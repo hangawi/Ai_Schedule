@@ -44,7 +44,20 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 };
 
-app.use(helmet({ crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }, crossOriginEmbedderPolicy: false }));
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        "script-src": ["'self'", "https://accounts.google.com/gsi/client"],
+        "img-src": ["'self'", "data:", "https://img.icons8.com"],
+        "connect-src": ["'self'", "https://accounts.google.com/gsi/"],
+      },
+    },
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+    crossOriginEmbedderPolicy: false,
+  })
+);
 app.use(compression());
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
