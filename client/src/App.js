@@ -652,9 +652,10 @@ function App() {
    }, [isLoggedIn]);
 
    useEffect(() => {
-      if (!isLoggedIn) return;
-      if (!areEventActionsReady) {
-         console.log('Waiting for event actions to be ready before starting voice recognition.');
+      if (!isLoggedIn || !areEventActionsReady || !isVoiceRecognitionEnabled) {
+         if (recognitionRef.current) {
+            recognitionRef.current.stop();
+         }
          return;
       }
 
@@ -670,56 +671,52 @@ function App() {
             console.log('Global voice recognition started.');
          };
 
-         recognitionRef.current.onend = () => {
-            setIsListening(false);
-            console.log('Global voice recognition ended.'); // Removed automatic restart
-            // The useEffect will handle restarting if isVoiceRecognitionEnabled is true
-         };
-
          recognitionRef.current.onresult = event => {
             const transcript = event.results[event.results.length - 1][0].transcript;
             console.log('Voice transcript:', transcript);
             parseAndAddVoiceEvent(transcript);
          };
-
-         recognitionRef.current.onerror = event => {
-            if (event.error === 'no-speech') {
-               console.log('음성 미감지.'); // Removed automatic restart message
-               return;
-            }
-            console.error('음성 인식 오류:', event.error);
-            setIsListening(false);
-         };
       }
+      
+      // We need a flag to prevent restart on manual stop
+      let manualStop = false;
 
+      const recognition = recognitionRef.current;
 
-      return () => {
-         if (recognitionRef.current) {
-            recognitionRef.current.stop();
-            recognitionRef.current.onstart = null;
-            recognitionRef.current.onend = null;
-            recognitionRef.current.onresult = null;
-            recognitionRef.current.onerror = null;
+      recognition.onend = () => {
+         setIsListening(false);
+         console.log('Global voice recognition ended.');
+         if (!manualStop) {
+            console.log('Restarting recognition...');
+            try {
+               recognition.start();
+            } catch(e) {
+               console.error("Recognition restart failed", e);
+            }
          }
       };
-   }, [isLoggedIn, parseAndAddVoiceEvent, eventActions, areEventActionsReady]);
 
-   // Separate effect for handling voice recognition enable/disable
-   useEffect(() => {
-      if (!isLoggedIn || !areEventActionsReady || !recognitionRef.current) return;
-
-      if (isVoiceRecognitionEnabled) {
-         try {
-            recognitionRef.current.start();
-         } catch (e) {
-            // Already started, ignore error
+      recognition.onerror = event => {
+         console.error('음성 인식 오류:', event.error);
+         if (event.error === 'no-speech') {
+            // This is not a fatal error, onend will be called and we can restart.
+         } else {
+            // For other errors, we might want to stop completely.
+            manualStop = true;
          }
-      } else {
-         recognitionRef.current.stop();
-         setIsListening(false);
-         console.log('Voice recognition stopped by user.');
+      };
+
+      try {
+         recognition.start();
+      } catch(e) {
+         console.log("Recognition already started.");
       }
-   }, [isVoiceRecognitionEnabled, isLoggedIn, areEventActionsReady]);
+
+      return () => {
+         manualStop = true;
+         recognition.stop();
+      };
+   }, [isLoggedIn, areEventActionsReady, isVoiceRecognitionEnabled, parseAndAddVoiceEvent]);
 
    const handleLoginSuccess = useCallback((userData) => {
       setIsLoggedIn(true);
