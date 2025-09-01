@@ -1,0 +1,109 @@
+/* General calendar container */
+.rbc-calendar {
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb; /* gray-200 */
+  background-color: #ffffff;
+  padding: 1rem;
+  font-family: 'Spoqa Han Sans Neo', 'sans-serif';
+}
+
+/* Toolbar styles */
+.rbc-toolbar {
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rbc-toolbar .rbc-toolbar-label {
+  font-size: 1.25rem; /* text-xl */
+  font-weight: 700;
+  color: #1f2937; /* gray-800 */
+}
+
+.rbc-btn-group button {
+  background-color: #ffffff;
+  color: #374151; /* gray-700 */
+  border: 1px solid #d1d5db; /* gray-300 */
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.rbc-btn-group button:hover {
+  background-color: #f9fafb; /* gray-50 */
+}
+
+.rbc-btn-group button.rbc-active {
+  background-color: #eff6ff; /* blue-50 */
+  color: #2563eb; /* blue-600 */
+  border-color: #93c5fd; /* blue-300 */
+}
+
+/* Header row (Sun, Mon, etc.) */
+.rbc-header {
+  padding: 0.75rem 0;
+  text-align: center;
+  font-weight: 500;
+  color: #4b5563; /* gray-600 */
+  border-bottom: 1px solid #e5e7eb; /* gray-200 */
+}
+
+/* Day cell styles */
+.rbc-day-bg {
+  border-left: 1px solid #f3f4f6; /* gray-100 */
+}
+.rbc-day-bg:first-child {
+  border-left: none;
+}
+
+.rbc-month-view {
+  border: none;
+}
+
+/* Today's date style */
+.rbc-today {
+  background-color: #eff6ff; /* blue-50 */
+}
+
+/* Event item styles */
+.rbc-event {
+  background-color: #3b82f6; /* blue-500 */
+  border-color: #2563eb; /* blue-600 */
+  color: white;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* --- Mobile Responsive Styles --- */
+@media (max-width: 767px) {
+  .rbc-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .rbc-toolbar .rbc-toolbar-label {
+    font-size: 1.125rem; /* text-lg */
+    margin-bottom: 0.75rem;
+  }
+  .rbc-btn-group {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .rbc-btn-group button {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+  }
+  .rbc-agenda-view table {
+    font-size: 0.875rem;
+  }
+  .rbc-agenda-view table thead th {
+    padding: 0.5rem;
+  }
+  .rbc-agenda-view table tbody tr td {
+    padding: 0.5rem;
+  }
+  .rbc-agenda-time {
+    font-weight: 600;
+  }
+}

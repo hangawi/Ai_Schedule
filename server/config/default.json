@@ -1,0 +1,23 @@
+{
+  "jwtSecret": "64ccfa5262c58f98ce161c33dc9f28f86dd7b98c998e9ae72757b82b70030d1e70f877130ca1922ab219af8f306112e592eaf592c6b1833ae7db756f02727fcd",
+  "mongoURI": "mongodb+srv://user1:IhCgaO0HBVUQOvqb@cluster0.iqnytlx.mongodb.net/",
+  "port": 5000,
+  "corsOrigin": "http://localhost:3000",
+  "bcryptRounds": 12,
+  "tokenExpiration": "24h",
+  "database": {
+    "options": {
+      "useNewUrlParser": true,
+      "useUnifiedTopology": true,
+      "maxPoolSize": 10,
+      "serverSelectionTimeoutMS": 5000,
+      "socketTimeoutMS": 45000
+    }
+  },
+  "api": {
+    "rateLimit": {
+      "windowMs": 900000,
+      "max": 100
+    }
+  }
+}

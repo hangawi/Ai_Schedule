@@ -1,0 +1,46 @@
+{
+  "name": "fin-meetagent",
+  "version": "1.0.0",
+  "description": "Integrated AI-based meeting scheduling system",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
+    "server:dev": "cd server && npm run dev",
+    "client:dev": "cd client && npm start",
+    "build": "cd client && npm run build",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "heroku-postbuild": "npm run install:all && npm run build"
+  },
+  "dependencies": {
+    "concurrently": "^7.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "keywords": [
+    "ai",
+    "scheduling",
+    "meetings",
+    "calendar",
+    "automation",
+    "agent",
+    "jwt",
+    "authentication",
+    "google-calendar"
+  ],
+  "author": "Integrated MeetAgent Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/integrated-meetagent/fin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/integrated-meetagent/fin/issues"
+  },
+  "homepage": "https://github.com/integrated-meetagent/fin#readme"
+}
