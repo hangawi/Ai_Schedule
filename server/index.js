@@ -51,7 +51,7 @@ app.use(
         ...helmet.contentSecurityPolicy.getDefaultDirectives(),
         "script-src": ["'self'", "https://accounts.google.com/gsi/client"],
         "img-src": ["'self'", "data:", "https://img.icons8.com"],
-        "connect-src": ["'self'", "https://accounts.google.com/gsi/"],
+        "connect-src": ["'self'", "https://accounts.google.com/gsi/", "https://generativelanguage.googleapis.com"],
       },
     },
     crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
