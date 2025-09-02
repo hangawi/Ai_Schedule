@@ -5,6 +5,7 @@ import { AuthScreen } from './AuthScreen';
 import ChatBox from './ChatBox';
 import moment from 'moment';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import CommandModal from './CommandModal'; // Import the modal component
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -28,7 +29,7 @@ const generateAIPrompt = (command) => {
    return [
       `오늘 = ${moment().format('YYYY-MM-DD dddd')} (${moment().format('MM월 DD일')})`,
       `현재 시간 = ${moment().format('YYYY-MM-DD HH:mm:ss')}`,
-      `명령어: "${command}"`,
+      `명령어: "${command}"`, 
       ``,
       `**정확한 날짜 계산 (오늘 기준):**`,
       `어제 = ${moment().subtract(1, 'days').format('YYYY-MM-DD')}`,
@@ -37,7 +38,7 @@ const generateAIPrompt = (command) => {
       `모레 = ${moment().add(2, 'days').format('YYYY-MM-DD')}`,
       `글피 = ${moment().add(3, 'days').format('YYYY-MM-DD')}`,
       ``,
-      `절대 설명하지 마! JSON만 출력!`,
+      `절대 설명하지 마! JSON만 출력!`, 
       ``,
       `**정확한 주차 계산 (과거/현재/미래 모두):**`,
       `저저저저번주 (4주 전) = ${moment().subtract(4, 'weeks').startOf('week').format('YYYY-MM-DD')} ~ ${moment().subtract(4, 'weeks').endOf('week').format('YYYY-MM-DD')}`,
@@ -50,8 +51,8 @@ const generateAIPrompt = (command) => {
       `다다다음주 (3주 후) = ${moment().add(3, 'weeks').startOf('week').format('YYYY-MM-DD')} ~ ${moment().add(3, 'weeks').endOf('week').format('YYYY-MM-DD')}`,
       `다다다다음주 (4주 후) = ${moment().add(4, 'weeks').startOf('week').format('YYYY-MM-DD')} ~ ${moment().add(4, 'weeks').endOf('week').format('YYYY-MM-DD')}`,
       ``,
-      `⚠️ 혼동 금지: "다다다음주(3주 후)" ≠ "다다음주(2주 후)"`,
-      `⚠️ 혼동 금지: "저저저번주(3주 전)" ≠ "저저번주(2주 전)"`,
+      `⚠️ 혼동 금지: "다다다음주(3주 후)" ≠ "다다음주(2주 후)"`, 
+      `⚠️ 혼동 금지: "저저저번주(3주 전)" ≠ "저저번주(2주 전)"`, 
       ``,
       `**정확한 요일별 날짜 (과거/미래):**`,
       `저저저저번주 월요일 (4주 전) = ${moment().subtract(4, 'weeks').day(1).format('YYYY-MM-DD')}`,
@@ -64,28 +65,28 @@ const generateAIPrompt = (command) => {
       `다다다음주 수요일 (3주 후) = ${moment().add(3, 'weeks').day(3).format('YYYY-MM-DD')}`,
       `다다다다음주 목요일 (4주 후) = ${moment().add(4, 'weeks').day(4).format('YYYY-MM-DD')}`,
       ``,
-      `**중요: 일정=약속=미팅=회의=모임 (모두 같은 의미!)**`,
+      `**중요: 일정=약속=미팅=회의=모임 (모두 같은 의미!)**`, 
       ``,
       `**필수 JSON 형식 (이 형식 그대로!):**`,
       `일정/약속 추가:`,
-      `{"intent": "add_event", "title": "일정", "startDateTime": "2025-09-08T16:00:00+09:00", "endDateTime": "2025-09-08T17:00:00+09:00", "response": "추가!"}`,
+      `{"intent": "add_event", "title": "일정", "startDateTime": "2025-09-08T16:00:00+09:00", "endDateTime": "2025-09-08T17:00:00+09:00", "response": "추가!"}`, 
       ``,
-      `일정/약속 삭제:`, 
-      `{"intent": "delete_event", "title": "일정", "startDateTime": "2025-09-08T09:00:00+09:00", "endDateTime": "2025-09-08T10:00:00+09:00", "response": "삭제!"}`,
+      `일정/약속 삭제:`,
+      ` {"intent": "delete_event", "title": "일정", "startDateTime": "2025-09-08T09:00:00+09:00", "endDateTime": "2025-09-08T10:00:00+09:00", "response": "삭제!"}`, 
       ``,
       `범위 삭제:`,
-      `{"intent": "delete_range", "title": "일정", "startDateTime": "2025-09-01T00:00:00+09:00", "endDateTime": "2025-09-07T23:59:59+09:00", "response": "삭제!"}`,
+      `{"intent": "delete_range", "title": "일정", "startDateTime": "2025-09-01T00:00:00+09:00", "endDateTime": "2025-09-07T23:59:59+09:00", "response": "삭제!"}`, 
       ``,
-      `"다음주 일정 삭제" = "다음주 약속 삭제" (완전히 같음)`,
-      `"이번주 회의 삭제" = "이번주 미팅 삭제" (완전히 같음)`,
+      `"다음주 일정 삭제" = "다음주 약속 삭제" (완전히 같음)`, 
+      `"이번주 회의 삭제" = "이번주 미팅 삭제" (완전히 같음)`, 
       ``,
       `**삭제 예시 (매우 중요!):**`,
-      `"다음주 월요일 약속 삭제" -> {"intent": "delete_event", "title": "약속", "startDateTime": "${moment().add(1, 'week').day(1).format('YYYY-MM-DD')}T00:00:00+09:00", "endDateTime": "${moment().add(1, 'week').day(1).format('YYYY-MM-DD')}T23:59:59+09:00", "response": "삭제!"}`,
-      `"다음주 월요일 일정 전부 삭제" -> {"intent": "delete_range", "title": "일정", "startDateTime": "${moment().add(1, 'week').day(1).format('YYYY-MM-DD')}T00:00:00+09:00", "endDateTime": "${moment().add(1, 'week').day(1).format('YYYY-MM-DD')}T23:59:59+09:00", "response": "삭제!"}`,
-      `"이번주 일정 전부 삭제" -> {"intent": "delete_range", "title": "일정", "startDateTime": "${moment().startOf('week').format('YYYY-MM-DD')}T00:00:00+09:00", "endDateTime": "${moment().endOf('week').format('YYYY-MM-DD')}T23:59:59+09:00", "response": "삭제!"}`,
-      `"다음주 회의 모두 삭제" -> {"intent": "delete_range", "title": "회의", "startDateTime": "${moment().add(1, 'week').startOf('week').format('YYYY-MM-DD')}T00:00:00+09:00", "endDateTime": "${moment().add(1, 'week').endOf('week').format('YYYY-MM-DD')}T23:59:59+09:00", "response": "삭제!"}`,
+      `"다음주 월요일 약속 삭제" -> {"intent": "delete_event", "title": "약속", "startDateTime": "${moment().add(1, 'week').day(1).format('YYYY-MM-DD')}T00:00:00+09:00", "endDateTime": "${moment().add(1, 'week').day(1).format('YYYY-MM-DD')}T23:59:59+09:00", "response": "삭제!"}`, 
+      `"다음주 월요일 일정 전부 삭제" -> {"intent": "delete_range", "title": "일정", "startDateTime": "${moment().add(1, 'week').day(1).format('YYYY-MM-DD')}T00:00:00+09:00", "endDateTime": "${moment().add(1, 'week').day(1).format('YYYY-MM-DD')}T23:59:59+09:00", "response": "삭제!"}`, 
+      `"이번주 일정 전부 삭제" -> {"intent": "delete_range", "title": "일정", "startDateTime": "${moment().startOf('week').format('YYYY-MM-DD')}T00:00:00+09:00", "endDateTime": "${moment().endOf('week').format('YYYY-MM-DD')}T23:59:59+09:00", "response": "삭제!"}`, 
+      `"다음주 회의 모두 삭제" -> {"intent": "delete_range", "title": "회의", "startDateTime": "${moment().add(1, 'week').startOf('week').format('YYYY-MM-DD')}T00:00:00+09:00", "endDateTime": "${moment().add(1, 'week').endOf('week').format('YYYY-MM-DD')}T23:59:59+09:00", "response": "삭제!"}`, 
       ``,
-      `**매우 중요:** 사용자의 메시지가 일정 관리(추가, 삭제, 수정, 확인)와 전혀 관련 없는 단순 대화(예: "안녕", "뭐해", "밥 먹었어?")일 경우, 절대 일정을 생성하지 말고, 다음과 같은 JSON을 출력해: {"intent": "clarification", "response": "안녕하세요! 일정 관리를 도와드릴까요?"}`,
+      `**매우 중요:** 사용자의 메시지가 일정 관리(추가, 삭제, 수정, 확인)와 전혀 관련 없는 단순 대화(예: "안녕", "뭐해", "밥 먹었어?")일 경우, 절대 일정을 생성하지 말고, 다음과 같은 JSON을 출력해: {"intent": "clarification", "response": "안녕하세요! 일정 관리를 도와드릴까요?"}`, 
    ].join('\n');
 };
 
@@ -127,7 +128,15 @@ function App() {
    const [isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled] = useState(true); // Default to true
    const [eventActions, setEventActions] = useState(null);
    const [areEventActionsReady, setAreEventActionsReady] = useState(false);
+   const [modalText, setModalText] = useState(''); // State for the modal
    const recognitionRef = useRef(null);
+   const [listeningMode, setListeningMode] = useState('hotword'); // 'hotword' or 'command'
+   const lastTranscriptRef = useRef('');
+   const [micVolume, setMicVolume] = useState(0); // For VU meter
+   const audioContextRef = useRef(null);
+   const analyserRef = useRef(null);
+   const sourceRef = useRef(null);
+   const animationFrameId = useRef(null);
 
    const fetchUser = useCallback(async () => {
       const token = localStorage.getItem('token');
@@ -167,247 +176,188 @@ function App() {
       fetchUser();
    }, [fetchUser]);
 
-   const parseAndAddVoiceEvent = useCallback(
-      async transcript => {
-         if (!isLoggedIn) {
-            return;
-         }
-         if (!isVoiceRecognitionEnabled) {
-            // NEW: If voice recognition is disabled, do not process command
-            return;
-         }
+   const processVoiceCommand = useCallback(async (command) => {
+      if (!isLoggedIn) {
+         return;
+      }
+      if (!isVoiceRecognitionEnabled) {
+         return;
+      }
+      if (!command) {
+         speak('네, 무엇을 도와드릴까요?');
+         return;
+      }
 
+      setModalText(command); // Show the recognized command in the modal
+
+      try {
          const API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
-         const HOTWORDS = ['큐브야', '비서야', '자비스', '큐브', '비서'];
-
          if (!API_KEY) {
             alert('Gemini API Key가 설정되지 않았습니다. .env 파일에 REACT_APP_GEMINI_API_KEY를 설정해주세요.');
             return;
          }
 
-         // 더 유연한 호출어 감지
-         const hotword = HOTWORDS.find(h => 
-            transcript.trim().toLowerCase().includes(h) || 
-            transcript.trim().toLowerCase().startsWith(h)
-         );
+         const genAI = new GoogleGenerativeAI(API_KEY);
+         const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
          
-         let command;
-         if (hotword) {
-            const hotwordIndex = transcript.toLowerCase().indexOf(hotword);
-            command = transcript.substring(hotwordIndex + hotword.length).trim();
-         } else {
-            // 호출어 없이도 일정 관련 키워드가 있으면 처리
-            const scheduleKeywords = ['일정', '약속', '회의', '미팅', '예약', '스케줄', '캘린더'];
-            const hasScheduleKeyword = scheduleKeywords.some(keyword => 
-               transcript.includes(keyword)
-            );
-            
-            if (hasScheduleKeyword) {
-               command = transcript.trim();
-            } else {
-               return;
-            }
-         }
+         const prompt = generateAIPrompt(command);
+         const result = await model.generateContent(prompt);
+         const response = await result.response;
+         const text = response.text();
+         const eventData = parseAIResponse(text);
 
-         if (!command) {
-            speak('네, 무엇을 도와드릴까요?');
+         if (!eventData.startDateTime) {
+            speak('언제 일정을 잡을까요?');
             return;
          }
 
-         try {
-            const genAI = new GoogleGenerativeAI(API_KEY);
-            const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+         if (!eventActions) {
+            console.error('Event actions not available yet.');
+            speak('아직 일정 기능을 사용할 수 없습니다. 잠시 후 다시 시도해주세요.');
+            return;
+         }
+
+         if (eventData.intent === 'add_event') {
+            const token = localStorage.getItem('token');
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
             
-            const prompt = generateAIPrompt(command);
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            const text = response.text();
-            const eventData = parseAIResponse(text);
+            const apiResponse = await fetch(`${API_BASE_URL}/api/calendar/events/google`, {
+               method: 'POST',
+               headers: {
+                  'Content-Type': 'application/json',
+                  'x-auth-token': token,
+               },
+               body: JSON.stringify(eventData),
+               signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
 
-            // 최소한의 검증만
-            if (!eventData.startDateTime) {
-               speak('언제 일정을 잡을까요?');
-               return;
+            if (!apiResponse.ok) {
+               const errorData = await apiResponse.json();
+               throw new Error(errorData.msg || 'Failed to add event to Google Calendar');
             }
 
-            // --- NEW LOGIC FOR INTENT HANDLING ---
-            if (!eventActions) {
-               console.error('Event actions not available yet.');
-               speak('아직 일정 기능을 사용할 수 없습니다. 잠시 후 다시 시도해주세요.');
-               return;
-            }
-
-            if (eventData.intent === 'add_event') {
-               // Existing add event logic
-               const token = localStorage.getItem('token');
-               const controller = new AbortController();
-               const timeoutId = setTimeout(() => controller.abort(), 15000);
+            speak('일정을 성공적으로 추가했습니다.');
+            setEventAddedKey(prevKey => prevKey + 1);
+         } else if (eventData.intent === 'delete_event' || eventData.intent === 'delete_range') {
+            const token = localStorage.getItem('token');
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            
+            try {
+               const threeMonthsAgo = new Date();
+               threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+               const oneYearLater = new Date();
+               oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
                
-               const apiResponse = await fetch(`${API_BASE_URL}/api/calendar/events/google`, {
-                  method: 'POST',
-                  headers: {
-                     'Content-Type': 'application/json',
-                     'x-auth-token': token,
-                  },
-                  body: JSON.stringify(eventData),
+               const eventsResponse = await fetch(`${API_BASE_URL}/api/calendar/events?timeMin=${threeMonthsAgo.toISOString()}&timeMax=${oneYearLater.toISOString()}`, {
+                  headers: { 'x-auth-token': token },
+                  signal: controller.signal
+               });
+               
+               if (!eventsResponse.ok) {
+                  throw new Error('일정 목록을 가져올 수 없습니다.');
+               }
+               
+               const events = await eventsResponse.json();
+               let matchingEvents;
+               
+               if (eventData.intent === 'delete_range') {
+                  const startDate = new Date(eventData.startDateTime);
+                  const endDate = new Date(eventData.endDateTime);
+                  matchingEvents = events.filter(event => {
+                     const eventDate = new Date(event.start.dateTime || event.start.date);
+                     const inRange = eventDate >= startDate && eventDate <= endDate;
+                     const scheduleKeywords = ['일정', '약속', '미팅', '회의', '모임', '전체', '전부', '모든', '모두'];
+                     const isGeneralSchedule = !eventData.title || scheduleKeywords.includes(eventData.title);
+                     const titleMatch = isGeneralSchedule || event.summary?.toLowerCase().includes(eventData.title.toLowerCase());
+                     return inRange && titleMatch;
+                  });
+               } else {
+                  const targetDate = new Date(eventData.startDateTime).toDateString();
+                  matchingEvents = events.filter(event => {
+                     const eventDate = new Date(event.start.dateTime || event.start.date).toDateString();
+                     const dateMatch = eventDate === targetDate;
+                     const scheduleKeywords = ['일정', '약속', '미팅', '회의', '모임', '전체', '전부', '모든', '모두'];
+                     const isGeneralSchedule = !eventData.title || scheduleKeywords.includes(eventData.title);
+                     const titleMatch = isGeneralSchedule || event.summary?.toLowerCase().includes(eventData.title.toLowerCase());
+                     return dateMatch && titleMatch;
+                  });
+               }
+               
+               if (matchingEvents.length === 0) {
+                  speak('해당 일정을 찾을 수 없어요.');
+                  return;
+               }
+               
+               const deleteAllKeywords = ['전부', '모든', '모두', '다', '전체'];
+               const shouldDeleteAll = deleteAllKeywords.some(keyword => command.includes(keyword));
+               
+               if (matchingEvents.length > 1 && !shouldDeleteAll) {
+                  speak(`${matchingEvents.length}개의 일정이 있어요. "전부 삭제"라고 하시거나 더 구체적으로 말씀해 주세요.`);
+                  return;
+               }
+               
+               if (matchingEvents.length > 1 && shouldDeleteAll) {
+                  let deletedCount = 0;
+                  for (const event of matchingEvents) {
+                     try {
+                        const deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${event.id}`, {
+                           method: 'DELETE',
+                           headers: { 'x-auth-token': token },
+                           signal: controller.signal
+                        });
+                        if (deleteResponse.ok) {
+                           deletedCount++;
+                        }
+                     } catch (error) {
+                        console.error('개별 일정 삭제 오류:', error);
+                     }
+                  }
+                  clearTimeout(timeoutId);
+                  speak(`${deletedCount}개의 일정을 삭제했어요!`);
+                  setEventAddedKey(prevKey => prevKey + 1);
+                  return;
+               }
+               
+               const eventToDelete = matchingEvents[0];
+               const deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${eventToDelete.id}`, {
+                  method: 'DELETE',
+                  headers: { 'x-auth-token': token },
                   signal: controller.signal
                });
                
                clearTimeout(timeoutId);
-
-               if (!apiResponse.ok) {
-                  const errorData = await apiResponse.json();
-                  throw new Error(errorData.msg || 'Failed to add event to Google Calendar');
-               }
-
-               speak('일정을 성공적으로 추가했습니다.');
-               setEventAddedKey(prevKey => prevKey + 1); // Trigger refresh
-            } else if (eventData.intent === 'delete_event' || eventData.intent === 'delete_range') {
-               // 실제 일정 삭제 로직
-               const token = localStorage.getItem('token');
-               const controller = new AbortController();
-               const timeoutId = setTimeout(() => controller.abort(), 15000);
                
-               try {
-                  // 일정 목록 가져오기 (과거 3개월 ~ 미래 1년)
-                  const threeMonthsAgo = new Date();
-                  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-                  const oneYearLater = new Date();
-                  oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
-                  
-                  const eventsResponse = await fetch(`${API_BASE_URL}/api/calendar/events?timeMin=${threeMonthsAgo.toISOString()}&timeMax=${oneYearLater.toISOString()}`, {
-                     headers: { 'x-auth-token': token },
-                     signal: controller.signal
-                  });
-                  
-                  if (!eventsResponse.ok) {
-                     throw new Error('일정 목록을 가져올 수 없습니다.');
-                  }
-                  
-                  const events = await eventsResponse.json();
-                  
-                  let matchingEvents;
-                  
-                  if (eventData.intent === 'delete_range') {
-                     // 범위 삭제 (이번주, 다음주 등)
-                     const startDate = new Date(eventData.startDateTime);
-                     const endDate = new Date(eventData.endDateTime);
-                     
-                     matchingEvents = events.filter(event => {
-                        const eventDate = new Date(event.start.dateTime || event.start.date);
-                        const inRange = eventDate >= startDate && eventDate <= endDate;
-                        
-                        // 제목 매칭 - 모든 일정 관련 키워드 포함
-                        const scheduleKeywords = ['일정', '약속', '미팅', '회의', '모임', '전체', '전부', '모든', '모두'];
-                        const isGeneralSchedule = !eventData.title || scheduleKeywords.includes(eventData.title);
-                        const titleMatch = isGeneralSchedule || 
-                                          event.summary?.toLowerCase().includes(eventData.title.toLowerCase());
-                        
-                        if (inRange && titleMatch) {
-                        }
-                        
-                        return inRange && titleMatch;
-                     });
-                  } else {
-                     // 단일 날짜 삭제
-                     const targetDate = new Date(eventData.startDateTime).toDateString();
-                     
-                     matchingEvents = events.filter(event => {
-                        const eventDate = new Date(event.start.dateTime || event.start.date).toDateString();
-                        const dateMatch = eventDate === targetDate;
-                        const scheduleKeywords = ['일정', '약속', '미팅', '회의', '모임', '전체', '전부', '모든', '모두'];
-                        const isGeneralSchedule = !eventData.title || scheduleKeywords.includes(eventData.title);
-                        const titleMatch = isGeneralSchedule || 
-                                          event.summary?.toLowerCase().includes(eventData.title.toLowerCase());
-                        
-                        if (dateMatch && titleMatch) {
-                        }
-                        
-                        return dateMatch && titleMatch;
-                     });
-                  }
-                  
-                  
-                  if (matchingEvents.length === 0) {
-                     speak('해당 일정을 찾을 수 없어요.');
-                     return;
-                  }
-                  
-                  // "전부", "모든", "모두" 키워드 체크
-                  const deleteAllKeywords = ['전부', '모든', '모두', '다', '전체'];
-                  const shouldDeleteAll = deleteAllKeywords.some(keyword => command.includes(keyword));
-                  
-                  if (matchingEvents.length > 1 && !shouldDeleteAll) {
-                     speak(`${matchingEvents.length}개의 일정이 있어요. "전부 삭제"라고 하시거나 더 구체적으로 말씀해 주세요.`);
-                     return;
-                  }
-                  
-                  // 여러 개 삭제 처리
-                  if (matchingEvents.length > 1 && shouldDeleteAll) {
-                     let deletedCount = 0;
-                     for (const event of matchingEvents) {
-                        try {
-                           const deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${event.id}`, {
-                              method: 'DELETE',
-                              headers: { 'x-auth-token': token },
-                              signal: controller.signal
-                           });
-                           
-                           if (deleteResponse.ok) {
-                              deletedCount++;
-                           }
-                        } catch (error) {
-                           console.error('개별 일정 삭제 오류:', error);
-                        }
-                     }
-                     
-                     clearTimeout(timeoutId);
-                     speak(`${deletedCount}개의 일정을 삭제했어요!`);
-                     setEventAddedKey(prevKey => prevKey + 1);
-                     return;
-                  }
-                  
-                  // 일정 삭제
-                  const eventToDelete = matchingEvents[0];
-                  const deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${eventToDelete.id}`, {
-                     method: 'DELETE',
-                     headers: { 'x-auth-token': token },
-                     signal: controller.signal
-                  });
-                  
-                  clearTimeout(timeoutId);
-                  
-                  if (!deleteResponse.ok) {
-                     throw new Error('일정 삭제에 실패했습니다.');
-                  }
-                  
-                  if (!eventData.response) {
-                     speak(`${eventToDelete.summary || '일정'}을 삭제했어요!`);
-                  }
-                  setEventAddedKey(prevKey => prevKey + 1); // 캘린더 새로고침
-                  
-               } catch (error) {
-                  clearTimeout(timeoutId);
-                  console.error('일정 삭제 오류:', error);
-                  speak(`일정 삭제에 실패했어요. ${error.message}`);
+               if (!deleteResponse.ok) {
+                  throw new Error('일정 삭제에 실패했습니다.');
                }
-            } else if (eventData.intent === 'update_event') {
-               // Handle update_event if needed in the future
-               speak('일정 업데이트 기능은 아직 지원하지 않습니다.');
-            } else {
-               speak('알 수 없는 명령입니다.');
+               
+               if (!eventData.response) {
+                  speak(`${eventToDelete.summary || '일정'}을 삭제했어요!`);
+               }
+               setEventAddedKey(prevKey => prevKey + 1);
+            } catch (error) {
+               clearTimeout(timeoutId);
+               console.error('일정 삭제 오류:', error);
+               speak(`일정 삭제에 실패했어요. ${error.message}`);
             }
-         } catch (error) {
-            if (error.name === 'AbortError') {
-               speak('요청 시간이 초과되었습니다. 다시 시도해주세요.');
-            } else {
-               console.error('Error adding event via voice:', error.message);
-               speak(`음성 일정 추가에 실패했습니다. ${error.message}`);
-            }
+         } else if (eventData.intent === 'update_event') {
+            speak('일정 업데이트 기능은 아직 지원하지 않습니다.');
+         } else {
+            speak('알 수 없는 명령입니다.');
          }
-      },
-      [isLoggedIn, eventActions, isVoiceRecognitionEnabled],
-   );
+      } catch (error) {
+         if (error.name === 'AbortError') {
+            speak('요청 시간이 초과되었습니다. 다시 시도해주세요.');
+         } else {
+            console.error('Error adding event via voice:', error.message);
+            speak(`음성 일정 추가에 실패했습니다. ${error.message}`);
+         }
+      }
+   }, [isLoggedIn, eventActions, isVoiceRecognitionEnabled]);
 
    const handleChatMessage = useCallback(async (message) => {
       if (!isLoggedIn) return { success: false, message: '로그인이 필요합니다.' };
@@ -482,7 +432,7 @@ function App() {
             setEventAddedKey(prevKey => prevKey + 1); // 캘린더 새로고침
             return { 
                success: true, 
-               message: `${chatResponse.title} 일정을 추가했어요!`,
+               message: `${chatResponse.title} 일정을 추가했어요!`, 
                data: chatResponse 
             };
          }
@@ -605,7 +555,7 @@ function App() {
                setEventAddedKey(prevKey => prevKey + 1);
                return { 
                   success: true, 
-                  message: `${deletedCount}개의 일정을 삭제했어요!`,
+                  message: `${deletedCount}개의 일정을 삭제했어요!`, 
                   data: chatResponse 
                };
             }
@@ -624,7 +574,7 @@ function App() {
             setEventAddedKey(prevKey => prevKey + 1); // 캘린더 새로고침
             return { 
                success: true, 
-               message: `${eventToDelete.summary || '일정'}을 삭제했어요!`,
+               message: `${eventToDelete.summary || '일정'}을 삭제했어요!`, 
                data: chatResponse 
             };
          }
@@ -636,7 +586,7 @@ function App() {
          
          return { 
             success: true, 
-            message: chatResponse.response || '처리했어요!',
+            message: chatResponse.response || '처리했어요!', 
             data: chatResponse 
          };
       } catch (error) {
@@ -654,45 +604,67 @@ function App() {
 
    useEffect(() => {
       if (!isLoggedIn || !areEventActionsReady || !isVoiceRecognitionEnabled) {
-         if (recognitionRef.current) {
-            recognitionRef.current.stop();
-         }
+         if (recognitionRef.current) recognitionRef.current.stop();
+         if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
          return;
       }
 
-      // Initialize recognitionRef.current only once
+      const setupAudioAnalysis = async () => {
+         try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+            analyserRef.current = audioContextRef.current.createAnalyser();
+            sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
+            sourceRef.current.connect(analyserRef.current);
+            analyserRef.current.fftSize = 256;
+            const bufferLength = analyserRef.current.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            const draw = () => {
+               animationFrameId.current = requestAnimationFrame(draw);
+               if (!analyserRef.current) return;
+               analyserRef.current.getByteFrequencyData(dataArray);
+               const average = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
+               setMicVolume(average / 128); // Normalize to 0-1 range
+            };
+            draw();
+         } catch (err) {
+            console.error('마이크 접근 오류:', err);
+         }
+      };
+
+      const HOTWORDS = ['큐브야', '비서야', '자비스', '큐브', '비서'];
       if (!recognitionRef.current) {
          recognitionRef.current = new window.webkitSpeechRecognition();
          recognitionRef.current.continuous = true;
          recognitionRef.current.interimResults = false;
          recognitionRef.current.lang = 'ko-KR';
-
-         recognitionRef.current.onstart = () => {
-            setIsListening(true);
-            console.log('Global voice recognition started.');
-         };
-
-         recognitionRef.current.onresult = event => {
-            const transcript = event.results[event.results.length - 1][0].transcript;
-            console.log('Voice transcript:', transcript);
-            parseAndAddVoiceEvent(transcript);
-         };
+         setupAudioAnalysis();
       }
-      
-      // We need a flag to prevent restart on manual stop
-      let manualStop = false;
 
       const recognition = recognitionRef.current;
 
-      recognition.onend = () => {
-         setIsListening(false);
-         console.log('Global voice recognition ended.');
-         if (!manualStop) {
-            console.log('Restarting recognition...');
-            try {
-               recognition.start();
-            } catch(e) {
-               console.error("Recognition restart failed", e);
+      recognition.onstart = () => setIsListening(true);
+
+      recognition.onresult = event => {
+         const transcript = event.results[event.results.length - 1][0].transcript.trim();
+         if (listeningMode === 'hotword') {
+            if (HOTWORDS.some(h => transcript.toLowerCase().includes(h.toLowerCase()))) {
+               speak('네, 말씀하세요.');
+               setModalText('네, 말씀하세요...');
+               setListeningMode('command');
+               lastTranscriptRef.current = transcript;
+            }
+         } else if (listeningMode === 'command') {
+            if (transcript !== lastTranscriptRef.current) {
+               const command = transcript.startsWith(lastTranscriptRef.current)
+                  ? transcript.substring(lastTranscriptRef.current.length).trim()
+                  : transcript;
+               if (command) {
+                  processVoiceCommand(command);
+                  setListeningMode('hotword');
+                  lastTranscriptRef.current = '';
+               }
             }
          }
       };
@@ -700,24 +672,31 @@ function App() {
       recognition.onerror = event => {
          console.error('음성 인식 오류:', event.error);
          if (event.error === 'no-speech') {
-            // This is not a fatal error, onend will be called and we can restart.
-         } else {
-            // For other errors, we might want to stop completely.
-            manualStop = true;
+            setListeningMode('hotword');
+            setModalText('');
          }
       };
 
-      try {
-         recognition.start();
-      } catch(e) {
-         console.log("Recognition already started.");
-      }
+      let manualStop = false;
+      recognition.onend = () => {
+         setIsListening(false);
+         if (!manualStop) {
+            try { recognition.start(); } catch (e) { console.error("Recognition restart failed", e); }
+         }
+      };
+
+      try { recognition.start(); } catch (e) { console.log("Recognition already started."); }
 
       return () => {
          manualStop = true;
          recognition.stop();
+         if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
+         if (sourceRef.current) sourceRef.current.disconnect();
+         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close();
+         }
       };
-   }, [isLoggedIn, areEventActionsReady, isVoiceRecognitionEnabled, parseAndAddVoiceEvent]);
+   }, [isLoggedIn, areEventActionsReady, isVoiceRecognitionEnabled, processVoiceCommand, listeningMode]);
 
    const handleLoginSuccess = useCallback((userData, loginType) => {
       setIsLoggedIn(true);
@@ -764,6 +743,7 @@ function App() {
             />
          </Routes>
          {isLoggedIn && <ChatBox onSendMessage={handleChatMessage} speak={speak} />}
+         {modalText && <CommandModal text={modalText} onClose={() => setModalText('')} />}
       </Router>
    );
 }
