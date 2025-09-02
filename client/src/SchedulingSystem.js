@@ -38,7 +38,7 @@ const formatEventForClient = (event, color) => {
    };
 };
 
-const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAddedKey, speak, setEventActions, setAreEventActionsReady, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled }) => {
+const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAddedKey, speak, setEventActions, setAreEventActionsReady, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled, loginMethod }) => {
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
    const [activeTab, setActiveTab] = useState('dashboard');
    const [showCreateModal, setShowCreateModal] = useState(false);
@@ -216,8 +216,11 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                      <MenuIcon size={24} />
                   </button>
                   <button onClick={() => setActiveTab('dashboard')} className="flex items-center cursor-pointer">
-                     <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold mr-3">
+                     <div className="relative w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold mr-3">
                         MA
+                        {loginMethod && (
+                           <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${loginMethod === 'google' ? 'bg-green-500' : 'bg-red-500'} border-2 border-white`}></div>
+                        )}
                      </div>
                      <h1 className="text-xl font-bold text-gray-800 hidden sm:block">MeetAgent</h1>
                   </button>
