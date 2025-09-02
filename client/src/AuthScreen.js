@@ -30,7 +30,7 @@ export const LoginModal = ({ onClose, onRegisterClick, onLoginSuccess }) => {
       }
 
       localStorage.setItem('token', data.token);
-      onLoginSuccess(data.user);
+      onLoginSuccess(data.user, 'general');
 
     } catch (error) {
       alert('이메일/비밀번호가 일치하지 않습니다.');
@@ -55,7 +55,7 @@ export const LoginModal = ({ onClose, onRegisterClick, onLoginSuccess }) => {
       }
 
       localStorage.setItem('token', data.token);
-      onLoginSuccess(data.user);
+      onLoginSuccess(data.user, 'google');
     } catch (error) {
       alert(`Google 로그인 실패: ${error.message}`);
       console.error('Google Login Error:', error);

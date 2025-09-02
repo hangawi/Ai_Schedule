@@ -121,6 +121,7 @@ const parseAIResponse = (text) => {
 function App() {
    const [isLoggedIn, setIsLoggedIn] = useState(false);
    const [user, setUser] = useState(null);
+   const [loginMethod, setLoginMethod] = useState(null);
    const [isListening, setIsListening] = useState(false);
    const [eventAddedKey, setEventAddedKey] = useState(0); // Event added trigger
    const [isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled] = useState(true); // Default to true
@@ -718,9 +719,10 @@ function App() {
       };
    }, [isLoggedIn, areEventActionsReady, isVoiceRecognitionEnabled, parseAndAddVoiceEvent]);
 
-   const handleLoginSuccess = useCallback((userData) => {
+   const handleLoginSuccess = useCallback((userData, loginType) => {
       setIsLoggedIn(true);
       setUser(userData);
+      setLoginMethod(loginType); // Store the login type
    }, []);
 
    const handleLogout = useCallback(() => {
@@ -739,8 +741,9 @@ function App() {
       setEventActions,
       setAreEventActionsReady,
       isVoiceRecognitionEnabled,
-      setIsVoiceRecognitionEnabled
-   }), [isLoggedIn, user, handleLogout, isListening, eventAddedKey, isVoiceRecognitionEnabled]);
+      setIsVoiceRecognitionEnabled,
+      loginMethod // Pass loginMethod
+   }), [isLoggedIn, user, handleLogout, isListening, eventAddedKey, isVoiceRecognitionEnabled, loginMethod]);
 
    return (
       <Router>
