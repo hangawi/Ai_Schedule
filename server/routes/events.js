@@ -1,5 +1,4 @@
 const express = require('express');
-console.log('events.js file is being executed!'); // NEW: Add this line at the very top
 const router = express.Router();
 const eventController = require('../controllers/eventController');
 const auth = require('../middleware/auth');
@@ -46,7 +45,6 @@ const validateEvent = [
 const checkValidation = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    console.log('❌ 입력 검증 실패:', errors.array());
     return res.status(400).json({
       msg: '입력값이 유효하지 않습니다.',
       errors: errors.array()

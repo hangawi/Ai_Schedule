@@ -6,10 +6,6 @@ const generateToken = (payload, expiresIn = '24h') => {
   try {
     const secret = config.get('jwtSecret');
     
-    console.log('🔑 JWT 토큰 생성 시도');
-    console.log('시크릿 키 존재:', secret ? '✅' : '❌');
-    console.log('페이로드:', payload);
-    
     if (!secret) {
       throw new Error('JWT_SECRET이 설정되지 않았습니다.');
     }
@@ -33,13 +29,6 @@ const generateToken = (payload, expiresIn = '24h') => {
     
     const token = jwt.sign(tokenPayload, secret, { expiresIn });
     
-    console.log('✅ JWT 토큰 생성 성공');
-    console.log('토큰 정보:', {
-      payloadUserId: tokenPayload.user.id,
-      tokenLength: token.length,
-      expiresIn: expiresIn
-    });
-    
     return token;
   } catch (error) {
     console.error('❌ JWT 토큰 생성 실패:', {
@@ -56,10 +45,6 @@ const verifyToken = (token) => {
   try {
     const secret = config.get('jwtSecret');
     
-    console.log('🔍 JWT 토큰 검증 시도');
-    console.log('시크릿 키 존재:', secret ? '✅' : '❌');
-    console.log('토큰 길이:', token ? token.length : 0);
-    
     if (!secret) {
       throw new Error('JWT_SECRET이 설정되지 않았습니다.');
     }
@@ -70,13 +55,6 @@ const verifyToken = (token) => {
     
     const decoded = jwt.verify(token, secret);
     
-    console.log('✅ JWT 토큰 검증 성공');
-    console.log('디코딩된 페이로드:', {
-      userId: decoded.user?.id,
-      iat: decoded.iat ? new Date(decoded.iat * 1000).toISOString() : 'N/A',
-      exp: decoded.exp ? new Date(decoded.exp * 1000).toISOString() : 'N/A'
-    });
-
     // 페이로드 구조 검증
     if (!decoded.user || !decoded.user.id) {
       throw new Error('토큰에 유효한 사용자 정보가 없습니다.');
@@ -107,21 +85,11 @@ const verifyToken = (token) => {
 // JWT 토큰 디코딩 (검증 없이)
 const decodeToken = (token) => {
   try {
-    console.log('📋 JWT 토큰 디코딩 (검증 없음)');
-    
     if (!token) {
       throw new Error('토큰이 제공되지 않았습니다.');
     }
 
     const decoded = jwt.decode(token, { complete: true });
-    
-    console.log('✅ JWT 토큰 디코딩 성공');
-    console.log('디코딩 결과:', {
-      header: decoded?.header,
-      payloadUserId: decoded?.payload?.user?.id,
-      iat: decoded?.payload?.iat ? new Date(decoded.payload.iat * 1000).toISOString() : 'N/A',
-      exp: decoded?.payload?.exp ? new Date(decoded.payload.exp * 1000).toISOString() : 'N/A'
-    });
     
     return decoded;
   } catch (error) {
