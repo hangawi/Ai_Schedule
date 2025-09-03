@@ -1,16 +1,8 @@
-
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { Mic } from 'lucide-react';
 
 const CommandModal = ({ text, onClose }) => {
   const modalContentRef = useRef(null);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      onClose();
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [text, onClose]);
 
   const handleBackdropClick = (e) => {
     if (modalContentRef.current && !modalContentRef.current.contains(e.target)) {
@@ -20,12 +12,12 @@ const CommandModal = ({ text, onClose }) => {
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50"
+      className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 transition-opacity duration-300 ease-in-out"
       onClick={handleBackdropClick}
     >
       <div 
         ref={modalContentRef}
-        className="bg-white rounded-lg shadow-xl p-6 w-11/12 max-w-md text-center"
+        className="bg-white rounded-lg shadow-xl p-6 w-11/12 max-w-md text-center transition-transform duration-300 ease-in-out transform scale-100"
       >
         <div className="flex justify-center items-center mb-4">
           <Mic className="text-blue-500" size={24} />
