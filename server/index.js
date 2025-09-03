@@ -31,8 +31,15 @@ const allowedOrigins = process.env.CORS_ORIGIN
 
 const corsOptions = {
   origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or Postman)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+    
+    // Security fix: Don't allow wildcard with credentials
+    if (allowedOrigins.includes('*') && process.env.NODE_ENV === 'production') {
+      return callback(new Error('Wildcard CORS with credentials not allowed in production'));
+    }
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -64,6 +71,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 if (process.env.NODE_ENV !== 'production') {
+  // Development request logging middleware (disabled in production)
   app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
     next();
@@ -91,7 +99,13 @@ app.get('/', (req, res) => {
 
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err.stack);
-  res.status(500).json({ message: 'Something went wrong!', error: err.message });
+  
+  // Security fix: Don't expose error details in production
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.status(500).json({ 
+    message: 'Something went wrong!', 
+    error: isProduction ? 'Internal server error' : err.message 
+  });
 });
 
 app.use('*', (req, res) => {

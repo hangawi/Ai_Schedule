@@ -22,19 +22,16 @@ export const useChat = (isLoggedIn, setEventAddedKey) => {
          const result = await model.generateContent(prompt);
          const response = await result.response;
          const text = response.text();
-         console.log('채팅 응답 텍스트:', text);
          const chatResponse = parseAIResponse(text);
-         console.log('파싱된 데이터:', chatResponse);
          
          // 잘못된 JSON 형식 감지 및 수정
          if (!chatResponse.intent && (chatResponse.date || chatResponse.deleted)) {
-            console.log('잘못된 JSON 형식 감지, 수정 시도');
             return { success: false, message: 'AI 응답 형식이 올바르지 않습니다. 다시 시도해주세요.' };
          }
          
          // 실제 일정 처리 로직 추가
          if (chatResponse.intent === 'add_event' && chatResponse.startDateTime) {
-            console.log('[채팅] 일정 추가 처리:', chatResponse);
+            // 일정 추가 처리 시작
             
             // 기본값 설정
             if (!chatResponse.title) chatResponse.title = '약속';
@@ -52,7 +49,7 @@ export const useChat = (isLoggedIn, setEventAddedKey) => {
                }
             }
             
-            console.log('[채팅] 처리된 데이터:', chatResponse);
+            // 데이터 처리 완료, Google Calendar에 일정 추가 준비
             
             // Google Calendar에 일정 추가
             const token = localStorage.getItem('token');
@@ -85,7 +82,7 @@ export const useChat = (isLoggedIn, setEventAddedKey) => {
          
          // 일정 삭제 처리
          else if ((chatResponse.intent === 'delete_event' || chatResponse.intent === 'delete_range') && chatResponse.startDateTime) {
-            console.log('[채팅] 삭제 처리 시작:', chatResponse);
+            // 삭제 처리 시작
             const token = localStorage.getItem('token');
             
             // 일정 목록 가져오기 (과거 3개월 ~ 미래 1년)
@@ -94,12 +91,10 @@ export const useChat = (isLoggedIn, setEventAddedKey) => {
             const oneYearLater = new Date();
             oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
             
-            console.log('[채팅] API 호출 시작...');
+            // 일정 목록 가져오기 API 호출
             const eventsResponse = await fetch(`${API_BASE_URL}/api/calendar/events?timeMin=${threeMonthsAgo.toISOString()}&timeMax=${oneYearLater.toISOString()}`, {
                headers: { 'x-auth-token': token }
             });
-            
-            console.log('[채팅] API 응답 상태:', eventsResponse.status);
             
             if (!eventsResponse.ok) {
                throw new Error('일정 목록을 가져올 수 없습니다.');
@@ -113,7 +108,7 @@ export const useChat = (isLoggedIn, setEventAddedKey) => {
                // 범위 삭제 (이번주, 다음주 등)
                const startDate = new Date(chatResponse.startDateTime);
                const endDate = new Date(chatResponse.endDateTime);
-               console.log('[채팅] 삭제할 범위:', startDate.toDateString(), '~', endDate.toDateString());
+               // 삭제할 범위 설정 완료
                
                matchingEvents = events.filter(event => {
                   const eventDate = new Date(event.start.dateTime || event.start.date);
@@ -131,7 +126,7 @@ export const useChat = (isLoggedIn, setEventAddedKey) => {
             } else {
                // 단일 날짜 삭제 - 더 유연하게
                const targetDate = new Date(chatResponse.startDateTime);
-               console.log('[채팅] 삭제 대상 날짜:', targetDate.toDateString(), '검색 키워드:', chatResponse.title);
+               // 삭제 대상 날짜 및 검색 키워드 설정 완료
                
                matchingEvents = events.filter(event => {
                   const eventDate = new Date(event.start.dateTime || event.start.date);
@@ -154,19 +149,13 @@ export const useChat = (isLoggedIn, setEventAddedKey) => {
                   
                   const isMatch = isSameDay && titleMatch;
                   
-                  if (isMatch) {
-                     console.log('[채팅] ✅ 매칭 성공:', {
-                        날짜: eventDate.toDateString(),
-                        제목: event.summary,
-                        이벤트ID: event.id
-                     });
-                  }
+                  // 매칭된 일정이 있으면 삭제 대상으로 추가
                   
                   return isMatch;
                });
             }
             
-            console.log(`[채팅] 총 ${matchingEvents.length}개 일정 매칭됨`);
+            // 매칭된 일정 개수 확인 완료
             
             if (matchingEvents.length === 0) {
                return { success: false, message: '해당 일정을 찾을 수 없어요.' };

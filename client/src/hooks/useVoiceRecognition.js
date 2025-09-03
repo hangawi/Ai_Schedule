@@ -67,7 +67,6 @@ export const useVoiceRecognition = (
             }
 
             if (!eventActions) {
-               console.error('Event actions not available yet.');
                speak('아직 일정 기능을 사용할 수 없습니다. 잠시 후 다시 시도해주세요.');
                return;
             }
@@ -193,7 +192,7 @@ export const useVoiceRecognition = (
                            });
                            if (deleteResponse.ok) deletedCount++;
                         } catch (error) {
-                           console.error('개별 일정 삭제 오류:', error);
+                           // 개별 일정 삭제 실패는 무시하고 계속 진행
                         }
                      }
                      clearTimeout(timeoutId);
@@ -219,7 +218,6 @@ export const useVoiceRecognition = (
                   setModalText('');
                } catch (error) {
                   clearTimeout(timeoutId);
-                  console.error('일정 삭제 오류:', error);
                   speak(`일정 삭제에 실패했어요. ${error.message}`);
                }
             } else if (eventData.intent === 'update_event') {
@@ -232,11 +230,12 @@ export const useVoiceRecognition = (
             setModalText('');
          } catch (error) {
             if (error.name === 'AbortError') {
-               speak('요청 시간이 초과되었습니다. 다시 시도해주세요.');
+               // AbortError는 조용히 처리 (사용자가 의도적으로 중단하거나 타임아웃)
+               setModalText('');
             } else {
                speak(`음성 일정 추가에 실패했습니다. ${error.message}`);
+               setModalText('');
             }
-            setModalText('');
          }
       },
       [isLoggedIn, eventActions, isVoiceRecognitionEnabled, setEventAddedKey],
@@ -245,8 +244,15 @@ export const useVoiceRecognition = (
    /** 🎤 음성 인식 useEffect */
    useEffect(() => {
       if (!isLoggedIn || !areEventActionsReady || !isVoiceRecognitionEnabled) {
-         if (recognitionRef.current) recognitionRef.current.stop();
+         if (recognitionRef.current) {
+            try {
+               recognitionRef.current.stop();
+            } catch (e) {
+               // stop 호출 시 에러 무시
+            }
+         }
          if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
+         cleanupAudioResources();
          return;
       }
 
@@ -271,12 +277,19 @@ export const useVoiceRecognition = (
             };
             draw();
          } catch (err) {
-            console.error('마이크 접근 오류:', err);
+            // 마이크 접근 실패 시 조용히 처리
          }
       };
 
       if (!recognitionRef.current) {
-         recognitionRef.current = new window.webkitSpeechRecognition();
+         // Browser compatibility check
+         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+         if (!SpeechRecognition) {
+            console.error('Speech recognition not supported in this browser');
+            return;
+         }
+         
+         recognitionRef.current = new SpeechRecognition();
          recognitionRef.current.continuous = true;
          recognitionRef.current.interimResults = true;
          recognitionRef.current.lang = 'ko-KR';
@@ -330,56 +343,78 @@ export const useVoiceRecognition = (
       };
 
       recognition.onerror = event => {
-         console.error('음성 인식 오류:', event.error);
          if (event.error === 'no-speech') {
             if (listeningMode === 'command') {
                setModalText('음성 입력 없음. 다시 말씀해주세요...');
                setTimeout(() => setModalText(''), 1500);
             }
             setListeningMode('hotword');
+         } else if (event.error === 'aborted') {
+            // aborted 에러는 조용히 처리 (정상적인 중단)
+            setListeningMode('hotword');
          } else {
-            recognition.abort();
-            setModalText(`오류: ${event.error}`);
-            setTimeout(() => setModalText(''), 1500);
+            // 다른 에러만 표시
+            setModalText(`음성인식 오류: ${event.error}`);
+            setTimeout(() => setModalText(''), 2000);
          }
       };
 
-      /** 자동 재시작 */
+      /** 자동 재시작 - 더 안전한 조건 */
       recognition.onend = () => {
-         if (!restartingRef.current) {
-            restartingRef.current = true;
-            setTimeout(() => {
-               try {
-                  cleanupAudioResources();
+         setIsListening(false);
+         
+         // 컴포넌트가 언마운트되었거나 음성인식이 비활성화되면 재시작하지 않음
+         if (!isVoiceRecognitionEnabled || !isLoggedIn || !areEventActionsReady || restartingRef.current) {
+            return;
+         }
+         
+         // 너무 빈번한 재시작 방지
+         restartingRef.current = true;
+         
+         setTimeout(() => {
+            try {
+               // 재시작 조건을 다시 한번 체크
+               if (isVoiceRecognitionEnabled && isLoggedIn && areEventActionsReady && recognitionRef.current) {
                   recognition.start();
                   setupAudioAnalysis();
-               } catch (e) {
-                  console.error('Recognition restart failed', e);
-               } finally {
-                  restartingRef.current = false;
                }
-            }, 500);
-         }
+            } catch (e) {
+               // 음성 인식 재시작 실패 시 5초 후 다시 시도
+               setTimeout(() => {
+                  restartingRef.current = false;
+               }, 5000);
+               return;
+            }
+            restartingRef.current = false;
+         }, 2000); // 재시작 간격을 2초로 더 증가
       };
 
       try {
-         recognition.start();
-         setupAudioAnalysis();
+         if (!restartingRef.current) {
+            recognition.start();
+            setupAudioAnalysis();
+         }
       } catch (e) {
-         console.log('Recognition already started.');
+         // 음성 인식이 이미 시작된 경우 무시
+         restartingRef.current = false;
       }
 
       return () => {
-         recognition.stop();
+         try {
+            if (recognitionRef.current) {
+               recognitionRef.current.stop();
+               recognitionRef.current = null;
+            }
+         } catch (e) {
+            // cleanup 중 에러 무시
+         }
          cleanupAudioResources();
       };
    }, [
       isLoggedIn,
       areEventActionsReady,
       isVoiceRecognitionEnabled,
-      processVoiceCommand,
-      listeningMode,
-      cleanupAudioResources,
+      // processVoiceCommand, listeningMode, cleanupAudioResources 제거하여 불필요한 재생성 방지
    ]);
 
    return { isListening, modalText, setModalText, micVolume };
