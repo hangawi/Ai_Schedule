@@ -1,8 +1,25 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Mic } from 'lucide-react';
 
-const CommandModal = ({ text, onClose }) => {
+const CommandModal = ({ text, onClose, micVolume }) => {
   const modalContentRef = useRef(null);
+  const [animatedText, setAnimatedText] = useState('');
+
+  useEffect(() => {
+    setAnimatedText(''); // Reset on new text
+    if (!text) return;
+
+    let i = 0;
+    const typingInterval = setInterval(() => {
+      setAnimatedText(prev => prev + text[i]);
+      i++;
+      if (i === text.length) {
+        clearInterval(typingInterval);
+      }
+    }, 70); // Adjust typing speed here
+
+    return () => clearInterval(typingInterval);
+  }, [text]);
 
   const handleBackdropClick = (e) => {
     if (modalContentRef.current && !modalContentRef.current.contains(e.target)) {
@@ -12,40 +29,32 @@ const CommandModal = ({ text, onClose }) => {
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 transition-opacity duration-300 ease-in-out"
+      className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 transition-opacity duration-300 ease-in-out"
       onClick={handleBackdropClick}
     >
       <div 
         ref={modalContentRef}
-        className="bg-white rounded-lg shadow-xl p-6 w-11/12 max-w-md text-center transition-transform duration-300 ease-in-out transform scale-100"
+        className="bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl shadow-2xl p-8 w-11/12 max-w-md text-center transform scale-95 transition-all duration-300 ease-out"
+        style={{ transform: `scale(${0.95 + micVolume * 0.05})` }} // Subtle scale based on volume
       >
-        <div className="flex justify-center items-center mb-4">
-          <Mic className="text-blue-500" size={24} />
-          <h2 className="text-xl font-bold ml-2 text-gray-800">음성 명령</h2>
+        <div className="flex justify-center items-center mb-6">
+          <Mic className="text-white" size={32} />
+          <h2 className="text-2xl font-extrabold ml-3 text-white">음성 명령</h2>
         </div>
-        <p className="text-gray-600 text-lg py-4" style={{ fontFamily: 'Spoqa Han Sans Neo', fontWeight: 500 }}>
-          "{text}"
+        <p className="text-white text-2xl font-semibold py-4 tracking-wide leading-relaxed" style={{ fontFamily: 'Spoqa Han Sans Neo', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
+          "{animatedText}"
         </p>
 
-        {/* VU Meter Placeholder */}
-        <div className="flex justify-center items-end h-10 mt-4 space-x-1">
-          <div className="w-2 bg-blue-400 rounded-full animate-pulse-vu" style={{ animationDelay: '0s' }}></div>
-          <div className="w-2 bg-blue-500 rounded-full animate-pulse-vu" style={{ animationDelay: '0.1s' }}></div>
-          <div className="w-2 bg-blue-600 rounded-full animate-pulse-vu" style={{ animationDelay: '0.2s' }}></div>
-          <div className="w-2 bg-blue-500 rounded-full animate-pulse-vu" style={{ animationDelay: '0.3s' }}></div>
-          <div className="w-2 bg-blue-400 rounded-full animate-pulse-vu" style={{ animationDelay: '0.4s' }}></div>
+        {/* VU Meter */}
+        <div className="flex justify-center items-end h-12 mt-6 space-x-1.5">
+          {[...Array(5)].map((_, i) => (
+            <div 
+              key={i}
+              className="w-3 bg-white rounded-full transition-all duration-100 ease-out"
+              style={{ height: `${Math.max(10, micVolume * 100 * (1 + i * 0.1))}px`, opacity: `${0.3 + micVolume * 0.7}` }}
+            ></div>
+          ))}
         </div>
-
-        {/* Add custom animation keyframes for Tailwind CSS */}
-        <style jsx>{`
-          @keyframes pulse-vu {
-            0%, 100% { height: 10%; opacity: 0.5; }
-            50% { height: 90%; opacity: 1; }
-          }
-          .animate-pulse-vu {
-            animation: pulse-vu 1.2s infinite ease-in-out alternate;
-          }
-        `}</style>
       </div>
     </div>
   );
