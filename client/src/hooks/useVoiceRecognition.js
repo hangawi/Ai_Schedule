@@ -261,7 +261,7 @@ export const useVoiceRecognition = (isLoggedIn, isVoiceRecognitionEnabled, event
             }
          }
 
-         setModalText(currentTranscript.trim()); // Update modal with interim results
+         setModalText(typeof currentTranscript === 'string' ? currentTranscript.trim() : ''); // Update modal with interim results
 
          if (isFinal) {
             const command = currentTranscript.trim();
@@ -300,7 +300,10 @@ export const useVoiceRecognition = (isLoggedIn, isVoiceRecognitionEnabled, event
       recognition.onend = () => {
          setIsListening(false);
          if (!manualStop) {
-            try { recognition.start(); } catch (e) { console.error("Recognition restart failed", e); }
+            try {
+               recognition.start();
+               setupAudioAnalysis(); // Re-initialize audio analysis
+            } catch (e) { console.error("Recognition restart failed", e); }
          }
       };
 
@@ -311,6 +314,7 @@ export const useVoiceRecognition = (isLoggedIn, isVoiceRecognitionEnabled, event
          recognition.stop();
          if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
          if (sourceRef.current) sourceRef.current.disconnect();
+         // Only close audio context if it's not null and not already closed
          if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
             audioContextRef.current.close();
          }
