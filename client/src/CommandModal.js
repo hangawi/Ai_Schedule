@@ -11,9 +11,10 @@ const CommandModal = ({ text, onClose, micVolume }) => {
 
     let i = 0;
     const typingInterval = setInterval(() => {
-      setAnimatedText(prev => prev + text[i]);
-      i++;
-      if (i === text.length) {
+      if (i < text.length) {
+        setAnimatedText(prev => prev + text[i]);
+        i++;
+      } else {
         clearInterval(typingInterval);
       }
     }, 70); // Adjust typing speed here
@@ -42,7 +43,7 @@ const CommandModal = ({ text, onClose, micVolume }) => {
           <h2 className="text-2xl font-extrabold ml-3 text-white">음성 명령</h2>
         </div>
         <p className="text-white text-2xl font-semibold py-4 tracking-wide leading-relaxed" style={{ fontFamily: 'Spoqa Han Sans Neo', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
-          "{animatedText}"
+          {animatedText}
         </p>
 
         {/* VU Meter */}

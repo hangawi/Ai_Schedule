@@ -238,10 +238,6 @@ UserSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   
   try {
-    console.log('--- User Model Pre-save Hook ---');
-    console.log('Hashing password for user:', this.email);
-    // 경고: 실제 프로덕션 환경에서는 절대 평문 비밀번호를 로그에 남기지 마세요!
-    console.log('Original password (before hash):', this.password);
     const salt = await bcrypt.genSalt(12);
     this.password = await bcrypt.hash(this.password, salt);
     next();

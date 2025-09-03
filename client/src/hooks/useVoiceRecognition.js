@@ -15,6 +15,7 @@ export const useVoiceRecognition = (isLoggedIn, isVoiceRecognitionEnabled, event
    const analyserRef = useRef(null);
    const sourceRef = useRef(null);
    const animationFrameId = useRef(null);
+   const restartingRef = useRef(false); // Flag to prevent multiple restarts
 
    const processVoiceCommand = useCallback(async (command) => {
       if (!isLoggedIn) {
@@ -241,6 +242,7 @@ export const useVoiceRecognition = (isLoggedIn, isVoiceRecognitionEnabled, event
          recognitionRef.current.continuous = true;
          recognitionRef.current.interimResults = true; // Changed to true
          recognitionRef.current.lang = 'ko-KR';
+         recognitionRef.current.maxAlternatives = 5; // Get more alternatives
          setupAudioAnalysis();
       }
 
@@ -252,7 +254,15 @@ export const useVoiceRecognition = (isLoggedIn, isVoiceRecognitionEnabled, event
          let currentTranscript = '';
          let isFinal = false;
          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            const transcript = event.results[i][0].transcript;
+            let bestAlternative = event.results[i][0];
+            // Find the alternative with the highest confidence
+            for (let j = 1; j < event.results[i].length; j++) {
+               if (event.results[i][j].confidence > bestAlternative.confidence) {
+                  bestAlternative = event.results[i][j];
+               }
+            }
+            const transcript = bestAlternative.transcript;
+
             if (event.results[i].isFinal) {
                currentTranscript += transcript;
                isFinal = true;
@@ -284,26 +294,40 @@ export const useVoiceRecognition = (isLoggedIn, isVoiceRecognitionEnabled, event
       recognition.onerror = event => {
          console.error('음성 인식 오류:', event.error);
          if (event.error === 'no-speech') {
+            if (listeningMode === 'command') { // Only show message if expecting a command
+               setModalText('음성 입력 없음. 다시 말씀해주세요...'); // Temporary message
+               setTimeout(() => {
+                  setModalText(''); // Clear message after a short while
+               }, 1500); // Display message for 1.5 seconds
+            }
             setListeningMode('hotword');
-            setModalText('');
-            // Add a delay before restarting recognition
-            setTimeout(() => {
-               try { recognition.start(); } catch (e) { console.error("Recognition restart failed after no-speech", e); }
-            }, 1000); // 1 second delay
          } else {
-            // For other errors, just try to restart immediately
-            try { recognition.start(); } catch (e) { console.error("Recognition restart failed on error", e); }
+            // For other errors, explicitly abort to ensure a clean state before onend restarts
+            recognition.abort(); 
+            setModalText(`오류: ${event.error}`); // Display other errors
+            setTimeout(() => {
+               setModalText('');
+            }, 1500); // Display message for 1.5 seconds
          }
+         // Do not restart here, onend will handle it
       };
 
       let manualStop = false;
       recognition.onend = () => {
          setIsListening(false);
          if (!manualStop) {
-            try {
-               recognition.start();
-               setupAudioAnalysis(); // Re-initialize audio analysis
-            } catch (e) { console.error("Recognition restart failed", e); }
+            if (restartingRef.current) return; // Prevent multiple restarts
+            restartingRef.current = true;
+            // Add a delay before restarting recognition to prevent InvalidStateError
+            setTimeout(() => {
+               try {
+                  recognition.start();
+                  setupAudioAnalysis(); // Re-initialize audio analysis
+               } catch (e) { console.error("Recognition restart failed", e); }
+               finally {
+                  restartingRef.current = false;
+               }
+            }, 500); // 0.5 second delay
          }
       };
 
