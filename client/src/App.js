@@ -52,7 +52,7 @@ function App() {
             />
          </Routes>
          {isLoggedIn && <ChatBox onSendMessage={handleChatMessage} speak={speak} />}
-         {modalText && <CommandModal text={modalText} onClose={() => setModalText('')} />}
+         {modalText && <CommandModal text={modalText} onClose={() => setModalText('')} micVolume={micVolume} />}}
       </Router>
    );
 }
