@@ -6,20 +6,7 @@ const CommandModal = ({ text, onClose, micVolume }) => {
   const [animatedText, setAnimatedText] = useState('');
 
   useEffect(() => {
-    setAnimatedText(''); // Reset on new text
-    if (!text) return;
-
-    let i = 0;
-    const typingInterval = setInterval(() => {
-      if (i < text.length) {
-        setAnimatedText(prev => prev + text[i]);
-        i++;
-      } else {
-        clearInterval(typingInterval);
-      }
-    }, 70); // Adjust typing speed here
-
-    return () => clearInterval(typingInterval);
+    setAnimatedText(text); // Directly set the text without animation or clearing
   }, [text]);
 
   const handleBackdropClick = (e) => {
