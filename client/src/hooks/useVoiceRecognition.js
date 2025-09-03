@@ -36,7 +36,11 @@ export const useVoiceRecognition = (
    /** 🎤 음성 명령 처리 */
    const processVoiceCommand = useCallback(
       async command => {
-         if (!isLoggedIn || !isVoiceRecognitionEnabled) return;
+         if (!isLoggedIn || !isVoiceRecognitionEnabled) {
+            setModalText('로그인이 필요하거나 음성인식이 비활성화되어 있습니다.');
+            setTimeout(() => setModalText(''), 2000);
+            return;
+         }
 
          if (!command) {
             speak('네, 무엇을 도와드릴까요?');
@@ -307,7 +311,9 @@ export const useVoiceRecognition = (
       recognition.onresult = event => {
          let currentTranscript = '';
          let isFinal = false;
-         for (let i = event.resultIndex; i < event.results.length; ++i) {
+         
+         // 모든 결과를 합쳐서 전체 텍스트 만들기
+         for (let i = 0; i < event.results.length; ++i) {
             let bestAlternative = event.results[i][0];
             for (let j = 1; j < event.results[i].length; j++) {
                if (event.results[i][j].confidence > bestAlternative.confidence) {
@@ -315,27 +321,27 @@ export const useVoiceRecognition = (
                }
             }
             const transcript = bestAlternative.transcript;
+            currentTranscript += transcript;
 
             if (event.results[i].isFinal) {
-               currentTranscript += transcript;
                isFinal = true;
-            } else {
-               currentTranscript += transcript;
             }
          }
 
          // command 모드에서는 실시간으로 텍스트 표시
          if (listeningMode === 'command') {
-            const displayText = typeof currentTranscript === 'string' ? currentTranscript.trim() : '';
+            const displayText = currentTranscript.trim();
             if (displayText) {
-               setModalText(`듣고 있어요: "${displayText}"`);
+               setModalText(`${displayText}`);
             } else {
                setModalText('말씀해주세요...');
             }
          }
 
+         // 최종 결과가 나왔을 때 처리
          if (isFinal) {
             const command = currentTranscript.trim();
+            
             if (listeningMode === 'hotword') {
                const HOTWORDS = ['큐브야', '비서야', '자비스', '큐브', '비서'];
                if (HOTWORDS.some(h => command.toLowerCase().includes(h.toLowerCase()))) {
@@ -343,16 +349,10 @@ export const useVoiceRecognition = (
                   setModalText('말씀해주세요...');
                   setListeningMode('command');
                }
-            } else if (listeningMode === 'command') {
-               if (command) {
-                  setModalText(`명령 처리 중: "${command}"`);
-                  processVoiceCommand(command);
-                  setListeningMode('hotword');
-               } else {
-                  // 빈 명령어면 다시 hotword 모드로
-                  setModalText('');
-                  setListeningMode('hotword');
-               }
+            } else if (listeningMode === 'command' && command) {
+               setModalText(`명령 처리 중...`);
+               processVoiceCommand(command);
+               setListeningMode('hotword');
             }
          }
       };
@@ -384,7 +384,7 @@ export const useVoiceRecognition = (
          }
       };
 
-      /** 자동 재시작 - 더 안전한 조건 */
+      /** 자동 재시작 - command 모드 고려 */
       recognition.onend = () => {
          setIsListening(false);
          
@@ -393,7 +393,9 @@ export const useVoiceRecognition = (
             return;
          }
          
-         // 너무 빈번한 재시작 방지
+         // command 모드일 때는 더 빨리 재시작 (사용자 명령 대기 중)
+         const restartDelay = listeningMode === 'command' ? 500 : 2000;
+         
          restartingRef.current = true;
          
          setTimeout(() => {
@@ -411,7 +413,7 @@ export const useVoiceRecognition = (
                return;
             }
             restartingRef.current = false;
-         }, 2000); // 재시작 간격을 2초로 더 증가
+         }, restartDelay);
       };
 
       try {
@@ -439,7 +441,9 @@ export const useVoiceRecognition = (
       isLoggedIn,
       areEventActionsReady,
       isVoiceRecognitionEnabled,
-      // processVoiceCommand, listeningMode, cleanupAudioResources 제거하여 불필요한 재생성 방지
+      processVoiceCommand,
+      listeningMode,
+      cleanupAudioResources,
    ]);
 
    return { isListening, modalText, setModalText, micVolume };
