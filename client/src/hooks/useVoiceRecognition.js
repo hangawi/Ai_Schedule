@@ -409,7 +409,7 @@ export const useVoiceRecognition = (
          }
       };
 
-      /** 자동 재시작 - command 모드에서만 재시작 */
+      /** 자동 재시작 - 모든 모드에서 재시작 */
       recognition.onend = () => {
          setIsListening(false);
          
@@ -418,17 +418,15 @@ export const useVoiceRecognition = (
             return;
          }
          
-         // command 모드일 때만 재시작 (hotword 모드에서는 재시작하지 않음)
-         if (listeningModeRef.current !== 'command') {
-            return;
-         }
-         
          restartingRef.current = true;
+         
+         // command 모드는 빠르게, hotword 모드는 조금 더 빠르게 재시작
+         const restartDelay = listeningModeRef.current === 'command' ? 300 : 800;
          
          setTimeout(() => {
             try {
-               // command 모드이고 모든 조건이 맞을 때만 재시작
-               if (listeningModeRef.current === 'command' && isVoiceRecognitionEnabled && isLoggedIn && areEventActionsReady && recognitionRef.current) {
+               // 모든 조건이 맞을 때 재시작
+               if (isVoiceRecognitionEnabled && isLoggedIn && areEventActionsReady && recognitionRef.current) {
                   recognition.start();
                   setupAudioAnalysis();
                }
@@ -436,7 +434,7 @@ export const useVoiceRecognition = (
                // 재시작 실패 시 조용히 처리
             }
             restartingRef.current = false;
-         }, 500);
+         }, restartDelay);
       };
 
       try {
