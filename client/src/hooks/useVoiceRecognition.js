@@ -318,18 +318,16 @@ export const useVoiceRecognition = (
          // 재시작 시 현재 모드 유지 (ref 값 사용)
          if (listeningModeRef.current !== 'command') {
             updateListeningMode('hotword');
-         } else {
-            // command 모드에서 재시작된 경우 텍스트 초기화
-            setModalText('무엇을 도와드릴까요?');
          }
+         // command 모드에서는 onstart 시 텍스트 변경하지 않음
       };
 
       recognition.onresult = event => {
          let currentTranscript = '';
          let isFinal = false;
          
-         // 모든 결과를 합쳐서 전체 텍스트 만들기
-         for (let i = 0; i < event.results.length; ++i) {
+         // 새로운 결과만 가져오기 (이전 결과 누적 방지)
+         for (let i = event.resultIndex; i < event.results.length; ++i) {
             let bestAlternative = event.results[i][0];
             for (let j = 1; j < event.results[i].length; j++) {
                if (event.results[i][j].confidence > bestAlternative.confidence) {
@@ -344,17 +342,16 @@ export const useVoiceRecognition = (
             }
          }
 
-         // command 모드에서는 실시간으로 텍스트 표시
+         // command 모드에서만 실시간 텍스트 표시
          if (listeningModeRef.current === 'command') {
             const displayText = currentTranscript.trim();
             if (displayText) {
-               setModalText(`${displayText}`);
-            } else {
-               setModalText('무엇을 도와드릴까요?');
+               setModalText(displayText);
             }
+            // 텍스트가 없으면 아무것도 표시하지 않음 (기본 메시지도 표시 안 함)
          }
 
-         // 최종 결과가 나왔을 때 처리
+         // 최종 결과가 나왔을 때만 처리
          if (isFinal) {
             const command = currentTranscript.trim();
             
@@ -362,28 +359,27 @@ export const useVoiceRecognition = (
                const HOTWORDS = ['큐브야', '비서야', '자비스', '큐브', '비서'];
                if (HOTWORDS.some(h => command.toLowerCase().includes(h.toLowerCase()))) {
                   speak('네, 말씀하세요.');
-                  setModalText('무엇을 도와드릴까요?');
+                  // hotword 감지 시에는 텍스트를 즉시 초기화
+                  setModalText('');
                   updateListeningMode('command');
-                  // 이전 내용 초기화
-                  lastTranscriptRef.current = '';
-                  // command 모드로 전환 후 즉시 음성인식 재시작
+                  
+                  // command 모드로 전환 후 음성인식 재시작
                   setTimeout(() => {
                      try {
                         if (recognitionRef.current && listeningModeRef.current === 'command') {
+                           setModalText('말씀하세요...');
                            recognition.start();
                            setupAudioAnalysis();
                         }
                      } catch (e) {
                         // 재시작 실패 시 조용히 처리
                      }
-                  }, 100);
+                  }, 500);
                }
             } else if (listeningModeRef.current === 'command' && command) {
-               setModalText(`명령 처리 중...`);
+               setModalText('명령 처리 중...');
                processVoiceCommand(command);
                updateListeningMode('hotword');
-               // 명령 처리 후 초기화
-               lastTranscriptRef.current = '';
             }
          }
       };
@@ -391,29 +387,24 @@ export const useVoiceRecognition = (
       recognition.onerror = event => {
          if (event.error === 'no-speech') {
             if (listeningModeRef.current === 'command') {
-               setModalText('음성이 들리지 않아요. "비서야"라고 다시 불러주세요.');
+               setModalText('음성이 들리지 않습니다');
                setTimeout(() => {
                   setModalText('');
                   updateListeningMode('hotword');
-                  lastTranscriptRef.current = '';
-               }, 3000);
+               }, 2000);
             } else {
                updateListeningMode('hotword');
             }
          } else if (event.error === 'aborted') {
             // aborted 에러는 조용히 처리 (정상적인 중단)
-            if (listeningModeRef.current === 'command') {
-               setModalText('');
-            }
+            setModalText('');
             updateListeningMode('hotword');
-            lastTranscriptRef.current = '';
          } else {
             // 다른 에러만 표시
             setModalText(`음성인식 오류: ${event.error}`);
             setTimeout(() => {
                setModalText('');
                updateListeningMode('hotword');
-               lastTranscriptRef.current = '';
             }, 2000);
          }
       };
