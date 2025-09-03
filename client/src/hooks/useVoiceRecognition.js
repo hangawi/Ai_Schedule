@@ -239,7 +239,7 @@ export const useVoiceRecognition = (isLoggedIn, isVoiceRecognitionEnabled, event
       if (!recognitionRef.current) {
          recognitionRef.current = new window.webkitSpeechRecognition();
          recognitionRef.current.continuous = true;
-         recognitionRef.current.interimResults = false;
+         recognitionRef.current.interimResults = true; // Changed to true
          recognitionRef.current.lang = 'ko-KR';
          setupAudioAnalysis();
       }
@@ -249,23 +249,33 @@ export const useVoiceRecognition = (isLoggedIn, isVoiceRecognitionEnabled, event
       recognition.onstart = () => setIsListening(true);
 
       recognition.onresult = event => {
-         const transcript = event.results[event.results.length - 1][0].transcript.trim();
-         if (listeningMode === 'hotword') {
-            if (HOTWORDS.some(h => transcript.toLowerCase().includes(h.toLowerCase()))) {
-               speak('네, 말씀하세요.');
-               setModalText('네, 말씀하세요...');
-               setListeningMode('command');
-               lastTranscriptRef.current = transcript;
+         let currentTranscript = '';
+         let isFinal = false;
+         for (let i = event.resultIndex; i < event.results.length; ++i) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+               currentTranscript += transcript;
+               isFinal = true;
+            } else {
+               currentTranscript += transcript;
             }
-         } else if (listeningMode === 'command') {
-            if (transcript !== lastTranscriptRef.current) {
-               const command = transcript.startsWith(lastTranscriptRef.current)
-                  ? transcript.substring(lastTranscriptRef.current.length).trim()
-                  : transcript;
+         }
+
+         setModalText(currentTranscript.trim()); // Update modal with interim results
+
+         if (isFinal) {
+            const command = currentTranscript.trim();
+            if (listeningMode === 'hotword') {
+               const HOTWORDS = ['큐브야', '비서야', '자비스', '큐브', '비서'];
+               if (HOTWORDS.some(h => command.toLowerCase().includes(h.toLowerCase()))) {
+                  speak('네, 말씀하세요.');
+                  setModalText('네, 말씀하세요...');
+                  setListeningMode('command');
+               }
+            } else if (listeningMode === 'command') {
                if (command) {
                   processVoiceCommand(command);
                   setListeningMode('hotword');
-                  lastTranscriptRef.current = '';
                }
             }
          }
@@ -276,6 +286,13 @@ export const useVoiceRecognition = (isLoggedIn, isVoiceRecognitionEnabled, event
          if (event.error === 'no-speech') {
             setListeningMode('hotword');
             setModalText('');
+            // Add a delay before restarting recognition
+            setTimeout(() => {
+               try { recognition.start(); } catch (e) { console.error("Recognition restart failed after no-speech", e); }
+            }, 1000); // 1 second delay
+         } else {
+            // For other errors, just try to restart immediately
+            try { recognition.start(); } catch (e) { console.error("Recognition restart failed on error", e); }
          }
       };
 
