@@ -13,7 +13,7 @@ moment.locale('ko'); // moment 전역 로케일 설정
 const localizer = momentLocalizer(moment);
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
-const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled }) => {
+const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onToggleVoiceRecognition }) => {
    const [events, setEvents] = useState([]);
    const [date, setDate] = useState(new Date());
    const [showAddEventModal, setShowAddEventModal] = useState(false);
@@ -141,12 +141,13 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled }) =>
          <div className="flex justify-end items-center mb-4">
             <button
                className={`px-4 py-2 rounded-md flex items-center text-white ${
-                  isListening ? 'bg-red-500' : 'bg-gray-400'
-               } mr-2`}
-               disabled
+                  isVoiceRecognitionEnabled ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 hover:bg-gray-500'
+               } mr-2 cursor-pointer`}
+               onClick={onToggleVoiceRecognition}
+               title={isVoiceRecognitionEnabled ? "음성인식 비활성화" : "음성인식 활성화"}
             >
                <Mic size={20} className="mr-2" />
-               {!isVoiceRecognitionEnabled ? '음성인식 비활성화' : (isListening ? '음성인식 중' : '준비됨')}
+               {isVoiceRecognitionEnabled ? '음성인식 활성화' : '음성인식 비활성화'}
             </button>
             <button
                onClick={() => setShowAddEventModal(true)}

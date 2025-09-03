@@ -15,6 +15,13 @@ export const useVoiceRecognition = (
    const [modalText, setModalText] = useState('');
    const recognitionRef = useRef(null);
    const [listeningMode, setListeningMode] = useState('hotword'); // 'hotword' or 'command'
+   const listeningModeRef = useRef('hotword'); // ref로 현재 모드 추적
+   
+   // listeningMode를 설정하는 헬퍼 함수
+   const updateListeningMode = useCallback((mode) => {
+      setListeningMode(mode);
+      listeningModeRef.current = mode;
+   }, []);
    const lastTranscriptRef = useRef('');
    const [micVolume, setMicVolume] = useState(0); // VU meter
    const audioContextRef = useRef(null);
@@ -306,7 +313,13 @@ export const useVoiceRecognition = (
 
       const recognition = recognitionRef.current;
 
-      recognition.onstart = () => setIsListening(true);
+      recognition.onstart = () => {
+         setIsListening(true);
+         // 재시작 시 현재 모드 유지 (ref 값 사용)
+         if (listeningModeRef.current !== 'command') {
+            updateListeningMode('hotword');
+         }
+      };
 
       recognition.onresult = event => {
          let currentTranscript = '';
@@ -329,7 +342,7 @@ export const useVoiceRecognition = (
          }
 
          // command 모드에서는 실시간으로 텍스트 표시
-         if (listeningMode === 'command') {
+         if (listeningModeRef.current === 'command') {
             const displayText = currentTranscript.trim();
             if (displayText) {
                setModalText(`${displayText}`);
@@ -342,49 +355,60 @@ export const useVoiceRecognition = (
          if (isFinal) {
             const command = currentTranscript.trim();
             
-            if (listeningMode === 'hotword') {
+            if (listeningModeRef.current === 'hotword') {
                const HOTWORDS = ['큐브야', '비서야', '자비스', '큐브', '비서'];
                if (HOTWORDS.some(h => command.toLowerCase().includes(h.toLowerCase()))) {
                   speak('네, 말씀하세요.');
                   setModalText('말씀해주세요...');
-                  setListeningMode('command');
+                  updateListeningMode('command');
+                  // command 모드로 전환 후 즉시 음성인식 재시작
+                  setTimeout(() => {
+                     try {
+                        if (recognitionRef.current && listeningModeRef.current === 'command') {
+                           recognition.start();
+                           setupAudioAnalysis();
+                        }
+                     } catch (e) {
+                        // 재시작 실패 시 조용히 처리
+                     }
+                  }, 100);
                }
-            } else if (listeningMode === 'command' && command) {
+            } else if (listeningModeRef.current === 'command' && command) {
                setModalText(`명령 처리 중...`);
                processVoiceCommand(command);
-               setListeningMode('hotword');
+               updateListeningMode('hotword');
             }
          }
       };
 
       recognition.onerror = event => {
          if (event.error === 'no-speech') {
-            if (listeningMode === 'command') {
+            if (listeningModeRef.current === 'command') {
                setModalText('음성이 들리지 않아요. "비서야"라고 다시 불러주세요.');
                setTimeout(() => {
                   setModalText('');
-                  setListeningMode('hotword');
+                  updateListeningMode('hotword');
                }, 3000);
             } else {
-               setListeningMode('hotword');
+               updateListeningMode('hotword');
             }
          } else if (event.error === 'aborted') {
             // aborted 에러는 조용히 처리 (정상적인 중단)
-            if (listeningMode === 'command') {
+            if (listeningModeRef.current === 'command') {
                setModalText('');
             }
-            setListeningMode('hotword');
+            updateListeningMode('hotword');
          } else {
             // 다른 에러만 표시
             setModalText(`음성인식 오류: ${event.error}`);
             setTimeout(() => {
                setModalText('');
-               setListeningMode('hotword');
+               updateListeningMode('hotword');
             }, 2000);
          }
       };
 
-      /** 자동 재시작 - command 모드 고려 */
+      /** 자동 재시작 - command 모드에서만 재시작 */
       recognition.onend = () => {
          setIsListening(false);
          
@@ -393,37 +417,33 @@ export const useVoiceRecognition = (
             return;
          }
          
-         // command 모드일 때는 더 빨리 재시작 (사용자 명령 대기 중)
-         const restartDelay = listeningMode === 'command' ? 500 : 2000;
+         // command 모드일 때만 재시작 (hotword 모드에서는 재시작하지 않음)
+         if (listeningModeRef.current !== 'command') {
+            return;
+         }
          
          restartingRef.current = true;
          
          setTimeout(() => {
             try {
-               // 재시작 조건을 다시 한번 체크
-               if (isVoiceRecognitionEnabled && isLoggedIn && areEventActionsReady && recognitionRef.current) {
+               // command 모드이고 모든 조건이 맞을 때만 재시작
+               if (listeningModeRef.current === 'command' && isVoiceRecognitionEnabled && isLoggedIn && areEventActionsReady && recognitionRef.current) {
                   recognition.start();
                   setupAudioAnalysis();
                }
             } catch (e) {
-               // 음성 인식 재시작 실패 시 5초 후 다시 시도
-               setTimeout(() => {
-                  restartingRef.current = false;
-               }, 5000);
-               return;
+               // 재시작 실패 시 조용히 처리
             }
             restartingRef.current = false;
-         }, restartDelay);
+         }, 500);
       };
 
       try {
-         if (!restartingRef.current) {
-            recognition.start();
-            setupAudioAnalysis();
-         }
+         // 처음 시작할 때만 음성인식 시작 (hotword 감지용)
+         recognition.start();
+         setupAudioAnalysis();
       } catch (e) {
          // 음성 인식이 이미 시작된 경우 무시
-         restartingRef.current = false;
       }
 
       return () => {
@@ -442,7 +462,7 @@ export const useVoiceRecognition = (
       areEventActionsReady,
       isVoiceRecognitionEnabled,
       processVoiceCommand,
-      listeningMode,
+      updateListeningMode,
       cleanupAudioResources,
    ]);
 
