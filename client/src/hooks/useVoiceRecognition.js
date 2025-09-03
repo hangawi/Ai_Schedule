@@ -293,7 +293,11 @@ export const useVoiceRecognition = (
          recognitionRef.current.continuous = true;
          recognitionRef.current.interimResults = true;
          recognitionRef.current.lang = 'ko-KR';
-         recognitionRef.current.maxAlternatives = 5;
+         recognitionRef.current.maxAlternatives = 3;
+         // 음성인식 민감도 향상
+         if (recognitionRef.current.serviceURI) {
+            recognitionRef.current.serviceURI = 'wss://www.google.com/speech-api/v2/recognize';
+         }
       }
 
       const recognition = recognitionRef.current;
@@ -320,8 +324,14 @@ export const useVoiceRecognition = (
             }
          }
 
+         // command 모드에서는 실시간으로 텍스트 표시
          if (listeningMode === 'command') {
-            setModalText(typeof currentTranscript === 'string' ? currentTranscript.trim() : '');
+            const displayText = typeof currentTranscript === 'string' ? currentTranscript.trim() : '';
+            if (displayText) {
+               setModalText(`듣고 있어요: "${displayText}"`);
+            } else {
+               setModalText('말씀해주세요...');
+            }
          }
 
          if (isFinal) {
@@ -330,12 +340,17 @@ export const useVoiceRecognition = (
                const HOTWORDS = ['큐브야', '비서야', '자비스', '큐브', '비서'];
                if (HOTWORDS.some(h => command.toLowerCase().includes(h.toLowerCase()))) {
                   speak('네, 말씀하세요.');
-                  setModalText('네, 말씀하세요...');
+                  setModalText('말씀해주세요...');
                   setListeningMode('command');
                }
             } else if (listeningMode === 'command') {
                if (command) {
+                  setModalText(`명령 처리 중: "${command}"`);
                   processVoiceCommand(command);
+                  setListeningMode('hotword');
+               } else {
+                  // 빈 명령어면 다시 hotword 모드로
+                  setModalText('');
                   setListeningMode('hotword');
                }
             }
@@ -345,17 +360,27 @@ export const useVoiceRecognition = (
       recognition.onerror = event => {
          if (event.error === 'no-speech') {
             if (listeningMode === 'command') {
-               setModalText('음성 입력 없음. 다시 말씀해주세요...');
-               setTimeout(() => setModalText(''), 1500);
+               setModalText('음성이 들리지 않아요. "비서야"라고 다시 불러주세요.');
+               setTimeout(() => {
+                  setModalText('');
+                  setListeningMode('hotword');
+               }, 3000);
+            } else {
+               setListeningMode('hotword');
             }
-            setListeningMode('hotword');
          } else if (event.error === 'aborted') {
             // aborted 에러는 조용히 처리 (정상적인 중단)
+            if (listeningMode === 'command') {
+               setModalText('');
+            }
             setListeningMode('hotword');
          } else {
             // 다른 에러만 표시
             setModalText(`음성인식 오류: ${event.error}`);
-            setTimeout(() => setModalText(''), 2000);
+            setTimeout(() => {
+               setModalText('');
+               setListeningMode('hotword');
+            }, 2000);
          }
       };
 
