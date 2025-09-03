@@ -81,6 +81,7 @@ export const useVoiceRecognition = (isLoggedIn, isVoiceRecognitionEnabled, event
 
             speak('일정을 성공적으로 추가했습니다.');
             setEventAddedKey(prevKey => prevKey + 1);
+            setModalText('');
          } else if (eventData.intent === 'delete_event' || eventData.intent === 'delete_range') {
             const token = localStorage.getItem('token');
             const controller = new AbortController();
@@ -159,6 +160,7 @@ export const useVoiceRecognition = (isLoggedIn, isVoiceRecognitionEnabled, event
                   clearTimeout(timeoutId);
                   speak(`${deletedCount}개의 일정을 삭제했어요!`);
                   setEventAddedKey(prevKey => prevKey + 1);
+                  setModalText('');
                   return;
                }
                
@@ -179,6 +181,7 @@ export const useVoiceRecognition = (isLoggedIn, isVoiceRecognitionEnabled, event
                   speak(`${eventToDelete.summary || '일정'}을 삭제했어요!`);
                }
                setEventAddedKey(prevKey => prevKey + 1);
+               setModalText('');
             } catch (error) {
                clearTimeout(timeoutId);
                console.error('일정 삭제 오류:', error);
@@ -189,6 +192,7 @@ export const useVoiceRecognition = (isLoggedIn, isVoiceRecognitionEnabled, event
          } else {
             speak('알 수 없는 명령입니다.');
          }
+         setModalText(''); // Close modal after processing command
       } catch (error) {
          if (error.name === 'AbortError') {
             speak('요청 시간이 초과되었습니다. 다시 시도해주세요.');
@@ -196,6 +200,7 @@ export const useVoiceRecognition = (isLoggedIn, isVoiceRecognitionEnabled, event
             console.error('Error adding event via voice:', error.message);
             speak(`음성 일정 추가에 실패했습니다. ${error.message}`);
          }
+         setModalText(''); // Close modal on error as well
       }
    }, [isLoggedIn, eventActions, isVoiceRecognitionEnabled, setEventAddedKey]);
 
