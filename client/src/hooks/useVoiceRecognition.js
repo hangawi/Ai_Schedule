@@ -239,6 +239,17 @@ export const useVoiceRecognition = (
             }
 
             setModalText('');
+            
+            // 처리 완료 후 즉시 음성인식 재시작
+            setTimeout(() => {
+               if (isVoiceRecognitionEnabled && recognitionRef.current) {
+                  try {
+                     recognitionRef.current.start();
+                  } catch (e) {
+                     // 재시작 실패 시 조용히 처리
+                  }
+               }
+            }, 100);
          } catch (error) {
             if (error.name === 'AbortError') {
                // AbortError는 조용히 처리 (사용자가 의도적으로 중단하거나 타임아웃)
@@ -247,6 +258,17 @@ export const useVoiceRecognition = (
                speak(`음성 일정 추가에 실패했습니다. ${error.message}`);
                setModalText('');
             }
+            
+            // 에러 발생 시에도 음성인식 재시작
+            setTimeout(() => {
+               if (isVoiceRecognitionEnabled && recognitionRef.current) {
+                  try {
+                     recognitionRef.current.start();
+                  } catch (e) {
+                     // 재시작 실패 시 조용히 처리
+                  }
+               }
+            }, 100);
          }
       },
       [isLoggedIn, eventActions, isVoiceRecognitionEnabled, setEventAddedKey],
@@ -304,10 +326,19 @@ export const useVoiceRecognition = (
          recognitionRef.current.continuous = true;
          recognitionRef.current.interimResults = true;
          recognitionRef.current.lang = 'ko-KR';
-         recognitionRef.current.maxAlternatives = 3;
-         // 음성인식 민감도 향상
+         recognitionRef.current.maxAlternatives = 5; // 더 많은 대안 고려
+         
+         // 음성인식 정확도 향상 설정
          if (recognitionRef.current.serviceURI) {
             recognitionRef.current.serviceURI = 'wss://www.google.com/speech-api/v2/recognize';
+         }
+         
+         // 추가 정확도 향상 설정들
+         if (recognitionRef.current.grammars) {
+            const grammar = '#JSGF V1.0; grammar commands; public <commands> = 비서야 | 큐브야 | 자비스 | 약속 | 일정 | 추가 | 삭제 | 오늘 | 내일 | 모레 | 시간 | 분;';
+            const speechRecognitionList = new (window.SpeechGrammarList || window.webkitSpeechGrammarList)();
+            speechRecognitionList.addFromString(grammar, 1);
+            recognitionRef.current.grammars = speechRecognitionList;
          }
       }
 
@@ -409,7 +440,7 @@ export const useVoiceRecognition = (
          }
       };
 
-      /** 자동 재시작 - 모든 모드에서 재시작 */
+      /** 자동 재시작 - 더 빠른 재시작 */
       recognition.onend = () => {
          setIsListening(false);
          
@@ -420,9 +451,7 @@ export const useVoiceRecognition = (
          
          restartingRef.current = true;
          
-         // command 모드는 빠르게, hotword 모드는 조금 더 빠르게 재시작
-         const restartDelay = listeningModeRef.current === 'command' ? 300 : 800;
-         
+         // 모든 모드에서 빠른 재시작 (200ms로 대폭 단축)
          setTimeout(() => {
             try {
                // 모든 조건이 맞을 때 재시작
@@ -434,7 +463,7 @@ export const useVoiceRecognition = (
                // 재시작 실패 시 조용히 처리
             }
             restartingRef.current = false;
-         }, restartDelay);
+         }, 200);
       };
 
       try {
