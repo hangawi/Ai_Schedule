@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import SchedulingSystem from './SchedulingSystem';
-import { AuthScreen } from './AuthScreen';
-import ChatBox from './ChatBox';
-import CommandModal from './CommandModal';
+import { AuthScreen } from './components/auth/AuthScreen';
+import ChatBox from './components/chat/ChatBox';
+import CommandModal from './components/modals/CommandModal';
 import { useAuth } from './hooks/useAuth';
 import { useVoiceRecognition } from './hooks/useVoiceRecognition';
 import { useChat } from './hooks/useChat';
-import { speak } from './utils';
+import { speak } from './utils.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -52,7 +52,7 @@ function App() {
             />
          </Routes>
          {isLoggedIn && <ChatBox onSendMessage={handleChatMessage} speak={speak} />}
-         {modalText && <CommandModal text={modalText} onClose={() => setModalText('')} micVolume={micVolume} />}}
+         {modalText && <CommandModal text={modalText} onClose={() => setModalText('')} micVolume={micVolume} />}
       </Router>
    );
 }

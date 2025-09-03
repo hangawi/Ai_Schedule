@@ -4,9 +4,9 @@ import moment from 'moment';
 import 'moment/locale/ko'; // 한국어 로케일 임포트
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import './Calendar.css';
-import AddEventModal from './AddEventModal';
-import EventDetailsModal from './EventDetailsModal';
-import EditEventModal from './EditEventModal';
+import AddEventModal from '../modals/AddEventModal';
+import EventDetailsModal from '../modals/EventDetailsModal';
+import EditEventModal from '../modals/EditEventModal';
 import { Mic } from 'lucide-react';
 
 moment.locale('ko'); // moment 전역 로케일 설정
@@ -82,7 +82,7 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled }) =>
          }));
          setEvents(formattedEvents);
       } catch (error) {
-         console.error('Error fetching calendar events:', error);
+         // 캘린더 이벤트 로드 실패 시 조용히 처리
       }
    }, []);
 
@@ -117,7 +117,6 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled }) =>
          setSelectedEvent(null);
          fetchEvents(date);
       } catch (error) {
-         console.error('Error deleting event:', error);
          alert('일정 삭제 중 오류가 발생했습니다.');
       }
    };

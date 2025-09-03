@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import moment from 'moment';
 import {
    ChevronDown,
@@ -12,7 +12,7 @@ import {
    X,
    Menu as MenuIcon,
 } from 'lucide-react';
-import MyCalendar from './Calendar';
+import MyCalendar from './components/calendar/Calendar';
 import EventFormModal from './components/EventFormModal';
 import DashboardTab from './components/DashboardTab';
 import ProposalsTab from './components/ProposalsTab';
@@ -209,18 +209,22 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
       }
    }, [isLoggedIn, eventsLoaded, fetchEvents]);
 
-   const today = new Date();
-   today.setHours(0, 0, 0, 0);
+   const { todayEvents, upcomingEvents } = useMemo(() => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-   const todayEvents = globalEvents.filter(event => {
-      const eventDate = new Date(event.date);
-      return eventDate.getTime() === today.getTime();
-   });
+      const todayEvents = globalEvents.filter(event => {
+         const eventDate = new Date(event.date);
+         return eventDate.getTime() === today.getTime();
+      });
 
-   const upcomingEvents = globalEvents.filter(event => {
-      const eventDate = new Date(event.date);
-      return eventDate > today;
-   });
+      const upcomingEvents = globalEvents.filter(event => {
+         const eventDate = new Date(event.date);
+         return eventDate > today;
+      });
+
+      return { todayEvents, upcomingEvents };
+   }, [globalEvents]);
 
    return (
       <div className="flex flex-col h-screen bg-gray-50">
@@ -249,10 +253,18 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                         {user && user.firstName ? user.firstName : '프로필'}
                      </button>
                   )}
-                  <button onClick={() => setIsVoiceRecognitionEnabled(prev => !prev)} title={isVoiceRecognitionEnabled ? "음성 인식 활성화됨 (클릭하여 비활성화)" : "음성 인식 비활성화됨 (클릭하여 활성화)"} className={`mr-2 sm:mr-4 text-xl transition-colors ${isVoiceRecognitionEnabled ? (isListening ? 'text-red-500 hover:text-red-600' : 'text-blue-500 hover:text-blue-600') : 'text-gray-400 hover:text-gray-500'}`}>
+                  <button 
+                     onClick={() => setIsVoiceRecognitionEnabled(prev => !prev)} 
+                     title={isVoiceRecognitionEnabled ? "음성 인식 활성화됨 (클릭하여 비활성화)" : "음성 인식 비활성화됨 (클릭하여 활성화)"} 
+                     aria-label={isVoiceRecognitionEnabled ? "음성 인식 비활성화" : "음성 인식 활성화"}
+                     className={`mr-2 sm:mr-4 text-xl transition-colors ${isVoiceRecognitionEnabled ? (isListening ? 'text-red-500 hover:text-red-600' : 'text-blue-500 hover:text-blue-600') : 'text-gray-400 hover:text-gray-500'}`}>
                      {isVoiceRecognitionEnabled ? (isListening ? '🎤' : '🎙️') : '🔇'}
                   </button>
-                  <button className="w-8 h-8 bg-red-100 text-red-600 rounded-full flex items-center justify-center cursor-pointer" onClick={handleManualLogout}>
+                  <button 
+                     className="w-8 h-8 bg-red-100 text-red-600 rounded-full flex items-center justify-center cursor-pointer" 
+                     onClick={handleManualLogout}
+                     aria-label="로그아웃"
+                     title="로그아웃">
                      <LogOut size={16} />
                   </button>
                </div>
@@ -296,14 +308,6 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
    );
 };
 
-// CSS Override for Toggle Switch
-const style = document.createElement('style');
-style.textContent = `
-  input:checked ~ .dot {
-    transform: translateX(100%);
-    background-color: #3b82f6;
-  }
-`;
-document.head.appendChild(style);
+// Toggle switch styles are handled by Tailwind CSS classes
 
 export default SchedulingSystem;
