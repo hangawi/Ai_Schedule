@@ -86,7 +86,7 @@ export const LoginModal = ({ onClose, onRegisterClick, onLoginSuccess }) => {
     <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
       <div className="bg-white w-11/12 max-w-md rounded-lg shadow-xl p-6">
         <div className="relative mb-4">
-          <h2 className="text-xl font-bold text-gray-800 text-center">로로로그인</h2>
+          <h2 className="text-xl font-bold text-gray-800 text-center">로그인</h2>
         </div>
 
         <div className="space-y-4">

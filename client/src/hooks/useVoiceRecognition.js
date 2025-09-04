@@ -28,7 +28,8 @@ export const useVoiceRecognition = (
    const analyserRef = useRef(null);
    const sourceRef = useRef(null);
    const animationFrameId = useRef(null);
-   const restartingRef = useRef(false);
+   const restartingRef = useRef(false); // 재시작 상태 추적
+   
 
    /** 🎤 오디오 리소스 정리 */
    const cleanupAudioResources = useCallback(() => {
@@ -292,7 +293,20 @@ export const useVoiceRecognition = (
       /** 🔊 마이크 분석 */
       const setupAudioAnalysis = async () => {
          try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // 이전에 허용한 적이 있는지 확인
+            const micPermissionGranted = localStorage.getItem('micPermissionGranted') === 'true';
+            
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+               audio: {
+                  echoCancellation: true,
+                  noiseSuppression: true,
+                  autoGainControl: true
+               } 
+            });
+            
+            // 성공적으로 마이크 접근이 되면 localStorage에 저장
+            localStorage.setItem('micPermissionGranted', 'true');
+            
             audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
             analyserRef.current = audioContextRef.current.createAnalyser();
             sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
@@ -310,7 +324,9 @@ export const useVoiceRecognition = (
             };
             draw();
          } catch (err) {
-            // 마이크 접근 실패 시 조용히 처리
+            // 마이크 접근 실패 시 localStorage에서 제거
+            localStorage.removeItem('micPermissionGranted');
+            console.warn('마이크 접근 실패:', err);
          }
       };
 
