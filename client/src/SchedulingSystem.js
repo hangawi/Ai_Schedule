@@ -257,8 +257,8 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                      onClick={() => setIsVoiceRecognitionEnabled(prev => !prev)} 
                      title={isVoiceRecognitionEnabled ? "음성 인식 활성화됨 (클릭하여 비활성화)" : "음성 인식 비활성화됨 (클릭하여 활성화)"} 
                      aria-label={isVoiceRecognitionEnabled ? "음성 인식 비활성화" : "음성 인식 활성화"}
-                     className={`mr-2 sm:mr-4 text-xl transition-colors ${isVoiceRecognitionEnabled ? (isListening ? 'text-red-500 hover:text-red-600' : 'text-blue-500 hover:text-blue-600') : 'text-gray-400 hover:text-gray-500'}`}>
-                     {isVoiceRecognitionEnabled ? (isListening ? '🎤' : '🎙️') : '🔇'}
+                     className={`mr-2 sm:mr-4 text-xl transition-colors ${isVoiceRecognitionEnabled ? 'text-blue-500 hover:text-blue-600' : 'text-gray-400 hover:text-gray-500'}`}>
+                     {isVoiceRecognitionEnabled ? '🎙️' : '🔇'}
                   </button>
                   <button 
                      className="w-8 h-8 bg-red-100 text-red-600 rounded-full flex items-center justify-center cursor-pointer" 

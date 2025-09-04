@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import SchedulingSystem from './SchedulingSystem';
 import { AuthScreen } from './components/auth/AuthScreen';
@@ -11,7 +11,6 @@ import { useVoiceRecognition } from './hooks/useVoiceRecognition';
 import { useChat } from './hooks/useChat';
 import { speak } from './utils.js';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
 function App() { // Trigger auto-deploy
 
@@ -27,7 +26,23 @@ function App() { // Trigger auto-deploy
    const { handleChatMessage } = useChat(isLoggedIn, setEventAddedKey);
    const [sharedText, setSharedText] = useState(null);
    const [copiedText, setCopiedText] = useState(null); // New state for copied text
-   const [dismissedCopiedTexts, setDismissedCopiedTexts] = useState(new Set()); // 취소한 복사 텍스트들
+   const [dismissedCopiedTexts, setDismissedCopiedTexts] = useState(() => {
+      try {
+         const saved = localStorage.getItem('dismissedCopiedTexts');
+         const savedArray = saved ? JSON.parse(saved) : [];
+         
+         // 너무 많은 데이터가 쌓이는 것을 방지하기 위해 최근 100개만 유지
+         const recentTexts = savedArray.slice(-100);
+         
+         if (recentTexts.length !== savedArray.length) {
+            localStorage.setItem('dismissedCopiedTexts', JSON.stringify(recentTexts));
+         }
+         
+         return new Set(recentTexts);
+      } catch (error) {
+         return new Set();
+      }
+   }); // 취소한 복사 텍스트들
 
    // Effect for handling shared text from URL
    useEffect(() => {
@@ -40,7 +55,7 @@ function App() { // Trigger auto-deploy
    }, []);
 
    // Function to read clipboard content
-   const readClipboard = async () => {
+   const readClipboard = useCallback(async () => {
       if (!navigator.clipboard || !navigator.clipboard.readText) {
          console.warn('Clipboard API not available.');
          return;
@@ -77,7 +92,7 @@ function App() { // Trigger auto-deploy
       } catch (err) {
          console.error('Failed to read clipboard contents: ', err);
       }
-   };
+   }, [sharedText, copiedText, dismissedCopiedTexts]);
 
    // Effect for handling copied text
    useEffect(() => {
@@ -90,7 +105,7 @@ function App() { // Trigger auto-deploy
       return () => {
          window.removeEventListener('focus', readClipboard);
       };
-   }, [sharedText, dismissedCopiedTexts]); // Re-run if sharedText or dismissedCopiedTexts changes
+   }, [sharedText, dismissedCopiedTexts, readClipboard]); // Re-run if sharedText, dismissedCopiedTexts, or readClipboard changes
 
    // 음성인식 토글 함수 (localStorage에 저장)
    const handleToggleVoiceRecognition = useCallback(() => {
@@ -119,14 +134,29 @@ function App() { // Trigger auto-deploy
       setSharedText(null);
    };
 
+   // dismissedCopiedTexts를 업데이트하고 localStorage에 저장하는 helper 함수
+   const addToDismissedTexts = useCallback((text) => {
+      setDismissedCopiedTexts(prev => {
+         const newSet = new Set(prev).add(text);
+         try {
+            localStorage.setItem('dismissedCopiedTexts', JSON.stringify(Array.from(newSet)));
+         } catch (error) {
+            console.warn('Failed to save dismissed texts to localStorage:', error);
+         }
+         return newSet;
+      });
+   }, []);
+
    const handleConfirmCopiedText = (text) => {
       handleChatMessage(`다음 내용으로 일정 추가: ${text}`);
+      // 확인 후 취소한 텍스트 목록에도 추가해서 다시 표시되지 않도록 함
+      addToDismissedTexts(text);
       setCopiedText(null);
    };
 
    const handleCloseCopiedText = (text) => {
       // 취소한 텍스트를 Set에 추가해서 다시 표시되지 않도록 함
-      setDismissedCopiedTexts(prev => new Set(prev).add(text));
+      addToDismissedTexts(text);
       setCopiedText(null);
    };
 
