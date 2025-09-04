@@ -593,7 +593,29 @@ export const useVoiceRecognition = (
                       window.location.href.includes('homescreen=1');
          
          const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
          const domain = window.location.hostname;
+         
+         // iOS에서는 더 엄격한 권한 체크
+         if (isIOS) {
+            console.log('iOS 환경 감지됨');
+            
+            // iOS에서는 세션별로 권한 관리 (새로고침/재방문 시 초기화)
+            const sessionKey = `ios_mic_session_${Date.now().toString().slice(-8)}`;
+            const currentSession = sessionStorage.getItem('ios_mic_session');
+            
+            if (!currentSession) {
+               // 새 세션 - 권한 재요청 필요
+               console.log('iOS 새 세션, 권한 재요청');
+               localStorage.removeItem('micPermissionGranted');
+               localStorage.removeItem('isPWAWithMicPermission');
+            } else {
+               console.log('iOS 기존 세션 유지');
+            }
+            
+            sessionStorage.setItem('ios_mic_session', sessionKey);
+         }
          
          // 다양한 저장소에서 권한 상태 확인
          const hasPermission = localStorage.getItem('isPWAWithMicPermission') === 'true' ||
@@ -601,20 +623,33 @@ export const useVoiceRecognition = (
                               localStorage.getItem(`micPermission_${domain}`) === 'true' ||
                               sessionStorage.getItem('micPermissionGranted') === 'true';
          
-         // 타임스탬프 확인 (24시간 이내인지)
+         // 타임스탬프 확인 (iOS는 1시간, 다른 기기는 24시간)
          const permissionTimestamp = localStorage.getItem('pwaPermissionTimestamp');
+         const maxAge = isIOS ? 1 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000; // iOS는 1시간
          const isRecentPermission = permissionTimestamp && 
-                                  (Date.now() - parseInt(permissionTimestamp)) < 24 * 60 * 60 * 1000;
+                                  (Date.now() - parseInt(permissionTimestamp)) < maxAge;
          
-         console.log('권한 체크:', { isPWA, isMobile, hasPermission, isRecentPermission });
+         console.log('권한 체크:', { isPWA, isMobile, isIOS, hasPermission, isRecentPermission });
          
-         // PWA나 모바일에서 최근에 허용했다면 조용히 시작
-         if ((isPWA || isMobile) && hasPermission && isRecentPermission) {
+         // iOS에서는 더 보수적으로 접근
+         if (isIOS && !isRecentPermission) {
+            console.log('iOS에서 권한 만료 또는 없음, 새로 요청');
+            try {
+               recognition.start();
+               setupAudioAnalysis();
+            } catch (e) {
+               console.log('iOS 권한 요청 실패:', e);
+            }
+         } else if ((isPWA || isMobile) && hasPermission && isRecentPermission) {
             console.log('이전 권한 사용하여 조용히 시작');
             try {
                recognition.start();
-               // 권한이 있다고 가정하고 setupAudioAnalysis 호출
-               setTimeout(() => setupAudioAnalysis(), 100);
+               // iOS가 아닌 경우에만 지연 시작
+               if (!isIOS) {
+                  setTimeout(() => setupAudioAnalysis(), 100);
+               } else {
+                  setupAudioAnalysis(); // iOS는 즉시 시작
+               }
             } catch (e) {
                console.log('조용한 시작 실패, 일반 프로세스로 진행');
                setupAudioAnalysis();

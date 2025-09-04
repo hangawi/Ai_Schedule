@@ -58,6 +58,8 @@ function App() { // Trigger auto-deploy
    const readClipboard = useCallback(async () => {
       // 모바일 환경 감지
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       const isPWA = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
       
       // 클립보드 API 지원 확인
@@ -66,9 +68,32 @@ function App() { // Trigger auto-deploy
          return;
       }
       
-      // 모바일에서는 더 엄격한 권한 확인
-      if (isMobile || isPWA) {
-         // 모바일에서는 사용자 상호작용 없이 클립보드 접근이 제한적
+      // iOS는 특별한 처리가 필요
+      if (isIOS) {
+         console.log('iOS 클립보드 접근 시도');
+         
+         // iOS에서는 사용자 상호작용이 반드시 필요
+         if (document.visibilityState !== 'visible') {
+            console.log('iOS에서 백그라운드 상태로 클립보드 접근 건너뜀');
+            return;
+         }
+         
+         // iOS에서는 HTTPS에서만 클립보드 접근 가능
+         if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+            console.warn('iOS에서는 HTTPS에서만 클립보드 접근 가능');
+            return;
+         }
+         
+         // iOS Safari에서는 focus 이벤트 직후에만 클립보드 접근 가능
+         const lastFocusTime = sessionStorage.getItem('lastFocusTime');
+         const currentTime = Date.now();
+         if (!lastFocusTime || (currentTime - parseInt(lastFocusTime)) > 5000) { // 5초 이내
+            console.log('iOS에서 최근 사용자 상호작용 없음, 클립보드 접근 건너뜀');
+            sessionStorage.setItem('lastFocusTime', currentTime.toString());
+            return;
+         }
+      } else if (isMobile || isPWA) {
+         // 다른 모바일에서는 더 엄격한 권한 확인
          if (document.visibilityState !== 'visible') {
             console.log('모바일에서 백그라운드 상태로 클립보드 접근 건너뜀');
             return;
@@ -83,7 +108,6 @@ function App() { // Trigger auto-deploy
                   return;
                } else if (result.state === 'prompt') {
                   console.log('모바일에서 클립보드 권한 프롬프트 필요');
-                  // 프롬프트가 필요한 경우 사용자 제스처가 있을 때만 진행
                   return;
                }
             } catch (err) {
@@ -135,51 +159,83 @@ function App() { // Trigger auto-deploy
    // Effect for handling copied text
    useEffect(() => {
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       
-      // Initial check on mount
-      readClipboard();
-
-      // 모바일에서는 더 많은 이벤트를 감지
-      const events = ['focus'];
-      if (isMobile) {
-         events.push('visibilitychange', 'pageshow', 'resume');
+      // Initial check on mount (iOS는 사용자 상호작용 후에만)
+      if (!isIOS) {
+         readClipboard();
       }
-      
-      // 모바일용 특별 처리: visibility change 이벤트
-      const handleVisibilityChange = () => {
-         if (document.visibilityState === 'visible' && isMobile) {
-            console.log('모바일에서 앱이 포그라운드로 전환됨, 클립보드 체크');
-            // 약간의 지연 후 클립보드 체크 (권한 안정화를 위해)
-            setTimeout(readClipboard, 500);
-         }
-      };
-      
-      // 모바일용 페이지 표시 이벤트
-      const handlePageShow = (event) => {
-         if (isMobile && event.persisted) {
-            console.log('모바일에서 페이지 복원됨, 클립보드 체크');
-            setTimeout(readClipboard, 300);
-         }
-      };
-      
-      // 기본 이벤트 리스너들
-      window.addEventListener('focus', readClipboard);
-      
-      // 모바일 전용 이벤트 리스너들
-      if (isMobile) {
-         document.addEventListener('visibilitychange', handleVisibilityChange);
-         window.addEventListener('pageshow', handlePageShow);
+
+      // iOS 전용 처리
+      if (isIOS) {
+         // iOS에서는 focus 이벤트에서 타임스탬프 기록
+         const handleFocus = () => {
+            console.log('iOS focus 이벤트, 클립보드 접근 시간 기록');
+            sessionStorage.setItem('lastFocusTime', Date.now().toString());
+            setTimeout(readClipboard, 100); // 즉시 클립보드 체크
+         };
          
-         // 터치 이벤트 후 클립보드 체크 (사용자 상호작용 감지)
+         // iOS에서는 터치 상호작용을 더 적극적으로 감지
+         const handleTouchStart = () => {
+            sessionStorage.setItem('lastFocusTime', Date.now().toString());
+         };
+         
+         const handleTouchEnd = () => {
+            setTimeout(() => {
+               console.log('iOS 터치 상호작용 후 클립보드 체크');
+               readClipboard();
+            }, 500);
+         };
+         
+         // iOS에서 visibility change
+         const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+               console.log('iOS에서 앱이 포그라운드로 전환됨');
+               sessionStorage.setItem('lastFocusTime', Date.now().toString());
+               setTimeout(readClipboard, 1000); // iOS는 더 긴 지연
+            }
+         };
+         
+         window.addEventListener('focus', handleFocus);
+         document.addEventListener('touchstart', handleTouchStart, { passive: true });
+         document.addEventListener('touchend', handleTouchEnd, { passive: true });
+         document.addEventListener('visibilitychange', handleVisibilityChange);
+         
+         return () => {
+            window.removeEventListener('focus', handleFocus);
+            document.removeEventListener('touchstart', handleTouchStart);
+            document.removeEventListener('touchend', handleTouchEnd);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+         };
+      } else if (isMobile) {
+         // 다른 모바일 기기 처리
+         const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+               console.log('모바일에서 앱이 포그라운드로 전환됨, 클립보드 체크');
+               setTimeout(readClipboard, 500);
+            }
+         };
+         
+         const handlePageShow = (event) => {
+            if (event.persisted) {
+               console.log('모바일에서 페이지 복원됨, 클립보드 체크');
+               setTimeout(readClipboard, 300);
+            }
+         };
+         
          let touchTimeout;
          const handleTouchEnd = () => {
             if (touchTimeout) clearTimeout(touchTimeout);
             touchTimeout = setTimeout(() => {
                console.log('모바일 터치 상호작용 후 클립보드 체크');
                readClipboard();
-            }, 1000); // 1초 후 체크
+            }, 1000);
          };
          
+         window.addEventListener('focus', readClipboard);
+         document.addEventListener('visibilitychange', handleVisibilityChange);
+         window.addEventListener('pageshow', handlePageShow);
          document.addEventListener('touchend', handleTouchEnd, { passive: true });
          
          return () => {
@@ -190,6 +246,8 @@ function App() { // Trigger auto-deploy
             if (touchTimeout) clearTimeout(touchTimeout);
          };
       } else {
+         // 데스크톱 처리
+         window.addEventListener('focus', readClipboard);
          return () => {
             window.removeEventListener('focus', readClipboard);
          };
