@@ -293,18 +293,32 @@ export const useVoiceRecognition = (
             // PWA가 다시 보일 때 권한 상태 재확인
             const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
                          window.navigator.standalone || 
-                         document.referrer.includes('android-app://');
+                         document.referrer.includes('android-app://') ||
+                         window.location.href.includes('homescreen=1');
             
-            if (isPWA && localStorage.getItem('isPWAWithMicPermission') === 'true') {
+            const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+            const domain = window.location.hostname;
+            
+            // 다양한 권한 상태 확인
+            const hasPermission = localStorage.getItem('isPWAWithMicPermission') === 'true' ||
+                                 localStorage.getItem('micPermissionGranted') === 'true' ||
+                                 localStorage.getItem(`micPermission_${domain}`) === 'true';
+            
+            const permissionTimestamp = localStorage.getItem('pwaPermissionTimestamp');
+            const isRecentPermission = permissionTimestamp && 
+                                     (Date.now() - parseInt(permissionTimestamp)) < 24 * 60 * 60 * 1000;
+            
+            if ((isPWA || isMobile) && hasPermission && isRecentPermission) {
+               console.log('PWA/모바일에서 포그라운드 전환 시 권한 재사용');
                setTimeout(() => {
                   if (isVoiceRecognitionEnabled && recognitionRef.current) {
                      try {
                         recognitionRef.current.start();
                      } catch (e) {
-                        // 이미 시작된 경우 무시
+                        console.log('포그라운드 전환 시 음성인식 재시작 실패:', e);
                      }
                   }
-               }, 500);
+               }, 300); // 더 빠른 재시작
             }
          }
       };
@@ -314,40 +328,73 @@ export const useVoiceRecognition = (
       /** 🔊 마이크 분석 */
       const setupAudioAnalysis = async () => {
          try {
-            // PWA 환경에서는 권한 API를 먼저 확인
+            // 모바일 환경에서 권한 상태를 더 정확하게 체크
+            const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
+                         window.navigator.standalone || 
+                         document.referrer.includes('android-app://') ||
+                         window.location.href.includes('homescreen=1');
+            
+            // 이미 허용된 상태인지 확인
+            const previouslyGranted = localStorage.getItem('micPermissionGranted') === 'true' ||
+                                    sessionStorage.getItem('micPermissionGranted') === 'true';
+            
+            // PWA 환경에서 권한 API로 현재 상태 확인
+            let permissionGranted = false;
             if (navigator.permissions) {
                try {
                   const permissionResult = await navigator.permissions.query({name: 'microphone'});
-                  if (permissionResult.state === 'denied') {
-                     console.warn('마이크 권한이 거부되었습니다.');
+                  if (permissionResult.state === 'granted') {
+                     permissionGranted = true;
+                  } else if (permissionResult.state === 'denied') {
+                     // 명시적으로 거부된 경우
                      localStorage.removeItem('micPermissionGranted');
+                     sessionStorage.removeItem('micPermissionGranted');
+                     localStorage.removeItem('isPWAWithMicPermission');
+                     console.warn('마이크 권한이 명시적으로 거부되었습니다.');
                      return;
                   }
                } catch (permError) {
-                  // permissions API가 지원되지 않는 경우 계속 진행
-                  console.log('Permissions API not supported, proceeding with getUserMedia');
+                  // permissions API가 지원되지 않는 경우
+                  console.log('Permissions API not supported');
                }
+            }
+
+            // 모바일/PWA에서 이전에 허용했다면 바로 접근 시도
+            if ((isPWA || /Mobi|Android/i.test(navigator.userAgent)) && (previouslyGranted || permissionGranted)) {
+               console.log('모바일/PWA 환경에서 이전 권한 사용');
             }
 
             const stream = await navigator.mediaDevices.getUserMedia({ 
                audio: {
                   echoCancellation: true,
                   noiseSuppression: true,
-                  autoGainControl: true
+                  autoGainControl: true,
+                  // 모바일에서 더 나은 호환성을 위한 설정
+                  sampleRate: 16000,
+                  channelCount: 1
                } 
             });
             
-            // 성공적으로 마이크 접근이 되면 localStorage와 sessionStorage에 모두 저장
-            localStorage.setItem('micPermissionGranted', 'true');
-            sessionStorage.setItem('micPermissionGranted', 'true');
+            // 성공적으로 마이크 접근이 되면 다중 저장 + 타임스탬프
+            const timestamp = Date.now();
+            const permissionData = JSON.stringify({ granted: true, timestamp, isPWA });
             
-            // PWA인지 확인하고 추가 처리
-            const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
-                         window.navigator.standalone || 
-                         document.referrer.includes('android-app://');
+            localStorage.setItem('micPermissionGranted', 'true');
+            localStorage.setItem('micPermissionData', permissionData);
+            sessionStorage.setItem('micPermissionGranted', 'true');
             
             if (isPWA) {
                localStorage.setItem('isPWAWithMicPermission', 'true');
+               // PWA용 추가 식별자
+               localStorage.setItem('pwaPermissionTimestamp', timestamp.toString());
+            }
+            
+            // 도메인별로도 저장 (모바일 브라우저 호환성)
+            try {
+               const domain = window.location.hostname;
+               localStorage.setItem(`micPermission_${domain}`, 'true');
+            } catch (e) {
+               console.log('도메인별 저장 실패:', e);
             }
             
             audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -369,8 +416,19 @@ export const useVoiceRecognition = (
          } catch (err) {
             // 마이크 접근 실패 시 모든 관련 저장소에서 제거
             localStorage.removeItem('micPermissionGranted');
+            localStorage.removeItem('micPermissionData');
             sessionStorage.removeItem('micPermissionGranted');
             localStorage.removeItem('isPWAWithMicPermission');
+            localStorage.removeItem('pwaPermissionTimestamp');
+            
+            // 도메인별 저장소도 정리
+            try {
+               const domain = window.location.hostname;
+               localStorage.removeItem(`micPermission_${domain}`);
+            } catch (e) {
+               console.log('도메인별 정리 실패:', e);
+            }
+            
             console.warn('마이크 접근 실패:', err);
          }
       };
@@ -527,33 +585,52 @@ export const useVoiceRecognition = (
          }, 200);
       };
 
-      // PWA에서 이전에 마이크 권한을 허용했는지 확인
-      const checkPWAPermission = async () => {
+      // PWA 및 모바일 환경에서 권한 확인 후 초기화
+      const checkPermissionAndStart = async () => {
          const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
                       window.navigator.standalone || 
-                      document.referrer.includes('android-app://');
+                      document.referrer.includes('android-app://') ||
+                      window.location.href.includes('homescreen=1');
          
-         if (isPWA && localStorage.getItem('isPWAWithMicPermission') === 'true') {
-            // PWA에서 이전에 허용한 경우, 다시 권한 확인 없이 시도
+         const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+         const domain = window.location.hostname;
+         
+         // 다양한 저장소에서 권한 상태 확인
+         const hasPermission = localStorage.getItem('isPWAWithMicPermission') === 'true' ||
+                              localStorage.getItem('micPermissionGranted') === 'true' ||
+                              localStorage.getItem(`micPermission_${domain}`) === 'true' ||
+                              sessionStorage.getItem('micPermissionGranted') === 'true';
+         
+         // 타임스탬프 확인 (24시간 이내인지)
+         const permissionTimestamp = localStorage.getItem('pwaPermissionTimestamp');
+         const isRecentPermission = permissionTimestamp && 
+                                  (Date.now() - parseInt(permissionTimestamp)) < 24 * 60 * 60 * 1000;
+         
+         console.log('권한 체크:', { isPWA, isMobile, hasPermission, isRecentPermission });
+         
+         // PWA나 모바일에서 최근에 허용했다면 조용히 시작
+         if ((isPWA || isMobile) && hasPermission && isRecentPermission) {
+            console.log('이전 권한 사용하여 조용히 시작');
             try {
                recognition.start();
-               setupAudioAnalysis();
+               // 권한이 있다고 가정하고 setupAudioAnalysis 호출
+               setTimeout(() => setupAudioAnalysis(), 100);
             } catch (e) {
-               // 실패 시 권한 재요청
+               console.log('조용한 시작 실패, 일반 프로세스로 진행');
                setupAudioAnalysis();
             }
          } else {
-            // 일반적인 경우
+            // 일반적인 경우 또는 권한이 없는 경우
             try {
                recognition.start();
                setupAudioAnalysis();
             } catch (e) {
-               // 음성 인식이 이미 시작된 경우 무시
+               console.log('일반 시작 실패:', e);
             }
          }
       };
 
-      checkPWAPermission();
+      checkPermissionAndStart();
 
       return () => {
          document.removeEventListener('visibilitychange', handleVisibilityChange);
