@@ -17,13 +17,17 @@ function App() { // Trigger auto-deploy
 
    const { isLoggedIn, user, loginMethod, handleLoginSuccess, handleLogout } = useAuth();
    const [eventAddedKey, setEventAddedKey] = useState(0);
-   const [isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled] = useState(true);
+   const [isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled] = useState(() => {
+      const saved = localStorage.getItem('voiceRecognitionEnabled');
+      return saved !== null ? JSON.parse(saved) : true;
+   });
    const [eventActions, setEventActions] = useState(null);
    const [areEventActionsReady, setAreEventActionsReady] = useState(false);
    const { isListening, modalText, setModalText, micVolume } = useVoiceRecognition(isLoggedIn, isVoiceRecognitionEnabled, eventActions, areEventActionsReady, setEventAddedKey);
    const { handleChatMessage } = useChat(isLoggedIn, setEventAddedKey);
    const [sharedText, setSharedText] = useState(null);
    const [copiedText, setCopiedText] = useState(null); // New state for copied text
+   const [dismissedCopiedTexts, setDismissedCopiedTexts] = useState(new Set()); // 취소한 복사 텍스트들
 
    // Effect for handling shared text from URL
    useEffect(() => {
@@ -58,7 +62,7 @@ function App() { // Trigger auto-deploy
       try {
          const text = await navigator.clipboard.readText();
          // 텍스트가 있고, 길이가 5자 이상이며, 일정 관련 키워드가 포함된 경우에만 표시
-         if (text && text.trim().length >= 5 && text !== sharedText && text !== copiedText) {
+         if (text && text.trim().length >= 5 && text !== sharedText && text !== copiedText && !dismissedCopiedTexts.has(text)) {
             const scheduleKeywords = ['일정', '약속', '미팅', '회의', '모임', '시간', '날짜', '월', '화', '수', '목', '금', '토', '일', '오늘', '내일', '모레', '오후', '오전'];
             const hasScheduleKeyword = scheduleKeywords.some(keyword => text.toLowerCase().includes(keyword.toLowerCase()));
             
@@ -86,7 +90,16 @@ function App() { // Trigger auto-deploy
       return () => {
          window.removeEventListener('focus', readClipboard);
       };
-   }, [sharedText]); // Re-run if sharedText changes, to avoid showing both modals
+   }, [sharedText, dismissedCopiedTexts]); // Re-run if sharedText or dismissedCopiedTexts changes
+
+   // 음성인식 토글 함수 (localStorage에 저장)
+   const handleToggleVoiceRecognition = useCallback(() => {
+      setIsVoiceRecognitionEnabled(prev => {
+         const newValue = !prev;
+         localStorage.setItem('voiceRecognitionEnabled', JSON.stringify(newValue));
+         return newValue;
+      });
+   }, []);
 
    const schedulingSystemProps = useMemo(() => ({
       isLoggedIn,
@@ -97,9 +110,9 @@ function App() { // Trigger auto-deploy
       setEventActions,
       setAreEventActionsReady,
       isVoiceRecognitionEnabled,
-      setIsVoiceRecognitionEnabled,
+      setIsVoiceRecognitionEnabled: handleToggleVoiceRecognition,
       loginMethod
-   }), [isLoggedIn, user, handleLogout, isListening, eventAddedKey, isVoiceRecognitionEnabled, loginMethod]);
+   }), [isLoggedIn, user, handleLogout, isListening, eventAddedKey, isVoiceRecognitionEnabled, handleToggleVoiceRecognition, loginMethod]);
 
    const handleConfirmSharedText = (text) => {
       handleChatMessage(`다음 내용으로 일정 추가: ${text}`);
@@ -108,6 +121,12 @@ function App() { // Trigger auto-deploy
 
    const handleConfirmCopiedText = (text) => {
       handleChatMessage(`다음 내용으로 일정 추가: ${text}`);
+      setCopiedText(null);
+   };
+
+   const handleCloseCopiedText = (text) => {
+      // 취소한 텍스트를 Set에 추가해서 다시 표시되지 않도록 함
+      setDismissedCopiedTexts(prev => new Set(prev).add(text));
       setCopiedText(null);
    };
 
@@ -141,7 +160,7 @@ function App() { // Trigger auto-deploy
          {isLoggedIn && copiedText && !sharedText && (
             <CopiedTextModal
                text={copiedText}
-               onClose={() => setCopiedText(null)}
+               onClose={() => handleCloseCopiedText(copiedText)}
                onConfirm={handleConfirmCopiedText}
             />
          )}
