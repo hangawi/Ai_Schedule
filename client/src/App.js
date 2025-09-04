@@ -9,7 +9,7 @@ import CopiedTextModal from './components/modals/CopiedTextModal'; // Import the
 import { useAuth } from './hooks/useAuth';
 import { useVoiceRecognition } from './hooks/useVoiceRecognition';
 import { useChat } from './hooks/useChat';
-import { usePullToRefresh } from './hooks/usePullToRefresh';
+// import { usePullToRefresh } from './hooks/usePullToRefresh'; // 임시 비활성화
 import { speak } from './utils.js';
 
 
@@ -45,15 +45,13 @@ function App() { // Trigger auto-deploy
       }
    }); // 취소한 복사 텍스트들
 
-   // Pull to refresh 핸들러
-   const handleRefresh = useCallback(async () => {
-      console.log('새로고침 중...');
-      // 페이지 새로고침
-      window.location.reload();
-   }, []);
-
-   // Pull to refresh 기능 활성화
-   const { isRefreshing } = usePullToRefresh(handleRefresh);
+   // Pull to refresh 기능 임시 비활성화 (버그 수정 후 재활성화)
+   // const handleRefresh = useCallback(async () => {
+   //    console.log('새로고침 중...');
+   //    // 페이지 새로고침
+   //    window.location.reload();
+   // }, []);
+   // const { isRefreshing } = usePullToRefresh(handleRefresh);
 
    // Effect for handling shared text from URL
    useEffect(() => {
@@ -171,68 +169,35 @@ function App() { // Trigger auto-deploy
       }
    }, [sharedText, copiedText, dismissedCopiedTexts]);
 
-   // Effect for handling copied text - 최소한의 이벤트만 사용
+   // Effect for handling copied text - 단순하고 안정적인 이벤트만 사용
    useEffect(() => {
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       
       // 디바운싱을 위한 타이머
       let clipboardCheckTimer;
       
-      // 클립보드 체크 디바운스 함수
+      // 클립보드 체크 디바운스 함수 (더 긴 지연시간)
       const debouncedReadClipboard = () => {
          if (clipboardCheckTimer) {
             clearTimeout(clipboardCheckTimer);
          }
-         clipboardCheckTimer = setTimeout(readClipboard, 2000); // 2초 디바운싱
+         clipboardCheckTimer = setTimeout(readClipboard, 3000); // 3초 디바운싱으로 증가
       };
 
-      // iOS - 앱 포그라운드 전환 시에만 체크
-      if (isIOS) {
-         const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-               console.log('iOS에서 앱이 포그라운드로 전환됨');
-               sessionStorage.setItem('lastFocusTime', Date.now().toString());
-               debouncedReadClipboard();
-            }
-         };
-         
-         document.addEventListener('visibilitychange', handleVisibilityChange);
-         
-         return () => {
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-            if (clipboardCheckTimer) clearTimeout(clipboardCheckTimer);
-         };
-      } else if (isMobile) {
-         // 모바일 - 앱 포그라운드 전환과 페이지 쇼 이벤트만
-         const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-               console.log('모바일에서 앱이 포그라운드로 전환됨');
-               debouncedReadClipboard();
-            }
-         };
-         
-         document.addEventListener('visibilitychange', handleVisibilityChange);
-         
-         return () => {
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-            if (clipboardCheckTimer) clearTimeout(clipboardCheckTimer);
-         };
-      } else {
-         // 데스크톱 - 창 포커스 시에만
-         const handleFocus = () => {
-            console.log('데스크톱에서 창 포커스');
+      // 모든 플랫폼에서 동일하게 처리 - visibility change만 사용
+      const handleVisibilityChange = () => {
+         if (document.visibilityState === 'visible') {
+            console.log('앱이 포그라운드로 전환됨');
             debouncedReadClipboard();
-         };
-         
-         window.addEventListener('focus', handleFocus);
-         
-         return () => {
-            window.removeEventListener('focus', handleFocus);
-            if (clipboardCheckTimer) clearTimeout(clipboardCheckTimer);
-         };
-      }
+         }
+      };
+      
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      
+      return () => {
+         document.removeEventListener('visibilitychange', handleVisibilityChange);
+         if (clipboardCheckTimer) clearTimeout(clipboardCheckTimer);
+      };
    }, [sharedText, dismissedCopiedTexts, readClipboard]);
 
    // 음성인식 토글 함수 (localStorage에 저장)
