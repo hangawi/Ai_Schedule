@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import SchedulingSystem from './SchedulingSystem';
 import { AuthScreen } from './components/auth/AuthScreen';
 import ChatBox from './components/chat/ChatBox';
 import CommandModal from './components/modals/CommandModal';
+import SharedTextModal from './components/modals/SharedTextModal'; // Import the new modal
 import { useAuth } from './hooks/useAuth';
 import { useVoiceRecognition } from './hooks/useVoiceRecognition';
 import { useChat } from './hooks/useChat';
@@ -19,6 +20,17 @@ function App() {
    const [areEventActionsReady, setAreEventActionsReady] = useState(false);
    const { isListening, modalText, setModalText, micVolume } = useVoiceRecognition(isLoggedIn, isVoiceRecognitionEnabled, eventActions, areEventActionsReady, setEventAddedKey);
    const { handleChatMessage } = useChat(isLoggedIn, setEventAddedKey);
+   const [sharedText, setSharedText] = useState(null);
+
+   useEffect(() => {
+      const queryParams = new URLSearchParams(window.location.search);
+      const text = queryParams.get('text');
+      if (text) {
+         setSharedText(text);
+         // Clean the URL to avoid re-triggering on refresh
+         window.history.replaceState({}, document.title, window.location.pathname);
+      }
+   }, []);
 
    const schedulingSystemProps = useMemo(() => ({
       isLoggedIn,
@@ -32,6 +44,11 @@ function App() {
       setIsVoiceRecognitionEnabled,
       loginMethod // Pass loginMethod
    }), [isLoggedIn, user, handleLogout, isListening, eventAddedKey, isVoiceRecognitionEnabled, loginMethod]);
+
+   const handleConfirmSharedText = (text) => {
+      handleChatMessage(`다음 내용으로 일정 추가: ${text}`);
+      setSharedText(null);
+   };
 
    return (
       <Router>
@@ -53,6 +70,13 @@ function App() {
          </Routes>
          {isLoggedIn && <ChatBox onSendMessage={handleChatMessage} speak={speak} />}
          {modalText && <CommandModal text={modalText} onClose={() => setModalText('')} micVolume={micVolume} />}
+         {isLoggedIn && sharedText && (
+            <SharedTextModal 
+               text={sharedText} 
+               onClose={() => setSharedText(null)} 
+               onConfirm={handleConfirmSharedText} 
+            />
+         )}
       </Router>
    );
 }
