@@ -65,63 +65,28 @@ function App() { // Trigger auto-deploy
 
    // Function to read clipboard content
    const readClipboard = useCallback(async () => {
-      // 모바일 환경 감지
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      const isPWA = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
-      
       // 클립보드 API 지원 확인
       if (!navigator.clipboard || !navigator.clipboard.readText) {
          console.warn('Clipboard API not available.');
          return;
       }
       
-      // iOS는 특별한 처리가 필요
-      if (isIOS) {
-         console.log('iOS 클립보드 접근 시도');
-         
-         // iOS에서는 사용자 상호작용이 반드시 필요
-         if (document.visibilityState !== 'visible') {
-            console.log('iOS에서 백그라운드 상태로 클립보드 접근 건너뜀');
-            return;
-         }
-         
-         // iOS에서는 HTTPS에서만 클립보드 접근 가능
-         if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-            console.warn('iOS에서는 HTTPS에서만 클립보드 접근 가능');
-            return;
-         }
-         
-         // iOS Safari에서는 focus 이벤트 직후에만 클립보드 접근 가능
-         const lastFocusTime = sessionStorage.getItem('lastFocusTime');
-         const currentTime = Date.now();
-         if (!lastFocusTime || (currentTime - parseInt(lastFocusTime)) > 5000) { // 5초 이내
-            console.log('iOS에서 최근 사용자 상호작용 없음, 클립보드 접근 건너뜀');
-            sessionStorage.setItem('lastFocusTime', currentTime.toString());
-            return;
-         }
-      } else if (isMobile || isPWA) {
-         // 다른 모바일에서는 더 엄격한 권한 확인
-         if (document.visibilityState !== 'visible') {
-            console.log('모바일에서 백그라운드 상태로 클립보드 접근 건너뜀');
-            return;
-         }
-         
-         // 권한 상태 확인 (모바일에서 중요)
-         if (navigator.permissions) {
-            try {
-               const result = await navigator.permissions.query({name: 'clipboard-read'});
-               if (result.state === 'denied') {
-                  console.warn('모바일에서 클립보드 읽기 권한 거부됨');
-                  return;
-               } else if (result.state === 'prompt') {
-                  console.log('모바일에서 클립보드 권한 프롬프트 필요');
-                  return;
-               }
-            } catch (err) {
-               console.log('모바일 권한 확인 실패, 계속 진행:', err);
+      // 문서가 포커스되지 않은 상태에서는 클립보드 접근 불가
+      if (document.visibilityState !== 'visible' || !document.hasFocus()) {
+         console.log('문서가 포커스되지 않아 클립보드 접근 건너뜀');
+         return;
+      }
+      
+      // 권한 상태 확인
+      if (navigator.permissions) {
+         try {
+            const result = await navigator.permissions.query({name: 'clipboard-read'});
+            if (result.state === 'denied') {
+               console.warn('클립보드 읽기 권한 거부됨');
+               return;
             }
+         } catch (err) {
+            console.log('권한 확인 실패, 계속 진행:', err);
          }
       }
       
@@ -160,41 +125,77 @@ function App() { // Trigger auto-deploy
             }
          }
       } catch (err) {
-         // 모바일에서 클립보드 접근 실패는 일반적
-         if (isMobile) {
-            console.log('모바일 클립보드 접근 실패 (정상):', err.message);
-         } else {
-            console.error('클립보드 접근 실패:', err);
-         }
+         console.log('클립보드 접근 실패:', err.message);
       }
    }, [sharedText, copiedText, dismissedCopiedTexts]);
 
-   // Effect for handling copied text - 단순하고 안정적인 이벤트만 사용
+   // Effect for handling copied text - 복사 즉시 감지 가능하도록 개선
    useEffect(() => {
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       
       // 디바운싱을 위한 타이머
       let clipboardCheckTimer;
       
-      // 클립보드 체크 디바운스 함수 (더 긴 지연시간)
+      // 클립보드 체크 디바운스 함수
       const debouncedReadClipboard = () => {
          if (clipboardCheckTimer) {
             clearTimeout(clipboardCheckTimer);
          }
-         clipboardCheckTimer = setTimeout(readClipboard, 3000); // 3초 디바운싱으로 증가
+         clipboardCheckTimer = setTimeout(readClipboard, 1000); // 1초로 단축
       };
 
-      // 모든 플랫폼에서 동일하게 처리 - visibility change만 사용
+      // 즉시 클립보드 체크 (디바운싱 없이)
+      const immediateReadClipboard = () => {
+         if (clipboardCheckTimer) {
+            clearTimeout(clipboardCheckTimer);
+         }
+         // 포커스 상태 확인 후 실행
+         if (document.hasFocus() && document.visibilityState === 'visible') {
+            readClipboard();
+         } else {
+            console.log('문서가 포커스되지 않아 클립보드 체크 건너뜀');
+         }
+      };
+
+      // 앱 포그라운드 전환 시
       const handleVisibilityChange = () => {
          if (document.visibilityState === 'visible') {
             console.log('앱이 포그라운드로 전환됨');
+            // 약간의 지연 후 체크 (포커스가 완전히 설정될 때까지 대기)
+            setTimeout(immediateReadClipboard, 100);
+         }
+      };
+      
+      // 창 포커스 시 (데스크톱에서 중요)
+      const handleFocus = () => {
+         console.log('창 포커스');
+         // 포커스 이벤트는 이미 포커스 상태이므로 바로 실행
+         setTimeout(() => readClipboard(), 100);
+      };
+
+      // 모바일에서 터치 후 체크 (복사 후 바로 감지용)
+      const handleTouchEnd = () => {
+         if (isMobile) {
+            console.log('터치 후 클립보드 체크');
             debouncedReadClipboard();
          }
       };
       
       document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('focus', handleFocus);
+      if (isMobile) {
+         document.addEventListener('touchend', handleTouchEnd, { passive: true });
+      }
+      
+      // 최초 로드 시 한 번 체크
+      setTimeout(immediateReadClipboard, 500);
       
       return () => {
          document.removeEventListener('visibilitychange', handleVisibilityChange);
+         window.removeEventListener('focus', handleFocus);
+         if (isMobile) {
+            document.removeEventListener('touchend', handleTouchEnd);
+         }
          if (clipboardCheckTimer) clearTimeout(clipboardCheckTimer);
       };
    }, [sharedText, dismissedCopiedTexts, readClipboard]);
