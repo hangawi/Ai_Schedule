@@ -9,6 +9,7 @@ import CopiedTextModal from './components/modals/CopiedTextModal'; // Import the
 import { useAuth } from './hooks/useAuth';
 import { useVoiceRecognition } from './hooks/useVoiceRecognition';
 import { useChat } from './hooks/useChat';
+import { usePullToRefresh } from './hooks/usePullToRefresh';
 import { speak } from './utils.js';
 
 
@@ -43,6 +44,16 @@ function App() { // Trigger auto-deploy
          return new Set();
       }
    }); // 취소한 복사 텍스트들
+
+   // Pull to refresh 핸들러
+   const handleRefresh = useCallback(async () => {
+      console.log('새로고침 중...');
+      // 페이지 새로고침
+      window.location.reload();
+   }, []);
+
+   // Pull to refresh 기능 활성화
+   const { isRefreshing } = usePullToRefresh(handleRefresh);
 
    // Effect for handling shared text from URL
    useEffect(() => {
