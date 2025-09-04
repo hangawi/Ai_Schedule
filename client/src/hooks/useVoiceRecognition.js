@@ -14,15 +14,12 @@ export const useVoiceRecognition = (
    const [isListening, setIsListening] = useState(false);
    const [modalText, setModalText] = useState('');
    const recognitionRef = useRef(null);
-   const [listeningMode, setListeningMode] = useState('hotword'); // 'hotword' or 'command'
    const listeningModeRef = useRef('hotword'); // ref로 현재 모드 추적
    
    // listeningMode를 설정하는 헬퍼 함수
    const updateListeningMode = useCallback((mode) => {
-      setListeningMode(mode);
       listeningModeRef.current = mode;
    }, []);
-   const lastTranscriptRef = useRef('');
    const [micVolume, setMicVolume] = useState(0); // VU meter
    const audioContextRef = useRef(null);
    const analyserRef = useRef(null);
@@ -293,9 +290,6 @@ export const useVoiceRecognition = (
       /** 🔊 마이크 분석 */
       const setupAudioAnalysis = async () => {
          try {
-            // 이전에 허용한 적이 있는지 확인
-            const micPermissionGranted = localStorage.getItem('micPermissionGranted') === 'true';
-            
             const stream = await navigator.mediaDevices.getUserMedia({ 
                audio: {
                   echoCancellation: true,
