@@ -35,6 +35,7 @@
   "background_color": "#000000",
   "categories": ["productivity", "utilities"],
   "lang": "ko",
+  "permissions": ["microphone", "clipboard-read"],
   "share_target": {
     "action": "/",
     "method": "GET",
