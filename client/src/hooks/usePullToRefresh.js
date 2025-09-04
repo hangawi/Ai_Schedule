@@ -73,7 +73,6 @@ export const usePullToRefresh = (onRefresh) => {
         if (pullDistance.current > 0 && pullRefreshElement) {
           e.preventDefault(); // 스크롤 방지
           
-          const progress = Math.min(pullDistance.current / threshold, 1);
           const translateY = Math.min(pullDistance.current * 0.5, 40);
           
           const indicator = pullRefreshElement.firstChild;

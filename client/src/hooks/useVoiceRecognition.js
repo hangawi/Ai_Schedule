@@ -362,12 +362,11 @@ export const useVoiceRecognition = (
             }
             
             // PWA 환경에서 권한 API로 현재 상태 확인
-            let permissionGranted = false;
             if (navigator.permissions) {
                try {
                   const permissionResult = await navigator.permissions.query({name: 'microphone'});
                   if (permissionResult.state === 'granted') {
-                     permissionGranted = true;
+                     // 권한이 이미 허용됨
                   } else if (permissionResult.state === 'denied') {
                      // 명시적으로 거부된 경우
                      localStorage.removeItem('micPermissionGranted');
