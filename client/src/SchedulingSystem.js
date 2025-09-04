@@ -1,13 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import moment from 'moment';
 import {
-   ChevronDown,
-   ChevronUp,
    Calendar,
    Clock,
    Users,
    UserPlus,
-   Star,
    LogOut,
    X,
    Menu as MenuIcon,
@@ -235,10 +231,10 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                      <MenuIcon size={24} />
                   </button>
                   <button onClick={() => setActiveTab('dashboard')} className="flex items-center cursor-pointer">
-                     <div className="relative w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold mr-3">
-                        MA
+                     <div className="relative w-10 h-10 rounded-lg mr-3">
+                        <img src="/image.png" alt="MeetAgent Logo" className="w-full h-full object-cover rounded-lg" />
                         {loginMethod && (
-                           <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${loginMethod === 'google' ? 'bg-green-500' : 'bg-red-500'} border-2 border-white`}></div>
+                           <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${loginMethod === 'google' ? 'bg-green-500' : 'bg-red-500'} border-2 border-white z-10`}></div>
                         )}
                      </div>
                      <h1 className="text-xl font-bold text-gray-800 hidden sm:block">MeetAgent</h1>
