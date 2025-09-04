@@ -37,15 +37,38 @@ function App() { // Trigger auto-deploy
 
    // Function to read clipboard content
    const readClipboard = async () => {
-      if (!navigator.clipboard) {
+      if (!navigator.clipboard || !navigator.clipboard.readText) {
          console.warn('Clipboard API not available.');
          return;
       }
+      
+      // 모바일에서는 사용자 제스처가 필요하므로 권한 확인
+      if (navigator.permissions) {
+         try {
+            const result = await navigator.permissions.query({name: 'clipboard-read'});
+            if (result.state === 'denied') {
+               console.warn('Clipboard read permission denied.');
+               return;
+            }
+         } catch (err) {
+            // 권한 API가 지원되지 않는 브라우저에서는 계속 진행
+         }
+      }
+      
       try {
          const text = await navigator.clipboard.readText();
-         // Only set if text is not empty, not already being processed by sharedText, and not the same as current copiedText
-         if (text && text.trim() !== '' && text !== sharedText && text !== copiedText) {
-            setCopiedText(text);
+         // 텍스트가 있고, 길이가 5자 이상이며, 일정 관련 키워드가 포함된 경우에만 표시
+         if (text && text.trim().length >= 5 && text !== sharedText && text !== copiedText) {
+            const scheduleKeywords = ['일정', '약속', '미팅', '회의', '모임', '시간', '날짜', '월', '화', '수', '목', '금', '토', '일', '오늘', '내일', '모레', '오후', '오전'];
+            const hasScheduleKeyword = scheduleKeywords.some(keyword => text.toLowerCase().includes(keyword.toLowerCase()));
+            
+            // 일정 관련 키워드가 있거나 시간 형식(예: 13:00, 1시, 오후 2시)이 포함된 경우
+            const timePattern = /(\d{1,2}:\d{2}|\d{1,2}시|\b오전|\b오후)/;
+            const datePattern = /(\d{1,2}월|\d{1,2}일|월요일|화요일|수요일|목요일|금요일|토요일|일요일)/;
+            
+            if (hasScheduleKeyword || timePattern.test(text) || datePattern.test(text)) {
+               setCopiedText(text);
+            }
          }
       } catch (err) {
          console.error('Failed to read clipboard contents: ', err);
