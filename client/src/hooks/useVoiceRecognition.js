@@ -287,6 +287,12 @@ export const useVoiceRecognition = (
          return;
       }
 
+      // 중복 초기화 방지
+      if (recognitionRef.current) {
+         console.log('이미 음성인식이 초기화되어 있음, 건너뜀');
+         return;
+      }
+
       // PWA 환경에서 visibility change 이벤트 처리
       const handleVisibilityChange = () => {
          if (document.visibilityState === 'visible') {
@@ -328,15 +334,32 @@ export const useVoiceRecognition = (
       /** 🔊 마이크 분석 */
       const setupAudioAnalysis = async () => {
          try {
+            // 중복 실행 방지
+            if (audioContextRef.current || sourceRef.current) {
+               console.log('오디오 분석이 이미 실행 중, 건너뜀');
+               return;
+            }
+
             // 모바일 환경에서 권한 상태를 더 정확하게 체크
             const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
                          window.navigator.standalone || 
                          document.referrer.includes('android-app://') ||
                          window.location.href.includes('homescreen=1');
             
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            
             // 이미 허용된 상태인지 확인
             const previouslyGranted = localStorage.getItem('micPermissionGranted') === 'true' ||
                                     sessionStorage.getItem('micPermissionGranted') === 'true';
+            
+            // iOS에서는 세션별 권한 체크
+            if (isIOS) {
+               const currentSession = sessionStorage.getItem('ios_mic_session');
+               if (!currentSession && !previouslyGranted) {
+                  console.log('iOS 새 세션에서 권한 요청 필요');
+               }
+            }
             
             // PWA 환경에서 권한 API로 현재 상태 확인
             let permissionGranted = false;
@@ -357,11 +380,6 @@ export const useVoiceRecognition = (
                   // permissions API가 지원되지 않는 경우
                   console.log('Permissions API not supported');
                }
-            }
-
-            // 모바일/PWA에서 이전에 허용했다면 바로 접근 시도
-            if ((isPWA || /Mobi|Android/i.test(navigator.userAgent)) && (previouslyGranted || permissionGranted)) {
-               console.log('모바일/PWA 환경에서 이전 권한 사용');
             }
 
             const stream = await navigator.mediaDevices.getUserMedia({ 

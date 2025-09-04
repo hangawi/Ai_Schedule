@@ -3,8 +3,8 @@ import { X, Check } from 'lucide-react';
 
 const CopiedTextModal = ({ text, onClose, onConfirm }) => {
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50 p-4">
-      <div className="bg-white w-full max-w-md rounded-lg shadow-xl p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 flex items-end sm:items-center justify-center z-50 bg-black bg-opacity-50 p-4">
+      <div className="bg-white w-full max-w-md rounded-t-lg sm:rounded-lg shadow-xl p-4 sm:p-6 max-h-[80vh] sm:max-h-[90vh] overflow-y-auto transform transition-transform duration-300 ease-out">
         <div className="flex justify-between items-start mb-4">
           <h2 className="text-lg sm:text-xl font-bold text-gray-800 pr-2">복사된 텍스트로 일정 추가</h2>
           <button 
