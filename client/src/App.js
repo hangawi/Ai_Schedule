@@ -138,7 +138,7 @@ function App() { // Trigger auto-deploy
             ];
             
             // 시간 관련 표현
-            const timePattern = /(\d{1,2}:\d{2}|\d{1,2}시|\d{1,2}분|\d{1,2}월\s*\d{1,2}일|\d{4}[-\/]\d{1,2}[-\/]\d{1,2}|오전|오후|새벽|밤)/;
+            const timePattern = /(\d{1,2}:\d{2}|\d{1,2}시|\d{1,2}분|\d{1,2}월\s*\d{1,2}일|\d{4}[-/]\d{1,2}[-/]\d{1,2}|오전|오후|새벽|밤)/;
             
             // 날짜 관련 표현
             const datePattern = /(오늘|내일|모레|어제|이번주|다음주|월요일|화요일|수요일|목요일|금요일|토요일|일요일)/;
@@ -171,7 +171,6 @@ function App() { // Trigger auto-deploy
 
    // Effect for handling copied text - 단순하고 안정적인 이벤트만 사용
    useEffect(() => {
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       
       // 디바운싱을 위한 타이머
       let clipboardCheckTimer;
