@@ -130,30 +130,34 @@ function App() { // Trigger auto-deploy
       try {
          const text = await navigator.clipboard.readText();
          
-         // 모바일에서 더 관대한 조건으로 텍스트 길이 줄임
-         const minLength = isMobile ? 3 : 5;
+         // 적절한 조건으로 일정 텍스트 감지
+         const minLength = 5; // 최소 텍스트 길이
          
          if (text && text.trim().length >= minLength && text !== sharedText && text !== copiedText && !dismissedCopiedTexts.has(text)) {
-            // 모바일에서 더 많은 키워드로 감지 범위 확장
+            // 일정 키워드
             const scheduleKeywords = [
-               '일정', '약속', '미팅', '회의', '모임', '만남', '식사', '점심', '저녁',
-               '시간', '날짜', '월', '화', '수', '목', '금', '토', '일', 
-               '오늘', '내일', '모레', '다음주', '이번주',
-               '오전', '오후', '저녁', '밤', '새벽',
-               'AM', 'PM', 'am', 'pm'
+               '일정', '약속', '미팅', '회의', '모임', '만남', '식사', '점심', '저녁'
             ];
+            
+            // 시간 관련 표현
+            const timePattern = /(\d{1,2}:\d{2}|\d{1,2}시|\d{1,2}분|\d{1,2}월\s*\d{1,2}일|\d{4}[-\/]\d{1,2}[-\/]\d{1,2}|오전|오후|새벽|밤)/;
+            
+            // 날짜 관련 표현
+            const datePattern = /(오늘|내일|모레|어제|이번주|다음주|월요일|화요일|수요일|목요일|금요일|토요일|일요일)/;
+            
             const hasScheduleKeyword = scheduleKeywords.some(keyword => 
-               text.toLowerCase().includes(keyword.toLowerCase()) ||
                text.includes(keyword)
             );
             
-            // 더 포괄적인 시간/날짜 패턴
-            const timePattern = /(\d{1,2}:\d{2}|\d{1,2}시|\d{1,2}분|\b오전|\b오후|AM|PM|am|pm)/i;
-            const datePattern = /(\d{1,2}월|\d{1,2}일|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\/\d{1,2}|월요일|화요일|수요일|목요일|금요일|토요일|일요일)/;
-            const mobileTimePattern = /(\d{1,2}:\d{2}|\d시|\d분|시간|분)/; // 모바일용 추가 패턴
+            const hasTimeExpression = timePattern.test(text);
+            const hasDateExpression = datePattern.test(text);
             
-            if (hasScheduleKeyword || timePattern.test(text) || datePattern.test(text) || (isMobile && mobileTimePattern.test(text))) {
-               console.log('모바일에서 일정 관련 텍스트 감지:', text.substring(0, 50));
+            // 다음 중 하나라도 만족하면 감지
+            // 1. 일정 키워드만 있어도 OK
+            // 2. 시간 표현 + 날짜 표현
+            // 3. 일정 키워드 + (시간 또는 날짜) 표현
+            if (hasScheduleKeyword || (hasTimeExpression && hasDateExpression) || (hasScheduleKeyword && (hasTimeExpression || hasDateExpression))) {
+               console.log('일정 관련 텍스트 감지:', text.substring(0, 50));
                setCopiedText(text);
             }
          }
@@ -167,103 +171,69 @@ function App() { // Trigger auto-deploy
       }
    }, [sharedText, copiedText, dismissedCopiedTexts]);
 
-   // Effect for handling copied text
+   // Effect for handling copied text - 최소한의 이벤트만 사용
    useEffect(() => {
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       
-      // Initial check on mount (iOS는 사용자 상호작용 후에만)
-      if (!isIOS) {
-         readClipboard();
-      }
+      // 디바운싱을 위한 타이머
+      let clipboardCheckTimer;
+      
+      // 클립보드 체크 디바운스 함수
+      const debouncedReadClipboard = () => {
+         if (clipboardCheckTimer) {
+            clearTimeout(clipboardCheckTimer);
+         }
+         clipboardCheckTimer = setTimeout(readClipboard, 2000); // 2초 디바운싱
+      };
 
-      // iOS 전용 처리
+      // iOS - 앱 포그라운드 전환 시에만 체크
       if (isIOS) {
-         // iOS에서는 focus 이벤트에서 타임스탬프 기록
-         const handleFocus = () => {
-            console.log('iOS focus 이벤트, 클립보드 접근 시간 기록');
-            sessionStorage.setItem('lastFocusTime', Date.now().toString());
-            setTimeout(readClipboard, 100); // 즉시 클립보드 체크
-         };
-         
-         // iOS에서는 터치 상호작용을 더 적극적으로 감지
-         const handleTouchStart = () => {
-            sessionStorage.setItem('lastFocusTime', Date.now().toString());
-         };
-         
-         const handleTouchEnd = () => {
-            setTimeout(() => {
-               console.log('iOS 터치 상호작용 후 클립보드 체크');
-               readClipboard();
-            }, 500);
-         };
-         
-         // iOS에서 visibility change
          const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
                console.log('iOS에서 앱이 포그라운드로 전환됨');
                sessionStorage.setItem('lastFocusTime', Date.now().toString());
-               setTimeout(readClipboard, 1000); // iOS는 더 긴 지연
+               debouncedReadClipboard();
             }
+         };
+         
+         document.addEventListener('visibilitychange', handleVisibilityChange);
+         
+         return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            if (clipboardCheckTimer) clearTimeout(clipboardCheckTimer);
+         };
+      } else if (isMobile) {
+         // 모바일 - 앱 포그라운드 전환과 페이지 쇼 이벤트만
+         const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+               console.log('모바일에서 앱이 포그라운드로 전환됨');
+               debouncedReadClipboard();
+            }
+         };
+         
+         document.addEventListener('visibilitychange', handleVisibilityChange);
+         
+         return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            if (clipboardCheckTimer) clearTimeout(clipboardCheckTimer);
+         };
+      } else {
+         // 데스크톱 - 창 포커스 시에만
+         const handleFocus = () => {
+            console.log('데스크톱에서 창 포커스');
+            debouncedReadClipboard();
          };
          
          window.addEventListener('focus', handleFocus);
-         document.addEventListener('touchstart', handleTouchStart, { passive: true });
-         document.addEventListener('touchend', handleTouchEnd, { passive: true });
-         document.addEventListener('visibilitychange', handleVisibilityChange);
          
          return () => {
             window.removeEventListener('focus', handleFocus);
-            document.removeEventListener('touchstart', handleTouchStart);
-            document.removeEventListener('touchend', handleTouchEnd);
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-         };
-      } else if (isMobile) {
-         // 다른 모바일 기기 처리
-         const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-               console.log('모바일에서 앱이 포그라운드로 전환됨, 클립보드 체크');
-               setTimeout(readClipboard, 500);
-            }
-         };
-         
-         const handlePageShow = (event) => {
-            if (event.persisted) {
-               console.log('모바일에서 페이지 복원됨, 클립보드 체크');
-               setTimeout(readClipboard, 300);
-            }
-         };
-         
-         let touchTimeout;
-         const handleTouchEnd = () => {
-            if (touchTimeout) clearTimeout(touchTimeout);
-            touchTimeout = setTimeout(() => {
-               console.log('모바일 터치 상호작용 후 클립보드 체크');
-               readClipboard();
-            }, 1000);
-         };
-         
-         window.addEventListener('focus', readClipboard);
-         document.addEventListener('visibilitychange', handleVisibilityChange);
-         window.addEventListener('pageshow', handlePageShow);
-         document.addEventListener('touchend', handleTouchEnd, { passive: true });
-         
-         return () => {
-            window.removeEventListener('focus', readClipboard);
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-            window.removeEventListener('pageshow', handlePageShow);
-            document.removeEventListener('touchend', handleTouchEnd);
-            if (touchTimeout) clearTimeout(touchTimeout);
-         };
-      } else {
-         // 데스크톱 처리
-         window.addEventListener('focus', readClipboard);
-         return () => {
-            window.removeEventListener('focus', readClipboard);
+            if (clipboardCheckTimer) clearTimeout(clipboardCheckTimer);
          };
       }
-   }, [sharedText, dismissedCopiedTexts, readClipboard]); // Re-run if sharedText, dismissedCopiedTexts, or readClipboard changes
+   }, [sharedText, dismissedCopiedTexts, readClipboard]);
 
    // 음성인식 토글 함수 (localStorage에 저장)
    const handleToggleVoiceRecognition = useCallback(() => {
