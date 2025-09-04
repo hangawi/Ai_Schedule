@@ -287,9 +287,48 @@ export const useVoiceRecognition = (
          return;
       }
 
+      // PWA 환경에서 visibility change 이벤트 처리
+      const handleVisibilityChange = () => {
+         if (document.visibilityState === 'visible') {
+            // PWA가 다시 보일 때 권한 상태 재확인
+            const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
+                         window.navigator.standalone || 
+                         document.referrer.includes('android-app://');
+            
+            if (isPWA && localStorage.getItem('isPWAWithMicPermission') === 'true') {
+               setTimeout(() => {
+                  if (isVoiceRecognitionEnabled && recognitionRef.current) {
+                     try {
+                        recognitionRef.current.start();
+                     } catch (e) {
+                        // 이미 시작된 경우 무시
+                     }
+                  }
+               }, 500);
+            }
+         }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
       /** 🔊 마이크 분석 */
       const setupAudioAnalysis = async () => {
          try {
+            // PWA 환경에서는 권한 API를 먼저 확인
+            if (navigator.permissions) {
+               try {
+                  const permissionResult = await navigator.permissions.query({name: 'microphone'});
+                  if (permissionResult.state === 'denied') {
+                     console.warn('마이크 권한이 거부되었습니다.');
+                     localStorage.removeItem('micPermissionGranted');
+                     return;
+                  }
+               } catch (permError) {
+                  // permissions API가 지원되지 않는 경우 계속 진행
+                  console.log('Permissions API not supported, proceeding with getUserMedia');
+               }
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({ 
                audio: {
                   echoCancellation: true,
@@ -298,8 +337,18 @@ export const useVoiceRecognition = (
                } 
             });
             
-            // 성공적으로 마이크 접근이 되면 localStorage에 저장
+            // 성공적으로 마이크 접근이 되면 localStorage와 sessionStorage에 모두 저장
             localStorage.setItem('micPermissionGranted', 'true');
+            sessionStorage.setItem('micPermissionGranted', 'true');
+            
+            // PWA인지 확인하고 추가 처리
+            const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
+                         window.navigator.standalone || 
+                         document.referrer.includes('android-app://');
+            
+            if (isPWA) {
+               localStorage.setItem('isPWAWithMicPermission', 'true');
+            }
             
             audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
             analyserRef.current = audioContextRef.current.createAnalyser();
@@ -318,8 +367,10 @@ export const useVoiceRecognition = (
             };
             draw();
          } catch (err) {
-            // 마이크 접근 실패 시 localStorage에서 제거
+            // 마이크 접근 실패 시 모든 관련 저장소에서 제거
             localStorage.removeItem('micPermissionGranted');
+            sessionStorage.removeItem('micPermissionGranted');
+            localStorage.removeItem('isPWAWithMicPermission');
             console.warn('마이크 접근 실패:', err);
          }
       };
@@ -476,15 +527,36 @@ export const useVoiceRecognition = (
          }, 200);
       };
 
-      try {
-         // 처음 시작할 때만 음성인식 시작 (hotword 감지용)
-         recognition.start();
-         setupAudioAnalysis();
-      } catch (e) {
-         // 음성 인식이 이미 시작된 경우 무시
-      }
+      // PWA에서 이전에 마이크 권한을 허용했는지 확인
+      const checkPWAPermission = async () => {
+         const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
+                      window.navigator.standalone || 
+                      document.referrer.includes('android-app://');
+         
+         if (isPWA && localStorage.getItem('isPWAWithMicPermission') === 'true') {
+            // PWA에서 이전에 허용한 경우, 다시 권한 확인 없이 시도
+            try {
+               recognition.start();
+               setupAudioAnalysis();
+            } catch (e) {
+               // 실패 시 권한 재요청
+               setupAudioAnalysis();
+            }
+         } else {
+            // 일반적인 경우
+            try {
+               recognition.start();
+               setupAudioAnalysis();
+            } catch (e) {
+               // 음성 인식이 이미 시작된 경우 무시
+            }
+         }
+      };
+
+      checkPWAPermission();
 
       return () => {
+         document.removeEventListener('visibilitychange', handleVisibilityChange);
          try {
             if (recognitionRef.current) {
                recognitionRef.current.stop();
