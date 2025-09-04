@@ -13,7 +13,8 @@ import { speak } from './utils.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
-function App() {
+function App() { // Trigger auto-deploy
+
    const { isLoggedIn, user, loginMethod, handleLoginSuccess, handleLogout } = useAuth();
    const [eventAddedKey, setEventAddedKey] = useState(0);
    const [isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled] = useState(true);
