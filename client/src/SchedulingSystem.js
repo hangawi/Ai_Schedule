@@ -16,6 +16,7 @@ import EventsTab from './components/EventsTab';
 import AgentTab from './components/AgentTab';
 import CreateProposalModal from './components/CreateProposalModal';
 import TimeSelectionModal from './components/TimeSelectionModal';
+import BackgroundCallIndicator from './components/BackgroundCallIndicator';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -49,7 +50,7 @@ const NavItem = ({ icon, label, active, onClick, badge }) => (
    </button>
 );
 
-const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAddedKey, speak, setEventActions, setAreEventActionsReady, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled, loginMethod }) => {
+const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAddedKey, speak, setEventActions, setAreEventActionsReady, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled, loginMethod, isBackgroundMonitoring, isCallDetected, toggleBackgroundMonitoring }) => {
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
    const [activeTab, setActiveTab] = useState('dashboard');
    const [showCreateModal, setShowCreateModal] = useState(false);
@@ -240,8 +241,14 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                      <h1 className="text-xl font-bold text-gray-800 hidden sm:block">MeetAgent</h1>
                   </button>
                </div>
-               <div className="flex items-center">
-                  <button className="text-gray-600 mr-4 hover:text-gray-800" onClick={() => setActiveTab('googleCalendar')}>
+               <div className="flex items-center space-x-2">
+                  <BackgroundCallIndicator
+                     isMonitoring={isBackgroundMonitoring}
+                     isCallDetected={isCallDetected}
+                     callStartTime={null}
+                     onToggleMonitoring={toggleBackgroundMonitoring}
+                  />
+                  <button className="text-gray-600 hover:text-gray-800" onClick={() => setActiveTab('googleCalendar')}>
                      <Calendar size={20} />
                   </button>
                   {isLoggedIn && (

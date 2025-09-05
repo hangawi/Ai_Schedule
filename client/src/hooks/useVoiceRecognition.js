@@ -336,7 +336,7 @@ export const useVoiceRecognition = (
          try {
             // 중복 실행 방지
             if (audioContextRef.current || sourceRef.current) {
-               console.log('오디오 분석이 이미 실행 중, 건너뜀');
+               console.log('기존 음성 인식 오디오 분석이 이미 실행 중');
                return;
             }
 

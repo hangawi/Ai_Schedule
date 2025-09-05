@@ -85,6 +85,7 @@ app.use('/api/agents', require('./routes/agents'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/external', require('./routes/external'));
 app.use('/api/calendar', require('./routes/calendar'));
+app.use('/api/call-analysis', require('./routes/callAnalysis'));
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '..', 'client', 'build')));
