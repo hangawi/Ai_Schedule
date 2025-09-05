@@ -8,6 +8,7 @@ import SharedTextModal from './components/modals/SharedTextModal';
 import CopiedTextModal from './components/modals/CopiedTextModal'; // Import the new modal
 import AutoDetectedScheduleModal from './components/modals/AutoDetectedScheduleModal';
 import BackgroundGuide from './components/BackgroundGuide';
+import MobileStatusIndicator from './components/MobileStatusIndicator';
 import { useAuth } from './hooks/useAuth';
 import { useIntegratedVoiceSystem } from './hooks/useIntegratedVoiceSystem';
 import { useChat } from './hooks/useChat';
@@ -88,25 +89,47 @@ function App() { // Trigger auto-deploy
 
    // Function to read clipboard content
    const readClipboard = useCallback(async () => {
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      
       // 클립보드 API 지원 확인
       if (!navigator.clipboard || !navigator.clipboard.readText) {
          console.warn('Clipboard API not available.');
          return;
       }
       
-      // 문서가 포커스되지 않은 상태에서는 클립보드 접근 불가
-      if (document.visibilityState !== 'visible' || !document.hasFocus()) {
-         console.log('문서가 포커스되지 않아 클립보드 접근 건너뜀');
-         return;
+      // 모바일에서는 더 엄격한 조건 적용
+      if (isMobile) {
+         // iOS는 특히 제한적 - HTTPS + 사용자 제스처 + 포커스 모두 필요
+         if (isIOS && (!document.hasFocus() || document.visibilityState !== 'visible')) {
+            console.log('iOS: 포커스 및 가시성 요구사항 미충족');
+            return;
+         }
+         
+         // 모바일에서는 사용자 제스처가 최근에 발생해야 함
+         if (document.visibilityState !== 'visible') {
+            console.log('모바일: 문서가 백그라운드 상태');
+            return;
+         }
+      } else {
+         // 데스크톱에서는 기존 조건 유지
+         if (document.visibilityState !== 'visible' || !document.hasFocus()) {
+            console.log('데스크톱: 문서가 포커스되지 않아 클립보드 접근 건너뜀');
+            return;
+         }
       }
       
-      // 권한 상태 확인
+      // 권한 상태 확인 - 모바일에서는 더 상세히
       if (navigator.permissions) {
          try {
             const result = await navigator.permissions.query({name: 'clipboard-read'});
             if (result.state === 'denied') {
                console.warn('클립보드 읽기 권한 거부됨');
                return;
+            }
+            // iOS에서는 prompt 상태에서도 실패할 수 있음
+            if (isIOS && result.state === 'prompt') {
+               console.log('iOS: 클립보드 권한이 prompt 상태');
             }
          } catch (err) {
             console.log('권한 확인 실패, 계속 진행:', err);
@@ -332,6 +355,12 @@ function App() { // Trigger auto-deploy
          {isLoggedIn && showBackgroundGuide && (
             <BackgroundGuide onClose={handleCloseBackgroundGuide} />
          )}
+         {/* 모바일 환경에서 상태 표시 */}
+         <MobileStatusIndicator 
+            isBackgroundMonitoring={isBackgroundMonitoring}
+            isCallDetected={isCallDetected}
+            micVolume={micVolume}
+         />
       </Router>
    );
 }
