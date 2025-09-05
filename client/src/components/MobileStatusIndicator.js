@@ -34,15 +34,21 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
       const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
                     window.navigator.standalone === true;
 
-      // 클립보드 접근 권한 확인
+      // 클립보드 접근 권한 확인 (iOS는 특별 처리)
       let hasClipboardAccess = false;
       try {
         if (navigator.clipboard && navigator.clipboard.readText) {
-          const permission = await navigator.permissions.query({name: 'clipboard-read'});
-          hasClipboardAccess = permission.state === 'granted' || permission.state === 'prompt';
+          if (isIOS) {
+            // iOS는 권한 API가 제한적이므로 실제 접근 시도
+            hasClipboardAccess = true; // 일단 가능한 것으로 표시
+          } else {
+            const permission = await navigator.permissions.query({name: 'clipboard-read'});
+            hasClipboardAccess = permission.state === 'granted' || permission.state === 'prompt';
+          }
         }
       } catch (error) {
         console.log('클립보드 권한 확인 실패:', error);
+        hasClipboardAccess = isIOS; // iOS는 조건부 접근 가능
       }
 
       // 마이크 접근 권한 확인
@@ -54,7 +60,7 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
         console.log('마이크 권한 확인 실패:', error);
       }
 
-      setDeviceInfo({
+      const newDeviceInfo = {
         isMobile,
         isIOS,
         isAndroid,
@@ -64,7 +70,10 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
         hasMicrophoneAccess,
         isDocumentVisible: document.visibilityState === 'visible',
         isDocumentFocused: document.hasFocus()
-      });
+      };
+      
+      console.log('MobileStatusIndicator - Device Info:', newDeviceInfo);
+      setDeviceInfo(newDeviceInfo);
     };
 
     checkDeviceCapabilities();
@@ -97,8 +106,8 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
     };
   }, []);
 
-  // 모바일이 아니면 표시하지 않음
-  if (!deviceInfo.isMobile) return null;
+  // 디버깅용: 항상 표시
+  // if (!deviceInfo.isMobile) return null;
 
   const getStatusColor = () => {
     if (!deviceInfo.isDocumentVisible || !deviceInfo.isDocumentFocused) return 'text-red-500';
@@ -205,7 +214,7 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
                 <Clipboard size={14} className="text-yellow-500" />
               }
               <span className="text-sm">
-                클립보드: {deviceInfo.hasClipboardAccess ? '접근 가능' : '제한됨'}
+                클립보드: {deviceInfo.isIOS ? '조건부 접근' : deviceInfo.hasClipboardAccess ? '접근 가능' : '제한됨'}
               </span>
             </div>
 
