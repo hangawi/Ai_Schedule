@@ -71,13 +71,17 @@ const MobileGuideModal = ({ isOpen, onClose }) => {
                 {isIOS ? (
                   <div className="bg-orange-50 p-3 rounded">
                     <p className="text-orange-800">
-                      <strong>iOS 제한사항:</strong> Safari에서는 클립보드 접근이 제한적입니다.
+                      <strong>iOS Safari 제한사항:</strong> 클립보드 접근이 매우 제한적입니다.
                     </p>
                     <ul className="mt-2 text-orange-700 space-y-1">
-                      <li>• 앱으로 돌아온 직후에만 감지 가능</li>
-                      <li>• 텍스트 복사 후 즉시 앱 열기</li>
-                      <li>• HTTPS 연결 필수</li>
+                      <li>• <strong>앱이 포그라운드에서만</strong> 접근 가능</li>
+                      <li>• 텍스트 복사 후 <strong>즉시 앱으로 전환</strong></li>
+                      <li>• 백그라운드에서는 감지 불가능</li>
+                      <li>• 권한 허용 팝업이 매번 나타날 수 있음</li>
                     </ul>
+                    <div className="mt-2 text-xs text-orange-600 bg-orange-100 p-2 rounded">
+                      💡 <strong>추천:</strong> 음성 명령("비서야")을 더 많이 활용하세요!
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-1">

@@ -356,11 +356,13 @@ function App() { // Trigger auto-deploy
             <BackgroundGuide onClose={handleCloseBackgroundGuide} />
          )}
          {/* 모바일 환경에서 상태 표시 */}
-         <MobileStatusIndicator 
-            isBackgroundMonitoring={isBackgroundMonitoring}
-            isCallDetected={isCallDetected}
-            micVolume={micVolume}
-         />
+         {isLoggedIn && (
+            <MobileStatusIndicator 
+               isBackgroundMonitoring={isBackgroundMonitoring}
+               isCallDetected={isCallDetected}
+               micVolume={micVolume}
+            />
+         )}
       </Router>
    );
 }

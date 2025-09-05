@@ -30,7 +30,7 @@ export const useIntegratedVoiceSystem = (
    const analyserRef = useRef(null);
    const sourceRef = useRef(null);
    const animationFrameId = useRef(null);
-   const restartingRef = useRef(false);
+   // 간단한 상태 관리만 유지
    
    // 백그라운드 전용 refs
    const transcriptBufferRef = useRef('');
@@ -317,25 +317,46 @@ export const useIntegratedVoiceSystem = (
       setDetectedSchedules(prev => prev.filter(s => s !== schedule));
    }, []);
 
-   // 통합 음성 인식 시스템
+   // 통합 음성 인식 시스템 - 단순화
    useEffect(() => {
+      // 조건 확인
       if (!isLoggedIn || !areEventActionsReady || (!isVoiceRecognitionEnabled && !isBackgroundMonitoring)) {
+         // 조건 미충족 시 정리
          if (recognitionRef.current) {
             try {
-               recognitionRef.current.stop();
-            } catch (e) {
-               // stop 호출 시 에러 무시
-            }
+               recognitionRef.current.abort();
+               recognitionRef.current = null;
+            } catch (e) {}
          }
          cleanupAudioResources();
+         setIsListening(false);
          return;
       }
 
-      // 중복 초기화 방지
+      // 이미 실행 중이면 건너뛰기
       if (recognitionRef.current) {
          return;
       }
 
+      // 새 인스턴스 시작
+      console.log('음성 인식 시작');
+      initializeRecognition();
+   }, [
+      isLoggedIn,
+      areEventActionsReady,
+      isVoiceRecognitionEnabled,
+      isBackgroundMonitoring
+      // 함수들은 의존성에서 제거 (useCallback으로 안정화됨)
+   ]);
+
+   const initializeRecognition = useCallback(() => {
+      if (recognitionRef.current) {
+         console.log('이미 음성 인식이 실행 중입니다.');
+         return;
+      }
+      
+      console.log('새 음성 인식 시작');
+      
       const setupAudioAnalysis = async () => {
          try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -403,6 +424,7 @@ export const useIntegratedVoiceSystem = (
       const recognition = recognitionRef.current;
 
       recognition.onstart = () => {
+         console.log('음성 인식 시작됨');
          setIsListening(true);
          if (listeningModeRef.current !== 'command') {
             listeningModeRef.current = 'hotword';
@@ -476,8 +498,12 @@ export const useIntegratedVoiceSystem = (
       };
 
       recognition.onerror = event => {
+         console.log('음성 인식 오류:', event.error);
+         setIsListening(false);
+         
          if (event.error === 'aborted') {
-            console.log('음성 인식 중단됨 (정상)');
+            // aborted는 정상적인 중단으로 처리
+            console.log('음성 인식이 중단되었습니다.');
             return;
          }
          if (event.error === 'no-speech') {
@@ -501,59 +527,40 @@ export const useIntegratedVoiceSystem = (
       };
 
       recognition.onend = () => {
+         console.log('음성 인식 종료됨');
          setIsListening(false);
-         
-         if ((!isVoiceRecognitionEnabled && !isBackgroundMonitoring) || restartingRef.current) {
-            return;
-         }
-         
-         restartingRef.current = true;
-         
-         setTimeout(() => {
-            try {
-               if ((isVoiceRecognitionEnabled || isBackgroundMonitoring) && recognitionRef.current) {
-                  recognition.start();
-                  setupAudioAnalysis();
-               }
-            } catch (e) {
-               // 재시작 실패 시 조용히 처리
-            }
-            restartingRef.current = false;
-         }, 200);
+         // 자동 재시작 완전 제거 - 사용자가 원할 때만 다시 시작
       };
 
-      recognition.start();
-      setupAudioAnalysis();
-
+      try {
+         recognition.start();
+         setupAudioAnalysis();
+         console.log('음성 인식 초기화 완료');
+      } catch (error) {
+         console.error('음성 인식 시작 실패:', error.message);
+         if (recognitionRef.current) {
+            recognitionRef.current = null;
+         }
+         cleanupAudioResources();
+      }
+   }, []); // 의존성 없음 - 모든 필요한 값은 ref로 관리
+   
+   // Cleanup effect
+   useEffect(() => {
       return () => {
+         console.log('음성 시스템 정리 시작');
          try {
             if (recognitionRef.current) {
-               recognitionRef.current.stop();
+               recognitionRef.current.abort();
                recognitionRef.current = null;
             }
          } catch (e) {
-            // cleanup 중 에러 무시
+            console.log('Recognition cleanup 실패:', e);
          }
          cleanupAudioResources();
-      };
-   }, [
-      isLoggedIn,
-      areEventActionsReady,
-      isVoiceRecognitionEnabled,
-      isBackgroundMonitoring,
-      processVoiceCommand,
-      cleanupAudioResources,
-      detectCallActivity,
-      detectScheduleKeywords
-   ]);
-
-   // 컴포넌트 언마운트 시 정리
-   useEffect(() => {
-      return () => {
          if (silenceTimeoutRef.current) {
             clearTimeout(silenceTimeoutRef.current);
          }
-         cleanupAudioResources();
       };
    }, [cleanupAudioResources]);
 
