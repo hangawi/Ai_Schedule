@@ -6,8 +6,10 @@ import ChatBox from './components/chat/ChatBox';
 import CommandModal from './components/modals/CommandModal';
 import SharedTextModal from './components/modals/SharedTextModal';
 import CopiedTextModal from './components/modals/CopiedTextModal'; // Import the new modal
+import AutoDetectedScheduleModal from './components/modals/AutoDetectedScheduleModal';
+import BackgroundGuide from './components/BackgroundGuide';
 import { useAuth } from './hooks/useAuth';
-import { useVoiceRecognition } from './hooks/useVoiceRecognition';
+import { useIntegratedVoiceSystem } from './hooks/useIntegratedVoiceSystem';
 import { useChat } from './hooks/useChat';
 // import { usePullToRefresh } from './hooks/usePullToRefresh'; // 임시 비활성화
 import { speak } from './utils.js';
@@ -23,8 +25,25 @@ function App() { // Trigger auto-deploy
    });
    const [eventActions, setEventActions] = useState(null);
    const [areEventActionsReady, setAreEventActionsReady] = useState(false);
-   const { isListening, modalText, setModalText, micVolume } = useVoiceRecognition(isLoggedIn, isVoiceRecognitionEnabled, eventActions, areEventActionsReady, setEventAddedKey);
    const { handleChatMessage } = useChat(isLoggedIn, setEventAddedKey);
+   
+   // 통합된 음성 시스템
+   const {
+      // 기존 음성 명령 관련
+      isListening,
+      modalText,
+      setModalText,
+      micVolume,
+      // 백그라운드 감지 관련
+      isBackgroundMonitoring,
+      isCallDetected,
+      callStartTime,
+      detectedSchedules,
+      backgroundTranscript,
+      toggleBackgroundMonitoring,
+      confirmSchedule,
+      dismissSchedule
+   } = useIntegratedVoiceSystem(isLoggedIn, isVoiceRecognitionEnabled, eventActions, areEventActionsReady, setEventAddedKey);
    const [sharedText, setSharedText] = useState(null);
    const [copiedText, setCopiedText] = useState(null); // New state for copied text
    const [dismissedCopiedTexts, setDismissedCopiedTexts] = useState(() => {
@@ -44,6 +63,10 @@ function App() { // Trigger auto-deploy
          return new Set();
       }
    }); // 취소한 복사 텍스트들
+   
+   const [showBackgroundGuide, setShowBackgroundGuide] = useState(() => {
+      return !localStorage.getItem('backgroundGuideShown');
+   });
 
    // Pull to refresh 기능 임시 비활성화 (버그 수정 후 재활성화)
    // const handleRefresh = useCallback(async () => {
@@ -219,8 +242,12 @@ function App() { // Trigger auto-deploy
       setAreEventActionsReady,
       isVoiceRecognitionEnabled,
       setIsVoiceRecognitionEnabled: handleToggleVoiceRecognition,
-      loginMethod
-   }), [isLoggedIn, user, handleLogout, isListening, eventAddedKey, isVoiceRecognitionEnabled, handleToggleVoiceRecognition, loginMethod]);
+      loginMethod,
+      // 통합 음성 시스템
+      isBackgroundMonitoring,
+      isCallDetected,
+      toggleBackgroundMonitoring
+   }), [isLoggedIn, user, handleLogout, isListening, eventAddedKey, isVoiceRecognitionEnabled, handleToggleVoiceRecognition, loginMethod, isBackgroundMonitoring, isCallDetected, toggleBackgroundMonitoring]);
 
    const handleConfirmSharedText = (text) => {
       handleChatMessage(`다음 내용으로 일정 추가: ${text}`);
@@ -251,6 +278,11 @@ function App() { // Trigger auto-deploy
       // 취소한 텍스트를 Set에 추가해서 다시 표시되지 않도록 함
       addToDismissedTexts(text);
       setCopiedText(null);
+   };
+
+   const handleCloseBackgroundGuide = () => {
+      localStorage.setItem('backgroundGuideShown', 'true');
+      setShowBackgroundGuide(false);
    };
 
    return (
@@ -286,6 +318,19 @@ function App() { // Trigger auto-deploy
                onClose={() => handleCloseCopiedText(copiedText)}
                onConfirm={handleConfirmCopiedText}
             />
+         )}
+         {isLoggedIn && detectedSchedules.length > 0 && (
+            <AutoDetectedScheduleModal
+               detectedSchedules={detectedSchedules}
+               onConfirm={confirmSchedule}
+               onDismiss={dismissSchedule}
+               onClose={() => detectedSchedules.forEach(dismissSchedule)}
+               backgroundTranscript={backgroundTranscript}
+               callStartTime={callStartTime}
+            />
+         )}
+         {isLoggedIn && showBackgroundGuide && (
+            <BackgroundGuide onClose={handleCloseBackgroundGuide} />
          )}
       </Router>
    );
