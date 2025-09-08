@@ -13,7 +13,7 @@ import { useAuth } from './hooks/useAuth';
 import { useIntegratedVoiceSystem } from './hooks/useIntegratedVoiceSystem';
 import { useChat } from './hooks/useChat';
 // import { usePullToRefresh } from './hooks/usePullToRefresh'; // 임시 비활성화
-import { speak } from './utils.js';
+import { speak } from './utils';
 
 
 function App() { // Trigger auto-deploy
@@ -71,7 +71,7 @@ function App() { // Trigger auto-deploy
 
    // Pull to refresh 기능 임시 비활성화 (버그 수정 후 재활성화)
    // const handleRefresh = useCallback(async () => {
-   //    console.log('새로고침 중...');
+   //    // 새로고침 중 로그 (제거됨)
    //    // 페이지 새로고침
    //    window.location.reload();
    // }, []);
@@ -94,7 +94,7 @@ function App() { // Trigger auto-deploy
       
       // 클립보드 API 지원 확인
       if (!navigator.clipboard || !navigator.clipboard.readText) {
-         console.warn('Clipboard API not available.');
+         // 클립보드 API가 사용할 수 없는 환경입니다
          return;
       }
       
@@ -102,19 +102,19 @@ function App() { // Trigger auto-deploy
       if (isMobile) {
          // iOS는 특히 제한적 - HTTPS + 사용자 제스처 + 포커스 모두 필요
          if (isIOS && (!document.hasFocus() || document.visibilityState !== 'visible')) {
-            console.log('iOS: 포커스 및 가시성 요구사항 미충족');
+            // iOS: 포커스 및 가시성 요구사항 미충족
             return;
          }
          
          // 모바일에서는 사용자 제스처가 최근에 발생해야 함
          if (document.visibilityState !== 'visible') {
-            console.log('모바일: 문서가 백그라운드 상태');
+            // 모바일: 문서가 백그라운드 상태
             return;
          }
       } else {
          // 데스크톱에서는 기존 조건 유지
          if (document.visibilityState !== 'visible' || !document.hasFocus()) {
-            console.log('데스크톱: 문서가 포커스되지 않아 클립보드 접근 건너뜀');
+            // 데스크톱: 문서가 포커스되지 않아 클립보드 접근 건너뜀
             return;
          }
       }
@@ -124,15 +124,15 @@ function App() { // Trigger auto-deploy
          try {
             const result = await navigator.permissions.query({name: 'clipboard-read'});
             if (result.state === 'denied') {
-               console.warn('클립보드 읽기 권한 거부됨');
+               // 클립보드 읽기 권한이 거부되었습니다
                return;
             }
             // iOS에서는 prompt 상태에서도 실패할 수 있음
             if (isIOS && result.state === 'prompt') {
-               console.log('iOS: 클립보드 권한이 prompt 상태');
+               // iOS: 클립보드 권한이 prompt 상태
             }
          } catch (err) {
-            console.log('권한 확인 실패, 계속 진행:', err);
+            // 권한 확인 실패, 계속 진행
          }
       }
       
@@ -166,12 +166,12 @@ function App() { // Trigger auto-deploy
             // 2. 시간 표현 + 날짜 표현
             // 3. 일정 키워드 + (시간 또는 날짜) 표현
             if (hasScheduleKeyword || (hasTimeExpression && hasDateExpression) || (hasScheduleKeyword && (hasTimeExpression || hasDateExpression))) {
-               console.log('일정 관련 텍스트 감지:', text.substring(0, 50));
+               // 일정 관련 텍스트 감지됨
                setCopiedText(text);
             }
          }
       } catch (err) {
-         console.log('클립보드 접근 실패:', err.message);
+         // 클립보드 접근 실패
       }
    }, [sharedText, copiedText, dismissedCopiedTexts]);
 
@@ -199,14 +199,14 @@ function App() { // Trigger auto-deploy
          if (document.hasFocus() && document.visibilityState === 'visible') {
             readClipboard();
          } else {
-            console.log('문서가 포커스되지 않아 클립보드 체크 건너뜀');
+            // 문서가 포커스되지 않아 클립보드 체크 건너뜀
          }
       };
 
       // 앱 포그라운드 전환 시
       const handleVisibilityChange = () => {
          if (document.visibilityState === 'visible') {
-            console.log('앱이 포그라운드로 전환됨');
+            // 앱이 포그라운드로 전환됨
             // 약간의 지연 후 체크 (포커스가 완전히 설정될 때까지 대기)
             setTimeout(immediateReadClipboard, 100);
          }
@@ -214,7 +214,7 @@ function App() { // Trigger auto-deploy
       
       // 창 포커스 시 (데스크톱에서 중요)
       const handleFocus = () => {
-         console.log('창 포커스');
+         // 창 포커스
          // 포커스 이벤트는 이미 포커스 상태이므로 바로 실행
          setTimeout(() => readClipboard(), 100);
       };
@@ -222,7 +222,7 @@ function App() { // Trigger auto-deploy
       // 모바일에서 터치 후 체크 (복사 후 바로 감지용)
       const handleTouchEnd = () => {
          if (isMobile) {
-            console.log('터치 후 클립보드 체크');
+            // 터치 후 클립보드 체크
             debouncedReadClipboard();
          }
       };
@@ -284,7 +284,7 @@ function App() { // Trigger auto-deploy
          try {
             localStorage.setItem('dismissedCopiedTexts', JSON.stringify(Array.from(newSet)));
          } catch (error) {
-            console.warn('Failed to save dismissed texts to localStorage:', error);
+            // localStorage에 취소된 텍스트 저장 실패
          }
          return newSet;
       });

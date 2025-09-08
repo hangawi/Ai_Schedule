@@ -1,10 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Smartphone, Mic, MicOff, Wifi, WifiOff, Volume2, VolumeX, Clipboard, HelpCircle } from 'lucide-react';
 import MobileGuideModal from './modals/MobileGuideModal';
 
 const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolume }) => {
+  // 즉시 모바일 감지
+  const detectMobile = () => {
+    const userAgent = navigator.userAgent;
+    const isDesktop = /Windows NT|Macintosh|X11.*Linux/i.test(userAgent) && 
+                      !/Mobile|Tablet/i.test(userAgent);
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(userAgent);
+    return !isDesktop && (isMobileUA || window.innerWidth <= 768);
+  };
+
   const [deviceInfo, setDeviceInfo] = useState({
-    isMobile: false,
+    isMobile: detectMobile(), // 초기에 즉시 감지
     isIOS: false,
     isAndroid: false,
     browser: '',
@@ -18,10 +27,23 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
   const [expandedView, setExpandedView] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
 
+  const permissionListenerRef = useRef(null);
+  const initDoneRef = useRef(false);
+
   useEffect(() => {
+    // 이미 초기화되었으면 중복 실행 방지
+    if (initDoneRef.current) return;
+    
     const checkDeviceCapabilities = async () => {
       const userAgent = navigator.userAgent;
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+      // 강력한 모바일 감지: 데스크톱을 확실히 제외하는 방식
+      const isDesktop = /Windows NT|Macintosh|X11.*Linux/i.test(userAgent) && 
+                        !/Mobile|Tablet/i.test(userAgent);
+      
+      const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(userAgent);
+      
+      const isMobile = !isDesktop && (isMobileUA || window.innerWidth <= 768);
+      
       const isIOS = /iPad|iPhone|iPod/.test(userAgent);
       const isAndroid = /Android/.test(userAgent);
       
@@ -39,25 +61,44 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
       try {
         if (navigator.clipboard && navigator.clipboard.readText) {
           if (isIOS) {
-            // iOS는 권한 API가 제한적이므로 실제 접근 시도
-            hasClipboardAccess = true; // 일단 가능한 것으로 표시
+            hasClipboardAccess = true;
           } else {
             const permission = await navigator.permissions.query({name: 'clipboard-read'});
             hasClipboardAccess = permission.state === 'granted' || permission.state === 'prompt';
           }
         }
       } catch (error) {
-        console.log('클립보드 권한 확인 실패:', error);
-        hasClipboardAccess = isIOS; // iOS는 조건부 접근 가능
+        hasClipboardAccess = isIOS;
       }
 
-      // 마이크 접근 권한 확인
+      // 마이크 접근 권한 확인 - 완전히 안정화
       let hasMicrophoneAccess = false;
-      try {
-        const permission = await navigator.permissions.query({name: 'microphone'});
-        hasMicrophoneAccess = permission.state === 'granted';
-      } catch (error) {
-        console.log('마이크 권한 확인 실패:', error);
+      if (!permissionListenerRef.current) {
+        try {
+          const permission = await navigator.permissions.query({name: 'microphone'});
+          hasMicrophoneAccess = permission.state === 'granted';
+          
+          // 리스너 등록 (한 번만)
+          permissionListenerRef.current = permission;
+          permission.onchange = () => {
+            // 디바운싱으로 중복 호출 방지
+            clearTimeout(window.micPermissionTimeout);
+            window.micPermissionTimeout = setTimeout(() => {
+              const updatedAccess = permission.state === 'granted';
+              setDeviceInfo(prev => {
+                if (prev.hasMicrophoneAccess !== updatedAccess) {
+                  return { ...prev, hasMicrophoneAccess: updatedAccess };
+                }
+                return prev;
+              });
+            }, 100);
+          };
+        } catch (error) {
+          // 마이크 권한 확인 실패 시 조용히 처리
+        }
+      } else {
+        // 이미 리스너가 있으면 현재 상태만 확인
+        hasMicrophoneAccess = permissionListenerRef.current.state === 'granted';
       }
 
       const newDeviceInfo = {
@@ -72,8 +113,8 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
         isDocumentFocused: document.hasFocus()
       };
       
-      console.log('MobileStatusIndicator - Device Info:', newDeviceInfo);
       setDeviceInfo(newDeviceInfo);
+      initDoneRef.current = true;
     };
 
     checkDeviceCapabilities();
@@ -95,19 +136,40 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
       setDeviceInfo(prev => ({ ...prev, isDocumentFocused: false }));
     };
 
+    // 리사이즈 이벤트로 모바일 감지 업데이트
+    const handleResize = () => {
+      const isMobile = detectMobile();
+      setDeviceInfo(prev => ({
+        ...prev,
+        isMobile
+      }));
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
     window.addEventListener('blur', handleBlur);
+    window.addEventListener('resize', handleResize);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('resize', handleResize);
+      // 타이머 정리
+      if (window.micPermissionTimeout) {
+        clearTimeout(window.micPermissionTimeout);
+      }
+      // 권한 리스너 정리
+      if (permissionListenerRef.current) {
+        permissionListenerRef.current.onchange = null;
+        permissionListenerRef.current = null;
+      }
+      initDoneRef.current = false;
     };
   }, []);
 
-  // 디버깅용: 항상 표시
-  // if (!deviceInfo.isMobile) return null;
+  // 모바일에서만 표시
+  if (!deviceInfo.isMobile) return null;
 
   const getStatusColor = () => {
     if (!deviceInfo.isDocumentVisible || !deviceInfo.isDocumentFocused) return 'text-red-500';
@@ -125,7 +187,7 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-50">
+    <div className="fixed bottom-4 left-4 z-40">
       {/* 간단한 상태 인디케이터 */}
       {!expandedView && (
         <button
@@ -145,7 +207,7 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
 
       {/* 확장된 상태 창 */}
       {expandedView && (
-        <div className="bg-white rounded-lg shadow-xl p-4 min-w-[280px] border">
+        <div className="bg-white rounded-lg shadow-xl p-4 min-w-[280px] max-w-[320px] border">
           <div className="flex justify-between items-center mb-3">
             <h3 className="font-semibold text-gray-800">모바일 상태</h3>
             <div className="flex items-center space-x-2">
