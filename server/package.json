@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "npx jest"
+    "test": "npx jest",
+    "migrate:rooms": "node scripts/migrateRooms.js",
+    "migrate:rooms:cleanup": "node scripts/migrateRooms.js --cleanup"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

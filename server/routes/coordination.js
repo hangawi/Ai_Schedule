@@ -5,6 +5,8 @@ const auth = require('../middleware/auth');
 
 // Room management
 router.post('/rooms', auth, coordinationController.createRoom);
+router.put('/rooms/:roomId', auth, coordinationController.updateRoom);
+router.delete('/rooms/:roomId', auth, coordinationController.deleteRoom);
 router.post('/rooms/:inviteCode/join', auth, coordinationController.joinRoom);
 router.get('/rooms/:roomId', auth, coordinationController.getRoomDetails);
 router.get('/my-rooms', auth, coordinationController.getMyRooms);
