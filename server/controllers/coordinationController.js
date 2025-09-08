@@ -1,38 +1,135 @@
+const Room = require('../models/room');
 const CoordinationRoom = require('../models/coordinationRoom');
-const TimeSlot = require('../models/timeSlot');
-const CoordinationRequest = require('../models/coordinationRequest');
 const User = require('../models/user');
 
 // @desc    Create a new coordination room
 // @route   POST /api/coordination/rooms
 // @access  Private
 exports.createRoom = async (req, res) => {
-  console.log('req.body:', req.body);
-  const { roomName, maxMembers } = req.body;
-  const roomMasterId = req.user.id; // Assuming req.user.id is set by auth middleware
-
   try {
-    // Removed: Check if the user already masters a room
-    // const existingRoom = await CoordinationRoom.findOne({ roomMasterId });
-    // if (existingRoom) {
-    //   return res.status(400).json({ msg: '이미 방을 생성했습니다. 한 명의 방장은 하나의 방만 관리할 수 있습니다.' });
-    // }
+    const { name, description, maxMembers, settings } = req.body;
 
-    const newRoom = new CoordinationRoom({
-      name: roomName,
-      roomMasterId,
-      members: [roomMasterId], // Master is automatically a member
-      settings: {
-        maxMembers: maxMembers || 10, // Use provided maxMembers or default
-      },
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({ msg: '방 이름은 필수입니다.' });
+    }
+
+    // Generate unique invite code
+    let inviteCode;
+    let codeExists = true;
+    while (codeExists) {
+      inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const existingRoom = await Room.findOne({ inviteCode });
+      if (!existingRoom) codeExists = false;
+    }
+
+    console.log('Creating room with settings:', settings);
+    
+    const room = new Room({
+      name: name.trim(),
+      description: description?.trim() || '',
+      owner: req.user.id,
+      inviteCode,
+      maxMembers: maxMembers || 10,
+      settings: settings || {}
     });
 
-    await newRoom.save();
+    await room.save();
+    await room.populate('owner', 'name email');
+    await room.populate('members.user', 'name email');
 
-    res.status(201).json(newRoom);
-  } catch (err) {
-    console.error('Error creating room:', err);
-    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+    res.status(201).json(room);
+  } catch (error) {
+    console.error('Error creating room:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// @desc    Update room details (owner only)
+// @route   PUT /api/coordination/rooms/:roomId
+// @access  Private
+exports.updateRoom = async (req, res) => {
+  try {
+    const { name, description, maxMembers, settings } = req.body;
+    
+    // Try to find in new Room model first
+    let room = await Room.findById(req.params.roomId);
+    let isLegacy = false;
+
+    // If not found, try legacy CoordinationRoom model
+    if (!room) {
+      const legacyRoom = await CoordinationRoom.findById(req.params.roomId);
+      if (legacyRoom) {
+        return res.status(400).json({ msg: '레거시 방은 수정할 수 없습니다. 먼저 마이그레이션을 수행해주세요.' });
+      }
+    }
+
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    // Check if user is owner
+    if (!room.isOwner(req.user.id)) {
+      return res.status(403).json({ msg: '방장만 수정할 수 있습니다.' });
+    }
+
+    // Update room fields
+    if (name && name.trim()) room.name = name.trim();
+    if (description !== undefined) room.description = description.trim();
+    if (maxMembers && maxMembers >= 2 && maxMembers <= 20) {
+      // Check if current members exceed new limit
+      if (room.members.length > maxMembers) {
+        return res.status(400).json({ msg: `현재 멤버 수(${room.members.length}명)보다 적게 설정할 수 없습니다.` });
+      }
+      room.maxMembers = maxMembers;
+    }
+    if (settings) room.settings = { ...room.settings, ...settings };
+
+    await room.save();
+    await room.populate('owner', 'name email');
+    await room.populate('members.user', 'name email');
+
+    res.json(room);
+  } catch (error) {
+    console.error('Error updating room:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// @desc    Delete room (owner only)
+// @route   DELETE /api/coordination/rooms/:roomId
+// @access  Private
+exports.deleteRoom = async (req, res) => {
+  try {
+    // Try to find in new Room model first
+    let room = await Room.findById(req.params.roomId);
+
+    // If not found, try legacy CoordinationRoom model
+    if (!room) {
+      const legacyRoom = await CoordinationRoom.findById(req.params.roomId);
+      if (legacyRoom) {
+        // Check if user is owner of legacy room
+        if (legacyRoom.roomMasterId.toString() !== req.user.id) {
+          return res.status(403).json({ msg: '방장만 삭제할 수 있습니다.' });
+        }
+        await CoordinationRoom.findByIdAndDelete(req.params.roomId);
+        return res.json({ msg: '방이 삭제되었습니다.' });
+      }
+    }
+
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    // Check if user is owner
+    if (!room.isOwner(req.user.id)) {
+      return res.status(403).json({ msg: '방장만 삭제할 수 있습니다.' });
+    }
+
+    await Room.findByIdAndDelete(req.params.roomId);
+    res.json({ msg: '방이 삭제되었습니다.' });
+  } catch (error) {
+    console.error('Error deleting room:', error);
+    res.status(500).json({ msg: 'Server error' });
   }
 };
 
@@ -40,33 +137,44 @@ exports.createRoom = async (req, res) => {
 // @route   POST /api/coordination/rooms/:inviteCode/join
 // @access  Private
 exports.joinRoom = async (req, res) => {
-  const { inviteCode } = req.params;
-  const userId = req.user.id;
-
   try {
-    const room = await CoordinationRoom.findOne({ inviteCode });
-
+    const room = await Room.findOne({ inviteCode: req.params.inviteCode.toUpperCase() });
     if (!room) {
-      return res.status(404).json({ msg: '초대 코드가 유효하지 않거나 방을 찾을 수 없습니다.' });
+      return res.status(404).json({ msg: '초대 코드가 유효하지 않습니다.' });
     }
 
-    // Check if user is already a member
-    if (room.members.includes(userId)) {
-      return res.status(400).json({ msg: '이미 이 방의 멤버입니다.' });
+    // Check if user is the room owner
+    if (room.isOwner(req.user.id)) {
+      await room.populate('owner', 'name email');
+      await room.populate('members.user', 'name email');
+      return res.json({ 
+        ...room.toJSON(), 
+        message: '방장은 초대 코드 없이 직접 방에 입장할 수 있습니다.' 
+      });
     }
 
-    // Check if room is full
-    if (room.members.length >= room.settings.maxMembers) {
-      return res.status(400).json({ msg: '방의 정원이 가득 찼습니다.' });
+    // Check if already a member
+    if (room.isMember(req.user.id)) {
+      await room.populate('owner', 'name email');
+      await room.populate('members.user', 'name email');
+      return res.json(room);
     }
 
-    room.members.push(userId);
+    // Check room capacity
+    if (room.members.length >= room.maxMembers) {
+      return res.status(400).json({ msg: '방이 가득 찼습니다.' });
+    }
+
+    // Add user as member
+    room.members.push({ user: req.user.id });
     await room.save();
+    await room.populate('owner', 'name email');
+    await room.populate('members.user', 'name email');
 
-    res.status(200).json(room);
-  } catch (err) {
-    console.error('Error joining room:', err.message);
-    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+    res.json(room);
+  } catch (error) {
+    console.error('Error joining room:', error);
+    res.status(500).json({ msg: 'Server error' });
   }
 };
 
@@ -74,37 +182,107 @@ exports.joinRoom = async (req, res) => {
 // @route   GET /api/coordination/rooms/:roomId
 // @access  Private
 exports.getRoomDetails = async (req, res) => {
-  const { roomId } = req.params;
-  const userId = req.user.id;
-
   try {
-    const room = await CoordinationRoom.findById(roomId)
-      .populate('roomMasterId', 'firstName lastName email') // Populate master details
-      .populate('members', 'firstName lastName email'); // Populate member details
+    console.log(`\n=== Room Access Debug ===`);
+    console.log(`Room ID: ${req.params.roomId}`);
+    console.log(`User ID: ${req.user.id}`);
+    
+    // Try new Room model first
+    let room = await Room.findById(req.params.roomId)
+      .populate('owner', 'firstName lastName email')
+      .populate('members.user', 'firstName lastName email')
+      .populate('timeSlots.user', 'firstName lastName email')
+      .populate('requests.requester', 'firstName lastName email');
 
+    let isLegacy = false;
+    
+    // If not found, try legacy CoordinationRoom model
     if (!room) {
+      console.log('Not found in new Room collection, checking legacy...');
+      const legacyRoom = await CoordinationRoom.findById(req.params.roomId)
+        .populate('roomMasterId', 'firstName lastName email')
+        .populate('members', 'firstName lastName email');
+        
+      if (legacyRoom) {
+        isLegacy = true;
+        console.log('Found in legacy CoordinationRoom');
+        console.log('Legacy room master:', legacyRoom.roomMasterId?._id);
+        console.log('Legacy members:', legacyRoom.members?.map(m => m._id));
+        
+        // Convert legacy room to new format
+        room = {
+          _id: legacyRoom._id,
+          name: legacyRoom.name,
+          description: '',
+          owner: legacyRoom.roomMasterId ? {
+            _id: legacyRoom.roomMasterId._id,
+            name: legacyRoom.roomMasterId.name || `${legacyRoom.roomMasterId.firstName} ${legacyRoom.roomMasterId.lastName}`,
+            email: legacyRoom.roomMasterId.email
+          } : null,
+          members: legacyRoom.members.map(member => ({
+            user: {
+              _id: member._id,
+              name: member.name || `${member.firstName} ${member.lastName}`,
+              email: member.email
+            }
+          })),
+          inviteCode: legacyRoom.inviteCode,
+          maxMembers: legacyRoom.settings?.maxMembers || 10,
+          settings: legacyRoom.settings || {},
+          timeSlots: [],
+          requests: [],
+          createdAt: legacyRoom.createdAt,
+          updatedAt: legacyRoom.updatedAt,
+          isMember: function(userId) {
+            return this.owner._id.toString() === userId.toString() || 
+                   this.members.some(member => member.user._id.toString() === userId.toString());
+          },
+          isOwner: function(userId) {
+            return this.owner._id.toString() === userId.toString();
+          }
+        };
+      }
+    } else {
+      console.log('Found in new Room collection');
+    }
+    
+    if (!room) {
+      console.log('Room not found in either collection');
       return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
     }
-
-    // Check if the user is a member of this room
-    if (!room.members.some(member => member._id.toString() === userId)) {
+    
+    console.log(`Room type: ${isLegacy ? 'Legacy' : 'New'}`);
+    console.log(`Room name: ${room.name}`);
+    console.log(`Owner ID: ${room.owner?._id}`);
+    console.log(`Members: ${room.members?.map(m => m.user?._id || m._id)}`);
+    
+    // Check if user is member of the room
+    const isOwner = room.owner?._id?.toString() === req.user.id;
+    const isMemberByArray = room.members?.some(member => {
+      const memberId = member.user?._id || member._id;
+      return memberId?.toString() === req.user.id;
+    });
+    const isMemberByFunction = room.isMember ? room.isMember(req.user.id) : false;
+    
+    console.log(`Is owner: ${isOwner}`);
+    console.log(`Is member (by array): ${isMemberByArray}`);
+    console.log(`Is member (by function): ${isMemberByFunction}`);
+    
+    const isMember = isOwner || isMemberByArray || isMemberByFunction;
+    console.log(`Final access decision: ${isMember}`);
+    
+    if (!isMember) {
+      console.log('ACCESS DENIED');
       return res.status(403).json({ msg: '이 방에 접근할 권한이 없습니다.' });
     }
 
-    // Also fetch all time slots for this room
-    const timeSlots = await TimeSlot.find({ roomId })
-      .populate('userId', 'firstName lastName email'); // Populate user who booked the slot
-
-    // Combine room details with time slots
-    const roomDetails = {
-      ...room.toObject(),
-      timeSlots: timeSlots,
-    };
-
-    res.status(200).json(roomDetails);
-  } catch (err) {
-    console.error('Error getting room details:', err.message);
-    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+    console.log('ACCESS GRANTED');
+    console.log('=== End Debug ===\n');
+    
+    res.json(room);
+  } catch (error) {
+    console.error('Error fetching room details:', error);
+    res.status(500).json({ msg: 'Server error' });
   }
 };
 
@@ -112,41 +290,101 @@ exports.getRoomDetails = async (req, res) => {
 // @route   POST /api/coordination/rooms/:roomId/slots
 // @access  Private
 exports.submitTimeSlots = async (req, res) => {
-  const { roomId } = req.params;
-  const userId = req.user.id;
-  const { slots } = req.body; // slots is an array of { startTime, endTime }
-
   try {
-    const room = await CoordinationRoom.findById(roomId);
+    console.log('\n=== TimeSlot Submission Debug ===');
+    console.log('Room ID:', req.params.roomId);
+    console.log('User ID:', req.user.id);
+    console.log('Submitted slots:', req.body.slots);
+    
+    const { slots } = req.body;
+    
+    // Try to find in new Room model first
+    let room = await Room.findById(req.params.roomId);
+    let isLegacy = false;
+
+    // If not found, try legacy CoordinationRoom model
     if (!room) {
+      const legacyRoom = await CoordinationRoom.findById(req.params.roomId);
+      if (legacyRoom) {
+        return res.status(400).json({ msg: '레거시 방은 새 시간표 기능을 지원하지 않습니다. 먼저 마이그레이션을 수행해주세요.' });
+      }
+    }
+
+    if (!room) {
+      console.log('Room not found');
       return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
     }
 
-    // Check if the user is a member of this room
-    if (!room.members.some(member => member._id.toString() === userId)) {
-      return res.status(403).json({ msg: '이 방에 시간표를 제출할 권한이 없습니다.' });
+    console.log('Room found:', room.name);
+    console.log('Room owner:', room.owner);
+    console.log('Room members:', room.members.map(m => m.user));
+
+    // Check if user is member (same logic as getRoomDetails)
+    const isOwner = room.owner?._id?.toString() === req.user.id;
+    const isMemberByArray = room.members?.some(member => {
+      const memberId = member.user?._id || member._id;
+      return memberId?.toString() === req.user.id;
+    });
+    const isMemberByFunction = room.isMember ? room.isMember(req.user.id) : false;
+    
+    const isMember = isOwner || isMemberByArray || isMemberByFunction;
+    
+    console.log('Is owner:', isOwner);
+    console.log('Is member (by array):', isMemberByArray);
+    console.log('Is member (by function):', isMemberByFunction);
+    console.log('Final member check:', isMember);
+
+    if (!isMember) {
+      console.log('ACCESS DENIED for timeSlot submission');
+      return res.status(403).json({ msg: '이 방의 멤버가 아닙니다.' });
     }
 
-    // Clear existing slots for this user in this room
-    await TimeSlot.deleteMany({ roomId, userId });
+    // Remove existing slots for this user
+    const beforeCount = room.timeSlots.length;
+    room.timeSlots = room.timeSlots.filter(slot => slot.user.toString() !== req.user.id);
+    const afterCount = room.timeSlots.length;
+    
+    console.log(`Removed ${beforeCount - afterCount} existing slots for user`);
 
-    const newTimeSlots = [];
-    for (const slot of slots) {
-      const newSlot = new TimeSlot({
-        roomId,
-        userId,
-        startTime: new Date(slot.startTime),
-        endTime: new Date(slot.endTime),
+    // Add new slots
+    if (slots && slots.length > 0) {
+      const newSlots = slots.map(slot => ({
+        ...slot,
+        user: req.user.id,
+        status: 'confirmed'
+      }));
+
+      console.log('Adding new slots:', newSlots);
+      room.timeSlots.push(...newSlots);
+
+      // Check for conflicts
+      room.timeSlots.forEach(slot => {
+        const conflicts = room.timeSlots.filter(otherSlot => 
+          otherSlot._id !== slot._id &&
+          otherSlot.day === slot.day &&
+          ((slot.startTime >= otherSlot.startTime && slot.startTime < otherSlot.endTime) ||
+           (slot.endTime > otherSlot.startTime && slot.endTime <= otherSlot.endTime) ||
+           (slot.startTime <= otherSlot.startTime && slot.endTime >= otherSlot.endTime))
+        );
+        
+        if (conflicts.length > 0) {
+          slot.status = 'conflict';
+          conflicts.forEach(conflict => conflict.status = 'conflict');
+        }
       });
-      newTimeSlots.push(newSlot);
     }
 
-    await TimeSlot.insertMany(newTimeSlots);
+    await room.save();
+    await room.populate('timeSlots.user', 'name email');
 
-    res.status(200).json({ msg: '시간표가 성공적으로 제출되었습니다.', submittedSlots: newTimeSlots });
-  } catch (err) {
-    console.error('Error submitting time slots:', err.message);
-    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+    console.log('TimeSlots saved successfully');
+    console.log('Total timeSlots:', room.timeSlots.length);
+    console.log('=== End TimeSlot Debug ===\n');
+
+    res.json(room);
+  } catch (error) {
+    console.error('Error submitting time slots:', error);
+    res.status(500).json({ msg: 'Server error' });
   }
 };
 
@@ -154,35 +392,35 @@ exports.submitTimeSlots = async (req, res) => {
 // @route   POST /api/coordination/requests
 // @access  Private
 exports.createRequest = async (req, res) => {
-  const { roomId, requestType, requestedSlot, conflictingUserId, message } = req.body;
-  const requesterId = req.user.id;
-
   try {
-    const room = await CoordinationRoom.findById(roomId);
+    const { roomId, type, timeSlot, targetSlot, message } = req.body;
+    
+    const room = await Room.findById(roomId);
     if (!room) {
       return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
     }
 
-    // Check if requester is a member of the room
-    if (!room.members.some(member => member._id.toString() === requesterId)) {
-      return res.status(403).json({ msg: '이 방에서 요청을 생성할 권한이 없습니다.' });
+    if (!room.isMember(req.user.id)) {
+      return res.status(403).json({ msg: '이 방의 멤버가 아닙니다.' });
     }
 
-    const newRequest = new CoordinationRequest({
-      roomId,
-      requesterId,
-      requestType,
-      requestedSlot,
-      conflictingUserId: requestType === 'conflict' ? conflictingUserId : undefined,
+    const request = {
+      requester: req.user.id,
+      type,
+      timeSlot,
+      targetSlot,
       message,
-    });
+      status: 'pending'
+    };
 
-    await newRequest.save();
+    room.requests.push(request);
+    await room.save();
+    await room.populate('requests.requester', 'name email');
 
-    res.status(201).json(newRequest);
-  } catch (err) {
-    console.error('Error creating request:', err.message);
-    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+    res.status(201).json(request);
+  } catch (error) {
+    console.error('Error creating request:', error);
+    res.status(500).json({ msg: 'Server error' });
   }
 };
 
@@ -190,47 +428,40 @@ exports.createRequest = async (req, res) => {
 // @route   PUT /api/coordination/requests/:requestId
 // @access  Private (Room Master only)
 exports.handleRequest = async (req, res) => {
-  const { requestId } = req.params;
-  const { status } = req.body; // 'approved' or 'rejected'
-  const userId = req.user.id; // The user making the decision
-
   try {
-    const request = await CoordinationRequest.findById(requestId);
+    const { status } = req.body;
+    
+    const room = await Room.findOne({ 'requests._id': req.params.requestId });
+    if (!room) {
+      return res.status(404).json({ msg: '요청을 찾을 수 없습니다.' });
+    }
+
+    // Only room owner can handle requests
+    if (!room.isOwner(req.user.id)) {
+      return res.status(403).json({ msg: '방장만 요청을 처리할 수 있습니다.' });
+    }
+
+    const request = room.requests.id(req.params.requestId);
     if (!request) {
       return res.status(404).json({ msg: '요청을 찾을 수 없습니다.' });
     }
 
-    const room = await CoordinationRoom.findById(request.roomId);
-    if (!room) {
-      return res.status(404).json({ msg: '관련 방을 찾을 수 없습니다.' });
-    }
-
-    // Only the room master can handle requests
-    if (room.roomMasterId.toString() !== userId) {
-      return res.status(403).json({ msg: '요청을 처리할 권한이 없습니다. 방장만 가능합니다.' });
-    }
-
     request.status = status;
-    await request.save();
 
-    // If approved, and it's a booking request, create a TimeSlot
-    if (status === 'approved' && request.requestType === 'booking') {
-      const newTimeSlot = new TimeSlot({
-        roomId: request.roomId,
-        userId: request.requesterId,
-        startTime: request.requestedSlot.startTime,
-        endTime: request.requestedSlot.endTime,
+    if (status === 'approved' && request.type === 'time_request') {
+      // Add the requested time slot
+      room.timeSlots.push({
+        ...request.timeSlot,
+        user: request.requester,
+        status: 'confirmed'
       });
-      await newTimeSlot.save();
     }
-    // If approved, and it's a conflict request, the master needs to manually resolve it
-    // (e.g., by moving the conflicting user's slot or communicating with them)
-    // This part is outside the scope of this API call, but the request status is updated.
 
-    res.status(200).json(request);
-  } catch (err) {
-    console.error('Error handling request:', err.message);
-    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+    await room.save();
+    res.json({ msg: `요청이 ${status === 'approved' ? '승인' : '거절'}되었습니다.` });
+  } catch (error) {
+    console.error('Error handling request:', error);
+    res.status(500).json({ msg: 'Server error' });
   }
 };
 
@@ -238,29 +469,26 @@ exports.handleRequest = async (req, res) => {
 // @route   GET /api/coordination/rooms/:roomId/requests
 // @access  Private
 exports.getRequestsForRoom = async (req, res) => {
-  const { roomId } = req.params;
-  const userId = req.user.id;
-
   try {
-    const room = await CoordinationRoom.findById(roomId);
+    const room = await Room.findById(req.params.roomId)
+      .populate('requests.requester', 'name email');
+    
     if (!room) {
       return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
     }
 
     // Check if the user is a member of this room
-    if (!room.members.some(member => member._id.toString() === userId)) {
+    if (!room.isMember(req.user.id)) {
       return res.status(403).json({ msg: '이 방의 요청을 조회할 권한이 없습니다.' });
     }
 
-    const requests = await CoordinationRequest.find({ roomId })
-      .populate('requesterId', 'firstName lastName email')
-      .populate('conflictingUserId', 'firstName lastName email')
-      .sort({ createdAt: -1 }); // Latest requests first
+    // Sort requests by creation date (newest first)
+    const requests = room.requests.sort((a, b) => b.createdAt - a.createdAt);
 
-    res.status(200).json(requests);
-  } catch (err) {
-    console.error('Error getting requests for room:', err.message);
-    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+    res.json(requests);
+  } catch (error) {
+    console.error('Error getting requests for room:', error);
+    res.status(500).json({ msg: 'Server error' });
   }
 };
 
@@ -269,19 +497,74 @@ exports.getRequestsForRoom = async (req, res) => {
 // @access  Private
 exports.getMyRooms = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const rooms = await CoordinationRoom.find({
+    // Get rooms from new Room model
+    const newOwnedRooms = await Room.find({ owner: req.user.id })
+      .populate('owner', 'name email')
+      .populate('members.user', 'name email')
+      .sort({ createdAt: -1 });
+
+    const newJoinedRooms = await Room.find({ 
+      'members.user': req.user.id,
+      owner: { $ne: req.user.id }
+    })
+      .populate('owner', 'name email')
+      .populate('members.user', 'name email')
+      .sort({ createdAt: -1 });
+
+    // Get rooms from legacy CoordinationRoom model
+    const legacyRooms = await CoordinationRoom.find({
       $or: [
-        { roomMasterId: userId },
-        { members: userId }
+        { roomMasterId: req.user.id },
+        { members: req.user.id }
       ]
     })
-    .populate('roomMasterId', 'firstName lastName email')
-    .populate('members', 'firstName lastName email');
+    .populate('roomMasterId', 'name email')
+    .populate('members', 'name email')
+    .sort({ createdAt: -1 });
 
-    res.json(rooms);
-  } catch (err) {
-    console.error('Error getting user rooms:', err.message);
-    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+    // Convert legacy rooms to new format
+    const convertedLegacyRooms = legacyRooms.map(legacyRoom => ({
+      _id: legacyRoom._id,
+      name: legacyRoom.name,
+      description: '',
+      owner: legacyRoom.roomMasterId ? {
+        _id: legacyRoom.roomMasterId._id,
+        name: legacyRoom.roomMasterId.name || `${legacyRoom.roomMasterId.firstName} ${legacyRoom.roomMasterId.lastName}`,
+        email: legacyRoom.roomMasterId.email
+      } : null,
+      members: legacyRoom.members.map(member => ({
+        user: {
+          _id: member._id,
+          name: member.name || `${member.firstName} ${member.lastName}`,
+          email: member.email
+        }
+      })),
+      inviteCode: legacyRoom.inviteCode,
+      maxMembers: legacyRoom.settings?.maxMembers || 10,
+      settings: legacyRoom.settings || {},
+      memberCount: legacyRoom.members.length,
+      createdAt: legacyRoom.createdAt,
+      updatedAt: legacyRoom.updatedAt
+    }));
+
+    // Separate owned and joined legacy rooms
+    const legacyOwnedRooms = convertedLegacyRooms.filter(room => 
+      room.owner._id.toString() === req.user.id
+    );
+    const legacyJoinedRooms = convertedLegacyRooms.filter(room => 
+      room.owner._id.toString() !== req.user.id
+    );
+
+    // Combine new and legacy rooms
+    const allOwnedRooms = [...newOwnedRooms, ...legacyOwnedRooms];
+    const allJoinedRooms = [...newJoinedRooms, ...legacyJoinedRooms];
+
+    res.json({
+      owned: allOwnedRooms,
+      joined: allJoinedRooms
+    });
+  } catch (error) {
+    console.error('Error fetching my rooms:', error);
+    res.status(500).json({ msg: 'Server error' });
   }
 };

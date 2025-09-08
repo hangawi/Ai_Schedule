@@ -8,27 +8,54 @@ export const useCoordination = (userId) => {
   const [error, setError] = useState(null);
   const [myRooms, setMyRooms] = useState([]);
 
-  const fetchRoomDetails = useCallback(async (roomId) => {
-    console.log('Fetching room details for roomId:', roomId);
-    setError(null);
+  const fetchRoomDetails = useCallback(async (roomId, silent = false) => {
+    if (!silent) setError(null);
+    
     try {
+      console.log(`Fetching room details for roomId: ${roomId}`);
       const token = localStorage.getItem('token');
       if (!token) throw new Error('No authentication token found.');
 
       const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}`, {
         headers: { 'x-auth-token': token },
       });
+      
+      console.log(`Response status: ${response.status} ${response.statusText}`);
+      
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.msg || 'Failed to fetch room details.');
+        const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+        console.error('Response error data:', errData);
+        throw new Error(errData.msg || `HTTP ${response.status}: Failed to fetch room details.`);
       }
       const data = await response.json();
+      
+      console.log('=== ROOM OWNER DEBUG ===');
+      console.log('Your User ID:', localStorage.getItem('userId') || 'not found in localStorage');
+      console.log('Room Owner ID:', data.owner);
+      console.log('Room Owner Object:', typeof data.owner, data.owner);
+      console.log('Owner _id:', data.owner?._id);
+      console.log('Room Master ID:', data.roomMasterId);
+      console.log('Are they equal?', data.owner === localStorage.getItem('userId'));
+      console.log('Are _ids equal?', data.owner?._id === localStorage.getItem('userId'));
+      console.log('=== END DEBUG ===');
+      
+      // Only update if the data has actually changed
+      console.log('setCurrentRoom 호출 - 새로운 방 데이터 설정');
       setCurrentRoom(data);
-      console.log('Room details fetched and currentRoom updated:', data);
+      console.log('currentRoom 상태 업데이트 완료');
+      
     } catch (err) {
-      setError(err.message);
-      console.error('Error fetching room details:', err);
-      setCurrentRoom(null);
+      console.error('fetchRoomDetails error details:', {
+        roomId,
+        error: err.message,
+        stack: err.stack
+      });
+      
+      if (!silent) {
+        setError(err.message);
+        setCurrentRoom(null);
+      }
+      throw err; // Re-throw so handleRoomClick can catch it
     }
   }, []);
 
@@ -59,12 +86,20 @@ export const useCoordination = (userId) => {
   useEffect(() => {
     let intervalId;
     if (currentRoom && currentRoom._id) {
-      setIsLoading(true);
-      fetchRoomDetails(currentRoom._id).then(() => setIsLoading(false));
+      // Don't fetch immediately if we already have full room data
+      const hasCompleteData = currentRoom.members && currentRoom.timeSlots !== undefined;
+      
+      if (!hasCompleteData) {
+        setIsLoading(true);
+        fetchRoomDetails(currentRoom._id).then(() => setIsLoading(false));
+      }
 
-      intervalId = setInterval(() => {
-        fetchRoomDetails(currentRoom._id);
-      }, 5000);
+      // Set up periodic refresh only for rooms with complete data
+      if (hasCompleteData) {
+        intervalId = setInterval(() => {
+          fetchRoomDetails(currentRoom._id, true); // Silent mode to avoid UI flicker
+        }, 30000); // Increased to 30 seconds to reduce server load
+      }
     }
 
     return () => {
@@ -72,7 +107,7 @@ export const useCoordination = (userId) => {
         clearInterval(intervalId);
       }
     };
-  }, [currentRoom, fetchRoomDetails]);
+  }, [currentRoom?._id]); // Only depend on room ID, not the entire room object
 
   const createRoom = useCallback(async (roomData) => {
     setIsLoading(true);
@@ -125,7 +160,11 @@ export const useCoordination = (userId) => {
       }
       const data = await response.json();
       setCurrentRoom(data);
-      alert('방에 성공적으로 참여했습니다!');
+      if (data.message) {
+        alert(data.message);
+      } else {
+        alert('방에 성공적으로 참여했습니다!');
+      }
     } catch (err) {
       setError(err.message);
       alert(`방 참여 실패: ${err.message}`);
@@ -230,14 +269,80 @@ export const useCoordination = (userId) => {
     }
   }, [currentRoom, fetchRoomDetails]);
 
+  const updateRoom = useCallback(async (roomId, roomData) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('No authentication token found.');
+
+      const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token,
+        },
+        body: JSON.stringify(roomData),
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.msg || 'Failed to update room.');
+      }
+      const data = await response.json();
+      setCurrentRoom(data);
+      alert('방 정보가 성공적으로 수정되었습니다!');
+      return data;
+    } catch (err) {
+      setError(err.message);
+      alert(`방 수정 실패: ${err.message}`);
+      console.error('Error updating room:', err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const deleteRoom = useCallback(async (roomId) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('No authentication token found.');
+
+      const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}`, {
+        method: 'DELETE',
+        headers: {
+          'x-auth-token': token,
+        },
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.msg || 'Failed to delete room.');
+      }
+      setCurrentRoom(null);
+      await fetchMyRooms(); // Refresh the room list
+      alert('방이 성공적으로 삭제되었습니다!');
+    } catch (err) {
+      setError(err.message);
+      alert(`방 삭제 실패: ${err.message}`);
+      console.error('Error deleting room:', err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchMyRooms]);
+
   return {
     currentRoom,
+    setCurrentRoom,
     myRooms,
     isLoading,
     error,
     fetchRoomDetails,
     fetchMyRooms,
     createRoom,
+    updateRoom,
+    deleteRoom,
     joinRoom,
     submitTimeSlots,
     createRequest,

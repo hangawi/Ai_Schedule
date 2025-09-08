@@ -19,7 +19,7 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
     browser: '',
     isPWA: false,
     hasClipboardAccess: false,
-    hasMicrophoneAccess: false,
+    hasMicrophoneAccess: null, // null로 초기화해서 깜빡임 방지
     isDocumentVisible: true,
     isDocumentFocused: true
   });
@@ -28,12 +28,8 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
   const [showGuide, setShowGuide] = useState(false);
 
   const permissionListenerRef = useRef(null);
-  const initDoneRef = useRef(false);
 
   useEffect(() => {
-    // 이미 초기화되었으면 중복 실행 방지
-    if (initDoneRef.current) return;
-    
     const checkDeviceCapabilities = async () => {
       const userAgent = navigator.userAgent;
       // 강력한 모바일 감지: 데스크톱을 확실히 제외하는 방식
@@ -71,34 +67,13 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
         hasClipboardAccess = isIOS;
       }
 
-      // 마이크 접근 권한 확인 - 완전히 안정화
+      // 마이크 접근 권한 확인 - 간단하고 안정적으로
       let hasMicrophoneAccess = false;
-      if (!permissionListenerRef.current) {
-        try {
-          const permission = await navigator.permissions.query({name: 'microphone'});
-          hasMicrophoneAccess = permission.state === 'granted';
-          
-          // 리스너 등록 (한 번만)
-          permissionListenerRef.current = permission;
-          permission.onchange = () => {
-            // 디바운싱으로 중복 호출 방지
-            clearTimeout(window.micPermissionTimeout);
-            window.micPermissionTimeout = setTimeout(() => {
-              const updatedAccess = permission.state === 'granted';
-              setDeviceInfo(prev => {
-                if (prev.hasMicrophoneAccess !== updatedAccess) {
-                  return { ...prev, hasMicrophoneAccess: updatedAccess };
-                }
-                return prev;
-              });
-            }, 100);
-          };
-        } catch (error) {
-          // 마이크 권한 확인 실패 시 조용히 처리
-        }
-      } else {
-        // 이미 리스너가 있으면 현재 상태만 확인
-        hasMicrophoneAccess = permissionListenerRef.current.state === 'granted';
+      try {
+        const permission = await navigator.permissions.query({name: 'microphone'});
+        hasMicrophoneAccess = permission.state === 'granted';
+      } catch (error) {
+        // 마이크 권한 확인 실패 시 조용히 처리
       }
 
       const newDeviceInfo = {
@@ -114,7 +89,6 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
       };
       
       setDeviceInfo(newDeviceInfo);
-      initDoneRef.current = true;
     };
 
     checkDeviceCapabilities();
@@ -155,24 +129,15 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('resize', handleResize);
-      // 타이머 정리
-      if (window.micPermissionTimeout) {
-        clearTimeout(window.micPermissionTimeout);
-      }
-      // 권한 리스너 정리
-      if (permissionListenerRef.current) {
-        permissionListenerRef.current.onchange = null;
-        permissionListenerRef.current = null;
-      }
-      initDoneRef.current = false;
     };
-  }, []);
+  }, [detectMobile]);
 
   // 모바일에서만 표시
   if (!deviceInfo.isMobile) return null;
 
   const getStatusColor = () => {
     if (!deviceInfo.isDocumentVisible || !deviceInfo.isDocumentFocused) return 'text-red-500';
+    if (deviceInfo.hasMicrophoneAccess === null) return 'text-gray-500';
     if (!deviceInfo.hasMicrophoneAccess) return 'text-yellow-500';
     if (isBackgroundMonitoring && deviceInfo.hasMicrophoneAccess) return 'text-green-500';
     return 'text-gray-500';
@@ -181,6 +146,7 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
   const getStatusText = () => {
     if (!deviceInfo.isDocumentVisible) return '백그라운드 (음성인식 불가)';
     if (!deviceInfo.isDocumentFocused) return '포커스 없음 (제한적)';
+    if (deviceInfo.hasMicrophoneAccess === null) return '권한 확인 중...';
     if (!deviceInfo.hasMicrophoneAccess) return '마이크 권한 필요';
     if (isBackgroundMonitoring) return '백그라운드 모니터링 활성';
     return '대기 중';
@@ -240,12 +206,14 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
 
             {/* 마이크 상태 */}
             <div className="flex items-center space-x-2">
-              {deviceInfo.hasMicrophoneAccess ? 
+              {deviceInfo.hasMicrophoneAccess === null ? (
+                <Mic size={14} className="text-gray-400" />
+              ) : deviceInfo.hasMicrophoneAccess ? 
                 <Mic size={14} className="text-green-500" /> : 
                 <MicOff size={14} className="text-red-500" />
               }
               <span className="text-sm">
-                마이크: {deviceInfo.hasMicrophoneAccess ? '허용됨' : '권한 필요'}
+                마이크: {deviceInfo.hasMicrophoneAccess === null ? '확인 중...' : deviceInfo.hasMicrophoneAccess ? '허용됨' : '권한 필요'}
               </span>
               {micVolume > 0 && (
                 <div className={`w-2 h-2 rounded-full animate-pulse ${

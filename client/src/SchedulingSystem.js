@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
    Calendar,
-   Clock,
+   CalendarCheck,
    Users,
-   UserPlus,
    LogOut,
    X,
    Menu as MenuIcon,
+   LayoutDashboard,
+   ListTodo,
+   Bot,
+   History
 } from 'lucide-react';
 import MyCalendar from './components/calendar/Calendar';
 import EventFormModal from './components/EventFormModal';
@@ -288,12 +291,12 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                   </button>
                </div>
                <div className="space-y-1">
-                  <NavItem icon={<Calendar size={18} />} label="대시보드" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<Clock size={18} />} label="나의 일정" active={activeTab === 'events'} onClick={() => { setActiveTab('events'); setIsSidebarOpen(false); }} />
+                  <NavItem icon={<LayoutDashboard size={18} />} label="대시보드" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }} />
+                  <NavItem icon={<ListTodo size={18} />} label="나의 일정" active={activeTab === 'events'} onClick={() => { setActiveTab('events'); setIsSidebarOpen(false); }} />
                   <NavItem icon={<Calendar size={18} />} label="Google 캘린더" active={activeTab === 'googleCalendar'} onClick={() => { setActiveTab('googleCalendar'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<Users size={18} />} label="조율 내역" active={activeTab === 'proposals'} onClick={() => { setActiveTab('proposals'); setIsSidebarOpen(false); }} badge="3" />
-                  <NavItem icon={<Clock size={18} />} label="시간표 조율" active={activeTab === 'coordination'} onClick={() => { setActiveTab('coordination'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<UserPlus size={18} />} label="내 AI 비서" active={activeTab === 'agent'} onClick={() => { setActiveTab('agent'); setIsSidebarOpen(false); }} />
+                  <NavItem icon={<History size={18} />} label="조율 내역" active={activeTab === 'proposals'} onClick={() => { setActiveTab('proposals'); setIsSidebarOpen(false); }} badge="3" />
+                  <NavItem icon={<CalendarCheck size={18} />} label="일정 맞추기" active={activeTab === 'coordination'} onClick={() => { setActiveTab('coordination'); setIsSidebarOpen(false); }} />
+                  <NavItem icon={<Bot size={18} />} label="내 AI 비서" active={activeTab === 'agent'} onClick={() => { setActiveTab('agent'); setIsSidebarOpen(false); }} />
                </div>
             </nav>
 

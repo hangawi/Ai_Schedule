@@ -15,10 +15,22 @@ const TimetableGrid = ({ roomSettings, timeSlots, members, onSlotSelect }) => {
   const days = ['월', '화', '수', '목', '금'];
   const timeSlotsInDay = []; // 30-minute intervals for one day
 
-  const scheduleStartHour = parseInt(roomSettings?.scheduleStart.split(':')[0] || '9');
-  const scheduleEndHour = parseInt(roomSettings?.scheduleEnd.split(':')[0] || '18');
-  const lunchStartHour = parseInt(roomSettings?.lunchStart.split(':')[0] || '12');
-  const lunchEndHour = parseInt(roomSettings?.lunchEnd.split(':')[0] || '13');
+  // Handle both old and new room settings structure
+  const getHourFromSettings = (setting, defaultValue) => {
+    if (!setting) return parseInt(defaultValue);
+    if (typeof setting === 'string') return parseInt(setting.split(':')[0]);
+    if (typeof setting === 'number') return setting;
+    return parseInt(defaultValue);
+  };
+
+  const scheduleStartHour = getHourFromSettings(
+    roomSettings?.scheduleStart || roomSettings?.startHour, 
+    '9'
+  );
+  const scheduleEndHour = getHourFromSettings(
+    roomSettings?.scheduleEnd || roomSettings?.endHour, 
+    '18'
+  );
 
   for (let h = scheduleStartHour; h < scheduleEndHour; h++) {
     for (let m = 0; m < 60; m += 30) {
@@ -27,33 +39,44 @@ const TimetableGrid = ({ roomSettings, timeSlots, members, onSlotSelect }) => {
     }
   }
 
-  const filteredTimeSlotsInDay = timeSlotsInDay.filter(slot => {
-    const [hour, minute] = slot.split(':').map(Number);
-    if (hour >= lunchStartHour && hour < lunchEndHour) {
-      return false;
+  // Helper function to check if a time slot is blocked and return block info
+  const getBlockedTimeInfo = (time) => {
+    if (!roomSettings?.blockedTimes || roomSettings.blockedTimes.length === 0) {
+      return null;
     }
-    return true;
-  });
+    
+    const blockedTime = roomSettings.blockedTimes.find(blockedTime => {
+      return time >= blockedTime.startTime && time < blockedTime.endTime;
+    });
+    
+    return blockedTime || null;
+  };
+
+  // Don't filter out blocked times - we want to show them as blocked
+  const filteredTimeSlotsInDay = timeSlotsInDay;
 
   const [currentSelectedSlots, setCurrentSelectedSlots] = useState([]);
 
   // Calculate the Monday of the current week once
   const mondayOfCurrentWeek = useMemo(() => getMondayOfCurrentWeek(new Date()), []);
 
-  // Effect to notify parent about selected slots (as Date objects)
+  // Effect to notify parent about selected slots (in new format)
   useEffect(() => {
-    const selectedDateObjects = currentSelectedSlots.map(slot => {
+    const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+    const selectedSlots = currentSelectedSlots.map(slot => {
       const [hour, minute] = slot.time.split(':').map(Number);
-      const slotDate = new Date(mondayOfCurrentWeek);
-      slotDate.setDate(mondayOfCurrentWeek.getDate() + slot.dayIndex); // Add days for Mon, Tue, etc.
-      slotDate.setHours(hour, minute, 0, 0);
+      const endHour = minute === 30 ? hour + 1 : hour;
+      const endMinute = minute === 30 ? 0 : minute + 30;
+      
       return {
-        startTime: slotDate,
-        endTime: new Date(slotDate.getTime() + 30 * 60 * 1000) // 30-minute duration
+        day: dayNames[slot.dayIndex],
+        startTime: slot.time,
+        endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
+        subject: '새 일정' // Default subject
       };
     });
-    onSlotSelect(selectedDateObjects);
-  }, [currentSelectedSlots, onSlotSelect, mondayOfCurrentWeek]);
+    onSlotSelect(selectedSlots);
+  }, [currentSelectedSlots, onSlotSelect]);
 
   // Function to handle slot click
   const handleSlotClick = useCallback((dayIndex, time) => {
@@ -76,23 +99,63 @@ const TimetableGrid = ({ roomSettings, timeSlots, members, onSlotSelect }) => {
 
   // Helper to get who booked a slot (based on Date object overlap)
   const getSlotOwner = useCallback((dayIndex, time) => {
+    if (!timeSlots || !members) return null;
+    
     const [hour, minute] = time.split(':').map(Number);
     const slotStart = new Date(mondayOfCurrentWeek);
     slotStart.setDate(mondayOfCurrentWeek.getDate() + dayIndex);
     slotStart.setHours(hour, minute, 0, 0);
     const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
 
-    const bookedSlot = timeSlots?.find(booked => {
-      const bookedStartTime = new Date(booked.startTime);
-      const bookedEndTime = new Date(booked.endTime);
+    const bookedSlot = timeSlots.find(booked => {
+      // Handle both old and new timeSlot structures
+      let bookedStartTime, bookedEndTime;
+      
+      if (booked.startTime && booked.endTime) {
+        // Old structure with Date objects
+        bookedStartTime = new Date(booked.startTime);
+        bookedEndTime = new Date(booked.endTime);
+      } else if (booked.day && booked.startTime && booked.endTime) {
+        // New structure with day strings and time strings
+        const dayMap = { 'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3, 'friday': 4 };
+        const bookedDayIndex = dayMap[booked.day.toLowerCase()];
+        
+        if (bookedDayIndex === dayIndex) {
+          const [bookedHour, bookedMinute] = booked.startTime.split(':').map(Number);
+          const [bookedEndHour, bookedEndMinute] = booked.endTime.split(':').map(Number);
+          
+          bookedStartTime = new Date(mondayOfCurrentWeek);
+          bookedStartTime.setDate(mondayOfCurrentWeek.getDate() + bookedDayIndex);
+          bookedStartTime.setHours(bookedHour, bookedMinute, 0, 0);
+          
+          bookedEndTime = new Date(mondayOfCurrentWeek);
+          bookedEndTime.setDate(mondayOfCurrentWeek.getDate() + bookedDayIndex);
+          bookedEndTime.setHours(bookedEndHour, bookedEndMinute, 0, 0);
+        } else {
+          return false; // Different day
+        }
+      } else {
+        return false; // Invalid slot structure
+      }
 
       // Check for overlap
       return (slotStart < bookedEndTime && slotEnd > bookedStartTime);
     });
 
     if (bookedSlot) {
-      const member = members?.find(m => m._id === bookedSlot.userId);
-      return member ? `${member.firstName} ${member.lastName}` : '알 수 없음';
+      // Handle both old and new member structures
+      const userId = bookedSlot.userId || bookedSlot.user?._id || bookedSlot.user;
+      const member = members.find(m => {
+        const memberId = m._id || m.user?._id;
+        return memberId === userId;
+      });
+      
+      if (member) {
+        // Handle different member name structures
+        const memberData = member.user || member;
+        return memberData.name || `${memberData.firstName || ''} ${memberData.lastName || ''}`.trim() || '알 수 없음';
+      }
+      return '알 수 없음';
     }
     return null;
   }, [timeSlots, members, mondayOfCurrentWeek]);
@@ -118,15 +181,27 @@ const TimetableGrid = ({ roomSettings, timeSlots, members, onSlotSelect }) => {
           {days.map((day, dayIndex) => {
             const owner = getSlotOwner(dayIndex, time);
             const isSelected = isSlotSelected(dayIndex, time);
+            const blockedInfo = getBlockedTimeInfo(time);
+            const isBlocked = !!blockedInfo;
+            
             return (
               <div
                 key={`${day}-${time}`}
-                className={`col-span-1 border-l border-gray-200 h-10 flex items-center justify-center cursor-pointer
-                  ${owner ? 'bg-red-100' : isSelected ? 'bg-blue-200' : 'hover:bg-gray-50'}
+                className={`col-span-1 border-l border-gray-200 h-10 flex items-center justify-center
+                  ${isBlocked ? 'bg-gray-300 cursor-not-allowed' : 'cursor-pointer'}
+                  ${!isBlocked && owner ? 'bg-red-100' : ''}
+                  ${!isBlocked && !owner && isSelected ? 'bg-blue-200' : ''}
+                  ${!isBlocked && !owner && !isSelected ? 'hover:bg-gray-50' : ''}
                 `}
-                onClick={() => handleSlotClick(dayIndex, time)}
+                onClick={() => !isBlocked && handleSlotClick(dayIndex, time)}
               >
-                {owner && <span className="text-xs text-red-800">{owner}</span>}
+                {isBlocked ? (
+                  <span className="text-xs text-gray-600 font-medium" title={`${blockedInfo.startTime} - ${blockedInfo.endTime}`}>
+                    {blockedInfo.name}
+                  </span>
+                ) : (
+                  owner && <span className="text-xs text-red-800">{owner}</span>
+                )}
               </div>
             );
           })}
