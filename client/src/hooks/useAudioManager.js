@@ -8,52 +8,58 @@ export const useAudioManager = () => {
   const animationFrameId = useRef(null);
 
   const cleanupAudioResources = useCallback(() => {
-    if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
-    if (sourceRef.current) sourceRef.current.disconnect();
+    if (animationFrameId.current) {
+      cancelAnimationFrame(animationFrameId.current);
+      animationFrameId.current = null;
+    }
+    if (sourceRef.current) {
+      sourceRef.current.disconnect();
+      sourceRef.current = null;
+    }
+    if (analyserRef.current) {
+      analyserRef.current = null;
+    }
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      // The underlying stream is managed externally, so we only close the context.
       audioContextRef.current.close();
       audioContextRef.current = null;
     }
   }, []);
 
-  const setupAudioAnalysis = useCallback(async (onVolumeUpdate) => {
+  const setupAudioAnalysis = useCallback((stream, onVolumeUpdate) => {
+    if (!stream || audioContextRef.current) return;
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 16000,
-          channelCount: 1
-        } 
-      });
+      const context = new (window.AudioContext || window.webkitAudioContext)();
+      audioContextRef.current = context;
       
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-        analyserRef.current = audioContextRef.current.createAnalyser();
-        sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
-        sourceRef.current.connect(analyserRef.current);
-        analyserRef.current.fftSize = 256;
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 256;
+      analyserRef.current = analyser;
 
-        const bufferLength = analyserRef.current.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
+      const source = context.createMediaStreamSource(stream);
+      sourceRef.current = source;
+      source.connect(analyser);
 
-        const draw = () => {
-          animationFrameId.current = requestAnimationFrame(draw);
-          if (!analyserRef.current) return;
-          analyserRef.current.getByteFrequencyData(dataArray);
-          const average = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
-          const normalizedVolume = average / 128;
-          setMicVolume(normalizedVolume);
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
 
-          if (onVolumeUpdate) {
-            onVolumeUpdate(normalizedVolume);
-          }
-        };
-        draw();
-      }
+      const draw = () => {
+        animationFrameId.current = requestAnimationFrame(draw);
+        if (!analyserRef.current) return;
+
+        analyserRef.current.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
+        const normalizedVolume = average / 128;
+        setMicVolume(normalizedVolume);
+
+        if (onVolumeUpdate) {
+          onVolumeUpdate(normalizedVolume);
+        }
+      };
+      draw();
     } catch (err) {
-      // 마이크 접근 실패 시 조용히 처리
+      console.error('Error setting up audio analysis:', err);
     }
   }, []);
 
