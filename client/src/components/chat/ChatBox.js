@@ -1,11 +1,31 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, MessageCircle, X } from 'lucide-react';
+import { Send, MessageCircle } from 'lucide-react';
 
 const ChatBox = ({ onSendMessage, speak }) => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      // 강력한 모바일 감지: 데스크톱을 확실히 제외하는 방식
+      const userAgent = navigator.userAgent;
+      const isDesktop = /Windows NT|Macintosh|X11.*Linux/i.test(userAgent) && 
+                        !/Mobile|Tablet/i.test(userAgent);
+      
+      const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(userAgent);
+      
+      const mobile = !isDesktop && (isMobileUA || window.innerWidth <= 768);
+      setIsMobile(mobile);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -79,14 +99,18 @@ const ChatBox = ({ onSendMessage, speak }) => {
 
   return (
     <>
-      {/* 채팅 버튼 */}
+      {/* 채팅 버튼 - 모바일에서는 상태창과 겹치지 않게 배치 */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`fixed bottom-4 right-4 w-14 h-14 rounded-full shadow-lg transition-all duration-300 z-50 flex items-center justify-center ${
-          isOpen ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'
+          isOpen ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'
         } text-white`}
       >
-        {isOpen ? <X size={24} /> : <MessageCircle size={24} />}
+{isOpen ? (
+          <span className="font-bold text-lg">AI</span>
+        ) : (
+          <MessageCircle size={24} />
+        )}
       </button>
 
       {/* 채팅창 */}
@@ -96,8 +120,12 @@ const ChatBox = ({ onSendMessage, speak }) => {
           onClick={() => setIsOpen(false)}
         >
           <div 
-            className="fixed bottom-20 right-2 w-11/12 max-w-lg sm:right-4 sm:w-96 h-[500px] bg-white rounded-lg shadow-xl border z-50 flex flex-col" 
+            className={`fixed ${isMobile ? 'bottom-20 right-2 left-2' : 'bottom-20 right-4 w-96'} ${isMobile ? 'max-h-[60vh] h-[400px]' : 'h-[500px]'} bg-white rounded-lg shadow-xl border z-50 flex flex-col`}
             onClick={(e) => e.stopPropagation()}
+            style={isMobile ? {
+              maxHeight: Math.min(400, window.innerHeight * 0.6),
+              minHeight: '300px'
+            } : {}}
           >
             {/* 헤더 */}
             <div className="bg-blue-500 text-white p-3 rounded-t-lg">
@@ -106,7 +134,13 @@ const ChatBox = ({ onSendMessage, speak }) => {
             </div>
 
             {/* 메시지 영역 */}
-            <div className="overflow-y-auto p-3 space-y-3" style={{ height: '350px', flexShrink: 0 }}>
+            <div 
+              className="overflow-y-auto p-3 space-y-3 flex-1"
+              style={{ 
+                minHeight: isMobile ? '200px' : '350px',
+                maxHeight: isMobile ? 'calc(60vh - 140px)' : '350px'
+              }}
+            >
               {messages.length === 0 && (
                 <div className="text-center text-gray-500 text-sm mt-4">
                   <p className="font-semibold">안녕하세요! 일정 관리를 도와드리겠습니다.</p>
@@ -166,22 +200,22 @@ const ChatBox = ({ onSendMessage, speak }) => {
             </div>
 
             {/* 입력 영역 */}
-            <div className="p-3 border-t" style={{ flexShrink: 0 }}>
-              <div className="flex space-x-2">
+            <div className="p-3 border-t bg-white rounded-b-lg flex-shrink-0">
+              <div className={`flex ${isMobile ? 'space-x-2' : 'space-x-2'}`}>
                 <input
                   type="text"
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   onKeyPress={handleKeyPress}
                   placeholder="일정을 말씀해주세요..."
-                  className="flex-1 p-3 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={`flex-1 ${isMobile ? 'p-2 text-base' : 'p-3 text-sm'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 />
                 <button
                   onClick={handleSend}
                   disabled={!inputText.trim()}
-                  className="p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  className={`${isMobile ? 'p-2 w-12 h-12' : 'p-3'} bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0`}
                 >
-                  <Send size={18} />
+                  <Send size={isMobile ? 20 : 18} />
                 </button>
               </div>
             </div>

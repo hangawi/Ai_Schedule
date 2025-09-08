@@ -102,6 +102,11 @@ export const useChat = (isLoggedIn, setEventAddedKey) => {
             
             const events = await eventsResponse.json();
             
+            // events 배열 유효성 검사
+            if (!events || !Array.isArray(events)) {
+               throw new Error('일정 목록 형식이 올바르지 않습니다.');
+            }
+            
             let matchingEvents;
             
             if (chatResponse.intent === 'delete_range') {
@@ -111,6 +116,7 @@ export const useChat = (isLoggedIn, setEventAddedKey) => {
                // 삭제할 범위 설정 완료
                
                matchingEvents = events.filter(event => {
+                  if (!event || !event.start) return false;
                   const eventDate = new Date(event.start.dateTime || event.start.date);
                   const inRange = eventDate >= startDate && eventDate <= endDate;
                   
@@ -129,6 +135,7 @@ export const useChat = (isLoggedIn, setEventAddedKey) => {
                // 삭제 대상 날짜 및 검색 키워드 설정 완료
                
                matchingEvents = events.filter(event => {
+                  if (!event || !event.start) return false;
                   const eventDate = new Date(event.start.dateTime || event.start.date);
                   
                   // 날짜 매칭 - 같은 날이면 OK

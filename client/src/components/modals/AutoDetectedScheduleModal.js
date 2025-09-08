@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Calendar, Clock, Users, MapPin, CheckCircle, XCircle, Brain, Volume2 } from 'lucide-react';
+import { X, Calendar, Clock, Users, MapPin, CheckCircle, XCircle, Brain, Volume2, FileText } from 'lucide-react';
 
 const AutoDetectedScheduleModal = ({ 
    detectedSchedules, 
@@ -10,6 +10,7 @@ const AutoDetectedScheduleModal = ({
    callStartTime
 }) => {
    const [selectedSchedule, setSelectedSchedule] = useState(null);
+   const [showConfirmDialog, setShowConfirmDialog] = useState(null);
 
    if (!detectedSchedules || detectedSchedules.length === 0) return null;
 
@@ -47,6 +48,31 @@ const AutoDetectedScheduleModal = ({
       const minutes = Math.floor(duration / 60);
       const seconds = duration % 60;
       return `${minutes}분 ${seconds}초`;
+   };
+
+   const handleConfirmClick = (schedule) => {
+      setShowConfirmDialog(schedule);
+   };
+
+   const handleFinalConfirm = () => {
+      if (showConfirmDialog) {
+         onConfirm(showConfirmDialog);
+         setShowConfirmDialog(null);
+      }
+   };
+
+   const generateScheduleSummary = (schedule) => {
+      const parts = [];
+      
+      if (schedule.title) parts.push(`📅 ${schedule.title}`);
+      if (schedule.date) parts.push(`📆 ${formatDate(schedule.date)}`);
+      if (schedule.time) parts.push(`🕐 ${schedule.time}`);
+      if (schedule.location) parts.push(`📍 ${schedule.location}`);
+      if (schedule.participants && schedule.participants.length > 0) {
+         parts.push(`👥 ${schedule.participants.join(', ')}`);
+      }
+      
+      return parts.join('\n');
    };
 
    return (
@@ -156,13 +182,13 @@ const AutoDetectedScheduleModal = ({
                         <button
                            onClick={(e) => {
                               e.stopPropagation();
-                              onConfirm(schedule);
+                              handleConfirmClick(schedule);
                            }}
                            className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors flex items-center justify-center"
                            disabled={!schedule.title}
                         >
                            <CheckCircle size={16} className="mr-2" />
-                           일정 등록
+                           일정 추가하시겠습니까?
                         </button>
                         <button
                            onClick={(e) => {
@@ -223,6 +249,66 @@ const AutoDetectedScheduleModal = ({
                </div>
             </div>
          </div>
+
+         {/* 확인 다이얼로그 */}
+         {showConfirmDialog && (
+            <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center z-10">
+               <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 animate-in zoom-in duration-200">
+                  <div className="p-6">
+                     {/* 다이얼로그 헤더 */}
+                     <div className="flex items-center mb-4">
+                        <FileText className="w-6 h-6 text-blue-600 mr-3" />
+                        <h3 className="text-lg font-semibold text-gray-900">
+                           일정을 추가하시겠습니까?
+                        </h3>
+                     </div>
+
+                     {/* 일정 요약 */}
+                     <div className="bg-blue-50 rounded-lg p-4 mb-6">
+                        <h4 className="font-medium text-blue-900 mb-2">감지된 일정 요약:</h4>
+                        <div className="text-sm text-blue-800 whitespace-pre-line leading-relaxed">
+                           {generateScheduleSummary(showConfirmDialog)}
+                        </div>
+                        
+                        {/* 신뢰도 표시 */}
+                        <div className="mt-3 pt-3 border-t border-blue-200">
+                           <span className="text-xs text-blue-700">
+                              AI 신뢰도: <span className="font-semibold">
+                                 {Math.round(showConfirmDialog.confidence * 100)}%
+                              </span>
+                           </span>
+                        </div>
+                     </div>
+
+                     {/* 원본 대화 미리보기 */}
+                     {showConfirmDialog.originalText && (
+                        <div className="bg-gray-50 rounded-lg p-3 mb-6">
+                           <p className="text-xs text-gray-500 mb-2">원본 대화:</p>
+                           <p className="text-sm text-gray-700 italic line-clamp-3">
+                              "{showConfirmDialog.originalText}"
+                           </p>
+                        </div>
+                     )}
+
+                     {/* 액션 버튼 */}
+                     <div className="flex space-x-3">
+                        <button
+                           onClick={() => setShowConfirmDialog(null)}
+                           className="flex-1 px-4 py-3 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                        >
+                           취소
+                        </button>
+                        <button
+                           onClick={handleFinalConfirm}
+                           className="flex-1 px-4 py-3 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                        >
+                           네, 추가하겠습니다
+                        </button>
+                     </div>
+                  </div>
+               </div>
+            </div>
+         )}
       </div>
    );
 };
