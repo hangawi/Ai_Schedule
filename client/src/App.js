@@ -44,7 +44,7 @@ function App() { // Trigger auto-deploy
       toggleBackgroundMonitoring,
       confirmSchedule,
       dismissSchedule
-   } = useIntegratedVoiceSystem(isLoggedIn, isVoiceRecognitionEnabled, eventActions, areEventActionsReady, setEventAddedKey);
+   } = useIntegratedVoiceSystem(isLoggedIn, isVoiceRecognitionEnabled, eventActions, areEventActionsReady, setEventAddedKey, handleChatMessage);
    const [sharedText, setSharedText] = useState(null);
    const [copiedText, setCopiedText] = useState(null); // New state for copied text
    const [dismissedCopiedTexts, setDismissedCopiedTexts] = useState(() => {
