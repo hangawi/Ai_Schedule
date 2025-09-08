@@ -14,6 +14,7 @@ import DashboardTab from './components/DashboardTab';
 import ProposalsTab from './components/ProposalsTab';
 import EventsTab from './components/EventsTab';
 import AgentTab from './components/AgentTab';
+import CoordinationTab from './components/CoordinationTab'; // New import
 import CreateProposalModal from './components/CreateProposalModal';
 import TimeSelectionModal from './components/TimeSelectionModal';
 import BackgroundCallIndicator from './components/BackgroundCallIndicator';
@@ -291,6 +292,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                   <NavItem icon={<Clock size={18} />} label="나의 일정" active={activeTab === 'events'} onClick={() => { setActiveTab('events'); setIsSidebarOpen(false); }} />
                   <NavItem icon={<Calendar size={18} />} label="Google 캘린더" active={activeTab === 'googleCalendar'} onClick={() => { setActiveTab('googleCalendar'); setIsSidebarOpen(false); }} />
                   <NavItem icon={<Users size={18} />} label="조율 내역" active={activeTab === 'proposals'} onClick={() => { setActiveTab('proposals'); setIsSidebarOpen(false); }} badge="3" />
+                  <NavItem icon={<Clock size={18} />} label="시간표 조율" active={activeTab === 'coordination'} onClick={() => { setActiveTab('coordination'); setIsSidebarOpen(false); }} />
                   <NavItem icon={<UserPlus size={18} />} label="내 AI 비서" active={activeTab === 'agent'} onClick={() => { setActiveTab('agent'); setIsSidebarOpen(false); }} />
                </div>
             </nav>
@@ -300,6 +302,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                {activeTab === 'proposals' && <ProposalsTab onSelectTime={handleSelectProposalForTime} proposals={globalProposals} />}
                {activeTab === 'events' && <EventsTab events={globalEvents} onAddEvent={handleAddGlobalEvent} isLoggedIn={isLoggedIn} onDeleteEvent={handleDeleteEvent} onEditEvent={handleEditEvent} />}
                {activeTab === 'googleCalendar' && <MyCalendar isListening={isListening} onEventAdded={eventAddedKey} isVoiceRecognitionEnabled={isVoiceRecognitionEnabled} onToggleVoiceRecognition={() => setIsVoiceRecognitionEnabled(prev => !prev)} />}
+               {activeTab === 'coordination' && <CoordinationTab />}
                {activeTab === 'agent' && <AgentTab />}
             </main>
          </div>
