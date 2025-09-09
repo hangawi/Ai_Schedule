@@ -130,7 +130,7 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('resize', handleResize);
     };
-  }, [detectMobile]);
+  }, []);
 
   // 모바일에서만 표시
   if (!deviceInfo.isMobile) return null;

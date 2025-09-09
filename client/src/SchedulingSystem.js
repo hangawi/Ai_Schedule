@@ -305,7 +305,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                {activeTab === 'proposals' && <ProposalsTab onSelectTime={handleSelectProposalForTime} proposals={globalProposals} />}
                {activeTab === 'events' && <EventsTab events={globalEvents} onAddEvent={handleAddGlobalEvent} isLoggedIn={isLoggedIn} onDeleteEvent={handleDeleteEvent} onEditEvent={handleEditEvent} />}
                {activeTab === 'googleCalendar' && <MyCalendar isListening={isListening} onEventAdded={eventAddedKey} isVoiceRecognitionEnabled={isVoiceRecognitionEnabled} onToggleVoiceRecognition={() => setIsVoiceRecognitionEnabled(prev => !prev)} />}
-               {activeTab === 'coordination' && <CoordinationTab />}
+               {activeTab === 'coordination' && <CoordinationTab user={user} />}
                {activeTab === 'agent' && <AgentTab />}
             </main>
          </div>
