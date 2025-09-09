@@ -38,7 +38,7 @@ const RequestSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['time_request', 'time_change', 'time_swap'],
+    enum: ['time_request', 'time_change', 'time_swap', 'slot_swap', 'slot_release'],
     required: true
   },
   timeSlot: {
@@ -48,6 +48,10 @@ const RequestSchema = new mongoose.Schema({
     subject: String
   },
   targetSlot: TimeSlotSchema, // For swap requests
+  targetUserId: {
+    type: String,
+    required: false
+  },
   message: String,
   status: {
     type: String,
@@ -87,8 +91,21 @@ const RoomSchema = new mongoose.Schema({
     color: {
       type: String,
       default: function() {
-        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'];
-        return colors[Math.floor(Math.random() * colors.length)];
+        // Generate a consistent color based on the user's ID
+        if (!this.user) {
+            // 방장 색상(#FF6B6B)을 제외한 색상 배열
+            const colors = ['#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+        // 방장 색상(#FF6B6B)을 제외한 색상 배열
+        const colors = ['#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'];
+        const userIdString = this.user.toString();
+        let hash = 0;
+        for (let i = 0; i < userIdString.length; i++) {
+            hash = userIdString.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const index = Math.abs(hash % colors.length);
+        return colors[index];
       }
     }
   }],
@@ -163,7 +180,10 @@ RoomSchema.pre('save', function(next) {
 // Add owner as first member when room is created
 RoomSchema.pre('save', function(next) {
   if (this.isNew && this.members.length === 0) {
-    this.members.push({ user: this.owner });
+    this.members.push({ 
+      user: this.owner,
+      color: '#FF6B6B' // 방장은 항상 빨간색
+    });
   }
   next();
 });

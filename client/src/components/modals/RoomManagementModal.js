@@ -14,7 +14,17 @@ const RoomManagementModal = ({
     name: room?.name || "",
     description: room?.description || "",
     maxMembers: room?.maxMembers || 10,
-    settings: room?.settings || {},
+    settings: {
+      startHour: room?.settings?.startHour || 9,
+      endHour: room?.settings?.endHour || 18,
+      blockedTimes: room?.settings?.blockedTimes || [],
+    },
+  });
+
+  const [newBlockedTime, setNewBlockedTime] = useState({
+    name: '',
+    startTime: '12:00',
+    endTime: '13:00'
   });
 
   const handleUpdate = async () => {
@@ -49,8 +59,33 @@ const RoomManagementModal = ({
 
   const removeMember = async (memberId) => {
     if (window.confirm("이 멤버를 방에서 제거하시겠습니까?")) {
-      console.log("Removing member:", memberId);
-      // TODO: API 연결
+      try {
+        const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+        const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${room._id}/members/${memberId}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-auth-token': localStorage.getItem('token') 
+          }
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.msg || 'Failed to remove member');
+        }
+
+        const result = await response.json();
+        onRoomUpdated(result.room); 
+
+        if (result.removedMember) {
+          alert(`${result.removedMember.name}님이 방에서 강퇴되었습니다. 해당 멤버에게 알림이 전송되었습니다.`);
+        } else {
+          alert("조원이 성공적으로 제거되었습니다.");
+        }
+      } catch (error) {
+        console.error("Failed to remove member:", error);
+        alert(`조원 제거 실패: ${error.message}`);
+      }
     }
   };
 
@@ -99,6 +134,128 @@ const RoomManagementModal = ({
               max="20"
             />
           </div>
+
+            {/* TimeTable Settings Block - Copied from RoomCreationModal */}
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">시간표 설정</h3>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">시작 시간</label>
+                  <select
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.settings.startHour}
+                    onChange={(e) => setFormData({...formData, settings: {...formData.settings, startHour: Number(e.target.value)}})}
+                  >
+                    {Array.from({length: 24}, (_, i) => (
+                      <option key={i} value={i}>{i}:00</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">종료 시간</label>
+                  <select
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.settings.endHour}
+                    onChange={(e) => setFormData({...formData, settings: {...formData.settings, endHour: Number(e.target.value)}})}
+                  >
+                    {Array.from({length: 24}, (_, i) => (
+                      <option key={i+1} value={i+1}>{i+1}:00</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="text-xs font-medium text-gray-700">금지 시간대 설정</h4>
+                  <span className="text-xs text-gray-500">({formData.settings.blockedTimes.length}개)</span>
+                </div>
+                
+                {/* 기존 금지 시간대 목록 */}
+                {formData.settings.blockedTimes.length > 0 && (
+                  <div className="mb-3 space-y-2">
+                    {formData.settings.blockedTimes.map((blockedTime, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 bg-red-50 rounded border border-red-200">
+                        <div className="flex-1">
+                          <span className="text-sm font-medium text-red-700">{blockedTime.name}</span>
+                          <span className="text-xs text-red-600 ml-2">{blockedTime.startTime} ~ {blockedTime.endTime}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updatedBlockedTimes = formData.settings.blockedTimes.filter((_, i) => i !== index);
+                            setFormData({...formData, settings: {...formData.settings, blockedTimes: updatedBlockedTimes}});
+                          }}
+                          className="text-red-500 hover:text-red-700 text-sm px-2"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* 새 금지 시간대 추가 */}
+                <div className="border border-gray-200 rounded p-3">
+                  <div className="mb-2">
+                    <input
+                      type="text"
+                      className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={newBlockedTime.name}
+                      onChange={(e) => setNewBlockedTime({...newBlockedTime, name: e.target.value})}
+                      placeholder="금지 시간 이름 (예: 점심시간, 회의시간)"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">시작 시간</label>
+                      <input
+                        type="time"
+                        className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={newBlockedTime.startTime}
+                        onChange={(e) => setNewBlockedTime({...newBlockedTime, startTime: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">종료 시간</label>
+                      <input
+                        type="time"
+                        className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={newBlockedTime.endTime}
+                        onChange={(e) => setNewBlockedTime({...newBlockedTime, endTime: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newBlockedTime.name.trim() && newBlockedTime.startTime && newBlockedTime.endTime) {
+                        if (newBlockedTime.startTime >= newBlockedTime.endTime) {
+                          alert('종료 시간은 시작 시간보다 늦어야 합니다.');
+                          return;
+                        }
+                        setFormData({
+                          ...formData,
+                          settings: {
+                            ...formData.settings,
+                            blockedTimes: [...formData.settings.blockedTimes, {...newBlockedTime}]
+                          }
+                        });
+                        setNewBlockedTime({ name: '', startTime: '12:00', endTime: '13:00' });
+                      } else {
+                        alert('모든 필드를 입력해주세요.');
+                      }
+                    }}
+                    className="w-full px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                    disabled={!newBlockedTime.name.trim() || !newBlockedTime.startTime || !newBlockedTime.endTime}
+                  >
+                    금지 시간 추가
+                  </button>
+                </div>
+              </div>
+            </div>
         </div>
       ) : (
         <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-4">

@@ -12,7 +12,6 @@ export const useCoordination = (userId) => {
     if (!silent) setError(null);
     
     try {
-      console.log(`Fetching room details for roomId: ${roomId}`);
       const token = localStorage.getItem('token');
       if (!token) throw new Error('No authentication token found.');
 
@@ -20,7 +19,6 @@ export const useCoordination = (userId) => {
         headers: { 'x-auth-token': token },
       });
       
-      console.log(`Response status: ${response.status} ${response.statusText}`);
       
       if (!response.ok) {
         const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
@@ -29,20 +27,8 @@ export const useCoordination = (userId) => {
       }
       const data = await response.json();
       
-      console.log('=== ROOM OWNER DEBUG ===');
-      console.log('Your User ID:', localStorage.getItem('userId') || 'not found in localStorage');
-      console.log('Room Owner ID:', data.owner);
-      console.log('Room Owner Object:', typeof data.owner, data.owner);
-      console.log('Owner _id:', data.owner?._id);
-      console.log('Room Master ID:', data.roomMasterId);
-      console.log('Are they equal?', data.owner === localStorage.getItem('userId'));
-      console.log('Are _ids equal?', data.owner?._id === localStorage.getItem('userId'));
-      console.log('=== END DEBUG ===');
-      
       // Only update if the data has actually changed
-      console.log('setCurrentRoom 호출 - 새로운 방 데이터 설정');
       setCurrentRoom(data);
-      console.log('currentRoom 상태 업데이트 완료');
       
     } catch (err) {
       console.error('fetchRoomDetails error details:', {
@@ -193,9 +179,8 @@ export const useCoordination = (userId) => {
         const errData = await response.json();
         throw new Error(errData.msg || 'Failed to submit time slots.');
       }
-      if (currentRoom && currentRoom._id) {
-        await fetchRoomDetails(currentRoom._id);
-      }
+      const data = await response.json();
+      setCurrentRoom(data); // Use the response data directly
       alert('시간표가 성공적으로 제출되었습니다!');
     } catch (err) {
       setError(err.message);
@@ -204,7 +189,99 @@ export const useCoordination = (userId) => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentRoom, fetchRoomDetails]);
+  }, [fetchRoomDetails, setCurrentRoom]);
+
+  const assignTimeSlot = useCallback(async (roomId, day, startTime, endTime, userId) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('No authentication token found.');
+
+      const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/assign-slot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token,
+        },
+        body: JSON.stringify({ day, startTime, endTime, userId }),
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.msg || 'Failed to assign time slot.');
+      }
+      const data = await response.json();
+      setCurrentRoom(data); // Refresh room details
+      alert('시간이 성공적으로 배정되었습니다!');
+    } catch (err) {
+      setError(err.message);
+      alert(`시간 배정 실패: ${err.message}`);
+      console.error('Error assigning time slot:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchRoomDetails, setCurrentRoom]);
+
+  const autoAssignSlots = useCallback(async (roomId) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('No authentication token found.');
+
+      const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/auto-assign`, {
+        method: 'POST',
+        headers: {
+          'x-auth-token': token,
+        },
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.msg || 'Failed to auto-assign slots.');
+      }
+      if (currentRoom && currentRoom._id) {
+        await fetchRoomDetails(currentRoom._id); // Refresh room details
+      }
+      alert('시간이 자동으로 배정되었습니다!');
+    } catch (err) {
+      setError(err.message);
+      alert(`자동 배정 실패: ${err.message}`);
+      console.error('Error auto-assigning slots:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchRoomDetails]);
+
+  const removeTimeSlot = useCallback(async (roomId, day, startTime, endTime) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('No authentication token found.');
+
+      const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/slots`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token,
+        },
+        body: JSON.stringify({ day, startTime, endTime }),
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.msg || 'Failed to remove time slot.');
+      }
+      const data = await response.json();
+      setCurrentRoom(data);
+      alert('시간이 성공적으로 삭제되었습니다!');
+    } catch (err) {
+      setError(err.message);
+      alert(`시간 삭제 실패: ${err.message}`);
+      console.error('Error removing time slot:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   const createRequest = useCallback(async (requestData) => {
     setIsLoading(true);
@@ -226,7 +303,11 @@ export const useCoordination = (userId) => {
         throw new Error(errData.msg || 'Failed to create request.');
       }
       const data = await response.json();
-      alert('요청이 성공적으로 생성되었습니다!');
+      if (requestData.type === 'time_swap' || requestData.type === 'slot_swap') {
+        alert('교환요청이 상대방에게 전송되었습니다! 상대방이 승인하면 시간이 교환됩니다.');
+      } else {
+        alert('요청이 성공적으로 생성되었습니다!');
+      }
       return data;
     } catch (err) {
       setError(err.message);
@@ -256,9 +337,15 @@ export const useCoordination = (userId) => {
         const errData = await response.json();
         throw new Error(errData.msg || 'Failed to handle request.');
       }
-      if (currentRoom && currentRoom._id) {
+      
+      // Get the updated room data directly from server response
+      const responseData = await response.json();
+      if (responseData.room) {
+        setCurrentRoom(responseData.room);
+      } else if (currentRoom && currentRoom._id) {
         await fetchRoomDetails(currentRoom._id);
       }
+      
       alert(`요청이 ${status === 'approved' ? '승인' : '거절'}되었습니다!`);
     } catch (err) {
       setError(err.message);
@@ -267,7 +354,7 @@ export const useCoordination = (userId) => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentRoom, fetchRoomDetails]);
+  }, [fetchRoomDetails]);
 
   const updateRoom = useCallback(async (roomId, roomData) => {
     setIsLoading(true);
@@ -345,7 +432,10 @@ export const useCoordination = (userId) => {
     deleteRoom,
     joinRoom,
     submitTimeSlots,
+    removeTimeSlot,
     createRequest,
     handleRequest,
+    assignTimeSlot,
+    autoAssignSlots,
   };
 };
