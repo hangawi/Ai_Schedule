@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Smartphone, Mic, MicOff, Wifi, WifiOff, Volume2, VolumeX, Clipboard, HelpCircle } from 'lucide-react';
-import MobileGuideModal from './modals/MobileGuideModal';
+import MobileGuideModal from '../modals/MobileGuideModal';
 
 const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolume }) => {
   // 즉시 모바일 감지

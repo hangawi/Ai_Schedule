@@ -1,3 +1,24 @@
+// 영어 요일을 한글로 변환하는 함수
+export const translateEnglishDays = (text) => {
+   const dayMap = {
+      'monday': '월요일',
+      'tuesday': '화요일', 
+      'wednesday': '수요일',
+      'thursday': '목요일',
+      'friday': '금요일',
+      'saturday': '토요일',
+      'sunday': '일요일'
+   };
+
+   let translatedText = text;
+   Object.keys(dayMap).forEach(englishDay => {
+      const regex = new RegExp(`\\b${englishDay}\\b`, 'gi');
+      translatedText = translatedText.replace(regex, dayMap[englishDay]);
+   });
+
+   return translatedText;
+};
+
 // 날짜 유틸리티 함수들
 const formatDate = (date, format = 'YYYY-MM-DD') => {
    const d = new Date(date);

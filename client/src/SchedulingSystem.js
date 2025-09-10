@@ -12,15 +12,15 @@ import {
    History
 } from 'lucide-react';
 import MyCalendar from './components/calendar/Calendar';
-import EventFormModal from './components/EventFormModal';
-import DashboardTab from './components/DashboardTab';
-import ProposalsTab from './components/ProposalsTab';
-import EventsTab from './components/EventsTab';
-import AgentTab from './components/AgentTab';
-import CoordinationTab from './components/CoordinationTab'; // New import
-import CreateProposalModal from './components/CreateProposalModal';
-import TimeSelectionModal from './components/TimeSelectionModal';
-import BackgroundCallIndicator from './components/BackgroundCallIndicator';
+import EventFormModal from './components/forms/EventFormModal';
+import DashboardTab from './components/tabs/DashboardTab';
+import ProposalsTab from './components/tabs/ProposalsTab';
+import EventsTab from './components/tabs/EventsTab';
+import AgentTab from './components/tabs/AgentTab';
+import CoordinationTab from './components/tabs/CoordinationTab';
+import CreateProposalModal from './components/forms/CreateProposalModal';
+import TimeSelectionModal from './components/forms/TimeSelectionModal';
+import BackgroundCallIndicator from './components/indicators/BackgroundCallIndicator';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -56,7 +56,17 @@ const NavItem = ({ icon, label, active, onClick, badge }) => (
 
 const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAddedKey, speak, setEventActions, setAreEventActionsReady, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled, loginMethod, isBackgroundMonitoring, isCallDetected, toggleBackgroundMonitoring }) => {
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-   const [activeTab, setActiveTab] = useState('dashboard');
+   const [activeTab, setActiveTab] = useState(() => {
+     const savedTab = localStorage.getItem('activeTab');
+     console.log('Initializing activeTab. Saved tab:', savedTab);
+     return savedTab || 'dashboard';
+   });
+
+   // Effect to write to localStorage when activeTab changes
+   useEffect(() => {
+     console.log('useEffect (activeTab change) - saving activeTab to localStorage:', activeTab);
+     localStorage.setItem('activeTab', activeTab);
+   }, [activeTab]);
    const [showCreateModal, setShowCreateModal] = useState(false);
    const [showTimeSelectionModal, setShowTimeSelectionModal] = useState(false);
    const [globalEvents, setGlobalEvents] = useState([]);

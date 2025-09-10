@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
+const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+
 // Helper function to get the Monday of the current week
 const getMondayOfCurrentWeek = (date) => {
   const d = new Date(date);
@@ -11,8 +13,30 @@ const getMondayOfCurrentWeek = (date) => {
   return d;
 };
 
-const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect, currentUser, isRoomOwner, onAssignSlot, onRequestSlot, onRemoveSlot, onDirectSubmit, selectedSlots, events, proposals }) => {
+const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect, currentUser, isRoomOwner, onAssignSlot, onRequestSlot, onRemoveSlot, onDirectSubmit, selectedSlots, events, proposals, calculateEndTime }) => {
   
+  const [weekDates, setWeekDates] = useState([]);
+
+  useEffect(() => {
+    const today = new Date();
+    // If it's Sunday, we want to show next week's calendar
+    if (today.getUTCDay() === 0) {
+      today.setUTCDate(today.getUTCDate() + 1);
+    }
+    const monday = getMondayOfCurrentWeek(today);
+
+    const dates = [];
+    const dayNamesKorean = ['월', '화', '수', '목', '금'];
+    for (let i = 0; i < 5; i++) {
+      const date = new Date(monday);
+      date.setUTCDate(monday.getUTCDate() + i);
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const dayOfMonth = String(date.getUTCDate()).padStart(2, '0');
+      dates.push(`${dayNamesKorean[i]} (${month}.${dayOfMonth})`);
+    }
+    setWeekDates(dates);
+  }, []);
+
   const days = ['월', '화', '수', '목', '금'];
   const timeSlotsInDay = []; // 30-minute intervals for one day
 
@@ -74,7 +98,6 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect,
 
   // Effect to notify parent about selected slots (in new format)
   useEffect(() => {
-    const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
     const selectedSlots = currentSelectedSlots.map(slot => {
       if (!slot.time) return null;
       const [hour, minute] = slot.time.split(':').map(Number);
@@ -97,7 +120,6 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect,
   const getSlotOwner = useCallback((dayIndex, time) => {
     if (!timeSlots || !members || !time) return null;
     
-    const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
     const currentDayName = dayNames[dayIndex];
 
     const bookedSlot = timeSlots.find(booked => {
@@ -198,7 +220,6 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect,
       if (isOwnedByCurrentUser) {
         // User clicks on their own assigned slot - directly remove it
         if (onRemoveSlot && window.confirm('이 시간을 삭제하시겠습니까?')) {
-          const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
           const [hour, minute] = time.split(':').map(Number);
           const endHour = minute === 30 ? hour + 1 : hour;
           const endMinute = minute === 30 ? 0 : minute + 30;
@@ -217,7 +238,13 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect,
           time, 
           currentOwner: ownerInfo.name, 
           targetUserId: ownerInfo.actualUserId || ownerInfo.userId,
-          action: 'swap' 
+          action: 'swap',
+          targetSlot: { // This is the slot the target user is giving away
+            day: dayNames[dayIndex], // dayNames is available
+            startTime: time,
+            endTime: calculateEndTime(time), // calculateEndTime is now available
+            user: ownerInfo.actualUserId || ownerInfo.userId // The current owner of this slot
+          }
         });
         setShowChangeRequestModal(true);
       }
@@ -235,12 +262,11 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect,
       }
       // If isRoomOwner is true, do nothing for empty slots (as per original logic)
     }
-  }, [getBlockedTimeInfo, getSlotOwner, currentUser, isRoomOwner]);
+  }, [getBlockedTimeInfo, getSlotOwner, currentUser, isRoomOwner, onRemoveSlot, calculateEndTime]);
 
   // Function to handle assignment from modal
-  const handleAssign = (memberId) => {
+  const handleAssign = useCallback((memberId) => {
     if (slotToAssign && slotToAssign.time && memberId && onAssignSlot) {
-      const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
       const [hour, minute] = slotToAssign.time.split(':').map(Number);
       const endHour = minute === 30 ? hour + 1 : hour;
       const endMinute = minute === 30 ? 0 : minute + 30;
@@ -256,12 +282,11 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect,
       setShowAssignModal(false);
       setSlotToAssign(null);
     }
-  };
+  }, [slotToAssign, onAssignSlot, roomId]);
 
   // Function to handle request from modal
-  const handleRequest = (message) => {
+  const handleRequest = useCallback((message) => {
     if (slotToRequest && slotToRequest.time && onRequestSlot) {
-      const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
       const [hour, minute] = slotToRequest.time.split(':').map(Number);
       const endHour = minute === 30 ? hour + 1 : hour;
       const endMinute = minute === 30 ? 0 : minute + 30;
@@ -280,12 +305,11 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect,
       setShowRequestModal(false);
       setSlotToRequest(null);
     }
-  };
+  }, [slotToRequest, onRequestSlot, roomId]);
 
   // Function to handle change request from modal
-  const handleChangeRequest = (message) => {
+  const handleChangeRequest = useCallback((message) => {
     if (slotToChange && slotToChange.time && onRequestSlot) {
-      const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
       const [hour, minute] = slotToChange.time.split(':').map(Number);
       const endHour = minute === 30 ? hour + 1 : hour;
       const endMinute = minute === 30 ? 0 : minute + 30;
@@ -315,6 +339,7 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
           },
           targetUserId: slotToChange.targetUserId,
+          targetSlot: slotToChange.targetSlot, // This is the slot the target user is giving away
           message: message || '시간 교환을 요청합니다.',
         };
       } else {
@@ -341,15 +366,15 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect,
       setShowChangeRequestModal(false);
       setSlotToChange(null);
     }
-  };
+  }, [slotToChange, onRequestSlot, roomId, currentUser]);
 
   return (
     <div className="timetable-grid border border-gray-200 rounded-lg overflow-hidden">
       {/* Header Row (Days) */}
       <div className="grid grid-cols-6 bg-gray-100 border-b border-gray-200">
         <div className="col-span-1 p-2 text-center font-semibold text-gray-700">시간</div>
-        {days.map((day, index) => (
-          <div key={day} className="col-span-1 p-2 text-center font-semibold text-gray-700 border-l border-gray-200">
+        {(weekDates.length > 0 ? weekDates : days).map((day, index) => (
+          <div key={index} className="col-span-1 p-2 text-center font-semibold text-gray-700 border-l border-gray-200">
             {day}
           </div>
         ))}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import moment from 'moment';
 import { X } from 'lucide-react';
-import EventFormModal from './EventFormModal';
+import EventFormModal from '../forms/EventFormModal';
 
 const EventsTab = ({ events, onAddEvent, isLoggedIn, onDeleteEvent, onEditEvent }) => {
    const [showAddEventModal, setShowAddEventModal] = useState(false);
