@@ -140,6 +140,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
             throw new Error(errorData.msg || 'Failed to add event');
          }
          const savedEvent = await response.json();
+         console.log('Server response (savedEvent):', savedEvent);
          const newEvent = formatEventForClient(savedEvent, eventData.color);
          setGlobalEvents(prevEvents => [...prevEvents, newEvent]);
          return newEvent;

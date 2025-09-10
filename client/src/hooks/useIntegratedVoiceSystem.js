@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useBackgroundMonitoring } from './useBackgroundMonitoring';
 import { useVoiceCommands } from './useVoiceCommands';
-import { useAudioManager } from './useAudioManager';
 import { useSharedAudioStream } from './useSharedAudioStream';
 
 export const useIntegratedVoiceSystem = (
@@ -15,12 +14,11 @@ export const useIntegratedVoiceSystem = (
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
 
-  const { stream, getStream, stopStream } = useSharedAudioStream();
+  const { getStream, stopStream } = useSharedAudioStream();
 
   const {
     isBackgroundMonitoring,
     processTranscript,
-    detectCallActivity,
     ...backgroundMonitoringProps
   } = useBackgroundMonitoring(eventActions, setEventAddedKey);
 
@@ -28,30 +26,39 @@ export const useIntegratedVoiceSystem = (
     modalText,
     setModalText,
     handleVoiceResult,
-    ...voiceCommandsProps
   } = useVoiceCommands(isLoggedIn, isVoiceRecognitionEnabled, handleChatMessage, setEventAddedKey);
 
-  const {
-    micVolume,
-    setupAudioAnalysis,
-    cleanupAudioResources
-  } = useAudioManager();
+  const isMountedRef = useRef(true);
+
+  // Refs to hold the latest values to avoid stale closures in event handlers
+  const isBackgroundMonitoringRef = useRef(isBackgroundMonitoring);
+  const isVoiceRecognitionEnabledRef = useRef(isVoiceRecognitionEnabled);
+  const processTranscriptRef = useRef(processTranscript);
+  const handleVoiceResultRef = useRef(handleVoiceResult);
+
+  useEffect(() => { isBackgroundMonitoringRef.current = isBackgroundMonitoring; }, [isBackgroundMonitoring]);
+  useEffect(() => { isVoiceRecognitionEnabledRef.current = isVoiceRecognitionEnabled; }, [isVoiceRecognitionEnabled]);
+  useEffect(() => { processTranscriptRef.current = processTranscript; }, [processTranscript]);
+  useEffect(() => { handleVoiceResultRef.current = handleVoiceResult; }, [handleVoiceResult]);
 
   const initializeRecognition = useCallback(async () => {
-    const audioStream = await getStream();
-    if (!audioStream) return;
+    await getStream();
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      console.error("Speech Recognition not supported.");
+      return;
+    }
 
     recognitionRef.current = new SpeechRecognition();
     const recognition = recognitionRef.current;
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'ko-KR';
-    recognition.maxAlternatives = 3;
+    recognition.maxAlternatives = 1;
 
     recognition.onstart = () => setIsListening(true);
+
     recognition.onresult = event => {
       let currentTranscript = '';
       let isFinal = false;
@@ -59,41 +66,46 @@ export const useIntegratedVoiceSystem = (
         currentTranscript += event.results[i][0].transcript;
         if (event.results[i].isFinal) isFinal = true;
       }
-      if (isBackgroundMonitoring && isFinal) processTranscript(currentTranscript);
-      if (isVoiceRecognitionEnabled) handleVoiceResult(currentTranscript, isFinal, recognition);
+      
+      if (isBackgroundMonitoringRef.current && isFinal) {
+        processTranscriptRef.current(currentTranscript);
+      }
+      if (isVoiceRecognitionEnabledRef.current) {
+        handleVoiceResultRef.current(currentTranscript, isFinal, recognition);
+      }
     };
 
     const restart = () => {
-        if (recognitionRef.current) {
-            try { recognition.start(); } catch(e) {}
+      if (recognitionRef.current && isMountedRef.current) {
+        try {
+          recognition.start();
+        } catch (e) {
+          // It might already be starting, which is fine.
         }
+      }
     }
 
     recognition.onerror = event => {
-      setIsListening(false);
-      if (event.error !== 'aborted') {
-        setTimeout(restart, 250);
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        console.error("Speech recognition error:", event.error);
       }
     };
 
     recognition.onend = () => {
-      setIsListening(false);
-      setTimeout(restart, 250);
+      if (isMountedRef.current && recognitionRef.current) {
+        restart();
+      }
     };
 
     try {
       recognition.start();
-      setupAudioAnalysis(audioStream, detectCallActivity);
     } catch (error) {
-      cleanupAudioResources();
+      console.error("Error starting recognition: ", error);
     }
-  }, [ 
-    getStream, isBackgroundMonitoring, processTranscript, 
-    isVoiceRecognitionEnabled, handleVoiceResult, setupAudioAnalysis, 
-    detectCallActivity, cleanupAudioResources
-  ]);
+  }, [getStream]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     const shouldBeRunning = isLoggedIn && areEventActionsReady && (isVoiceRecognitionEnabled || isBackgroundMonitoring);
 
     if (shouldBeRunning) {
@@ -101,17 +113,10 @@ export const useIntegratedVoiceSystem = (
     } else {
       if (recognitionRef.current) {
         recognitionRef.current.abort();
-        recognitionRef.current = null;
       }
-      stopStream();
-      cleanupAudioResources();
-      setIsListening(false);
     }
-
-  }, [ 
-    isLoggedIn, areEventActionsReady, isVoiceRecognitionEnabled, 
-    isBackgroundMonitoring, initializeRecognition, stopStream, cleanupAudioResources
-  ]);
+    return () => { isMountedRef.current = false; };
+  }, [isLoggedIn, areEventActionsReady, isVoiceRecognitionEnabled, isBackgroundMonitoring, initializeRecognition]);
 
   useEffect(() => {
     return () => {
@@ -120,22 +125,14 @@ export const useIntegratedVoiceSystem = (
         recognitionRef.current = null;
       }
       stopStream();
-      cleanupAudioResources();
     };
-  }, [stopStream, cleanupAudioResources]);
+  }, [stopStream]);
 
   return { 
     isListening, 
     modalText,
     setModalText,
-    micVolume,
     isBackgroundMonitoring,
-    isCallDetected: backgroundMonitoringProps.isCallDetected,
-    callStartTime: backgroundMonitoringProps.callStartTime,
-    detectedSchedules: backgroundMonitoringProps.detectedSchedules,
-    backgroundTranscript: backgroundMonitoringProps.backgroundTranscript,
-    toggleBackgroundMonitoring: backgroundMonitoringProps.toggleBackgroundMonitoring,
-    confirmSchedule: backgroundMonitoringProps.confirmSchedule,
-    dismissSchedule: backgroundMonitoringProps.dismissSchedule
+    ...backgroundMonitoringProps
   };
 };
