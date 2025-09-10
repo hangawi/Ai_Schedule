@@ -21,6 +21,7 @@ import CoordinationTab from './components/tabs/CoordinationTab';
 import CreateProposalModal from './components/forms/CreateProposalModal';
 import TimeSelectionModal from './components/forms/TimeSelectionModal';
 import BackgroundCallIndicator from './components/indicators/BackgroundCallIndicator';
+import { coordinationService } from './services/coordinationService';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -75,6 +76,60 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
    const [globalProposals, setGlobalProposals] = useState([]);
    const [showEditModal, setShowEditModal] = useState(false);
    const [editingEvent, setEditingEvent] = useState(null);
+   
+   // 교환 요청 수 관리
+   const [exchangeRequestCount, setExchangeRequestCount] = useState(0);
+
+   // 로그인 후 교환 요청 수 자동 로드
+   useEffect(() => {
+     const loadExchangeRequestCount = async () => {
+       if (!isLoggedIn || !user) return;
+       
+       try {
+         const result = await coordinationService.getExchangeRequestsCount();
+         if (result.success) {
+           setExchangeRequestCount(result.count);
+         }
+       } catch (error) {
+         console.error('Failed to load exchange requests count:', error);
+         setExchangeRequestCount(0);
+       }
+     };
+
+     loadExchangeRequestCount();
+   }, [isLoggedIn, user]);
+
+   // 주기적으로 교환 요청 수 업데이트 (선택적)
+   useEffect(() => {
+     if (!isLoggedIn || !user) return;
+
+     const interval = setInterval(async () => {
+       try {
+         const result = await coordinationService.getExchangeRequestsCount();
+         if (result.success) {
+           setExchangeRequestCount(result.count);
+         }
+       } catch (error) {
+         console.error('Failed to refresh exchange requests count:', error);
+       }
+     }, 30000); // 30초마다 업데이트
+
+     return () => clearInterval(interval);
+   }, [isLoggedIn, user]);
+
+   // 교환 요청 수 새로고침 함수
+   const refreshExchangeRequestCount = useCallback(async () => {
+     if (!isLoggedIn || !user) return;
+     
+     try {
+       const result = await coordinationService.getExchangeRequestsCount();
+       if (result.success) {
+         setExchangeRequestCount(result.count);
+       }
+     } catch (error) {
+       console.error('Failed to refresh exchange requests count:', error);
+     }
+   }, [isLoggedIn, user]);
 
    const handleManualLogout = () => {
       handleLogout();
@@ -305,8 +360,8 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                   <NavItem icon={<LayoutDashboard size={18} />} label="대시보드" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }} />
                   <NavItem icon={<ListTodo size={18} />} label="나의 일정" active={activeTab === 'events'} onClick={() => { setActiveTab('events'); setIsSidebarOpen(false); }} />
                   <NavItem icon={<Calendar size={18} />} label="Google 캘린더" active={activeTab === 'googleCalendar'} onClick={() => { setActiveTab('googleCalendar'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<History size={18} />} label="조율 내역" active={activeTab === 'proposals'} onClick={() => { setActiveTab('proposals'); setIsSidebarOpen(false); }} badge="3" />
-                  <NavItem icon={<CalendarCheck size={18} />} label="일정 맞추기" active={activeTab === 'coordination'} onClick={() => { setActiveTab('coordination'); setIsSidebarOpen(false); }} />
+                  <NavItem icon={<History size={18} />} label="조율 내역" active={activeTab === 'proposals'} onClick={() => { setActiveTab('proposals'); setIsSidebarOpen(false); }} />
+                  <NavItem icon={<CalendarCheck size={18} />} label="일정 맞추기" active={activeTab === 'coordination'} onClick={() => { setActiveTab('coordination'); setIsSidebarOpen(false); }} badge={exchangeRequestCount > 0 ? exchangeRequestCount.toString() : undefined} />
                   <NavItem icon={<Bot size={18} />} label="내 AI 비서" active={activeTab === 'agent'} onClick={() => { setActiveTab('agent'); setIsSidebarOpen(false); }} />
                </div>
             </nav>
@@ -316,7 +371,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                {activeTab === 'proposals' && <ProposalsTab onSelectTime={handleSelectProposalForTime} proposals={globalProposals} />}
                {activeTab === 'events' && <EventsTab events={globalEvents} onAddEvent={handleAddGlobalEvent} isLoggedIn={isLoggedIn} onDeleteEvent={handleDeleteEvent} onEditEvent={handleEditEvent} />}
                {activeTab === 'googleCalendar' && <MyCalendar isListening={isListening} onEventAdded={eventAddedKey} isVoiceRecognitionEnabled={isVoiceRecognitionEnabled} onToggleVoiceRecognition={() => setIsVoiceRecognitionEnabled(prev => !prev)} />}
-               {activeTab === 'coordination' && <CoordinationTab user={user} />}
+               {activeTab === 'coordination' && <CoordinationTab user={user} onExchangeRequestCountChange={setExchangeRequestCount} onRefreshExchangeCount={refreshExchangeRequestCount} />}
                {activeTab === 'agent' && <AgentTab />}
             </main>
          </div>

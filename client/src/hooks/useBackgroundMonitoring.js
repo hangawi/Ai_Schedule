@@ -9,8 +9,13 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
   const [detectedSchedules, setDetectedSchedules] = useState([]);
   const [backgroundTranscript, setBackgroundTranscript] = useState('');
   
+  // 새로운 상태 추가: 음성 인식 상태 세분화
+  const [voiceStatus, setVoiceStatus] = useState('waiting'); // 'waiting', 'recording', 'ending', 'analyzing'
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
   const transcriptBufferRef = useRef('');
   const silenceTimeoutRef = useRef(null);
+  const lastSpeechTimeRef = useRef(null);
 
   const analyzeFullTranscript = useCallback(async () => {
     const transcriptToAnalyze = transcriptBufferRef.current;
@@ -18,12 +23,21 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
     
     if (!transcriptToAnalyze || transcriptToAnalyze.length < 20) { // Shorter threshold
       setBackgroundTranscript('');
+      setVoiceStatus('waiting');
       return;
     }
 
+    // 분석 시작 상태로 변경
+    setVoiceStatus('analyzing');
+    setIsAnalyzing(true);
+
     try {
       const token = localStorage.getItem('token');
-      if (!token) return;
+      if (!token) {
+        setVoiceStatus('waiting');
+        setIsAnalyzing(false);
+        return;
+      }
 
       const response = await fetch(`${API_BASE_URL}/api/call-analysis/analyze`, {
         method: 'POST',
@@ -46,6 +60,10 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
       }
     } catch (error) {
       console.error("Error analyzing full transcript:", error);
+    } finally {
+      // 분석 완료 후 대기 상태로 복귀
+      setIsAnalyzing(false);
+      setVoiceStatus('waiting');
     }
   }, [detectedSchedules]);
 
@@ -65,25 +83,43 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
   const processTranscript = useCallback((transcript) => {
     if (!isBackgroundMonitoring || !transcript.trim()) return;
 
+    // 음성 감지 시작 - 녹음 상태로 변경
+    if (voiceStatus === 'waiting') {
+      setVoiceStatus('recording');
+      console.log('음성 감지됨 - 녹음 시작');
+    }
+
     if (!isCallDetected) {
       setIsCallDetected(true);
       setCallStartTime(Date.now());
     }
 
+    // 마지막 음성 감지 시간 업데이트
+    lastSpeechTimeRef.current = Date.now();
+    
     transcriptBufferRef.current += transcript + ' ';
     setBackgroundTranscript(transcriptBufferRef.current);
 
+    // 기존 타이머 클리어
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current);
     }
 
+    // 3초 침묵 감지 타이머 설정
     silenceTimeoutRef.current = setTimeout(() => {
-      setIsCallDetected(false);
-      setCallStartTime(null);
-      analyzeFullTranscript(); 
-    }, 3000); // User-requested 3 seconds
+      console.log('3초 침묵 감지 - 녹음 종료');
+      setVoiceStatus('ending');
+      
+      // 짧은 딜레이 후 분석 시작 (UI에서 "녹음종료" 상태를 보여주기 위해)
+      setTimeout(() => {
+        setIsCallDetected(false);
+        setCallStartTime(null);
+        analyzeFullTranscript(); 
+      }, 500); // 0.5초 후 분석 시작
+      
+    }, 3000); // 사용자 요청대로 3초
     
-  }, [isBackgroundMonitoring, isCallDetected, analyzeFullTranscript]);
+  }, [isBackgroundMonitoring, isCallDetected, analyzeFullTranscript, voiceStatus]);
 
   const confirmSchedule = useCallback(async (schedule) => {
     try {
@@ -141,6 +177,9 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
     toggleBackgroundMonitoring,
     confirmSchedule,
     dismissSchedule,
-    processTranscript
+    processTranscript,
+    // 새로운 음성 상태들
+    voiceStatus, // 'waiting', 'recording', 'ending', 'analyzing'
+    isAnalyzing
   };
 };

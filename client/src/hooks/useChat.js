@@ -9,8 +9,13 @@ export const useChat = (isLoggedIn, setEventAddedKey) => {
       if (!isLoggedIn) return { success: false, message: '로그인이 필요합니다.' };
 
       const API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
-      if (!API_KEY) {
+      if (!API_KEY || API_KEY.trim().length === 0) {
          return { success: false, message: 'Gemini API Key가 설정되지 않았습니다.' };
+      }
+
+      // API 키 형식 기본 검증
+      if (API_KEY.length < 30) {
+         return { success: false, message: 'AI 서비스 설정에 문제가 있습니다. 관리자에게 문의해주세요.' };
       }
 
       try {
@@ -234,6 +239,17 @@ export const useChat = (isLoggedIn, setEventAddedKey) => {
       } catch (error) {
          console.error('Chat error:', error);
          console.error('Error details:', error.message, error.stack);
+         
+         // API 키 관련 오류 체크
+         if (error.message.includes('API key not valid') || 
+             error.message.includes('API_KEY_INVALID') ||
+             error.message.includes('invalid API key') ||
+             error.message.includes('Unauthorized')) {
+            return { 
+               success: false, 
+               message: 'AI 서비스에 문제가 있습니다. 관리자에게 문의해주세요.' 
+            };
+         }
          
          // JSON 파싱 오류인지 확인
          if (error instanceof SyntaxError) {

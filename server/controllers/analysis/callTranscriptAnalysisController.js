@@ -14,10 +14,19 @@ exports.analyzeCallTranscript = async (req, res) => {
 
       // Gemini API 키 확인
       const API_KEY = process.env.GEMINI_API_KEY;
-      if (!API_KEY) {
+      if (!API_KEY || API_KEY.trim().length === 0) {
          return res.status(500).json({
             success: false,
             message: 'Gemini API 키가 설정되지 않았습니다.'
+         });
+      }
+
+      // API 키 형식 기본 검증 (Google API 키는 보통 39자)
+      if (API_KEY.length < 30) {
+         console.error('GEMINI_API_KEY가 너무 짧음 - 유효하지 않은 키일 가능성');
+         return res.status(500).json({
+            success: false,
+            message: 'Gemini API 키 형식이 올바르지 않습니다.'
          });
       }
 
@@ -71,6 +80,14 @@ exports.analyzeCallTranscript = async (req, res) => {
    - "다음 주 화요일" → 정확한 날짜 계산
    - "이번 달 말" → 해당 월의 마지막 날짜
    
+   **⚠️ 과거 날짜 표현 처리 (매우 중요):**
+   - "저번주", "지난주", "작주" → 현재 주보다 1주 전
+   - "지난달", "저번달" → 현재 달보다 1달 전  
+   - "어제", "그제", "엊그제" → 과거 날짜로 정확히 계산
+   - "저번주 화요일", "지난주 월요일" 등 → 반드시 과거 날짜로 설정
+   
+   **과거 날짜인 경우 반드시 confidence를 0.3 이하로 설정하고 reasoning에 "과거 일정은 추가하지 않음" 명시**
+   
 2. 시간 해석 - 문맥상 추론:
    - "오후 2시" → 14:00
    - "점심때" → 12:00
@@ -82,9 +99,10 @@ exports.analyzeCallTranscript = async (req, res) => {
    - 목적과 참석자를 포함
 
 4. 확실성 기준:
-   - 0.9+ : 날짜, 시간, 장소 모두 명확
-   - 0.8+ : 날짜, 시간 명확하지만 장소 불분명  
-   - 0.7+ : 날짜만 명확
+   - **0.3 이하 : 과거 날짜 (저번주, 지난주, 어제 등) - 자동 제외**
+   - 0.9+ : 미래 날짜, 시간, 장소 모두 명확
+   - 0.8+ : 미래 날짜, 시간 명확하지만 장소 불분명  
+   - 0.7+ : 미래 날짜만 명확
    - 0.6+ : 일정 의도는 있지만 세부사항 부족
    - 0.6 미만은 제외
 
@@ -145,6 +163,21 @@ exports.analyzeCallTranscript = async (req, res) => {
       });
 
    } catch (error) {
+      console.error('통화 내용 분석 에러:', error.message);
+      
+      // API 키 관련 오류 체크
+      if (error.message.includes('API key not valid') || 
+          error.message.includes('API_KEY_INVALID') ||
+          error.message.includes('invalid API key')) {
+         console.log('Gemini API 키가 유효하지 않음');
+         return res.status(500).json({
+            success: false,
+            message: 'AI 분석 서비스에 문제가 있습니다. Gemini API 키를 확인해주세요.',
+            error: 'Invalid API key',
+            fallback: true
+         });
+      }
+      
       res.status(500).json({
          success: false,
          message: '통화 내용 분석 중 오류가 발생했습니다.',

@@ -13,7 +13,7 @@ const getMondayOfCurrentWeek = (date) => {
   return d;
 };
 
-const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect, currentUser, isRoomOwner, onAssignSlot, onRequestSlot, onRemoveSlot, onDirectSubmit, selectedSlots, events, proposals, calculateEndTime }) => {
+const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onSlotSelect, currentUser, isRoomOwner, onAssignSlot, onRequestSlot, onRemoveSlot, onDirectSubmit, selectedSlots, events, proposals, calculateEndTime }) => {
   
   const [weekDates, setWeekDates] = useState([]);
 
@@ -202,6 +202,12 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect,
 
   // Function to handle slot click
   const handleSlotClick = useCallback((dayIndex, time) => {
+    // 방장은 시간표를 클릭할 수 없음
+    if (isRoomOwner) {
+      alert('방장은 시간표에 직접 참여할 수 없습니다. 방 관리 기능을 이용해주세요.');
+      return;
+    }
+
     const isBlocked = !!getBlockedTimeInfo(time);
     const ownerInfo = getSlotOwner(dayIndex, time);
     // Check if current user owns this slot by ID or email
@@ -233,6 +239,57 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect,
       } else {
         // User clicks on someone else's assigned slot - request swap
         
+        // 중복 교환 요청 확인 - 디버깅 추가
+        console.log('중복 요청 체크:', {
+          roomData: roomData,
+          requests: roomData?.requests,
+          currentUserId: currentUser?.id,
+          dayIndex,
+          time,
+          targetUserId: ownerInfo.actualUserId || ownerInfo.userId
+        });
+        
+        const existingSwapRequest = roomData?.requests?.find(request => {
+          const requesterId = request.requester?._id || request.requester?.id || request.requester;
+          const isMatch = request.status === 'pending' &&
+            request.type === 'slot_swap' &&
+            (requesterId === currentUser?.id || requesterId?.toString() === currentUser?.id?.toString()) &&
+            request.timeSlot?.day === dayNames[dayIndex] &&
+            request.timeSlot?.startTime === time &&
+            request.targetUserId === (ownerInfo.actualUserId || ownerInfo.userId);
+          
+          console.log('요청 체크:', {
+            requestId: request._id,
+            requester: request.requester,
+            requesterId: requesterId,
+            currentUserId: currentUser?.id,
+            requestStatus: request.status,
+            requestType: request.type,
+            timeSlotDay: request.timeSlot?.day,
+            expectedDay: dayNames[dayIndex],
+            timeSlotStart: request.timeSlot?.startTime,
+            expectedTime: time,
+            targetUserId: request.targetUserId,
+            expectedTargetId: ownerInfo.actualUserId || ownerInfo.userId,
+            isMatch
+          });
+          
+          return isMatch;
+        });
+
+        if (existingSwapRequest) {
+          alert('이미 이 시간대에 대한 교환 요청을 보냈습니다. 기존 요청이 처리될 때까지 기다려주세요.');
+          return;
+        }
+        
+        // Find the actual existing slot to get the subject
+        const existingSlot = timeSlots.find(slot => 
+          slot.day === dayNames[dayIndex] &&
+          slot.startTime === time &&
+          (slot.user === ownerInfo.actualUserId || slot.user === ownerInfo.userId || 
+           slot.user?.toString() === ownerInfo.actualUserId || slot.user?.toString() === ownerInfo.userId)
+        );
+
         setSlotToChange({ 
           dayIndex, 
           time, 
@@ -243,6 +300,7 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect,
             day: dayNames[dayIndex], // dayNames is available
             startTime: time,
             endTime: calculateEndTime(time), // calculateEndTime is now available
+            subject: existingSlot?.subject || '교환 대상', // Use existing subject or fallback
             user: ownerInfo.actualUserId || ownerInfo.userId // The current owner of this slot
           }
         });
@@ -337,6 +395,15 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect,
             day: dayNames[slotToChange.dayIndex],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
+            subject: (() => {
+              // Find the existing slot for current user at this time
+              const existingSlot = timeSlots.find(slot => 
+                slot.day === dayNames[slotToChange.dayIndex] &&
+                slot.startTime === slotToChange.time &&
+                (slot.user === currentUser.id || slot.user?.toString() === currentUser.id?.toString())
+              );
+              return existingSlot?.subject || '요청자 시간';
+            })()
           },
           targetUserId: slotToChange.targetUserId,
           targetSlot: slotToChange.targetSlot, // This is the slot the target user is giving away
@@ -351,11 +418,29 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect,
             day: dayNames[slotToChange.dayIndex],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
+            subject: (() => {
+              // Find the existing slot for current user at this time
+              const existingSlot = timeSlots.find(slot => 
+                slot.day === dayNames[slotToChange.dayIndex] &&
+                slot.startTime === slotToChange.time &&
+                (slot.user === currentUser.id || slot.user?.toString() === currentUser.id?.toString())
+              );
+              return existingSlot?.subject || '변경 요청';
+            })()
           },
           targetSlot: {
             day: dayNames[slotToChange.dayIndex],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
+            subject: (() => {
+              // Find the existing slot for current user at this time
+              const existingSlot = timeSlots.find(slot => 
+                slot.day === dayNames[slotToChange.dayIndex] &&
+                slot.startTime === slotToChange.time &&
+                (slot.user === currentUser.id || slot.user?.toString() === currentUser.id?.toString())
+              );
+              return existingSlot?.subject || '변경 대상';
+            })(),
             user: currentUser.id
           },
           message: message || '시간 변경 요청합니다.',
@@ -397,10 +482,11 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, onSlotSelect,
                 key={`${day}-${time}`}
                 className={`col-span-1 border-l border-gray-200 h-10 flex items-center justify-center
                   ${isBlocked ? 'bg-gray-300 cursor-not-allowed' : ''}
+                  ${isRoomOwner ? 'cursor-not-allowed opacity-60' : ''}
                   ${!isBlocked && !ownerInfo && isSelected && !isRoomOwner ? 'bg-blue-200 border-2 border-blue-400' : ''}
                   ${!isBlocked && !ownerInfo && !isSelected && currentUser && !isRoomOwner ? 'hover:bg-blue-50 cursor-pointer' : ''}
-                  ${!isBlocked && ownerInfo && currentUser ? 'cursor-pointer hover:opacity-80' : ''}
-                  ${!isBlocked && !ownerInfo && !isSelected && isRoomOwner ? 'cursor-default' : ''}
+                  ${!isBlocked && ownerInfo && currentUser && !isRoomOwner ? 'cursor-pointer hover:opacity-80' : ''}
+                  ${!isBlocked && !ownerInfo && !isSelected && !isRoomOwner ? '' : ''}
                 `}
                 style={!isBlocked && ownerInfo ? { backgroundColor: `${ownerInfo.color}20`, borderColor: ownerInfo.color } : {}}
                 onClick={() => handleSlotClick(dayIndex, time)}

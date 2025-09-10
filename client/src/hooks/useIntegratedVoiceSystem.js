@@ -19,6 +19,8 @@ export const useIntegratedVoiceSystem = (
   const {
     isBackgroundMonitoring,
     processTranscript,
+    voiceStatus,
+    isAnalyzing,
     ...backgroundMonitoringProps
   } = useBackgroundMonitoring(eventActions, setEventAddedKey);
 
@@ -133,6 +135,8 @@ export const useIntegratedVoiceSystem = (
     modalText,
     setModalText,
     isBackgroundMonitoring,
+    voiceStatus,
+    isAnalyzing,
     ...backgroundMonitoringProps
   };
 };

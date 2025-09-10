@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { coordinationService } from '../services/coordinationService';
 
-export const useCoordination = (userId) => {
+export const useCoordination = (userId, onRefreshExchangeCount) => {
   const [currentRoom, setCurrentRoom] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -137,12 +137,16 @@ export const useCoordination = (userId) => {
     try {
       await coordinationService.createRequest(requestData);
       await fetchRoomDetails(requestData.roomId, true);
+      // 교환 요청 생성 후 전역 카운트 새로고침
+      if (onRefreshExchangeCount) {
+        onRefreshExchangeCount();
+      }
     } catch (err) {
       console.error('createRequest error:', err);
       setError(err.message);
       throw err;
     }
-  }, [fetchRoomDetails]);
+  }, [fetchRoomDetails, onRefreshExchangeCount]);
 
   const handleRequest = useCallback(async (requestId, action) => {
     setError(null);
@@ -151,12 +155,16 @@ export const useCoordination = (userId) => {
       if (currentRoom) {
         await fetchRoomDetails(currentRoom._id, true);
       }
+      // 교환 요청 처리 후 전역 카운트 새로고침
+      if (onRefreshExchangeCount) {
+        onRefreshExchangeCount();
+      }
     } catch (err) {
       console.error('handleRequest error:', err);
       setError(err.message);
       throw err;
     }
-  }, [currentRoom, fetchRoomDetails]);
+  }, [currentRoom, fetchRoomDetails, onRefreshExchangeCount]);
 
 
   useEffect(() => {
