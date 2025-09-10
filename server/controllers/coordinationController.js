@@ -209,7 +209,7 @@ exports.getRoomDetails = async (req, res) => {
     await room.populate('owner', 'firstName lastName email');
     await room.populate('members.user', 'firstName lastName email');
     await room.populate('timeSlots.user', 'firstName lastName email');
-    await room.populate('requests.requester', 'firstName lastName email');
+    await room.populate('requests.requester', '_id firstName lastName email');
 
     res.json(room);
   } catch (error) {
@@ -392,7 +392,7 @@ exports.createRequest = async (req, res) => {
 
     room.requests.push(newRequest);
     await room.save();
-    await room.populate('requests.requester', 'firstName lastName email');
+    await room.populate('requests.requester', '_id firstName lastName email');
     res.json(room);
   } catch (error) {
     console.error('Error creating request:', error);
@@ -406,6 +406,10 @@ exports.createRequest = async (req, res) => {
 exports.handleRequest = async (req, res) => {
   try {
     const { requestId, action } = req.params;
+    console.log('=== 교환 요청 처리 시작 ===');
+    console.log('requestId:', requestId);
+    console.log('action:', action);
+    console.log('user:', req.user.id);
     const room = await Room.findOne({ 'requests._id': requestId });
 
     if (!room) {
@@ -414,8 +418,20 @@ exports.handleRequest = async (req, res) => {
 
     const request = room.requests.id(requestId);
     if (!request) {
+      console.log('요청을 찾을 수 없음 - requestId:', requestId);
+      console.log('방의 모든 요청들:', room.requests.map(r => ({ id: r._id, type: r.type })));
       return res.status(404).json({ msg: '요청을 찾을 수 없습니다.' });
     }
+    
+    console.log('찾은 요청:', {
+      id: request._id,
+      type: request.type,
+      status: request.status,
+      requester: request.requester,
+      targetUserId: request.targetUserId,
+      timeSlot: request.timeSlot,
+      targetSlot: request.targetSlot
+    });
 
     if (action === 'approved') {
       request.status = 'approved';
@@ -431,35 +447,113 @@ exports.handleRequest = async (req, res) => {
       } else if (request.type === 'slot_swap') {
         const requesterSlot = request.timeSlot; // Slot requester wants to give
         const targetSlot = request.targetSlot;   // Slot target user wants to give
+        
+        // targetSlot 유효성 검사
+        if (!targetSlot) {
+          console.error('targetSlot이 없습니다:', request);
+          request.status = 'failed';
+          return res.status(400).json({ msg: '교환 대상 시간대 정보가 없습니다.' });
+        }
+
+        console.log('교환 요청 처리 시작:', {
+          requestId: requestId,
+          requesterId: request.requester,
+          targetUserId: request.targetUserId,
+          requesterSlot,
+          targetSlot
+        });
+        
+        console.log('현재 방의 모든 타임슬롯:', room.timeSlots.map(slot => ({
+          day: slot.day,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          user: slot.user?.toString(),
+          status: slot.status
+        })));
 
         // Find the actual time slots in the room's timeSlots array
-        const roomRequesterSlot = room.timeSlots.find(slot =>
+        // First, try to find exactly what the requester specified
+        let roomRequesterSlot = room.timeSlots.find(slot =>
           slot.day === requesterSlot.day &&
           slot.startTime === requesterSlot.startTime &&
           slot.endTime === requesterSlot.endTime &&
-          slot.user.toString() === request.requester.toString() // Ensure it's the requester's slot
+          slot.user.toString() === request.requester.toString()
         );
+        
+        // If not found, find any slot owned by the requester (fallback)
+        if (!roomRequesterSlot) {
+          console.log('정확한 요청자 슬롯을 찾을 수 없음, 요청자의 다른 슬롯 검색...');
+          roomRequesterSlot = room.timeSlots.find(slot =>
+            slot.user.toString() === request.requester.toString()
+          );
+          console.log('대체 요청자 슬롯:', roomRequesterSlot ? {
+            day: roomRequesterSlot.day,
+            startTime: roomRequesterSlot.startTime,
+            endTime: roomRequesterSlot.endTime
+          } : 'none');
+        }
 
         const roomTargetSlot = room.timeSlots.find(slot =>
           slot.day === targetSlot.day &&
           slot.startTime === targetSlot.startTime &&
           slot.endTime === targetSlot.endTime &&
-          slot.user.toString() === request.targetUserId.toString() // Ensure it's the target user's slot
+          (slot.user.toString() === request.targetUserId || 
+           slot.user.toString() === request.targetUserId?.toString() ||
+           slot.user === request.targetUserId ||
+           slot.user === request.targetUserId?.toString()) // More flexible comparison
         );
 
-        if (roomRequesterSlot && roomTargetSlot) {
-          // Perform the swap
-          roomRequesterSlot.user = request.targetUserId; // Requester's slot now belongs to target
-          roomTargetSlot.user = request.requester;       // Target's slot now belongs to requester
+        console.log('슬롯 검색 결과:', {
+          roomRequesterSlot: roomRequesterSlot ? 'found' : 'not found',
+          roomTargetSlot: roomTargetSlot ? 'found' : 'not found',
+          searchCriteria: {
+            requesterSlot: {
+              day: requesterSlot.day,
+              startTime: requesterSlot.startTime,
+              endTime: requesterSlot.endTime,
+              expectedUser: request.requester.toString()
+            },
+            targetSlot: {
+              day: targetSlot.day,
+              startTime: targetSlot.startTime,
+              endTime: targetSlot.endTime,
+              expectedUser: request.targetUserId
+            }
+          }
+        });
 
-          // Optionally update status to confirmed/assigned
-          roomRequesterSlot.status = 'assigned';
-          roomTargetSlot.status = 'assigned';
+        if (roomRequesterSlot && roomTargetSlot) {
+          console.log('교환 전 상태:', {
+            requesterSlotUser: roomRequesterSlot.user.toString(),
+            targetSlotUser: roomTargetSlot.user.toString()
+          });
+
+          // Perform the swap
+          const tempUser = roomRequesterSlot.user;
+          roomRequesterSlot.user = roomTargetSlot.user;
+          roomTargetSlot.user = tempUser;
+
+          // Update status to confirmed
+          roomRequesterSlot.status = 'confirmed';
+          roomTargetSlot.status = 'confirmed';
+
+          console.log('교환 후 상태:', {
+            requesterSlotUser: roomRequesterSlot.user.toString(),
+            targetSlotUser: roomTargetSlot.user.toString()
+          });
         } else {
-          // Handle case where one or both slots are not found (e.g., already taken or removed)
-          console.warn('One or both slots for swap not found in room.timeSlots');
-          // Maybe set request status to 'failed' or 'invalid'
-          request.status = 'failed'; // Or 'invalid'
+          console.error('교환 실패 - 슬롯을 찾을 수 없음:', {
+            requesterSlotFound: !!roomRequesterSlot,
+            targetSlotFound: !!roomTargetSlot,
+            allTimeSlots: room.timeSlots.map(slot => ({
+              day: slot.day,
+              startTime: slot.startTime,
+              endTime: slot.endTime,
+              user: slot.user.toString()
+            }))
+          });
+          request.status = 'failed';
+          return res.status(400).json({ msg: '교환할 시간대를 찾을 수 없습니다.' });
         }
       }
     } else if (action === 'rejected') {
@@ -467,10 +561,105 @@ exports.handleRequest = async (req, res) => {
     }
 
     await room.save();
-    res.json({ msg: `요청이 ${action === 'approved' ? '승인' : '거절'}되었습니다.` });
+    
+    // Populate all necessary fields for updated response
+    await room.populate('owner', 'firstName lastName email');
+    await room.populate('members.user', 'firstName lastName email');
+    await room.populate('timeSlots.user', 'firstName lastName email');
+    await room.populate('requests.requester', '_id firstName lastName email');
+
+    res.json({ 
+      msg: `요청이 ${action === 'approved' ? '승인' : '거절'}되었습니다.`,
+      room: room
+    });
   } catch (error) {
     console.error('Error handling request:', error);
     res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// @desc    Get exchange requests count for user
+// @route   GET /api/coordination/exchange-requests-count
+// @access  Private
+exports.getExchangeRequestsCount = async (req, res) => {
+  try {
+    // Find all rooms where user is a member
+    const rooms = await Room.find({
+      $or: [
+        { owner: req.user.id },
+        { 'members.user': req.user.id }
+      ]
+    });
+
+    let totalExchangeRequests = 0;
+
+    // Count exchange requests targeting this user across all rooms
+    rooms.forEach(room => {
+      if (room.requests) {
+        const userExchangeRequests = room.requests.filter(request =>
+          request.status === 'pending' &&
+          request.type === 'slot_swap' &&
+          (request.targetUserId === req.user.id || 
+           request.targetUserId === req.user.email || 
+           request.targetUserId?.toString() === req.user.id?.toString())
+        );
+        totalExchangeRequests += userExchangeRequests.length;
+      }
+    });
+
+    res.json({ 
+      success: true, 
+      count: totalExchangeRequests 
+    });
+  } catch (error) {
+    console.error('Error getting exchange requests count:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// @desc    Get exchange requests count per room (for room-specific badges)
+// @route   GET /api/coordination/rooms/exchange-counts  
+// @access  Private
+exports.getRoomExchangeCounts = async (req, res) => {
+  try {
+    const rooms = await Room.find({
+      $or: [
+        { owner: req.user.id },
+        { 'members.user': req.user.id }
+      ]
+    });
+
+    const roomCounts = {};
+    rooms.forEach(room => {
+      if (room.requests) {
+        // Filter for exchange requests targeting this user in this specific room
+        const userExchangeRequests = room.requests.filter(request =>
+          request.status === 'pending' &&
+          request.type === 'slot_swap' &&
+          (
+            request.targetUserId === req.user.id ||
+            request.targetUserId === req.user.email ||
+            request.targetUserId?.toString() === req.user.id?.toString()
+          )
+        );
+        roomCounts[room._id.toString()] = userExchangeRequests.length;
+      } else {
+        roomCounts[room._id.toString()] = 0;
+      }
+    });
+
+    res.json({
+      success: true,
+      roomCounts
+    });
+
+  } catch (error) {
+    console.error('Error getting room exchange counts:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get room exchange counts',
+      error: error.message
+    });
   }
 };
 

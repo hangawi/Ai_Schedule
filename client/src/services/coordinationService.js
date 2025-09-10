@@ -205,4 +205,34 @@ export const coordinationService = {
     return await response.json();
   },
 
+  // 교환 요청 수 가져오기
+  async getExchangeRequestsCount() {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/coordination/exchange-requests-count`, {
+      headers: { 'x-auth-token': token },
+    });
+    
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to get exchange requests count');
+    }
+    
+    return await response.json();
+  },
+
+  // 방별 교환 요청 수 가져오기
+  async getRoomExchangeCounts() {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/exchange-counts`, {
+      headers: { 'x-auth-token': token },
+    });
+    
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to get room exchange counts');
+    }
+    
+    return await response.json();
+  },
+
 };

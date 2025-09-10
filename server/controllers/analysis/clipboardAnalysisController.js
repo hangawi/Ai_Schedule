@@ -16,9 +16,15 @@ exports.analyzeClipboardText = async (req, res) => {
 
       // Gemini API 키 확인
       const API_KEY = process.env.GEMINI_API_KEY;
-      if (!API_KEY) {
+      if (!API_KEY || API_KEY.trim().length === 0) {
          console.error('GEMINI_API_KEY 환경변수가 설정되지 않음');
-         // 폴백: 키워드 기반 분석
+         // 폴백: 키워드 기반 분석 - text 변수가 스코프에 있어야 함
+         return analyzeWithKeywords(text, res);
+      }
+
+      // API 키 형식 기본 검증 (Google API 키는 보통 39자)
+      if (API_KEY.length < 30) {
+         console.error('GEMINI_API_KEY가 너무 짧음 - 유효하지 않은 키일 가능성');
          return analyzeWithKeywords(text, res);
       }
 
@@ -182,7 +188,16 @@ exports.analyzeClipboardText = async (req, res) => {
 
    } catch (error) {
       console.error('클립보드 분석 에러:', error.message);
+      
+      // API 키 관련 오류 체크
+      if (error.message.includes('API key not valid') || 
+          error.message.includes('API_KEY_INVALID') ||
+          error.message.includes('invalid API key')) {
+         console.log('Gemini API 키가 유효하지 않음, 키워드 기반 분석으로 폴백');
+      }
+      
       // Gemini API 호출 실패시 폴백
+      const { text } = req.body;
       return analyzeWithKeywords(text, res);
    }
 };
@@ -311,7 +326,7 @@ function analyzeWithKeywords(text, res) {
       }
       
       if (/영화/i.test(translatedText)) {
-         extractedInfo.title = '영화';
+         extractedInfo.title = '영화 보기';
          extractedInfo.description = '영화 관람 약속';
       }
    }

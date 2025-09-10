@@ -9,6 +9,7 @@ import ChangeRequestModal from '../modals/ChangeRequestModal';
 import { useCoordination } from '../../hooks/useCoordination';
 import { useCoordinationModals } from '../../hooks/useCoordinationModals';
 import { useAuth } from '../../hooks/useAuth';
+import { coordinationService } from '../../services/coordinationService';
 import { Users, Calendar, PlusCircle, LogIn } from 'lucide-react';
 import { translateEnglishDays } from '../../utils';
 
@@ -17,9 +18,9 @@ const dayMap = {
   'thursday': '목요일', 'friday': '금요일', 'saturday': '토요일', 'sunday': '일요일'
 };
 
-const CoordinationTab = () => {
+const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount }) => {
   const { user } = useAuth();
-  const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest } = useCoordination(user?.id);
+  const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest } = useCoordination(user?.id, onRefreshExchangeCount);
   
   // Modal management hook
   const {
@@ -36,20 +37,49 @@ const CoordinationTab = () => {
 
   const [selectedSlots, setSelectedSlots] = useState([]);
   const [selectedTab, setSelectedTab] = useState('owned'); // 'owned' or 'joined'
+  const [roomExchangeCounts, setRoomExchangeCounts] = useState({}); // 방별 교환요청 수
   
   // Days array for modal calculations
   const days = ['월요일', '화요일', '수요일', '목요일', '금요일'];
+  
+  // 방별 교환요청 수 로드
+  const loadRoomExchangeCounts = async () => {
+    if (!user?.id) return;
+    try {
+      const result = await coordinationService.getRoomExchangeCounts();
+      if (result.success) {
+        setRoomExchangeCounts(result.roomCounts);
+      }
+    } catch (error) {
+      console.error('Failed to load room exchange counts:', error);
+    }
+  };
+  
+  // 교환요청 수 계산하고 부모에게 전달
+  useEffect(() => {
+    if (!currentRoom || !onExchangeRequestCountChange) return;
+    
+    const exchangeRequestCount = (currentRoom.requests || []).filter(req => 
+      req.status === 'pending' && 
+      req.type === 'slot_swap' && 
+      (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())
+    ).length;
+    
+    onExchangeRequestCountChange(exchangeRequestCount);
+  }, [currentRoom, user?.id, user?.email, onExchangeRequestCountChange]);
 
   const handleCreateRoom = async (roomData) => {
     await createRoom(roomData);
     closeCreateRoomModal();
     fetchMyRooms(); // Refresh the list of rooms after creation
+    loadRoomExchangeCounts(); // Refresh exchange counts
   };
 
   const handleJoinRoom = async (inviteCode) => {
     await joinRoom(inviteCode);
     closeJoinRoomModal();
     fetchMyRooms(); // Refresh the list of rooms after joining
+    loadRoomExchangeCounts(); // Refresh exchange counts
   };
 
   const handleSubmitSlots = async () => {
@@ -99,6 +129,7 @@ const CoordinationTab = () => {
   useEffect(() => {
     if (user?.id) {
       fetchMyRooms();
+      loadRoomExchangeCounts();
     }
   }, [user?.id, fetchMyRooms]);
 
@@ -194,7 +225,10 @@ const CoordinationTab = () => {
               </button>
             )} 
             <button
-              onClick={() => setCurrentRoom(null)}
+              onClick={() => {
+                setCurrentRoom(null);
+                loadRoomExchangeCounts(); // Refresh exchange counts when returning to room list
+              }}
               className="px-5 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors shadow-sm"
             >
               방 목록으로 돌아가기
@@ -325,7 +359,7 @@ const CoordinationTab = () => {
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
                     <Users size={16} className="mr-2 text-blue-600" />
-                    교환 요청 ({(currentRoom.requests || []).filter(req => req.status === 'pending' && req.type === 'slot_swap' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length}건)
+                    받은 교환 요청 ({(currentRoom.requests || []).filter(req => req.status === 'pending' && req.type === 'slot_swap' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length}건)
                   </h4>
                   <div className="space-y-2">
                     {(currentRoom.requests || []).filter(req => req.status === 'pending' && req.type === 'slot_swap' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).slice(0, 3).map((request, index) => {
@@ -369,6 +403,113 @@ const CoordinationTab = () => {
                   </div>
                 </div>
               )}
+
+              {/* 내가 보낸 교환 요청 (모든 멤버에게 표시) */}
+              {(() => {
+                const myRequests = (currentRoom.requests || []).filter((req, index) => {
+                  // 다양한 방법으로 requester ID 추출 시도
+                  let requesterId = null;
+                  
+                  if (typeof req.requester === 'string') {
+                    requesterId = req.requester;
+                  } else if (typeof req.requester === 'object' && req.requester) {
+                    // populate된 객체에서 ID 추출 시도
+                    requesterId = req.requester._id || req.requester.id;
+                    
+                    // MongoDB ObjectId를 문자열로 변환
+                    if (requesterId && typeof requesterId === 'object' && requesterId.toString) {
+                      requesterId = requesterId.toString();
+                    }
+                  }
+                  
+                  const isMyRequest = req.status === 'pending' && 
+                    req.type === 'slot_swap' && 
+                    requesterId && 
+                    (requesterId === user?.id || 
+                     requesterId.toString() === user?.id?.toString());
+                  
+                  // 처음 몇 개만 로그 출력
+                  if (index < 2) {
+                    console.log('내 요청 체크 - 개선된 로직:', {
+                      requestId: req._id,
+                      requesterType: typeof req.requester,
+                      requester: req.requester,
+                      'req.requester._id': req.requester?._id,
+                      'req.requester.id': req.requester?.id,
+                      extractedRequesterId: requesterId,
+                      userId: user?.id,
+                      match: requesterId === user?.id,
+                      matchStr: requesterId?.toString() === user?.id?.toString(),
+                      isMyRequest
+                    });
+                  }
+                  
+                  return isMyRequest;
+                });
+                
+                console.log('내가 보낸 요청들:', myRequests);
+                
+                return myRequests.length > 0;
+              })() && (
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                    <Calendar size={16} className="mr-2 text-purple-600" />
+                    내가 보낸 교환 요청 ({(currentRoom.requests || []).filter(req => {
+                      const requesterId = req.requester?._id || req.requester?.id || req.requester;
+                      return req.status === 'pending' && req.type === 'slot_swap' && (requesterId === user?.id || requesterId?.toString() === user?.id?.toString());
+                    }).length}건)
+                  </h4>
+                  <div className="space-y-2">
+                    {(currentRoom.requests || []).filter(req => {
+                      const requesterId = req.requester?._id || req.requester?.id || req.requester;
+                      return req.status === 'pending' && req.type === 'slot_swap' && (requesterId === user?.id || requesterId?.toString() === user?.id?.toString());
+                    }).slice(0, 3).map((request, index) => {
+                      // 타겟 사용자 찾기
+                      const targetUser = currentRoom.members.find(member => 
+                        member.user._id === request.targetUserId || 
+                        member.user.id === request.targetUserId ||
+                        member.user._id?.toString() === request.targetUserId?.toString()
+                      );
+                      const targetUserData = targetUser?.user;
+                      const targetName = targetUserData?.name || `${targetUserData?.firstName || ''} ${targetUserData?.lastName || ''}`.trim() || '알 수 없음';
+                      
+                      return (
+                        <div key={request._id || index} className="p-2 bg-purple-50 border border-purple-200 rounded-lg">
+                          <div className="flex justify-between items-center mb-1">
+                            <div className="text-xs font-medium text-purple-900">→ {targetName}</div>
+                            <div className="text-xs text-purple-600">교환 요청 중</div>
+                          </div>
+                          <div className="text-xs text-purple-700 mb-2">
+                            {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime} 교환 요청
+                          </div>
+                          {request.message && (
+                            <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
+                          )}
+                          <div className="flex justify-end space-x-2 mt-2">
+                            <button
+                              onClick={() => handleRequest(request._id, 'rejected')}
+                              className="px-3 py-1 text-xs bg-red-500 text-white rounded-md hover:bg-red-600"
+                            >
+                              요청 취소
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {(currentRoom.requests || []).filter(req => {
+                      const requesterId = req.requester?._id || req.requester?.id || req.requester;
+                      return req.status === 'pending' && req.type === 'slot_swap' && (requesterId === user?.id || requesterId?.toString() === user?.id?.toString());
+                    }).length > 3 && (
+                      <div className="text-xs text-gray-500 text-center">
+                        +{(currentRoom.requests || []).filter(req => {
+                          const requesterId = req.requester?._id || req.requester?.id || req.requester;
+                          return req.status === 'pending' && req.type === 'slot_swap' && (requesterId === user?.id || requesterId?.toString() === user?.id?.toString());
+                        }).length - 3}개 더
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -384,6 +525,7 @@ const CoordinationTab = () => {
                 roomSettings={currentRoom.settings}
                 timeSlots={currentRoom.timeSlots || []}
                 members={currentRoom.members || []}
+                roomData={currentRoom}
                 onSlotSelect={setSelectedSlots}
                 currentUser={user}
                 isRoomOwner={isOwner}
@@ -557,7 +699,14 @@ const CoordinationTab = () => {
                 onClick={() => handleRoomClick(room)}
               >
                 <div className="flex justify-between items-start mb-3">
-                  <h4 className="text-lg font-bold text-gray-900 truncate pr-2">{translateEnglishDays(room.name)}</h4>
+                  <div className="flex items-center">
+                    <h4 className="text-lg font-bold text-gray-900 truncate pr-2">{translateEnglishDays(room.name)}</h4>
+                    {roomExchangeCounts[room._id] > 0 && (
+                      <span className="ml-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[20px] h-5 flex items-center justify-center">
+                        {roomExchangeCounts[room._id]}
+                      </span>
+                    )}
+                  </div>
                   <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${selectedTab === 'owned' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
                     {selectedTab === 'owned' ? '방장' : '멤버'}
                   </span>
