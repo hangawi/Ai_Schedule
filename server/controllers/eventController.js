@@ -208,16 +208,10 @@ exports.createEvent = async (req, res) => {
       const populatedEvent = await Event.findById(savedEvent._id).populate('participants.userId', 'name email');
 
 
-      const response = {
-         ...populatedEvent.toObject(),
-         color: color || 'blue',
-         ...(conflicts.length > 0 && {
-            warning: `${conflicts.length}개의 기존 일정과 시간이 겹칩니다.`,
-            conflicts: conflicts.map(c => ({ id: c._id, title: c.title, startTime: c.startTime })),
-         }),
-      };
+      const responseObject = populatedEvent.toJSON();
+      responseObject.color = color || 'blue';
 
-      res.status(201).json(response);
+      res.status(201).json(responseObject);
    } catch (err) {
       console.error('❌ 이벤트 생성 실패:', err.message);
       res.status(500).json({ msg: 'Server error', error: err.message });

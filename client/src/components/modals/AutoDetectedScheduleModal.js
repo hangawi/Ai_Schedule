@@ -225,29 +225,7 @@ const AutoDetectedScheduleModal = ({
                </div>
             )}
 
-            {/* 푸터 */}
-            <div className="sticky bottom-0 bg-gradient-to-t from-white to-transparent px-6 py-4 rounded-b-lg">
-               <div className="flex justify-between items-center">
-                  <div className="flex items-center text-xs text-gray-500">
-                     <Brain size={14} className="mr-1" />
-                     <span>AI가 자동으로 감지한 일정입니다</span>
-                  </div>
-                  <div className="flex space-x-2">
-                     <button
-                        onClick={() => detectedSchedules.forEach(onDismiss)}
-                        className="text-gray-600 hover:text-gray-800 text-sm font-medium px-3 py-1 rounded border hover:bg-gray-50"
-                     >
-                        모두 무시
-                     </button>
-                     <button
-                        onClick={onClose}
-                        className="bg-purple-600 text-white text-sm font-medium px-4 py-1 rounded hover:bg-purple-700"
-                     >
-                        닫기
-                     </button>
-                  </div>
-               </div>
-            </div>
+            
          </div>
 
          {/* 확인 다이얼로그 */}
