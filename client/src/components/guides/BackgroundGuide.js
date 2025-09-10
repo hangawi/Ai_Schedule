@@ -7,9 +7,9 @@ const BackgroundGuide = ({ onClose }) => {
    const steps = [
       {
          icon: <Info className="w-8 h-8 text-blue-500" />,
-         title: "백그라운드 자동 감지란?",
-         content: "AI가 항상 듣고 있다가 통화 중 일정 얘기가 나오면 자동으로 감지해서 캘린더에 등록해주는 기능입니다.",
-         tip: "버튼을 누를 필요가 없어요!"
+         title: "백그라운드 대화 녹음이란?",
+         content: "AI가 백그라운드에서 대화를 녹음하다가 일정 관련 얘기가 나오면 자동으로 요약해서 일정 추가를 제안하는 기능입니다.",
+         tip: "대화가 끝나면 자동으로 요약됩니다!"
       },
       {
          icon: <Mic className="w-8 h-8 text-green-500" />,
@@ -19,20 +19,20 @@ const BackgroundGuide = ({ onClose }) => {
       },
       {
          icon: <Phone className="w-8 h-8 text-red-500" />,
-         title: "통화 중 사용법",
-         content: "평소처럼 전화하시고 자연스럽게 일정 얘기를 하세요. 예: '내일 오후 2시에 강남역에서 만날까요?'",
-         tip: "AI가 자동으로 감지합니다"
+         title: "대화 중 사용법",
+         content: "친구와 얘기하거나 전화하면서 자연스럽게 일정 얘기를 하세요. 예: '어 내일 오후 4시 장어집? 알았어!'",
+         tip: "평소처럼 대화하면 됩니다"
       },
       {
          icon: <Brain className="w-8 h-8 text-purple-500" />,
          title: "AI가 감지하는 것들",
-         content: "• 날짜: 내일, 다음주 화요일, 3월 15일\n• 시간: 2시, 오후, 점심시간\n• 장소: 강남역, 카페, 회의실\n• 참석자: 김대리, 팀 전체",
-         tip: "구체적으로 말할수록 정확해요"
+         content: "• 날짜: 내일, 다음주 화요일, tuesday, 3월 15일\n• 시간: 4시, 오후, 점심시간\n• 장소: 장어집, 카페, 회의실\n• 참석자: 친구들, 팀원들",
+         tip: "tuesday는 자동으로 화요일로 변환됩니다"
       },
       {
          icon: <Calendar className="w-8 h-8 text-blue-500" />,
          title: "일정 등록",
-         content: "AI가 일정을 감지하면 보라색 모달이 뜹니다. 내용을 확인하고 '일정 등록' 버튼을 클릭하면 완료!",
+         content: "대화가 끝나면 AI가 대화 내용을 요약하고 일정 추가 여부를 묻는 모달이 나타납니다. 확인 후 등록하세요!",
          tip: "원하지 않으면 '무시' 클릭하세요"
       }
    ];

@@ -7,12 +7,11 @@ import CommandModal from './components/modals/CommandModal';
 import SharedTextModal from './components/modals/SharedTextModal';
 import CopiedTextModal from './components/modals/CopiedTextModal'; // Import the new modal
 import AutoDetectedScheduleModal from './components/modals/AutoDetectedScheduleModal';
-import BackgroundGuide from './components/BackgroundGuide';
-import MobileStatusIndicator from './components/MobileStatusIndicator';
+import BackgroundGuide from './components/guides/BackgroundGuide';
+import MobileStatusIndicator from './components/indicators/MobileStatusIndicator';
 import { useAuth } from './hooks/useAuth';
 import { useIntegratedVoiceSystem } from './hooks/useIntegratedVoiceSystem';
 import { useChat } from './hooks/useChat';
-// import { usePullToRefresh } from './hooks/usePullToRefresh'; // 임시 비활성화
 import { speak } from './utils';
 
 
@@ -47,6 +46,7 @@ function App() { // Trigger auto-deploy
    } = useIntegratedVoiceSystem(isLoggedIn, isVoiceRecognitionEnabled, eventActions, areEventActionsReady, setEventAddedKey, handleChatMessage);
    const [sharedText, setSharedText] = useState(null);
    const [copiedText, setCopiedText] = useState(null); // New state for copied text
+  const [isAnalyzing, setIsAnalyzing] = useState(false); // 분석 중 상태
    const [dismissedCopiedTexts, setDismissedCopiedTexts] = useState(() => {
       try {
          const saved = localStorage.getItem('dismissedCopiedTexts');
@@ -69,13 +69,6 @@ function App() { // Trigger auto-deploy
       return !localStorage.getItem('backgroundGuideShown');
    });
 
-   // Pull to refresh 기능 임시 비활성화 (버그 수정 후 재활성화)
-   // const handleRefresh = useCallback(async () => {
-   //    // 새로고침 중 로그 (제거됨)
-   //    // 페이지 새로고침
-   //    window.location.reload();
-   // }, []);
-   // const { isRefreshing } = usePullToRefresh(handleRefresh);
 
    // Effect for handling shared text from URL
    useEffect(() => {
@@ -84,6 +77,51 @@ function App() { // Trigger auto-deploy
       if (text) {
          setSharedText(text);
          window.history.replaceState({}, document.title, window.location.pathname);
+      }
+   }, []);
+
+   // Function to analyze clipboard content using LLM
+   const analyzeClipboard = useCallback(async (text) => {
+      try {
+         const token = localStorage.getItem('token');
+         if (!token) return false;
+
+         const response = await fetch(`${process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000'}/api/call-analysis/analyze-clipboard`, {
+            method: 'POST',
+            headers: {
+               'Content-Type': 'application/json',
+               'x-auth-token': token,
+            },
+            body: JSON.stringify({ text }),
+         });
+
+         if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.data.isScheduleRelated && data.data.confidence >= 0.5) {
+               return true;
+            }
+         }
+         return false;
+      } catch (error) {
+         // LLM 분석 실패시 개선된 패턴 매칭으로 폴백
+         const improvedPatterns = [
+            // 날짜 패턴
+            /(오늘|내일|모레|월요일|화요일|수요일|목요일|금요일|토요일|일요일|tuesday|다음주|이번주|저번주)/i,
+            // 시간 패턴  
+            /\d{1,2}:\d{2}/,
+            /\d{1,2}시/,
+            /(오전|오후|새벽|밤|점심|저녁|아침)/,
+            // 활동 패턴
+            /(약속|미팅|회의|모임|만남|식사|점심|저녁|영화|공연|콘서트|쇼핑)/,
+            // 장소 패턴
+            /(카페|식당|영화관|극장|백화점|마트|공원|집|사무실|학교|회사)/,
+            // 동사 패턴
+            /(보기|먹기|만나기|가기|하기|보러|먹으러|만나러|가러|하러)/
+         ];
+         
+         // 최소 2개 이상의 패턴이 매칭되어야 일정으로 판단
+         const matchCount = improvedPatterns.filter(pattern => pattern.test(text)).length;
+         return matchCount >= 2;
       }
    }, []);
 
@@ -143,37 +181,41 @@ function App() { // Trigger auto-deploy
          const minLength = 5; // 최소 텍스트 길이
          
          if (text && text.trim().length >= minLength && text !== sharedText && text !== copiedText && !dismissedCopiedTexts.has(text)) {
-            // 일정 키워드
-            const scheduleKeywords = [
-               '일정', '약속', '미팅', '회의', '모임', '만남', '식사', '점심', '저녁'
-            ];
+            // 즉시 모달 표시 (분석 중 상태)
+            setCopiedText(text);
+            setIsAnalyzing(true);
             
-            // 시간 관련 표현
-            const timePattern = /(\d{1,2}:\d{2}|\d{1,2}시|\d{1,2}분|\d{1,2}월\s*\d{1,2}일|\d{4}[-/]\d{1,2}[-/]\d{1,2}|오전|오후|새벽|밤)/;
-            
-            // 날짜 관련 표현
-            const datePattern = /(오늘|내일|모레|어제|이번주|다음주|월요일|화요일|수요일|목요일|금요일|토요일|일요일)/;
-            
-            const hasScheduleKeyword = scheduleKeywords.some(keyword => 
-               text.includes(keyword)
-            );
-            
-            const hasTimeExpression = timePattern.test(text);
-            const hasDateExpression = datePattern.test(text);
-            
-            // 다음 중 하나라도 만족하면 감지
-            // 1. 일정 키워드만 있어도 OK
-            // 2. 시간 표현 + 날짜 표현
-            // 3. 일정 키워드 + (시간 또는 날짜) 표현
-            if (hasScheduleKeyword || (hasTimeExpression && hasDateExpression) || (hasScheduleKeyword && (hasTimeExpression || hasDateExpression))) {
-               // 일정 관련 텍스트 감지됨
-               setCopiedText(text);
-            }
+            // 백그라운드에서 LLM 분석 수행
+            analyzeClipboard(text).then(isScheduleText => {
+               setIsAnalyzing(false);
+               if (!isScheduleText) {
+                  // 일정과 관련 없는 텍스트면 모달 숨김
+                  setCopiedText(null);
+                  // 다시 표시되지 않도록 취소 목록에 추가
+                  addToDismissedTexts(text);
+               }
+               // 일정 관련 텍스트면 모달은 그대로 유지
+            }).catch(error => {
+               console.error('클립보드 분석 오류:', error);
+               setIsAnalyzing(false);
+               // 분석 실패시 폴백으로 패턴 매칭 사용
+               const improvedPatterns = [
+                  /(오늘|내일|모레|월요일|화요일|수요일|목요일|금요일|토요일|일요일|tuesday|다음주|이번주)/i,
+                  /\d{1,2}:\d{2}|\d{1,2}시|(오전|오후|새벽|밤|점심|저녁|아침)/,
+                  /(약속|미팅|회의|모임|만남|식사|점심|저녁|영화|공연|콘서트|쇼핑|카페|식당|영화관)/,
+                  /(보기|먹기|만나기|가기|하기|보러|먹으러|만나러|가러|하러|보자|먹자|만나자|가자)/
+               ];
+               const matchCount = improvedPatterns.filter(pattern => pattern.test(text)).length;
+               if (matchCount < 2) {
+                  setCopiedText(null);
+                  addToDismissedTexts(text);
+               }
+            });
          }
       } catch (err) {
          // 클립보드 접근 실패
       }
-   }, [sharedText, copiedText, dismissedCopiedTexts]);
+   }, [sharedText, copiedText, dismissedCopiedTexts, analyzeClipboard]);
 
    // Effect for handling copied text - 복사 즉시 감지 가능하도록 개선
    useEffect(() => {
@@ -301,6 +343,7 @@ function App() { // Trigger auto-deploy
       // 취소한 텍스트를 Set에 추가해서 다시 표시되지 않도록 함
       addToDismissedTexts(text);
       setCopiedText(null);
+      setIsAnalyzing(false);
    };
 
    const handleCloseBackgroundGuide = () => {
@@ -338,6 +381,7 @@ function App() { // Trigger auto-deploy
          {isLoggedIn && copiedText && !sharedText && (
             <CopiedTextModal
                text={copiedText}
+               isAnalyzing={isAnalyzing}
                onClose={() => handleCloseCopiedText(copiedText)}
                onConfirm={handleConfirmCopiedText}
             />

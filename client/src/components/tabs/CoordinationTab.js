@@ -1,46 +1,54 @@
 import React, { useState, useEffect } from 'react';
-import TimetableGrid from './timetable/TimetableGrid';
-import RoomCreationModal from './modals/RoomCreationModal';
-import RoomJoinModal from './modals/RoomJoinModal';
-import RoomManagementModal from './modals/RoomManagementModal';
-import AssignSlotModal from './modals/AssignSlotModal';
-import RequestSlotModal from './modals/RequestSlotModal';
-import ChangeRequestModal from './modals/ChangeRequestModal';
-import { useCoordination } from '../hooks/useCoordination';
-import { useAuth } from '../hooks/useAuth';
+import TimetableGrid from '../timetable/TimetableGrid';
+import RoomCreationModal from '../modals/RoomCreationModal';
+import RoomJoinModal from '../modals/RoomJoinModal';
+import RoomManagementModal from '../modals/RoomManagementModal';
+import AssignSlotModal from '../modals/AssignSlotModal';
+import RequestSlotModal from '../modals/RequestSlotModal';
+import ChangeRequestModal from '../modals/ChangeRequestModal';
+import { useCoordination } from '../../hooks/useCoordination';
+import { useCoordinationModals } from '../../hooks/useCoordinationModals';
+import { useAuth } from '../../hooks/useAuth';
 import { Users, Calendar, PlusCircle, LogIn } from 'lucide-react';
+import { translateEnglishDays } from '../../utils';
 
+const dayMap = {
+  'monday': '월요일', 'tuesday': '화요일', 'wednesday': '수요일',
+  'thursday': '목요일', 'friday': '금요일', 'saturday': '토요일', 'sunday': '일요일'
+};
 
 const CoordinationTab = () => {
   const { user } = useAuth();
-  const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest, autoAssignSlots } = useCoordination(user?.id);
+  const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest } = useCoordination(user?.id);
+  
+  // Modal management hook
+  const {
+    showCreateRoomModal, showJoinRoomModal, showManageRoomModal,
+    showAssignModal, showRequestModal, showChangeRequestModal,
+    slotToAssign, slotToRequest, slotToChange,
+    openCreateRoomModal, closeCreateRoomModal,
+    openJoinRoomModal, closeJoinRoomModal,
+    openManageRoomModal, closeManageRoomModal,
+    openAssignModal, closeAssignModal,
+    openRequestModal, closeRequestModal,
+    openChangeRequestModal, closeChangeRequestModal
+  } = useCoordinationModals();
 
-  const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
-  const [showJoinRoomModal, setShowJoinRoomModal] = useState(false);
-  const [showManageRoomModal, setShowManageRoomModal] = useState(false);
   const [selectedSlots, setSelectedSlots] = useState([]);
   const [selectedTab, setSelectedTab] = useState('owned'); // 'owned' or 'joined'
-  
-  // Modal states for TimetableGrid
-  const [showAssignModal, setShowAssignModal] = useState(false);
-  const [slotToAssign, setSlotToAssign] = useState(null);
-  const [showRequestModal, setShowRequestModal] = useState(false);
-  const [slotToRequest, setSlotToRequest] = useState(null);
-  const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
-  const [slotToChange, setSlotToChange] = useState(null);
   
   // Days array for modal calculations
   const days = ['월요일', '화요일', '수요일', '목요일', '금요일'];
 
   const handleCreateRoom = async (roomData) => {
     await createRoom(roomData);
-    setShowCreateRoomModal(false);
+    closeCreateRoomModal();
     fetchMyRooms(); // Refresh the list of rooms after creation
   };
 
   const handleJoinRoom = async (inviteCode) => {
     await joinRoom(inviteCode);
-    setShowJoinRoomModal(false);
+    closeJoinRoomModal();
     fetchMyRooms(); // Refresh the list of rooms after joining
   };
 
@@ -74,10 +82,6 @@ const CoordinationTab = () => {
     // createRequest already refreshes room details if successful
   };
 
-  const handleAutoAssign = async () => {
-    if (!currentRoom) return;
-    await autoAssignSlots(currentRoom._id);
-  };
 
   const handleRoomClick = async (room) => {
     if (room._id) {
@@ -100,7 +104,7 @@ const CoordinationTab = () => {
 
   useEffect(() => {
     if (!currentRoom && showManageRoomModal) {
-      setShowManageRoomModal(false);
+      closeManageRoomModal();
     }
   }, [currentRoom, showManageRoomModal]);
 
@@ -159,8 +163,8 @@ const CoordinationTab = () => {
         <div className="bg-white p-6 rounded-xl shadow-lg mb-6 border border-gray-200">
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <h2 className="text-2xl font-bold text-gray-800">{currentRoom.name}</h2>
-              <p className="text-gray-500 mt-1">{currentRoom.description || '방 설명이 없습니다.'}</p>
+              <h2 className="text-2xl font-bold text-gray-800">{translateEnglishDays(currentRoom.name)}</h2>
+              <p className="text-gray-500 mt-1">{translateEnglishDays(currentRoom.description || '방 설명이 없습니다.')}</p>
               <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-600">
                 <div className="flex items-center"><strong className="mr-2">초대코드:</strong> <span className="font-mono bg-blue-50 text-blue-700 px-2 py-1 rounded">{currentRoom.inviteCode}</span></div>
                 <div className="flex items-center"><strong className="mr-2">방장:</strong> {isOwner ? (user.name || `${user.firstName} ${user.lastName}`) : (currentRoom.owner?.name || `${currentRoom.owner?.firstName || ''} ${currentRoom.owner?.lastName || ''}`.trim() || '알 수 없음')}</div>
@@ -168,12 +172,14 @@ const CoordinationTab = () => {
               </div>
             </div>
             {isOwner && (
-              <button
-                onClick={() => setShowManageRoomModal(true)}
-                className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
-              >
-                방 관리
-              </button>
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-1">
+                <button
+                  onClick={openManageRoomModal}
+                  className="px-4 py-2 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors font-medium shadow-sm"
+                >
+                  방 관리
+                </button>
+              </div>
             )}
           </div>
           
@@ -187,14 +193,6 @@ const CoordinationTab = () => {
                 선택 시간표 제출 ({selectedSlots.length}개)
               </button>
             )} 
-            {isOwner && (
-              <button
-                onClick={handleAutoAssign}
-                className="px-5 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
-              >
-                자동 배정
-              </button>
-            )}
             <button
               onClick={() => setCurrentRoom(null)}
               className="px-5 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors shadow-sm"
@@ -229,28 +227,41 @@ const CoordinationTab = () => {
                     <div
                       key={memberData._id || index}
                       className={`flex items-center p-3 rounded-lg border ${
-                        isCurrentUser ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
+                        memberIsOwner 
+                          ? 'bg-red-50 border-red-200 ring-2 ring-red-100' 
+                          : isCurrentUser 
+                            ? 'bg-blue-50 border-blue-200' 
+                            : 'bg-gray-50 border-gray-200'
                       }`}
                     >
                       <div
-                        className="w-4 h-4 rounded-full mr-3 flex-shrink-0"
+                        className={`w-5 h-5 rounded-full mr-3 flex-shrink-0 ${
+                          memberIsOwner ? 'ring-2 ring-red-300' : ''
+                        }`}
                         style={{ backgroundColor: member.color || '#6B7280' }}
                       ></div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center">
                           <span className={`text-sm font-medium truncate ${
-                            isCurrentUser ? 'text-blue-900' : 'text-gray-900'
+                            memberIsOwner 
+                              ? 'text-red-900 font-bold' 
+                              : isCurrentUser 
+                                ? 'text-blue-900' 
+                                : 'text-gray-900'
                           }`}>
+                            {memberIsOwner && '👑 '}
                             {memberName}
                             {isCurrentUser && ' (나)'}
                           </span>
                           {memberIsOwner && (
-                            <span className="ml-2 px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded-full flex-shrink-0">
+                            <span className="ml-2 px-2 py-0.5 text-xs bg-red-100 text-red-800 rounded-full flex-shrink-0 font-semibold">
                               방장
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">
+                        <div className={`text-xs mt-1 ${
+                          memberIsOwner ? 'text-red-600' : 'text-gray-500'
+                        }`}>
                           {new Date(member.joinedAt || new Date()).toLocaleDateString('ko-KR')} 참여
                         </div>
                       </div>
@@ -278,7 +289,7 @@ const CoordinationTab = () => {
                             <div className="text-xs text-orange-600">{request.type === 'time_request' ? '시간 요청' : '시간 변경'}</div>
                           </div>
                           <div className="text-xs text-orange-700 mb-2">
-                            {request.timeSlot?.day} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+                            {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
                           </div>
                           {request.message && (
                             <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
@@ -328,7 +339,7 @@ const CoordinationTab = () => {
                             <div className="text-xs text-blue-600">교환 요청</div>
                           </div>
                           <div className="text-xs text-blue-700 mb-2">
-                            {request.timeSlot?.day} {request.timeSlot?.startTime}-{request.timeSlot?.endTime} 교환
+                            {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime} 교환
                           </div>
                           {request.message && (
                             <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
@@ -387,6 +398,7 @@ const CoordinationTab = () => {
                   await fetchRoomDetails(currentRoom._id);
                 }}
                 selectedSlots={selectedSlots}
+                calculateEndTime={calculateEndTime}
               />
             </div>
           </div>
@@ -394,7 +406,7 @@ const CoordinationTab = () => {
         {showManageRoomModal && currentRoom && (
           <RoomManagementModal
             room={currentRoom}
-            onClose={() => setShowManageRoomModal(false)}
+            onClose={closeManageRoomModal}
             updateRoom={updateRoom}
             deleteRoom={deleteRoom}
             onRoomUpdated={(updatedRoom) => {
@@ -405,7 +417,7 @@ const CoordinationTab = () => {
         )}
         {showAssignModal && slotToAssign && (
           <AssignSlotModal
-            onClose={() => setShowAssignModal(false)}
+            onClose={closeAssignModal}
             onAssign={(memberId) => {
               handleAssignSlot({
                 roomId: currentRoom._id,
@@ -414,8 +426,7 @@ const CoordinationTab = () => {
                 endTime: calculateEndTime(slotToAssign.time),
                 userId: memberId
               });
-              setShowAssignModal(false);
-              setSlotToAssign(null);
+              closeAssignModal();
             }}
             slotInfo={slotToAssign}
             members={currentRoom.members}
@@ -423,7 +434,7 @@ const CoordinationTab = () => {
         )}
         {showRequestModal && slotToRequest && (
           <RequestSlotModal
-            onClose={() => setShowRequestModal(false)}
+            onClose={closeRequestModal}
             onRequest={(message) => {
               handleRequestSlot({
                 roomId: currentRoom._id,
@@ -435,15 +446,14 @@ const CoordinationTab = () => {
                 },
                 message: message
               });
-              setShowRequestModal(false);
-              setSlotToRequest(null);
+              closeRequestModal();
             }}
             slotInfo={slotToRequest}
           />
         )}
         {showChangeRequestModal && slotToChange && (
           <ChangeRequestModal
-            onClose={() => setShowChangeRequestModal(false)}
+            onClose={closeChangeRequestModal}
             onRequestChange={(message) => {
               let requestData;
 
@@ -468,6 +478,7 @@ const CoordinationTab = () => {
                     endTime: calculateEndTime(slotToChange.time),
                   },
                   targetUserId: slotToChange.targetUserId,
+                  targetSlot: slotToChange.targetSlot, // <--- ADD THIS LINE
                   message: message || '시간 교환을 요청합니다.',
                 };
               } else {
@@ -490,8 +501,7 @@ const CoordinationTab = () => {
                 };
               }
               handleRequestSlot(requestData);
-              setShowChangeRequestModal(false);
-              setSlotToChange(null);
+              closeChangeRequestModal();
             }}
             slotToChange={slotToChange}
           />
@@ -506,14 +516,14 @@ const CoordinationTab = () => {
         <h2 className="text-3xl font-bold text-gray-800 mb-2 sm:mb-0">일정 맞추기</h2>
         <div className="flex space-x-3">
           <button
-            onClick={() => setShowCreateRoomModal(true)}
+            onClick={openCreateRoomModal}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center transition-all shadow-md hover:shadow-lg"
           >
             <PlusCircle size={18} className="mr-2" />
             새 조율방 생성
           </button>
           <button
-            onClick={() => setShowJoinRoomModal(true)}
+            onClick={openJoinRoomModal}
             className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 flex items-center transition-all shadow-md hover:shadow-lg"
           >
             <LogIn size={18} className="mr-2" />
@@ -547,13 +557,13 @@ const CoordinationTab = () => {
                 onClick={() => handleRoomClick(room)}
               >
                 <div className="flex justify-between items-start mb-3">
-                  <h4 className="text-lg font-bold text-gray-900 truncate pr-2">{room.name}</h4>
+                  <h4 className="text-lg font-bold text-gray-900 truncate pr-2">{translateEnglishDays(room.name)}</h4>
                   <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${selectedTab === 'owned' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
                     {selectedTab === 'owned' ? '방장' : '멤버'}
                   </span>
                 </div>
                 {room.description && (
-                  <p className="text-gray-600 text-sm mb-4 h-10 line-clamp-2">{room.description}</p>
+                  <p className="text-gray-600 text-sm mb-4 h-10 line-clamp-2">{translateEnglishDays(room.description)}</p>
                 )}
                 <div className="space-y-2 text-sm text-gray-700 border-t pt-4 mt-4">
                   <div className="flex items-center"><Users size={14} className="mr-2 text-gray-400"/><span>멤버: {room.memberCount || room.members?.length || 0} / {room.maxMembers}명</span></div>
@@ -576,10 +586,10 @@ const CoordinationTab = () => {
       )}
 
       {showCreateRoomModal && (
-        <RoomCreationModal onClose={() => setShowCreateRoomModal(false)} onCreateRoom={handleCreateRoom} />
+        <RoomCreationModal onClose={closeCreateRoomModal} onCreateRoom={handleCreateRoom} />
       )}
       {showJoinRoomModal && (
-        <RoomJoinModal onClose={() => setShowJoinRoomModal(false)} onJoinRoom={handleJoinRoom} />
+        <RoomJoinModal onClose={closeJoinRoomModal} onJoinRoom={handleJoinRoom} />
       )}
     </div>
   );

@@ -13,4 +13,9 @@ router.post('/analyze', auth, callAnalysisController.analyzeCallTranscript);
 // @access  Private
 router.post('/detect-keywords', auth, callAnalysisController.detectScheduleKeywords);
 
+// @route   POST /api/call-analysis/analyze-clipboard
+// @desc    클립보드 텍스트 분석
+// @access  Private
+router.post('/analyze-clipboard', auth, callAnalysisController.analyzeClipboardText);
+
 module.exports = router;

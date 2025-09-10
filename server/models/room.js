@@ -90,23 +90,7 @@ const RoomSchema = new mongoose.Schema({
     },
     color: {
       type: String,
-      default: function() {
-        // Generate a consistent color based on the user's ID
-        if (!this.user) {
-            // 방장 색상(#FF6B6B)을 제외한 색상 배열
-            const colors = ['#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'];
-            return colors[Math.floor(Math.random() * colors.length)];
-        }
-        // 방장 색상(#FF6B6B)을 제외한 색상 배열
-        const colors = ['#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'];
-        const userIdString = this.user.toString();
-        let hash = 0;
-        for (let i = 0; i < userIdString.length; i++) {
-            hash = userIdString.charCodeAt(i) + ((hash << 5) - hash);
-        }
-        const index = Math.abs(hash % colors.length);
-        return colors[index];
-      }
+      default: '#6B7280' // 기본 회색, 실제 색상은 방에 참가할 때 동적으로 할당
     }
   }],
   inviteCode: {
@@ -182,7 +166,7 @@ RoomSchema.pre('save', function(next) {
   if (this.isNew && this.members.length === 0) {
     this.members.push({ 
       user: this.owner,
-      color: '#FF6B6B' // 방장은 항상 빨간색
+      color: '#DC2626' // 방장은 항상 진한 빨간색으로 구분
     });
   }
   next();

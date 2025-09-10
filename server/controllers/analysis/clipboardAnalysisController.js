@@ -311,7 +311,7 @@ function analyzeWithKeywords(text, res) {
       }
       
       if (/영화/i.test(translatedText)) {
-         extractedInfo.title = '영화 보기';
+         extractedInfo.title = '영화';
          extractedInfo.description = '영화 관람 약속';
       }
    }
