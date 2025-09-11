@@ -8,7 +8,6 @@ import SharedTextModal from './components/modals/SharedTextModal';
 import CopiedTextModal from './components/modals/CopiedTextModal';
 import AutoDetectedScheduleModal from './components/modals/AutoDetectedScheduleModal';
 import BackgroundGuide from './components/guides/BackgroundGuide';
-import MobileStatusIndicator from './components/indicators/MobileStatusIndicator';
 import { useAuth } from './hooks/useAuth';
 import { useIntegratedVoiceSystem } from './hooks/useIntegratedVoiceSystem';
 import { useChat } from './hooks/useChat';
@@ -152,8 +151,10 @@ function App() {
       isLoggedIn, user, handleLogout, isListening, eventAddedKey,
       setEventActions, setAreEventActionsReady, isVoiceRecognitionEnabled,
       setIsVoiceRecognitionEnabled: handleToggleVoiceRecognition, loginMethod,
-      isBackgroundMonitoring, isCallDetected, toggleBackgroundMonitoring
-   }), [isLoggedIn, user, handleLogout, isListening, eventAddedKey, isVoiceRecognitionEnabled, handleToggleVoiceRecognition, loginMethod, isBackgroundMonitoring, isCallDetected, toggleBackgroundMonitoring]);
+      isBackgroundMonitoring, isCallDetected, toggleBackgroundMonitoring,
+      voiceStatus, 
+      isAnalyzing: voiceAnalyzing
+   }), [isLoggedIn, user, handleLogout, isListening, eventAddedKey, isVoiceRecognitionEnabled, handleToggleVoiceRecognition, loginMethod, isBackgroundMonitoring, isCallDetected, toggleBackgroundMonitoring, voiceStatus, voiceAnalyzing]);
 
    const handleConfirmSharedText = (text) => {
       handleChatMessage(`다음 내용으로 일정 추가: ${text}`);
@@ -202,14 +203,6 @@ function App() {
             />
          )}
          {isLoggedIn && showBackgroundGuide && <BackgroundGuide onClose={handleCloseBackgroundGuide} />}
-         {isLoggedIn && (
-            <MobileStatusIndicator 
-               isBackgroundMonitoring={isBackgroundMonitoring}
-               isCallDetected={isCallDetected}
-               voiceStatus={voiceStatus}
-               isAnalyzing={voiceAnalyzing}
-            />
-         )}
       </Router>
    );
 }

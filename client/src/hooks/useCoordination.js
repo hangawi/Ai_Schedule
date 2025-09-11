@@ -157,7 +157,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
         throw err; // 다른 에러만 throw
       }
     }
-  }, [fetchRoomDetails, onRefreshExchangeCount]);
+  }, [fetchRoomDetails, onRefreshExchangeCount, onRefreshSentRequests]);
 
   const handleRequest = useCallback(async (requestId, action) => {
     setError(null);
