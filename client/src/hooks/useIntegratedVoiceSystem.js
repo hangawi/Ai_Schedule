@@ -13,26 +13,32 @@ export const useIntegratedVoiceSystem = (
 ) => {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
+  const [isCommandProcessing, setIsCommandProcessing] = useState(false);
 
   const { getStream, stopStream } = useSharedAudioStream();
 
   const {
     isBackgroundMonitoring,
     processTranscript,
-    voiceStatus,
-    isAnalyzing,
+    voiceStatus: backgroundVoiceStatus, // Rename to avoid conflict
+    isAnalyzing: isBackgroundAnalyzing, // Rename to avoid conflict
     ...backgroundMonitoringProps
   } = useBackgroundMonitoring(eventActions, setEventAddedKey);
+
+  const handleCommandStart = useCallback(() => setIsCommandProcessing(true), []);
+  const handleCommandEnd = useCallback(() => setIsCommandProcessing(false), []);
 
   const {
     modalText,
     setModalText,
     handleVoiceResult,
-  } = useVoiceCommands(isLoggedIn, isVoiceRecognitionEnabled, handleChatMessage, setEventAddedKey);
+  } = useVoiceCommands(isLoggedIn, isVoiceRecognitionEnabled, handleChatMessage, {
+    onCommandStart: handleCommandStart,
+    onCommandEnd: handleCommandEnd,
+  });
 
   const isMountedRef = useRef(true);
 
-  // Refs to hold the latest values to avoid stale closures in event handlers
   const isBackgroundMonitoringRef = useRef(isBackgroundMonitoring);
   const isVoiceRecognitionEnabledRef = useRef(isVoiceRecognitionEnabled);
   const processTranscriptRef = useRef(processTranscript);
@@ -106,7 +112,7 @@ export const useIntegratedVoiceSystem = (
     } catch (error) {
       console.error("Error starting recognition: ", error);
     }
-  }, [getStream]);
+  }, [getStream, handleVoiceResult]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -131,6 +137,10 @@ export const useIntegratedVoiceSystem = (
       stopStream();
     };
   }, [stopStream]);
+
+  // Determine the final status to display
+  const voiceStatus = isCommandProcessing ? 'command' : backgroundVoiceStatus;
+  const isAnalyzing = isCommandProcessing || isBackgroundAnalyzing;
 
   return { 
     isListening, 
