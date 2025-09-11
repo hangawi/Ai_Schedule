@@ -86,12 +86,6 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
       return;
     }
 
-    // 비서야 명령어는 백그라운드에서 제외 (음성 명령 전용)
-    const normalizedTranscript = transcript.toLowerCase().replace(/[~!\?\.]/g, '');
-    if (normalizedTranscript.includes('비서야') || normalizedTranscript.includes('비서')) {
-      return; // 백그라운드 모니터링에서 제외
-    }
-
     // 첫 번째 음성 감지 시에만 "녹음중"으로 변경
     if (!isCallDetected) {
       setIsCallDetected(true);
