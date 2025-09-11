@@ -187,30 +187,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     }
   }, [currentRoom, showManageRoomModal]);
 
-  // 실시간 업데이트를 위한 폴링
-  useEffect(() => {
-    const updateInterval = setInterval(async () => {
-      try {
-        // 보낸 요청 목록 강제 업데이트
-        await loadSentRequests();
-        // 교환 요청 수 강제 업데이트
-        await loadRoomExchangeCounts();
-        
-        // 현재 방이 있으면 방 정보도 업데이트
-        if (currentRoom) {
-          await fetchRoomDetails(currentRoom._id, true);
-        }
-      } catch (error) {
-        // 조용히 실패 처리
-      }
-    }, 3000); // 3초마다 업데이트
-
-    // 즉시 한 번 실행
-    loadSentRequests();
-    loadRoomExchangeCounts();
-
-    return () => clearInterval(updateInterval);
-  }, [currentRoom, fetchRoomDetails, loadSentRequests, loadRoomExchangeCounts]);
+  // 실시간 업데이트 제거 (요청 처리 후에만 수동 업데이트)
 
   if (isLoading) {
     return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div></div>;

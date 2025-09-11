@@ -22,7 +22,7 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
     const transcriptToAnalyze = transcriptBufferRef.current;
     transcriptBufferRef.current = ''; // Clear buffer immediately
     
-    if (!transcriptToAnalyze || transcriptToAnalyze.length < 20) { // Shorter threshold
+    if (!transcriptToAnalyze || transcriptToAnalyze.length < 10) { // 더 짧은 임계값
       setBackgroundTranscript('');
       setVoiceStatus('waiting');
       return;
@@ -86,6 +86,12 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
       return;
     }
 
+    // 비서야 명령어는 백그라운드에서 제외 (음성 명령 전용)
+    const normalizedTranscript = transcript.toLowerCase().replace(/[~!\?\.]/g, '');
+    if (normalizedTranscript.includes('비서야') || normalizedTranscript.includes('비서')) {
+      return; // 백그라운드 모니터링에서 제외
+    }
+
     // 첫 번째 음성 감지 시에만 "녹음중"으로 변경
     if (!isCallDetected) {
       setIsCallDetected(true);
@@ -104,18 +110,18 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
       clearTimeout(silenceTimeoutRef.current);
     }
 
-    // 5초 침묵 감지 타이머 설정 (더 안정적인 감지를 위해 늘림)
+    // 3초 침묵 감지 타이머 설정 (빠른 요약을 위해)
     silenceTimeoutRef.current = setTimeout(() => {
       setVoiceStatus('ending');
       
-      // 1초 후 분석 시작 (UI에서 "녹음종료" 상태를 보여주기 위해)
+      // 즉시 분석 시작 (빠른 요약)
       setTimeout(() => {
         setIsCallDetected(false);
         setCallStartTime(null);
         analyzeFullTranscript(); 
-      }, 1000); // 1초 후 분석 시작
+      }, 500); // 0.5초 후 즉시 분석
       
-    }, 5000); // 5초로 늘림
+    }, 3000); // 3초로 단축
     
   }, [isBackgroundMonitoring, isCallDetected, analyzeFullTranscript]);
 
