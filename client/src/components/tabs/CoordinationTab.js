@@ -40,6 +40,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [roomExchangeCounts, setRoomExchangeCounts] = useState({}); // 방별 교환요청 수
   const [sentRequests, setSentRequests] = useState([]); // 보낸 요청 내역
   
+  // 새로운 UI 상태들
+  const [requestViewMode, setRequestViewMode] = useState('received'); // 'received' or 'sent'
+  const [showAllRequests, setShowAllRequests] = useState({}); // 각 섹션별 전체 보기 상태
+  const [expandedSections, setExpandedSections] = useState({}); // 각 섹션별 확장 상태
+  
   // Days array for modal calculations
   const days = ['월요일', '화요일', '수요일', '목요일', '금요일'];
   
@@ -508,55 +513,282 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 </div>
               )}
               
-              {/* 전체 보낸 요청 내역 (모든 방) */}
-              {sentRequests.length > 0 && (
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                    <Users size={16} className="mr-2 text-purple-600" />
-                    내가 보낸 요청 내역 ({sentRequests.length}건)
+              {/* 교환요청 관리 섹션 */}
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-md font-semibold text-gray-800 flex items-center">
+                    <Users size={16} className="mr-2 text-blue-600" />
+                    교환요청 관리
                   </h4>
-                  <div className="space-y-2">
-                    {sentRequests.slice(0, 5).map((request, index) => (
-                      <div key={request._id || index} className="p-2 bg-purple-50 border border-purple-200 rounded-lg">
-                        <div className="flex justify-between items-center mb-1">
-                          <div className="text-xs font-medium text-purple-900">{request.roomName}</div>
-                          <div className="flex items-center space-x-2">
-                            <div className={`text-xs px-2 py-1 rounded-full ${
-                              request.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                              request.status === 'approved' ? 'bg-green-100 text-green-800' :
-                              'bg-red-100 text-red-800'
-                            }`}>
-                              {request.status === 'pending' ? '대기중' :
-                               request.status === 'approved' ? '승인됨' : '거절됨'}
-                            </div>
-                            <div className="text-xs text-purple-600">
-                              {request.type === 'slot_swap' ? '교환 요청' :
-                               request.type === 'time_request' ? '시간 요청' : '시간 변경'}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-xs text-purple-700 mb-2">
-                          {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
-                          {request.type === 'slot_swap' && request.targetSlot && (
-                            <span> ↔ {(dayMap[request.targetSlot?.day.toLowerCase()] || request.targetSlot?.day)} {request.targetSlot?.startTime}-{request.targetSlot?.endTime}</span>
+                  <div className="flex bg-gray-100 rounded-lg p-1">
+                    <button
+                      onClick={() => setRequestViewMode('received')}
+                      className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                        requestViewMode === 'received' 
+                          ? 'bg-blue-500 text-white' 
+                          : 'text-gray-600 hover:text-gray-800'
+                      }`}
+                    >
+                      받은 요청
+                    </button>
+                    <button
+                      onClick={() => setRequestViewMode('sent')}
+                      className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                        requestViewMode === 'sent' 
+                          ? 'bg-blue-500 text-white' 
+                          : 'text-gray-600 hover:text-gray-800'
+                      }`}
+                    >
+                      보낸 요청
+                    </button>
+                  </div>
+                </div>
+
+                {requestViewMode === 'received' && (
+                  <div>
+                    {/* 대기 중인 받은 요청 */}
+                    {(currentRoom.requests || []).filter(req => req.status === 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length > 0 && (
+                      <div className="mb-4">
+                        <h5 className="text-sm font-medium text-gray-700 mb-2">대기 중인 요청</h5>
+                        <div className="space-y-2">
+                          {(currentRoom.requests || [])
+                            .filter(req => req.status === 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString()))
+                            .slice(0, showAllRequests['receivedPending'] ? undefined : 3)
+                            .map((request, index) => {
+                              const requesterData = request.requester;
+                              const requesterName = requesterData?.name || `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
+                              
+                              return (
+                                <div key={request._id || index} className="p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                                  <div className="flex justify-between items-center mb-1">
+                                    <div className="text-xs font-medium text-blue-900">{requesterName}</div>
+                                    <div className="text-xs text-blue-600">
+                                      {request.type === 'slot_swap' ? '교환 요청' : request.type === 'time_request' ? '시간 요청' : '시간 변경'}
+                                    </div>
+                                  </div>
+                                  <div className="text-xs text-blue-700 mb-2">
+                                    {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+                                    {request.type === 'slot_swap' && request.targetSlot && (
+                                      <span> ↔ {(dayMap[request.targetSlot?.day.toLowerCase()] || request.targetSlot?.day)} {request.targetSlot?.startTime}-{request.targetSlot?.endTime}</span>
+                                    )}
+                                  </div>
+                                  {request.message && (
+                                    <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
+                                  )}
+                                  <div className="flex justify-end space-x-2 mt-2">
+                                    <button
+                                      onClick={() => handleRequest(request._id, 'approved')}
+                                      className="px-3 py-1 text-xs bg-green-500 text-white rounded-md hover:bg-green-600"
+                                    >
+                                      승인
+                                    </button>
+                                    <button
+                                      onClick={() => handleRequest(request._id, 'rejected')}
+                                      className="px-3 py-1 text-xs bg-red-500 text-white rounded-md hover:bg-red-600"
+                                    >
+                                      거절
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          {(currentRoom.requests || []).filter(req => req.status === 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length > 3 && !showAllRequests['receivedPending'] && (
+                            <button
+                              onClick={() => setShowAllRequests(prev => ({...prev, receivedPending: true}))}
+                              className="text-xs text-blue-500 hover:text-blue-600 text-center w-full"
+                            >
+                              +{(currentRoom.requests || []).filter(req => req.status === 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length - 3}개 더 보기
+                            </button>
                           )}
                         </div>
-                        {request.message && (
-                          <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
-                        )}
-                        <div className="text-xs text-gray-500">
-                          {new Date(request.createdAt).toLocaleDateString('ko-KR')} {new Date(request.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
                       </div>
-                    ))}
-                    {sentRequests.length > 5 && (
-                      <div className="text-xs text-gray-500 text-center">
-                        +{sentRequests.length - 5}개 더
+                    )}
+
+                    {/* 처리된 받은 요청 */}
+                    {(currentRoom.requests || []).filter(req => req.status !== 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length > 0 && (
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <h5 className="text-sm font-medium text-gray-700">처리된 요청</h5>
+                          <button
+                            onClick={() => setExpandedSections(prev => ({...prev, receivedProcessed: !prev.receivedProcessed}))}
+                            className="text-xs text-gray-500 hover:text-gray-700"
+                          >
+                            {expandedSections['receivedProcessed'] ? '접기' : '펼치기'}
+                          </button>
+                        </div>
+                        {expandedSections['receivedProcessed'] && (
+                          <div className="space-y-2">
+                            {(currentRoom.requests || [])
+                              .filter(req => req.status !== 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString()))
+                              .slice(0, showAllRequests['receivedProcessed'] ? undefined : 3)
+                              .map((request, index) => {
+                                const requesterData = request.requester;
+                                const requesterName = requesterData?.name || `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
+                                
+                                return (
+                                  <div key={request._id || index} className={`p-2 border rounded-lg ${
+                                    request.status === 'approved' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                                  }`}>
+                                    <div className="flex justify-between items-center mb-1">
+                                      <div className={`text-xs font-medium ${
+                                        request.status === 'approved' ? 'text-green-900' : 'text-red-900'
+                                      }`}>{requesterName}</div>
+                                      <div className={`text-xs px-2 py-1 rounded-full ${
+                                        request.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                      }`}>
+                                        {request.status === 'approved' ? '승인됨' : '거절됨'}
+                                      </div>
+                                    </div>
+                                    <div className={`text-xs mb-2 ${
+                                      request.status === 'approved' ? 'text-green-700' : 'text-red-700'
+                                    }`}>
+                                      {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            {(currentRoom.requests || []).filter(req => req.status !== 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length > 3 && !showAllRequests['receivedProcessed'] && (
+                              <button
+                                onClick={() => setShowAllRequests(prev => ({...prev, receivedProcessed: true}))}
+                                className="text-xs text-gray-500 hover:text-gray-600 text-center w-full"
+                              >
+                                +{(currentRoom.requests || []).filter(req => req.status !== 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length - 3}개 더 보기
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                </div>
-              )}
+                )}
+
+                {requestViewMode === 'sent' && (
+                  <div>
+                    {/* 현재 방의 보낸 요청만 필터링 */}
+                    {(() => {
+                      const currentRoomSentRequests = sentRequests.filter(req => req.roomId === currentRoom._id);
+                      const pendingRequests = currentRoomSentRequests.filter(req => req.status === 'pending');
+                      const processedRequests = currentRoomSentRequests.filter(req => req.status !== 'pending');
+
+                      return (
+                        <>
+                          {/* 대기 중인 보낸 요청 */}
+                          {pendingRequests.length > 0 && (
+                            <div className="mb-4">
+                              <h5 className="text-sm font-medium text-gray-700 mb-2">대기 중인 요청</h5>
+                              <div className="space-y-2">
+                                {pendingRequests
+                                  .slice(0, showAllRequests['sentPending'] ? undefined : 3)
+                                  .map((request, index) => (
+                                    <div key={request._id || index} className="p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                      <div className="flex justify-between items-center mb-1">
+                                        <div className="text-xs font-medium text-yellow-900">
+                                          {request.type === 'slot_swap' ? '교환 요청' : request.type === 'time_request' ? '시간 요청' : '시간 변경'}
+                                        </div>
+                                        <div className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800">
+                                          대기중
+                                        </div>
+                                      </div>
+                                      <div className="text-xs text-yellow-700 mb-2">
+                                        {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+                                        {request.type === 'slot_swap' && request.targetSlot && (
+                                          <span> ↔ {(dayMap[request.targetSlot?.day.toLowerCase()] || request.targetSlot?.day)} {request.targetSlot?.startTime}-{request.targetSlot?.endTime}</span>
+                                        )}
+                                      </div>
+                                      {request.message && (
+                                        <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
+                                      )}
+                                      <div className="flex justify-end">
+                                        <button
+                                          onClick={() => {/* TODO: 취소 기능 구현 */}}
+                                          className="px-3 py-1 text-xs bg-gray-500 text-white rounded-md hover:bg-gray-600"
+                                        >
+                                          취소
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                {pendingRequests.length > 3 && !showAllRequests['sentPending'] && (
+                                  <button
+                                    onClick={() => setShowAllRequests(prev => ({...prev, sentPending: true}))}
+                                    className="text-xs text-yellow-600 hover:text-yellow-700 text-center w-full"
+                                  >
+                                    +{pendingRequests.length - 3}개 더 보기
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 처리된 보낸 요청 */}
+                          {processedRequests.length > 0 && (
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <h5 className="text-sm font-medium text-gray-700">처리된 요청</h5>
+                                <button
+                                  onClick={() => setExpandedSections(prev => ({...prev, sentProcessed: !prev.sentProcessed}))}
+                                  className="text-xs text-gray-500 hover:text-gray-700"
+                                >
+                                  {expandedSections['sentProcessed'] ? '접기' : '펼치기'}
+                                </button>
+                              </div>
+                              {expandedSections['sentProcessed'] && (
+                                <div className="space-y-2">
+                                  {processedRequests
+                                    .slice(0, showAllRequests['sentProcessed'] ? undefined : 3)
+                                    .map((request, index) => (
+                                      <div key={request._id || index} className={`p-2 border rounded-lg ${
+                                        request.status === 'approved' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                                      }`}>
+                                        <div className="flex justify-between items-center mb-1">
+                                          <div className={`text-xs font-medium ${
+                                            request.status === 'approved' ? 'text-green-900' : 'text-red-900'
+                                          }`}>
+                                            {request.type === 'slot_swap' ? '교환 요청' : request.type === 'time_request' ? '시간 요청' : '시간 변경'}
+                                          </div>
+                                          <div className="flex items-center space-x-2">
+                                            <div className={`text-xs px-2 py-1 rounded-full ${
+                                              request.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                            }`}>
+                                              {request.status === 'approved' ? '승인됨' : '거절됨'}
+                                            </div>
+                                            <button
+                                              onClick={() => {/* TODO: 내역 삭제 기능 구현 */}}
+                                              className="text-xs text-gray-400 hover:text-red-500"
+                                              title="내역 삭제"
+                                            >
+                                              ✕
+                                            </button>
+                                          </div>
+                                        </div>
+                                        <div className={`text-xs mb-2 ${
+                                          request.status === 'approved' ? 'text-green-700' : 'text-red-700'
+                                        }`}>
+                                          {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+                                        </div>
+                                        <div className="text-xs text-gray-500">
+                                          {new Date(request.createdAt).toLocaleDateString('ko-KR')} {new Date(request.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  {processedRequests.length > 3 && !showAllRequests['sentProcessed'] && (
+                                    <button
+                                      onClick={() => setShowAllRequests(prev => ({...prev, sentProcessed: true}))}
+                                      className="text-xs text-gray-500 hover:text-gray-600 text-center w-full"
+                                    >
+                                      +{processedRequests.length - 3}개 더 보기
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
