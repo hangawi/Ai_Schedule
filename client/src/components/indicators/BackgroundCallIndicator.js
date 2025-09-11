@@ -16,6 +16,8 @@ const BackgroundCallIndicator = ({
       }
 
       switch (voiceStatus) {
+         case 'command':
+            return { text: '명령 처리 중...', color: 'text-blue-600' };
          case 'recording':
             return { text: '녹음 중', color: 'text-red-600' };
          case 'ending':

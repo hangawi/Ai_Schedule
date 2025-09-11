@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { speak } from '../utils';
 
-export const useVoiceCommands = (isLoggedIn, isVoiceRecognitionEnabled, handleChatMessage) => {
+export const useVoiceCommands = (isLoggedIn, isVoiceRecognitionEnabled, handleChatMessage, { onCommandStart, onCommandEnd }) => {
   const [modalText, setModalText] = useState('');
   const listeningModeRef = useRef('hotword');
 
@@ -19,6 +19,8 @@ export const useVoiceCommands = (isLoggedIn, isVoiceRecognitionEnabled, handleCh
 
     setModalText(`"${command}" 처리 중...`);
 
+    if (onCommandStart) onCommandStart();
+
     try {
       const result = await handleChatMessage(command);
       speak(result.message);
@@ -26,8 +28,9 @@ export const useVoiceCommands = (isLoggedIn, isVoiceRecognitionEnabled, handleCh
       speak(`음성 명령 처리에 실패했습니다. ${error.message}`);
     } finally {
       setModalText('');
+      if (onCommandEnd) onCommandEnd();
     }
-  }, [isLoggedIn, isVoiceRecognitionEnabled, handleChatMessage]);
+  }, [isLoggedIn, isVoiceRecognitionEnabled, handleChatMessage, onCommandStart, onCommandEnd]);
 
   const handleVoiceResult = useCallback((transcript, isFinal) => {
     if (listeningModeRef.current === 'command' && !isFinal) {
@@ -40,7 +43,7 @@ export const useVoiceCommands = (isLoggedIn, isVoiceRecognitionEnabled, handleCh
       
       if (listeningModeRef.current === 'hotword' && command) {
         const HOTWORDS = ['큐브야', '비서야', '자비스', '큐브', '비서'];
-        const normalizedCommand = command.toLowerCase().replace(/[~!?.]/g, ''); // ~, !, ?, . 등 특수문자 제거
+        const normalizedCommand = command.toLowerCase().replace(/[~!?.]/g, '');
         if (HOTWORDS.some(h => normalizedCommand.includes(h.toLowerCase()))) {
           console.log('핫워드 감지:', command, '정규화된 명령:', normalizedCommand);
           speak('네, 말씀하세요.');
