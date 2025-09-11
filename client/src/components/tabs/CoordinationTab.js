@@ -462,9 +462,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                   </div>
                                   <div className="text-xs text-blue-700 mb-2">
                                     {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
-                                    {request.type === 'slot_swap' && request.targetSlot && (
-                                      <span> ↔ {(dayMap[request.targetSlot?.day.toLowerCase()] || request.targetSlot?.day)} {request.targetSlot?.startTime}-{request.targetSlot?.endTime}</span>
-                                    )}
                                   </div>
                                   {request.message && (
                                     <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
@@ -594,9 +591,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                       </div>
                                       <div className="text-xs text-yellow-700 mb-2">
                                         {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
-                                        {request.type === 'slot_swap' && request.targetSlot && (
-                                          <span> ↔ {(dayMap[request.targetSlot?.day.toLowerCase()] || request.targetSlot?.day)} {request.targetSlot?.startTime}-{request.targetSlot?.endTime}</span>
-                                        )}
                                       </div>
                                       {request.message && (
                                         <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useBackgroundMonitoring } from './useBackgroundMonitoring';
 import { useVoiceCommands } from './useVoiceCommands';
 import { useSharedAudioStream } from './useSharedAudioStream';
+import { useAudioManager } from './useAudioManager';
 
 export const useIntegratedVoiceSystem = (
   isLoggedIn,
@@ -16,12 +17,15 @@ export const useIntegratedVoiceSystem = (
   const [isCommandProcessing, setIsCommandProcessing] = useState(false);
 
   const { getStream, stopStream } = useSharedAudioStream();
+  const { micVolume } = useAudioManager();
 
   const {
     isBackgroundMonitoring,
     processTranscript,
     voiceStatus: backgroundVoiceStatus, // Rename to avoid conflict
     isAnalyzing: isBackgroundAnalyzing, // Rename to avoid conflict
+    notification,
+    clearNotification,
     ...backgroundMonitoringProps
   } = useBackgroundMonitoring(eventActions, setEventAddedKey);
 
@@ -138,9 +142,9 @@ export const useIntegratedVoiceSystem = (
     };
   }, [stopStream]);
 
-  // Determine the final status to display
-  const voiceStatus = isCommandProcessing ? 'command' : backgroundVoiceStatus;
-  const isAnalyzing = isCommandProcessing || isBackgroundAnalyzing;
+  // Determine the final status to display - 백그라운드 상태 우선
+  const voiceStatus = backgroundVoiceStatus !== 'waiting' ? backgroundVoiceStatus : (isCommandProcessing ? 'command' : 'waiting');
+  const isAnalyzing = isBackgroundAnalyzing || isCommandProcessing;
 
   return { 
     isListening, 
@@ -149,6 +153,9 @@ export const useIntegratedVoiceSystem = (
     isBackgroundMonitoring,
     voiceStatus,
     isAnalyzing,
+    micVolume,
+    notification,
+    clearNotification,
     ...backgroundMonitoringProps
   };
 };

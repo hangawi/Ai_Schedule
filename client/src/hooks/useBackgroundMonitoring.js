@@ -12,6 +12,9 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
   // 새로운 상태 추가: 음성 인식 상태 세분화
   const [voiceStatus, setVoiceStatus] = useState('waiting'); // 'waiting', 'recording', 'ending', 'analyzing'
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
+  // 알림 상태 추가
+  const [notification, setNotification] = useState(null);
 
   
   const transcriptBufferRef = useRef('');
@@ -135,7 +138,11 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
 
       const token = localStorage.getItem('token');
       if (!token) {
-        alert('로그인이 필요합니다.');
+        setNotification({
+          type: 'error',
+          title: '로그인 필요',
+          message: '일정을 등록하려면 로그인이 필요합니다.'
+        });
         return;
       }
 
@@ -155,15 +162,27 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
 
       setDetectedSchedules(prev => prev.filter(s => s !== schedule));
       setEventAddedKey(prev => prev + 1);
-      alert('Google 캘린더에 일정이 성공적으로 등록되었습니다!');
+      setNotification({
+        type: 'success',
+        title: '일정 등록 완료',
+        message: 'Google 캘린더에 일정이 성공적으로 등록되었습니다!'
+      });
 
     } catch (error) {
-      alert(`일정 등록 실패: ${error.message}`);
+      setNotification({
+        type: 'error',
+        title: '일정 등록 실패',
+        message: error.message
+      });
     }
   }, [setEventAddedKey]);
 
   const dismissSchedule = useCallback((schedule) => {
     setDetectedSchedules(prev => prev.filter(s => s !== schedule));
+  }, []);
+
+  const clearNotification = useCallback(() => {
+    setNotification(null);
   }, []);
 
   return {
@@ -178,6 +197,9 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
     processTranscript,
     // 새로운 음성 상태들
     voiceStatus, // 'waiting', 'recording', 'ending', 'analyzing'
-    isAnalyzing
+    isAnalyzing,
+    // 알림 상태
+    notification,
+    clearNotification
   };
 };
