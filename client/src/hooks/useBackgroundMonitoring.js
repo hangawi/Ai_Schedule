@@ -13,14 +13,6 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
   const [voiceStatus, setVoiceStatus] = useState('waiting'); // 'waiting', 'recording', 'ending', 'analyzing'
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // 디버깅을 위한 voiceStatus 변경 추적
-  useEffect(() => {
-    console.log('voiceStatus 변경됨:', voiceStatus);
-  }, [voiceStatus]);
-
-  useEffect(() => {
-    console.log('isAnalyzing 변경됨:', isAnalyzing);
-  }, [isAnalyzing]);
   
   const transcriptBufferRef = useRef('');
   const silenceTimeoutRef = useRef(null);
@@ -90,26 +82,15 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
   }, [isBackgroundMonitoring]);
 
   const processTranscript = useCallback((transcript) => {
-    console.log('processTranscript 호출됨:', { 
-      transcript, 
-      isBackgroundMonitoring, 
-      trimmed: transcript.trim(),
-      voiceStatus 
-    });
-    
     if (!isBackgroundMonitoring || !transcript.trim()) {
-      console.log('processTranscript 종료 - 조건 불만족');
       return;
     }
-
-    console.log('음성 감지:', transcript);
 
     // 첫 번째 음성 감지 시에만 "녹음중"으로 변경
     if (!isCallDetected) {
       setIsCallDetected(true);
       setCallStartTime(Date.now());
       setVoiceStatus('recording');
-      console.log('대화 시작 감지 - 녹음 시작');
     }
 
     // 마지막 음성 감지 시간 업데이트
@@ -125,7 +106,6 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
 
     // 5초 침묵 감지 타이머 설정 (더 안정적인 감지를 위해 늘림)
     silenceTimeoutRef.current = setTimeout(() => {
-      console.log('5초 침묵 감지 - 녹음 종료');
       setVoiceStatus('ending');
       
       // 1초 후 분석 시작 (UI에서 "녹음종료" 상태를 보여주기 위해)

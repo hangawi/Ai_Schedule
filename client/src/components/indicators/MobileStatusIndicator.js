@@ -3,13 +3,6 @@ import { Smartphone, Mic, MicOff, Wifi, WifiOff, Volume2, VolumeX, Clipboard, He
 import MobileGuideModal from '../modals/MobileGuideModal';
 
 const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolume, voiceStatus, isAnalyzing }) => {
-  // 디버깅을 위한 로그
-  console.log('MobileStatusIndicator props:', { 
-    isBackgroundMonitoring, 
-    isCallDetected, 
-    voiceStatus, 
-    isAnalyzing 
-  });
 
   // 즉시 모바일 감지
   const detectMobile = () => {
@@ -152,21 +145,14 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
   };
 
   const getStatusText = () => {
-    console.log('getStatusText 호출:', { 
-      voiceStatus, 
-      isAnalyzing, 
-      isBackgroundMonitoring, 
-      isCallDetected 
-    });
-    
     if (!deviceInfo.isDocumentVisible) return '백그라운드 (음성인식 불가)';
     if (!deviceInfo.isDocumentFocused) return '포커스 없음 (제한적)';
     if (deviceInfo.hasMicrophoneAccess === null) return '권한 확인 중...';
     if (!deviceInfo.hasMicrophoneAccess) return '마이크 권한 필요';
     if (isBackgroundMonitoring) {
-      // isCallDetected 상태도 함께 체크
-      if (isCallDetected && voiceStatus === 'recording') return '🎤 음성 녹화 중';
-      if (isCallDetected && voiceStatus === 'ending') return '⏹️ 녹화 종료 중';
+      // voiceStatus 우선 체크 후 isCallDetected 체크
+      if (voiceStatus === 'recording') return '🎤 음성 녹화 중';
+      if (voiceStatus === 'ending') return '⏹️ 녹화 종료 중';
       if (isAnalyzing || voiceStatus === 'analyzing') return '🔍 대화 내용 분석 중...';
       if (isCallDetected) return '📞 통화 감지됨';
       return '👂 대기 중 (모니터링 활성)';

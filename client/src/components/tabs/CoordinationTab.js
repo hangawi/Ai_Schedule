@@ -189,6 +189,26 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     }
   }, [currentRoom, showManageRoomModal]);
 
+  // 실시간 요청 업데이트를 위한 폴링
+  useEffect(() => {
+    if (!currentRoom) return;
+
+    const updateInterval = setInterval(async () => {
+      try {
+        // 현재 방 정보 업데이트 (조용히)
+        await fetchRoomDetails(currentRoom._id, true);
+        // 보낸 요청 목록 업데이트
+        await loadSentRequests();
+        // 교환 요청 수 업데이트
+        await loadRoomExchangeCounts();
+      } catch (error) {
+        console.log('실시간 업데이트 중 오류:', error);
+      }
+    }, 10000); // 10초마다 업데이트
+
+    return () => clearInterval(updateInterval);
+  }, [currentRoom, fetchRoomDetails, loadSentRequests, loadRoomExchangeCounts]);
+
   if (isLoading) {
     return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div></div>;
   }
@@ -526,10 +546,19 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                       <div className={`text-xs font-medium ${
                                         request.status === 'approved' ? 'text-green-900' : 'text-red-900'
                                       }`}>{requesterName}</div>
-                                      <div className={`text-xs px-2 py-1 rounded-full ${
-                                        request.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                      }`}>
-                                        {request.status === 'approved' ? '승인됨' : '거절됨'}
+                                      <div className="flex items-center space-x-2">
+                                        <div className={`text-xs px-2 py-1 rounded-full ${
+                                          request.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                        }`}>
+                                          {request.status === 'approved' ? '승인됨' : '거절됨'}
+                                        </div>
+                                        <button
+                                          onClick={() => handleCancelRequest(request._id)}
+                                          className="text-xs text-gray-400 hover:text-red-500"
+                                          title="내역 삭제"
+                                        >
+                                          ✕
+                                        </button>
                                       </div>
                                     </div>
                                     <div className={`text-xs mb-2 ${
@@ -646,7 +675,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                               {request.status === 'approved' ? '승인됨' : '거절됨'}
                                             </div>
                                             <button
-                                              onClick={() => {/* TODO: 내역 삭제 기능 구현 */}}
+                                              onClick={() => handleCancelRequest(request._id)}
                                               className="text-xs text-gray-400 hover:text-red-500"
                                               title="내역 삭제"
                                             >
