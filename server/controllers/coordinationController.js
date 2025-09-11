@@ -733,3 +733,54 @@ exports.getSentRequests = async (req, res) => {
   }
 };
 
+// @desc    Cancel request (only by requester)
+// @route   DELETE /api/coordination/requests/:requestId
+// @access  Private
+exports.cancelRequest = async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    
+    const room = await Room.findOne({
+      'requests._id': requestId
+    });
+
+    if (!room) {
+      return res.status(404).json({ msg: '요청을 찾을 수 없습니다.' });
+    }
+
+    const request = room.requests.id(requestId);
+    if (!request) {
+      return res.status(404).json({ msg: '요청을 찾을 수 없습니다.' });
+    }
+
+    // 요청자 본인만 취소 가능
+    if (request.requester.toString() !== req.user.id) {
+      return res.status(403).json({ msg: '본인이 보낸 요청만 취소할 수 있습니다.' });
+    }
+
+    // 이미 처리된 요청은 취소 불가
+    if (request.status !== 'pending') {
+      return res.status(400).json({ msg: '이미 처리된 요청은 취소할 수 없습니다.' });
+    }
+
+    // 요청 삭제
+    room.requests.pull(requestId);
+    await room.save();
+    await room.populate('requests.requester', '_id firstName lastName email');
+
+    res.json({
+      success: true,
+      message: '요청이 성공적으로 취소되었습니다.',
+      room
+    });
+
+  } catch (error) {
+    console.error('Error canceling request:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to cancel request',
+      error: error.message
+    });
+  }
+};
+

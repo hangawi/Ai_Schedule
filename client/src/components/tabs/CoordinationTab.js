@@ -73,6 +73,36 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       console.error('Failed to load sent requests:', error);
     }
   };
+
+  // 요청 취소
+  const handleCancelRequest = async (requestId) => {
+    try {
+      const result = await coordinationService.cancelRequest(requestId);
+      if (result.success) {
+        alert('요청이 성공적으로 취소되었습니다.');
+        // 현재 방 정보 새로고침
+        await fetchRoomDetails(currentRoom._id);
+        // 보낸 요청 목록 새로고침
+        await loadSentRequests();
+        // 교환 요청 수 새로고침
+        await loadRoomExchangeCounts();
+      }
+    } catch (error) {
+      console.error('Failed to cancel request:', error);
+      alert(`요청 취소 실패: ${error.message}`);
+    }
+  };
+
+  // 요청 처리 (승인/거절) 후 보낸 요청 목록도 업데이트
+  const handleRequestWithUpdate = async (requestId, action) => {
+    try {
+      await handleRequest(requestId, action);
+      // 보낸 요청 목록도 새로고침 (요청 처리 시 상태가 변경되므로)
+      await loadSentRequests();
+    } catch (error) {
+      console.error('Failed to handle request:', error);
+    }
+  };
   
   // 교환요청 수 계산하고 부모에게 전달
   useEffect(() => {
@@ -350,13 +380,13 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                           )}
                           <div className="flex justify-end space-x-2 mt-2">
                             <button
-                              onClick={() => handleRequest(request._id, 'approved')}
+                              onClick={() => handleRequestWithUpdate(request._id, 'approved')}
                               className="px-3 py-1 text-xs bg-green-500 text-white rounded-md hover:bg-green-600"
                             >
                               승인
                             </button>
                             <button
-                              onClick={() => handleRequest(request._id, 'rejected')}
+                              onClick={() => handleRequestWithUpdate(request._id, 'rejected')}
                               className="px-3 py-1 text-xs bg-red-500 text-white rounded-md hover:bg-red-600"
                             >
                               거절
@@ -374,144 +404,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 </div>
               )}
 
-              {/* 교환 요청 알림 (모든 멤버에게 표시) */}
-              {(currentRoom.requests || []).filter(req => req.status === 'pending' && req.type === 'slot_swap' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length > 0 && (
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                    <Users size={16} className="mr-2 text-blue-600" />
-                    받은 교환 요청 ({(currentRoom.requests || []).filter(req => req.status === 'pending' && req.type === 'slot_swap' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length}건)
-                  </h4>
-                  <div className="space-y-2">
-                    {(currentRoom.requests || []).filter(req => req.status === 'pending' && req.type === 'slot_swap' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).slice(0, 3).map((request, index) => {
-                      const requesterData = request.requester;
-                      const requesterName = requesterData?.name || `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
-                      
-                      return (
-                        <div key={request._id || index} className="p-2 bg-blue-50 border border-blue-200 rounded-lg">
-                          <div className="flex justify-between items-center mb-1">
-                            <div className="text-xs font-medium text-blue-900">{requesterName}</div>
-                            <div className="text-xs text-blue-600">교환 요청</div>
-                          </div>
-                          <div className="text-xs text-blue-700 mb-2">
-                            {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime} 교환
-                          </div>
-                          {request.message && (
-                            <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
-                          )}
-                          <div className="flex justify-end space-x-2 mt-2">
-                            <button
-                              onClick={() => handleRequest(request._id, 'approved')}
-                              className="px-3 py-1 text-xs bg-green-500 text-white rounded-md hover:bg-green-600"
-                            >
-                              교환 승인
-                            </button>
-                            <button
-                              onClick={() => handleRequest(request._id, 'rejected')}
-                              className="px-3 py-1 text-xs bg-red-500 text-white rounded-md hover:bg-red-600"
-                            >
-                              교환 거절
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {(currentRoom.requests || []).filter(req => req.status === 'pending' && req.type === 'slot_swap' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length > 3 && (
-                      <div className="text-xs text-gray-500 text-center">
-                        +{(currentRoom.requests || []).filter(req => req.status === 'pending' && req.type === 'slot_swap' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length - 3}개 더
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
 
-              {/* 내가 보낸 교환 요청 (모든 멤버에게 표시) */}
-              {(() => {
-                const myRequests = (currentRoom.requests || []).filter((req, index) => {
-                  // 다양한 방법으로 requester ID 추출 시도
-                  let requesterId = null;
-                  
-                  if (typeof req.requester === 'string') {
-                    requesterId = req.requester;
-                  } else if (typeof req.requester === 'object' && req.requester) {
-                    // populate된 객체에서 ID 추출 시도 (User 스키마에서 _id가 id로 변환됨)
-                    requesterId = req.requester.id || req.requester._id;
-                    
-                    // MongoDB ObjectId를 문자열로 변환
-                    if (requesterId && typeof requesterId === 'object' && requesterId.toString) {
-                      requesterId = requesterId.toString();
-                    }
-                  }
-                  
-                  const isMyRequest = req.status === 'pending' && 
-                    req.type === 'slot_swap' && 
-                    requesterId && 
-                    (requesterId === user?.id || 
-                     requesterId.toString() === user?.id?.toString());
-                  
-                  return isMyRequest;
-                });
-                
-                return myRequests.length > 0;
-              })() && (
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                    <Calendar size={16} className="mr-2 text-purple-600" />
-                    내가 보낸 교환 요청 ({(currentRoom.requests || []).filter(req => {
-                      const requesterId = req.requester?._id || req.requester?.id || req.requester;
-                      return req.status === 'pending' && req.type === 'slot_swap' && (requesterId === user?.id || requesterId?.toString() === user?.id?.toString());
-                    }).length}건)
-                  </h4>
-                  <div className="space-y-2">
-                    {(currentRoom.requests || []).filter(req => {
-                      const requesterId = req.requester?._id || req.requester?.id || req.requester;
-                      return req.status === 'pending' && req.type === 'slot_swap' && (requesterId === user?.id || requesterId?.toString() === user?.id?.toString());
-                    }).slice(0, 3).map((request, index) => {
-                      // 타겟 사용자 찾기
-                      const targetUser = currentRoom.members.find(member => 
-                        member.user._id === request.targetUserId || 
-                        member.user.id === request.targetUserId ||
-                        member.user._id?.toString() === request.targetUserId?.toString()
-                      );
-                      const targetUserData = targetUser?.user;
-                      const targetName = targetUserData?.name || `${targetUserData?.firstName || ''} ${targetUserData?.lastName || ''}`.trim() || '알 수 없음';
-                      
-                      return (
-                        <div key={request._id || index} className="p-2 bg-purple-50 border border-purple-200 rounded-lg">
-                          <div className="flex justify-between items-center mb-1">
-                            <div className="text-xs font-medium text-purple-900">→ {targetName}</div>
-                            <div className="text-xs text-purple-600">교환 요청 중</div>
-                          </div>
-                          <div className="text-xs text-purple-700 mb-2">
-                            {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime} 교환 요청
-                          </div>
-                          {request.message && (
-                            <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
-                          )}
-                          <div className="flex justify-end space-x-2 mt-2">
-                            <button
-                              onClick={() => handleRequest(request._id, 'rejected')}
-                              className="px-3 py-1 text-xs bg-red-500 text-white rounded-md hover:bg-red-600"
-                            >
-                              요청 취소
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {(currentRoom.requests || []).filter(req => {
-                      const requesterId = req.requester?._id || req.requester?.id || req.requester;
-                      return req.status === 'pending' && req.type === 'slot_swap' && (requesterId === user?.id || requesterId?.toString() === user?.id?.toString());
-                    }).length > 3 && (
-                      <div className="text-xs text-gray-500 text-center">
-                        +{(currentRoom.requests || []).filter(req => {
-                          const requesterId = req.requester?._id || req.requester?.id || req.requester;
-                          return req.status === 'pending' && req.type === 'slot_swap' && (requesterId === user?.id || requesterId?.toString() === user?.id?.toString());
-                        }).length - 3}개 더
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
               
               {/* 교환요청 관리 섹션 */}
               <div className="mt-6 pt-4 border-t border-gray-200">
@@ -577,13 +470,13 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                   )}
                                   <div className="flex justify-end space-x-2 mt-2">
                                     <button
-                                      onClick={() => handleRequest(request._id, 'approved')}
+                                      onClick={() => handleRequestWithUpdate(request._id, 'approved')}
                                       className="px-3 py-1 text-xs bg-green-500 text-white rounded-md hover:bg-green-600"
                                     >
                                       승인
                                     </button>
                                     <button
-                                      onClick={() => handleRequest(request._id, 'rejected')}
+                                      onClick={() => handleRequestWithUpdate(request._id, 'rejected')}
                                       className="px-3 py-1 text-xs bg-red-500 text-white rounded-md hover:bg-red-600"
                                     >
                                       거절
@@ -700,7 +593,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                       )}
                                       <div className="flex justify-end">
                                         <button
-                                          onClick={() => {/* TODO: 취소 기능 구현 */}}
+                                          onClick={() => handleCancelRequest(request._id)}
                                           className="px-3 py-1 text-xs bg-gray-500 text-white rounded-md hover:bg-gray-600"
                                         >
                                           취소

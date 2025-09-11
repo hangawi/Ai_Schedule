@@ -20,6 +20,7 @@ router.post('/rooms/:roomId/assign', auth, coordinationController.assignTimeSlot
 // Request management
 router.post('/requests', auth, coordinationController.createRequest);
 router.post('/requests/:requestId/:action', auth, coordinationController.handleRequest);
+router.delete('/requests/:requestId', auth, coordinationController.cancelRequest);
 router.get('/sent-requests', auth, coordinationController.getSentRequests);
 router.get('/exchange-requests-count', auth, coordinationController.getExchangeRequestsCount);
 

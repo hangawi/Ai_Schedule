@@ -143,7 +143,13 @@ export const useCoordination = (userId, onRefreshExchangeCount) => {
       }
     } catch (err) {
       console.error('createRequest error:', err);
-      setError(err.message);
+      
+      // 중복 요청 오류인 경우 더 친화적인 메시지로 표시
+      if (err.isDuplicate) {
+        alert('⚠️ 이미 동일한 시간표에 대한 교환요청을 보냈습니다.\n\n기존 요청이 처리된 후 다시 시도해주세요.');
+      } else {
+        setError(err.message);
+      }
       throw err;
     }
   }, [fetchRoomDetails, onRefreshExchangeCount]);
