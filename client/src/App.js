@@ -40,6 +40,9 @@ function App() {
       voiceStatus,
       isAnalyzing: voiceAnalyzing
    } = useIntegratedVoiceSystem(isLoggedIn, isVoiceRecognitionEnabled, eventActions, areEventActionsReady, setEventAddedKey, handleChatMessage);
+
+   // 디버깅을 위한 로그
+   console.log('App.js에서 받은 voiceStatus:', voiceStatus, 'voiceAnalyzing:', voiceAnalyzing);
    
    const [sharedText, setSharedText] = useState(null);
    const [copiedText, setCopiedText] = useState(null);

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -12,6 +12,15 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
   // 새로운 상태 추가: 음성 인식 상태 세분화
   const [voiceStatus, setVoiceStatus] = useState('waiting'); // 'waiting', 'recording', 'ending', 'analyzing'
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // 디버깅을 위한 voiceStatus 변경 추적
+  useEffect(() => {
+    console.log('voiceStatus 변경됨:', voiceStatus);
+  }, [voiceStatus]);
+
+  useEffect(() => {
+    console.log('isAnalyzing 변경됨:', isAnalyzing);
+  }, [isAnalyzing]);
   
   const transcriptBufferRef = useRef('');
   const silenceTimeoutRef = useRef(null);
@@ -81,7 +90,17 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
   }, [isBackgroundMonitoring]);
 
   const processTranscript = useCallback((transcript) => {
-    if (!isBackgroundMonitoring || !transcript.trim()) return;
+    console.log('processTranscript 호출됨:', { 
+      transcript, 
+      isBackgroundMonitoring, 
+      trimmed: transcript.trim(),
+      voiceStatus 
+    });
+    
+    if (!isBackgroundMonitoring || !transcript.trim()) {
+      console.log('processTranscript 종료 - 조건 불만족');
+      return;
+    }
 
     console.log('음성 감지:', transcript);
 

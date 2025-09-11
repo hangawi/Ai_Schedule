@@ -489,28 +489,7 @@ exports.handleRequest = async (req, res) => {
           status: slot.status
         })));
 
-        // Find the actual time slots in the room's timeSlots array
-        // First, try to find exactly what the requester specified
-        let roomRequesterSlot = room.timeSlots.find(slot =>
-          slot.day === requesterSlot.day &&
-          slot.startTime === requesterSlot.startTime &&
-          slot.endTime === requesterSlot.endTime &&
-          slot.user.toString() === request.requester.toString()
-        );
-        
-        // If not found, find any slot owned by the requester (fallback)
-        if (!roomRequesterSlot) {
-          console.log('정확한 요청자 슬롯을 찾을 수 없음, 요청자의 다른 슬롯 검색...');
-          roomRequesterSlot = room.timeSlots.find(slot =>
-            slot.user.toString() === request.requester.toString()
-          );
-          console.log('대체 요청자 슬롯:', roomRequesterSlot ? {
-            day: roomRequesterSlot.day,
-            startTime: roomRequesterSlot.startTime,
-            endTime: roomRequesterSlot.endTime
-          } : 'none');
-        }
-
+        // 양보 개념: 요청자가 원하는 타겟 사용자의 시간대만 찾으면 됨
         const roomTargetSlot = room.timeSlots.find(slot =>
           slot.day === targetSlot.day &&
           slot.startTime === targetSlot.startTime &&
@@ -521,16 +500,9 @@ exports.handleRequest = async (req, res) => {
            slot.user === request.targetUserId?.toString()) // More flexible comparison
         );
 
-        console.log('슬롯 검색 결과:', {
-          roomRequesterSlot: roomRequesterSlot ? 'found' : 'not found',
+        console.log('양보할 슬롯 검색 결과:', {
           roomTargetSlot: roomTargetSlot ? 'found' : 'not found',
           searchCriteria: {
-            requesterSlot: {
-              day: requesterSlot.day,
-              startTime: requesterSlot.startTime,
-              endTime: requesterSlot.endTime,
-              expectedUser: request.requester.toString()
-            },
             targetSlot: {
               day: targetSlot.day,
               startTime: targetSlot.startTime,
@@ -540,28 +512,29 @@ exports.handleRequest = async (req, res) => {
           }
         });
 
-        if (roomRequesterSlot && roomTargetSlot) {
-          console.log('교환 전 상태:', {
-            requesterSlotUser: roomRequesterSlot.user.toString(),
-            targetSlotUser: roomTargetSlot.user.toString()
+        if (roomTargetSlot) {
+          console.log('양보 전 상태:', {
+            targetSlotUser: roomTargetSlot.user.toString(),
+            requesterWhoWantsIt: request.requester.toString()
           });
 
-          // Perform the swap
-          const tempUser = roomRequesterSlot.user;
-          roomRequesterSlot.user = roomTargetSlot.user;
-          roomTargetSlot.user = tempUser;
+          // 양보 로직: 타겟의 시간을 요청자에게 넘겨줌 (교환이 아닌 양보)
+          roomTargetSlot.user = request.requester;
+          
+          console.log('양보 완료:', {
+            슬롯: `${roomTargetSlot.day} ${roomTargetSlot.startTime}-${roomTargetSlot.endTime}`,
+            새소유자: request.requester.toString()
+          });
 
-          // Update status to confirmed
-          roomRequesterSlot.status = 'confirmed';
+          // Update status to confirmed (양보 시에는 타겟 슬롯만 업데이트)
           roomTargetSlot.status = 'confirmed';
 
-          console.log('교환 후 상태:', {
-            requesterSlotUser: roomRequesterSlot.user.toString(),
-            targetSlotUser: roomTargetSlot.user.toString()
+          console.log('양보 후 상태:', {
+            양보받은슬롯사용자: roomTargetSlot.user.toString(),
+            슬롯상태: roomTargetSlot.status
           });
         } else {
-          console.error('교환 실패 - 슬롯을 찾을 수 없음:', {
-            requesterSlotFound: !!roomRequesterSlot,
+          console.error('양보 실패 - 양보할 슬롯을 찾을 수 없음:', {
             targetSlotFound: !!roomTargetSlot,
             allTimeSlots: room.timeSlots.map(slot => ({
               day: slot.day,
@@ -571,7 +544,7 @@ exports.handleRequest = async (req, res) => {
             }))
           });
           request.status = 'failed';
-          return res.status(400).json({ msg: '교환할 시간대를 찾을 수 없습니다.' });
+          return res.status(400).json({ msg: '양보할 시간대를 찾을 수 없습니다.' });
         }
       }
     } else if (action === 'rejected') {
