@@ -133,8 +133,16 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
     };
   }, []);
 
-  // 백그라운드 모니터링이 활성화된 경우에만 표시
-  if (!isBackgroundMonitoring) return null;
+  // 디버깅: 조건 확인
+  console.log('MobileStatusIndicator 표시 조건:', {
+    isBackgroundMonitoring,
+    isMobile: deviceInfo.isMobile,
+    userAgent: navigator.userAgent,
+    windowWidth: window.innerWidth
+  });
+
+  // 모바일에서만 표시 (백그라운드 ON/OFF 상관없이)
+  if (!deviceInfo.isMobile) return null;
 
   const getStatusColor = () => {
     if (!deviceInfo.isDocumentVisible || !deviceInfo.isDocumentFocused) return 'text-red-500';
