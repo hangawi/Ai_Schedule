@@ -314,6 +314,8 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                      isCallDetected={isCallDetected}
                      callStartTime={null}
                      onToggleMonitoring={toggleBackgroundMonitoring}
+                     voiceStatus={voiceStatus}
+                     isAnalyzing={isAnalyzing}
                   />
                   <button className="text-gray-600 hover:text-gray-800" onClick={() => setActiveTab('googleCalendar')}>
                      <Calendar size={20} />
