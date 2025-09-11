@@ -38,6 +38,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [selectedSlots, setSelectedSlots] = useState([]);
   const [selectedTab, setSelectedTab] = useState('owned'); // 'owned' or 'joined'
   const [roomExchangeCounts, setRoomExchangeCounts] = useState({}); // 방별 교환요청 수
+  const [sentRequests, setSentRequests] = useState([]); // 보낸 요청 내역
   
   // Days array for modal calculations
   const days = ['월요일', '화요일', '수요일', '목요일', '금요일'];
@@ -52,6 +53,19 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       }
     } catch (error) {
       console.error('Failed to load room exchange counts:', error);
+    }
+  };
+
+  // 보낸 요청 내역 로드
+  const loadSentRequests = async () => {
+    if (!user?.id) return;
+    try {
+      const result = await coordinationService.getSentRequests();
+      if (result.success) {
+        setSentRequests(result.requests);
+      }
+    } catch (error) {
+      console.error('Failed to load sent requests:', error);
     }
   };
   
@@ -130,6 +144,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     if (user?.id) {
       fetchMyRooms();
       loadRoomExchangeCounts();
+      loadSentRequests();
     }
   }, [user?.id, fetchMyRooms]);
 
@@ -413,8 +428,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   if (typeof req.requester === 'string') {
                     requesterId = req.requester;
                   } else if (typeof req.requester === 'object' && req.requester) {
-                    // populate된 객체에서 ID 추출 시도
-                    requesterId = req.requester._id || req.requester.id;
+                    // populate된 객체에서 ID 추출 시도 (User 스키마에서 _id가 id로 변환됨)
+                    requesterId = req.requester.id || req.requester._id;
                     
                     // MongoDB ObjectId를 문자열로 변환
                     if (requesterId && typeof requesterId === 'object' && requesterId.toString) {
@@ -428,26 +443,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                     (requesterId === user?.id || 
                      requesterId.toString() === user?.id?.toString());
                   
-                  // 처음 몇 개만 로그 출력
-                  if (index < 2) {
-                    console.log('내 요청 체크 - 개선된 로직:', {
-                      requestId: req._id,
-                      requesterType: typeof req.requester,
-                      requester: req.requester,
-                      'req.requester._id': req.requester?._id,
-                      'req.requester.id': req.requester?.id,
-                      extractedRequesterId: requesterId,
-                      userId: user?.id,
-                      match: requesterId === user?.id,
-                      matchStr: requesterId?.toString() === user?.id?.toString(),
-                      isMyRequest
-                    });
-                  }
-                  
                   return isMyRequest;
                 });
-                
-                console.log('내가 보낸 요청들:', myRequests);
                 
                 return myRequests.length > 0;
               })() && (
@@ -505,6 +502,56 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                           const requesterId = req.requester?._id || req.requester?.id || req.requester;
                           return req.status === 'pending' && req.type === 'slot_swap' && (requesterId === user?.id || requesterId?.toString() === user?.id?.toString());
                         }).length - 3}개 더
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* 전체 보낸 요청 내역 (모든 방) */}
+              {sentRequests.length > 0 && (
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                    <Users size={16} className="mr-2 text-purple-600" />
+                    내가 보낸 요청 내역 ({sentRequests.length}건)
+                  </h4>
+                  <div className="space-y-2">
+                    {sentRequests.slice(0, 5).map((request, index) => (
+                      <div key={request._id || index} className="p-2 bg-purple-50 border border-purple-200 rounded-lg">
+                        <div className="flex justify-between items-center mb-1">
+                          <div className="text-xs font-medium text-purple-900">{request.roomName}</div>
+                          <div className="flex items-center space-x-2">
+                            <div className={`text-xs px-2 py-1 rounded-full ${
+                              request.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                              request.status === 'approved' ? 'bg-green-100 text-green-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {request.status === 'pending' ? '대기중' :
+                               request.status === 'approved' ? '승인됨' : '거절됨'}
+                            </div>
+                            <div className="text-xs text-purple-600">
+                              {request.type === 'slot_swap' ? '교환 요청' :
+                               request.type === 'time_request' ? '시간 요청' : '시간 변경'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-xs text-purple-700 mb-2">
+                          {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+                          {request.type === 'slot_swap' && request.targetSlot && (
+                            <span> ↔ {(dayMap[request.targetSlot?.day.toLowerCase()] || request.targetSlot?.day)} {request.targetSlot?.startTime}-{request.targetSlot?.endTime}</span>
+                          )}
+                        </div>
+                        {request.message && (
+                          <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
+                        )}
+                        <div className="text-xs text-gray-500">
+                          {new Date(request.createdAt).toLocaleDateString('ko-KR')} {new Date(request.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    ))}
+                    {sentRequests.length > 5 && (
+                      <div className="text-xs text-gray-500 text-center">
+                        +{sentRequests.length - 5}개 더
                       </div>
                     )}
                   </div>

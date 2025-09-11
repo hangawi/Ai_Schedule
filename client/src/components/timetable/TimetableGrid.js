@@ -250,7 +250,7 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
         });
         
         const existingSwapRequest = roomData?.requests?.find(request => {
-          const requesterId = request.requester?._id || request.requester?.id || request.requester;
+          const requesterId = request.requester?.id || request.requester?._id || request.requester;
           const isMatch = request.status === 'pending' &&
             request.type === 'slot_swap' &&
             (requesterId === currentUser?.id || requesterId?.toString() === currentUser?.id?.toString()) &&
