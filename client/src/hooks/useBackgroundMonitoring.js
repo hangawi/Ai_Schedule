@@ -84,12 +84,12 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
     }
   }, [isBackgroundMonitoring]);
 
-  const processTranscript = useCallback((transcript) => {
+  const processTranscript = useCallback((transcript, isFinal = true) => {
     if (!isBackgroundMonitoring || !transcript.trim()) {
       return;
     }
 
-    // 첫 번째 음성 감지 시에만 "녹음중"으로 변경
+    // 첫 번째 음성 감지 시에만 "녹음중"으로 변경 (중간 결과에서도 즉시 반응)
     if (!isCallDetected) {
       setIsCallDetected(true);
       setCallStartTime(Date.now());
@@ -99,8 +99,11 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
     // 마지막 음성 감지 시간 업데이트
     lastSpeechTimeRef.current = Date.now();
     
-    transcriptBufferRef.current += transcript + ' ';
-    setBackgroundTranscript(transcriptBufferRef.current);
+    // Final 결과만 버퍼에 추가
+    if (isFinal) {
+      transcriptBufferRef.current += transcript + ' ';
+      setBackgroundTranscript(transcriptBufferRef.current);
+    }
 
     // 기존 타이머 클리어
     if (silenceTimeoutRef.current) {

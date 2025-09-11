@@ -84,8 +84,11 @@ export const useIntegratedVoiceSystem = (
         wasHandledByVoiceCommand = handleVoiceResultRef.current(currentTranscript, isFinal, recognition);
       }
 
-      if (isBackgroundMonitoringRef.current && isFinal && !wasHandledByVoiceCommand) {
-        processTranscriptRef.current(currentTranscript);
+      if (isBackgroundMonitoringRef.current && !wasHandledByVoiceCommand) {
+        // 실시간 상태 업데이트를 위해 중간 결과에서도 호출
+        if (currentTranscript.trim()) {
+          processTranscriptRef.current(currentTranscript, isFinal);
+        }
       }
     };
 
