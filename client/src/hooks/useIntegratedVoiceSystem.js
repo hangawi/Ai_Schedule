@@ -69,11 +69,13 @@ export const useIntegratedVoiceSystem = (
         if (event.results[i].isFinal) isFinal = true;
       }
       
-      if (isBackgroundMonitoringRef.current && isFinal) {
-        processTranscriptRef.current(currentTranscript);
-      }
+      let wasHandledByVoiceCommand = false;
       if (isVoiceRecognitionEnabledRef.current) {
-        handleVoiceResultRef.current(currentTranscript, isFinal, recognition);
+        wasHandledByVoiceCommand = handleVoiceResultRef.current(currentTranscript, isFinal, recognition);
+      }
+
+      if (isBackgroundMonitoringRef.current && isFinal && !wasHandledByVoiceCommand) {
+        processTranscriptRef.current(currentTranscript);
       }
     };
 

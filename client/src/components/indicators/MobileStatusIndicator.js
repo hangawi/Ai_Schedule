@@ -160,7 +160,7 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
   };
 
   return (
-    <div className="fixed bottom-4 left-4 z-40">
+    <div className="fixed bottom-4 left-4 z-50">
       {/* 간단한 상태 인디케이터 */}
       {!expandedView && (
         <button

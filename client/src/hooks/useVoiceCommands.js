@@ -32,6 +32,7 @@ export const useVoiceCommands = (isLoggedIn, isVoiceRecognitionEnabled, handleCh
   const handleVoiceResult = useCallback((transcript, isFinal) => {
     if (listeningModeRef.current === 'command' && !isFinal) {
         setModalText(transcript);
+        return true;
     }
 
     if (isFinal && transcript) {
@@ -39,18 +40,21 @@ export const useVoiceCommands = (isLoggedIn, isVoiceRecognitionEnabled, handleCh
       
       if (listeningModeRef.current === 'hotword' && command) {
         const HOTWORDS = ['큐브야', '비서야', '자비스', '큐브', '비서'];
-        const normalizedCommand = command.toLowerCase().replace(/[~!\?\.]/g, ''); // ~, !, ?, . 등 특수문자 제거
+        const normalizedCommand = command.toLowerCase().replace(/[~!?.]/g, ''); // ~, !, ?, . 등 특수문자 제거
         if (HOTWORDS.some(h => normalizedCommand.includes(h.toLowerCase()))) {
           console.log('핫워드 감지:', command, '정규화된 명령:', normalizedCommand);
           speak('네, 말씀하세요.');
           listeningModeRef.current = 'command';
           setModalText('말씀하세요...');
+          return true;
         }
       } else if (listeningModeRef.current === 'command' && command) {
         processVoiceCommand(command);
         listeningModeRef.current = 'hotword';
+        return true;
       }
     }
+    return false;
   }, [processVoiceCommand]);
 
   return {
