@@ -731,10 +731,7 @@ exports.cancelRequest = async (req, res) => {
       return res.status(403).json({ msg: '본인이 보낸 요청만 취소할 수 있습니다.' });
     }
 
-    // 이미 처리된 요청은 취소 불가
-    if (request.status !== 'pending') {
-      return res.status(400).json({ msg: '이미 처리된 요청은 취소할 수 없습니다.' });
-    }
+    // 처리된 요청도 내역 삭제 가능하도록 변경
 
     // 요청 삭제
     room.requests.pull(requestId);
