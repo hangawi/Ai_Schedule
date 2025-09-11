@@ -83,18 +83,14 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
   const processTranscript = useCallback((transcript) => {
     if (!isBackgroundMonitoring || !transcript.trim()) return;
 
-    // 음성 감지 시작 - 녹음 상태로 변경 (ref를 사용하여 현재 상태 확인)
-    setVoiceStatus(prevStatus => {
-      if (prevStatus === 'waiting') {
-        console.log('음성 감지됨 - 녹음 시작');
-        return 'recording';
-      }
-      return prevStatus;
-    });
+    console.log('음성 감지:', transcript);
 
+    // 첫 번째 음성 감지 시에만 "녹음중"으로 변경
     if (!isCallDetected) {
       setIsCallDetected(true);
       setCallStartTime(Date.now());
+      setVoiceStatus('recording');
+      console.log('대화 시작 감지 - 녹음 시작');
     }
 
     // 마지막 음성 감지 시간 업데이트
@@ -108,19 +104,19 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
       clearTimeout(silenceTimeoutRef.current);
     }
 
-    // 3초 침묵 감지 타이머 설정
+    // 5초 침묵 감지 타이머 설정 (더 안정적인 감지를 위해 늘림)
     silenceTimeoutRef.current = setTimeout(() => {
-      console.log('3초 침묵 감지 - 녹음 종료');
+      console.log('5초 침묵 감지 - 녹음 종료');
       setVoiceStatus('ending');
       
-      // 짧은 딜레이 후 분석 시작 (UI에서 "녹음종료" 상태를 보여주기 위해)
+      // 1초 후 분석 시작 (UI에서 "녹음종료" 상태를 보여주기 위해)
       setTimeout(() => {
         setIsCallDetected(false);
         setCallStartTime(null);
         analyzeFullTranscript(); 
-      }, 500); // 0.5초 후 분석 시작
+      }, 1000); // 1초 후 분석 시작
       
-    }, 3000); // 사용자 요청대로 3초
+    }, 5000); // 5초로 늘림
     
   }, [isBackgroundMonitoring, isCallDetected, analyzeFullTranscript]);
 

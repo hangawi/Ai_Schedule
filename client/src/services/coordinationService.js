@@ -252,4 +252,20 @@ export const coordinationService = {
     return await response.json();
   },
 
+  // 요청 취소
+  async cancelRequest(requestId) {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/coordination/requests/${requestId}`, {
+      method: 'DELETE',
+      headers: { 'x-auth-token': token },
+    });
+    
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to cancel request');
+    }
+    
+    return await response.json();
+  },
+
 };
