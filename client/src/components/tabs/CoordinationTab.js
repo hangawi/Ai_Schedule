@@ -20,34 +20,9 @@ const dayMap = {
 
 const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount }) => {
   const { user } = useAuth();
-  const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest } = useCoordination(user?.id, onRefreshExchangeCount);
-  
-  // Modal management hook
-  const {
-    showCreateRoomModal, showJoinRoomModal, showManageRoomModal,
-    showAssignModal, showRequestModal, showChangeRequestModal,
-    slotToAssign, slotToRequest, slotToChange,
-    openCreateRoomModal, closeCreateRoomModal,
-    openJoinRoomModal, closeJoinRoomModal,
-    openManageRoomModal, closeManageRoomModal,
-    openAssignModal, closeAssignModal,
-    openRequestModal, closeRequestModal,
-    openChangeRequestModal, closeChangeRequestModal
-  } = useCoordinationModals();
-
-  const [selectedSlots, setSelectedSlots] = useState([]);
-  const [selectedTab, setSelectedTab] = useState('owned'); // 'owned' or 'joined'
   const [roomExchangeCounts, setRoomExchangeCounts] = useState({}); // 방별 교환요청 수
   const [sentRequests, setSentRequests] = useState([]); // 보낸 요청 내역
-  
-  // 새로운 UI 상태들
-  const [requestViewMode, setRequestViewMode] = useState('received'); // 'received' or 'sent'
-  const [showAllRequests, setShowAllRequests] = useState({}); // 각 섹션별 전체 보기 상태
-  const [expandedSections, setExpandedSections] = useState({}); // 각 섹션별 확장 상태
-  
-  // Days array for modal calculations
-  const days = ['월요일', '화요일', '수요일', '목요일', '금요일'];
-  
+
   // 방별 교환요청 수 로드
   const loadRoomExchangeCounts = async () => {
     if (!user?.id) return;
@@ -74,29 +49,56 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     }
   };
 
+  const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest } = useCoordination(user?.id, onRefreshExchangeCount, loadSentRequests);
+  
+  // Modal management hook
+  const {
+    showCreateRoomModal, showJoinRoomModal, showManageRoomModal,
+    showAssignModal, showRequestModal, showChangeRequestModal,
+    slotToAssign, slotToRequest, slotToChange,
+    openCreateRoomModal, closeCreateRoomModal,
+    openJoinRoomModal, closeJoinRoomModal,
+    openManageRoomModal, closeManageRoomModal,
+    openAssignModal, closeAssignModal,
+    openRequestModal, closeRequestModal,
+    openChangeRequestModal, closeChangeRequestModal
+  } = useCoordinationModals();
+
+  const [selectedSlots, setSelectedSlots] = useState([]);
+  const [selectedTab, setSelectedTab] = useState('owned'); // 'owned' or 'joined'
+  
+  // 새로운 UI 상태들
+  const [requestViewMode, setRequestViewMode] = useState('received'); // 'received' or 'sent'
+  const [showAllRequests, setShowAllRequests] = useState({}); // 각 섹션별 전체 보기 상태
+  const [expandedSections, setExpandedSections] = useState({}); // 각 섹션별 확장 상태
+  
+  // Days array for modal calculations
+  const days = ['월요일', '화요일', '수요일', '목요일', '금요일'];
+
   // 요청 취소
   const handleCancelRequest = async (requestId) => {
     try {
       await coordinationService.cancelRequest(requestId);
-      // 현재 방 정보 새로고침
+    } catch (error) {
+      // 모든 에러를 조용히 처리 (이미 삭제된 요청 등)
+    }
+    
+    // 성공/실패 상관없이 항상 최신 상태로 업데이트
+    try {
       if (currentRoom) {
         await fetchRoomDetails(currentRoom._id);
       }
-      // 보낸 요청 목록 새로고침
       await loadSentRequests();
-      // 교환 요청 수 새로고침
-      await loadRoomExchangeCounts();
-    } catch (error) {
-      console.error('Failed to cancel request:', error);
+    } catch (updateError) {
+      // 업데이트 에러도 조용히 처리
     }
   };
 
-  // 요청 처리 (승인/거절) 후 보낸 요청 목록도 업데이트
+  // 요청 처리 (승인/거절)
   const handleRequestWithUpdate = async (requestId, action) => {
     try {
       await handleRequest(requestId, action);
-      // 보낸 요청 목록도 새로고침 (요청 처리 시 상태가 변경되므로)
-      await loadSentRequests();
+      // handleRequest 내부에서 이미 업데이트 처리됨
     } catch (error) {
       console.error('Failed to handle request:', error);
     }
@@ -119,14 +121,12 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     await createRoom(roomData);
     closeCreateRoomModal();
     fetchMyRooms(); // Refresh the list of rooms after creation
-    loadRoomExchangeCounts(); // Refresh exchange counts
   };
 
   const handleJoinRoom = async (inviteCode) => {
     await joinRoom(inviteCode);
     closeJoinRoomModal();
     fetchMyRooms(); // Refresh the list of rooms after joining
-    loadRoomExchangeCounts(); // Refresh exchange counts
   };
 
   const handleSubmitSlots = async () => {
@@ -176,8 +176,10 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   useEffect(() => {
     if (user?.id) {
       fetchMyRooms();
-      loadRoomExchangeCounts();
-      loadSentRequests();
+      setTimeout(() => {
+        loadRoomExchangeCounts();
+        loadSentRequests();
+      }, 100); // 약간의 지연으로 중복 호출 방지
     }
   }, [user?.id, fetchMyRooms]);
 
@@ -277,7 +279,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             <button
               onClick={() => {
                 setCurrentRoom(null);
-                loadRoomExchangeCounts(); // Refresh exchange counts when returning to room list
               }}
               className="px-5 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors shadow-sm"
             >
@@ -285,10 +286,10 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 px-2 sm:px-4 lg:px-6">
           {/* 조원 리스트 사이드바 */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-4">
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4">
               <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
                 <Users size={20} className="mr-2 text-blue-600" />
                 조원 목록 ({(currentRoom.members || []).length}명)
@@ -696,7 +697,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
           {/* 시간표 그리드 */}
           <div className="lg:col-span-3">
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-4">
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4">
               <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
                 <Calendar size={20} className="mr-2 text-green-600" />
                 시간표 ({scheduleStartHour}:00 - {scheduleEndHour}:00)

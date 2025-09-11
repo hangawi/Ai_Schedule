@@ -133,8 +133,8 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
     };
   }, []);
 
-  // 모바일에서만 표시
-  if (!deviceInfo.isMobile) return null;
+  // 백그라운드 모니터링이 활성화된 경우에만 표시
+  if (!isBackgroundMonitoring) return null;
 
   const getStatusColor = () => {
     if (!deviceInfo.isDocumentVisible || !deviceInfo.isDocumentFocused) return 'text-red-500';
@@ -150,12 +150,11 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
     if (deviceInfo.hasMicrophoneAccess === null) return '권한 확인 중...';
     if (!deviceInfo.hasMicrophoneAccess) return '마이크 권한 필요';
     if (isBackgroundMonitoring) {
-      // voiceStatus 우선 체크 후 isCallDetected 체크
-      if (voiceStatus === 'recording') return '🎤 음성 녹화 중';
-      if (voiceStatus === 'ending') return '⏹️ 녹화 종료 중';
-      if (isAnalyzing || voiceStatus === 'analyzing') return '🔍 대화 내용 분석 중...';
-      if (isCallDetected) return '📞 통화 감지됨';
-      return '👂 대기 중 (모니터링 활성)';
+      // 상태별 명확한 표시
+      if (voiceStatus === 'recording') return '🎤 녹음 중';
+      if (voiceStatus === 'ending') return '⏹️ 녹음 종료';
+      if (isAnalyzing || voiceStatus === 'analyzing') return '🔍 요약 중';
+      return '👂 대기 중';
     }
     return '😴 대기 중';
   };
