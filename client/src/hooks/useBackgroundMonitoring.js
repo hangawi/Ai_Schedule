@@ -83,11 +83,14 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
   const processTranscript = useCallback((transcript) => {
     if (!isBackgroundMonitoring || !transcript.trim()) return;
 
-    // 음성 감지 시작 - 녹음 상태로 변경
-    if (voiceStatus === 'waiting') {
-      setVoiceStatus('recording');
-      console.log('음성 감지됨 - 녹음 시작');
-    }
+    // 음성 감지 시작 - 녹음 상태로 변경 (ref를 사용하여 현재 상태 확인)
+    setVoiceStatus(prevStatus => {
+      if (prevStatus === 'waiting') {
+        console.log('음성 감지됨 - 녹음 시작');
+        return 'recording';
+      }
+      return prevStatus;
+    });
 
     if (!isCallDetected) {
       setIsCallDetected(true);
@@ -119,7 +122,7 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
       
     }, 3000); // 사용자 요청대로 3초
     
-  }, [isBackgroundMonitoring, isCallDetected, analyzeFullTranscript, voiceStatus]);
+  }, [isBackgroundMonitoring, isCallDetected, analyzeFullTranscript]);
 
   const confirmSchedule = useCallback(async (schedule) => {
     try {
