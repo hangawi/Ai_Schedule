@@ -145,6 +145,16 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
   };
 
   const getStatusText = () => {
+    // 디버깅을 위한 로그 (개발용)
+    console.log('MobileStatusIndicator 상태:', {
+      isBackgroundMonitoring,
+      voiceStatus,
+      isAnalyzing,
+      isDocumentVisible: deviceInfo.isDocumentVisible,
+      isDocumentFocused: deviceInfo.isDocumentFocused,
+      hasMicrophoneAccess: deviceInfo.hasMicrophoneAccess
+    });
+    
     if (!deviceInfo.isDocumentVisible) return '백그라운드 (음성인식 불가)';
     if (!deviceInfo.isDocumentFocused) return '포커스 없음 (제한적)';
     if (deviceInfo.hasMicrophoneAccess === null) return '권한 확인 중...';
@@ -152,7 +162,7 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
     if (isBackgroundMonitoring) {
       // 상태별 명확한 표시
       if (voiceStatus === 'recording') return '🎤 녹음 중';
-      if (voiceStatus === 'ending') return '⏹️ 녹음 종료';
+      if (voiceStatus === 'ending') return '⏹️ 녹음 종료';  
       if (isAnalyzing || voiceStatus === 'analyzing') return '🔍 요약 중';
       return '👂 대기 중';
     }

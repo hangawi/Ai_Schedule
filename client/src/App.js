@@ -8,6 +8,8 @@ import SharedTextModal from './components/modals/SharedTextModal';
 import CopiedTextModal from './components/modals/CopiedTextModal';
 import AutoDetectedScheduleModal from './components/modals/AutoDetectedScheduleModal';
 import BackgroundGuide from './components/guides/BackgroundGuide';
+import MobileStatusIndicator from './components/indicators/MobileStatusIndicator';
+import NotificationModal from './components/modals/NotificationModal';
 import { useAuth } from './hooks/useAuth';
 import { useIntegratedVoiceSystem } from './hooks/useIntegratedVoiceSystem';
 import { useChat } from './hooks/useChat';
@@ -37,7 +39,10 @@ function App() {
       confirmSchedule,
       dismissSchedule,
       voiceStatus,
-      isAnalyzing: voiceAnalyzing
+      isAnalyzing: voiceAnalyzing,
+      micVolume,
+      notification,
+      clearNotification
    } = useIntegratedVoiceSystem(isLoggedIn, isVoiceRecognitionEnabled, eventActions, areEventActionsReady, setEventAddedKey, handleChatMessage);
 
    
@@ -203,6 +208,24 @@ function App() {
             />
          )}
          {isLoggedIn && showBackgroundGuide && <BackgroundGuide onClose={handleCloseBackgroundGuide} />}
+         {isLoggedIn && notification && (
+            <NotificationModal
+               isOpen={!!notification}
+               onClose={clearNotification}
+               type={notification.type}
+               title={notification.title}
+               message={notification.message}
+            />
+         )}
+         {isLoggedIn && (
+            <MobileStatusIndicator 
+               isBackgroundMonitoring={isBackgroundMonitoring}
+               isCallDetected={isCallDetected}
+               micVolume={micVolume}
+               voiceStatus={voiceStatus}
+               isAnalyzing={voiceAnalyzing}
+            />
+         )}
       </Router>
    );
 }
