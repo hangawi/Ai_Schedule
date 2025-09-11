@@ -77,19 +77,17 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   // 요청 취소
   const handleCancelRequest = async (requestId) => {
     try {
-      const result = await coordinationService.cancelRequest(requestId);
-      if (result.success) {
-        alert('요청이 성공적으로 취소되었습니다.');
-        // 현재 방 정보 새로고침
+      await coordinationService.cancelRequest(requestId);
+      // 현재 방 정보 새로고침
+      if (currentRoom) {
         await fetchRoomDetails(currentRoom._id);
-        // 보낸 요청 목록 새로고침
-        await loadSentRequests();
-        // 교환 요청 수 새로고침
-        await loadRoomExchangeCounts();
       }
+      // 보낸 요청 목록 새로고침
+      await loadSentRequests();
+      // 교환 요청 수 새로고침
+      await loadRoomExchangeCounts();
     } catch (error) {
       console.error('Failed to cancel request:', error);
-      alert(`요청 취소 실패: ${error.message}`);
     }
   };
 
@@ -189,22 +187,27 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     }
   }, [currentRoom, showManageRoomModal]);
 
-  // 실시간 요청 업데이트를 위한 폴링
+  // 실시간 업데이트를 위한 폴링
   useEffect(() => {
-    if (!currentRoom) return;
-
     const updateInterval = setInterval(async () => {
       try {
-        // 현재 방 정보 업데이트 (조용히)
-        await fetchRoomDetails(currentRoom._id, true);
-        // 보낸 요청 목록 업데이트
+        // 보낸 요청 목록 강제 업데이트
         await loadSentRequests();
-        // 교환 요청 수 업데이트
+        // 교환 요청 수 강제 업데이트
         await loadRoomExchangeCounts();
+        
+        // 현재 방이 있으면 방 정보도 업데이트
+        if (currentRoom) {
+          await fetchRoomDetails(currentRoom._id, true);
+        }
       } catch (error) {
-        console.log('실시간 업데이트 중 오류:', error);
+        // 조용히 실패 처리
       }
-    }, 10000); // 10초마다 업데이트
+    }, 3000); // 3초마다 업데이트
+
+    // 즉시 한 번 실행
+    loadSentRequests();
+    loadRoomExchangeCounts();
 
     return () => clearInterval(updateInterval);
   }, [currentRoom, fetchRoomDetails, loadSentRequests, loadRoomExchangeCounts]);
