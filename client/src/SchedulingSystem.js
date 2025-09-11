@@ -59,13 +59,11 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
    const [activeTab, setActiveTab] = useState(() => {
      const savedTab = localStorage.getItem('activeTab');
-     console.log('Initializing activeTab. Saved tab:', savedTab);
      return savedTab || 'dashboard';
    });
 
    // Effect to write to localStorage when activeTab changes
    useEffect(() => {
-     console.log('useEffect (activeTab change) - saving activeTab to localStorage:', activeTab);
      localStorage.setItem('activeTab', activeTab);
    }, [activeTab]);
    const [showCreateModal, setShowCreateModal] = useState(false);
@@ -195,7 +193,6 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
             throw new Error(errorData.msg || 'Failed to add event');
          }
          const savedEvent = await response.json();
-         console.log('Server response (savedEvent):', savedEvent);
          const newEvent = formatEventForClient(savedEvent, eventData.color);
          setGlobalEvents(prevEvents => [...prevEvents, newEvent]);
          return newEvent;

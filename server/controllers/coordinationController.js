@@ -726,9 +726,9 @@ exports.cancelRequest = async (req, res) => {
       return res.status(404).json({ msg: '요청을 찾을 수 없습니다.' });
     }
 
-    // 요청자 본인만 취소 가능
-    if (request.requester.toString() !== req.user.id) {
-      return res.status(403).json({ msg: '본인이 보낸 요청만 취소할 수 있습니다.' });
+    // 요청자 또는 타겟 사용자가 삭제 가능 (처리된 요청 내역 삭제용)
+    if (request.requester.toString() !== req.user.id && request.targetUserId?.toString() !== req.user.id) {
+      return res.status(403).json({ msg: '관련된 사용자만 요청을 삭제할 수 있습니다.' });
     }
 
     // 처리된 요청도 내역 삭제 가능하도록 변경

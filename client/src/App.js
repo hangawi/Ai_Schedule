@@ -8,6 +8,7 @@ import SharedTextModal from './components/modals/SharedTextModal';
 import CopiedTextModal from './components/modals/CopiedTextModal';
 import AutoDetectedScheduleModal from './components/modals/AutoDetectedScheduleModal';
 import BackgroundGuide from './components/guides/BackgroundGuide';
+import MobileStatusIndicator from './components/indicators/MobileStatusIndicator';
 import { useAuth } from './hooks/useAuth';
 import { useIntegratedVoiceSystem } from './hooks/useIntegratedVoiceSystem';
 import { useChat } from './hooks/useChat';
@@ -201,6 +202,14 @@ function App() {
             />
          )}
          {isLoggedIn && showBackgroundGuide && <BackgroundGuide onClose={handleCloseBackgroundGuide} />}
+         {isLoggedIn && (
+            <MobileStatusIndicator 
+               isBackgroundMonitoring={isBackgroundMonitoring}
+               isCallDetected={isCallDetected}
+               voiceStatus={voiceStatus}
+               isAnalyzing={voiceAnalyzing}
+            />
+         )}
       </Router>
    );
 }

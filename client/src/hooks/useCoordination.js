@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { coordinationService } from '../services/coordinationService';
 
-export const useCoordination = (userId, onRefreshExchangeCount) => {
+export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentRequests) => {
   const [currentRoom, setCurrentRoom] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -140,6 +140,10 @@ export const useCoordination = (userId, onRefreshExchangeCount) => {
       // 교환 요청 생성 후 전역 카운트 새로고침
       if (onRefreshExchangeCount) {
         onRefreshExchangeCount();
+      }
+      // 보낸 요청 목록 즉시 업데이트
+      if (onRefreshSentRequests) {
+        onRefreshSentRequests();
       }
     } catch (err) {
       console.error('createRequest error:', err);
