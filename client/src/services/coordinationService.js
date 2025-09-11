@@ -183,7 +183,9 @@ export const coordinationService = {
     
     if (!response.ok) {
       const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
-      throw new Error(errData.msg || 'Failed to create request');
+      const error = new Error(errData.msg || 'Failed to create request');
+      error.isDuplicate = errData.duplicateRequest || false;
+      throw error;
     }
     
     return await response.json();
@@ -230,6 +232,21 @@ export const coordinationService = {
     if (!response.ok) {
       const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
       throw new Error(errData.msg || 'Failed to get room exchange counts');
+    }
+    
+    return await response.json();
+  },
+
+  // 보낸 교환 요청 내역 가져오기
+  async getSentRequests() {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/coordination/sent-requests`, {
+      headers: { 'x-auth-token': token },
+    });
+    
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to get sent requests');
     }
     
     return await response.json();

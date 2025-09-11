@@ -376,6 +376,24 @@ exports.createRequest = async (req, res) => {
       return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
     }
 
+    // 중복 요청 체크
+    const existingRequest = room.requests.find(request => 
+      request.requester.toString() === req.user.id &&
+      request.status === 'pending' &&
+      request.type === type &&
+      request.timeSlot.day === timeSlot.day &&
+      request.timeSlot.startTime === timeSlot.startTime &&
+      request.timeSlot.endTime === timeSlot.endTime &&
+      (targetUserId ? request.targetUserId === targetUserId : true)
+    );
+
+    if (existingRequest) {
+      return res.status(400).json({ 
+        msg: '동일한 시간표에 대한 교환요청이 이미 존재합니다.',
+        duplicateRequest: true 
+      });
+    }
+
     const newRequest = {
       _id: new mongoose.Types.ObjectId(),
       requester: req.user.id,
@@ -658,6 +676,58 @@ exports.getRoomExchangeCounts = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to get room exchange counts',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Get sent requests by user
+// @route   GET /api/coordination/sent-requests
+// @access  Private
+exports.getSentRequests = async (req, res) => {
+  try {
+    const rooms = await Room.find({
+      'members.user': req.user.id
+    }).populate('requests.requester', '_id firstName lastName email');
+
+    const sentRequests = [];
+
+    rooms.forEach(room => {
+      if (room.requests && room.requests.length > 0) {
+        const userSentRequests = room.requests.filter(request => 
+          request.requester._id.toString() === req.user.id
+        );
+        
+        userSentRequests.forEach(request => {
+          sentRequests.push({
+            _id: request._id,
+            roomId: room._id,
+            roomName: room.name,
+            type: request.type,
+            timeSlot: request.timeSlot,
+            targetSlot: request.targetSlot,
+            targetUserId: request.targetUserId,
+            message: request.message,
+            status: request.status,
+            createdAt: request.createdAt
+          });
+        });
+      }
+    });
+
+    // 최신순으로 정렬
+    sentRequests.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json({
+      success: true,
+      requests: sentRequests
+    });
+
+  } catch (error) {
+    console.error('Error getting sent requests:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get sent requests',
       error: error.message
     });
   }

@@ -36,7 +36,9 @@ function App() {
       backgroundTranscript,
       toggleBackgroundMonitoring,
       confirmSchedule,
-      dismissSchedule
+      dismissSchedule,
+      voiceStatus,
+      isAnalyzing: voiceAnalyzing
    } = useIntegratedVoiceSystem(isLoggedIn, isVoiceRecognitionEnabled, eventActions, areEventActionsReady, setEventAddedKey, handleChatMessage);
    
    const [sharedText, setSharedText] = useState(null);
@@ -203,6 +205,8 @@ function App() {
             <MobileStatusIndicator 
                isBackgroundMonitoring={isBackgroundMonitoring}
                isCallDetected={isCallDetected}
+               voiceStatus={voiceStatus}
+               isAnalyzing={voiceAnalyzing}
             />
          )}
       </Router>
