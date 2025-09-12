@@ -17,6 +17,9 @@ router.post('/rooms/:roomId/slots', auth, coordinationController.submitTimeSlots
 router.post('/rooms/:roomId/slots/remove', auth, coordinationController.removeTimeSlot);
 router.post('/rooms/:roomId/assign', auth, coordinationController.assignTimeSlot);
 
+// AI-based scheduling
+router.post('/rooms/:roomId/find-common-slots', auth, coordinationController.findCommonSlots);
+
 // Request management
 router.post('/requests', auth, coordinationController.createRequest);
 router.post('/requests/:requestId/:action', auth, coordinationController.handleRequest);

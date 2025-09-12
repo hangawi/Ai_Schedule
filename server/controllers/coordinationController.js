@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const Room = require('../models/room');
 const User = require('../models/user');
+const Event = require('../models/event');
+const { findOptimalSlots } = require('../services/schedulingAnalysisService');
 const { OWNER_COLOR, getAvailableColor } = require('../utils/colorUtils');
 
 // @desc    Create a new coordination room
@@ -751,6 +753,104 @@ exports.cancelRequest = async (req, res) => {
       message: 'Failed to cancel request',
       error: error.message
     });
+  }
+};
+
+
+// @desc    Find common available slots using AI
+// @route   POST /api/coordination/rooms/:roomId/find-common-slots
+// @access  Private (Owner only)
+exports.findCommonSlots = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const constraints = req.body; // { durationMinutes, timeOfDay, numberOfOptions, dateRange: { start, end } }
+
+    const room = await Room.findById(roomId).populate('members.user', 'id firstName lastName defaultSchedule scheduleExceptions');
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    if (!room.isOwner(req.user.id)) {
+      return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
+    }
+
+    const memberIds = room.members.map(m => m.user.id);
+
+    const searchStartDate = new Date(constraints.dateRange.start);
+    const searchEndDate = new Date(constraints.dateRange.end);
+
+    // Fetch all personal events for all members in the given date range
+    const memberEvents = await Event.find({
+      user: { $in: memberIds },
+      startTime: { $lt: searchEndDate },
+      endTime: { $gt: searchStartDate },
+    });
+
+    const membersAvailability = room.members.map(member => {
+      const user = member.user;
+      const userEvents = memberEvents.filter(e => e.user.toString() === user.id.toString());
+      
+      let availability = [];
+      // Iterate through each day in the date range
+      for (let d = new Date(searchStartDate); d <= searchEndDate; d.setDate(d.getDate() + 1)) {
+        const dayOfWeek = d.getDay();
+        const dateStr = d.toISOString().split('T')[0];
+
+        // Get default slots for the day
+        const defaultSlots = user.defaultSchedule.filter(s => s.dayOfWeek === dayOfWeek);
+
+        defaultSlots.forEach(slot => {
+          const start = new Date(`${dateStr}T${slot.startTime}:00.000Z`);
+          const end = new Date(`${dateStr}T${slot.endTime}:00.000Z`);
+          availability.push({ start, end });
+        });
+      }
+
+      // Subtract exceptions
+      user.scheduleExceptions.forEach(exc => {
+        const excStart = new Date(exc.startTime);
+        const excEnd = new Date(exc.endTime);
+        availability = availability.flatMap(slot => {
+          // Case 1: Exception covers the whole slot -> remove slot
+          if (excStart <= slot.start && excEnd >= slot.end) return [];
+          // Case 2: Exception splits the slot -> create two new slots
+          if (excStart > slot.start && excEnd < slot.end) return [{ start: slot.start, end: excStart }, { start: excEnd, end: slot.end }];
+          // Case 3: Exception truncates the start -> move slot start
+          if (excStart <= slot.start && excEnd > slot.start) return [{ start: excEnd, end: slot.end }];
+          // Case 4: Exception truncates the end -> move slot end
+          if (excStart < slot.end && excEnd >= slot.end) return [{ start: slot.start, end: excStart }];
+          // No overlap
+          return [slot];
+        });
+      });
+
+      // Subtract personal events
+      userEvents.forEach(event => {
+        const eventStart = new Date(event.startTime);
+        const eventEnd = new Date(event.endTime);
+         availability = availability.flatMap(slot => {
+          if (eventStart <= slot.start && eventEnd >= slot.end) return [];
+          if (eventStart > slot.start && eventEnd < slot.end) return [{ start: slot.start, end: eventStart }, { start: eventEnd, end: slot.end }];
+          if (eventStart <= slot.start && eventEnd > slot.start) return [{ start: eventEnd, end: slot.end }];
+          if (eventStart < slot.end && eventEnd >= slot.end) return [{ start: slot.start, end: eventStart }];
+          return [slot];
+        });
+      });
+
+      return {
+        id: user.id,
+        name: `${user.firstName} ${user.lastName}`,
+        availability: availability
+      };
+    });
+
+    const result = await findOptimalSlots(membersAvailability, constraints);
+
+    res.json(result);
+
+  } catch (error) {
+    console.error('Error finding common slots:', error);
+    res.status(500).json({ msg: 'Server error while finding common slots' });
   }
 };
 

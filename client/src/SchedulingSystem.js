@@ -9,7 +9,8 @@ import {
    LayoutDashboard,
    ListTodo,
    Bot,
-   History
+   History,
+   User
 } from 'lucide-react';
 import MyCalendar from './components/calendar/Calendar';
 import EventFormModal from './components/forms/EventFormModal';
@@ -17,6 +18,7 @@ import DashboardTab from './components/tabs/DashboardTab';
 import ProposalsTab from './components/tabs/ProposalsTab';
 import EventsTab from './components/tabs/EventsTab';
 import AgentTab from './components/tabs/AgentTab';
+import ProfileTab from './components/tabs/ProfileTab';
 import CoordinationTab from './components/tabs/CoordinationTab';
 import CreateProposalModal from './components/forms/CreateProposalModal';
 import TimeSelectionModal from './components/forms/TimeSelectionModal';
@@ -354,7 +356,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                      <Calendar size={20} />
                   </button>
                   {isLoggedIn && (
-                     <button className="hidden sm:flex w-auto min-w-[40px] h-8 bg-blue-100 text-blue-600 rounded-full items-center justify-center cursor-pointer px-3 mr-2" onClick={() => showAlert('프로필 페이지로 이동 (구현 예정)', 'info', '알림')}>
+                     <button className="hidden sm:flex w-auto min-w-[40px] h-8 bg-blue-100 text-blue-600 rounded-full items-center justify-center cursor-pointer px-3 mr-2" onClick={() => setActiveTab('profile')}>
                         {user && user.firstName ? user.firstName : '프로필'}
                      </button>
                   )}
@@ -390,6 +392,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                </div>
                <div className="space-y-1">
                   <NavItem icon={<LayoutDashboard size={18} />} label="대시보드" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }} />
+                  <NavItem icon={<User size={18} />} label="내 프로필" active={activeTab === 'profile'} onClick={() => { setActiveTab('profile'); setIsSidebarOpen(false); }} />
                   <NavItem icon={<ListTodo size={18} />} label="나의 일정" active={activeTab === 'events'} onClick={() => { setActiveTab('events'); setIsSidebarOpen(false); }} />
                   <NavItem icon={<Calendar size={18} />} label="Google 캘린더" active={activeTab === 'googleCalendar'} onClick={() => { setActiveTab('googleCalendar'); setIsSidebarOpen(false); }} />
                   <NavItem icon={<History size={18} />} label="조율 내역" active={activeTab === 'proposals'} onClick={() => { setActiveTab('proposals'); setIsSidebarOpen(false); }} />
@@ -405,6 +408,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                {activeTab === 'googleCalendar' && <MyCalendar isListening={isListening} onEventAdded={eventAddedKey} isVoiceRecognitionEnabled={isVoiceRecognitionEnabled} onToggleVoiceRecognition={() => setIsVoiceRecognitionEnabled(prev => !prev)} />}
                {activeTab === 'coordination' && <CoordinationTab user={user} onExchangeRequestCountChange={setExchangeRequestCount} onRefreshExchangeCount={refreshExchangeRequestCount} />}
                {activeTab === 'agent' && <AgentTab />}
+               {activeTab === 'profile' && <ProfileTab user={user} />}
             </main>
          </div>
 
