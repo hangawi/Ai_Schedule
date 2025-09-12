@@ -23,6 +23,9 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
   const showAlert = (message) => setCustomAlert({ show: true, message });
   const closeAlert = () => setCustomAlert({ show: false, message: '' });
   
+  // 최근 요청 추적 (중복 방지)
+  const [recentRequests, setRecentRequests] = useState(new Set());
+  
   const [weekDates, setWeekDates] = useState([]);
 
   useEffect(() => {
@@ -88,7 +91,17 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
   // Don't filter out blocked times - we want to show them as blocked
   const filteredTimeSlotsInDay = timeSlotsInDay;
 
-  const [currentSelectedSlots, setCurrentSelectedSlots] = useState([]);
+  // Use selectedSlots from props instead of internal state
+  const currentSelectedSlots = useMemo(() => {
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+    return selectedSlots?.map(slot => {
+      const dayIndex = days.indexOf(slot.day);
+      return {
+        dayIndex,
+        time: slot.startTime
+      };
+    }).filter(slot => slot.dayIndex !== -1) || [];
+  }, [selectedSlots]);
 
   
 
@@ -104,23 +117,7 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
   // Calculate the Monday of the current week once
   const mondayOfCurrentWeek = useMemo(() => getMondayOfCurrentWeek(new Date()), []);
 
-  // Effect to notify parent about selected slots (in new format)
-  useEffect(() => {
-    const selectedSlots = currentSelectedSlots.map(slot => {
-      if (!slot.time) return null;
-      const [hour, minute] = slot.time.split(':').map(Number);
-      const endHour = minute === 30 ? hour + 1 : hour;
-      const endMinute = minute === 30 ? 0 : minute + 30;
-      
-      return {
-        day: dayNames[slot.dayIndex],
-        startTime: slot.time,
-        endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
-        subject: '새 일정' // Default subject
-      };
-    }).filter(slot => slot !== null);
-    onSlotSelect(selectedSlots);
-  }, [currentSelectedSlots, onSlotSelect]);
+  // selectedSlots are now managed by parent component via props
 
   // Helper to get who booked a slot (based on Date object overlap)
   // Helper to get who booked a slot
@@ -209,11 +206,6 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
 
   // Function to handle slot click
   const handleSlotClick = useCallback((dayIndex, time) => {
-    // 방장은 시간표를 클릭할 수 없음
-    if (isRoomOwner) {
-      showAlert('방장은 시간표에 직접 참여할 수 없습니다. 방 관리 기능을 이용해주세요.');
-      return;
-    }
 
     const isBlocked = !!getBlockedTimeInfo(time);
     const ownerInfo = getSlotOwner(dayIndex, time);
@@ -246,40 +238,42 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
       } else {
         // User clicks on someone else's assigned slot - request swap
         
-        // 중복 교환 요청 확인
+        // 중복 교환 요청 확인 (로컬 및 서버 모두 체크)
+        const requestKey = `${dayNames[dayIndex]}-${time}-${ownerInfo.actualUserId || ownerInfo.userId}`;
         
+        // 1. 최근 요청 로컬 체크 (즉시 중복 방지)
+        if (recentRequests.has(requestKey)) {
+          showAlert('이미 이 시간대에 대한 교환 요청을 보냈습니다. 기존 요청이 처리될 때까지 기다려주세요.');
+          return;
+        }
+        
+        // 2. 서버 데이터 체크
         const existingSwapRequest = roomData?.requests?.find(request => {
           const requesterId = request.requester?.id || request.requester?._id || request.requester;
-          const isMatch = request.status === 'pending' &&
+          return request.status === 'pending' &&
             request.type === 'slot_swap' &&
             (requesterId === currentUser?.id || requesterId?.toString() === currentUser?.id?.toString()) &&
             request.timeSlot?.day === dayNames[dayIndex] &&
             request.timeSlot?.startTime === time &&
             request.targetUserId === (ownerInfo.actualUserId || ownerInfo.userId);
-          
-          console.log('요청 체크:', {
-            requestId: request._id,
-            requester: request.requester,
-            requesterId: requesterId,
-            currentUserId: currentUser?.id,
-            requestStatus: request.status,
-            requestType: request.type,
-            timeSlotDay: request.timeSlot?.day,
-            expectedDay: dayNames[dayIndex],
-            timeSlotStart: request.timeSlot?.startTime,
-            expectedTime: time,
-            targetUserId: request.targetUserId,
-            expectedTargetId: ownerInfo.actualUserId || ownerInfo.userId,
-            isMatch
-          });
-          
-          return isMatch;
         });
 
         if (existingSwapRequest) {
           showAlert('이미 이 시간대에 대한 교환 요청을 보냈습니다. 기존 요청이 처리될 때까지 기다려주세요.');
           return;
         }
+        
+        // 3. 요청 진행 - 로컬 상태에 추가
+        setRecentRequests(prev => new Set([...prev, requestKey]));
+        
+        // 5초 후 로컬 상태에서 제거 (실제 서버 응답 시간 고려)
+        setTimeout(() => {
+          setRecentRequests(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(requestKey);
+            return newSet;
+          });
+        }, 5000);
         
         // Find the actual existing slot to get the subject
         const existingSlot = timeSlots.find(slot => 
@@ -306,20 +300,38 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
         setShowChangeRequestModal(true);
       }
     } else { // Empty slot
-      if (!isRoomOwner) { // Only members can select empty slots
-        const clickedSlotIdentifier = { dayIndex, time };
-        setCurrentSelectedSlots(prev => {
-          const isSelected = prev.some(s => s.dayIndex === dayIndex && s.time === time);
-          if (isSelected) {
-            return prev.filter(s => !(s.dayIndex === dayIndex && s.time === time));
-          } else {
-            return [...prev, clickedSlotIdentifier];
-          }
-        });
+      if (isRoomOwner) {
+        // Room owner clicks empty slot - show assignment modal
+        setSlotToAssign({ dayIndex, time });
+        setShowAssignModal(true);
+      } else {
+        // Members can select empty slots
+        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+        const isSelected = selectedSlots.some(s => s.day === days[dayIndex] && s.startTime === time);
+        
+        let newSelectedSlots;
+        if (isSelected) {
+          // Remove the slot
+          newSelectedSlots = selectedSlots.filter(s => !(s.day === days[dayIndex] && s.startTime === time));
+        } else {
+          // Add the slot
+          const [hour, minute] = time.split(':').map(Number);
+          const endHour = minute === 30 ? hour + 1 : hour;
+          const endMinute = minute === 30 ? 0 : minute + 30;
+          
+          const newSlot = {
+            day: days[dayIndex],
+            startTime: time,
+            endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
+            subject: '새 일정'
+          };
+          newSelectedSlots = [...selectedSlots, newSlot];
+        }
+        
+        onSlotSelect(newSelectedSlots);
       }
-      // If isRoomOwner is true, do nothing for empty slots (as per original logic)
     }
-  }, [getBlockedTimeInfo, getSlotOwner, currentUser, isRoomOwner, onRemoveSlot, calculateEndTime]);
+  }, [getBlockedTimeInfo, getSlotOwner, currentUser, isRoomOwner, onRemoveSlot, calculateEndTime, selectedSlots, onSlotSelect]);
 
   // Function to handle assignment from modal
   const handleAssign = useCallback((memberId) => {
@@ -579,9 +591,12 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
 
       {/* CustomAlert Modal */}
       <CustomAlertModal
-        show={customAlert.show}
+        isOpen={customAlert.show}
         onClose={closeAlert}
+        title="알림"
         message={customAlert.message}
+        type="warning"
+        showCancel={false}
       />
     </div>
   );
