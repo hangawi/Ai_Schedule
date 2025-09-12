@@ -358,13 +358,8 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                   <button className="hidden sm:block text-gray-600 hover:text-gray-800" onClick={() => setActiveTab('googleCalendar')}>
                      <Calendar size={20} />
                   </button>
-                  {isLoggedIn && (
-                     <button className="hidden sm:flex w-auto min-w-[40px] h-8 bg-blue-100 text-blue-600 rounded-full items-center justify-center cursor-pointer px-3 mr-2" onClick={() => setActiveTab('profile')}>
-                        {user && user.firstName ? user.firstName : '프로필'}
-                     </button>
-                  )}
                   
-                  {/* 백그라운드 모니터링 버튼 */}
+                  {/* 백그라운드 모니터링 버튼 - 달력 아이콘 바로 옆 */}
                   <div className="hidden sm:block">
                      <BackgroundCallIndicator
                         isMonitoring={isBackgroundMonitoring}
@@ -375,6 +370,12 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                         isAnalyzing={isAnalyzing}
                      />
                   </div>
+                  
+                  {isLoggedIn && (
+                     <button className="hidden sm:flex w-auto min-w-[40px] h-8 bg-blue-100 text-blue-600 rounded-full items-center justify-center cursor-pointer px-3 mr-2" onClick={() => setActiveTab('profile')}>
+                        {user && user.firstName ? user.firstName : '프로필'}
+                     </button>
+                  )}
                   
                   <button 
                      onClick={() => setIsVoiceRecognitionEnabled(prev => !prev)} 
