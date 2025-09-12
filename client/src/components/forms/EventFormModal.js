@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
+import CustomAlertModal from '../modals/CustomAlertModal';
 
 const EventFormModal = ({ onClose, onSubmitEvent, event }) => {
    const [title, setTitle] = useState(event ? event.title : '');
@@ -7,13 +8,18 @@ const EventFormModal = ({ onClose, onSubmitEvent, event }) => {
    const [time, setTime] = useState(event ? event.time : '');
    const [color, setColor] = useState(event ? event.color : 'blue');
 
+   // CustomAlert 상태
+   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
+   const showAlert = (message) => setCustomAlert({ show: true, message });
+   const closeAlert = () => setCustomAlert({ show: false, message: '' });
+
    const isEditMode = !!event;
 
    const handleSubmit = async () => {
       if (title && date && time) {
          await onSubmitEvent({ title, date, time, color }, event ? event.id : null);
       } else {
-         alert('모든 필드를 채워주세요.');
+         showAlert('모든 필드를 채워주세요.');
       }
    };
 
@@ -52,6 +58,13 @@ const EventFormModal = ({ onClose, onSubmitEvent, event }) => {
                <button onClick={handleSubmit} className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">{isEditMode ? '수정' : '추가'}</button>
             </div>
          </div>
+
+         {/* CustomAlert Modal */}
+         <CustomAlertModal
+           show={customAlert.show}
+           onClose={closeAlert}
+           message={customAlert.message}
+         />
       </div>
    );
 };

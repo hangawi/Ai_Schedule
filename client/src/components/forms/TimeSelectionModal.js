@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
+import CustomAlertModal from '../modals/CustomAlertModal';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
 const TimeSelectionModal = ({ onClose, proposal, onFinalize }) => {
    const [selectedTimeIndex, setSelectedTimeIndex] = useState(null);
 
+   // CustomAlert 상태
+   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
+   const showAlert = (message) => setCustomAlert({ show: true, message });
+   const closeAlert = () => setCustomAlert({ show: false, message: '' });
+
    const handleFinalize = async () => {
       if (selectedTimeIndex === null) {
-         alert('시간을 선택해주세요.');
+         showAlert('시간을 선택해주세요.');
          return;
       }
       const token = localStorage.getItem('token');
       if (!token) {
-         alert('로그인이 필요합니다.');
+         showAlert('로그인이 필요합니다.');
          return;
       }
       const finalTime = proposal.suggestedTimes[selectedTimeIndex].startTime;
@@ -32,7 +38,7 @@ const TimeSelectionModal = ({ onClose, proposal, onFinalize }) => {
          onClose();
       } catch (error) {
          console.error('Error finalizing time:', error);
-         alert(`시간 확정에 실패했습니다: ${error.message}`);
+         showAlert(`시간 확정에 실패했습니다: ${error.message}`);
       }
    };
 
@@ -68,6 +74,13 @@ const TimeSelectionModal = ({ onClose, proposal, onFinalize }) => {
                <button onClick={handleFinalize} className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600" disabled={proposal.suggestedTimes.length === 0 || selectedTimeIndex === null}>시간 확정</button>
             </div>
          </div>
+
+         {/* CustomAlert Modal */}
+         <CustomAlertModal
+           show={customAlert.show}
+           onClose={closeAlert}
+           message={customAlert.message}
+         />
       </div>
    );
 };

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import SchedulingSystem from './SchedulingSystem';
-import { AuthScreen } from './components/auth/AuthScreen';
+import AuthScreen from './components/auth/AuthScreen';
 import ChatBox from './components/chat/ChatBox';
 import CommandModal from './components/modals/CommandModal';
 import SharedTextModal from './components/modals/SharedTextModal';

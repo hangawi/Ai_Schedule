@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
+import CustomAlertModal from './CustomAlertModal';
 
 const AssignSlotModal = ({ onClose, onAssign, slotInfo, members }) => {
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const days = ['월', '화', '수', '목', '금'];
 
+  // CustomAlert 상태
+  const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
+  const showAlert = (message) => setCustomAlert({ show: true, message });
+  const closeAlert = () => setCustomAlert({ show: false, message: '' });
+
   const handleSubmit = () => {
     if (!selectedMemberId) {
-      alert('조원을 선택해주세요.');
+      showAlert('조원을 선택해주세요.');
       return;
     }
     onAssign(selectedMemberId);
@@ -44,6 +50,13 @@ const AssignSlotModal = ({ onClose, onAssign, slotInfo, members }) => {
           <button onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">취소</button>
           <button onClick={handleSubmit} className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">배정</button>
         </div>
+
+        {/* CustomAlert Modal */}
+        <CustomAlertModal
+          show={customAlert.show}
+          onClose={closeAlert}
+          message={customAlert.message}
+        />
       </div>
     </div>
   );

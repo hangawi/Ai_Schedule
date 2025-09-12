@@ -12,6 +12,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { coordinationService } from '../../services/coordinationService';
 import { Users, Calendar, PlusCircle, LogIn } from 'lucide-react';
 import { translateEnglishDays } from '../../utils';
+import CustomAlertModal from '../modals/CustomAlertModal';
 
 const dayMap = {
   'monday': '월요일', 'tuesday': '화요일', 'wednesday': '수요일',
@@ -22,6 +23,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const { user } = useAuth();
   const [roomExchangeCounts, setRoomExchangeCounts] = useState({}); // 방별 교환요청 수
   const [sentRequests, setSentRequests] = useState([]); // 보낸 요청 내역
+
+  // CustomAlert 상태
+  const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
+  const showAlert = (message) => setCustomAlert({ show: true, message });
+  const closeAlert = () => setCustomAlert({ show: false, message: '' });
 
   // 방별 교환요청 수 로드
   const loadRoomExchangeCounts = async () => {
@@ -49,7 +55,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     }
   };
 
-  const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest } = useCoordination(user?.id, onRefreshExchangeCount, loadSentRequests);
+  const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest } = useCoordination(user?.id, onRefreshExchangeCount, loadSentRequests, showAlert);
   
   // Modal management hook
   const {
@@ -166,7 +172,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         await fetchRoomDetails(room._id);
       } catch (error) {
         console.error('Failed to fetch room details:', error);
-        alert(`방 접근 실패: ${error.message || error}`);
+        showAlert(`방 접근 실패: ${error.message || error}`);
       }
     } else {
       setCurrentRoom(room);
@@ -916,6 +922,13 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       {showJoinRoomModal && (
         <RoomJoinModal onClose={closeJoinRoomModal} onJoinRoom={handleJoinRoom} />
       )}
+
+      {/* CustomAlert Modal */}
+      <CustomAlertModal
+        show={customAlert.show}
+        onClose={closeAlert}
+        message={customAlert.message}
+      />
     </div>
   );
 };

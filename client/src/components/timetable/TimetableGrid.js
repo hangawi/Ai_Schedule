@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import CustomAlertModal from '../modals/CustomAlertModal';
+import TimetableControls from './TimetableControls';
+import WeekView from './WeekView';
 
 const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
 
@@ -14,6 +17,11 @@ const getMondayOfCurrentWeek = (date) => {
 };
 
 const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onSlotSelect, currentUser, isRoomOwner, onAssignSlot, onRequestSlot, onRemoveSlot, onDirectSubmit, selectedSlots, events, proposals, calculateEndTime }) => {
+
+  // CustomAlert 상태
+  const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
+  const showAlert = (message) => setCustomAlert({ show: true, message });
+  const closeAlert = () => setCustomAlert({ show: false, message: '' });
   
   const [weekDates, setWeekDates] = useState([]);
 
@@ -203,7 +211,7 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
   const handleSlotClick = useCallback((dayIndex, time) => {
     // 방장은 시간표를 클릭할 수 없음
     if (isRoomOwner) {
-      alert('방장은 시간표에 직접 참여할 수 없습니다. 방 관리 기능을 이용해주세요.');
+      showAlert('방장은 시간표에 직접 참여할 수 없습니다. 방 관리 기능을 이용해주세요.');
       return;
     }
 
@@ -269,7 +277,7 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
         });
 
         if (existingSwapRequest) {
-          alert('이미 이 시간대에 대한 교환 요청을 보냈습니다. 기존 요청이 처리될 때까지 기다려주세요.');
+          showAlert('이미 이 시간대에 대한 교환 요청을 보냈습니다. 기존 요청이 처리될 때까지 기다려주세요.');
           return;
         }
         
@@ -447,64 +455,19 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
   return (
     <div className="timetable-grid border border-gray-200 rounded-lg overflow-hidden">
       {/* Header Row (Days) */}
-      <div className="grid grid-cols-6 bg-gray-100 border-b border-gray-200">
-        <div className="col-span-1 p-2 text-center font-semibold text-gray-700">시간</div>
-        {(weekDates.length > 0 ? weekDates : days).map((day, index) => (
-          <div key={index} className="col-span-1 p-2 text-center font-semibold text-gray-700 border-l border-gray-200">
-            {day}
-          </div>
-        ))}
-      </div>
+      <TimetableControls weekDates={weekDates} days={days} />
 
       {/* Time Rows */}
-      {filteredTimeSlotsInDay.map(time => (
-        <div key={time} className="grid grid-cols-6 border-b border-gray-200 last:border-b-0">
-          <div className="col-span-1 p-2 text-center text-sm font-medium text-gray-600 flex items-center justify-center">
-            {time}
-          </div>
-          {days.map((day, dayIndex) => {
-            const ownerInfo = getSlotOwner(dayIndex, time);
-            const isSelected = isSlotSelected(dayIndex, time);
-            const blockedInfo = getBlockedTimeInfo(time);
-            const isBlocked = !!blockedInfo;
-            
-            return (
-              <div
-                key={`${day}-${time}`}
-                className={`col-span-1 border-l border-gray-200 h-10 flex items-center justify-center
-                  ${isBlocked ? 'bg-gray-300 cursor-not-allowed' : ''}
-                  ${isRoomOwner ? 'cursor-not-allowed opacity-60' : ''}
-                  ${!isBlocked && !ownerInfo && isSelected && !isRoomOwner ? 'bg-blue-200 border-2 border-blue-400' : ''}
-                  ${!isBlocked && !ownerInfo && !isSelected && currentUser && !isRoomOwner ? 'hover:bg-blue-50 cursor-pointer' : ''}
-                  ${!isBlocked && ownerInfo && currentUser && !isRoomOwner ? 'cursor-pointer hover:opacity-80' : ''}
-                  ${!isBlocked && !ownerInfo && !isSelected && !isRoomOwner ? '' : ''}
-                `}
-                style={!isBlocked && ownerInfo ? { backgroundColor: `${ownerInfo.color}20`, borderColor: ownerInfo.color } : {}}
-                onClick={() => handleSlotClick(dayIndex, time)}
-              >
-                {isBlocked ? (
-                  <span className="text-xs text-gray-600 font-medium" title={`${blockedInfo.startTime} - ${blockedInfo.endTime}`}>
-                    {blockedInfo.name}
-                  </span>
-                ) : (
-                  <>
-                    {ownerInfo && (
-                      <span className="text-xs font-medium px-1 py-0.5 rounded" style={{ color: ownerInfo.color, backgroundColor: `${ownerInfo.color}10` }}>
-                        {ownerInfo.name.length > 6 ? ownerInfo.name.substring(0, 4) + '...' : ownerInfo.name}
-                      </span>
-                    )}
-                    {!ownerInfo && isSelected && !isRoomOwner && (
-                      <span className="text-xs font-medium text-blue-700 px-1 py-0.5 rounded bg-blue-100">
-                        선택됨
-                      </span>
-                    )}
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      ))}
+      <WeekView 
+        filteredTimeSlotsInDay={filteredTimeSlotsInDay}
+        days={days}
+        getSlotOwner={getSlotOwner}
+        isSlotSelected={isSlotSelected}
+        getBlockedTimeInfo={getBlockedTimeInfo}
+        isRoomOwner={isRoomOwner}
+        currentUser={currentUser}
+        handleSlotClick={handleSlotClick}
+      />
 
       {/* Assignment Modal Placeholder */}
       {showAssignModal && slotToAssign && (
@@ -613,6 +576,13 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
           </div>
         </div>
       )}
+
+      {/* CustomAlert Modal */}
+      <CustomAlertModal
+        show={customAlert.show}
+        onClose={closeAlert}
+        message={customAlert.message}
+      />
     </div>
   );
 };
