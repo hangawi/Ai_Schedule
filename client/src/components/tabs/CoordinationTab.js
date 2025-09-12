@@ -10,9 +10,10 @@ import { useCoordination } from '../../hooks/useCoordination';
 import { useCoordinationModals } from '../../hooks/useCoordinationModals';
 import { useAuth } from '../../hooks/useAuth';
 import { coordinationService } from '../../services/coordinationService';
-import { Users, Calendar, PlusCircle, LogIn } from 'lucide-react';
+import { Users, Calendar, PlusCircle, LogIn, WandSparkles } from 'lucide-react';
 import { translateEnglishDays } from '../../utils';
 import CustomAlertModal from '../modals/CustomAlertModal';
+import MemberScheduleModal from '../modals/MemberScheduleModal';
 
 const dayMap = {
   'monday': '월요일', 'tuesday': '화요일', 'wednesday': '수요일',
@@ -28,6 +29,35 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
   const showAlert = (message) => setCustomAlert({ show: true, message });
   const closeAlert = () => setCustomAlert({ show: false, message: '' });
+
+  // AI Scheduler State
+  const [aiConstraints, setAiConstraints] = useState({
+    durationMinutes: 60,
+    timeOfDay: 'Any',
+    numberOfOptions: 3,
+    dateRange: {
+      start: new Date().toISOString().split('T')[0],
+      end: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0]
+    }
+  });
+  const [aiResults, setAiResults] = useState(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+
+  const handleFindSlots = async () => {
+    if (!currentRoom) return;
+    setIsAiLoading(true);
+    setAiError(null);
+    setAiResults(null);
+    try {
+      const results = await coordinationService.findCommonSlots(currentRoom._id, aiConstraints);
+      setAiResults(results);
+    } catch (error) {
+      setAiError(error.message);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
 
   // 방별 교환요청 수 로드
   const loadRoomExchangeCounts = async () => {
@@ -72,6 +102,14 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
   const [selectedSlots, setSelectedSlots] = useState([]);
   const [selectedTab, setSelectedTab] = useState('owned'); // 'owned' or 'joined'
+  const [showMemberScheduleModal, setShowMemberScheduleModal] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState(null);
+
+  const handleMemberClick = (memberId) => {
+    console.log('Member clicked:', memberId); // Debug log
+    setSelectedMemberId(memberId);
+    setShowMemberScheduleModal(true);
+  };
   
   // 새로운 UI 상태들
   const [requestViewMode, setRequestViewMode] = useState('received'); // 'received' or 'sent'
@@ -317,13 +355,14 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   return (
                     <div
                       key={memberData._id || index}
-                      className={`flex items-center p-3 rounded-lg border ${
+                      className={`flex items-center p-3 rounded-lg border cursor-pointer ${
                         memberIsOwner 
                           ? 'bg-red-50 border-red-200 ring-2 ring-red-100' 
                           : isCurrentUser 
                             ? 'bg-blue-50 border-blue-200' 
                             : 'bg-gray-50 border-gray-200'
                       }`}
+                      onClick={() => handleMemberClick(memberData._id || memberData.id)} // Add onClick handler
                     >
                       <div
                         className={`w-5 h-5 rounded-full mr-3 flex-shrink-0 ${
@@ -697,7 +736,22 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
           {/* 시간표 그리드 */}
           <div className="lg:col-span-3">
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4">
+            {isOwner && 
+              <AiSchedulerPanel 
+                constraints={aiConstraints} 
+                setConstraints={setAiConstraints} 
+                onFindSlots={handleFindSlots}
+                isLoading={isAiLoading}
+              />
+            }
+            {aiResults || aiError ? 
+              <AiScheduleResults 
+                results={aiResults} 
+                error={aiError} 
+                onClose={() => setAiResults(null)} 
+              /> : null
+            }
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mt-4">
               <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
                 <Calendar size={20} className="mr-2 text-green-600" />
                 시간표 ({scheduleStartHour}:00 - {scheduleEndHour}:00)
@@ -853,6 +907,17 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             <LogIn size={18} className="mr-2" />
             조율방 참여
           </button>
+          {/* Test button for MemberScheduleModal */}
+          <button
+            onClick={() => {
+              console.log('Test button clicked!');
+              setSelectedMemberId('68bfb7c0a89ab6ee047d69b3'); // Use a dummy ID
+              setShowMemberScheduleModal(true);
+            }}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center transition-all shadow-md hover:shadow-lg"
+          >
+            Test Member Modal
+          </button>
         </div>
       </div>
 
@@ -922,16 +987,124 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       {showJoinRoomModal && (
         <RoomJoinModal onClose={closeJoinRoomModal} onJoinRoom={handleJoinRoom} />
       )}
-
       {/* CustomAlert Modal */}
       <CustomAlertModal
-        show={customAlert.show}
+        isOpen={customAlert.show}
         onClose={closeAlert}
+        title="알림"
         message={customAlert.message}
+        type="warning"
+        showCancel={false}
       />
+      
+      {showMemberScheduleModal && selectedMemberId && (
+        <MemberScheduleModal
+          memberId={selectedMemberId}
+          onClose={() => setShowMemberScheduleModal(false)}
+        />
+      )}
     </div>
   );
 };
 
 
 export default CoordinationTab;
+
+const AiSchedulerPanel = ({ constraints, setConstraints, onFindSlots, isLoading }) => {
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setConstraints(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleDateChange = (e) => {
+    const { name, value } = e.target;
+    setConstraints(prev => ({ ...prev, dateRange: { ...prev.dateRange, [name]: value } }));
+  };
+
+  return (
+    <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 mb-4">
+      <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center">
+        <WandSparkles size={20} className="mr-2 text-purple-600" />
+        AI 최적 시간 분석
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700">회의 시간 (분)</label>
+          <input 
+            type="number" 
+            name="durationMinutes" 
+            value={constraints.durationMinutes} 
+            onChange={handleInputChange} 
+            className="mt-1 block w-full p-2 border rounded-md"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">선호 시간대</label>
+          <select name="timeOfDay" value={constraints.timeOfDay} onChange={handleInputChange} className="mt-1 block w-full p-2 border rounded-md">
+            <option>Any</option>
+            <option>Morning</option>
+            <option>Afternoon</option>
+            <option>Evening</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">분석 시작일</label>
+          <input type="date" name="start" value={constraints.dateRange.start} onChange={handleDateChange} className="mt-1 block w-full p-2 border rounded-md"/>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">분석 종료일</label>
+          <input type="date" name="end" value={constraints.dateRange.end} onChange={handleDateChange} className="mt-1 block w-full p-2 border rounded-md"/>
+        </div>
+      </div>
+      <button 
+        onClick={onFindSlots} 
+        disabled={isLoading} 
+        className="mt-4 w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 disabled:bg-purple-300 flex items-center justify-center"
+      >
+        {isLoading ? '분석 중...' : '최적 시간 찾기'}
+      </button>
+    </div>
+  );
+};
+
+const AiScheduleResults = ({ results, error, onClose }) => {
+  if (!results && !error) return null;
+
+  const formatDate = (dateStr) => new Date(dateStr).toLocaleString('ko-KR', { weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 mb-4">
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="text-lg font-bold text-gray-800">AI 분석 결과</h3>
+        <button onClick={onClose} className="text-gray-500 hover:text-gray-800">X</button>
+      </div>
+      {error && <div className="text-red-500">오류: {error}</div>}
+      {results && results.success && (
+        <div>
+          <h4 className="font-semibold text-green-700">✅ 모두가 가능한 시간대</h4>
+          <ul className="list-disc pl-5 mt-2 space-y-1">
+            {results.commonSlots.map((slot, i) => (
+              <li key={i} className="text-sm">{formatDate(slot.startTime)} - {formatDate(slot.endTime)}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {results && !results.success && (
+        <div>
+          <h4 className="font-semibold text-orange-700">❌ 공통 시간을 찾지 못했습니다. 다음 대안은 어떠신가요?</h4>
+          <div className="mt-2 space-y-3">
+            {Object.entries(results.alternatives).map(([key, alt]) => (
+              <div key={key} className="p-3 bg-gray-50 rounded-md">
+                <h5 className="font-bold">{alt.title}</h5>
+                <p className="text-sm text-gray-600 mb-1">{alt.description}</p>
+                <p className="text-sm font-mono bg-gray-200 p-1 rounded">{formatDate(alt.details.startTime)} - {formatDate(alt.details.endTime)}</p>
+                {alt.details.absentMembers && <p className="text-xs text-red-600">불참: {alt.details.absentMembers.map(m => m.name).join(', ')}</p>}
+                {alt.details.conflictingMember && <p className="text-xs text-red-600">조정 필요: {alt.details.conflictingMember.name}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

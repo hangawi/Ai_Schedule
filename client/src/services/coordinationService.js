@@ -268,4 +268,24 @@ export const coordinationService = {
     return await response.json();
   },
 
+  // AI로 공통 시간 찾기
+  async findCommonSlots(roomId, constraints) {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/find-common-slots`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-auth-token': token,
+      },
+      body: JSON.stringify(constraints),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to find common slots with AI');
+    }
+
+    return await response.json();
+  },
+
 };

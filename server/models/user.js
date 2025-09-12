@@ -163,6 +163,20 @@ const UserSchema = new mongoose.Schema({
     accessToken: String,
     refreshToken: String,
   },
+
+  // 사용자의 기본 주간 시간표
+  defaultSchedule: [{
+    dayOfWeek: { type: Number, required: true, min: 0, max: 6 }, // 0: Sunday, ..., 6: Saturday
+    startTime: { type: String, required: true, match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/ }, // HH:MM
+    endTime: { type: String, required: true, match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/ } // HH:MM
+  }],
+
+  // 기본 시간표의 예외 (예: 휴가, 특별 이벤트)
+  scheduleExceptions: [{
+    title: { type: String, required: true },
+    startTime: { type: Date, required: true },
+    endTime: { type: Date, required: true }
+  }],
 }, {
   // 스키마 옵션
   timestamps: true, // createdAt, updatedAt 자동 관리
