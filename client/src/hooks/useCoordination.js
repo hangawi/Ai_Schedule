@@ -2,10 +2,55 @@ import { useState, useCallback, useEffect } from 'react';
 import { coordinationService } from '../services/coordinationService';
 
 export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentRequests) => {
-  const [currentRoom, setCurrentRoom] = useState(null);
+  const [currentRoomState, setCurrentRoomState] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [myRooms, setMyRooms] = useState([]);
+
+  // currentRoom을 설정할 때 localStorage에도 저장
+  const setCurrentRoom = useCallback((room) => {
+    setCurrentRoomState(room);
+    if (room) {
+      localStorage.setItem('currentRoomId', room._id);
+      localStorage.setItem('currentRoomData', JSON.stringify(room));
+    } else {
+      localStorage.removeItem('currentRoomId');
+      localStorage.removeItem('currentRoomData');
+    }
+  }, []);
+
+  // 페이지 로드 시 저장된 방 정보 복원
+  useEffect(() => {
+    const restoreCurrentRoom = async () => {
+      if (!userId) return;
+      
+      const savedRoomId = localStorage.getItem('currentRoomId');
+      if (savedRoomId) {
+        try {
+          // 실제 서버에서 최신 방 정보 가져오기
+          const data = await coordinationService.fetchRoomDetails(savedRoomId);
+          setCurrentRoomState(data);
+          localStorage.setItem('currentRoomData', JSON.stringify(data));
+        } catch (err) {
+          console.error('Failed to restore room:', err);
+          // 서버에서 가져오기 실패시 로컬 저장된 데이터 사용
+          const savedRoomData = localStorage.getItem('currentRoomData');
+          if (savedRoomData) {
+            try {
+              const parsedRoom = JSON.parse(savedRoomData);
+              setCurrentRoomState(parsedRoom);
+            } catch (parseErr) {
+              // 파싱 실패시 저장된 데이터 삭제
+              localStorage.removeItem('currentRoomId');
+              localStorage.removeItem('currentRoomData');
+            }
+          }
+        }
+      }
+    };
+
+    restoreCurrentRoom();
+  }, [userId]);
 
   const fetchRoomDetails = useCallback(async (roomId, silent = false) => {
     if (!silent) setError(null);
@@ -21,7 +66,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       }
       throw err;
     }
-  }, []);
+  }, [setCurrentRoom]);
 
   const fetchMyRooms = useCallback(async () => {
     setIsLoading(true);
@@ -56,7 +101,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       setError(err.message);
       throw err;
     }
-  }, []);
+  }, [setCurrentRoom]);
 
   const joinRoom = useCallback(async (inviteCode) => {
     setError(null);
@@ -69,7 +114,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       setError(err.message);
       throw err;
     }
-  }, []);
+  }, [setCurrentRoom]);
 
   const updateRoom = useCallback(async (roomId, updateData) => {
     setError(null);
@@ -82,7 +127,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       setError(err.message);
       throw err;
     }
-  }, []);
+  }, [setCurrentRoom]);
 
   const deleteRoom = useCallback(async (roomId) => {
     setError(null);
@@ -94,7 +139,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       setError(err.message);
       throw err;
     }
-  }, []);
+  }, [setCurrentRoom]);
 
   const submitTimeSlots = useCallback(async (roomId, slots) => {
     setError(null);
@@ -163,8 +208,8 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
     setError(null);
     try {
       await coordinationService.handleRequest(requestId, action);
-      if (currentRoom) {
-        await fetchRoomDetails(currentRoom._id, true);
+      if (currentRoomState) {
+        await fetchRoomDetails(currentRoomState._id, true);
       }
       // 교환 요청 처리 후 전역 카운트 새로고침
       if (onRefreshExchangeCount) {
@@ -175,7 +220,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       setError(err.message);
       throw err;
     }
-  }, [currentRoom, fetchRoomDetails, onRefreshExchangeCount]);
+  }, [currentRoomState, fetchRoomDetails, onRefreshExchangeCount]);
 
 
   useEffect(() => {
@@ -185,7 +230,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
   }, [userId, fetchMyRooms]);
 
   return {
-    currentRoom,
+    currentRoom: currentRoomState,
     setCurrentRoom,
     isLoading,
     error,

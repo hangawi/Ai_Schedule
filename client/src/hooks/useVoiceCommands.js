@@ -45,7 +45,6 @@ export const useVoiceCommands = (isLoggedIn, isVoiceRecognitionEnabled, handleCh
         const HOTWORDS = ['큐브야', '비서야', '자비스', '큐브', '비서'];
         const normalizedCommand = command.toLowerCase().replace(/[~!?.]/g, '');
         if (HOTWORDS.some(h => normalizedCommand.includes(h.toLowerCase()))) {
-          console.log('핫워드 감지:', command, '정규화된 명령:', normalizedCommand);
           speak('네, 말씀하세요.');
           listeningModeRef.current = 'command';
           setModalText('말씀하세요...');

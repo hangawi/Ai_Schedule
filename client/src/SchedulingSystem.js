@@ -21,6 +21,7 @@ import CoordinationTab from './components/tabs/CoordinationTab';
 import CreateProposalModal from './components/forms/CreateProposalModal';
 import TimeSelectionModal from './components/forms/TimeSelectionModal';
 import BackgroundCallIndicator from './components/indicators/BackgroundCallIndicator';
+import CustomAlertModal from './components/modals/CustomAlertModal';
 import { coordinationService } from './services/coordinationService';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
@@ -77,6 +78,33 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
    
    // 교환 요청 수 관리
    const [exchangeRequestCount, setExchangeRequestCount] = useState(0);
+   
+   // CustomAlert 상태
+   const [alertModal, setAlertModal] = useState({
+     isOpen: false,
+     title: '',
+     message: '',
+     type: 'info',
+     showCancel: false,
+     onConfirm: null
+   });
+
+   // Alert 표시 유틸리티 함수
+   const showAlert = useCallback((message, type = 'info', title = '', showCancel = false, onConfirm = null) => {
+     setAlertModal({
+       isOpen: true,
+       title,
+       message,
+       type,
+       showCancel,
+       onConfirm
+     });
+   }, []);
+
+   // Alert 닫기 함수
+   const closeAlert = useCallback(() => {
+     setAlertModal(prev => ({ ...prev, isOpen: false }));
+   }, []);
 
    // 로그인 후 교환 요청 수 자동 로드
    useEffect(() => {
@@ -131,7 +159,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
 
    const handleManualLogout = () => {
       handleLogout();
-      alert('로그아웃 되었습니다.');
+      showAlert('로그아웃 되었습니다.', 'success', '로그아웃');
    };
 
    const handleSelectProposalForTime = useCallback(proposal => {
@@ -168,7 +196,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
       try {
          const token = localStorage.getItem('token');
          if (!token) {
-            alert('로그인이 필요합니다.');
+            showAlert('로그인이 필요합니다.', 'error', '로그인 필요');
             return;
          }
          const payload = {
@@ -203,28 +231,31 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
    }, []);
 
    const handleDeleteEvent = useCallback(async eventId => {
-      if (!window.confirm('정말로 이 일정을 삭제하시겠습니까?')) return;
-      try {
-         const token = localStorage.getItem('token');
-         if (!token) {
-            alert('로그인이 필요합니다.');
-            return;
+      const performDelete = async () => {
+         try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+               showAlert('로그인이 필요합니다.', 'error', '로그인 필요');
+               return;
+            }
+            const response = await fetch(`${API_BASE_URL}/api/events/${eventId}`, {
+               method: 'DELETE',
+               headers: { 'x-auth-token': token },
+            });
+            if (!response.ok) {
+               const errorData = await response.json();
+               throw new Error(errorData.msg || 'Failed to delete event');
+            }
+            setGlobalEvents(prevEvents => prevEvents.filter(event => event.id !== eventId));
+            showAlert('일정이 성공적으로 삭제되었습니다!', 'success', '삭제 완료');
+         } catch (error) {
+            console.error('Error deleting event:', error);
+            showAlert(`일정 삭제 실패: ${error.message}`, 'error', '삭제 실패');
          }
-         const response = await fetch(`${API_BASE_URL}/api/events/${eventId}`, {
-            method: 'DELETE',
-            headers: { 'x-auth-token': token },
-         });
-         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.msg || 'Failed to delete event');
-         }
-         setGlobalEvents(prevEvents => prevEvents.filter(event => event.id !== eventId));
-         alert('일정이 성공적으로 삭제되었습니다!');
-      } catch (error) {
-         console.error('Error deleting event:', error);
-         alert(`일정 삭제 실패: ${error.message}`);
-      }
-   }, []);
+      };
+      
+      showAlert('정말로 이 일정을 삭제하시겠습니까?', 'warning', '일정 삭제', true, performDelete);
+   }, [showAlert]);
 
    useEffect(() => {
        if (setEventActions) {
@@ -242,7 +273,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
       try {
          const token = localStorage.getItem('token');
          if (!token) {
-            alert('로그인이 필요합니다.');
+            showAlert('로그인이 필요합니다.', 'error', '로그인 필요');
             return;
          }
          const payload = { title: eventData.title, date: eventData.date, time: eventData.time, color: eventData.color };
@@ -260,12 +291,12 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
          setGlobalEvents(prevEvents => prevEvents.map(event => (event.id === updatedEventForClient.id ? updatedEventForClient : event)));
          setShowEditModal(false);
          setEditingEvent(null);
-         alert('일정이 성공적으로 수정되었습니다!');
+         showAlert('일정이 성공적으로 수정되었습니다!', 'success', '수정 완료');
       } catch (error) {
          console.error('Error updating event:', error);
-         alert(`일정 수정 실패: ${error.message}`);
+         showAlert(`일정 수정 실패: ${error.message}`, 'error', '수정 실패');
       }
-   }, []);
+   }, [showAlert]);
 
    useEffect(() => {
       if (isLoggedIn && !eventsLoaded) {
@@ -308,20 +339,22 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                      <h1 className="text-xl font-bold text-gray-800 hidden sm:block">MeetAgent</h1>
                   </button>
                </div>
-               <div className="flex items-center space-x-2">
-                  <BackgroundCallIndicator
-                     isMonitoring={isBackgroundMonitoring}
-                     isCallDetected={isCallDetected}
-                     callStartTime={null}
-                     onToggleMonitoring={toggleBackgroundMonitoring}
-                     voiceStatus={voiceStatus}
-                     isAnalyzing={isAnalyzing}
-                  />
-                  <button className="text-gray-600 hover:text-gray-800" onClick={() => setActiveTab('googleCalendar')}>
+               <div className="flex items-center space-x-1 sm:space-x-2">
+                  <div className="hidden sm:block">
+                     <BackgroundCallIndicator
+                        isMonitoring={isBackgroundMonitoring}
+                        isCallDetected={isCallDetected}
+                        callStartTime={null}
+                        onToggleMonitoring={toggleBackgroundMonitoring}
+                        voiceStatus={voiceStatus}
+                        isAnalyzing={isAnalyzing}
+                     />
+                  </div>
+                  <button className="hidden sm:block text-gray-600 hover:text-gray-800" onClick={() => setActiveTab('googleCalendar')}>
                      <Calendar size={20} />
                   </button>
                   {isLoggedIn && (
-                     <button className="w-auto min-w-[40px] h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center cursor-pointer px-3 mr-2" onClick={() => alert('프로필 페이지로 이동 (구현 예정)')}>
+                     <button className="hidden sm:flex w-auto min-w-[40px] h-8 bg-blue-100 text-blue-600 rounded-full items-center justify-center cursor-pointer px-3 mr-2" onClick={() => showAlert('프로필 페이지로 이동 (구현 예정)', 'info', '알림')}>
                         {user && user.firstName ? user.firstName : '프로필'}
                      </button>
                   )}
@@ -329,11 +362,11 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                      onClick={() => setIsVoiceRecognitionEnabled(prev => !prev)} 
                      title={isVoiceRecognitionEnabled ? "음성 인식 활성화됨 (클릭하여 비활성화)" : "음성 인식 비활성화됨 (클릭하여 활성화)"} 
                      aria-label={isVoiceRecognitionEnabled ? "음성 인식 비활성화" : "음성 인식 활성화"}
-                     className={`mr-2 sm:mr-4 text-xl transition-colors ${isVoiceRecognitionEnabled ? 'text-blue-500 hover:text-blue-600' : 'text-gray-400 hover:text-gray-500'}`}>
+                     className={`text-lg sm:text-xl transition-colors ${isVoiceRecognitionEnabled ? 'text-blue-500 hover:text-blue-600' : 'text-gray-400 hover:text-gray-500'}`}>
                      {isVoiceRecognitionEnabled ? '🎙️' : '🔇'}
                   </button>
                   <button 
-                     className="w-8 h-8 bg-red-100 text-red-600 rounded-full flex items-center justify-center cursor-pointer" 
+                     className="w-8 h-8 bg-red-100 text-red-600 rounded-full flex items-center justify-center cursor-pointer ml-1 sm:ml-2" 
                      onClick={handleManualLogout}
                      aria-label="로그아웃"
                      title="로그아웃">
@@ -378,6 +411,16 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
          {showCreateModal && <CreateProposalModal onClose={() => setShowCreateModal(false)} onProposalCreated={newProposal => { setGlobalProposals(prev => [...prev, { ...newProposal, id: newProposal._id || newProposal.id }]); }} />}
          {showTimeSelectionModal && selectedProposal && <TimeSelectionModal onClose={() => { setShowTimeSelectionModal(false); setSelectedProposal(null); }} proposal={selectedProposal} onFinalize={newEvent => { setGlobalEvents(prevEvents => [...prevEvents, formatEventForClient(newEvent, 'green')]); setShowTimeSelectionModal(false); setSelectedProposal(null); }} />}
          {showEditModal && editingEvent && <EventFormModal onClose={() => { setShowEditModal(false); setEditingEvent(null); }} onSubmitEvent={handleUpdateEvent} event={editingEvent} />}
+         
+         <CustomAlertModal
+            isOpen={alertModal.isOpen}
+            onClose={closeAlert}
+            onConfirm={alertModal.onConfirm}
+            title={alertModal.title}
+            message={alertModal.message}
+            type={alertModal.type}
+            showCancel={alertModal.showCancel}
+         />
       </div>
    );
 };
