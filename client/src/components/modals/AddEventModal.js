@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import moment from 'moment';
+import CustomAlertModal from './CustomAlertModal';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -11,6 +12,11 @@ const AddEventModal = ({ onClose, onAddEvent }) => {
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
 
+  // CustomAlert 상태
+  const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
+  const showAlert = (message) => setCustomAlert({ show: true, message });
+  const closeAlert = () => setCustomAlert({ show: false, message: '' });
+
   const handleAdd = async () => {
     if (title && date && startTime && endTime) {
       try {
@@ -20,7 +26,7 @@ const AddEventModal = ({ onClose, onAddEvent }) => {
         const endMoment = moment(`${date}T${endTime}`);
 
         if (endMoment.isSameOrBefore(startMoment)) {
-          alert('종료 시간은 시작 시간보다 늦어야 합니다.');
+          showAlert('종료 시간은 시작 시간보다 늦어야 합니다.');
           return;
         }
 
@@ -44,10 +50,10 @@ const AddEventModal = ({ onClose, onAddEvent }) => {
         onAddEvent(data);
       } catch (error) {
         console.error('Error adding event:', error.message);
-        alert(`일정 추가 실패: ${error.message}`);
+        showAlert(`일정 추가 실패: ${error.message}`);
       }
     } else {
-      alert('제목, 날짜, 시작 시간, 종료 시간을 모두 입력해주세요.');
+      showAlert('제목, 날짜, 시작 시간, 종료 시간을 모두 입력해주세요.');
     }
   };
 
@@ -126,6 +132,13 @@ const AddEventModal = ({ onClose, onAddEvent }) => {
             추가
           </button>
         </div>
+
+        {/* CustomAlert Modal */}
+        <CustomAlertModal
+          show={customAlert.show}
+          onClose={closeAlert}
+          message={customAlert.message}
+        />
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { coordinationService } from '../services/coordinationService';
 
-export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentRequests) => {
+export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentRequests, showAlert) => {
   const [currentRoomState, setCurrentRoomState] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -195,7 +195,9 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       
       // 중복 요청 오류인 경우 더 친화적인 메시지로 표시하고 에러를 다시 throw하지 않음
       if (err.isDuplicate) {
-        alert('⚠️ 이미 동일한 시간표에 대한 교환요청을 보냈습니다.\n\n기존 요청이 처리된 후 다시 시도해주세요.');
+        if (showAlert) {
+          showAlert('⚠️ 이미 동일한 시간표에 대한 교환요청을 보냈습니다.\n\n기존 요청이 처리된 후 다시 시도해주세요.');
+        }
         return; // 에러를 다시 throw하지 않음
       } else {
         setError(err.message);

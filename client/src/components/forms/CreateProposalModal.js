@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { X, UserPlus } from 'lucide-react';
+import CustomAlertModal from '../modals/CustomAlertModal';
 
 const ParticipantChip = ({ name, onRemove }) => (
    <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center">
@@ -18,6 +19,33 @@ const CreateProposalModal = ({ onClose, onProposalCreated }) => {
    const [externalParticipants, setExternalParticipants] = useState('');
    const [searchQuery, setSearchQuery] = useState('');
    const [searchResults, setSearchResults] = useState([]);
+
+   // CustomAlert 상태
+   const [alertModal, setAlertModal] = useState({
+     isOpen: false,
+     title: '',
+     message: '',
+     type: 'info',
+     showCancel: false,
+     onConfirm: null
+   });
+
+   // Alert 표시 유틸리티 함수
+   const showAlert = useCallback((message, type = 'info', title = '', showCancel = false, onConfirm = null) => {
+     setAlertModal({
+       isOpen: true,
+       title,
+       message,
+       type,
+       showCancel,
+       onConfirm
+     });
+   }, []);
+
+   // Alert 닫기 함수
+   const closeAlert = useCallback(() => {
+     setAlertModal(prev => ({ ...prev, isOpen: false }));
+   }, []);
 
    const dummyUsers = [
       { id: '60d5ec49a4d2a13e4c8b4567', name: '김철수', email: 'kim@example.com' },
@@ -56,8 +84,7 @@ const CreateProposalModal = ({ onClose, onProposalCreated }) => {
    const handleSubmit = async () => {
       const token = localStorage.getItem('token');
       if (!token) {
-         alert('로그인이 필요합니다.');
-         onClose();
+         showAlert('로그인이 필요합니다.', 'warning', '로그인 필요', false, () => onClose());
          return;
       }
       const proposalData = {
@@ -78,12 +105,13 @@ const CreateProposalModal = ({ onClose, onProposalCreated }) => {
             throw new Error(errorData.msg || 'Failed to create proposal');
          }
          const data = await response.json();
-         alert('일정 조율 요청이 성공적으로 생성되었습니다!');
-         onProposalCreated(data);
-         onClose();
+         showAlert('일정 조율 요청이 성공적으로 생성되었습니다!', 'success', '생성 완료', false, () => {
+           onProposalCreated(data);
+           onClose();
+         });
       } catch (error) {
          console.error('Error creating proposal:', error.message);
-         alert(`일정 조율 요청 실패: ${error.message}`);
+         showAlert(`일정 조율 요청 실패: ${error.message}`, 'error', '생성 실패');
       }
    };
 
@@ -167,6 +195,16 @@ const CreateProposalModal = ({ onClose, onProposalCreated }) => {
                <button onClick={handleSubmit} className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">조율 요청 생성</button>
             </div>
          </div>
+         
+         <CustomAlertModal
+           isOpen={alertModal.isOpen}
+           onClose={closeAlert}
+           onConfirm={alertModal.onConfirm}
+           title={alertModal.title}
+           message={alertModal.message}
+           type={alertModal.type}
+           showCancel={alertModal.showCancel}
+         />
       </div>
    );
 };

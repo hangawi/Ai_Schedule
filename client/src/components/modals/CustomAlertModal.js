@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react';
+import { CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 
 const CustomAlertModal = ({ 
   isOpen, 
@@ -78,7 +78,7 @@ const CustomAlertModal = ({
       onClick={handleOverlayClick}
     >
       <div className={`bg-white rounded-lg shadow-xl max-w-md w-full mx-4 ${colors.border} border-2 ${colors.bg}`}>
-        <div className="flex items-start justify-between p-6">
+        <div className="p-6">
           <div className="flex items-start space-x-3">
             {getIcon()}
             <div className="flex-1">
@@ -86,12 +86,6 @@ const CustomAlertModal = ({
               <p className="text-gray-700">{message}</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X size={20} />
-          </button>
         </div>
         
         <div className="flex justify-end space-x-3 px-6 pb-6">

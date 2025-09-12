@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import moment from 'moment';
+import CustomAlertModal from './CustomAlertModal';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -11,6 +12,11 @@ const EditEventModal = ({ event, onClose, onUpdateEvent }) => {
   const [endDate] = useState(moment(event.end).format('YYYY-MM-DD'));
   const [endTime, setEndTime] = useState(moment(event.end).format('HH:mm:ss'));
 
+  // CustomAlert 상태
+  const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
+  const showAlert = (message) => setCustomAlert({ show: true, message });
+  const closeAlert = () => setCustomAlert({ show: false, message: '' });
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -18,7 +24,7 @@ const EditEventModal = ({ event, onClose, onUpdateEvent }) => {
     const endMoment = moment(`${endDate}T${endTime}`);
 
     if (endMoment.isSameOrBefore(startMoment)) {
-      alert('종료 시간은 시작 시간보다 늦어야 합니다.');
+      showAlert('종료 시간은 시작 시간보다 늦어야 합니다.');
       return;
     }
 
@@ -48,7 +54,7 @@ const EditEventModal = ({ event, onClose, onUpdateEvent }) => {
       onClose();
     } catch (error) {
       console.error('Error updating event:', error);
-      alert('일정 업데이트 중 오류가 발생했습니다.');
+      showAlert('일정 업데이트 중 오류가 발생했습니다.');
     }
   };
 
@@ -135,6 +141,13 @@ const EditEventModal = ({ event, onClose, onUpdateEvent }) => {
             </button>
           </div>
         </form>
+
+        {/* CustomAlert Modal */}
+        <CustomAlertModal
+          show={customAlert.show}
+          onClose={closeAlert}
+          message={customAlert.message}
+        />
       </div>
     </div>
   );

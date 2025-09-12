@@ -2,10 +2,16 @@ import React, { useState } from 'react';
 import moment from 'moment';
 import { X } from 'lucide-react';
 import EventFormModal from '../forms/EventFormModal';
+import CustomAlertModal from '../modals/CustomAlertModal';
 
 const EventsTab = ({ events, onAddEvent, isLoggedIn, onDeleteEvent, onEditEvent }) => {
    const [showAddEventModal, setShowAddEventModal] = useState(false);
    const [currentMonth, setCurrentMonth] = useState(new Date());
+
+   // CustomAlert 상태
+   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
+   const showAlert = (message) => setCustomAlert({ show: true, message });
+   const closeAlert = () => setCustomAlert({ show: false, message: '' });
 
    const goToPreviousMonth = () => setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
    const goToNextMonth = () => setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
@@ -14,9 +20,9 @@ const EventsTab = ({ events, onAddEvent, isLoggedIn, onDeleteEvent, onEditEvent 
       try {
          await onAddEvent(newEventData);
          setShowAddEventModal(false);
-         alert('일정이 성공적으로 추가되었습니다!');
+         showAlert('일정이 성공적으로 추가되었습니다!');
       } catch (error) {
-         alert(`일정 추가 실패: ${error.message}`);
+         showAlert(`일정 추가 실패: ${error.message}`);
       }
    };
 
@@ -99,6 +105,13 @@ const EventsTab = ({ events, onAddEvent, isLoggedIn, onDeleteEvent, onEditEvent 
          </div>
 
          {showAddEventModal && <EventFormModal onClose={() => setShowAddEventModal(false)} onSubmitEvent={handleAddEvent} />}
+
+         {/* CustomAlert Modal */}
+         <CustomAlertModal
+           show={customAlert.show}
+           onClose={closeAlert}
+           message={customAlert.message}
+         />
       </div>
    );
 };

@@ -1,27 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-   Calendar,
-   CalendarCheck,
-   Users,
-   LogOut,
-   X,
-   Menu as MenuIcon,
-   LayoutDashboard,
-   ListTodo,
-   Bot,
-   History
-} from 'lucide-react';
-import MyCalendar from './components/calendar/Calendar';
 import EventFormModal from './components/forms/EventFormModal';
-import DashboardTab from './components/tabs/DashboardTab';
-import ProposalsTab from './components/tabs/ProposalsTab';
-import EventsTab from './components/tabs/EventsTab';
-import AgentTab from './components/tabs/AgentTab';
-import CoordinationTab from './components/tabs/CoordinationTab';
 import CreateProposalModal from './components/forms/CreateProposalModal';
 import TimeSelectionModal from './components/forms/TimeSelectionModal';
-import BackgroundCallIndicator from './components/indicators/BackgroundCallIndicator';
 import CustomAlertModal from './components/modals/CustomAlertModal';
+import Header from './components/layout/Header';
+import Sidebar from './components/layout/Sidebar';
+import MainContent from './components/layout/MainContent';
 import { coordinationService } from './services/coordinationService';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
@@ -48,13 +32,6 @@ const formatEventForClient = (event, color) => {
    };
 };
 
-const NavItem = ({ icon, label, active, onClick, badge }) => (
-   <button onClick={onClick} className={`w-full flex items-center px-3 py-2 rounded-lg ${active ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-100'}`}>
-      <span className="mr-3">{icon}</span>
-      <span className="flex-1 text-left">{label}</span>
-      {badge && <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">{badge}</span>}
-   </button>
-);
 
 const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAddedKey, speak, setEventActions, setAreEventActionsReady, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled, loginMethod, isBackgroundMonitoring, isCallDetected, toggleBackgroundMonitoring, voiceStatus, isAnalyzing }) => {
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -228,7 +205,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
          console.error('Error adding global event:', error.message);
          throw error;
       }
-   }, []);
+   }, [showAlert]);
 
    const handleDeleteEvent = useCallback(async eventId => {
       const performDelete = async () => {
@@ -323,89 +300,52 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
 
    return (
       <div className="flex flex-col h-screen bg-gray-50">
-         <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex-shrink-0">
-            <div className="flex items-center justify-between">
-               <div className="flex items-center">
-                  <button className="md:hidden mr-3 text-gray-600 hover:text-gray-800" onClick={() => setIsSidebarOpen(true)}>
-                     <MenuIcon size={24} />
-                  </button>
-                  <button onClick={() => setActiveTab('dashboard')} className="flex items-center cursor-pointer">
-                     <div className="relative w-10 h-10 rounded-lg mr-3">
-                        <img src="/image.png" alt="MeetAgent Logo" className="w-full h-full object-cover rounded-lg" />
-                        {loginMethod && (
-                           <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${loginMethod === 'google' ? 'bg-green-500' : 'bg-red-500'} border-2 border-white z-10`}></div>
-                        )}
-                     </div>
-                     <h1 className="text-xl font-bold text-gray-800 hidden sm:block">MeetAgent</h1>
-                  </button>
-               </div>
-               <div className="flex items-center space-x-1 sm:space-x-2">
-                  <div className="hidden sm:block">
-                     <BackgroundCallIndicator
-                        isMonitoring={isBackgroundMonitoring}
-                        isCallDetected={isCallDetected}
-                        callStartTime={null}
-                        onToggleMonitoring={toggleBackgroundMonitoring}
-                        voiceStatus={voiceStatus}
-                        isAnalyzing={isAnalyzing}
-                     />
-                  </div>
-                  <button className="hidden sm:block text-gray-600 hover:text-gray-800" onClick={() => setActiveTab('googleCalendar')}>
-                     <Calendar size={20} />
-                  </button>
-                  {isLoggedIn && (
-                     <button className="hidden sm:flex w-auto min-w-[40px] h-8 bg-blue-100 text-blue-600 rounded-full items-center justify-center cursor-pointer px-3 mr-2" onClick={() => showAlert('프로필 페이지로 이동 (구현 예정)', 'info', '알림')}>
-                        {user && user.firstName ? user.firstName : '프로필'}
-                     </button>
-                  )}
-                  <button 
-                     onClick={() => setIsVoiceRecognitionEnabled(prev => !prev)} 
-                     title={isVoiceRecognitionEnabled ? "음성 인식 활성화됨 (클릭하여 비활성화)" : "음성 인식 비활성화됨 (클릭하여 활성화)"} 
-                     aria-label={isVoiceRecognitionEnabled ? "음성 인식 비활성화" : "음성 인식 활성화"}
-                     className={`text-lg sm:text-xl transition-colors ${isVoiceRecognitionEnabled ? 'text-blue-500 hover:text-blue-600' : 'text-gray-400 hover:text-gray-500'}`}>
-                     {isVoiceRecognitionEnabled ? '🎙️' : '🔇'}
-                  </button>
-                  <button 
-                     className="w-8 h-8 bg-red-100 text-red-600 rounded-full flex items-center justify-center cursor-pointer ml-1 sm:ml-2" 
-                     onClick={handleManualLogout}
-                     aria-label="로그아웃"
-                     title="로그아웃">
-                     <LogOut size={16} />
-                  </button>
-               </div>
-            </div>
-         </header>
+         <Header
+            setIsSidebarOpen={setIsSidebarOpen}
+            setActiveTab={setActiveTab}
+            loginMethod={loginMethod}
+            isBackgroundMonitoring={isBackgroundMonitoring}
+            isCallDetected={isCallDetected}
+            toggleBackgroundMonitoring={toggleBackgroundMonitoring}
+            voiceStatus={voiceStatus}
+            isAnalyzing={isAnalyzing}
+            isLoggedIn={isLoggedIn}
+            user={user}
+            showAlert={showAlert}
+            isVoiceRecognitionEnabled={isVoiceRecognitionEnabled}
+            setIsVoiceRecognitionEnabled={setIsVoiceRecognitionEnabled}
+            handleManualLogout={handleManualLogout}
+         />
 
          <div className="flex flex-1 overflow-hidden">
-            <div className={`fixed inset-0 bg-black md:hidden ${isSidebarOpen ? 'bg-opacity-50' : 'bg-opacity-0 pointer-events-none'} transition-opacity duration-300 ease-in-out z-30`} onClick={() => setIsSidebarOpen(false)}></div>
-            <nav className={`fixed md:relative inset-y-0 left-0 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out w-64 bg-white border-r border-gray-200 p-6 z-40 shadow-lg md:shadow-none`}>
-               <div className="flex justify-between items-center mb-6 md:hidden">
-                  <h2 className="text-lg font-bold">메뉴</h2>
-                  <button onClick={() => setIsSidebarOpen(false)}><X size={24} /></button>
-               </div>
-               <div className="mb-6">
-                  <button onClick={() => { setShowCreateModal(true); setIsSidebarOpen(false); }} className="w-full bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center justify-center">
-                     <span>+ 새 일정 조율</span>
-                  </button>
-               </div>
-               <div className="space-y-1">
-                  <NavItem icon={<LayoutDashboard size={18} />} label="대시보드" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<ListTodo size={18} />} label="나의 일정" active={activeTab === 'events'} onClick={() => { setActiveTab('events'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<Calendar size={18} />} label="Google 캘린더" active={activeTab === 'googleCalendar'} onClick={() => { setActiveTab('googleCalendar'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<History size={18} />} label="조율 내역" active={activeTab === 'proposals'} onClick={() => { setActiveTab('proposals'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<CalendarCheck size={18} />} label="일정 맞추기" active={activeTab === 'coordination'} onClick={() => { setActiveTab('coordination'); setIsSidebarOpen(false); }} badge={exchangeRequestCount > 0 ? exchangeRequestCount.toString() : undefined} />
-                  <NavItem icon={<Bot size={18} />} label="내 AI 비서" active={activeTab === 'agent'} onClick={() => { setActiveTab('agent'); setIsSidebarOpen(false); }} />
-               </div>
-            </nav>
+            <Sidebar
+               isSidebarOpen={isSidebarOpen}
+               setIsSidebarOpen={setIsSidebarOpen}
+               activeTab={activeTab}
+               setActiveTab={setActiveTab}
+               setShowCreateModal={setShowCreateModal}
+               exchangeRequestCount={exchangeRequestCount}
+            />
 
-            <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-               {activeTab === 'dashboard' && <DashboardTab onSelectTime={handleSelectProposalForTime} proposals={globalProposals} todayEvents={todayEvents} upcomingEvents={upcomingEvents} />}
-               {activeTab === 'proposals' && <ProposalsTab onSelectTime={handleSelectProposalForTime} proposals={globalProposals} />}
-               {activeTab === 'events' && <EventsTab events={globalEvents} onAddEvent={handleAddGlobalEvent} isLoggedIn={isLoggedIn} onDeleteEvent={handleDeleteEvent} onEditEvent={handleEditEvent} />}
-               {activeTab === 'googleCalendar' && <MyCalendar isListening={isListening} onEventAdded={eventAddedKey} isVoiceRecognitionEnabled={isVoiceRecognitionEnabled} onToggleVoiceRecognition={() => setIsVoiceRecognitionEnabled(prev => !prev)} />}
-               {activeTab === 'coordination' && <CoordinationTab user={user} onExchangeRequestCountChange={setExchangeRequestCount} onRefreshExchangeCount={refreshExchangeRequestCount} />}
-               {activeTab === 'agent' && <AgentTab />}
-            </main>
+            <MainContent
+               activeTab={activeTab}
+               handleSelectProposalForTime={handleSelectProposalForTime}
+               globalProposals={globalProposals}
+               todayEvents={todayEvents}
+               upcomingEvents={upcomingEvents}
+               globalEvents={globalEvents}
+               handleAddGlobalEvent={handleAddGlobalEvent}
+               isLoggedIn={isLoggedIn}
+               handleDeleteEvent={handleDeleteEvent}
+               handleEditEvent={handleEditEvent}
+               isListening={isListening}
+               eventAddedKey={eventAddedKey}
+               isVoiceRecognitionEnabled={isVoiceRecognitionEnabled}
+               setIsVoiceRecognitionEnabled={setIsVoiceRecognitionEnabled}
+               user={user}
+               setExchangeRequestCount={setExchangeRequestCount}
+               refreshExchangeRequestCount={refreshExchangeRequestCount}
+            />
          </div>
 
          {showCreateModal && <CreateProposalModal onClose={() => setShowCreateModal(false)} onProposalCreated={newProposal => { setGlobalProposals(prev => [...prev, { ...newProposal, id: newProposal._id || newProposal.id }]); }} />}

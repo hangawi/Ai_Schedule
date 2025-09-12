@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
+import CustomAlertModal from './CustomAlertModal';
 
 const RoomJoinModal = ({ onClose, onJoinRoom }) => {
   const [inviteCode, setInviteCode] = useState('');
 
+  // CustomAlert 상태
+  const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
+  const showAlert = (message) => setCustomAlert({ show: true, message });
+  const closeAlert = () => setCustomAlert({ show: false, message: '' });
+
   const handleSubmit = () => {
     if (inviteCode.trim() === '') {
-      alert('초대 코드를 입력해주세요.');
+      showAlert('초대 코드를 입력해주세요.');
       return;
     }
     onJoinRoom(inviteCode);
@@ -36,6 +42,13 @@ const RoomJoinModal = ({ onClose, onJoinRoom }) => {
           <button onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">취소</button>
           <button onClick={handleSubmit} className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">참여</button>
         </div>
+
+        {/* CustomAlert Modal */}
+        <CustomAlertModal
+          show={customAlert.show}
+          onClose={closeAlert}
+          message={customAlert.message}
+        />
       </div>
     </div>
   );
