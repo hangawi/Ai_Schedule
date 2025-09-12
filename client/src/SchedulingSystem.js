@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
    Calendar,
    CalendarCheck,
-   Users,
    LogOut,
    X,
    Menu as MenuIcon,
@@ -23,10 +22,25 @@ import CoordinationTab from './components/tabs/CoordinationTab';
 import CreateProposalModal from './components/forms/CreateProposalModal';
 import TimeSelectionModal from './components/forms/TimeSelectionModal';
 import CustomAlertModal from './components/modals/CustomAlertModal';
-import Header from './components/layout/Header';
-import Sidebar from './components/layout/Sidebar';
-import MainContent from './components/layout/MainContent';
 import { coordinationService } from './services/coordinationService';
+
+// NavItem component
+const NavItem = ({ icon, label, active, onClick, badge }) => (
+   <button
+      className={`w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors ${
+         active ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-100'
+      }`}
+      onClick={onClick}
+   >
+      {icon}
+      <span className="ml-3 flex-1 text-left">{label}</span>
+      {badge && (
+         <span className="ml-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[20px] h-5 flex items-center justify-center">
+            {badge}
+         </span>
+      )}
+   </button>
+);
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 

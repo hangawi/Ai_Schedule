@@ -39,7 +39,6 @@ const ScheduleGridSelector = ({ schedule, setSchedule }) => {
     // Adjust to Monday of the current week. If today is Sunday, getMondayOfCurrentWeek will return last Monday.
     // So if today is Sunday, we need to add 1 day to get to Monday, then calculate Monday of that week.
     // Or simply, if day is 0 (Sunday), make it 7 for calculation purposes to get previous Monday.
-    const day = today.getUTCDay();
     const monday = getMondayOfCurrentWeek(today);
 
     const dates = [];

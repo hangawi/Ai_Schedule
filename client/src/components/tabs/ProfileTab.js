@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { userService } from '../../services/userService';
 import ScheduleGridSelector from './ScheduleGridSelector'; // 새로 만든 컴포넌트 import
-import { Plus, Trash2 } from 'lucide-react';
 
 const ProfileTab = () => {
   const [defaultSchedule, setDefaultSchedule] = useState([]);

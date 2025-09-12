@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Smartphone, Mic, MicOff, Wifi, WifiOff, Volume2, VolumeX, Clipboard, HelpCircle } from 'lucide-react';
 import MobileGuideModal from '../modals/MobileGuideModal';
 
@@ -28,7 +28,6 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
   const [expandedView, setExpandedView] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
 
-  const permissionListenerRef = useRef(null);
 
   useEffect(() => {
     const checkDeviceCapabilities = async () => {

@@ -4,7 +4,6 @@ import { Smartphone, Mic, Wifi, Copy, AlertTriangle, CheckCircle } from 'lucide-
 const MobileGuideModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
   return (
