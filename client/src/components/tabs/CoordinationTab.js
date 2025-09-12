@@ -355,14 +355,18 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   return (
                     <div
                       key={memberData._id || index}
-                      className={`flex items-center p-3 rounded-lg border cursor-pointer ${
+                      className={`flex items-center p-3 rounded-lg border ${isOwner ? 'cursor-pointer' : 'cursor-default'} ${
                         memberIsOwner 
                           ? 'bg-red-50 border-red-200 ring-2 ring-red-100' 
                           : isCurrentUser 
                             ? 'bg-blue-50 border-blue-200' 
                             : 'bg-gray-50 border-gray-200'
                       }`}
-                      onClick={() => handleMemberClick(memberData._id || memberData.id)} // Add onClick handler
+                      onClick={() => {
+                        if (isOwner) {
+                          handleMemberClick(memberData._id || memberData.id);
+                        }
+                      }}
                     >
                       <div
                         className={`w-5 h-5 rounded-full mr-3 flex-shrink-0 ${

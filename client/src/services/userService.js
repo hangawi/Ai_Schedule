@@ -31,4 +31,8 @@ export const userService = {
       body: JSON.stringify(scheduleData),
     });
   },
+
+  getUserScheduleById: (userId) => {
+    return request(`${API_BASE_URL}/api/users/${userId}/schedule`, { method: 'GET' });
+  },
 };
