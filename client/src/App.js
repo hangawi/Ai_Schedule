@@ -199,9 +199,8 @@ function App() {
          )}
          {isLoggedIn && detectedSchedules.length > 0 && (
             <AutoDetectedScheduleModal
-               schedules={detectedSchedules}
-               transcript={backgroundTranscript}
-               isCallDetected={isCallDetected}
+               detectedSchedules={detectedSchedules}
+               backgroundTranscript={backgroundTranscript}
                callStartTime={callStartTime}
                onConfirm={confirmSchedule}
                onDismiss={dismissSchedule}
