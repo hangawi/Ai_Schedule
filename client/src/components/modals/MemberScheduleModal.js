@@ -4,7 +4,6 @@ import { userService } from '../../services/userService';
 import { X } from 'lucide-react';
 
 const MemberScheduleModal = ({ memberId, onClose }) => {
-  console.log('MemberScheduleModal rendered for memberId:', memberId); // Debug log
   const [memberSchedule, setMemberSchedule] = useState([]);
   const [memberName, setMemberName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -17,12 +16,10 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
       setError(null);
       try {
         const data = await userService.getUserScheduleById(memberId);
-        console.log('Fetched schedule data:', data); // Debug log
         setMemberSchedule(data.defaultSchedule || []);
         setMemberName(`${data.firstName || ''} ${data.lastName || ''}`.trim() || '알 수 없음');
       } catch (err) {
         console.error('Failed to fetch member schedule:', err); // Existing error log
-        console.log('Fetch error:', err); // Debug log
         setError('조원 일정을 불러오는데 실패했습니다.');
       } finally {
         setIsLoading(false);
@@ -34,7 +31,6 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
 
   if (!memberId) return null; // memberId가 없으면 렌더링하지 않음
 
-  console.log('Is loading:', isLoading, 'Error:', error); // Debug log
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
