@@ -12,7 +12,7 @@ const SocialLoginButtons = ({ googleLogin, showAlert }) => {
       </div>
       <button onClick={() => googleLogin()} className={commonButtonStyle}>
         <img src="https://img.icons8.com/color/16/000000/google-logo.png" alt="Google" className="mr-4" />
-        <span>Google 계정으로 로그인</span>
+        <span>Google 계정으로 로로그인</span>
       </button>
       <button
         onClick={() => showAlert('네이버 로그인 기능은 아직 구현되지 않았습니다.', 'info', '알림')}
