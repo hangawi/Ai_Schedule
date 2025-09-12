@@ -7,6 +7,7 @@ import './Calendar.css';
 import AddEventModal from '../modals/AddEventModal';
 import EventDetailsModal from '../modals/EventDetailsModal';
 import EditEventModal from '../modals/EditEventModal';
+import CustomAlertModal from '../modals/CustomAlertModal';
 import { Mic } from 'lucide-react';
 
 moment.locale('ko'); // moment 전역 로케일 설정
@@ -20,6 +21,33 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
    const [selectedEvent, setSelectedEvent] = useState(null);
    const [showEditEventModal, setShowEditEventModal] = useState(false);
    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+   
+   // CustomAlert 상태
+   const [alertModal, setAlertModal] = useState({
+     isOpen: false,
+     title: '',
+     message: '',
+     type: 'info',
+     showCancel: false,
+     onConfirm: null
+   });
+
+   // Alert 표시 유틸리티 함수
+   const showAlert = useCallback((message, type = 'info', title = '', showCancel = false, onConfirm = null) => {
+     setAlertModal({
+       isOpen: true,
+       title,
+       message,
+       type,
+       showCancel,
+       onConfirm
+     });
+   }, []);
+
+   // Alert 닫기 함수
+   const closeAlert = useCallback(() => {
+     setAlertModal(prev => ({ ...prev, isOpen: false }));
+   }, []);
 
    const formats = {
       agendaDateFormat: 'M월 D일 dddd',
@@ -82,7 +110,9 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
          }));
          setEvents(formattedEvents);
       } catch (error) {
-         // 캘린더 이벤트 로드 실패 시 조용히 처리
+         console.warn('Google Calendar events loading failed:', error.message);
+         // 구글 연동이 안된 경우 빈 배열로 설정 (오류 메시지는 표시하지 않음)
+         setEvents([]);
       }
    }, []);
 
@@ -113,11 +143,11 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
             throw new Error('일정 삭제에 실패했습니다.');
          }
 
-         alert('일정이 성공적으로 삭제되었습니다.');
+         showAlert('일정이 성공적으로 삭제되었습니다.', 'success', '삭제 완료');
          setSelectedEvent(null);
          fetchEvents(date);
       } catch (error) {
-         alert('일정 삭제 중 오류가 발생했습니다.');
+         showAlert('일정 삭제 중 오류가 발생했습니다.', 'error', '삭제 실패');
       }
    };
 
@@ -189,6 +219,16 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
                onUpdateEvent={handleUpdateEvent}
             />
          )}
+         
+         <CustomAlertModal
+            isOpen={alertModal.isOpen}
+            onClose={closeAlert}
+            onConfirm={alertModal.onConfirm}
+            title={alertModal.title}
+            message={alertModal.message}
+            type={alertModal.type}
+            showCancel={alertModal.showCancel}
+         />
       </div>
    );
 };

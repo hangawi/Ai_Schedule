@@ -115,8 +115,7 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
   }, [currentSelectedSlots, onSlotSelect]);
 
   // Helper to get who booked a slot (based on Date object overlap)
-  // Helper to get who booked a slot (SIMPLIFIED FOR DEBUGGING)
-  // Helper to get who booked a slot (SIMPLIFIED FOR DEBUGGING)
+  // Helper to get who booked a slot
   const getSlotOwner = useCallback((dayIndex, time) => {
     if (!timeSlots || !members || !time) return null;
     
@@ -239,15 +238,7 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
       } else {
         // User clicks on someone else's assigned slot - request swap
         
-        // 중복 교환 요청 확인 - 디버깅 추가
-        console.log('중복 요청 체크:', {
-          roomData: roomData,
-          requests: roomData?.requests,
-          currentUserId: currentUser?.id,
-          dayIndex,
-          time,
-          targetUserId: ownerInfo.actualUserId || ownerInfo.userId
-        });
+        // 중복 교환 요청 확인
         
         const existingSwapRequest = roomData?.requests?.find(request => {
           const requesterId = request.requester?.id || request.requester?._id || request.requester;

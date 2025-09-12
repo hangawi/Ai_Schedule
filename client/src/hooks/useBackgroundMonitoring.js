@@ -89,20 +89,26 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
       return;
     }
 
-    // 첫 번째 음성 감지 시에만 "녹음중"으로 변경 (중간 결과에서도 즉시 반응)
+    // 첫 번째 음성 감지 시 즉시 "녹음중"으로 변경 (중간 결과에서도 즉시 반응)
     if (!isCallDetected) {
       setIsCallDetected(true);
       setCallStartTime(Date.now());
       setVoiceStatus('recording');
+    } else if (voiceStatus !== 'recording' && voiceStatus !== 'analyzing') {
+      // 이미 호출이 감지된 상태에서 추가 음성이 감지되면 다시 녹음중으로 변경
+      setVoiceStatus('recording');
     }
 
-    // 마지막 음성 감지 시간 업데이트
+    // 마지막 음성 감지 시간 업데이트 (중간 결과와 최종 결과 모두에서)
     lastSpeechTimeRef.current = Date.now();
     
-    // Final 결과만 버퍼에 추가
+    // Final 결과만 버퍼에 추가하되 중간 결과도 실시간 표시
     if (isFinal) {
       transcriptBufferRef.current += transcript + ' ';
       setBackgroundTranscript(transcriptBufferRef.current);
+    } else {
+      // 중간 결과도 실시간으로 표시 (버퍼에는 추가하지 않음)
+      setBackgroundTranscript(transcriptBufferRef.current + transcript);
     }
 
     // 기존 타이머 클리어
@@ -110,20 +116,20 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
       clearTimeout(silenceTimeoutRef.current);
     }
 
-    // 3초 침묵 감지 타이머 설정 (빠른 요약을 위해)
+    // 2.5초 침묵 감지 타이머 설정 (더 빠른 반응)
     silenceTimeoutRef.current = setTimeout(() => {
       setVoiceStatus('ending');
       
-      // 즉시 분석 시작 (빠른 요약)
+      // 더 빨리 분석 시작
       setTimeout(() => {
         setIsCallDetected(false);
         setCallStartTime(null);
         analyzeFullTranscript(); 
-      }, 500); // 0.5초 후 즉시 분석
+      }, 300); // 0.3초 후 즉시 분석
       
-    }, 3000); // 3초로 단축
+    }, 2500); // 2.5초로 단축
     
-  }, [isBackgroundMonitoring, isCallDetected, analyzeFullTranscript]);
+  }, [isBackgroundMonitoring, isCallDetected, analyzeFullTranscript, voiceStatus]);
 
   const confirmSchedule = useCallback(async (schedule) => {
     try {
