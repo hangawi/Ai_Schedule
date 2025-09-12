@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import TimetableGrid from '../timetable/TimetableGrid';
 import RoomCreationModal from '../modals/RoomCreationModal';
 import RoomJoinModal from '../modals/RoomJoinModal';
@@ -60,7 +60,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   };
 
   // 방별 교환요청 수 로드
-  const loadRoomExchangeCounts = async () => {
+  const loadRoomExchangeCounts = useCallback(async () => {
     if (!user?.id) return;
     try {
       const result = await coordinationService.getRoomExchangeCounts();
@@ -70,10 +70,10 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     } catch (error) {
       console.error('Failed to load room exchange counts:', error);
     }
-  };
+  }, [user?.id]);
 
   // 보낸 요청 내역 로드
-  const loadSentRequests = async () => {
+  const loadSentRequests = useCallback(async () => {
     if (!user?.id) return;
     try {
       const result = await coordinationService.getSentRequests();
@@ -83,7 +83,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     } catch (error) {
       console.error('Failed to load sent requests:', error);
     }
-  };
+  }, [user?.id]);
 
   const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest } = useCoordination(user?.id, onRefreshExchangeCount, loadSentRequests, showAlert);
   
@@ -95,9 +95,9 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     openCreateRoomModal, closeCreateRoomModal,
     openJoinRoomModal, closeJoinRoomModal,
     openManageRoomModal, closeManageRoomModal,
-    openAssignModal, closeAssignModal,
-    openRequestModal, closeRequestModal,
-    openChangeRequestModal, closeChangeRequestModal
+    closeAssignModal,
+    closeRequestModal,
+    closeChangeRequestModal
   } = useCoordinationModals();
 
   const [selectedSlots, setSelectedSlots] = useState([]);
@@ -225,13 +225,13 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         loadSentRequests();
       }, 100); // 약간의 지연으로 중복 호출 방지
     }
-  }, [user?.id, fetchMyRooms]);
+  }, [user?.id, fetchMyRooms, loadRoomExchangeCounts, loadSentRequests]);
 
   useEffect(() => {
     if (!currentRoom && showManageRoomModal) {
       closeManageRoomModal();
     }
-  }, [currentRoom, showManageRoomModal]);
+  }, [currentRoom, showManageRoomModal, closeManageRoomModal]);
 
   // 실시간 업데이트 제거 (요청 처리 후에만 수동 업데이트)
 

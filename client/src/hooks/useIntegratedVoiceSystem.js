@@ -119,7 +119,7 @@ export const useIntegratedVoiceSystem = (
     } catch (error) {
       console.error("Error starting recognition: ", error);
     }
-  }, [getStream, handleVoiceResult]);
+  }, [getStream]);
 
   useEffect(() => {
     isMountedRef.current = true;

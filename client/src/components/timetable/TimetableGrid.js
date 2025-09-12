@@ -114,8 +114,6 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
   const [slotToChange, setSlotToChange] = useState(null);
 
-  // Calculate the Monday of the current week once
-  const mondayOfCurrentWeek = useMemo(() => getMondayOfCurrentWeek(new Date()), []);
 
   // selectedSlots are now managed by parent component via props
 
@@ -197,7 +195,7 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
     }
     
     return null;
-  }, [timeSlots, members, currentUser]);
+  }, [timeSlots, members]);
 
   // Helper to check if a slot is selected by the current user
   const isSlotSelected = (dayIndex, time) => {
@@ -331,7 +329,7 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
         onSlotSelect(newSelectedSlots);
       }
     }
-  }, [getBlockedTimeInfo, getSlotOwner, currentUser, isRoomOwner, onRemoveSlot, calculateEndTime, selectedSlots, onSlotSelect]);
+  }, [getBlockedTimeInfo, getSlotOwner, currentUser, isRoomOwner, onRemoveSlot, calculateEndTime, selectedSlots, onSlotSelect, recentRequests, roomData?.requests, timeSlots]);
 
   // Function to handle assignment from modal
   const handleAssign = useCallback((memberId) => {
@@ -462,7 +460,7 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
       setShowChangeRequestModal(false);
       setSlotToChange(null);
     }
-  }, [slotToChange, onRequestSlot, roomId, currentUser]);
+  }, [slotToChange, onRequestSlot, roomId, currentUser, timeSlots]);
 
   return (
     <div className="timetable-grid border border-gray-200 rounded-lg overflow-hidden">
