@@ -14,6 +14,7 @@ import { Users, Calendar, PlusCircle, LogIn, WandSparkles } from 'lucide-react';
 import { translateEnglishDays } from '../../utils';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import MemberScheduleModal from '../modals/MemberScheduleModal';
+import AiSchedulingResults from '../coordination/AiSchedulingResults';
 
 const dayMap = {
   'monday': '월요일', 'tuesday': '화요일', 'wednesday': '수요일',
@@ -749,6 +750,10 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 results={aiResults} 
                 error={aiError} 
                 onClose={() => setAiResults(null)} 
+                onRetry={() => {
+                  setAiResults(null);
+                  setAiError(null);
+                }}
               /> : null
             }
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mt-4">
@@ -1067,10 +1072,9 @@ const AiSchedulerPanel = ({ constraints, setConstraints, onFindSlots, isLoading 
   );
 };
 
-const AiScheduleResults = ({ results, error, onClose }) => {
+const AiScheduleResults = ({ results, error, onClose, onRetry }) => {
   if (!results && !error) return null;
 
-  const formatDate = (dateStr) => new Date(dateStr).toLocaleString('ko-KR', { weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   return (
     <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 mb-4">
@@ -1078,31 +1082,28 @@ const AiScheduleResults = ({ results, error, onClose }) => {
         <h3 className="text-lg font-bold text-gray-800">AI 분석 결과</h3>
         <button onClick={onClose} className="text-gray-500 hover:text-gray-800">X</button>
       </div>
-      {error && <div className="text-red-500">오류: {error}</div>}
-      {results && results.success && (
-        <div>
-          <h4 className="font-semibold text-green-700">✅ 모두가 가능한 시간대</h4>
-          <ul className="list-disc pl-5 mt-2 space-y-1">
-            {results.commonSlots.map((slot, i) => (
-              <li key={i} className="text-sm">{formatDate(slot.startTime)} - {formatDate(slot.endTime)}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {results && !results.success && (
-        <div>
-          <h4 className="font-semibold text-orange-700">❌ 공통 시간을 찾지 못했습니다. 다음 대안은 어떠신가요?</h4>
-          <div className="mt-2 space-y-3">
-            {Object.entries(results.alternatives).map(([key, alt]) => (
-              <div key={key} className="p-3 bg-gray-50 rounded-md">
-                <h5 className="font-bold">{alt.title}</h5>
-                <p className="text-sm text-gray-600 mb-1">{alt.description}</p>
-                <p className="text-sm font-mono bg-gray-200 p-1 rounded">{formatDate(alt.details.startTime)} - {formatDate(alt.details.endTime)}</p>
-                {alt.details.absentMembers && <p className="text-xs text-red-600">불참: {alt.details.absentMembers.map(m => m.name).join(', ')}</p>}
-                {alt.details.conflictingMember && <p className="text-xs text-red-600">조정 필요: {alt.details.conflictingMember.name}</p>}
-              </div>
-            ))}
-          </div>
+      {/* AI 스케줄링 결과 */}
+      <AiSchedulingResults 
+        results={results}
+        onSelectTimeSlot={(slot) => {
+          // 여기에서 선택된 시간대로 방 일정을 확정하는 로직
+          // showAlert 함수를 찾아서 연결해야 함
+          console.log('Selected time slot:', slot);
+        }}
+        onRequestConcession={(alternative) => {
+          // 양보 요청 로직
+          const member = alternative.details.conflictingMember || alternative.details.absentMembers?.[0];
+          if (member) {
+            console.log('Request concession from:', member.name);
+          }
+        }}
+        onRetry={onRetry}
+      />
+      
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="text-red-700">⚠️ 오류가 발생했습니다</div>
+          <div className="text-sm text-red-600 mt-1">{error}</div>
         </div>
       )}
     </div>
