@@ -24,6 +24,9 @@ import TimeSelectionModal from './components/forms/TimeSelectionModal';
 import CustomAlertModal from './components/modals/CustomAlertModal';
 import { coordinationService } from './services/coordinationService';
 
+// 백그라운드 음성 인식 관련 imports
+import BackgroundCallIndicator from './components/indicators/BackgroundCallIndicator';
+
 // NavItem component
 const NavItem = ({ icon, label, active, onClick, badge }) => (
    <button
@@ -67,7 +70,7 @@ const formatEventForClient = (event, color) => {
 };
 
 
-const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAddedKey, speak, setEventActions, setAreEventActionsReady, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled, loginMethod, isBackgroundMonitoring, isCallDetected, toggleBackgroundMonitoring, voiceStatus, isAnalyzing }) => {
+const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAddedKey, setEventAddedKey, speak, setEventActions, setAreEventActionsReady, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled, loginMethod, isBackgroundMonitoring, isCallDetected, callStartTime, toggleBackgroundMonitoring, voiceStatus, isAnalyzing }) => {
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
    const [activeTab, setActiveTab] = useState(() => {
      const savedTab = localStorage.getItem('activeTab');
@@ -116,6 +119,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
    const closeAlert = useCallback(() => {
      setAlertModal(prev => ({ ...prev, isOpen: false }));
    }, []);
+
 
    // 로그인 후 교환 요청 수 자동 로드
    useEffect(() => {
@@ -359,6 +363,19 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                         {user && user.firstName ? user.firstName : '프로필'}
                      </button>
                   )}
+                  
+                  {/* 백그라운드 모니터링 버튼 */}
+                  <div className="hidden sm:block">
+                     <BackgroundCallIndicator
+                        isMonitoring={isBackgroundMonitoring}
+                        isCallDetected={isCallDetected}
+                        callStartTime={callStartTime}
+                        onToggleMonitoring={toggleBackgroundMonitoring}
+                        voiceStatus={voiceStatus}
+                        isAnalyzing={isAnalyzing}
+                     />
+                  </div>
+                  
                   <button 
                      onClick={() => setIsVoiceRecognitionEnabled(prev => !prev)} 
                      title={isVoiceRecognitionEnabled ? "음성 인식 활성화됨 (클릭하여 비활성화)" : "음성 인식 비활성화됨 (클릭하여 활성화)"} 
@@ -424,6 +441,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
             type={alertModal.type}
             showCancel={alertModal.showCancel}
          />
+
       </div>
    );
 };

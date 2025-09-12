@@ -153,13 +153,13 @@ function App() {
    }, []);
 
    const schedulingSystemProps = useMemo(() => ({
-      isLoggedIn, user, handleLogout, isListening, eventAddedKey,
+      isLoggedIn, user, handleLogout, isListening, eventAddedKey, setEventAddedKey,
       setEventActions, setAreEventActionsReady, isVoiceRecognitionEnabled,
       setIsVoiceRecognitionEnabled: handleToggleVoiceRecognition, loginMethod,
-      isBackgroundMonitoring, isCallDetected, toggleBackgroundMonitoring,
+      isBackgroundMonitoring, isCallDetected, callStartTime, toggleBackgroundMonitoring,
       voiceStatus, 
       isAnalyzing: voiceAnalyzing
-   }), [isLoggedIn, user, handleLogout, isListening, eventAddedKey, isVoiceRecognitionEnabled, handleToggleVoiceRecognition, loginMethod, isBackgroundMonitoring, isCallDetected, toggleBackgroundMonitoring, voiceStatus, voiceAnalyzing]);
+   }), [isLoggedIn, user, handleLogout, isListening, eventAddedKey, setEventAddedKey, isVoiceRecognitionEnabled, handleToggleVoiceRecognition, loginMethod, isBackgroundMonitoring, isCallDetected, callStartTime, toggleBackgroundMonitoring, voiceStatus, voiceAnalyzing]);
 
    const handleConfirmSharedText = (text) => {
       handleChatMessage(`다음 내용으로 일정 추가: ${text}`);
@@ -199,12 +199,13 @@ function App() {
          )}
          {isLoggedIn && detectedSchedules.length > 0 && (
             <AutoDetectedScheduleModal
-               detectedSchedules={detectedSchedules}
+               schedules={detectedSchedules}
+               transcript={backgroundTranscript}
+               isCallDetected={isCallDetected}
+               callStartTime={callStartTime}
                onConfirm={confirmSchedule}
                onDismiss={dismissSchedule}
                onClose={() => detectedSchedules.forEach(dismissSchedule)}
-               backgroundTranscript={backgroundTranscript}
-               callStartTime={callStartTime}
             />
          )}
          {isLoggedIn && showBackgroundGuide && <BackgroundGuide onClose={handleCloseBackgroundGuide} />}
