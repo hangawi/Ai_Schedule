@@ -107,7 +107,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [selectedMemberId, setSelectedMemberId] = useState(null);
 
   const handleMemberClick = (memberId) => {
-    console.log('Member clicked:', memberId); // Debug log
     setSelectedMemberId(memberId);
     setShowMemberScheduleModal(true);
   };
@@ -915,8 +914,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
           {/* Test button for MemberScheduleModal */}
           <button
             onClick={() => {
-              console.log('Test button clicked!');
-              setSelectedMemberId('68bfb7c0a89ab6ee047d69b3'); // Use a dummy ID
+                        setSelectedMemberId('68bfb7c0a89ab6ee047d69b3'); // Use a dummy ID
               setShowMemberScheduleModal(true);
             }}
             className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center transition-all shadow-md hover:shadow-lg"
@@ -1088,14 +1086,12 @@ const AiScheduleResults = ({ results, error, onClose, onRetry }) => {
         onSelectTimeSlot={(slot) => {
           // 여기에서 선택된 시간대로 방 일정을 확정하는 로직
           // showAlert 함수를 찾아서 연결해야 함
-          console.log('Selected time slot:', slot);
-        }}
+          }}
         onRequestConcession={(alternative) => {
           // 양보 요청 로직
           const member = alternative.details.conflictingMember || alternative.details.absentMembers?.[0];
           if (member) {
-            console.log('Request concession from:', member.name);
-          }
+              }
         }}
         onRetry={onRetry}
       />

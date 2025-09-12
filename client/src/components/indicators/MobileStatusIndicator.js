@@ -132,13 +132,6 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
     };
   }, []);
 
-  // 디버깅: 조건 확인
-  console.log('MobileStatusIndicator 표시 조건:', {
-    isBackgroundMonitoring,
-    isMobile: deviceInfo.isMobile,
-    userAgent: navigator.userAgent,
-    windowWidth: window.innerWidth
-  });
 
   // 모바일에서만 표시 (백그라운드 ON/OFF 상관없이)
   if (!deviceInfo.isMobile) return null;
@@ -152,15 +145,6 @@ const MobileStatusIndicator = ({ isBackgroundMonitoring, isCallDetected, micVolu
   };
 
   const getStatusText = () => {
-    // 디버깅을 위한 로그 (개발용)
-    console.log('MobileStatusIndicator 상태:', {
-      isBackgroundMonitoring,
-      voiceStatus,
-      isAnalyzing,
-      isDocumentVisible: deviceInfo.isDocumentVisible,
-      isDocumentFocused: deviceInfo.isDocumentFocused,
-      hasMicrophoneAccess: deviceInfo.hasMicrophoneAccess
-    });
     
     if (!deviceInfo.isDocumentVisible) return '백그라운드 (음성인식 불가)';
     if (!deviceInfo.isDocumentFocused) return '포커스 없음 (제한적)';
