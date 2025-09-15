@@ -1,18 +1,31 @@
-import React, { useState, useCallback } from 'react';
-import { Calendar, Plus, Trash2, Clock } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Calendar, Plus, Trash2, Edit, X } from 'lucide-react';
 import CustomAlertModal from '../modals/CustomAlertModal';
 
-const ScheduleExceptionEditor = ({ exceptions = [], setExceptions }) => {
-  const [showAddModal, setShowAddModal] = useState(false);
+const ScheduleExceptionEditor = ({ exceptions = [], setExceptions, isEditing }) => {
   const [newException, setNewException] = useState({
     title: '',
-    description: '',
     date: new Date().toISOString().split('T')[0],
     startTime: '09:00',
-    endTime: '18:00',
-    type: 'busy' // 'busy' 또는 'unavailable'
+    endTime: '10:00',
+    type: 'unavailable'
   });
+  const [editingId, setEditingId] = useState(null); // To track which exception is being edited
   const [customAlert, setCustomAlert] = useState({ show: false, message: '', title: '' });
+
+  // Reset form when edit mode is turned off
+  useEffect(() => {
+    if (!isEditing) {
+      setEditingId(null);
+      setNewException({
+        title: '',
+        date: new Date().toISOString().split('T')[0],
+        startTime: '09:00',
+        endTime: '10:00',
+        type: 'unavailable'
+      });
+    }
+  }, [isEditing]);
 
   const showAlert = useCallback((message, title = '알림') => {
     setCustomAlert({ show: true, message, title });
@@ -22,67 +35,62 @@ const ScheduleExceptionEditor = ({ exceptions = [], setExceptions }) => {
     setCustomAlert({ show: false, message: '', title: '' });
   }, []);
 
-  const handleAddException = useCallback(() => {
-    // 유효성 검증
-    if (!newException.title.trim()) {
-      showAlert('예외 일정의 제목을 입력해주세요.');
+  const handleFormSubmit = useCallback(() => {
+    if (!newException.title.trim() || !newException.date || !newException.startTime || !newException.endTime) {
+      showAlert('모든 필드를 입력해주세요.');
       return;
     }
-
     if (newException.startTime >= newException.endTime) {
       showAlert('종료 시간은 시작 시간보다 늦어야 합니다.');
       return;
     }
 
-    // 새 예외 추가 (서버 모델과 호환)
-    const exception = {
-      _id: Date.now(), // 임시 ID (클라이언트용)
+    const exceptionData = {
       title: newException.title,
-      description: newException.description,
-      startTime: new Date(`${newException.date}T${newException.startTime}:00.000Z`).toISOString(),
-      endTime: new Date(`${newException.date}T${newException.endTime}:00.000Z`).toISOString(),
-      type: newException.type
+      startTime: `${newException.date}T${newException.startTime}:00.000Z`,
+      endTime: `${newException.date}T${newException.endTime}:00.000Z`,
+      type: newException.type, // Not in DB schema, but used for client-side rendering
+      description: '' // Not in DB schema
     };
 
-    setExceptions([...exceptions, exception]);
-    
-    // 폼 초기화
-    setNewException({
-      title: '',
-      description: '',
-      date: new Date().toISOString().split('T')[0],
-      startTime: '09:00',
-      endTime: '18:00',
-      type: 'busy'
-    });
+    if (editingId) {
+      // Update existing exception
+      setExceptions(exceptions.map(ex => ex._id === editingId ? { ...ex, ...exceptionData } : ex));
+      setEditingId(null);
+    } else {
+      // Add new exception
+      setExceptions([...exceptions, { ...exceptionData, _id: Date.now() }]);
+    }
 
-    setShowAddModal(false);
-    showAlert('예외 일정이 추가되었습니다.', '완료');
-  }, [newException, exceptions, setExceptions, showAlert]);
+    setNewException({ title: '', date: new Date().toISOString().split('T')[0], startTime: '09:00', endTime: '10:00', type: 'unavailable' });
+  }, [newException, exceptions, setExceptions, showAlert, editingId]);
 
   const handleRemoveException = useCallback((id) => {
     setExceptions(exceptions.filter(exc => exc._id !== id));
-    showAlert('예외 일정이 삭제되었습니다.', '완료');
-  }, [exceptions, setExceptions, showAlert]);
+    if (id === editingId) {
+        setEditingId(null);
+        setNewException({ title: '', date: new Date().toISOString().split('T')[0], startTime: '09:00', endTime: '10:00', type: 'unavailable' });
+    }
+  }, [exceptions, setExceptions, editingId]);
 
-  const formatDate = (dateTimeString) => {
-    const date = new Date(dateTimeString);
-    return date.toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      weekday: 'short'
+  const handleEditClick = (exception) => {
+    setEditingId(exception._id);
+    setNewException({
+      title: exception.title,
+      date: new Date(exception.startTime).toISOString().split('T')[0],
+      startTime: new Date(exception.startTime).toLocaleTimeString('en-CA', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+      endTime: new Date(exception.endTime).toLocaleTimeString('en-CA', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+      type: exception.type || 'unavailable'
     });
   };
 
-  const formatTime = (dateTimeString) => {
-    const date = new Date(dateTimeString);
-    return date.toLocaleTimeString('ko-KR', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
-  };
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setNewException({ title: '', date: new Date().toISOString().split('T')[0], startTime: '09:00', endTime: '10:00', type: 'unavailable' });
+  }
+
+  const formatDate = (dateTimeString) => new Date(dateTimeString).toLocaleDateString('ko-KR');
+  const formatTime = (dateTimeString) => new Date(dateTimeString).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
@@ -91,176 +99,98 @@ const ScheduleExceptionEditor = ({ exceptions = [], setExceptions }) => {
           <Calendar className="mr-2" size={20} />
           예외 일정 관리
         </h3>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center"
-        >
-          <Plus className="mr-1" size={16} />
-          예외 추가
-        </button>
-      </div>
-
-      <p className="text-sm text-gray-600 mb-4">
-        기본 시간표와 다른 특정 날짜의 일정을 설정할 수 있습니다.
-        (예: 휴가, 회의, 시험 등)
-      </p>
-
-      {/* 예외 목록 */}
-      <div className="space-y-3">
-        {exceptions.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <Calendar size={48} className="mx-auto mb-2 opacity-50" />
-            <p>등록된 예외 일정이 없습니다.</p>
-          </div>
-        ) : (
-          exceptions.map((exception) => (
-            <div
-              key={exception._id}
-              className={`p-4 rounded-lg border-l-4 ${
-                exception.type === 'busy' 
-                  ? 'border-yellow-500 bg-yellow-50' 
-                  : 'border-red-500 bg-red-50'
-              }`}
-            >
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <h4 className="font-medium text-gray-900">{exception.title}</h4>
-                  {exception.description && (
-                    <p className="text-sm text-gray-600 mt-1">{exception.description}</p>
-                  )}
-                  <div className="flex items-center mt-2 text-sm text-gray-500">
-                    <Calendar size={14} className="mr-1" />
-                    {formatDate(exception.startTime)}
-                    <Clock size={14} className="ml-3 mr-1" />
-                    {formatTime(exception.startTime)} - {formatTime(exception.endTime)}
-                  </div>
-                  <span className={`inline-block mt-2 px-2 py-1 text-xs rounded ${
-                    exception.type === 'busy' 
-                      ? 'bg-yellow-200 text-yellow-800' 
-                      : 'bg-red-200 text-red-800'
-                  }`}>
-                    {exception.type === 'busy' ? '바쁨' : '불가능'}
-                  </span>
-                </div>
-                <button
-                  onClick={() => handleRemoveException(exception._id)}
-                  className="text-red-500 hover:text-red-700 p-1"
-                  title="삭제"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </div>
-          ))
+        {isEditing && (
+            <span className="text-sm text-gray-500">{exceptions.length}개</span>
         )}
       </div>
 
-      {/* 예외 추가 모달 */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-md">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold mb-4">예외 일정 추가</h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    제목 *
-                  </label>
-                  <input
+      {!isEditing && exceptions.length === 0 && (
+          <p className="text-sm text-gray-500 mb-4">등록된 예외 일정이 없습니다. 편집 모드에서 추가할 수 있습니다.</p>
+      )}
+      {!isEditing && exceptions.length > 0 && (
+        <p className="text-sm text-gray-600 mb-4">
+          기본 시간표와 다른 특정 날짜의 일정을 확인합니다. 편집하려면 '편집' 버튼을 클릭하세요.
+        </p>
+      )}
+      {isEditing && (
+        <p className="text-sm text-gray-600 mb-4">
+          휴가, 시험 등 특정 날짜에만 적용되는 일정을 추가/삭제/수정할 수 있습니다.
+        </p>
+      )}
+
+      {/* Exceptions List */}
+      <div className="space-y-2 mb-4">
+        {exceptions.map((exception) => (
+          <div key={exception._id} className={`flex items-center justify-between p-3 rounded-lg border ${editingId === exception._id ? 'bg-blue-50 border-blue-300' : 'bg-gray-50'}`}>
+            <div className="flex-1">
+              <span className="font-medium text-gray-800">{exception.title}</span>
+              <span className="text-sm text-gray-600 ml-3">
+                {formatDate(exception.startTime)} {formatTime(exception.startTime)} - {formatTime(exception.endTime)}
+              </span>
+            </div>
+            {isEditing && (
+              <div className="flex items-center space-x-2">
+                <button onClick={() => handleEditClick(exception)} className="text-blue-500 hover:text-blue-700">
+                    <Edit size={16} />
+                </button>
+                <button onClick={() => handleRemoveException(exception._id)} className="text-red-500 hover:text-red-700">
+                    <Trash2 size={16} />
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Add/Edit Exception Form (only in editing mode) */}
+      {isEditing && (
+        <div className="border-t pt-4">
+            <h4 className="text-md font-semibold text-gray-800 mb-2">{editingId ? '예외 수정' : '새 예외 추가'}</h4>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
+                <input
                     type="text"
+                    placeholder="예외 이름 (예: 중간고사)"
                     value={newException.title}
-                    onChange={(e) => setNewException(prev => ({ ...prev, title: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="예: 중간고사, 휴가, 회의"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    설명 (선택)
-                  </label>
-                  <textarea
-                    value={newException.description}
-                    onChange={(e) => setNewException(prev => ({ ...prev, description: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    rows="2"
-                    placeholder="추가 설명"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    날짜 *
-                  </label>
-                  <input
+                    onChange={(e) => setNewException({ ...newException, title: e.target.value })}
+                    className="md:col-span-2 w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                />
+                <input
                     type="date"
                     value={newException.date}
-                    onChange={(e) => setNewException(prev => ({ ...prev, date: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      시작 시간 *
-                    </label>
+                    onChange={(e) => setNewException({ ...newException, date: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                />
+                <div className="flex gap-2">
                     <input
-                      type="time"
-                      value={newException.startTime}
-                      onChange={(e) => setNewException(prev => ({ ...prev, startTime: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        type="time"
+                        value={newException.startTime}
+                        onChange={(e) => setNewException({ ...newException, startTime: e.target.value })}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      종료 시간 *
-                    </label>
                     <input
-                      type="time"
-                      value={newException.endTime}
-                      onChange={(e) => setNewException(prev => ({ ...prev, endTime: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        type="time"
+                        value={newException.endTime}
+                        onChange={(e) => setNewException({ ...newException, endTime: e.target.value })}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
                     />
-                  </div>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    유형 *
-                  </label>
-                  <select
-                    value={newException.type}
-                    onChange={(e) => setNewException(prev => ({ ...prev, type: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="busy">바쁨 (조정 가능)</option>
-                    <option value="unavailable">불가능 (절대 불가)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                >
-                  취소
-                </button>
-                <button
-                  onClick={handleAddException}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                >
-                  추가
-                </button>
-              </div>
             </div>
-          </div>
+            <div className="flex items-center space-x-2 mt-2">
+                <button
+                    onClick={handleFormSubmit}
+                    className="w-full px-4 py-2 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 flex items-center justify-center"
+                >
+                    {editingId ? <><Edit size={16} className="mr-1" /> 수정 완료</> : <><Plus size={16} className="mr-1" /> 추가</>}
+                </button>
+                {editingId && (
+                    <button onClick={handleCancelEdit} className="w-auto px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">
+                        <X size={16}/>
+                    </button>
+                )}
+            </div>
         </div>
       )}
 
-      {/* Alert Modal */}
       <CustomAlertModal
         isOpen={customAlert.show}
         onClose={closeAlert}
