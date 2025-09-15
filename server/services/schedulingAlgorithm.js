@@ -1,120 +1,363 @@
 class SchedulingAlgorithm {
-  constructor() {}
 
-  async calculateOptimalTime(busyTimes, eventDetails, allParticipantIds) {
-    const { duration, preferredTimeRanges } = eventDetails;
-    const possibleSlots = this._generatePossibleSlots(preferredTimeRanges, duration);
+  runAutoSchedule(members, owner, roomTimeSlots, options, deferredAssignments = []) {
+    const { minHoursPerWeek = 3, numWeeks = 2, currentWeek } = options;
+    const startDate = currentWeek ? new Date(currentWeek) : new Date();
+    
+    const timetable = this._createTimetable(roomTimeSlots, startDate, numWeeks);
 
-    if (possibleSlots.length === 0) {
-      return [];
-    }
+    let assignments = this._initializeMemberAssignments(members);
 
-    const scoredSlots = this._scoreSlots(possibleSlots, busyTimes, allParticipantIds, eventDetails);
+    // Phase 0: Assign Deferred Assignments (0-priority)
+    this._assignDeferredAssignments(timetable, assignments, deferredAssignments);
 
-    // Sort by score descending
-    scoredSlots.sort((a, b) => b.score - a.score);
+    // Phase 1: Assign undisputed high-priority slots
+    this._assignUndisputedSlots(timetable, assignments, 3, minHoursPerWeek);
 
-    // Return top 5 suggestions
-    return scoredSlots.slice(0, 5);
-  }
+    // Phase 2: Iteratively fill remaining hours
+    // Since all submitted slots are treated as high priority, we only need to run this once.
+    this._iterativeAssignment(timetable, assignments, 3, minHoursPerWeek);
 
-  _generatePossibleSlots(preferredTimeRanges, duration) {
-    const possibleSlots = [];
-    const meetingDurationMillis = duration * 60 * 1000;
+    // Phase 2.5: Explicit Conflict Resolution by Owner Taking Slot
+    this._resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, minHoursPerWeek);
 
-    for (const range of preferredTimeRanges) {
-      let currentTime = new Date(range.start);
-      const endTime = new Date(range.end);
+    // Phase 3: Conflict Resolution using Owner's Schedule
+    this._resolveConflictsWithOwner(timetable, assignments, owner, minHoursPerWeek);
 
-      while (currentTime.getTime() + meetingDurationMillis <= endTime.getTime()) {
-        const slotEnd = new Date(currentTime.getTime() + meetingDurationMillis);
-        possibleSlots.push({ startTime: new Date(currentTime), endTime: slotEnd });
+    // Phase 4: Carry-over assignments (prioritize unassigned members in future weeks)
+    this._carryOverAssignments(timetable, assignments, minHoursPerWeek);
 
-        // Move to the next 15-minute interval
-        currentTime = new Date(currentTime.getTime() + 15 * 60 * 1000);
+    // Identify unassigned members (for future carry-over)
+    const unassignedMembersInfo = Object.keys(assignments)
+      .filter(id => assignments[id].assignedHours < minHoursPerWeek)
+      .map(id => ({
+        memberId: id,
+        neededHours: minHoursPerWeek - assignments[id].assignedHours,
+        assignedSlots: assignments[id].slots,
+      }));
+
+    // Identify unresolvable conflicts
+    const unresolvableConflicts = [];
+    const ownerId = owner._id.toString(); 
+    for (const key in timetable) {
+      const slot = timetable[key];
+      if (!slot.assignedTo) {
+        const nonOwnerAvailable = slot.available.filter(a => a.memberId !== ownerId);
+        if (nonOwnerAvailable.length > 1) {
+          unresolvableConflicts.push({
+            slotKey: key,
+            date: slot.date,
+            availableMembers: nonOwnerAvailable.map(a => a.memberId)
+          });
+        }
       }
     }
-    return possibleSlots;
+
+    return {
+      assignments,
+      unassignedMembersInfo,
+      unresolvableConflicts,
+    };
   }
 
-  _scoreSlots(slots, busyTimes, allParticipantIds, eventDetails) {
-    const totalParticipants = allParticipantIds.length;
-    const { priority: proposalPriority } = eventDetails;
+  getMemberPriority(member) {
+    return member.user.priority || 0;
+  }
 
-    return slots.map(slot => {
-      let score = 0; // Base score
-      let availableParticipants = 0;
-      let conflictingEventsCount = 0;
-      let conflicts = [];
+  _createTimetable(roomTimeSlots, startDate, numWeeks) {
+    const timetable = {};
+    const currentDay = new Date(startDate);
+    currentDay.setUTCHours(0, 0, 0, 0);
 
-      for (const participantId of allParticipantIds) {
-        let isParticipantAvailable = true;
-        const participantBusyTimes = busyTimes.filter(bt => bt.userId.toString() === participantId.toString());
+    for (let w = 0; w < numWeeks; w++) {
+      for (let d = 0; d < 5; d++) { // Monday to Friday
+        const date = new Date(currentDay);
+        date.setUTCDate(currentDay.getUTCDate() + d + (w * 7));
+        const dayOfWeek = date.getUTCDay(); // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
+        if (dayOfWeek === 0 || dayOfWeek === 6) continue; // Skip Saturday and Sunday
 
-        for (const busy of participantBusyTimes) {
-          const busyStart = new Date(busy.startTime);
-          const busyEnd = new Date(busy.endTime);
+        // Convert to 1-indexed day of week (1=Mon, 2=Tue, ..., 5=Fri)
+        const oneIndexedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek; // Sunday becomes 7
 
-          // Check for overlap
-          if (slot.startTime < busyEnd && slot.endTime > busyStart) {
-            isParticipantAvailable = false;
-            conflictingEventsCount++;
-            conflicts.push({ userId: participantId, busyTime: busy });
-            break;
+        for (let h = 9; h < 18; h++) {
+          for (let m = 0; m < 60; m += 30) {
+            const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+            const key = `${dateKey}-${time}`;
+            timetable[key] = {
+              assignedTo: null,
+              available: [],
+              date: date, // Store the actual date object
+              dayOfWeek: oneIndexedDayOfWeek, // Store 1-indexed day of week
+            };
           }
         }
+      }
+    }
 
-        if (isParticipantAvailable) {
-          availableParticipants++;
+    // Populate availability from the user-submitted roomTimeSlots
+    roomTimeSlots.forEach(slot => {
+      const date = new Date(slot.date);
+      const dateKey = date.toISOString().split('T')[0];
+      const key = `${dateKey}-${slot.startTime}`;
+
+      if (timetable[key]) {
+        const userId = slot.user.toString();
+        // Assume all submitted slots are high priority
+        timetable[key].available.push({ memberId: userId, priority: 3, isOwner: false });
+      }
+    });
+
+    return timetable;
+  }
+
+  _initializeMemberAssignments(members) {
+    const assignments = {};
+    members.forEach(m => {
+      assignments[m.user._id.toString()] = { assignedHours: 0, slots: [] };
+    });
+    return assignments;
+  }
+
+  _assignDeferredAssignments(timetable, assignments, deferredAssignments) {
+    for (const deferred of deferredAssignments) {
+      const { memberId, neededHours } = deferred;
+      let hoursAssigned = 0;
+
+      const availableSlotsForMember = Object.keys(timetable)
+        .filter(key => {
+          const slot = timetable[key];
+          return !slot.assignedTo && slot.available.some(a => a.memberId === memberId && !a.isOwner);
+        })
+        .sort((keyA, keyB) => {
+          const slotA = timetable[keyA];
+          const slotB = timetable[keyB];
+          return slotA.available.filter(a => !a.isOwner).length - slotB.available.filter(a => !a.isOwner).length;
+        });
+
+      for (const key of availableSlotsForMember) {
+        if (hoursAssigned >= neededHours) break;
+        this._assignSlot(timetable, assignments, key, memberId);
+        hoursAssigned += 0.5;
+      }
+    }
+  }
+
+  _assignUndisputedSlots(timetable, assignments, priority, minHoursPerWeek) {
+    for (const key in timetable) {
+      const slot = timetable[key];
+      if (slot.assignedTo) continue;
+
+      const highPriorityAvailable = slot.available.filter(a => a.priority === priority && !a.isOwner);
+      
+      if (highPriorityAvailable.length === 1) {
+        const memberToAssign = highPriorityAvailable[0].memberId;
+        if (assignments[memberToAssign].assignedHours < minHoursPerWeek) {
+          this._assignSlot(timetable, assignments, key, memberToAssign);
         }
       }
+    }
+  }
 
-      // 1. 참가자 가용성 (가장 중요)
-      if (totalParticipants > 0) {
-        score += (availableParticipants / totalParticipants) * 60; // 60점 배점
-      } else {
-        score += 60; // 참가자가 없으면 60점 기본 부여 (모두 가능하다고 가정)
-      }
+  _iterativeAssignment(timetable, assignments, priority, minHoursPerWeek) {
+    const membersToAssign = Object.keys(assignments).filter(id => assignments[id].assignedHours < minHoursPerWeek);
 
-      // 2. 시간 선호도 (오전/오후 선호)
-      const slotHour = slot.startTime.getHours();
-      if (slotHour >= 9 && slotHour < 12) score += 15; // 오전 선호 (9-11시)
-      else if (slotHour >= 13 && slotHour < 17) score += 10; // 오후 선호 (13-16시)
-      else score += 5; // 그 외 시간
+    for (const memberId of membersToAssign) {
+        // Try to fill this member's hours before moving to the next member
+        while (assignments[memberId].assignedHours < minHoursPerWeek) {
+            const bestSlotResult = this._findBestSlotForMember(timetable, assignments, memberId, priority);
 
-      // 3. 충돌 최소화 (충돌이 적을수록 높은 점수)
-      // 충돌이 0개일 때 15점, 1개일 때 10점, 2개일 때 5점, 3개 이상일 때 0점
-      if (conflictingEventsCount === 0) score += 15;
-      else if (conflictingEventsCount === 1) score += 10;
-      else if (conflictingEventsCount === 2) score += 5;
+            if (bestSlotResult && bestSlotResult.bestSlot) {
+                this._assignSlot(timetable, assignments, bestSlotResult.bestSlot.key, memberId);
+            } else {
+                // No more slots can be found for this member at this priority.
+                break;
+            }
+        }
+    }
+  }
 
-      // 4. 제안 우선순위 (높을수록 높은 점수)
-      // proposalPriority가 유효한 숫자인지 확인
-      if (typeof proposalPriority === 'number' && !isNaN(proposalPriority)) {
-        score += (proposalPriority - 1) * 2.5; // 10점 배점
-      }
+  _getPreviousSlotKey(key) {
+    const lastDashIndex = key.lastIndexOf('-');
+    if (lastDashIndex === -1) return null;
 
-      // 점수를 0-100 범위로 정규화 및 정수화
-      score = Math.min(100, Math.max(0, Math.round(score)));
+    const dateKey = key.substring(0, lastDashIndex);
+    const time = key.substring(lastDashIndex + 1);
+    const [h, m] = time.split(':').map(Number);
 
-      let description = '';
-      if (availableParticipants === totalParticipants) {
-        description = '모든 참가자 가능';
-      } else if (availableParticipants === 0) {
-        description = '참가자 없음';
-      } else {
-        description = `${totalParticipants - availableParticipants}명 일정 조율 필요`;
-      }
+    let prevH = h;
+    let prevM = m - 30;
 
-      return {
-        startTime: slot.startTime.toISOString(),
-        endTime: slot.endTime.toISOString(),
-        score: score,
-        description: description,
-        conflicts: conflicts,
-      };
+    if (prevM < 0) {
+        prevM = 30;
+        prevH = h - 1;
+    }
+    
+    if (prevH < 0) return null; // Out of time range
+
+    const prevTime = `${String(prevH).padStart(2, '0')}:${String(prevM).padStart(2, '0')}`;
+    return `${dateKey}-${prevTime}`;
+  }
+
+  _findBestSlotForMember(timetable, assignments, memberId, priority) {
+    let bestSlot = null;
+    let bestScore = -1;
+
+    for (const key in timetable) {
+        const slot = timetable[key];
+        if (slot.assignedTo) continue;
+
+        const memberAvailability = slot.available.find(a => a.memberId === memberId && a.priority === priority && !a.isOwner);
+        if (memberAvailability) {
+            const contenders = slot.available.filter(a => !a.isOwner).length;
+            
+            let score = 1000 - (contenders * 10);
+
+            const prevKey = this._getPreviousSlotKey(key);
+            if (prevKey && timetable[prevKey] && timetable[prevKey].assignedTo === memberId) {
+                score += 100;
+            }
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestSlot = { key, slot };
+            }
+        }
+    }
+    
+    if (bestSlot) {
+        return { bestSlot, score: bestScore };
+    }
+    return null;
+  }
+
+  _assignSlot(timetable, assignments, key, memberId) {
+    const dayMap = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday' };
+    const lastDashIndex = key.lastIndexOf('-');
+    const dateKey = key.substring(0, lastDashIndex);
+    const startTimeRaw = key.substring(lastDashIndex + 1);
+    const [h, m] = startTimeRaw.split(':').map(Number); // Keep this for endTime calculation
+    
+    const endHour = m === 30 ? h + 1 : h;
+    const endMinute = m === 30 ? 0 : 30;
+    const endTime = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
+
+    const slotDate = timetable[key].date; // Use the date object already in the timetable
+    const slotDayOfWeek = timetable[key].dayOfWeek; // Use the 1-indexed dayOfWeek from the timetable
+    const dayString = dayMap[slotDayOfWeek];
+
+    if (!dayString) {
+      console.warn("SchedulingAlgorithm:_assignSlot - Invalid dayString for slotDayOfWeek:", slotDayOfWeek, "dateKey:", dateKey);
+      return;
+    }
+
+    timetable[key].assignedTo = memberId;
+    assignments[memberId].assignedHours += 0.5;
+    console.log("SchedulingAlgorithm:_assignSlot - Pushing slot with startTime:", startTimeRaw, "and endTime:", endTime);
+    assignments[memberId].slots.push({
+        date: slotDate,
+        day: dayString,
+        startTime: startTimeRaw, // Use startTimeRaw directly
+        endTime,
+        subject: '자동 배정',
+        user: memberId,
+        status: 'confirmed'
     });
+  }
+
+  _resolveConflictsWithOwner(timetable, assignments, owner, minHoursPerWeek) {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const membersNeedingHours = Object.keys(assignments).filter(id => 
+        id !== owner._id.toString() && assignments[id].assignedHours < minHoursPerWeek
+      );
+
+      for (const memberId of membersNeedingHours) {
+        for (const key in timetable) {
+          const slot = timetable[key];
+          if (slot.assignedTo) continue;
+
+          const memberAvailability = slot.available.find(a => a.memberId === memberId && !a.isOwner);
+          if (!memberAvailability) continue; 
+
+          const ownerAvailability = slot.available.find(a => a.memberId === owner._id.toString() && a.isOwner);
+          if (!ownerAvailability) continue; 
+
+          this._assignSlot(timetable, assignments, key, memberId);
+          changed = true;
+          break;
+        }
+      }
+    }
+  }
+
+  _resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, minHoursPerWeek) {
+    const ownerId = owner._id.toString();
+    for (const key in timetable) {
+      const slot = timetable[key];
+      if (slot.assignedTo) continue;
+
+      const nonOwnerAvailable = slot.available.filter(a => a.memberId !== ownerId);
+
+      if (nonOwnerAvailable.length > 1) {
+        const ownerAvailability = slot.available.find(a => a.memberId === ownerId && a.isOwner);
+        if (ownerAvailability) {
+          slot.assignedTo = ownerId;
+        }
+      }
+    }
+  }
+
+  _carryOverAssignments(timetable, assignments, minHoursPerWeek) {
+    const membersNeedingHours = Object.keys(assignments).filter(id => assignments[id].assignedHours < minHoursPerWeek);
+
+    for (const memberId of membersNeedingHours) {
+      let needed = minHoursPerWeek - assignments[memberId].assignedHours;
+      
+      const availableSlotsForMember = Object.keys(timetable)
+        .filter(key => {
+          const slot = timetable[key];
+          return !slot.assignedTo && slot.available.some(a => a.memberId === memberId && !a.isOwner);
+        })
+        .sort((keyA, keyB) => {
+          const slotA = timetable[keyA];
+          const slotB = timetable[keyB];
+          return slotA.available.filter(a => !a.isOwner).length - slotB.available.filter(a => !a.isOwner).length;
+        });
+
+      for (const key of availableSlotsForMember) {
+        if (needed <= 0) break;
+        this._assignSlot(timetable, assignments, key, memberId);
+        needed -= 0.5;
+      }
+    }
   }
 }
 
-module.exports = SchedulingAlgorithm;
+module.exports = new SchedulingAlgorithm();
+
+// --- DEBUGGING UTILITY ---
+/*
+class SchedulingAlgorithm {
+  debug(roomTimeSlots, options) {
+    const { minHoursPerWeek = 3, numWeeks = 2, currentWeek } = options;
+    const startDate = currentWeek ? new Date(currentWeek) : new Date();
+    
+    const timetable = this._createTimetable(roomTimeSlots, startDate, numWeeks);
+
+    const availableSlots = Object.entries(timetable)
+      .filter(([key, slot]) => slot.available.length > 0)
+      .reduce((acc, [key, slot]) => {
+        acc[key] = slot;
+        return acc;
+      }, {});
+
+    return {
+      receivedOptions: options,
+      receivedRoomTimeSlots: roomTimeSlots,
+      generatedTimetableWithAvailability: availableSlots,
+    };
+  }
+}
+*/

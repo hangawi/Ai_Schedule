@@ -288,4 +288,24 @@ export const coordinationService = {
     return await response.json();
   },
 
+  // 자동 시간 배정 실행
+  async runAutoSchedule(roomId, options) {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/run-schedule`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-auth-token': token,
+      },
+      body: JSON.stringify(options),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to run auto-schedule');
+    }
+
+    return await response.json();
+  },
+
 };

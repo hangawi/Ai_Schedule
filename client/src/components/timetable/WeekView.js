@@ -1,8 +1,11 @@
 import React from 'react';
 import TimeSlot from './TimeSlot';
 
+const dayNamesKorean = ['월', '화', '수', '목', '금'];
+
 const WeekView = ({ 
   filteredTimeSlotsInDay, 
+  weekDates, // New prop
   days, 
   getSlotOwner, 
   isSlotSelected, 
@@ -11,6 +14,8 @@ const WeekView = ({
   currentUser, 
   handleSlotClick 
 }) => {
+  console.log("WeekView: Received weekDates prop:", weekDates);
+  console.log("WeekView: Received filteredTimeSlotsInDay prop:", filteredTimeSlotsInDay);
   return (
     <>
       {filteredTimeSlotsInDay.map(time => (
@@ -18,17 +23,20 @@ const WeekView = ({
           <div className="col-span-1 p-2 text-center text-sm font-medium text-gray-600 flex items-center justify-center">
             {time}
           </div>
-          {days.map((day, dayIndex) => {
-            const ownerInfo = getSlotOwner(dayIndex, time);
-            const isSelected = isSlotSelected(dayIndex, time);
+          {weekDates.map((dateInfo, dayIndex) => { // Use dateInfo from weekDates
+            const date = dateInfo.fullDate; // Extract fullDate object
+            const ownerInfo = getSlotOwner(date, time);
+            const isSelected = isSlotSelected(date, time);
             const blockedInfo = getBlockedTimeInfo(time);
             const isBlocked = !!blockedInfo;
             
+            console.log("WeekView: Rendering slot for", date.toISOString().split('T')[0], time, "OwnerInfo:", ownerInfo);
+            
             return (
               <TimeSlot
-                key={`${day}-${time}`}
-                day={day}
-                dayIndex={dayIndex}
+                key={`${date.toISOString().split('T')[0]}-${time}`}
+                date={date} // Pass date object
+                day={dayNamesKorean[date.getUTCDay() % 5]} // Pass Korean day name
                 time={time}
                 ownerInfo={ownerInfo}
                 isSelected={isSelected}

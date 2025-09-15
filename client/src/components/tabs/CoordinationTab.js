@@ -10,11 +10,10 @@ import { useCoordination } from '../../hooks/useCoordination';
 import { useCoordinationModals } from '../../hooks/useCoordinationModals';
 import { useAuth } from '../../hooks/useAuth';
 import { coordinationService } from '../../services/coordinationService';
-import { Users, Calendar, PlusCircle, LogIn, WandSparkles } from 'lucide-react';
+import { Users, Calendar, PlusCircle, LogIn, WandSparkles, Zap, X } from 'lucide-react';
 import { translateEnglishDays } from '../../utils';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import MemberScheduleModal from '../modals/MemberScheduleModal';
-import AiSchedulingResults from '../coordination/AiSchedulingResults';
 
 const dayMap = {
   'monday': '월요일', 'tuesday': '화요일', 'wednesday': '수요일',
@@ -23,44 +22,41 @@ const dayMap = {
 
 const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount }) => {
   const { user } = useAuth();
-  const [roomExchangeCounts, setRoomExchangeCounts] = useState({}); // 방별 교환요청 수
-  const [sentRequests, setSentRequests] = useState([]); // 보낸 요청 내역
+  const [roomExchangeCounts, setRoomExchangeCounts] = useState({});
+  const [sentRequests, setSentRequests] = useState([]);
 
-  // CustomAlert 상태
   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
   const showAlert = (message) => setCustomAlert({ show: true, message });
   const closeAlert = () => setCustomAlert({ show: false, message: '' });
 
-  // AI Scheduler State
-  const [aiConstraints, setAiConstraints] = useState({
-    durationMinutes: 60,
-    timeOfDay: 'Any',
-    numberOfOptions: 3,
-    dateRange: {
-      start: new Date().toISOString().split('T')[0],
-      end: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0]
-    }
-  });
-  const [aiResults, setAiResults] = useState(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiError, setAiError] = useState(null);
+  // State for the currently displayed week in TimetableGrid
+  const [currentWeekStartDate, setCurrentWeekStartDate] = useState(null);
+  const handleWeekChange = useCallback((date) => {
+    setCurrentWeekStartDate(date);
+  }, []);
 
-  const handleFindSlots = async () => {
-    if (!currentRoom) return;
-    setIsAiLoading(true);
-    setAiError(null);
-    setAiResults(null);
+  // Auto-scheduler State
+  const [scheduleOptions, setScheduleOptions] = useState({ minHoursPerWeek: 3 });
+  const [isScheduling, setIsScheduling] = useState(false);
+  const [scheduleError, setScheduleError] = useState(null);
+  const [unassignedMembersInfo, setUnassignedMembersInfo] = useState(null); // New state for unassigned members
+
+  const handleRunAutoSchedule = async () => {
+    if (!currentRoom || !currentWeekStartDate) return;
+    setIsScheduling(true);
+    setScheduleError(null);
     try {
-      const results = await coordinationService.findCommonSlots(currentRoom._id, aiConstraints);
-      setAiResults(results);
+      await coordinationService.runAutoSchedule(currentRoom._id, { ...scheduleOptions, currentWeek: currentWeekStartDate });
+      await fetchRoomDetails(currentRoom._id); // Re-fetch the room details to get the absolute latest state
+      showAlert('자동 시간 배정이 완료되었습니다.');
     } catch (error) {
-      setAiError(error.message);
+      setScheduleError(error.message);
+      showAlert(`자동 배정 실패: ${error.message}`);
     } finally {
-      setIsAiLoading(false);
+      setIsScheduling(false);
     }
   };
 
-  // 방별 교환요청 수 로드
   const loadRoomExchangeCounts = useCallback(async () => {
     if (!user?.id) return;
     try {
@@ -73,7 +69,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     }
   }, [user?.id]);
 
-  // 보낸 요청 내역 로드
   const loadSentRequests = useCallback(async () => {
     if (!user?.id) return;
     try {
@@ -88,7 +83,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
   const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest } = useCoordination(user?.id, onRefreshExchangeCount, loadSentRequests, showAlert);
   
-  // Modal management hook
   const {
     showCreateRoomModal, showJoinRoomModal, showManageRoomModal,
     showAssignModal, showRequestModal, showChangeRequestModal,
@@ -102,7 +96,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   } = useCoordinationModals();
 
   const [selectedSlots, setSelectedSlots] = useState([]);
-  const [selectedTab, setSelectedTab] = useState('owned'); // 'owned' or 'joined'
+  const [selectedTab, setSelectedTab] = useState('owned');
   const [showMemberScheduleModal, setShowMemberScheduleModal] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState(null);
 
@@ -111,44 +105,35 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     setShowMemberScheduleModal(true);
   };
   
-  // 새로운 UI 상태들
-  const [requestViewMode, setRequestViewMode] = useState('received'); // 'received' or 'sent'
-  const [showAllRequests, setShowAllRequests] = useState({}); // 각 섹션별 전체 보기 상태
-  const [expandedSections, setExpandedSections] = useState({}); // 각 섹션별 확장 상태
+  const [requestViewMode, setRequestViewMode] = useState('received');
+  const [showAllRequests, setShowAllRequests] = useState({});
+  const [expandedSections, setExpandedSections] = useState({});
   
-  // Days array for modal calculations
   const days = ['월요일', '화요일', '수요일', '목요일', '금요일'];
 
-  // 요청 취소
   const handleCancelRequest = async (requestId) => {
     try {
       await coordinationService.cancelRequest(requestId);
     } catch (error) {
-      // 모든 에러를 조용히 처리 (이미 삭제된 요청 등)
     }
     
-    // 성공/실패 상관없이 항상 최신 상태로 업데이트
     try {
       if (currentRoom) {
         await fetchRoomDetails(currentRoom._id);
       }
       await loadSentRequests();
     } catch (updateError) {
-      // 업데이트 에러도 조용히 처리
     }
   };
 
-  // 요청 처리 (승인/거절)
   const handleRequestWithUpdate = async (requestId, action) => {
     try {
       await handleRequest(requestId, action);
-      // handleRequest 내부에서 이미 업데이트 처리됨
     } catch (error) {
       console.error('Failed to handle request:', error);
     }
   };
   
-  // 교환요청 수 계산하고 부모에게 전달
   useEffect(() => {
     if (!currentRoom || !onExchangeRequestCountChange) return;
     
@@ -164,21 +149,20 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const handleCreateRoom = async (roomData) => {
     await createRoom(roomData);
     closeCreateRoomModal();
-    fetchMyRooms(); // Refresh the list of rooms after creation
+    fetchMyRooms();
   };
 
   const handleJoinRoom = async (inviteCode) => {
     await joinRoom(inviteCode);
     closeJoinRoomModal();
-    fetchMyRooms(); // Refresh the list of rooms after joining
+    fetchMyRooms();
   };
 
   const handleSubmitSlots = async () => {
     if (!currentRoom || selectedSlots.length === 0) return;
     try {
       await submitTimeSlots(currentRoom._id, selectedSlots);
-      setSelectedSlots([]); // Clear selection after successful submission
-      // Force refresh by refetching room details
+      setSelectedSlots([]);
       await fetchRoomDetails(currentRoom._id);
     } catch (error) {
       console.error('Error submitting slots:', error);
@@ -186,7 +170,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   };
 
   const handleAssignSlot = async (assignmentData) => {
-    if (!currentRoom) return; // Ensure currentRoom is available
+    if (!currentRoom) return;
     await assignTimeSlot(
       assignmentData.roomId,
       assignmentData.day,
@@ -194,13 +178,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       assignmentData.endTime,
       assignmentData.userId
     );
-    // The assignTimeSlot in useCoordination already refreshes room details
   };
 
   const handleRequestSlot = async (requestData) => {
     if (!currentRoom) return;
     await createRequest(requestData);
-    // createRequest already refreshes room details if successful
   };
 
 
@@ -223,7 +205,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       setTimeout(() => {
         loadRoomExchangeCounts();
         loadSentRequests();
-      }, 100); // 약간의 지연으로 중복 호출 방지
+      }, 100);
     }
   }, [user?.id, fetchMyRooms, loadRoomExchangeCounts, loadSentRequests]);
 
@@ -232,8 +214,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       closeManageRoomModal();
     }
   }, [currentRoom, showManageRoomModal, closeManageRoomModal]);
-
-  // 실시간 업데이트 제거 (요청 처리 후에만 수동 업데이트)
 
   if (isLoading) {
     return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div></div>;
@@ -247,20 +227,16 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     let isOwner = false;
     if (user?.id && currentRoom) {
       const currentUserId = user.id;
-      const roomOwnerId = currentRoom.owner?._id || currentRoom.owner?.id || currentRoom.owner; // Handle various owner ID formats
+      const roomOwnerId = currentRoom.owner?._id || currentRoom.owner?.id || currentRoom.owner;
       
-      // Check if current user is the owner
       if (roomOwnerId && currentUserId.toString() === roomOwnerId.toString()) {
         isOwner = true;
       }
-      // Also check for legacy roomMasterId if it exists
       if (currentRoom.roomMasterId && currentUserId.toString() === currentRoom.roomMasterId._id?.toString()) {
         isOwner = true;
       }
     }
     
-
-  // Helper function to calculate end time based on start time (30-minute slot)
   const calculateEndTime = (startTime) => {
     const [hour, minute] = startTime.split(':').map(Number);
     const endHour = minute === 30 ? hour + 1 : hour;
@@ -268,7 +244,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     return `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
   };
 
-    // 시간표 설정 값 가져오기
     const getHourFromSettings = (setting, defaultValue) => {
       if (!setting) return parseInt(defaultValue);
       if (typeof setting === 'string') return parseInt(setting.split(':')[0]);
@@ -285,6 +260,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       '18'
     );
     
+    console.log("CoordinationTab: currentWeekStartDate before rendering TimetableGrid:", currentWeekStartDate);
+
     return (
       <div className="p-1">
         <div className="bg-white p-6 rounded-xl shadow-lg mb-6 border border-gray-200">
@@ -331,7 +308,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
           </div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 px-2 sm:px-4 lg:px-6">
-          {/* 조원 리스트 사이드바 */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4">
               <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
@@ -344,7 +320,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   const memberName = memberData.name || `${memberData.firstName || ''} ${memberData.lastName || ''}`.trim() || '알 수 없음';
                   const isCurrentUser = memberData._id === user?.id || memberData.id === user?.id;
                   
-                  // 방장인지 확인 - owner와 비교
                   let memberIsOwner = false;
                   if (currentRoom.owner) {
                     const ownerId = currentRoom.owner._id || currentRoom.owner.id || currentRoom.owner;
@@ -392,6 +367,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                               방장
                             </span>
                           )}
+                          {member.carryOver > 0 && (
+                            <span className="ml-2 px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded-full flex-shrink-0 font-semibold">
+                              이월: {member.carryOver}시간
+                            </span>
+                          )}
                         </div>
                         <div className={`text-xs mt-1 ${
                           memberIsOwner ? 'text-red-600' : 'text-gray-500'
@@ -404,7 +384,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 })}
               </div>
               
-              {/* 일반 요청 목록 (방장만 표시) */}
               {isOwner && (currentRoom.requests || []).filter(req => req.status === 'pending' && ['time_request', 'time_change'].includes(req.type)).length > 0 && (
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
@@ -454,9 +433,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 </div>
               )}
 
-
               
-              {/* 교환요청 관리 섹션 */}
               <div className="mt-6 pt-4 border-t border-gray-200">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-md font-semibold text-gray-800 flex items-center">
@@ -489,7 +466,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
                 {requestViewMode === 'received' && (
                   <div>
-                    {/* 대기 중인 받은 요청 */}
                     {(currentRoom.requests || []).filter(req => req.status === 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length > 0 && (
                       <div className="mb-4">
                         <h5 className="text-sm font-medium text-gray-700 mb-2">대기 중인 요청</h5>
@@ -544,7 +520,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                       </div>
                     )}
 
-                    {/* 처리된 받은 요청 */}
                     {(currentRoom.requests || []).filter(req => req.status !== 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length > 0 && (
                       <div>
                         <div className="flex items-center justify-between mb-2">
@@ -613,7 +588,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
                 {requestViewMode === 'sent' && (
                   <div>
-                    {/* 현재 방의 보낸 요청만 필터링 */}
                     {(() => {
                       const currentRoomSentRequests = sentRequests.filter(req => req.roomId === currentRoom._id);
                       const pendingRequests = currentRoomSentRequests.filter(req => req.status === 'pending');
@@ -621,7 +595,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
                       return (
                         <>
-                          {/* 대기 중인 보낸 요청 */}
                           {pendingRequests.length > 0 && (
                             <div className="mb-4">
                               <h5 className="text-sm font-medium text-gray-700 mb-2">대기 중인 요청</h5>
@@ -666,7 +639,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                             </div>
                           )}
 
-                          {/* 처리된 보낸 요청 */}
                           {processedRequests.length > 0 && (
                             <div>
                               <div className="flex items-center justify-between mb-2">
@@ -738,27 +710,33 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             </div>
           </div>
 
-          {/* 시간표 그리드 */}
           <div className="lg:col-span-3">
             {isOwner && 
-              <AiSchedulerPanel 
-                constraints={aiConstraints} 
-                setConstraints={setAiConstraints} 
-                onFindSlots={handleFindSlots}
-                isLoading={isAiLoading}
+              <AutoSchedulerPanel 
+                options={scheduleOptions} 
+                setOptions={setScheduleOptions} 
+                onRun={handleRunAutoSchedule}
+                isLoading={isScheduling}
               />
             }
-            {aiResults || aiError ? 
-              <AiScheduleResults 
-                results={aiResults} 
-                error={aiError} 
-                onClose={() => setAiResults(null)} 
-                onRetry={() => {
-                  setAiResults(null);
-                  setAiError(null);
-                }}
-              /> : null
+            {scheduleError && 
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4" role="alert">
+                <strong className="font-bold">오류!</strong>
+                <span className="block sm:inline"> {scheduleError}</span>
+              </div>
             }
+            {unassignedMembersInfo && unassignedMembersInfo.length > 0 && (
+              <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative mt-4" role="alert">
+                <strong className="font-bold">알림!</strong>
+                <p className="block sm:inline"> 다음 멤버들은 최소 할당 시간을 채우지 못했습니다:</p>
+                <ul className="list-disc list-inside mt-2">
+                  {unassignedMembersInfo.map((info, index) => (
+                    <li key={index}>멤버 ID: {info.memberId}, 부족 시간: {info.neededHours}시간</li>
+                  ))}
+                </ul>
+                <p className="text-sm mt-2">이들은 협의가 필요하거나 다음 주로 이월될 수 있습니다.</p>
+              </div>
+            )}
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mt-4">
               <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
                 <Calendar size={20} className="mr-2 text-green-600" />
@@ -785,6 +763,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 }}
                 selectedSlots={selectedSlots}
                 calculateEndTime={calculateEndTime}
+                onWeekChange={handleWeekChange}
+                initialStartDate={currentWeekStartDate}
               />
             </div>
           </div>
@@ -868,7 +848,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   message: message || '시간 교환을 요청합니다.',
                 };
               } else {
-                // Default change request (if action is not specified or new type)
                 requestData = {
                   roomId: currentRoom._id,
                   type: 'time_change',
@@ -881,7 +860,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                     day: days[slotToChange.dayIndex],
                     startTime: slotToChange.time,
                     endTime: calculateEndTime(slotToChange.time),
-                    user: user.id // Assuming currentUser has an id
+                    user: user.id
                   },
                   message: message || '시간 변경 요청합니다.',
                 };
@@ -898,6 +877,14 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             onClose={() => setShowMemberScheduleModal(false)}
           />
         )}
+        <CustomAlertModal
+            isOpen={customAlert.show}
+            onClose={closeAlert}
+            title="알림"
+            message={customAlert.message}
+            type="warning"
+            showCancel={false}
+        />
       </div>
     );
   }
@@ -990,7 +977,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       {showJoinRoomModal && (
         <RoomJoinModal onClose={closeJoinRoomModal} onJoinRoom={handleJoinRoom} />
       )}
-      {/* CustomAlert Modal */}
       <CustomAlertModal
         isOpen={customAlert.show}
         onClose={closeAlert}
@@ -999,6 +985,13 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         type="warning"
         showCancel={false}
       />
+      
+      {showMemberScheduleModal && selectedMemberId && (
+        <MemberScheduleModal
+          memberId={selectedMemberId}
+          onClose={() => setShowMemberScheduleModal(false)}
+        />
+      )}
     </div>
   );
 };
@@ -1006,95 +999,39 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
 export default CoordinationTab;
 
-const AiSchedulerPanel = ({ constraints, setConstraints, onFindSlots, isLoading }) => {
+const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading }) => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setConstraints(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleDateChange = (e) => {
-    const { name, value } = e.target;
-    setConstraints(prev => ({ ...prev, dateRange: { ...prev.dateRange, [name]: value } }));
+    setOptions(prev => ({ ...prev, [name]: Number(value) }));
   };
 
   return (
     <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 mb-4">
       <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center">
-        <WandSparkles size={20} className="mr-2 text-purple-600" />
-        AI 최적 시간 분석
+        <Zap size={20} className="mr-2 text-purple-600" />
+        자동 시간 배정
       </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700">회의 시간 (분)</label>
+          <label className="block text-sm font-medium text-gray-700">주당 최소 할당 시간 (시간)</label>
           <input 
             type="number" 
-            name="durationMinutes" 
-            value={constraints.durationMinutes} 
+            name="minHoursPerWeek" 
+            value={options.minHoursPerWeek} 
             onChange={handleInputChange} 
             className="mt-1 block w-full p-2 border rounded-md"
+            min="1"
+            max="10"
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">선호 시간대</label>
-          <select name="timeOfDay" value={constraints.timeOfDay} onChange={handleInputChange} className="mt-1 block w-full p-2 border rounded-md">
-            <option>Any</option>
-            <option>Morning</option>
-            <option>Afternoon</option>
-            <option>Evening</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">분석 시작일</label>
-          <input type="date" name="start" value={constraints.dateRange.start} onChange={handleDateChange} className="mt-1 block w-full p-2 border rounded-md"/>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">분석 종료일</label>
-          <input type="date" name="end" value={constraints.dateRange.end} onChange={handleDateChange} className="mt-1 block w-full p-2 border rounded-md"/>
         </div>
       </div>
       <button 
-        onClick={onFindSlots} 
+        onClick={onRun} 
         disabled={isLoading} 
         className="mt-4 w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 disabled:bg-purple-300 flex items-center justify-center"
       >
-        {isLoading ? '분석 중...' : '최적 시간 찾기'}
+        {isLoading ? '배정 중...' : '자동 배정 실행'}
       </button>
-    </div>
-  );
-};
-
-const AiScheduleResults = ({ results, error, onClose, onRetry }) => {
-  if (!results && !error) return null;
-
-
-  return (
-    <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 mb-4">
-      <div className="flex justify-between items-center mb-3">
-        <h3 className="text-lg font-bold text-gray-800">AI 분석 결과</h3>
-        <button onClick={onClose} className="text-gray-500 hover:text-gray-800">X</button>
-      </div>
-      {/* AI 스케줄링 결과 */}
-      <AiSchedulingResults 
-        results={results}
-        onSelectTimeSlot={(slot) => {
-          // 여기에서 선택된 시간대로 방 일정을 확정하는 로직
-          // showAlert 함수를 찾아서 연결해야 함
-          }}
-        onRequestConcession={(alternative) => {
-          // 양보 요청 로직
-          const member = alternative.details.conflictingMember || alternative.details.absentMembers?.[0];
-          if (member) {
-              }
-        }}
-        onRetry={onRetry}
-      />
-      
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="text-red-700">⚠️ 오류가 발생했습니다</div>
-          <div className="text-sm text-red-600 mt-1">{error}</div>
-        </div>
-      )}
     </div>
   );
 };

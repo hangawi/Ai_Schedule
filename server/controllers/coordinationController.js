@@ -3,6 +3,7 @@ const Room = require('../models/room');
 const User = require('../models/user');
 const Event = require('../models/event');
 const { findOptimalSlots } = require('../services/schedulingAnalysisService');
+const schedulingAlgorithm = require('../services/schedulingAlgorithm');
 const { OWNER_COLOR, getAvailableColor } = require('../utils/colorUtils');
 
 // @desc    Create a new coordination room
@@ -851,6 +852,73 @@ exports.findCommonSlots = async (req, res) => {
   } catch (error) {
     console.error('Error finding common slots:', error);
     res.status(500).json({ msg: 'Server error while finding common slots' });
+  }
+};
+
+// @desc    Run auto-scheduling algorithm
+// @route   POST /api/coordination/rooms/:roomId/run-schedule
+// @access  Private (Owner only)
+exports.runAutoSchedule = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { minHoursPerWeek, numWeeks = 4, currentWeek } = req.body;
+
+    const room = await Room.findById(roomId).populate('owner', 'defaultSchedule').populate('members.user', 'defaultSchedule');
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    if (!room.isOwner(req.user.id)) {
+      return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
+    }
+
+    // 1. Create deferredAssignments from existing carryOver values
+    const deferredAssignments = room.members
+      .filter(m => m.carryOver && m.carryOver > 0)
+      .map(m => ({
+        memberId: m.user._id.toString(),
+        neededHours: m.carryOver,
+      }));
+
+    // Filter out the owner from the members list before passing to the algorithm
+    const membersOnly = room.members.filter(member => member.user._id.toString() !== room.owner._id.toString());
+
+    // 2. Pass roomTimeSlots to the algorithm
+    const result = schedulingAlgorithm.runAutoSchedule(membersOnly, room.owner, room.timeSlots, { minHoursPerWeek, numWeeks, currentWeek }, deferredAssignments);
+
+    // Clear existing assignments and apply new ones
+    room.timeSlots = []; 
+    Object.values(result.assignments).forEach(assignment => {
+      room.timeSlots.push(...assignment.slots);
+    });
+
+    // 3. Create a new members array with updated carryOver values
+    const updatedMembers = room.members.map(member => {
+      const unassignedInfo = result.unassignedMembersInfo.find(info => info.memberId === member.user._id.toString());
+      return {
+        ...member.toObject(), // Convert subdocument to plain object to avoid issues
+        carryOver: unassignedInfo ? unassignedInfo.neededHours : 0,
+      };
+    });
+
+    room.members = updatedMembers; // Replace the entire array to ensure Mongoose detects the change
+
+    // 5. Save the updated room
+    await room.save();
+    
+    // After saving, fetch a fresh copy of the room and populate that.
+    const freshRoom = await Room.findById(room._id)
+        .populate('timeSlots.user', 'firstName lastName email')
+        .populate('members.user', 'firstName lastName email name');
+
+    res.json({
+        room: freshRoom, // Send the fresh copy
+        unassignedMembersInfo: result.unassignedMembersInfo
+    });
+
+  } catch (error) {
+    console.error('Error running auto-schedule:', error);
+    res.status(500).json({ msg: '자동 배정 실행 중 서버 오류가 발생했습니다.' });
   }
 };
 
