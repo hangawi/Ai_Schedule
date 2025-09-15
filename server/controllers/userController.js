@@ -61,10 +61,28 @@ exports.updateUserSchedule = async (req, res) => {
       return res.status(404).json({ msg: 'User not found' });
     }
 
-    // Basic validation can be added here if needed
+    // Explicitly rebuild the defaultSchedule array to ensure all fields are correctly processed
+    if (defaultSchedule) {
+      user.defaultSchedule = defaultSchedule.map(slot => ({
+        dayOfWeek: slot.dayOfWeek,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        priority: slot.priority || 2, // Ensure priority has a value, defaulting to 2
+      }));
+    } else {
+      user.defaultSchedule = [];
+    }
 
-    user.defaultSchedule = defaultSchedule || [];
-    user.scheduleExceptions = scheduleExceptions || [];
+    // Explicitly rebuild the scheduleExceptions array
+    if (scheduleExceptions) {
+        user.scheduleExceptions = scheduleExceptions.map(ex => ({
+            title: ex.title,
+            startTime: ex.startTime,
+            endTime: ex.endTime,
+        }));
+    } else {
+        user.scheduleExceptions = [];
+    }
 
     await user.save();
 
@@ -74,7 +92,7 @@ exports.updateUserSchedule = async (req, res) => {
       scheduleExceptions: user.scheduleExceptions
     });
   } catch (err) {
-    console.error(err.message);
+    console.error('Error updating user schedule:', err);
     res.status(500).send('Server Error');
   }
 };

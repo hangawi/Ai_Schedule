@@ -17,6 +17,12 @@ for (let h = 9; h < 18; h++) {
   }
 }
 
+const priorityConfig = {
+  3: { label: '선호', color: 'bg-blue-600', next: 2 },      // 선호 -> 보통
+  2: { label: '보통', color: 'bg-blue-400', next: 1 },      // 보통 -> 조정 가능
+  1: { label: '조정 가능', color: 'bg-blue-200', next: 0 }, // 조정 가능 -> 해제
+};
+
 // Helper function to get the Monday of the current week
 const getMondayOfCurrentWeek = (date) => {
   const d = new Date(date);
@@ -28,96 +34,141 @@ const getMondayOfCurrentWeek = (date) => {
   return d;
 };
 
-const ScheduleGridSelector = ({ schedule, setSchedule, readOnly }) => {
+const ScheduleGridSelector = ({ schedule, setSchedule, readOnly, exceptions = [], onRemoveException }) => {
 
   const [weekDates, setWeekDates] = useState([]);
 
-  
-
   useEffect(() => {
     const today = new Date();
-    // If it's Sunday, we want to show next week's calendar (Monday is 1, Sunday is 0)
-    // Adjust to Monday of the current week. If today is Sunday, getMondayOfCurrentWeek will return last Monday.
-    // So if today is Sunday, we need to add 1 day to get to Monday, then calculate Monday of that week.
-    // Or simply, if day is 0 (Sunday), make it 7 for calculation purposes to get previous Monday.
     const monday = getMondayOfCurrentWeek(today);
 
     const dates = [];
-    const dayNamesKorean = ['월', '화', '수', '목', '금']; // Only for Mon-Fri
-    for (let i = 0; i < 5; i++) { // Loop 5 times for Mon-Fri
+    const dayNamesKorean = ['월', '화', '수', '목', '금'];
+    for (let i = 0; i < 5; i++) {
       const date = new Date(monday);
       date.setUTCDate(monday.getUTCDate() + i);
       const month = String(date.getUTCMonth() + 1).padStart(2, '0');
       const dayOfMonth = String(date.getUTCDate()).padStart(2, '0');
-      dates.push(`${dayNamesKorean[i]} (${month}.${dayOfMonth})`);
+      dates.push({ fullDate: date, display: `${dayNamesKorean[i]} (${month}.${dayOfMonth})` });
     }
     setWeekDates(dates);
   }, []);
 
   const handleSlotClick = (dayOfWeek, startTime) => {
-    const [hour, minute] = startTime.split(':').map(Number);
-    const endHour = minute === 30 ? hour + 1 : hour;
-    const endMinute = minute === 30 ? 0 : 30;
-    const endTime = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
+    if (readOnly) return;
 
-    const isSelected = schedule.some(
-      slot => slot.dayOfWeek === dayOfWeek && slot.startTime === startTime
+    const existingSlot = schedule.find(
+      s => s.dayOfWeek === dayOfWeek && s.startTime === startTime
     );
 
-    if (isSelected) {
-      // Deselect the slot
-      setSchedule(
-        schedule.filter(
-          slot => !(slot.dayOfWeek === dayOfWeek && slot.startTime === startTime)
-        )
-      );
+    if (existingSlot) {
+      const currentPriority = existingSlot.priority || 2;
+      const nextPriority = priorityConfig[currentPriority].next;
+
+      if (nextPriority === 0) {
+        // Deselect by filtering based on day and time
+        setSchedule(schedule.filter(s => 
+          !(s.dayOfWeek === dayOfWeek && s.startTime === startTime)
+        ));
+      } else {
+        // Update priority by mapping based on day and time
+        setSchedule(schedule.map(s => 
+          (s.dayOfWeek === dayOfWeek && s.startTime === startTime)
+          ? { ...s, priority: nextPriority } 
+          : s
+        ));
+      }
     } else {
-      // Select the slot
-      setSchedule([...schedule, { dayOfWeek, startTime, endTime }]);
+      // Add new slot with default high priority
+      const [hour, minute] = startTime.split(':').map(Number);
+      const endHour = minute === 30 ? hour + 1 : hour;
+      const endMinute = minute === 30 ? 0 : 30;
+      const endTime = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
+      setSchedule([...schedule, { dayOfWeek, startTime, endTime, priority: 3 }]);
     }
   };
 
-  const isSlotSelected = (dayOfWeek, startTime) => {
-    return schedule.some(
-      slot => slot.dayOfWeek === dayOfWeek && slot.startTime === startTime
+  const getSlotInfo = (dayOfWeek, startTime) => {
+    return schedule.find(
+      s => s.dayOfWeek === dayOfWeek && s.startTime === startTime
     );
+  };
+
+  const getExceptionForSlot = (date, startTime) => {
+    if (!date) return null;
+    const slotStart = new Date(`${date.toISOString().split('T')[0]}T${startTime}:00.000Z`);
+    for (const ex of exceptions) {
+      const exStart = new Date(ex.startTime);
+      const exEnd = new Date(ex.endTime);
+      if (slotStart >= exStart && slotStart < exEnd) {
+        return ex;
+      }
+    }
+    return null;
   };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-      <h3 className="text-lg font-semibold mb-3">주간 반복 일정</h3>
-      <p className="text-sm text-gray-600 mb-4">
-        시간표에서 반복적으로 일정이 있는 시간대를 클릭하여 설정하세요. 파란색으로 표시된 시간이 고정 일정입니다.
-      </p>
+        {!readOnly && (
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg flex items-center justify-center space-x-4">
+                <span className="text-sm font-semibold text-gray-700">범례:</span>
+                {Object.entries(priorityConfig).sort(([p1], [p2]) => p2 - p1).map(([priority, {label, color}]) => (
+                    <div key={priority} className="flex items-center">
+                        <div className={`w-4 h-4 rounded-full ${color} mr-2`}></div>
+                        <span className="text-sm text-gray-600">{label}</span>
+                    </div>
+                ))}
+            </div>
+        )}
       <div className="timetable-grid border border-gray-200 rounded-lg overflow-auto" style={{ maxHeight: '500px' }}>
-        {/* Header Row */}
         <div className="grid grid-cols-6 bg-gray-100 sticky top-0 z-10">
           <div className="col-span-1 p-2 text-center font-semibold text-gray-700">시간</div>
-          {(weekDates.length > 0 ? weekDates : days.map(day => day.name)).map((dayDisplay, index) => (
+          {weekDates.map((date, index) => (
             <div key={index} className="col-span-1 p-2 text-center font-semibold text-gray-700 border-l border-gray-200">
-              {dayDisplay}
+              {date.display}
             </div>
           ))}
         </div>
 
-        {/* Time Rows */}
         {timeSlots.map(time => (
           <div key={time} className="grid grid-cols-6 border-b border-gray-200 last:border-b-0">
             <div className="col-span-1 p-2 text-center text-sm font-medium text-gray-600 flex items-center justify-center">
               {time}
             </div>
-            {days.map(day => {
-              const isSelected = isSlotSelected(day.dayOfWeek, time);
+            {days.map((day, index) => {
+              const slotInfo = getSlotInfo(day.dayOfWeek, time);
+              const exception = getExceptionForSlot(weekDates[index]?.fullDate, time);
+              const isExceptionSlot = !!exception;
+
+              let slotClass = 'bg-white';
+              if (isExceptionSlot) {
+                slotClass = 'bg-gray-400';
+              } else if (slotInfo) {
+                slotClass = priorityConfig[slotInfo.priority]?.color || 'bg-blue-400';
+              }
+
+              let cursorClass = readOnly ? 'cursor-default' : 'cursor-pointer';
+              if (isExceptionSlot) {
+                cursorClass = 'cursor-not-allowed';
+              }
+
               return (
                 <div
                   key={`${day.dayOfWeek}-${time}`}
-                  className={`col-span-1 border-l border-gray-200 h-8 flex items-center justify-center transition-colors
-                    ${isSelected ? 'bg-blue-500' : 'bg-white'}
-                    ${readOnly ? '' : 'cursor-pointer hover:bg-blue-100'}
-                  `}
-                  onClick={readOnly ? undefined : () => handleSlotClick(day.dayOfWeek, time)}
+                  className={`col-span-1 border-l border-gray-200 h-8 flex items-center justify-center transition-colors ${slotClass} ${cursorClass}`}
+                  onClick={() => {
+                    if (readOnly) return;
+                    if (isExceptionSlot) {
+                      onRemoveException?.(exception._id);
+                    } else {
+                      handleSlotClick(day.dayOfWeek, time);
+                    }
+                  }}
+                  title={isExceptionSlot ? exception.title : (slotInfo ? priorityConfig[slotInfo.priority]?.label : '클릭하여 선택')}
                 >
-                  {isSelected && !readOnly ? '✅' : ''}
+                  {isExceptionSlot ? (
+                    <span className="text-xs text-white truncate px-1">{exception.title}</span>
+                  ) : null}
                 </div>
               );
             })}
