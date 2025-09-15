@@ -8,6 +8,7 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
   const [memberName, setMemberName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [renderKey, setRenderKey] = useState(0); // New state for forcing re-render
 
   useEffect(() => {
     const fetchMemberSchedule = async () => {
@@ -16,8 +17,12 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
       setError(null);
       try {
         const data = await userService.getUserScheduleById(memberId);
-        setMemberSchedule(data.defaultSchedule || []);
+        setMemberSchedule((data.defaultSchedule || []).filter(slot => slot.dayOfWeek >= 1 && slot.dayOfWeek <= 5));
         setMemberName(`${data.firstName || ''} ${data.lastName || ''}`.trim() || '알 수 없음');
+        // Introduce a small delay before forcing re-render
+        setTimeout(() => {
+          setRenderKey(prev => prev + 1); // Increment renderKey to force re-render
+        }, 50); // 50ms delay
       } catch (err) {
         console.error('Failed to fetch member schedule:', err); // Existing error log
         setError('조원 일정을 불러오는데 실패했습니다.');
@@ -44,11 +49,16 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
 
         {isLoading && <div className="text-center py-4">로딩 중...</div>}
         {error && <div className="text-red-500 text-center py-4">오류: {error}</div>}
-        {!isLoading && !error && (
+        {!isLoading && !error && memberSchedule.length > 0 && (
           <ScheduleGridSelector 
+            key={renderKey} // Use renderKey to force re-mount
             schedule={memberSchedule} 
             setSchedule={() => {}} // 읽기 전용이므로 빈 함수 전달
+            readOnly={true}
           />
+        )}
+        {!isLoading && !error && memberSchedule.length === 0 && (
+          <div className="text-center py-4 text-gray-500">등록된 주간 반복 일정이 없습니다.</div>
         )}
       </div>
     </div>

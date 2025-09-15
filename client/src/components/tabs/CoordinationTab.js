@@ -892,6 +892,12 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             slotToChange={slotToChange}
           />
         )}
+        {showMemberScheduleModal && selectedMemberId && (
+          <MemberScheduleModal
+            memberId={selectedMemberId}
+            onClose={() => setShowMemberScheduleModal(false)}
+          />
+        )}
       </div>
     );
   }
@@ -914,16 +920,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
           >
             <LogIn size={18} className="mr-2" />
             조율방 참여
-          </button>
-          {/* Test button for MemberScheduleModal */}
-          <button
-            onClick={() => {
-                        setSelectedMemberId('68bfb7c0a89ab6ee047d69b3'); // Use a dummy ID
-              setShowMemberScheduleModal(true);
-            }}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center transition-all shadow-md hover:shadow-lg"
-          >
-            Test Member Modal
           </button>
         </div>
       </div>
@@ -1003,13 +999,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         type="warning"
         showCancel={false}
       />
-      
-      {showMemberScheduleModal && selectedMemberId && (
-        <MemberScheduleModal
-          memberId={selectedMemberId}
-          onClose={() => setShowMemberScheduleModal(false)}
-        />
-      )}
     </div>
   );
 };

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 
 // Constants
@@ -29,9 +28,11 @@ const getMondayOfCurrentWeek = (date) => {
   return d;
 };
 
-const ScheduleGridSelector = ({ schedule, setSchedule }) => {
+const ScheduleGridSelector = ({ schedule, setSchedule, readOnly }) => {
 
   const [weekDates, setWeekDates] = useState([]);
+
+  
 
   useEffect(() => {
     const today = new Date();
@@ -110,11 +111,14 @@ const ScheduleGridSelector = ({ schedule, setSchedule }) => {
               return (
                 <div
                   key={`${day.dayOfWeek}-${time}`}
-                  className={`col-span-1 border-l border-gray-200 h-8 flex items-center justify-center cursor-pointer hover:bg-blue-100 transition-colors
+                  className={`col-span-1 border-l border-gray-200 h-8 flex items-center justify-center transition-colors
                     ${isSelected ? 'bg-blue-500' : 'bg-white'}
+                    ${readOnly ? '' : 'cursor-pointer hover:bg-blue-100'}
                   `}
-                  onClick={() => handleSlotClick(day.dayOfWeek, time)}
-                />
+                  onClick={readOnly ? undefined : () => handleSlotClick(day.dayOfWeek, time)}
+                >
+                  {isSelected && !readOnly ? '✅' : ''}
+                </div>
               );
             })}
           </div>
