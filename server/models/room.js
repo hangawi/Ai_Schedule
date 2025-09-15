@@ -6,6 +6,10 @@ const TimeSlotSchema = new mongoose.Schema({
     required: true,
     enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
   },
+  date: {
+    type: Date,
+    required: true
+  },
   startTime: {
     type: String,
     required: true
@@ -91,6 +95,10 @@ const RoomSchema = new mongoose.Schema({
     color: {
       type: String,
       default: '#6B7280' // 기본 회색, 실제 색상은 방에 참가할 때 동적으로 할당
+    },
+    carryOver: {
+      type: Number,
+      default: 0
     }
   }],
   inviteCode: {
@@ -179,7 +187,10 @@ RoomSchema.virtual('memberCount').get(function() {
 
 // Check if user is room owner
 RoomSchema.methods.isOwner = function(userId) {
-  return this.owner.toString() === userId.toString();
+  if (!userId) return false;
+  // Handle both populated and non-populated owner field
+  const ownerId = this.owner._id ? this.owner._id.toString() : this.owner.toString();
+  return ownerId === userId.toString();
 };
 
 // Check if user is room member

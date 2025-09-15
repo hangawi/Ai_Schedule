@@ -1,8 +1,8 @@
 import React from 'react';
 
-const TimeSlot = ({ 
+const TimeSlot = ({
+  date, // New prop
   day, 
-  dayIndex, 
   time, 
   ownerInfo, 
   isSelected, 
@@ -13,12 +13,12 @@ const TimeSlot = ({
   onSlotClick 
 }) => {
   const handleClick = () => {
-    onSlotClick(dayIndex, time);
+    onSlotClick(date, time); // Pass date object
   };
 
   return (
     <div
-      key={`${day}-${time}`}
+      key={`${date.toISOString().split('T')[0]}-${time}`}
       className={`col-span-1 border-l border-gray-200 h-10 flex items-center justify-center
         ${isBlocked ? 'bg-gray-300 cursor-not-allowed' : ''}
         ${isRoomOwner ? 'cursor-not-allowed opacity-60' : ''}

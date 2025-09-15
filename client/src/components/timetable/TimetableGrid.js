@@ -4,6 +4,7 @@ import TimetableControls from './TimetableControls';
 import WeekView from './WeekView';
 
 const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+const dayNamesKorean = ['월', '화', '수', '목', '금'];
 
 // Helper function to get the Monday of the current week
 const getMondayOfCurrentWeek = (date) => {
@@ -12,11 +13,30 @@ const getMondayOfCurrentWeek = (date) => {
   const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
   d.setUTCDate(diff);
   d.setUTCHours(0, 0, 0, 0);
-  d.setUTCMilliseconds(0);
   return d;
 };
 
-const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onSlotSelect, currentUser, isRoomOwner, onAssignSlot, onRequestSlot, onRemoveSlot, onDirectSubmit, selectedSlots, events, proposals, calculateEndTime }) => {
+const TimetableGrid = ({
+  roomId,
+  roomSettings,
+  timeSlots,
+  members = [],
+  roomData,
+  onSlotSelect,
+  currentUser,
+  isRoomOwner,
+  onAssignSlot,
+  onRequestSlot,
+  onRemoveSlot,
+  onDirectSubmit,
+  selectedSlots = [],
+  events,
+  proposals,
+  calculateEndTime,
+  onWeekChange, // New prop to pass current week start date to parent
+  initialStartDate // New prop to set the initial week to display
+}) => {
+  console.log("TimetableGrid: Received timeSlots prop:", timeSlots);
 
   // CustomAlert 상태
   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
@@ -30,33 +50,53 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
 
   useEffect(() => {
     const today = new Date();
-    // If it's Sunday, we want to show next week's calendar
-    if (today.getUTCDay() === 0) {
-      today.setUTCDate(today.getUTCDate() + 1);
+    // If it's Sunday, show next week's calendar starting Monday
+    // This logic is already in getMondayOfCurrentWeek, but let's ensure today is a weekday for initial calculation
+    let startDay = new Date(today);
+    if (startDay.getUTCDay() === 0) { // If today is Sunday, start from tomorrow (Monday)
+      startDay.setUTCDate(startDay.getUTCDate() + 1);
+    } else if (startDay.getUTCDay() === 6) { // If today is Saturday, start from next Monday
+      startDay.setUTCDate(startDay.getUTCDate() + 2);
     }
-    const monday = getMondayOfCurrentWeek(today);
+
+    const mondayOfCurrentWeek = getMondayOfCurrentWeek(startDay);
 
     const dates = [];
-    const dayNamesKorean = ['월', '화', '수', '목', '금'];
-    for (let i = 0; i < 5; i++) {
-      const date = new Date(monday);
-      date.setUTCDate(monday.getUTCDate() + i);
-      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-      const dayOfMonth = String(date.getUTCDate()).padStart(2, '0');
-      dates.push(`${dayNamesKorean[i]} (${month}.${dayOfMonth})`);
+    let currentDay = new Date(mondayOfCurrentWeek);
+    for (let i = 0; i < 5; i++) { // Generate 5 weekdays (Mon-Fri for current week)
+      // Skip Saturday and Sunday
+      while (currentDay.getUTCDay() === 0 || currentDay.getUTCDay() === 6) {
+        currentDay.setUTCDate(currentDay.getUTCDate() + 1);
+      }
+
+      const month = String(currentDay.getUTCMonth() + 1).padStart(2, '0');
+      const dayOfMonth = String(currentDay.getUTCDate()).padStart(2, '0');
+      const dayName = dayNamesKorean[currentDay.getUTCDay() - 1]; // Monday is 1, so -1 for 0-indexed array
+      dates.push({ fullDate: new Date(currentDay), display: `${dayName} (${month}.${dayOfMonth})` });
+
+      currentDay.setUTCDate(currentDay.getUTCDate() + 1); // Move to the next day
     }
     setWeekDates(dates);
-  }, []);
+    console.log("TimetableGrid: Generated weekDates:", dates);
 
-  const days = ['월', '화', '수', '목', '금'];
+    // Call onWeekChange with the start date of the first week displayed
+    if (onWeekChange && dates.length > 0) {
+      const weekStartDate = dates[0].fullDate.toISOString().split('T')[0];
+      onWeekChange(weekStartDate); // Pass YYYY-MM-DD format
+    }
+  }, [onWeekChange]);
+
+  console.log("TimetableGrid: Received timeSlots prop:", timeSlots);
+
+  const days = ['월', '화', '수', '목', '금']; // Display labels (not used for logic)
   const timeSlotsInDay = []; // 30-minute intervals for one day
 
   // Handle both old and new room settings structure
   const getHourFromSettings = (setting, defaultValue) => {
-    if (!setting) return parseInt(defaultValue);
-    if (typeof setting === 'string') return parseInt(setting.split(':')[0]);
+    if (!setting) return parseInt(defaultValue, 10);
+    if (typeof setting === 'string') return parseInt(String(setting).split(':')[0], 10);
     if (typeof setting === 'number') return setting;
-    return parseInt(defaultValue);
+    return parseInt(defaultValue, 10);
   };
 
   const scheduleStartHour = getHourFromSettings(
@@ -93,17 +133,12 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
 
   // Use selectedSlots from props instead of internal state
   const currentSelectedSlots = useMemo(() => {
-    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
-    return selectedSlots?.map(slot => {
-      const dayIndex = days.indexOf(slot.day);
-      return {
-        dayIndex,
-        time: slot.startTime
-      };
-    }).filter(slot => slot.dayIndex !== -1) || [];
+    // Expect incoming selectedSlots as objects: { day: 'monday', startTime: '09:00', ... }
+    return (selectedSlots || []).map(slot => ({
+      day: slot.day,
+      startTime: slot.startTime
+    })).filter(slot => !!slot.day && !!slot.startTime);
   }, [selectedSlots]);
-
-  
 
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [slotToRequest, setSlotToRequest] = useState(null);
@@ -114,47 +149,37 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
   const [slotToChange, setSlotToChange] = useState(null);
 
-
-  // selectedSlots are now managed by parent component via props
-
   // Helper to get who booked a slot (based on Date object overlap)
-  // Helper to get who booked a slot
-  const getSlotOwner = useCallback((dayIndex, time) => {
-    if (!timeSlots || !members || !time) return null;
+  const getSlotOwner = useCallback((date, time) => {
+    if (!timeSlots || !members || !time || !date) return null;
     
-    const currentDayName = dayNames[dayIndex];
-
-    const bookedSlot = timeSlots.find(booked => {
+    const bookedSlot = (timeSlots || []).find(booked => {
       // Defensive check for data integrity
-      if (!booked || !booked.day || !booked.startTime) return false;
+      if (!booked || !booked.date || !booked.startTime) return false;
 
-      // Robust comparison
-      const dayMatch = currentDayName.trim().toLowerCase() === booked.day.trim().toLowerCase();
+      // Robust comparison using date and time
+      const bookedDate = new Date(booked.date);
+      const dateMatch = bookedDate.toISOString().split('T')[0] === date.toISOString().split('T')[0];
       const timeMatch = time.trim() === booked.startTime.trim();
 
-      return dayMatch && timeMatch;
+      return dateMatch && timeMatch;
     });
 
     if (bookedSlot) {
-      // Extract userId from multiple possible sources (handle both id and _id)
       let userId = bookedSlot.userId || bookedSlot.user;
       
       if (typeof userId === 'object' && userId !== null) {
         userId = userId._id || userId.id;
       }
       
-      // Try direct access to user._id and user.id if userId is still undefined
       if (!userId && bookedSlot.user) {
         userId = bookedSlot.user._id || bookedSlot.user.id;
       }
       
-      // Since we don't have userId, try to match by email instead
       let member = null;
       
       if (userId) {
-        // Find member with flexible matching - check both direct properties and user object
-        member = members.find(m => {
-          // Try multiple ways to match member ID
+        member = (members || []).find(m => {
           const memberDirectId = m.id || m._id;
           const memberUserId = m.user?.id || m.user?._id;
           const memberUserIdString = m.user?._id?.toString() || m.user?.id?.toString();
@@ -166,18 +191,15 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
           );
         });
       } else if (bookedSlot.user && bookedSlot.user.email) {
-        // Fallback: match by email if no userId available
-        member = members.find(m => {
+        member = (members || []).find(m => {
           return m.user?.email === bookedSlot.user.email;
         });
       }
       
       if (member) {
-        // Extract name from member object (could be in user property or directly on member)
         const memberData = member.user || member;
         const memberName = memberData.name || 
                          `${memberData.firstName || ''} ${memberData.lastName || ''}`.trim() ||
-                         // If member doesn't have name, try bookedSlot.user
                          `${bookedSlot.user?.firstName || ''} ${bookedSlot.user?.lastName || ''}`.trim() ||
                          '알 수 없음';
         
@@ -187,27 +209,33 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
           name: memberName,
           color: member.color || '#6B7280',
           userId: userId || bookedSlot.user?.email, // Use email as fallback identifier
-          actualUserId: actualUserId // Real user ID for targeting
+          actualUserId: actualUserId,
+          subject: bookedSlot.subject // Pass subject from bookedSlot
         };
       }
       
-      return { name: '알 수 없음', color: '#6B7280', userId: null };
+      return { name: '알 수 없음', color: '#6B7280', userId: null, subject: bookedSlot.subject };
     }
     
     return null;
   }, [timeSlots, members]);
 
-  // Helper to check if a slot is selected by the current user
-  const isSlotSelected = (dayIndex, time) => {
-    return currentSelectedSlots.some(s => s.dayIndex === dayIndex && s.time === time);
+  // Helper to check if a slot is selected by the current user (uses currentSelectedSlots)
+  const isSlotSelected = (date, time) => {
+    // Add defensive check for date
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+      console.warn('isSlotSelected received an invalid date:', date);
+      return false; // Or handle as appropriate
+    }
+    const dayKey = dayNames[date.getUTCDay() % 5];
+    return currentSelectedSlots.some(s => s.day === dayKey && s.startTime === time);
   };
 
   // Function to handle slot click
-  const handleSlotClick = useCallback((dayIndex, time) => {
+  const handleSlotClick = useCallback((date, time) => {
 
     const isBlocked = !!getBlockedTimeInfo(time);
-    const ownerInfo = getSlotOwner(dayIndex, time);
-    // Check if current user owns this slot by ID or email
+    const ownerInfo = getSlotOwner(date, time);
     const isOwnedByCurrentUser = ownerInfo && currentUser && (
       ownerInfo.userId === currentUser.id || 
       ownerInfo.userId === currentUser.email ||
@@ -215,43 +243,39 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
     );
     
 
-    if (isBlocked) { // Cannot interact with blocked slots
+    if (isBlocked) {
       return;
     }
 
     if (ownerInfo) {
       if (isOwnedByCurrentUser) {
-        // User clicks on their own assigned slot - directly remove it
         if (onRemoveSlot && window.confirm('이 시간을 삭제하시겠습니까?')) {
           const [hour, minute] = time.split(':').map(Number);
           const endHour = minute === 30 ? hour + 1 : hour;
           const endMinute = minute === 30 ? 0 : minute + 30;
           
           onRemoveSlot({
-            day: dayNames[dayIndex],
+            date: date, // Pass date object
+            day: dayNames[date.getUTCDay() % 5],
             startTime: time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`
           });
         }
       } else {
-        // User clicks on someone else's assigned slot - request swap
+        const requestKey = `${date.toISOString().split('T')[0]}-${time}-${ownerInfo.actualUserId || ownerInfo.userId}`;
         
-        // 중복 교환 요청 확인 (로컬 및 서버 모두 체크)
-        const requestKey = `${dayNames[dayIndex]}-${time}-${ownerInfo.actualUserId || ownerInfo.userId}`;
-        
-        // 1. 최근 요청 로컬 체크 (즉시 중복 방지)
         if (recentRequests.has(requestKey)) {
           showAlert('이미 이 시간대에 대한 교환 요청을 보냈습니다. 기존 요청이 처리될 때까지 기다려주세요.');
           return;
         }
         
-        // 2. 서버 데이터 체크
-        const existingSwapRequest = roomData?.requests?.find(request => {
+        const existingSwapRequest = (roomData?.requests || []).find(request => {
           const requesterId = request.requester?.id || request.requester?._id || request.requester;
+          const requestDate = new Date(request.timeSlot?.date);
           return request.status === 'pending' &&
             request.type === 'slot_swap' &&
             (requesterId === currentUser?.id || requesterId?.toString() === currentUser?.id?.toString()) &&
-            request.timeSlot?.day === dayNames[dayIndex] &&
+            requestDate.toISOString().split('T')[0] === date.toISOString().split('T')[0] &&
             request.timeSlot?.startTime === time &&
             request.targetUserId === (ownerInfo.actualUserId || ownerInfo.userId);
         });
@@ -261,10 +285,8 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
           return;
         }
         
-        // 3. 요청 진행 - 로컬 상태에 추가
         setRecentRequests(prev => new Set([...prev, requestKey]));
         
-        // 5초 후 로컬 상태에서 제거 (실제 서버 응답 시간 고려)
         setTimeout(() => {
           setRecentRequests(prev => {
             const newSet = new Set(prev);
@@ -273,63 +295,79 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
           });
         }, 5000);
         
-        // Find the actual existing slot to get the subject
-        const existingSlot = timeSlots.find(slot => 
-          slot.day === dayNames[dayIndex] &&
+        const existingSlot = (timeSlots || []).find(slot => 
+          new Date(slot.date).toISOString().split('T')[0] === date.toISOString().split('T')[0] &&
           slot.startTime === time &&
           (slot.user === ownerInfo.actualUserId || slot.user === ownerInfo.userId || 
            slot.user?.toString() === ownerInfo.actualUserId || slot.user?.toString() === ownerInfo.userId)
         );
 
         setSlotToChange({ 
-          dayIndex, 
+          date: date, // Pass date object
           time, 
           currentOwner: ownerInfo.name, 
           targetUserId: ownerInfo.actualUserId || ownerInfo.userId,
           action: 'swap',
-          targetSlot: { // This is the slot the target user is giving away
-            day: dayNames[dayIndex], // dayNames is available
+          targetSlot: { 
+            date: date, // Pass date object
+            day: dayNames[date.getUTCDay() % 5],
             startTime: time,
-            endTime: calculateEndTime(time), // calculateEndTime is now available
-            subject: existingSlot?.subject || '교환 대상', // Use existing subject or fallback
-            user: ownerInfo.actualUserId || ownerInfo.userId // The current owner of this slot
+            endTime: calculateEndTime ? calculateEndTime(time) : (() => {
+              const [h, m] = time.split(':').map(Number);
+              const eh = m === 30 ? h + 1 : h;
+              const em = m === 30 ? 0 : m + 30;
+              return `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
+            })(),
+            subject: existingSlot?.subject || '교환 대상', 
+            user: ownerInfo.actualUserId || ownerInfo.userId 
           }
         });
         setShowChangeRequestModal(true);
       }
     } else { // Empty slot
       if (isRoomOwner) {
-        // Room owner clicks empty slot - show assignment modal
-        setSlotToAssign({ dayIndex, time });
+        setSlotToAssign({ date: date, time }); // Pass date object
         setShowAssignModal(true);
       } else {
-        // Members can select empty slots
-        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
-        const isSelected = selectedSlots.some(s => s.day === days[dayIndex] && s.startTime === time);
+        const daysKey = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+        const isSelected = (selectedSlots || []).some(s => s.day === daysKey[date.getUTCDay() % 5] && s.startTime === time);
         
         let newSelectedSlots;
         if (isSelected) {
-          // Remove the slot
-          newSelectedSlots = selectedSlots.filter(s => !(s.day === days[dayIndex] && s.startTime === time));
-        } else {
-          // Add the slot
+          newSelectedSlots = (selectedSlots || []).filter(s => !(s.day === daysKey[date.getUTCDay() % 5] && s.startTime === time));
+        }
+        else {
           const [hour, minute] = time.split(':').map(Number);
           const endHour = minute === 30 ? hour + 1 : hour;
           const endMinute = minute === 30 ? 0 : minute + 30;
           
           const newSlot = {
-            day: days[dayIndex],
+            date: date, // Pass date object
+            day: daysKey[date.getUTCDay() % 5],
             startTime: time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: '새 일정'
           };
-          newSelectedSlots = [...selectedSlots, newSlot];
+          newSelectedSlots = [...(selectedSlots || []), newSlot];
         }
         
-        onSlotSelect(newSelectedSlots);
+        if (onSlotSelect) onSlotSelect(newSelectedSlots);
       }
     }
-  }, [getBlockedTimeInfo, getSlotOwner, currentUser, isRoomOwner, onRemoveSlot, calculateEndTime, selectedSlots, onSlotSelect, recentRequests, roomData?.requests, timeSlots]);
+  }, [
+    getBlockedTimeInfo,
+    getSlotOwner,
+    currentUser,
+    isRoomOwner,
+    onRemoveSlot,
+    calculateEndTime,
+    selectedSlots,
+    onSlotSelect,
+    recentRequests,
+    roomData?.requests,
+    timeSlots,
+    onRequestSlot
+  ]);
 
   // Function to handle assignment from modal
   const handleAssign = useCallback((memberId) => {
@@ -339,7 +377,8 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
       const endMinute = minute === 30 ? 0 : minute + 30;
 
       const assignmentData = {
-        day: dayNames[slotToAssign.dayIndex],
+        date: slotToAssign.date, // Pass date object
+        day: dayNames[slotToAssign.date.getUTCDay() % 5],
         startTime: slotToAssign.time,
         endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
         userId: memberId,
@@ -362,7 +401,8 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
         roomId: roomId,
         type: 'time_request', // Or 'time_change' if applicable
         timeSlot: {
-          day: dayNames[slotToRequest.dayIndex],
+          date: slotToRequest.date, // Pass date object
+          day: dayNames[slotToRequest.date.getUTCDay() % 5],
           startTime: slotToRequest.time,
           endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
         },
@@ -389,7 +429,8 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
           roomId: roomId,
           type: 'slot_release',
           timeSlot: {
-            day: dayNames[slotToChange.dayIndex],
+            date: slotToChange.date, // Pass date object
+            day: dayNames[slotToChange.date.getUTCDay() % 5],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
           },
@@ -401,21 +442,21 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
           roomId: roomId,
           type: 'slot_swap',
           timeSlot: {
-            day: dayNames[slotToChange.dayIndex],
+            date: slotToChange.date, // Pass date object
+            day: dayNames[slotToChange.date.getUTCDay() % 5],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: (() => {
-              // Find the existing slot for current user at this time
-              const existingSlot = timeSlots.find(slot => 
-                slot.day === dayNames[slotToChange.dayIndex] &&
+              const existingSlot = (timeSlots || []).find(slot => 
+                new Date(slot.date).toISOString().split('T')[0] === slotToChange.date.toISOString().split('T')[0] &&
                 slot.startTime === slotToChange.time &&
-                (slot.user === currentUser.id || slot.user?.toString() === currentUser.id?.toString())
+                (slot.user === currentUser?.id || slot.user?.toString() === currentUser?.id?.toString())
               );
               return existingSlot?.subject || '요청자 시간';
             })()
           },
           targetUserId: slotToChange.targetUserId,
-          targetSlot: slotToChange.targetSlot, // This is the slot the target user is giving away
+          targetSlot: slotToChange.targetSlot, 
           message: message || '시간 교환을 요청합니다.',
         };
       } else {
@@ -424,33 +465,33 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
           roomId: roomId,
           type: 'time_change',
           timeSlot: {
-            day: dayNames[slotToChange.dayIndex],
+            date: slotToChange.date, // Pass date object
+            day: dayNames[slotToChange.date.getUTCDay() % 5],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: (() => {
-              // Find the existing slot for current user at this time
-              const existingSlot = timeSlots.find(slot => 
-                slot.day === dayNames[slotToChange.dayIndex] &&
+              const existingSlot = (timeSlots || []).find(slot => 
+                new Date(slot.date).toISOString().split('T')[0] === slotToChange.date.toISOString().split('T')[0] &&
                 slot.startTime === slotToChange.time &&
-                (slot.user === currentUser.id || slot.user?.toString() === currentUser.id?.toString())
+                (slot.user === currentUser?.id || slot.user?.toString() === currentUser?.id?.toString())
               );
               return existingSlot?.subject || '변경 요청';
             })()
           },
           targetSlot: {
-            day: dayNames[slotToChange.dayIndex],
+            date: slotToChange.date, // Pass date object
+            day: dayNames[slotToChange.date.getUTCDay() % 5],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: (() => {
-              // Find the existing slot for current user at this time
-              const existingSlot = timeSlots.find(slot => 
-                slot.day === dayNames[slotToChange.dayIndex] &&
+              const existingSlot = (timeSlots || []).find(slot => 
+                new Date(slot.date).toISOString().split('T')[0] === slotToChange.date.toISOString().split('T')[0] &&
                 slot.startTime === slotToChange.time &&
-                (slot.user === currentUser.id || slot.user?.toString() === currentUser.id?.toString())
+                (slot.user === currentUser?.id || slot.user?.toString() === currentUser?.id?.toString())
               );
               return existingSlot?.subject || '변경 대상';
             })(),
-            user: currentUser.id
+            user: currentUser?.id
           },
           message: message || '시간 변경 요청합니다.',
         };
@@ -470,6 +511,7 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
       {/* Time Rows */}
       <WeekView 
         filteredTimeSlotsInDay={filteredTimeSlotsInDay}
+        weekDates={weekDates} // Pass weekDates to WeekView
         days={days}
         getSlotOwner={getSlotOwner}
         isSlotSelected={isSlotSelected}
@@ -485,12 +527,12 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
           <div className="bg-white p-6 rounded-lg shadow-xl w-96">
             <h3 className="text-lg font-bold mb-4">시간 배정</h3>
             <p className="mb-4">
-              {days[slotToAssign.dayIndex]}요일 {slotToAssign.time} 시간을 누구에게 배정하시겠습니까?
+              {days[slotToAssign.date.getUTCDay() % 5]}요일 {slotToAssign.time} 시간을 누구에게 배정하시겠습니까?
             </p>
-            <select className="w-full p-2 border rounded mb-4" onChange={(e) => handleAssign(e.target.value)}>
+            <select className="w-full p-2 border rounded mb-4" onChange={(e) => handleAssign(e.target.value)} value="">
               <option value="">조원 선택</option>
-              {members.map(member => (
-                <option key={member._id || member.user?._id} value={member._id || member.user?._id}>
+              {(members || []).map(member => (
+                <option key={member._id || member.user?._id || member.id || member.user?.id} value={member._id || member.user?._id || member.id || member.user?.id}>
                   {member.user?.name || member.name || `${member.user?.firstName || ''} ${member.user?.lastName || ''}`.trim()}
                 </option>
               ))}
@@ -511,7 +553,7 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
           <div className="bg-white p-6 rounded-lg shadow-xl w-96">
             <h3 className="text-lg font-bold mb-4">시간 요청</h3>
             <p className="mb-4">
-              {days[slotToRequest.dayIndex]}요일 {slotToRequest.time} 시간을 요청하시겠습니까?
+              {days[slotToRequest.date.getUTCDay() % 5]}요일 {slotToRequest.time} 시간을 요청하시겠습니까?
             </p>
             <textarea
               className="w-full p-2 border rounded mb-4"
@@ -547,10 +589,10 @@ const TimetableGrid = ({ roomId, roomSettings, timeSlots, members, roomData, onS
             </h3>
             <p className="mb-4">
               {slotToChange.action === 'release' ? 
-                `${days[slotToChange.dayIndex]}요일 ${slotToChange.time} 시간을 취소하시겠습니까?` :
+                `${days[slotToChange.date.getUTCDay() % 5]}요일 ${slotToChange.time} 시간을 취소하시겠습니까?` :
                slotToChange.action === 'swap' ? 
-                `${slotToChange.currentOwner}님의 ${days[slotToChange.dayIndex]}요일 ${slotToChange.time} 시간과 교환을 요청하시겠습니까?` :
-                `${days[slotToChange.dayIndex]}요일 ${slotToChange.time} 시간을 변경 요청하시겠습니까?`
+                `${slotToChange.currentOwner}님의 ${days[slotToChange.date.getUTCDay() % 5]}요일 ${slotToChange.time} 시간과 교환을 요청하시겠습니까?` :
+                `${days[slotToChange.date.getUTCDay() % 5]}요일 ${slotToChange.time} 시간을 변경 요청하시겠습니까?`
               }
             </p>
             <textarea
