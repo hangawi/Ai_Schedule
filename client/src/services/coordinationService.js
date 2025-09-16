@@ -54,7 +54,9 @@ export const coordinationService = {
       throw new Error(errData.msg || 'Failed to create room');
     }
     
-    return await response.json();
+    const newRoom = await response.json();
+    console.log('coordinationService.createRoom response:', newRoom);
+    return newRoom;
   },
 
   // 방 참가

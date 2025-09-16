@@ -128,6 +128,36 @@ const TimetableGrid = ({
     return blockedTime || null;
   }, [roomSettings?.blockedTimes]);
 
+  // Helper function to check if a time slot is covered by a room exception
+  const getRoomExceptionInfo = useCallback((date, time) => {
+    if (!roomSettings?.roomExceptions || roomSettings.roomExceptions.length === 0) {
+      return null;
+    }
+
+    const slotDateTime = new Date(date);
+    slotDateTime.setHours(parseInt(time.split(':')[0]), parseInt(time.split(':')[1]), 0, 0);
+    const slotEndTime = new Date(date);
+    slotEndTime.setHours(parseInt(time.split(':')[0]), parseInt(time.split(':')[1]) + 30, 0, 0);
+
+    const exception = roomSettings.roomExceptions.find(ex => {
+      if (ex.type === 'daily_recurring') {
+        const slotDayOfWeek = date.getUTCDay(); // 0 for Sunday, 1 for Monday, etc.
+        if (slotDayOfWeek === ex.dayOfWeek) {
+          return time >= ex.startTime && time < ex.endTime;
+        }
+      } else if (ex.type === 'date_specific') {
+        const exStartDate = new Date(ex.startDate);
+        const exEndDate = new Date(ex.endDate);
+        
+        // Check if the slot overlaps with the exception date range
+        return (slotDateTime < exEndDate && slotEndTime > exStartDate);
+      }
+      return false;
+    });
+
+    return exception || null;
+  }, [roomSettings?.roomExceptions]);
+
   // Don't filter out blocked times - we want to show them as blocked
   const filteredTimeSlotsInDay = timeSlotsInDay;
 
@@ -515,7 +545,8 @@ const TimetableGrid = ({
         days={days}
         getSlotOwner={getSlotOwner}
         isSlotSelected={isSlotSelected}
-        getBlockedTimeInfo={getBlockedTimeInfo}
+                getBlockedTimeInfo={getBlockedTimeInfo} 
+        getRoomExceptionInfo={getRoomExceptionInfo} 
         isRoomOwner={isRoomOwner}
         currentUser={currentUser}
         handleSlotClick={handleSlotClick}

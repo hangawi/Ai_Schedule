@@ -45,9 +45,20 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     if (!currentRoom || !currentWeekStartDate) return;
     setIsScheduling(true);
     setScheduleError(null);
+    setUnassignedMembersInfo(null); // Reset unassigned members info
     try {
-      await coordinationService.runAutoSchedule(currentRoom._id, { ...scheduleOptions, currentWeek: currentWeekStartDate });
-      await fetchRoomDetails(currentRoom._id); // Re-fetch the room details to get the absolute latest state
+      console.log('자동 배정 시작 - 옵션:', { ...scheduleOptions, currentWeek: currentWeekStartDate });
+      const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo } = await coordinationService.runAutoSchedule(currentRoom._id, { ...scheduleOptions, currentWeek: currentWeekStartDate });
+            
+      if (newUnassignedMembersInfo) {
+          setUnassignedMembersInfo(newUnassignedMembersInfo);
+          console.log('이월 정보:', newUnassignedMembersInfo);
+      }
+      // Directly update the current room state with the fresh room returned by the API
+      // This bypasses a potential race condition with fetchRoomDetails
+      console.log('업데이트된 방 정보:', updatedRoom);
+      console.log('업데이트된 멤버 정보:', updatedRoom.members.map(m => ({ name: m.user?.name, carryOver: m.carryOver })));
+      setCurrentRoom(updatedRoom);
       showAlert('자동 시간 배정이 완료되었습니다.');
     } catch (error) {
       setScheduleError(error.message);
@@ -147,9 +158,12 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   }, [currentRoom, user?.id, user?.email, onExchangeRequestCountChange]);
 
   const handleCreateRoom = async (roomData) => {
+    console.log('handleCreateRoom called');
+    console.log('Creating room with data:', roomData);
     await createRoom(roomData);
     closeCreateRoomModal();
     fetchMyRooms();
+    console.log('Room created, currentRoom after creation:', currentRoom); // Note: currentRoom might not be immediately updated here due to async state updates
   };
 
   const handleJoinRoom = async (inviteCode) => {
@@ -320,6 +334,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   const memberName = memberData.name || `${memberData.firstName || ''} ${memberData.lastName || ''}`.trim() || '알 수 없음';
                   const isCurrentUser = memberData._id === user?.id || memberData.id === user?.id;
                   
+                  console.log(`렌더링 - Member ${memberName}: carryOver = ${member.carryOver}`);
+                  
                   let memberIsOwner = false;
                   if (currentRoom.owner) {
                     const ownerId = currentRoom.owner._id || currentRoom.owner.id || currentRoom.owner;
@@ -367,7 +383,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                               방장
                             </span>
                           )}
-                          {member.carryOver > 0 && (
+                          {member.carryOver && member.carryOver > 0 && (
                             <span className="ml-2 px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded-full flex-shrink-0 font-semibold">
                               이월: {member.carryOver}시간
                             </span>
@@ -972,7 +988,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       )}
 
       {showCreateRoomModal && (
-        <RoomCreationModal onClose={closeCreateRoomModal} onCreateRoom={handleCreateRoom} />
+        <RoomCreationModal 
+          onClose={closeCreateRoomModal} 
+          onCreateRoom={handleCreateRoom} 
+          ownerProfileSchedule={user ? { defaultSchedule: user.defaultSchedule, scheduleExceptions: user.scheduleExceptions } : null}
+        />
       )}
       {showJoinRoomModal && (
         <RoomJoinModal onClose={closeJoinRoomModal} onJoinRoom={handleJoinRoom} />

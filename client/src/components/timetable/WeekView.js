@@ -5,11 +5,12 @@ const dayNamesKorean = ['월', '화', '수', '목', '금'];
 
 const WeekView = ({ 
   filteredTimeSlotsInDay, 
-  weekDates, // New prop
+  weekDates, 
   days, 
   getSlotOwner, 
   isSlotSelected, 
   getBlockedTimeInfo, 
+  getRoomExceptionInfo, // New prop
   isRoomOwner, 
   currentUser, 
   handleSlotClick 
@@ -28,9 +29,10 @@ const WeekView = ({
             const ownerInfo = getSlotOwner(date, time);
             const isSelected = isSlotSelected(date, time);
             const blockedInfo = getBlockedTimeInfo(time);
+            const roomExceptionInfo = getRoomExceptionInfo(date, time); // Get room exception info
             const isBlocked = !!blockedInfo;
             
-            console.log("WeekView: Rendering slot for", date.toISOString().split('T')[0], time, "OwnerInfo:", ownerInfo);
+            console.log("WeekView: Rendering slot for", date.toISOString().split('T')[0], time, "OwnerInfo:", ownerInfo, "RoomExceptionInfo:", roomExceptionInfo);
             
             return (
               <TimeSlot
@@ -41,6 +43,7 @@ const WeekView = ({
                 ownerInfo={ownerInfo}
                 isSelected={isSelected}
                 blockedInfo={blockedInfo}
+                roomExceptionInfo={roomExceptionInfo} // Pass room exception info
                 isBlocked={isBlocked}
                 isRoomOwner={isRoomOwner}
                 currentUser={currentUser}
