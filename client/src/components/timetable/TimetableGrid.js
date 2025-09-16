@@ -179,10 +179,41 @@ const TimetableGrid = ({
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
   const [slotToChange, setSlotToChange] = useState(null);
 
+  // Helper to check if a slot is under negotiation
+  const getNegotiationInfo = useCallback((date, time) => {
+    if (!roomData?.negotiations || roomData.negotiations.length === 0) return null;
+
+    const negotiation = roomData.negotiations.find(neg => {
+      if (neg.status !== 'active') return false;
+
+      const negDate = new Date(neg.slotInfo.date);
+      const dateMatch = negDate.toISOString().split('T')[0] === date.toISOString().split('T')[0];
+      const timeMatch = time.trim() === neg.slotInfo.startTime.trim();
+
+      return dateMatch && timeMatch;
+    });
+
+    return negotiation || null;
+  }, [roomData?.negotiations]);
+
   // Helper to get who booked a slot (based on Date object overlap)
   const getSlotOwner = useCallback((date, time) => {
     if (!timeSlots || !members || !time || !date) return null;
-    
+
+    // Check if this slot is under negotiation first
+    const negotiationInfo = getNegotiationInfo(date, time);
+    if (negotiationInfo) {
+      return {
+        name: '협의중',
+        color: '#F59E0B', // Orange color for negotiation
+        userId: 'negotiation',
+        actualUserId: 'negotiation',
+        subject: '협의중',
+        isNegotiation: true,
+        negotiationData: negotiationInfo
+      };
+    }
+
     const bookedSlot = (timeSlots || []).find(booked => {
       // Defensive check for data integrity
       if (!booked || !booked.date || !booked.startTime) return false;
@@ -197,23 +228,23 @@ const TimetableGrid = ({
 
     if (bookedSlot) {
       let userId = bookedSlot.userId || bookedSlot.user;
-      
+
       if (typeof userId === 'object' && userId !== null) {
         userId = userId._id || userId.id;
       }
-      
+
       if (!userId && bookedSlot.user) {
         userId = bookedSlot.user._id || bookedSlot.user.id;
       }
-      
+
       let member = null;
-      
+
       if (userId) {
         member = (members || []).find(m => {
           const memberDirectId = m.id || m._id;
           const memberUserId = m.user?.id || m.user?._id;
           const memberUserIdString = m.user?._id?.toString() || m.user?.id?.toString();
-          
+
           return (
             memberDirectId?.toString() === userId.toString() ||
             memberUserId?.toString() === userId.toString() ||
@@ -225,16 +256,16 @@ const TimetableGrid = ({
           return m.user?.email === bookedSlot.user.email;
         });
       }
-      
+
       if (member) {
         const memberData = member.user || member;
-        const memberName = memberData.name || 
+        const memberName = memberData.name ||
                          `${memberData.firstName || ''} ${memberData.lastName || ''}`.trim() ||
                          `${bookedSlot.user?.firstName || ''} ${bookedSlot.user?.lastName || ''}`.trim() ||
                          '알 수 없음';
-        
+
         const actualUserId = member.user?._id || member.user?.id || member._id || member.id;
-        
+
         return {
           name: memberName,
           color: member.color || '#6B7280',
@@ -243,12 +274,12 @@ const TimetableGrid = ({
           subject: bookedSlot.subject // Pass subject from bookedSlot
         };
       }
-      
+
       return { name: '알 수 없음', color: '#6B7280', userId: null, subject: bookedSlot.subject };
     }
-    
+
     return null;
-  }, [timeSlots, members]);
+  }, [timeSlots, members, getNegotiationInfo]);
 
   // Helper to check if a slot is selected by the current user (uses currentSelectedSlots)
   const isSlotSelected = (date, time) => {
@@ -278,12 +309,18 @@ const TimetableGrid = ({
     }
 
     if (ownerInfo) {
+      // Check if this is a negotiation slot
+      if (ownerInfo.isNegotiation) {
+        showAlert('이 시간대는 현재 협의 중입니다. 협의가 완료될 때까지 기다려주세요.');
+        return;
+      }
+
       if (isOwnedByCurrentUser) {
         if (onRemoveSlot && window.confirm('이 시간을 삭제하시겠습니까?')) {
           const [hour, minute] = time.split(':').map(Number);
           const endHour = minute === 30 ? hour + 1 : hour;
           const endMinute = minute === 30 ? 0 : minute + 30;
-          
+
           onRemoveSlot({
             date: date, // Pass date object
             day: dayNames[date.getUTCDay() % 5],
@@ -562,11 +599,17 @@ const TimetableGrid = ({
             </p>
             <select className="w-full p-2 border rounded mb-4" onChange={(e) => handleAssign(e.target.value)} value="">
               <option value="">조원 선택</option>
-              {(members || []).map(member => (
-                <option key={member._id || member.user?._id || member.id || member.user?.id} value={member._id || member.user?._id || member.id || member.user?.id}>
-                  {member.user?.name || member.name || `${member.user?.firstName || ''} ${member.user?.lastName || ''}`.trim()}
-                </option>
-              ))}
+              {(members || [])
+                .filter(member => {
+                  const memberId = member._id || member.user?._id || member.id || member.user?.id;
+                  const currentUserId = currentUser?.id || currentUser?._id;
+                  return memberId !== currentUserId; // 방장(현재 사용자) 제외
+                })
+                .map(member => (
+                  <option key={member._id || member.user?._id || member.id || member.user?.id} value={member._id || member.user?._id || member.id || member.user?.id}>
+                    {member.user?.name || member.name || `${member.user?.firstName || ''} ${member.user?.lastName || ''}`.trim()}
+                  </option>
+                ))}
             </select>
             <button
               onClick={() => setShowAssignModal(false)}

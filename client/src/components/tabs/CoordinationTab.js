@@ -14,6 +14,7 @@ import { Users, Calendar, PlusCircle, LogIn, WandSparkles, Zap, X } from 'lucide
 import { translateEnglishDays } from '../../utils';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import MemberScheduleModal from '../modals/MemberScheduleModal';
+import NotificationModal from '../modals/NotificationModal';
 
 const dayMap = {
   'monday': '월요일', 'tuesday': '화요일', 'wednesday': '수요일',
@@ -39,27 +40,84 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [scheduleOptions, setScheduleOptions] = useState({ minHoursPerWeek: 3 });
   const [isScheduling, setIsScheduling] = useState(false);
   const [scheduleError, setScheduleError] = useState(null);
-  const [unassignedMembersInfo, setUnassignedMembersInfo] = useState(null); // New state for unassigned members
+  const [unassignedMembersInfo, setUnassignedMembersInfo] = useState(null);
+  const [conflictSuggestions, setConflictSuggestions] = useState([]); // New state for unassigned members
+
+  // Negotiation notification states
+  const [showNegotiationAlert, setShowNegotiationAlert] = useState(false);
+  const [negotiationAlertData, setNegotiationAlertData] = useState(null);
+
+  // Handle auto-resolution of timeout negotiations
+  const handleAutoResolveNegotiations = useCallback(async () => {
+    if (!currentRoom?._id) return;
+
+    try {
+      const result = await coordinationService.autoResolveTimeoutNegotiations(currentRoom._id, 24);
+
+      if (result.resolvedCount > 0) {
+        // Show notification about auto-resolved negotiations
+        showAlert(`${result.resolvedCount}개의 협의가 자동으로 해결되었습니다.`);
+
+        // Refresh room data
+        await fetchRoomDetails(currentRoom._id);
+      }
+    } catch (error) {
+      console.error('Error auto-resolving negotiations:', error);
+    }
+  }, [currentRoom?._id, fetchRoomDetails, showAlert]);
+
+  // Force resolve negotiation function
+  const handleForceResolveNegotiation = useCallback(async (negotiationId, method = 'random') => {
+    if (!currentRoom?._id) return;
+
+    try {
+      const result = await coordinationService.forceResolveNegotiation(currentRoom._id, negotiationId, method);
+
+      showAlert(`협의가 ${result.assignmentMethod}으로 해결되었습니다.`);
+
+      // Refresh room data
+      await fetchRoomDetails(currentRoom._id);
+    } catch (error) {
+      console.error('Error force resolving negotiation:', error);
+      showAlert(`협의 해결 실패: ${error.message}`);
+    }
+  }, [currentRoom?._id, fetchRoomDetails, showAlert]);
 
   const handleRunAutoSchedule = async () => {
     if (!currentRoom || !currentWeekStartDate) return;
     setIsScheduling(true);
     setScheduleError(null);
-    setUnassignedMembersInfo(null); // Reset unassigned members info
+    setUnassignedMembersInfo(null);
+    setConflictSuggestions([]); // Reset unassigned members info
     try {
       console.log('자동 배정 시작 - 옵션:', { ...scheduleOptions, currentWeek: currentWeekStartDate });
-      const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo } = await coordinationService.runAutoSchedule(currentRoom._id, { ...scheduleOptions, currentWeek: currentWeekStartDate });
+      const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = await coordinationService.runAutoSchedule(currentRoom._id, { ...scheduleOptions, currentWeek: currentWeekStartDate });
             
       if (newUnassignedMembersInfo) {
           setUnassignedMembersInfo(newUnassignedMembersInfo);
           console.log('이월 정보:', newUnassignedMembersInfo);
+      }
+      if (newConflictSuggestions && newConflictSuggestions.length > 0) {
+          setConflictSuggestions(newConflictSuggestions);
+          console.log('충돌 해결 제안:', newConflictSuggestions);
       }
       // Directly update the current room state with the fresh room returned by the API
       // This bypasses a potential race condition with fetchRoomDetails
       console.log('업데이트된 방 정보:', updatedRoom);
       console.log('업데이트된 멤버 정보:', updatedRoom.members.map(m => ({ name: m.user?.name, carryOver: m.carryOver })));
       setCurrentRoom(updatedRoom);
-      showAlert('자동 시간 배정이 완료되었습니다.');
+
+      // Check for active negotiations and show notification
+      const activeNegotiations = updatedRoom.negotiations?.filter(neg => neg.status === 'active') || [];
+      if (activeNegotiations.length > 0) {
+        setNegotiationAlertData({
+          count: activeNegotiations.length,
+          negotiations: activeNegotiations
+        });
+        setShowNegotiationAlert(true);
+      } else {
+        showAlert('자동 시간 배정이 완료되었습니다.');
+      }
     } catch (error) {
       setScheduleError(error.message);
       showAlert(`자동 배정 실패: ${error.message}`);
@@ -383,9 +441,13 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                               방장
                             </span>
                           )}
-                          {member.carryOver && member.carryOver > 0 && (
-                            <span className="ml-2 px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded-full flex-shrink-0 font-semibold">
-                              이월: {member.carryOver}시간
+                          {(member.carryOver !== undefined && member.carryOver !== null) && (
+                            <span className={`ml-2 px-2 py-0.5 text-xs rounded-full flex-shrink-0 font-semibold ${
+                              member.carryOver > 0
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              이월: {member.carryOver || 0}시간
                             </span>
                           )}
                         </div>
@@ -727,12 +789,14 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
           </div>
 
           <div className="lg:col-span-3">
-            {isOwner && 
-              <AutoSchedulerPanel 
-                options={scheduleOptions} 
-                setOptions={setScheduleOptions} 
+            {isOwner &&
+              <AutoSchedulerPanel
+                options={scheduleOptions}
+                setOptions={setScheduleOptions}
                 onRun={handleRunAutoSchedule}
                 isLoading={isScheduling}
+                currentRoom={currentRoom}
+                onAutoResolveNegotiations={handleAutoResolveNegotiations}
               />
             }
             {scheduleError && 
@@ -751,6 +815,18 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   ))}
                 </ul>
                 <p className="text-sm mt-2">이들은 협의가 필요하거나 다음 주로 이월될 수 있습니다.</p>
+              </div>
+            )}
+            {conflictSuggestions && conflictSuggestions.length > 0 && (
+              <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded relative mt-4" role="alert">
+                {conflictSuggestions.map((suggestion, index) => (
+                  <div key={index} className="mb-4 last:mb-0">
+                    <strong className="font-bold">{suggestion.title}</strong>
+                    <div className="mt-2 text-sm whitespace-pre-line">
+                      {suggestion.content}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mt-4">
@@ -901,6 +977,18 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             type="warning"
             showCancel={false}
         />
+
+        {/* Negotiation Alert Modal */}
+        <NotificationModal
+          isOpen={showNegotiationAlert}
+          onClose={() => setShowNegotiationAlert(false)}
+          type="info"
+          title="협의가 필요한 시간대가 있습니다"
+          message={negotiationAlertData ?
+            `자동 배정 중 ${negotiationAlertData.count}개의 시간대에서 충돌이 발생했습니다. 해당 시간대는 '협의중' 상태로 표시되며, 멤버들 간의 협의가 필요합니다. 24시간 후 자동으로 해결됩니다.` :
+            ''
+          }
+        />
       </div>
     );
   }
@@ -1019,11 +1107,14 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
 export default CoordinationTab;
 
-const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading }) => {
+const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom, onAutoResolveNegotiations }) => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setOptions(prev => ({ ...prev, [name]: Number(value) }));
   };
+
+  // Get active negotiations count
+  const activeNegotiationsCount = currentRoom?.negotiations?.filter(neg => neg.status === 'active')?.length || 0;
 
   return (
     <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 mb-4">
@@ -1034,24 +1125,45 @@ const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading }) => {
       <div className="grid grid-cols-1 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700">주당 최소 할당 시간 (시간)</label>
-          <input 
-            type="number" 
-            name="minHoursPerWeek" 
-            value={options.minHoursPerWeek} 
-            onChange={handleInputChange} 
+          <input
+            type="number"
+            name="minHoursPerWeek"
+            value={options.minHoursPerWeek}
+            onChange={handleInputChange}
             className="mt-1 block w-full p-2 border rounded-md"
             min="1"
             max="10"
           />
         </div>
       </div>
-      <button 
-        onClick={onRun} 
-        disabled={isLoading} 
-        className="mt-4 w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 disabled:bg-purple-300 flex items-center justify-center"
-      >
-        {isLoading ? '배정 중...' : '자동 배정 실행'}
-      </button>
+
+      <div className="flex flex-col gap-2 mt-4">
+        <button
+          onClick={onRun}
+          disabled={isLoading}
+          className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 disabled:bg-purple-300 flex items-center justify-center"
+        >
+          {isLoading ? '배정 중...' : '자동 배정 실행'}
+        </button>
+
+        {activeNegotiationsCount > 0 && (
+          <button
+            onClick={onAutoResolveNegotiations}
+            className="w-full bg-orange-600 text-white py-2 rounded-lg hover:bg-orange-700 flex items-center justify-center text-sm"
+          >
+            협의 자동 해결 ({activeNegotiationsCount}개)
+          </button>
+        )}
+      </div>
+
+      {activeNegotiationsCount > 0 && (
+        <div className="mt-3 p-2 bg-orange-50 border border-orange-200 rounded-lg">
+          <p className="text-sm text-orange-700">
+            현재 {activeNegotiationsCount}개의 협의가 진행 중입니다.
+            24시간 후 자동으로 해결되거나 위 버튼으로 즉시 해결할 수 있습니다.
+          </p>
+        </div>
+      )}
     </div>
   );
 };

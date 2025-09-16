@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Calendar, Clock, Users, MapPin, CheckCircle, XCircle, Brain, Volume2, FileText } from 'lucide-react';
+import { Calendar, Clock, Users, MapPin, CheckCircle, XCircle, Brain, Volume2, FileText } from 'lucide-react';
 
 const AutoDetectedScheduleModal = ({ 
    detectedSchedules, 
@@ -79,7 +79,7 @@ const AutoDetectedScheduleModal = ({
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto animate-in fade-in duration-300">
             {/* 헤더 */}
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-lg">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-lg">
                <div className="flex items-center">
                   <Brain className="w-6 h-6 text-purple-600 mr-2" />
                   <div>
@@ -93,12 +93,6 @@ const AutoDetectedScheduleModal = ({
                      </p>
                   </div>
                </div>
-               <button
-                  onClick={onClose}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-               >
-                  <X size={24} />
-               </button>
             </div>
 
             {/* 일정 목록 */}

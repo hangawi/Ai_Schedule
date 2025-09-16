@@ -134,12 +134,14 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
     try {
       await coordinationService.deleteRoom(roomId);
       setCurrentRoom(null);
+      // 방 삭제 후 방 목록을 다시 가져옴
+      await fetchMyRooms();
     } catch (err) {
       console.error('deleteRoom error:', err);
       setError(err.message);
       throw err;
     }
-  }, [setCurrentRoom]);
+  }, [setCurrentRoom, fetchMyRooms]);
 
   const submitTimeSlots = useCallback(async (roomId, slots) => {
     setError(null);

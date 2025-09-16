@@ -310,4 +310,99 @@ export const coordinationService = {
     return await response.json();
   },
 
+  // 협의 목록 가져오기
+  async getNegotiations(roomId) {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/negotiations`, {
+      headers: { 'x-auth-token': token },
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to fetch negotiations');
+    }
+
+    return await response.json();
+  },
+
+  // 협의 메시지 추가
+  async addNegotiationMessage(roomId, negotiationId, message) {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/negotiations/${negotiationId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-auth-token': token,
+      },
+      body: JSON.stringify({ message }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to add negotiation message');
+    }
+
+    return await response.json();
+  },
+
+  // 협의 해결 (수동)
+  async resolveNegotiation(roomId, negotiationId, assignedTo) {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/negotiations/${negotiationId}/resolve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-auth-token': token,
+      },
+      body: JSON.stringify({ assignedTo }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to resolve negotiation');
+    }
+
+    return await response.json();
+  },
+
+  // 타임아웃 협의 자동 해결
+  async autoResolveTimeoutNegotiations(roomId, negotiationTimeoutHours = 24) {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/negotiations/auto-resolve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-auth-token': token,
+      },
+      body: JSON.stringify({ negotiationTimeoutHours }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to auto-resolve negotiations');
+    }
+
+    return await response.json();
+  },
+
+  // 협의 강제 해결
+  async forceResolveNegotiation(roomId, negotiationId, method = 'random') {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/negotiations/${negotiationId}/force-resolve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-auth-token': token,
+      },
+      body: JSON.stringify({ method }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to force resolve negotiation');
+    }
+
+    return await response.json();
+  },
+
 };
