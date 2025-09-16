@@ -47,7 +47,46 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [showNegotiationAlert, setShowNegotiationAlert] = useState(false);
   const [negotiationAlertData, setNegotiationAlertData] = useState(null);
 
-  // Handle auto-resolution of timeout negotiations
+
+  const loadRoomExchangeCounts = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const result = await coordinationService.getRoomExchangeCounts();
+      if (result.success) {
+        setRoomExchangeCounts(result.roomCounts);
+      }
+    } catch (error) {
+      console.error('Failed to load room exchange counts:', error);
+    }
+  }, [user?.id]);
+
+  const loadSentRequests = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const result = await coordinationService.getSentRequests();
+      if (result.success) {
+        setSentRequests(result.requests);
+      }
+    } catch (error) {
+      console.error('Failed to load sent requests:', error);
+    }
+  }, [user?.id]);
+
+  const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest } = useCoordination(user?.id, onRefreshExchangeCount, loadSentRequests, showAlert);
+
+  const {
+    showCreateRoomModal, showJoinRoomModal, showManageRoomModal,
+    showAssignModal, showRequestModal, showChangeRequestModal,
+    slotToAssign, slotToRequest, slotToChange,
+    openCreateRoomModal, closeCreateRoomModal,
+    openJoinRoomModal, closeJoinRoomModal,
+    openManageRoomModal, closeManageRoomModal,
+    closeAssignModal,
+    closeRequestModal,
+    closeChangeRequestModal
+  } = useCoordinationModals();
+
+  // Handle auto-resolution of timeout negotiations (moved after useCoordination)
   const handleAutoResolveNegotiations = useCallback(async () => {
     if (!currentRoom?._id) return;
 
@@ -66,7 +105,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     }
   }, [currentRoom?._id, fetchRoomDetails, showAlert]);
 
-  // Force resolve negotiation function
+  // Force resolve negotiation function (moved after useCoordination)
   const handleForceResolveNegotiation = useCallback(async (negotiationId, method = 'random') => {
     if (!currentRoom?._id) return;
 
@@ -83,6 +122,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     }
   }, [currentRoom?._id, fetchRoomDetails, showAlert]);
 
+  // Auto-scheduling function (moved after useCoordination)
   const handleRunAutoSchedule = async () => {
     if (!currentRoom || !currentWeekStartDate) return;
     setIsScheduling(true);
@@ -92,7 +132,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     try {
       console.log('자동 배정 시작 - 옵션:', { ...scheduleOptions, currentWeek: currentWeekStartDate });
       const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = await coordinationService.runAutoSchedule(currentRoom._id, { ...scheduleOptions, currentWeek: currentWeekStartDate });
-            
+
       if (newUnassignedMembersInfo) {
           setUnassignedMembersInfo(newUnassignedMembersInfo);
           console.log('이월 정보:', newUnassignedMembersInfo);
@@ -125,44 +165,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       setIsScheduling(false);
     }
   };
-
-  const loadRoomExchangeCounts = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      const result = await coordinationService.getRoomExchangeCounts();
-      if (result.success) {
-        setRoomExchangeCounts(result.roomCounts);
-      }
-    } catch (error) {
-      console.error('Failed to load room exchange counts:', error);
-    }
-  }, [user?.id]);
-
-  const loadSentRequests = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      const result = await coordinationService.getSentRequests();
-      if (result.success) {
-        setSentRequests(result.requests);
-      }
-    } catch (error) {
-      console.error('Failed to load sent requests:', error);
-    }
-  }, [user?.id]);
-
-  const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest } = useCoordination(user?.id, onRefreshExchangeCount, loadSentRequests, showAlert);
-  
-  const {
-    showCreateRoomModal, showJoinRoomModal, showManageRoomModal,
-    showAssignModal, showRequestModal, showChangeRequestModal,
-    slotToAssign, slotToRequest, slotToChange,
-    openCreateRoomModal, closeCreateRoomModal,
-    openJoinRoomModal, closeJoinRoomModal,
-    openManageRoomModal, closeManageRoomModal,
-    closeAssignModal,
-    closeRequestModal,
-    closeChangeRequestModal
-  } = useCoordinationModals();
 
   const [selectedSlots, setSelectedSlots] = useState([]);
   const [selectedTab, setSelectedTab] = useState('owned');
