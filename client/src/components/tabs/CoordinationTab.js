@@ -242,6 +242,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       setMemberStatsModal({ isOpen: true, member });
     }
   };
+
+  const handleMemberScheduleClick = (memberId) => {
+    setSelectedMemberId(memberId);
+    setShowMemberScheduleModal(true);
+  };
   
   const [requestViewMode, setRequestViewMode] = useState('received');
   const [showAllRequests, setShowAllRequests] = useState({});
@@ -488,18 +493,13 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   return (
                     <div
                       key={memberData._id || index}
-                      className={`flex items-center p-3 rounded-lg border ${isOwner ? 'cursor-pointer' : 'cursor-default'} ${
-                        memberIsOwner 
-                          ? 'bg-red-50 border-red-200 ring-2 ring-red-100' 
-                          : isCurrentUser 
-                            ? 'bg-blue-50 border-blue-200' 
+                      className={`flex items-center p-3 rounded-lg border ${
+                        memberIsOwner
+                          ? 'bg-red-50 border-red-200 ring-2 ring-red-100'
+                          : isCurrentUser
+                            ? 'bg-blue-50 border-blue-200'
                             : 'bg-gray-50 border-gray-200'
                       }`}
-                      onClick={() => {
-                        if (isOwner) {
-                          handleMemberClick(memberData._id || memberData.id);
-                        }
-                      }}
                     >
                       <div
                         className={`w-5 h-5 rounded-full mr-3 flex-shrink-0 ${
@@ -546,6 +546,24 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                           {new Date(member.joinedAt || new Date()).toLocaleDateString('ko-KR')} 참여
                         </div>
                       </div>
+
+                      {/* 버튼들 */}
+                      {isOwner && (
+                        <div className="flex flex-col gap-1 ml-2">
+                          <button
+                            onClick={() => handleMemberClick(memberData._id || memberData.id)}
+                            className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                          >
+                            통계
+                          </button>
+                          <button
+                            onClick={() => handleMemberScheduleClick(memberData._id || memberData.id)}
+                            className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                          >
+                            시간표
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

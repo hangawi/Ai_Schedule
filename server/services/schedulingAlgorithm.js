@@ -313,6 +313,16 @@ class SchedulingAlgorithm {
     }
 
     timetable[key].assignedTo = memberId;
+
+    // Initialize assignment if not exists
+    if (!assignments[memberId]) {
+      assignments[memberId] = {
+        memberId: memberId,
+        assignedHours: 0,
+        slots: []
+      };
+    }
+
     assignments[memberId].assignedHours += 1; // This represents one 30-minute slot
     console.log("SchedulingAlgorithm:_assignSlot - Pushing slot with startTime:", startTimeRaw, "and endTime:", endTime, "and date:", slotDate);
     assignments[memberId].slots.push({
@@ -327,28 +337,42 @@ class SchedulingAlgorithm {
   }
 
   _resolveConflictsWithOwner(timetable, assignments, owner, minSlotsPerWeek) {
-    let changed = true;
-    while (changed) {
-      changed = false;
-      const membersNeedingHours = Object.keys(assignments).filter(id => 
-        id !== owner._id.toString() && assignments[id].assignedHours < minSlotsPerWeek
-      );
+    const ownerId = owner._id.toString();
 
-      for (const memberId of membersNeedingHours) {
-        for (const key in timetable) {
+    // 방장의 모든 사용 가능한 시간대에서 충돌을 해결
+    // 방장이 양보할 수 있는 시간대를 찾아서 멤버들에게 할당
+    const membersNeedingHours = Object.keys(assignments).filter(id =>
+      id !== ownerId && assignments[id].assignedHours < minSlotsPerWeek
+    );
+
+    for (const memberId of membersNeedingHours) {
+      let needed = minSlotsPerWeek - assignments[memberId].assignedHours;
+
+      // 방장이 사용 가능한 시간대 중에서 해당 멤버도 사용 가능한 시간대 찾기
+      const availableSlotsForMember = Object.keys(timetable)
+        .filter(key => {
           const slot = timetable[key];
-          if (slot.assignedTo) continue;
+          if (slot.assignedTo) return false;
 
-          const memberAvailability = slot.available.find(a => a.memberId === memberId && !a.isOwner);
-          if (!memberAvailability) continue; 
+          // 멤버가 사용 가능한지 확인
+          const memberAvailable = slot.available.some(a => a.memberId === memberId && !a.isOwner);
+          // 방장이 사용 가능한지 확인 (방장이 양보할 수 있는 시간)
+          const ownerAvailable = slot.available.some(a => a.memberId === ownerId && a.isOwner);
 
-          const ownerAvailability = slot.available.find(a => a.memberId === owner._id.toString() && a.isOwner);
-          if (!ownerAvailability) continue; 
+          return memberAvailable && ownerAvailable;
+        })
+        .sort((keyA, keyB) => {
+          // 충돌이 적은 시간대 우선
+          const slotA = timetable[keyA];
+          const slotB = timetable[keyB];
+          return slotA.available.length - slotB.available.length;
+        });
 
-          this._assignSlot(timetable, assignments, key, memberId);
-          changed = true;
-          break;
-        }
+      // 필요한 만큼 할당
+      for (const key of availableSlotsForMember) {
+        if (needed <= 0) break;
+        this._assignSlot(timetable, assignments, key, memberId);
+        needed -= 1;
       }
     }
   }

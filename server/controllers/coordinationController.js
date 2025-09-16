@@ -1089,6 +1089,18 @@ exports.runAutoSchedule = async (req, res) => {
 
     const updatedMembers = room.members.map(member => {
       const memberId = member.user._id.toString();
+      const isOwner = room.owner._id.toString() === memberId;
+
+      // 방장은 이월시간 계산에서 제외
+      if (isOwner) {
+        return {
+          ...member.toObject(),
+          carryOver: 0,
+          carryOverHistory: member.carryOverHistory || [],
+          totalProgressTime: member.totalProgressTime || 0,
+        };
+      }
+
       const unassignedInfo = result.unassignedMembersInfo.find(info => info.memberId === memberId);
       const previousCarryOver = member.carryOver || 0;
 
@@ -1150,7 +1162,11 @@ exports.runAutoSchedule = async (req, res) => {
       conflictSuggestions = await generateConflictSuggestions(result.unresolvableConflicts, result.unassignedMembersInfo, room.members);
 
       // Create negotiations for unresolvable conflicts
-      await createNegotiations(room, result.unresolvableConflicts);
+      // Re-populate room with member details for negotiation creation
+      const roomForNegotiations = await Room.findById(room._id)
+        .populate('members.user', 'firstName lastName email name')
+        .populate('owner', 'firstName lastName email name');
+      await createNegotiations(roomForNegotiations, result.unresolvableConflicts);
     }
 
     res.json({
