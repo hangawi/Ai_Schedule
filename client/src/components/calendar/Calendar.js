@@ -82,6 +82,14 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
    const fetchEvents = useCallback(async currentDate => {
       try {
          const token = localStorage.getItem('token');
+
+         // 구글 인증 상태 확인 - 토큰이 없거나 구글 연결이 안된 경우 요청하지 않음
+         const googleConnected = localStorage.getItem('googleConnected');
+         if (!token || !googleConnected || googleConnected === 'false') {
+            setEvents([]);
+            return;
+         }
+
          const startOfMonth = moment(currentDate).startOf('month').toISOString();
          const endOfMonth = moment(currentDate).endOf('month').toISOString();
 
@@ -97,6 +105,7 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
          if (!response.ok) {
             if (response.status === 401) {
                // 구글 인증이 안된 경우 조용히 처리
+               localStorage.setItem('googleConnected', 'false');
                setEvents([]);
                return;
             }

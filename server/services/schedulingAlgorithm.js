@@ -1,7 +1,7 @@
 class SchedulingAlgorithm {
 
   runAutoSchedule(members, owner, roomTimeSlots, options, deferredAssignments = []) {
-    const { minHoursPerWeek = 3, numWeeks = 2, currentWeek } = options;
+    const { minHoursPerWeek = 3, numWeeks = 2, currentWeek, ownerPreferences = {} } = options;
     // Convert hours to 30-minute slots (1 hour = 2 slots)
     const minSlotsPerWeek = minHoursPerWeek * 2;
     const startDate = currentWeek ? new Date(currentWeek) : new Date();
@@ -20,8 +20,8 @@ class SchedulingAlgorithm {
     // Since all submitted slots are treated as high priority, we only need to run this once.
     this._iterativeAssignment(timetable, assignments, 3, minSlotsPerWeek);
 
-    // Phase 2.5: Explicit Conflict Resolution by Owner Taking Slot
-    this._resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, minSlotsPerWeek);
+    // Phase 2.5: Explicit Conflict Resolution by Owner Taking Slot (with preferences)
+    this._resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, minSlotsPerWeek, ownerPreferences);
 
     // Phase 3: Conflict Resolution using Owner's Schedule
     this._resolveConflictsWithOwner(timetable, assignments, owner, minSlotsPerWeek);
@@ -353,19 +353,42 @@ class SchedulingAlgorithm {
     }
   }
 
-  _resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, minSlotsPerWeek) {
+  _resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, minSlotsPerWeek, ownerPreferences = {}) {
     const ownerId = owner._id.toString();
+
+    // Get all conflicting slots that the owner can take
+    const conflictingSlotsOwnerCanTake = [];
+
     for (const key in timetable) {
       const slot = timetable[key];
       if (slot.assignedTo) continue;
 
       const nonOwnerAvailable = slot.available.filter(a => a.memberId !== ownerId);
-
       if (nonOwnerAvailable.length > 1) {
         const ownerAvailability = slot.available.find(a => a.memberId === ownerId && a.isOwner);
         if (ownerAvailability) {
-          slot.assignedTo = ownerId;
+          conflictingSlotsOwnerCanTake.push(key);
         }
+      }
+    }
+
+    // Prioritize slots based on owner preferences
+    const prioritizedSlots = this._prioritizeSlotsByOwnerPreference(conflictingSlotsOwnerCanTake, ownerPreferences);
+
+    // Assign owner to prioritized slots
+    for (const key of prioritizedSlots) {
+      const slot = timetable[key];
+      if (!slot.assignedTo) {
+        slot.assignedTo = ownerId;
+        if (!assignments[ownerId]) {
+          assignments[ownerId] = { memberId: ownerId, assignedHours: 0, slots: [] };
+        }
+        assignments[ownerId].assignedHours += 1;
+        assignments[ownerId].slots.push({
+          day: slot.day,
+          time: slot.time,
+          date: slot.date
+        });
       }
     }
   }
@@ -393,6 +416,47 @@ class SchedulingAlgorithm {
         needed -= 1;
       }
     }
+  }
+
+  // Helper function to check if a time slot matches owner preferences
+  _isInOwnerPreferredTime(time, ownerPreferences) {
+    if (!ownerPreferences.focusTimeType || ownerPreferences.focusTimeType === 'none') {
+      return false; // No preference
+    }
+
+    const [hour] = time.split(':').map(Number);
+
+    switch (ownerPreferences.focusTimeType) {
+      case 'morning':
+        return hour >= 9 && hour < 12;
+      case 'lunch':
+        return hour >= 12 && hour < 14;
+      case 'afternoon':
+        return hour >= 14 && hour < 17;
+      case 'evening':
+        return hour >= 17 && hour < 20;
+      default:
+        return false;
+    }
+  }
+
+  // Helper function to prioritize slots based on owner preferences
+  _prioritizeSlotsByOwnerPreference(slots, ownerPreferences) {
+    if (!ownerPreferences.focusTimeType || ownerPreferences.focusTimeType === 'none') {
+      return slots; // No preference, return as-is
+    }
+
+    return slots.sort((keyA, keyB) => {
+      const timeA = keyA.split('-').pop();
+      const timeB = keyB.split('-').pop();
+
+      const isPreferredA = this._isInOwnerPreferredTime(timeA, ownerPreferences);
+      const isPreferredB = this._isInOwnerPreferredTime(timeB, ownerPreferences);
+
+      if (isPreferredA && !isPreferredB) return -1;
+      if (!isPreferredA && isPreferredB) return 1;
+      return 0;
+    });
   }
 }
 

@@ -34,9 +34,9 @@ const TimetableGrid = ({
   proposals,
   calculateEndTime,
   onWeekChange, // New prop to pass current week start date to parent
-  initialStartDate // New prop to set the initial week to display
+  initialStartDate, // New prop to set the initial week to display
+  onOpenNegotiation // New prop to handle negotiation modal opening
 }) => {
-  console.log("TimetableGrid: Received timeSlots prop:", timeSlots);
 
   // CustomAlert 상태
   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
@@ -77,7 +77,6 @@ const TimetableGrid = ({
       currentDay.setUTCDate(currentDay.getUTCDate() + 1); // Move to the next day
     }
     setWeekDates(dates);
-    console.log("TimetableGrid: Generated weekDates:", dates);
 
     // Call onWeekChange with the start date of the first week displayed
     if (onWeekChange && dates.length > 0) {
@@ -86,7 +85,6 @@ const TimetableGrid = ({
     }
   }, [onWeekChange]);
 
-  console.log("TimetableGrid: Received timeSlots prop:", timeSlots);
 
   const days = ['월', '화', '수', '목', '금']; // Display labels (not used for logic)
   const timeSlotsInDay = []; // 30-minute intervals for one day
@@ -311,7 +309,12 @@ const TimetableGrid = ({
     if (ownerInfo) {
       // Check if this is a negotiation slot
       if (ownerInfo.isNegotiation) {
-        showAlert('이 시간대는 현재 협의 중입니다. 협의가 완료될 때까지 기다려주세요.');
+        // Open negotiation modal
+        if (onOpenNegotiation) {
+          onOpenNegotiation(ownerInfo.negotiationData);
+        } else {
+          showAlert('이 시간대는 현재 협의 중입니다. 협의가 완료될 때까지 기다려주세요.');
+        }
         return;
       }
 

@@ -50,7 +50,10 @@ const TimeSlot = ({
                 color: ownerInfo.color,
                 backgroundColor: `${ownerInfo.color}${ownerInfo.isNegotiation ? '30' : '10'}`
               }}
-              title={ownerInfo.isNegotiation ? '현재 협의 중인 시간대입니다' : ownerInfo.subject || ownerInfo.name}
+              title={ownerInfo.isNegotiation ?
+                `협의 참여자: ${ownerInfo.negotiationData?.conflictingMembers?.map(cm => cm.user?.name || cm.user?.firstName || '멤버').join(', ') || '알 수 없음'}` :
+                ownerInfo.subject || ownerInfo.name
+              }
             >
               {ownerInfo.name.length > 6 ? ownerInfo.name.substring(0, 4) + '...' : ownerInfo.name}
             </span>
