@@ -51,7 +51,15 @@ const TimeSlot = ({
                 backgroundColor: `${ownerInfo.color}${ownerInfo.isNegotiation ? '30' : '10'}`
               }}
               title={ownerInfo.isNegotiation ?
-                `협의 참여자: ${ownerInfo.negotiationData?.conflictingMembers?.map(cm => cm.user?.name || cm.user?.firstName || '멤버').join(', ') || '알 수 없음'}` :
+                `협의 참여자: ${ownerInfo.negotiationData?.conflictingMembers?.map(cm => {
+                  if (cm.user?.name) {
+                    return cm.user.name;
+                  } else if (cm.user?.firstName || cm.user?.lastName) {
+                    return `${cm.user.firstName || ''} ${cm.user.lastName || ''}`.trim();
+                  } else {
+                    return '멤버';
+                  }
+                }).join(', ') || '알 수 없음'}` :
                 ownerInfo.subject || ownerInfo.name
               }
             >
