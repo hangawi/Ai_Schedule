@@ -405,4 +405,24 @@ export const coordinationService = {
     return await response.json();
   },
 
+  // 협의 응답
+  async respondToNegotiation(roomId, negotiationId, response) {
+    const token = getAuthToken();
+    const res = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/negotiations/${negotiationId}/respond`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-auth-token': token,
+      },
+      body: JSON.stringify({ response }),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to respond to negotiation');
+    }
+
+    return await res.json();
+  },
+
 };

@@ -15,8 +15,6 @@ const WeekView = ({
   currentUser, 
   handleSlotClick 
 }) => {
-  console.log("WeekView: Received weekDates prop:", weekDates);
-  console.log("WeekView: Received filteredTimeSlotsInDay prop:", filteredTimeSlotsInDay);
   return (
     <>
       {filteredTimeSlotsInDay.map(time => (
@@ -31,9 +29,6 @@ const WeekView = ({
             const blockedInfo = getBlockedTimeInfo(time);
             const roomExceptionInfo = getRoomExceptionInfo(date, time); // Get room exception info
             const isBlocked = !!blockedInfo;
-            
-            console.log("WeekView: Rendering slot for", date.toISOString().split('T')[0], time, "OwnerInfo:", ownerInfo, "RoomExceptionInfo:", roomExceptionInfo);
-            
             return (
               <TimeSlot
                 key={`${date.toISOString().split('T')[0]}-${time}`}

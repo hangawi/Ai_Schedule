@@ -99,6 +99,19 @@ const RoomSchema = new mongoose.Schema({
     carryOver: {
       type: Number,
       default: 0
+    },
+    carryOverHistory: [{
+      week: Date,
+      amount: Number,
+      reason: String, // 'unassigned', 'negotiation_rejected', etc.
+      timestamp: {
+        type: Date,
+        default: Date.now
+      }
+    }],
+    totalProgressTime: {
+      type: Number,
+      default: 0
     }
   }],
   inviteCode: {
@@ -207,6 +220,25 @@ const RoomSchema = new mongoose.Schema({
       endTime: {
         type: String,
         default: '13:00'
+      }
+    },
+    ownerPreferences: {
+      focusTimeType: {
+        type: String,
+        enum: ['morning', 'lunch', 'afternoon', 'evening', 'none'],
+        default: 'none'
+      },
+      description: {
+        type: String,
+        default: ''
+      },
+      preferredStartTime: {
+        type: String,
+        default: null
+      },
+      preferredEndTime: {
+        type: String,
+        default: null
       }
     }
   }

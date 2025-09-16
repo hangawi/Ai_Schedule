@@ -89,8 +89,28 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
    useEffect(() => {
      const handlePopState = (event) => {
        const tab = event.state?.tab || 'dashboard';
+       const roomState = event.state?.roomState || null;
+       const roomId = event.state?.roomId || null;
+
        setActiveTab(tab);
        localStorage.setItem('activeTab', tab);
+
+       // Handle room navigation
+       if (tab === 'coordination') {
+         if (roomState === 'inRoom' && roomId) {
+           // Forward navigation - restore room state
+           window.dispatchEvent(new CustomEvent('restoreRoom', { detail: { roomId } }));
+         } else if (!roomState) {
+           // Back navigation - clear current room state
+           const currentRoomId = localStorage.getItem('currentRoomId');
+           if (currentRoomId) {
+             localStorage.removeItem('currentRoomId');
+             localStorage.removeItem('currentRoomData');
+             // Trigger a custom event to notify CoordinationTab
+             window.dispatchEvent(new CustomEvent('clearCurrentRoom'));
+           }
+         }
+       }
      };
 
      window.addEventListener('popstate', handlePopState);
