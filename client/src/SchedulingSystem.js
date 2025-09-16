@@ -77,10 +77,30 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
      return savedTab || 'dashboard';
    });
 
-   // Effect to write to localStorage when activeTab changes
+   // Enhanced setActiveTab that includes browser history management
+   const enhancedSetActiveTab = useCallback((newTab) => {
+     setActiveTab(newTab);
+     localStorage.setItem('activeTab', newTab);
+     // Push new state to browser history
+     window.history.pushState({ tab: newTab }, '', `#${newTab}`);
+   }, []);
+
+   // Handle browser navigation (back/forward buttons)
    useEffect(() => {
-     localStorage.setItem('activeTab', activeTab);
-   }, [activeTab]);
+     const handlePopState = (event) => {
+       const tab = event.state?.tab || 'dashboard';
+       setActiveTab(tab);
+       localStorage.setItem('activeTab', tab);
+     };
+
+     window.addEventListener('popstate', handlePopState);
+     return () => window.removeEventListener('popstate', handlePopState);
+   }, []);
+
+   // Initialize browser history with current tab on component mount
+   useEffect(() => {
+     window.history.replaceState({ tab: activeTab }, '', `#${activeTab}`);
+   }, []); // Only run once on mount
    const [showCreateModal, setShowCreateModal] = useState(false);
    const [showTimeSelectionModal, setShowTimeSelectionModal] = useState(false);
    const [globalEvents, setGlobalEvents] = useState([]);
@@ -344,7 +364,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                   <button className="md:hidden mr-3 text-gray-600 hover:text-gray-800" onClick={() => setIsSidebarOpen(true)}>
                      <MenuIcon size={24} />
                   </button>
-                  <button onClick={() => setActiveTab('dashboard')} className="flex items-center cursor-pointer">
+                  <button onClick={() => enhancedSetActiveTab('dashboard')} className="flex items-center cursor-pointer">
                      <div className="relative w-10 h-10 rounded-lg mr-3">
                         <img src="/image.png" alt="MeetAgent Logo" className="w-full h-full object-cover rounded-lg" />
                         {loginMethod && (
@@ -355,7 +375,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                   </button>
                </div>
                <div className="flex items-center space-x-1 sm:space-x-2">
-                  <button className="hidden sm:block text-gray-600 hover:text-gray-800" onClick={() => setActiveTab('googleCalendar')}>
+                  <button className="hidden sm:block text-gray-600 hover:text-gray-800" onClick={() => enhancedSetActiveTab('googleCalendar')}>
                      <Calendar size={20} />
                   </button>
                   
@@ -372,7 +392,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                   </div>
                   
                   {isLoggedIn && (
-                     <button className="hidden sm:flex w-auto min-w-[40px] h-8 bg-blue-100 text-blue-600 rounded-full items-center justify-center cursor-pointer px-3 mr-2" onClick={() => setActiveTab('profile')}>
+                     <button className="hidden sm:flex w-auto min-w-[40px] h-8 bg-blue-100 text-blue-600 rounded-full items-center justify-center cursor-pointer px-3 mr-2" onClick={() => enhancedSetActiveTab('profile')}>
                         {user && user.firstName ? user.firstName : '프로필'}
                      </button>
                   )}
@@ -408,13 +428,13 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                   </button>
                </div>
                <div className="space-y-1">
-                  <NavItem icon={<LayoutDashboard size={18} />} label="대시보드" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<User size={18} />} label="내 프로필" active={activeTab === 'profile'} onClick={() => { setActiveTab('profile'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<ListTodo size={18} />} label="나의 일정" active={activeTab === 'events'} onClick={() => { setActiveTab('events'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<Calendar size={18} />} label="Google 캘린더" active={activeTab === 'googleCalendar'} onClick={() => { setActiveTab('googleCalendar'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<History size={18} />} label="조율 내역" active={activeTab === 'proposals'} onClick={() => { setActiveTab('proposals'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<CalendarCheck size={18} />} label="일정 맞추기" active={activeTab === 'coordination'} onClick={() => { setActiveTab('coordination'); setIsSidebarOpen(false); }} badge={exchangeRequestCount > 0 ? exchangeRequestCount.toString() : undefined} />
-                  <NavItem icon={<Bot size={18} />} label="내 AI 비서" active={activeTab === 'agent'} onClick={() => { setActiveTab('agent'); setIsSidebarOpen(false); }} />
+                  <NavItem icon={<LayoutDashboard size={18} />} label="대시보드" active={activeTab === 'dashboard'} onClick={() => { enhancedSetActiveTab('dashboard'); setIsSidebarOpen(false); }} />
+                  <NavItem icon={<User size={18} />} label="내 프로필" active={activeTab === 'profile'} onClick={() => { enhancedSetActiveTab('profile'); setIsSidebarOpen(false); }} />
+                  <NavItem icon={<ListTodo size={18} />} label="나의 일정" active={activeTab === 'events'} onClick={() => { enhancedSetActiveTab('events'); setIsSidebarOpen(false); }} />
+                  <NavItem icon={<Calendar size={18} />} label="Google 캘린더" active={activeTab === 'googleCalendar'} onClick={() => { enhancedSetActiveTab('googleCalendar'); setIsSidebarOpen(false); }} />
+                  <NavItem icon={<History size={18} />} label="조율 내역" active={activeTab === 'proposals'} onClick={() => { enhancedSetActiveTab('proposals'); setIsSidebarOpen(false); }} />
+                  <NavItem icon={<CalendarCheck size={18} />} label="일정 맞추기" active={activeTab === 'coordination'} onClick={() => { enhancedSetActiveTab('coordination'); setIsSidebarOpen(false); }} badge={exchangeRequestCount > 0 ? exchangeRequestCount.toString() : undefined} />
+                  <NavItem icon={<Bot size={18} />} label="내 AI 비서" active={activeTab === 'agent'} onClick={() => { enhancedSetActiveTab('agent'); setIsSidebarOpen(false); }} />
                </div>
             </nav>
 

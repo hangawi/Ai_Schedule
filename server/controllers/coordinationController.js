@@ -5,6 +5,7 @@ const Event = require('../models/event');
 const { findOptimalSlots } = require('../services/schedulingAnalysisService');
 const schedulingAlgorithm = require('../services/schedulingAlgorithm');
 const { OWNER_COLOR, getAvailableColor } = require('../utils/colorUtils');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const dayMap = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' };
 
@@ -218,6 +219,22 @@ exports.getRoomDetails = async (req, res) => {
       return res.status(403).json({ msg: '이 방에 접근할 권한이 없습니다.' });
     }
 
+    // Clean up invalid timeSlots (missing date field)
+    const originalTimeSlotCount = room.timeSlots.length;
+    room.timeSlots = room.timeSlots.filter(slot => slot.date);
+    if (originalTimeSlotCount !== room.timeSlots.length) {
+      console.log(`정리됨: ${originalTimeSlotCount - room.timeSlots.length}개의 유효하지 않은 timeSlots 제거`);
+    }
+
+    // Clean up invalid requests with missing targetSlot.date
+    const originalRequestCount = room.requests.length;
+    room.requests = room.requests.filter(request =>
+      !request.targetSlot || request.targetSlot.date
+    );
+    if (originalRequestCount !== room.requests.length) {
+      console.log(`정리됨: ${originalRequestCount - room.requests.length}개의 유효하지 않은 requests 제거`);
+    }
+
     // Fix owner color to ensure it's different from members
     const ownerMember = room.members.find(member => 
       member.user?.toString() === room.owner?._id?.toString() || 
@@ -354,6 +371,11 @@ exports.getMyRooms = async (req, res) => {
 exports.assignTimeSlot = async (req, res) => {
   try {
     const { day, startTime, endTime, userId } = req.body;
+
+    if (!day || !startTime || !endTime || !userId) {
+      return res.status(400).json({ msg: '필수 필드가 누락되었습니다.' });
+    }
+
     const room = await Room.findById(req.params.roomId);
 
     if (!room) {
@@ -364,8 +386,18 @@ exports.assignTimeSlot = async (req, res) => {
       return res.status(403).json({ msg: '방장만 시간을 배정할 수 있습니다.' });
     }
 
+    // 배정할 사용자가 방 멤버인지 확인
+    const targetMember = room.members.find(member => {
+      const memberUserId = member.user?._id || member.user;
+      return memberUserId.toString() === userId.toString();
+    });
+
+    if (!targetMember) {
+      return res.status(400).json({ msg: '해당 사용자는 이 방의 멤버가 아닙니다.' });
+    }
+
     // Remove existing assignment for this slot
-    room.timeSlots = room.timeSlots.filter(slot => 
+    room.timeSlots = room.timeSlots.filter(slot =>
       !(slot.day === day && slot.startTime === startTime && slot.endTime === endTime)
     );
 
@@ -376,12 +408,17 @@ exports.assignTimeSlot = async (req, res) => {
       startTime,
       endTime,
       subject: '배정된 시간',
-      user: userId,
+      user: new mongoose.Types.ObjectId(userId),
       status: 'assigned'
     });
 
     await room.save();
-    await room.populate('timeSlots.user', 'firstName lastName email');
+    await room.populate([
+      { path: 'members.user', select: 'firstName lastName email name' },
+      { path: 'timeSlots.user', select: 'firstName lastName email name' },
+      { path: 'owner', select: 'firstName lastName email name' }
+    ]);
+
     res.json(room);
   } catch (error) {
     console.error('Error assigning time slot:', error);
@@ -1020,10 +1057,12 @@ exports.runAutoSchedule = async (req, res) => {
     console.log('runAutoSchedule: result.unassignedMembersInfo from algorithm:', result.unassignedMembersInfo);
 
     // Clear existing auto-assigned slots and apply new ones
-    // Keep only user-submitted slots (not auto-assigned ones)
+    // Keep only user-submitted slots (not auto-assigned ones) and slots with valid date
     const originalSlotsCount = room.timeSlots.length;
-    room.timeSlots = room.timeSlots.filter(slot => 
-      slot.status === 'confirmed' && slot.subject !== '자동 배정'
+    room.timeSlots = room.timeSlots.filter(slot =>
+      slot.status === 'confirmed' &&
+      slot.subject !== '자동 배정' &&
+      slot.date // Only keep slots with valid date field
     );
     console.log(`자동 배정 초기화: ${originalSlotsCount}개 슬롯에서 ${room.timeSlots.length}개 슬롯으로 필터링됨`);
     
@@ -1037,11 +1076,17 @@ exports.runAutoSchedule = async (req, res) => {
     const updatedMembers = room.members.map(member => {
       const memberId = member.user._id.toString();
       const unassignedInfo = result.unassignedMembersInfo.find(info => info.memberId === memberId);
-      const carryOverHours = unassignedInfo ? Math.max(0, unassignedInfo.neededHours) : 0;
-      console.log(`Member ${memberId} - 이월시간: ${carryOverHours}시간, 기존 이월: ${member.carryOver || 0}시간`);
+      const newCarryOverHours = unassignedInfo ? Math.max(0, unassignedInfo.neededHours) : 0;
+
+      // 이번 주에 새로 생긴 이월시간만 설정 (기존 이월시간은 이미 deferredAssignments에서 처리됨)
+      const totalCarryOver = newCarryOverHours;
+
+      console.log(`Member ${memberId} - 이번 주 이월: ${newCarryOverHours}시간, 총 이월: ${totalCarryOver}시간`);
+      console.log(`Member ${memberId} - unassignedInfo:`, unassignedInfo);
+
       return {
         ...member.toObject(), // Convert subdocument to plain object to avoid issues
-        carryOver: carryOverHours,
+        carryOver: totalCarryOver,
       };
     });
 
@@ -1057,15 +1102,478 @@ exports.runAutoSchedule = async (req, res) => {
         .populate('timeSlots.user', 'firstName lastName email')
         .populate('members.user', 'firstName lastName email name');
 
+    // Generate AI-powered conflict resolution suggestions
+    let conflictSuggestions = [];
+    if (result.unresolvableConflicts && result.unresolvableConflicts.length > 0) {
+      conflictSuggestions = await generateConflictSuggestions(result.unresolvableConflicts, result.unassignedMembersInfo, room.members);
+
+      // Create negotiations for unresolvable conflicts
+      await createNegotiations(room, result.unresolvableConflicts);
+    }
+
     res.json({
         room: freshRoom, // Send the fresh copy
-        unassignedMembersInfo: result.unassignedMembersInfo
+        unassignedMembersInfo: result.unassignedMembersInfo,
+        conflictSuggestions: conflictSuggestions
     });
     console.log('runAutoSchedule: freshRoom.timeSlots sent in response:', freshRoom.timeSlots.length, freshRoom.timeSlots);
 
   } catch (error) {
     console.error('Error running auto-schedule:', error);
     res.status(500).json({ msg: '자동 배정 실행 중 서버 오류가 발생했습니다.' });
+  }
+};
+
+// AI-powered conflict resolution suggestions
+async function generateConflictSuggestions(unresolvableConflicts, unassignedMembersInfo, members) {
+  try {
+    if (!process.env.GEMINI_API_KEY) {
+      console.log('GEMINI_API_KEY not found, skipping AI suggestions');
+      return [];
+    }
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+    const conflictDescription = unresolvableConflicts.map((conflict, index) => {
+      const availableMembers = conflict.availableMembers.map(memberId => {
+        const member = members.find(m => m.user._id.toString() === memberId);
+        return member ? (member.user.name || `${member.user.firstName} ${member.user.lastName}`) : '알 수 없음';
+      }).join(', ');
+
+      return `충돌 ${index + 1}: ${conflict.date.toLocaleDateString('ko-KR')} - 가능한 멤버: ${availableMembers}`;
+    }).join('\n');
+
+    const unassignedDescription = unassignedMembersInfo.map(info => {
+      const member = members.find(m => m.user._id.toString() === info.memberId);
+      const memberName = member ? (member.user.name || `${member.user.firstName} ${member.user.lastName}`) : '알 수 없음';
+      return `${memberName}: ${info.neededHours}시간 부족`;
+    }).join('\n');
+
+    const prompt = `
+다음은 팀 프로젝트 시간표 조율에서 발생한 충돌 상황입니다:
+
+해결되지 않은 충돌:
+${conflictDescription}
+
+시간이 부족한 멤버들:
+${unassignedDescription}
+
+이 상황을 해결하기 위한 구체적이고 실용적인 제안을 3가지 해주세요. 각 제안은:
+1. 문제 해결 방법
+2. 예상되는 결과
+3. 구현 난이도 (쉬움/보통/어려움)
+
+제안은 한국어로 작성하고, 실제 팀원들이 따라할 수 있는 구체적인 행동 지침을 포함해주세요.
+`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const suggestions = response.text();
+
+    return [{
+      type: 'ai_suggestion',
+      title: 'AI 충돌 해결 제안',
+      content: suggestions,
+      timestamp: new Date()
+    }];
+
+  } catch (error) {
+    console.error('Error generating conflict suggestions:', error);
+    return [{
+      type: 'fallback_suggestion',
+      title: '기본 충돌 해결 방법',
+      content: `
+충돌 해결을 위한 제안:
+
+1. **직접 협의**: 해당 시간에 가능한 멤버들끼리 직접 대화하여 조정
+2. **우선순위 재조정**: 각 멤버의 선호도를 다시 검토하여 낮은 우선순위 시간으로 이동
+3. **추가 시간 검토**: 현재 설정된 시간 외에 다른 시간대도 고려
+4. **이월 시스템 활용**: 이번 주에 시간이 부족한 멤버는 다음 주에 우선 배정
+
+방장은 "방 관리"에서 멤버별 일정을 확인하고 수동으로 시간을 배정할 수 있습니다.
+      `,
+      timestamp: new Date()
+    }];
+  }
+}
+
+// Create negotiations for conflicting time slots
+async function createNegotiations(room, unresolvableConflicts) {
+  try {
+    for (const conflict of unresolvableConflicts) {
+      // Check if negotiation already exists for this slot
+      const existingNegotiation = room.negotiations.find(neg =>
+        neg.status === 'active' &&
+        neg.slotInfo.date.toISOString().split('T')[0] === conflict.date.toISOString().split('T')[0] &&
+        neg.slotInfo.startTime === conflict.slotKey.split('-')[1]
+      );
+
+      if (!existingNegotiation) {
+        const dayMap = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday' };
+        const dayOfWeek = conflict.date.getUTCDay();
+        const [startTime] = conflict.slotKey.split('-').slice(-1);
+        const [hour, minute] = startTime.split(':').map(Number);
+        const endHour = minute === 30 ? hour + 1 : hour;
+        const endMinute = minute === 30 ? 0 : 30;
+        const endTime = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
+
+        const conflictingMembers = conflict.availableMembers.map(memberId => {
+          const member = room.members.find(m => m.user._id.toString() === memberId);
+          return {
+            user: new mongoose.Types.ObjectId(memberId),
+            priority: 3 // Default high priority
+          };
+        });
+
+        const negotiation = {
+          _id: new mongoose.Types.ObjectId(),
+          slotInfo: {
+            day: dayMap[dayOfWeek],
+            startTime: startTime,
+            endTime: endTime,
+            date: conflict.date
+          },
+          conflictingMembers: conflictingMembers,
+          messages: [{
+            from: room.owner,
+            message: `${conflict.date.toLocaleDateString('ko-KR')} ${startTime}-${endTime} 시간에 대해 ${conflictingMembers.length}명의 멤버가 충돌하고 있습니다. 서로 협의하여 해결해주세요.`,
+            timestamp: new Date()
+          }],
+          status: 'active'
+        };
+
+        room.negotiations.push(negotiation);
+      }
+    }
+
+    await room.save();
+  } catch (error) {
+    console.error('Error creating negotiations:', error);
+  }
+}
+
+// API endpoint to get negotiations for a room
+exports.getNegotiations = async (req, res) => {
+  try {
+    const room = await Room.findById(req.params.roomId)
+      .populate('negotiations.conflictingMembers.user', 'firstName lastName email name')
+      .populate('negotiations.messages.from', 'firstName lastName email name')
+      .populate('negotiations.resolution.assignedTo', 'firstName lastName email name');
+
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    if (!room.isOwner(req.user.id) && !room.isMember(req.user.id)) {
+      return res.status(403).json({ msg: '이 방에 접근할 권한이 없습니다.' });
+    }
+
+    const activeNegotiations = room.negotiations.filter(neg => neg.status === 'active');
+    res.json(activeNegotiations);
+  } catch (error) {
+    console.error('Error getting negotiations:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// API endpoint to add message to negotiation
+exports.addNegotiationMessage = async (req, res) => {
+  try {
+    const { roomId, negotiationId } = req.params;
+    const { message } = req.body;
+
+    const room = await Room.findById(roomId);
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    if (!room.isOwner(req.user.id) && !room.isMember(req.user.id)) {
+      return res.status(403).json({ msg: '이 방에 접근할 권한이 없습니다.' });
+    }
+
+    const negotiation = room.negotiations.id(negotiationId);
+    if (!negotiation) {
+      return res.status(404).json({ msg: '협상을 찾을 수 없습니다.' });
+    }
+
+    negotiation.messages.push({
+      from: req.user.id,
+      message: message,
+      timestamp: new Date()
+    });
+
+    await room.save();
+
+    const updatedRoom = await Room.findById(roomId)
+      .populate('negotiations.conflictingMembers.user', 'firstName lastName email name')
+      .populate('negotiations.messages.from', 'firstName lastName email name');
+
+    const updatedNegotiation = updatedRoom.negotiations.id(negotiationId);
+    res.json(updatedNegotiation);
+  } catch (error) {
+    console.error('Error adding negotiation message:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// API endpoint to resolve negotiation
+exports.resolveNegotiation = async (req, res) => {
+  try {
+    const { roomId, negotiationId } = req.params;
+    const { assignedTo } = req.body;
+
+    const room = await Room.findById(roomId);
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    if (!room.isOwner(req.user.id)) {
+      return res.status(403).json({ msg: '방장만 협상을 해결할 수 있습니다.' });
+    }
+
+    const negotiation = room.negotiations.id(negotiationId);
+    if (!negotiation) {
+      return res.status(404).json({ msg: '협상을 찾을 수 없습니다.' });
+    }
+
+    // Assign the time slot
+    const { slotInfo } = negotiation;
+    room.timeSlots.push({
+      _id: new mongoose.Types.ObjectId(),
+      day: slotInfo.day,
+      date: slotInfo.date,
+      startTime: slotInfo.startTime,
+      endTime: slotInfo.endTime,
+      subject: '협상 해결',
+      user: new mongoose.Types.ObjectId(assignedTo),
+      status: 'confirmed'
+    });
+
+    // Mark negotiation as resolved
+    negotiation.status = 'resolved';
+    negotiation.resolution = {
+      assignedTo: new mongoose.Types.ObjectId(assignedTo),
+      resolvedAt: new Date()
+    };
+
+    await room.save();
+    res.json({ msg: '협상이 해결되었습니다.' });
+  } catch (error) {
+    console.error('Error resolving negotiation:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// Auto-resolve negotiations that have timed out
+exports.autoResolveTimeoutNegotiations = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { negotiationTimeoutHours = 24 } = req.body; // Default 24 hours timeout
+
+    const room = await Room.findById(roomId).populate('members.user', 'firstName lastName email name');
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    if (!room.isOwner(req.user.id)) {
+      return res.status(403).json({ msg: '방장만 자동 해결을 실행할 수 있습니다.' });
+    }
+
+    const now = new Date();
+    const timeoutThreshold = new Date(now.getTime() - (negotiationTimeoutHours * 60 * 60 * 1000));
+
+    let resolvedCount = 0;
+    const notifications = [];
+
+    for (const negotiation of room.negotiations) {
+      if (negotiation.status === 'active' && negotiation.createdAt < timeoutThreshold) {
+        // Auto-resolve using random or owner assignment
+        const { assignedUserId, assignmentMethod } = await autoAssignSlot(room, negotiation);
+
+        // Assign the time slot
+        const { slotInfo } = negotiation;
+        room.timeSlots.push({
+          _id: new mongoose.Types.ObjectId(),
+          day: slotInfo.day,
+          date: slotInfo.date,
+          startTime: slotInfo.startTime,
+          endTime: slotInfo.endTime,
+          subject: `자동 배정 (${assignmentMethod})`,
+          user: new mongoose.Types.ObjectId(assignedUserId),
+          status: 'confirmed'
+        });
+
+        // Mark negotiation as resolved
+        negotiation.status = 'resolved';
+        negotiation.resolution = {
+          assignedTo: new mongoose.Types.ObjectId(assignedUserId),
+          resolvedAt: new Date()
+        };
+
+        // Add auto-resolution message
+        negotiation.messages.push({
+          from: room.owner,
+          message: `협의 시간이 만료되어 자동으로 ${assignmentMethod}에 의해 배정되었습니다.`,
+          timestamp: new Date()
+        });
+
+        resolvedCount++;
+
+        // Prepare notification data
+        const assignedMember = room.members.find(m => m.user._id.toString() === assignedUserId);
+        if (assignedMember) {
+          notifications.push({
+            slotInfo: slotInfo,
+            assignedTo: assignedMember.user,
+            assignmentMethod: assignmentMethod
+          });
+        }
+      }
+    }
+
+    await room.save();
+
+    res.json({
+      message: `${resolvedCount}개의 협의가 자동으로 해결되었습니다.`,
+      resolvedCount,
+      notifications
+    });
+  } catch (error) {
+    console.error('Error auto-resolving negotiations:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// Helper function to auto-assign a slot
+async function autoAssignSlot(room, negotiation) {
+  const conflictingMembers = negotiation.conflictingMembers;
+
+  if (conflictingMembers.length === 0) {
+    // No conflicting members, assign to owner
+    return {
+      assignedUserId: room.owner.toString(),
+      assignmentMethod: '방장 배정'
+    };
+  }
+
+  if (conflictingMembers.length === 1) {
+    // Only one member, assign to them
+    return {
+      assignedUserId: conflictingMembers[0].user.toString(),
+      assignmentMethod: '단독 배정'
+    };
+  }
+
+  // Multiple members - use priority or random assignment
+  // Sort by priority (higher priority first)
+  const sortedMembers = [...conflictingMembers].sort((a, b) => b.priority - a.priority);
+
+  // If there's a clear priority winner
+  if (sortedMembers[0].priority > sortedMembers[1].priority) {
+    return {
+      assignedUserId: sortedMembers[0].user.toString(),
+      assignmentMethod: '우선순위 배정'
+    };
+  }
+
+  // Random assignment among members with same highest priority
+  const highestPriority = sortedMembers[0].priority;
+  const topPriorityMembers = sortedMembers.filter(m => m.priority === highestPriority);
+  const randomIndex = Math.floor(Math.random() * topPriorityMembers.length);
+
+  return {
+    assignedUserId: topPriorityMembers[randomIndex].user.toString(),
+    assignmentMethod: '랜덤 배정'
+  };
+}
+
+// Manual trigger for negotiation timeout resolution
+exports.forceResolveNegotiation = async (req, res) => {
+  try {
+    const { roomId, negotiationId } = req.params;
+    const { method = 'random' } = req.body; // 'random', 'owner', or 'priority'
+
+    const room = await Room.findById(roomId).populate('members.user', 'firstName lastName email name');
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    if (!room.isOwner(req.user.id)) {
+      return res.status(403).json({ msg: '방장만 강제 해결을 실행할 수 있습니다.' });
+    }
+
+    const negotiation = room.negotiations.id(negotiationId);
+    if (!negotiation) {
+      return res.status(404).json({ msg: '협상을 찾을 수 없습니다.' });
+    }
+
+    if (negotiation.status !== 'active') {
+      return res.status(400).json({ msg: '이미 해결된 협상입니다.' });
+    }
+
+    let assignedUserId;
+    let assignmentMethod;
+
+    if (method === 'owner') {
+      assignedUserId = room.owner.toString();
+      assignmentMethod = '방장 지정';
+    } else if (method === 'priority') {
+      const result = await autoAssignSlot(room, negotiation);
+      assignedUserId = result.assignedUserId;
+      assignmentMethod = '우선순위 지정';
+    } else {
+      // Random assignment
+      const conflictingMembers = negotiation.conflictingMembers;
+      if (conflictingMembers.length > 0) {
+        const randomIndex = Math.floor(Math.random() * conflictingMembers.length);
+        assignedUserId = conflictingMembers[randomIndex].user.toString();
+        assignmentMethod = '랜덤 지정';
+      } else {
+        assignedUserId = room.owner.toString();
+        assignmentMethod = '방장 지정 (대체)';
+      }
+    }
+
+    // Assign the time slot
+    const { slotInfo } = negotiation;
+    room.timeSlots.push({
+      _id: new mongoose.Types.ObjectId(),
+      day: slotInfo.day,
+      date: slotInfo.date,
+      startTime: slotInfo.startTime,
+      endTime: slotInfo.endTime,
+      subject: `강제 배정 (${assignmentMethod})`,
+      user: new mongoose.Types.ObjectId(assignedUserId),
+      status: 'confirmed'
+    });
+
+    // Mark negotiation as resolved
+    negotiation.status = 'resolved';
+    negotiation.resolution = {
+      assignedTo: new mongoose.Types.ObjectId(assignedUserId),
+      resolvedAt: new Date()
+    };
+
+    // Add resolution message
+    negotiation.messages.push({
+      from: room.owner,
+      message: `방장에 의해 ${assignmentMethod}으로 강제 배정되었습니다.`,
+      timestamp: new Date()
+    });
+
+    await room.save();
+
+    const assignedMember = room.members.find(m => m.user._id.toString() === assignedUserId);
+
+    res.json({
+      message: '협의가 강제로 해결되었습니다.',
+      assignedTo: assignedMember?.user,
+      assignmentMethod
+    });
+  } catch (error) {
+    console.error('Error force resolving negotiation:', error);
+    res.status(500).json({ msg: 'Server error' });
   }
 };
 

@@ -28,4 +28,11 @@ router.delete('/requests/:requestId', auth, coordinationController.cancelRequest
 router.get('/sent-requests', auth, coordinationController.getSentRequests);
 router.get('/exchange-requests-count', auth, coordinationController.getExchangeRequestsCount);
 
+// Negotiation management
+router.get('/rooms/:roomId/negotiations', auth, coordinationController.getNegotiations);
+router.post('/rooms/:roomId/negotiations/:negotiationId/messages', auth, coordinationController.addNegotiationMessage);
+router.post('/rooms/:roomId/negotiations/:negotiationId/resolve', auth, coordinationController.resolveNegotiation);
+router.post('/rooms/:roomId/negotiations/auto-resolve', auth, coordinationController.autoResolveTimeoutNegotiations);
+router.post('/rooms/:roomId/negotiations/:negotiationId/force-resolve', auth, coordinationController.forceResolveNegotiation);
+
 module.exports = router;

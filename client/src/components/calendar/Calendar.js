@@ -95,6 +95,11 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
          );
 
          if (!response.ok) {
+            if (response.status === 401) {
+               // 구글 인증이 안된 경우 조용히 처리
+               setEvents([]);
+               return;
+            }
             throw new Error('캘린더 이벤트를 가져오는 데 실패했습니다.');
          }
 
@@ -110,8 +115,7 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
          }));
          setEvents(formattedEvents);
       } catch (error) {
-         console.warn('Google Calendar events loading failed:', error.message);
-         // 구글 연동이 안된 경우 빈 배열로 설정 (오류 메시지는 표시하지 않음)
+         // 구글 연동이 안된 경우 조용히 처리 (콘솔 로그도 제거)
          setEvents([]);
       }
    }, []);

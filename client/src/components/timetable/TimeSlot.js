@@ -25,11 +25,10 @@ const TimeSlot = ({
       key={`${date.toISOString().split('T')[0]}-${time}`}
       className={`col-span-1 border-l border-gray-200 h-10 flex items-center justify-center
         ${isEffectivelyBlocked ? 'bg-gray-300 cursor-not-allowed' : ''} // Use isEffectivelyBlocked for styling
-        ${isRoomOwner ? 'cursor-not-allowed opacity-60' : ''}
-        ${!isEffectivelyBlocked && !ownerInfo && isSelected && !isRoomOwner ? 'bg-blue-200 border-2 border-blue-400' : ''}
-        ${!isEffectivelyBlocked && !ownerInfo && !isSelected && currentUser && !isRoomOwner ? 'hover:bg-blue-50 cursor-pointer' : ''}
-        ${!isEffectivelyBlocked && ownerInfo && currentUser && !isRoomOwner ? 'cursor-pointer hover:opacity-80' : ''}
-        ${!isEffectivelyBlocked && !ownerInfo && !isSelected && !isRoomOwner ? '' : ''}
+        ${!isEffectivelyBlocked && !ownerInfo && isSelected ? 'bg-blue-200 border-2 border-blue-400' : ''}
+        ${!isEffectivelyBlocked && !ownerInfo && !isSelected && currentUser ? 'hover:bg-blue-50 cursor-pointer' : ''}
+        ${!isEffectivelyBlocked && ownerInfo && currentUser ? 'cursor-pointer hover:opacity-80' : ''}
+        ${!isEffectivelyBlocked && isRoomOwner && !ownerInfo ? 'cursor-pointer hover:bg-green-50' : ''}
       `}
       style={!isEffectivelyBlocked && ownerInfo ? { backgroundColor: `${ownerInfo.color}20`, borderColor: ownerInfo.color } : 
              isEffectivelyBlocked && roomExceptionInfo ? { backgroundColor: '#FEEBC8', borderColor: '#F6AD55' } : {} // Light orange for room exceptions
@@ -43,7 +42,16 @@ const TimeSlot = ({
       ) : (
         <>
           {ownerInfo && (
-            <span className="text-xs font-medium px-1 py-0.5 rounded" style={{ color: ownerInfo.color, backgroundColor: `${ownerInfo.color}10` }}>
+            <span
+              className={`text-xs font-medium px-1 py-0.5 rounded ${
+                ownerInfo.isNegotiation ? 'animate-pulse border border-orange-300' : ''
+              }`}
+              style={{
+                color: ownerInfo.color,
+                backgroundColor: `${ownerInfo.color}${ownerInfo.isNegotiation ? '30' : '10'}`
+              }}
+              title={ownerInfo.isNegotiation ? '현재 협의 중인 시간대입니다' : ownerInfo.subject || ownerInfo.name}
+            >
               {ownerInfo.name.length > 6 ? ownerInfo.name.substring(0, 4) + '...' : ownerInfo.name}
             </span>
           )}

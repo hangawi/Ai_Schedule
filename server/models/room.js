@@ -114,6 +114,48 @@ const RoomSchema = new mongoose.Schema({
   },
   timeSlots: [TimeSlotSchema],
   requests: [RequestSchema],
+  negotiations: [{
+    slotInfo: {
+      day: String,
+      startTime: String,
+      endTime: String,
+      date: Date
+    },
+    conflictingMembers: [{
+      user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      },
+      priority: Number
+    }],
+    messages: [{
+      from: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      },
+      message: String,
+      timestamp: {
+        type: Date,
+        default: Date.now
+      }
+    }],
+    status: {
+      type: String,
+      enum: ['active', 'resolved'],
+      default: 'active'
+    },
+    resolution: {
+      assignedTo: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      },
+      resolvedAt: Date
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   settings: {
     startHour: {
       type: Number,

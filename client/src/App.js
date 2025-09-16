@@ -89,15 +89,27 @@ function App() {
          }
          return false;
       } catch (error) {
-         const improvedPatterns = [
-            /(오늘|내일|모레|월요일|화요일|수요일|목요일|금요일|토요일|일요일|tuesday|다음주|이번주|저번주)/i,
-            /\d{1,2}:\d{2}|\d{1,2}시|(오전|오후|새벽|밤|점심|저녁|아침)/,
-            /(약속|미팅|회의|모임|만남|식사|영화|공연)/,
-            /(카페|식당|영화관|극장|백화점|공원)/,
-            /(보기|먹기|만나기|가기|하기|보러|먹으러|만나러|가러|하러)/
+         // 더 정확한 일정 감지 패턴
+         const schedulePatterns = [
+            // 시간 패턴 (더 구체적)
+            /\d{1,2}:\d{2}|\d{1,2}시\s*\d{0,2}분?|(오전|오후|새벽|저녁|아침)\s*\d{1,2}시?/,
+            // 날짜 패턴 (더 구체적)
+            /(오늘|내일|모레|월요일|화요일|수요일|목요일|금요일|토요일|일요일|다음주|이번주|다음달|이번달)\s*(에|부터|까지)?/i,
+            // 만남/일정 관련 동사
+            /(만나|만날|만나자|만나요|보자|보요|가자|가요|하자|하요|먹자|먹어요)/,
+            // 일정 관련 명사
+            /(약속|미팅|회의|모임|만남|식사|점심|저녁|영화|공연|수업|강의|프로젝트)/,
+            // 장소 패턴
+            /(카페|식당|영화관|극장|백화점|공원|학교|회사|사무실|집|기숙사)에?서?/
          ];
-         const matchCount = improvedPatterns.filter(pattern => pattern.test(text)).length;
-         return matchCount >= 2;
+
+         const matchCount = schedulePatterns.filter(pattern => pattern.test(text)).length;
+
+         // 텍스트 길이도 고려 (너무 짧으면 일정이 아닐 가능성 높음)
+         const hasMinimumLength = text.length >= 10;
+
+         // 최소 2개 패턴 매칭 + 최소 길이 조건
+         return matchCount >= 2 && hasMinimumLength;
       }
    }, []);
 
@@ -115,13 +127,15 @@ function App() {
       try {
          const text = await navigator.clipboard.readText();
          if (text && text.trim().length >= 5 && !dismissedCopiedTexts.has(text)) {
-            setCopiedText(text);
-            setIsAnalyzing(true);
-            
+            // 먼저 백그라운드에서 분석하고, 일정이 맞을 때만 모달 표시
             const isSchedule = await analyzeClipboard(text);
-            setIsAnalyzing(false);
-            if (!isSchedule) {
-               setCopiedText(null);
+            if (isSchedule) {
+               setCopiedText(text);
+               setIsAnalyzing(true);
+               // 짧은 시간 후 분석 완료 상태로 변경
+               setTimeout(() => setIsAnalyzing(false), 500);
+            } else {
+               // 일정이 아니면 바로 무시 목록에 추가
                addToDismissedTexts(text);
             }
          }
