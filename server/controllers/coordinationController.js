@@ -6,11 +6,14 @@ const { findOptimalSlots } = require('../services/schedulingAnalysisService');
 const schedulingAlgorithm = require('../services/schedulingAlgorithm');
 const { OWNER_COLOR, getAvailableColor } = require('../utils/colorUtils');
 
+const dayMap = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' };
+
 // @desc    Create a new coordination room
 // @route   POST /api/coordination/rooms
 // @access  Private
 exports.createRoom = async (req, res) => {
   try {
+    console.log('Backend createRoom: roomData received:', req.body);
     const { name, description, maxMembers, settings } = req.body;
 
     if (!name || name.trim().length === 0) {
@@ -35,13 +38,32 @@ exports.createRoom = async (req, res) => {
       settings: settings || {}
     });
 
+    // roomExceptions가 존재하면 유효성 검사 및 추가
+    if (settings && settings.roomExceptions && Array.isArray(settings.roomExceptions)) {
+      settings.roomExceptions.forEach(ex => {
+        // 기본적인 유효성 검사 (스키마에 정의된 enum, required 등)
+        if (!ex.type || !ex.name || !ex.startTime || !ex.endTime) {
+          throw new Error('유효하지 않은 roomException 필드입니다.');
+        }
+        if (ex.type === 'daily_recurring' && (ex.dayOfWeek === undefined || ex.dayOfWeek === null)) {
+          throw new Error('daily_recurring 예외는 dayOfWeek가 필요합니다.');
+        }
+        if (ex.type === 'date_specific' && (!ex.startDate || !ex.endDate)) {
+          throw new Error('date_specific 예외는 startDate와 endDate가 필요합니다.');
+        }
+      });
+      room.settings.roomExceptions = settings.roomExceptions;
+    }
+
+    console.log('Backend createRoom: new room created (before save):', room);
     await room.save();
     await room.populate('owner', 'firstName lastName email');
     await room.populate('members.user', 'firstName lastName email');
+    console.log('Backend createRoom: room saved and populated (before response):', room);
 
     res.status(201).json(room);
   } catch (error) {
-    console.error('Error creating room:', error);
+    console.error('Backend createRoom: error:', error);
     res.status(500).json({ msg: 'Server error' });
   }
 };
@@ -861,9 +883,14 @@ exports.findCommonSlots = async (req, res) => {
 exports.runAutoSchedule = async (req, res) => {
   try {
     const { roomId } = req.params;
-    const { minHoursPerWeek, numWeeks = 4, currentWeek } = req.body;
+    const { minHoursPerWeek = 3, numWeeks = 4, currentWeek } = req.body;
+    console.log('자동 배정 요청 - 받은 옵션:', { minHoursPerWeek, numWeeks, currentWeek });
+    const startDate = currentWeek ? new Date(currentWeek) : new Date(); // Define startDate here
 
-    const room = await Room.findById(roomId).populate('owner', 'defaultSchedule').populate('members.user', 'defaultSchedule');
+    const room = await Room.findById(roomId)
+      .populate('owner', 'defaultSchedule scheduleExceptions') // Populate owner's defaultSchedule and exceptions
+      .populate('members.user', 'defaultSchedule scheduleExceptions'); // Populate members' defaultSchedule and exceptions
+
     if (!room) {
       return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
     }
@@ -883,24 +910,143 @@ exports.runAutoSchedule = async (req, res) => {
     // Filter out the owner from the members list before passing to the algorithm
     const membersOnly = room.members.filter(member => member.user._id.toString() !== room.owner._id.toString());
 
-    // 2. Pass roomTimeSlots to the algorithm
-    const result = schedulingAlgorithm.runAutoSchedule(membersOnly, room.owner, room.timeSlots, { minHoursPerWeek, numWeeks, currentWeek }, deferredAssignments);
+    let allMemberAvailabilitySlots = [];
 
-    // Clear existing assignments and apply new ones
-    room.timeSlots = []; 
-    Object.values(result.assignments).forEach(assignment => {
-      room.timeSlots.push(...assignment.slots);
+    // Helper function to process default schedule and exceptions
+    const processUserAvailability = (userObj, userId, startDate, numWeeks) => { // Added startDate, numWeeks
+        if (!userObj || !userObj.defaultSchedule) return;
+
+        // Iterate through the scheduling period (numWeeks) to create concrete dates for each default schedule entry
+        for (let w = 0; w < numWeeks; w++) {
+            const weekStartDate = new Date(startDate);
+            weekStartDate.setDate(startDate.getDate() + (w * 7)); // Start of the current week in the scheduling period
+
+            userObj.defaultSchedule.forEach(ds => {
+                const dayOfWeek = ds.dayOfWeek; // 0=Sun, 1=Mon, ..., 6=Sat
+
+                // Find the specific date for this dayOfWeek within the current week
+                const targetDate = new Date(weekStartDate);
+                targetDate.setDate(weekStartDate.getDate() + (dayOfWeek - weekStartDate.getDay() + 7) % 7); // Adjust to the correct day of week
+
+                allMemberAvailabilitySlots.push({
+                    user: userId,
+                    date: targetDate, // <--- Now includes a concrete Date object
+                    day: dayMap[dayOfWeek], // Still include day string for potential other uses
+                    startTime: ds.startTime,
+                    endTime: ds.endTime,
+                    status: 'confirmed',
+                    priority: ds.priority || 2
+                });
+            });
+        }
+    };
+
+    // Process owner's default schedule
+    if (room.owner) {
+        processUserAvailability(room.owner, room.owner._id, startDate, numWeeks); // Pass startDate, numWeeks
+    }
+
+    // Process members' default schedules
+    room.members.forEach(member => {
+        if (member.user) {
+            processUserAvailability(member.user, member.user._id, startDate, numWeeks); // Pass startDate, numWeeks
+        }
     });
 
+    // Filter user-submitted slots for the algorithm input
+    // const userSubmittedTimeSlots = room.timeSlots.filter(slot => slot.status === 'confirmed'); // Old line, now replaced by allMemberAvailabilitySlots
+
+    // 2. Pass combined availability to the algorithm
+    // Helper function to apply room-level exceptions to availability slots
+    const applyRoomExceptions = (slots, roomExceptions) => {
+      if (!roomExceptions || roomExceptions.length === 0) return slots;
+
+      let filteredSlots = [...slots];
+
+      roomExceptions.forEach(exception => {
+        filteredSlots = filteredSlots.flatMap(slot => {
+          if (exception.type === 'daily_recurring') {
+            // Check if the slot's dayOfWeek matches the exception's dayOfWeek
+            const slotDayOfWeek = slot.date.getDay(); // 0 for Sunday, 1 for Monday, etc.
+            if (slotDayOfWeek === exception.dayOfWeek) {
+              // Convert slot and exception times to comparable format
+              const slotStart = new Date(slot.date);
+              slotStart.setHours(parseInt(slot.startTime.split(':')[0]), parseInt(slot.startTime.split(':')[1]), 0, 0);
+              const slotEnd = new Date(slot.date);
+              slotEnd.setHours(parseInt(slot.endTime.split(':')[0]), parseInt(slot.endTime.split(':')[1]), 0, 0);
+
+              const exceptionStart = new Date(slot.date);
+              exceptionStart.setHours(parseInt(exception.startTime.split(':')[0]), parseInt(exception.startTime.split(':')[1]), 0, 0);
+              const exceptionEnd = new Date(slot.date);
+              exceptionEnd.setHours(parseInt(exception.endTime.split(':')[0]), parseInt(exception.endTime.split(':')[1]), 0, 0);
+
+              // Apply exception logic (similar to scheduleExceptions)
+              if (exceptionStart <= slotStart && exceptionEnd >= slotEnd) return [];
+              if (exceptionStart > slotStart && exceptionEnd < slotEnd) return [{ ...slot, end: exceptionStart }, { ...slot, start: exceptionEnd }];
+              if (exceptionStart <= slotStart && exceptionEnd > slotStart) return [{ ...slot, start: exceptionEnd }];
+              if (exceptionStart < slotEnd && exceptionEnd >= slotEnd) return [{ ...slot, end: exceptionStart }];
+            }
+          } else if (exception.type === 'date_specific') {
+            const excStart = new Date(exception.startDate);
+            const excEnd = new Date(exception.endDate);
+
+            // Convert slot times to Date objects for comparison
+            const slotStart = new Date(slot.date);
+            slotStart.setHours(parseInt(slot.startTime.split(':')[0]), parseInt(slot.startTime.split(':')[1]), 0, 0);
+            const slotEnd = new Date(slot.date);
+            slotEnd.setHours(parseInt(slot.endTime.split(':')[0]), parseInt(slot.endTime.split(':')[1]), 0, 0);
+
+            // Apply exception logic
+            if (excStart <= slotStart && excEnd >= slotEnd) return [];
+            if (excStart > slotStart && excEnd < slotEnd) return [{ ...slot, end: excStart }, { ...slot, start: excEnd }];
+            if (excStart <= slotStart && excEnd > slotStart) return [{ ...slot, start: excEnd }];
+            if (excStart < slotEnd && excEnd >= slotEnd) return [{ ...slot, end: excStart }];
+          }
+          return [slot];
+        });
+      });
+      return filteredSlots;
+    };
+
+    // Apply room-level exceptions
+    const roomExceptions = room.settings?.roomExceptions || [];
+    let finalAvailabilitySlots = applyRoomExceptions(allMemberAvailabilitySlots, roomExceptions);
+
+    console.log('runAutoSchedule: allMemberAvailabilitySlots (input to algorithm):', finalAvailabilitySlots.length, finalAvailabilitySlots);
+    console.log('runAutoSchedule: deferredAssignments (input to algorithm):', deferredAssignments);
+    const result = schedulingAlgorithm.runAutoSchedule(membersOnly, room.owner, finalAvailabilitySlots, { minHoursPerWeek, numWeeks, currentWeek }, deferredAssignments);
+    console.log('runAutoSchedule: result from algorithm:', result);
+    console.log('runAutoSchedule: result.assignments from algorithm:', result.assignments);
+    console.log('runAutoSchedule: result.unassignedMembersInfo from algorithm:', result.unassignedMembersInfo);
+
+    // Clear existing auto-assigned slots and apply new ones
+    // Keep only user-submitted slots (not auto-assigned ones)
+    const originalSlotsCount = room.timeSlots.length;
+    room.timeSlots = room.timeSlots.filter(slot => 
+      slot.status === 'confirmed' && slot.subject !== '자동 배정'
+    );
+    console.log(`자동 배정 초기화: ${originalSlotsCount}개 슬롯에서 ${room.timeSlots.length}개 슬롯으로 필터링됨`);
+    
+    Object.values(result.assignments).forEach(assignment => {
+      room.timeSlots.push(...assignment.slots); // Add new auto-assigned slots
+    });
+    console.log('runAutoSchedule: room.timeSlots after algorithm and before save:', room.timeSlots.length, room.timeSlots);
+
     // 3. Create a new members array with updated carryOver values
+    console.log('이월 시간 계산 시작:', result.unassignedMembersInfo);
     const updatedMembers = room.members.map(member => {
-      const unassignedInfo = result.unassignedMembersInfo.find(info => info.memberId === member.user._id.toString());
+      const memberId = member.user._id.toString();
+      const unassignedInfo = result.unassignedMembersInfo.find(info => info.memberId === memberId);
+      const carryOverHours = unassignedInfo ? Math.max(0, unassignedInfo.neededHours) : 0;
+      console.log(`Member ${memberId} - 이월시간: ${carryOverHours}시간, 기존 이월: ${member.carryOver || 0}시간`);
       return {
         ...member.toObject(), // Convert subdocument to plain object to avoid issues
-        carryOver: unassignedInfo ? unassignedInfo.neededHours : 0,
+        carryOver: carryOverHours,
       };
     });
 
+    // Mark members as modified to ensure Mongoose saves the changes
+    room.markModified('members');
     room.members = updatedMembers; // Replace the entire array to ensure Mongoose detects the change
 
     // 5. Save the updated room
@@ -915,6 +1061,7 @@ exports.runAutoSchedule = async (req, res) => {
         room: freshRoom, // Send the fresh copy
         unassignedMembersInfo: result.unassignedMembersInfo
     });
+    console.log('runAutoSchedule: freshRoom.timeSlots sent in response:', freshRoom.timeSlots.length, freshRoom.timeSlots);
 
   } catch (error) {
     console.error('Error running auto-schedule:', error);

@@ -7,12 +7,16 @@ const TimeSlot = ({
   ownerInfo, 
   isSelected, 
   blockedInfo, 
-  isBlocked, 
+  roomExceptionInfo, // New prop
+  isBlocked, // This prop will now be derived from blockedInfo OR roomExceptionInfo
   isRoomOwner, 
   currentUser, 
   onSlotClick 
 }) => {
+  const isEffectivelyBlocked = isBlocked || !!roomExceptionInfo; // Combine existing blocked with new room exceptions
+
   const handleClick = () => {
+    if (isEffectivelyBlocked) return; // Prevent clicks on blocked/exception slots
     onSlotClick(date, time); // Pass date object
   };
 
@@ -20,19 +24,21 @@ const TimeSlot = ({
     <div
       key={`${date.toISOString().split('T')[0]}-${time}`}
       className={`col-span-1 border-l border-gray-200 h-10 flex items-center justify-center
-        ${isBlocked ? 'bg-gray-300 cursor-not-allowed' : ''}
+        ${isEffectivelyBlocked ? 'bg-gray-300 cursor-not-allowed' : ''} // Use isEffectivelyBlocked for styling
         ${isRoomOwner ? 'cursor-not-allowed opacity-60' : ''}
-        ${!isBlocked && !ownerInfo && isSelected && !isRoomOwner ? 'bg-blue-200 border-2 border-blue-400' : ''}
-        ${!isBlocked && !ownerInfo && !isSelected && currentUser && !isRoomOwner ? 'hover:bg-blue-50 cursor-pointer' : ''}
-        ${!isBlocked && ownerInfo && currentUser && !isRoomOwner ? 'cursor-pointer hover:opacity-80' : ''}
-        ${!isBlocked && !ownerInfo && !isSelected && !isRoomOwner ? '' : ''}
+        ${!isEffectivelyBlocked && !ownerInfo && isSelected && !isRoomOwner ? 'bg-blue-200 border-2 border-blue-400' : ''}
+        ${!isEffectivelyBlocked && !ownerInfo && !isSelected && currentUser && !isRoomOwner ? 'hover:bg-blue-50 cursor-pointer' : ''}
+        ${!isEffectivelyBlocked && ownerInfo && currentUser && !isRoomOwner ? 'cursor-pointer hover:opacity-80' : ''}
+        ${!isEffectivelyBlocked && !ownerInfo && !isSelected && !isRoomOwner ? '' : ''}
       `}
-      style={!isBlocked && ownerInfo ? { backgroundColor: `${ownerInfo.color}20`, borderColor: ownerInfo.color } : {}}
+      style={!isEffectivelyBlocked && ownerInfo ? { backgroundColor: `${ownerInfo.color}20`, borderColor: ownerInfo.color } : 
+             isEffectivelyBlocked && roomExceptionInfo ? { backgroundColor: '#FEEBC8', borderColor: '#F6AD55' } : {} // Light orange for room exceptions
+            }
       onClick={handleClick}
     >
-      {isBlocked ? (
-        <span className="text-xs text-gray-600 font-medium" title={`${blockedInfo.startTime} - ${blockedInfo.endTime}`}>
-          {blockedInfo.name}
+      {isEffectivelyBlocked ? (
+        <span className="text-xs text-gray-600 font-medium" title={roomExceptionInfo ? roomExceptionInfo.name : blockedInfo.name}>
+          {roomExceptionInfo ? roomExceptionInfo.name : blockedInfo.name}
         </span>
       ) : (
         <>

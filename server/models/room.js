@@ -127,7 +127,7 @@ const RoomSchema = new mongoose.Schema({
       min: 1,
       max: 24
     },
-    blockedTimes: [{
+    blockedTimes: [{ // For daily recurring blocked times (e.g., lunch break)
       name: {
         type: String,
         required: true
@@ -140,6 +140,17 @@ const RoomSchema = new mongoose.Schema({
         type: String,
         required: true
       }
+    }],
+    roomExceptions: [{ // New field for owner-synced or other specific exceptions
+      type: { type: String, enum: ['daily_recurring', 'date_specific'], required: true },
+      name: { type: String, required: true },
+      // For daily_recurring (from defaultSchedule)
+      dayOfWeek: { type: Number, min: 0, max: 6 }, // 0: Sunday, ..., 6: Saturday
+      startTime: { type: String, required: true }, // HH:MM
+      endTime: { type: String, required: true },   // HH:MM
+      // For date_specific (from scheduleExceptions)
+      startDate: { type: Date },
+      endDate: { type: Date }
     }],
     // Legacy support - keep lunchBreak for backward compatibility
     lunchBreak: {

@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import CustomAlertModal from './CustomAlertModal';
 
-const RoomCreationModal = ({ onClose, onCreateRoom }) => {
+const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [maxMembers, setMaxMembers] = useState(10);
   const [settings, setSettings] = useState({
     startHour: 9,
     endHour: 18,
-    blockedTimes: [] // 금지 시간대 배열
+    blockedTimes: [], // 금지 시간대 배열
+    roomExceptions: [] // 새로운 roomExceptions 배열
   });
   
   const [newBlockedTime, setNewBlockedTime] = useState({
@@ -18,10 +19,62 @@ const RoomCreationModal = ({ onClose, onCreateRoom }) => {
     endTime: '13:00'
   });
 
+  const [syncOwnerSchedule, setSyncOwnerSchedule] = useState(false); // 방장 시간표 연동 상태
+
   // CustomAlert 상태
   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
   const showAlert = (message) => setCustomAlert({ show: true, message });
   const closeAlert = () => setCustomAlert({ show: false, message: '' });
+
+  // 요일 매핑 (0: 일, 1: 월, ..., 6: 토)
+  const dayOfWeekMap = {
+    0: '일요일', 1: '월요일', 2: '화요일', 3: '수요일', 4: '목요일', 5: '금요일', 6: '토요일'
+  };
+
+  // 방장 시간표 연동 토글 핸들러
+  const handleSyncOwnerSchedule = () => {
+    setSyncOwnerSchedule(prev => !prev);
+  };
+
+  useEffect(() => {
+    if (syncOwnerSchedule && ownerProfileSchedule) {
+      const syncedExceptions = [];
+
+      // defaultSchedule을 roomExceptions으로 변환
+      ownerProfileSchedule.defaultSchedule.forEach(schedule => {
+        syncedExceptions.push({
+          type: 'daily_recurring',
+          name: `${dayOfWeekMap[schedule.dayOfWeek]} ${schedule.startTime}-${schedule.endTime} (방장 시간표)`,
+          dayOfWeek: schedule.dayOfWeek,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          isSynced: true // 연동된 예외임을 표시
+        });
+      });
+
+      // scheduleExceptions을 roomExceptions으로 변환
+      ownerProfileSchedule.scheduleExceptions.forEach(exception => {
+        syncedExceptions.push({
+          type: 'date_specific',
+          name: `${exception.title} (${new Date(exception.startTime).toLocaleDateString()}) (방장 시간표)`,
+          startDate: exception.startTime,
+          endDate: exception.endTime,
+          isSynced: true // 연동된 예외임을 표시
+        });
+      });
+
+      setSettings(prevSettings => ({
+        ...prevSettings,
+        roomExceptions: [...prevSettings.roomExceptions.filter(ex => !ex.isSynced), ...syncedExceptions]
+      }));
+    } else if (!syncOwnerSchedule) {
+      // 연동 해제 시, 연동된 예외만 제거
+      setSettings(prevSettings => ({
+        ...prevSettings,
+        roomExceptions: prevSettings.roomExceptions.filter(ex => !ex.isSynced)
+      }));
+    }
+  }, [syncOwnerSchedule, ownerProfileSchedule]); // ownerProfileSchedule이 변경될 때도 재실행
 
   const handleSubmit = () => {
     if (name.trim() === '') {
@@ -32,7 +85,11 @@ const RoomCreationModal = ({ onClose, onCreateRoom }) => {
       name: name.trim(), 
       description: description.trim(),
       maxMembers, 
-      settings 
+      settings: {
+        ...settings,
+        // 빈 roomExceptions 배열은 보내지 않도록 필터링
+        roomExceptions: settings.roomExceptions.length > 0 ? settings.roomExceptions : undefined
+      }
     });
   };
 
@@ -202,6 +259,57 @@ const RoomCreationModal = ({ onClose, onCreateRoom }) => {
                 </button>
               </div>
             </div>
+            
+            {/* 방장 시간표 연동 및 roomExceptions 표시 */}
+            {ownerProfileSchedule && (
+              <div className="mt-4 border-t pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-medium text-gray-700">방장 시간표 연동</h4>
+                  <button
+                    type="button"
+                    onClick={handleSyncOwnerSchedule}
+                    className={`px-3 py-1 text-xs rounded-md ${
+                      syncOwnerSchedule ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
+                    } text-white`}
+                  >
+                    {syncOwnerSchedule ? '연동 해제' : '현재 내 시간표 연동하기'}
+                  </button>
+                </div>
+                {settings.roomExceptions.length > 0 && (
+                  <div className="mb-3 space-y-2">
+                    {settings.roomExceptions.map((exception, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 bg-yellow-50 rounded border border-yellow-200">
+                        <div className="flex-1">
+                          <span className="text-sm font-medium text-yellow-700">{exception.name}</span>
+                          {exception.type === 'daily_recurring' && (
+                            <span className="text-xs text-yellow-600 ml-2">
+                              ({dayOfWeekMap[exception.dayOfWeek]}) {exception.startTime} ~ {exception.endTime}
+                            </span>
+                          )}
+                          {exception.type === 'date_specific' && (
+                            <span className="text-xs text-yellow-600 ml-2">
+                              ({new Date(exception.startDate).toLocaleDateString()} ~ {new Date(exception.endDate).toLocaleDateString()})
+                            </span>
+                          )}
+                        </div>
+                        {!exception.isSynced && ( // 연동된 예외는 삭제 버튼 없음
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updatedExceptions = settings.roomExceptions.filter((_, i) => i !== index);
+                              setSettings({...settings, roomExceptions: updatedExceptions});
+                            }}
+                            className="text-red-500 hover:text-red-700 text-sm px-2"
+                          >
+                            삭제
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
         

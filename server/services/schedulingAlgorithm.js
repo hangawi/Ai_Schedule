@@ -2,6 +2,8 @@ class SchedulingAlgorithm {
 
   runAutoSchedule(members, owner, roomTimeSlots, options, deferredAssignments = []) {
     const { minHoursPerWeek = 3, numWeeks = 2, currentWeek } = options;
+    // Convert hours to 30-minute slots (1 hour = 2 slots)
+    const minSlotsPerWeek = minHoursPerWeek * 2;
     const startDate = currentWeek ? new Date(currentWeek) : new Date();
     
     const timetable = this._createTimetable(roomTimeSlots, startDate, numWeeks);
@@ -12,29 +14,33 @@ class SchedulingAlgorithm {
     this._assignDeferredAssignments(timetable, assignments, deferredAssignments);
 
     // Phase 1: Assign undisputed high-priority slots
-    this._assignUndisputedSlots(timetable, assignments, 3, minHoursPerWeek);
+    this._assignUndisputedSlots(timetable, assignments, 3, minSlotsPerWeek);
 
     // Phase 2: Iteratively fill remaining hours
     // Since all submitted slots are treated as high priority, we only need to run this once.
-    this._iterativeAssignment(timetable, assignments, 3, minHoursPerWeek);
+    this._iterativeAssignment(timetable, assignments, 3, minSlotsPerWeek);
 
     // Phase 2.5: Explicit Conflict Resolution by Owner Taking Slot
-    this._resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, minHoursPerWeek);
+    this._resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, minSlotsPerWeek);
 
     // Phase 3: Conflict Resolution using Owner's Schedule
-    this._resolveConflictsWithOwner(timetable, assignments, owner, minHoursPerWeek);
+    this._resolveConflictsWithOwner(timetable, assignments, owner, minSlotsPerWeek);
 
     // Phase 4: Carry-over assignments (prioritize unassigned members in future weeks)
-    this._carryOverAssignments(timetable, assignments, minHoursPerWeek);
+    this._carryOverAssignments(timetable, assignments, minSlotsPerWeek);
 
     // Identify unassigned members (for future carry-over)
     const unassignedMembersInfo = Object.keys(assignments)
-      .filter(id => assignments[id].assignedHours < minHoursPerWeek)
-      .map(id => ({
-        memberId: id,
-        neededHours: minHoursPerWeek - assignments[id].assignedHours,
-        assignedSlots: assignments[id].slots,
-      }));
+      .filter(id => assignments[id].assignedHours < minSlotsPerWeek)
+      .map(id => {
+        const neededHours = (minSlotsPerWeek - assignments[id].assignedHours) / 2; // Convert back to hours
+        console.log(`알고리즘: 멤버 ${id} - 할당된 슬롯: ${assignments[id].assignedHours}, 필요한 슬롯: ${minSlotsPerWeek}, 이월 시간: ${neededHours}시간`);
+        return {
+          memberId: id,
+          neededHours: neededHours,
+          assignedSlots: assignments[id].slots,
+        };
+      });
 
     // Identify unresolvable conflicts
     const unresolvableConflicts = [];
@@ -96,15 +102,29 @@ class SchedulingAlgorithm {
     }
 
     // Populate availability from the user-submitted roomTimeSlots
+    console.log('schedulingAlgorithm._createTimetable: Processing roomTimeSlots:', roomTimeSlots.length);
     roomTimeSlots.forEach(slot => {
+      console.log('schedulingAlgorithm._createTimetable: Processing slot:', slot);
       const date = new Date(slot.date);
       const dateKey = date.toISOString().split('T')[0];
       const key = `${dateKey}-${slot.startTime}`;
 
       if (timetable[key]) {
-        const userId = slot.user.toString();
-        // Assume all submitted slots are high priority
+        let userId;
+        if (slot.user && slot.user._id) {
+          userId = slot.user._id.toString();
+        } else if (slot.user) {
+          userId = slot.user.toString();
+        } else {
+          console.warn('Invalid slot user:', slot);
+          return;
+        }
+        
+        // Mark all submitted slots as high priority
         timetable[key].available.push({ memberId: userId, priority: 3, isOwner: false });
+        console.log(`Added availability for user ${userId} at ${key}`);
+      } else {
+        console.warn(`Timetable slot not found for key: ${key}`);
       }
     });
 
@@ -122,7 +142,9 @@ class SchedulingAlgorithm {
   _assignDeferredAssignments(timetable, assignments, deferredAssignments) {
     for (const deferred of deferredAssignments) {
       const { memberId, neededHours } = deferred;
-      let hoursAssigned = 0;
+      // Convert hours to slots (1 hour = 2 slots)
+      const neededSlots = neededHours * 2;
+      let slotsAssigned = 0;
 
       const availableSlotsForMember = Object.keys(timetable)
         .filter(key => {
@@ -136,14 +158,14 @@ class SchedulingAlgorithm {
         });
 
       for (const key of availableSlotsForMember) {
-        if (hoursAssigned >= neededHours) break;
+        if (slotsAssigned >= neededSlots) break;
         this._assignSlot(timetable, assignments, key, memberId);
-        hoursAssigned += 0.5;
+        slotsAssigned += 1;
       }
     }
   }
 
-  _assignUndisputedSlots(timetable, assignments, priority, minHoursPerWeek) {
+  _assignUndisputedSlots(timetable, assignments, priority, minSlotsPerWeek) {
     for (const key in timetable) {
       const slot = timetable[key];
       if (slot.assignedTo) continue;
@@ -152,28 +174,41 @@ class SchedulingAlgorithm {
       
       if (highPriorityAvailable.length === 1) {
         const memberToAssign = highPriorityAvailable[0].memberId;
-        if (assignments[memberToAssign].assignedHours < minHoursPerWeek) {
+        if (assignments[memberToAssign].assignedHours < minSlotsPerWeek) {
           this._assignSlot(timetable, assignments, key, memberToAssign);
         }
       }
     }
   }
 
-  _iterativeAssignment(timetable, assignments, priority, minHoursPerWeek) {
-    const membersToAssign = Object.keys(assignments).filter(id => assignments[id].assignedHours < minHoursPerWeek);
+  _iterativeAssignment(timetable, assignments, priority, minSlotsPerWeek) {
+    let changed = true;
+    // Loop as long as we are successfully assigning slots
+    while (changed) {
+      changed = false;
+      
+      // Find all members who still need hours assigned
+      const membersToAssign = Object.keys(assignments)
+        .filter(id => assignments[id].assignedHours < minSlotsPerWeek)
+        // Prioritize members with the fewest hours assigned so far
+        .sort((a, b) => assignments[a].assignedHours - assignments[b].assignedHours);
 
-    for (const memberId of membersToAssign) {
-        // Try to fill this member's hours before moving to the next member
-        while (assignments[memberId].assignedHours < minHoursPerWeek) {
-            const bestSlotResult = this._findBestSlotForMember(timetable, assignments, memberId, priority);
+      if (membersToAssign.length === 0) {
+        break; // All members have their minimum hours
+      }
 
-            if (bestSlotResult && bestSlotResult.bestSlot) {
-                this._assignSlot(timetable, assignments, bestSlotResult.bestSlot.key, memberId);
-            } else {
-                // No more slots can be found for this member at this priority.
-                break;
-            }
+      // Iterate through the needy members and try to assign ONE slot to the most needy one
+      for (const memberId of membersToAssign) {
+        const bestSlotResult = this._findBestSlotForMember(timetable, assignments, memberId, priority);
+
+        if (bestSlotResult && bestSlotResult.bestSlot) {
+          this._assignSlot(timetable, assignments, bestSlotResult.bestSlot.key, memberId);
+          changed = true;
+          // After assigning one slot, break from the for-loop and restart the while-loop
+          // This re-evaluates who is the most "needy" member for the next assignment
+          break; 
         }
+      }
     }
   }
 
@@ -203,20 +238,46 @@ class SchedulingAlgorithm {
     let bestSlot = null;
     let bestScore = -1;
 
+    // 사용자의 이미 할당된 슬롯들에서 평균 시간대 계산
+    const memberSlots = assignments[memberId].slots;
+    let avgTime = 12; // 기본값 12시 (정오)
+    
+    if (memberSlots.length > 0) {
+      const times = memberSlots.map(slot => {
+        const [h, m] = slot.startTime.split(':').map(Number);
+        return h + (m / 60);
+      });
+      avgTime = times.reduce((sum, time) => sum + time, 0) / times.length;
+    }
+
     for (const key in timetable) {
         const slot = timetable[key];
         if (slot.assignedTo) continue;
 
-        const memberAvailability = slot.available.find(a => a.memberId === memberId && a.priority === priority && !a.isOwner);
+        const memberAvailability = slot.available.find(a => a.memberId === memberId && a.priority >= priority && !a.isOwner);
         if (memberAvailability) {
             const contenders = slot.available.filter(a => !a.isOwner).length;
             
+            // 기본 점수: 경쟁자 수에 따라 감점
             let score = 1000 - (contenders * 10);
 
+            // 선호도 보너스: 높은 priority일수록 보너스 점수
+            score += (memberAvailability.priority - priority) * 50;
+
+            // 연속성 보너스: 이전 슬롯이 같은 멤버에게 할당된 경우
             const prevKey = this._getPreviousSlotKey(key);
             if (prevKey && timetable[prevKey] && timetable[prevKey].assignedTo === memberId) {
-                score += 100;
+                score += 200;
             }
+
+            // 시간대 근접성 보너스: 평균 시간에 가까울수록 높은 점수
+            const [h, m] = key.split('-')[1].split(':').map(Number);
+            const slotTime = h + (m / 60);
+            const timeDiff = Math.abs(slotTime - avgTime);
+            const proximityBonus = Math.max(0, 100 - (timeDiff * 20)); // 시간당 20점 감점
+            score += proximityBonus;
+
+            console.log(`Score for ${memberId} at ${key}: base=${1000-(contenders*10)}, priority=${(memberAvailability.priority-priority)*50}, proximity=${proximityBonus}, total=${score}`);
 
             if (score > bestScore) {
                 bestScore = score;
@@ -252,8 +313,8 @@ class SchedulingAlgorithm {
     }
 
     timetable[key].assignedTo = memberId;
-    assignments[memberId].assignedHours += 0.5;
-    console.log("SchedulingAlgorithm:_assignSlot - Pushing slot with startTime:", startTimeRaw, "and endTime:", endTime);
+    assignments[memberId].assignedHours += 1; // This represents one 30-minute slot
+    console.log("SchedulingAlgorithm:_assignSlot - Pushing slot with startTime:", startTimeRaw, "and endTime:", endTime, "and date:", slotDate);
     assignments[memberId].slots.push({
         date: slotDate,
         day: dayString,
@@ -265,12 +326,12 @@ class SchedulingAlgorithm {
     });
   }
 
-  _resolveConflictsWithOwner(timetable, assignments, owner, minHoursPerWeek) {
+  _resolveConflictsWithOwner(timetable, assignments, owner, minSlotsPerWeek) {
     let changed = true;
     while (changed) {
       changed = false;
       const membersNeedingHours = Object.keys(assignments).filter(id => 
-        id !== owner._id.toString() && assignments[id].assignedHours < minHoursPerWeek
+        id !== owner._id.toString() && assignments[id].assignedHours < minSlotsPerWeek
       );
 
       for (const memberId of membersNeedingHours) {
@@ -292,7 +353,7 @@ class SchedulingAlgorithm {
     }
   }
 
-  _resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, minHoursPerWeek) {
+  _resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, minSlotsPerWeek) {
     const ownerId = owner._id.toString();
     for (const key in timetable) {
       const slot = timetable[key];
@@ -309,11 +370,11 @@ class SchedulingAlgorithm {
     }
   }
 
-  _carryOverAssignments(timetable, assignments, minHoursPerWeek) {
-    const membersNeedingHours = Object.keys(assignments).filter(id => assignments[id].assignedHours < minHoursPerWeek);
+  _carryOverAssignments(timetable, assignments, minSlotsPerWeek) {
+    const membersNeedingHours = Object.keys(assignments).filter(id => assignments[id].assignedHours < minSlotsPerWeek);
 
     for (const memberId of membersNeedingHours) {
-      let needed = minHoursPerWeek - assignments[memberId].assignedHours;
+      let needed = minSlotsPerWeek - assignments[memberId].assignedHours;
       
       const availableSlotsForMember = Object.keys(timetable)
         .filter(key => {
@@ -329,7 +390,7 @@ class SchedulingAlgorithm {
       for (const key of availableSlotsForMember) {
         if (needed <= 0) break;
         this._assignSlot(timetable, assignments, key, memberId);
-        needed -= 0.5;
+        needed -= 1;
       }
     }
   }
