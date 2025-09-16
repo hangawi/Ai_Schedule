@@ -6,11 +6,15 @@ const auth = require('../middleware/auth');
 // Room management
 router.post('/rooms', auth, coordinationController.createRoom);
 router.get('/rooms/exchange-counts', auth, coordinationController.getRoomExchangeCounts); // 이거를 먼저 배치
+router.get('/my-rooms', auth, coordinationController.getMyRooms);
+
+// Carryover management (moved before dynamic room routes)
+router.post('/reset-carryover/:roomId', auth, coordinationController.resetCarryOverTimes);
+
 router.put('/rooms/:roomId', auth, coordinationController.updateRoom);
 router.delete('/rooms/:roomId', auth, coordinationController.deleteRoom);
 router.post('/rooms/:inviteCode/join', auth, coordinationController.joinRoom);
 router.get('/rooms/:roomId', auth, coordinationController.getRoomDetails);
-router.get('/my-rooms', auth, coordinationController.getMyRooms);
 
 // TimeSlot management
 router.post('/rooms/:roomId/slots', auth, coordinationController.submitTimeSlots);
