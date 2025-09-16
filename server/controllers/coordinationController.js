@@ -248,10 +248,14 @@ exports.getRoomDetails = async (req, res) => {
     await room.save();
     
     // Populate all necessary fields
-    await room.populate('owner', 'firstName lastName email');
-    await room.populate('members.user', 'firstName lastName email');
-    await room.populate('timeSlots.user', 'firstName lastName email');
-    await room.populate('requests.requester', '_id firstName lastName email');
+    await room.populate('owner', 'firstName lastName email name');
+    await room.populate('members.user', 'firstName lastName email name');
+    await room.populate('timeSlots.user', 'firstName lastName email name');
+    await room.populate('requests.requester', '_id firstName lastName email name');
+
+    // Also populate negotiations
+    await room.populate('negotiations.conflictingMembers.user', 'firstName lastName email name');
+    await room.populate('negotiations.messages.from', 'firstName lastName email name');
 
     res.json(room);
   } catch (error) {
@@ -1072,15 +1076,68 @@ exports.runAutoSchedule = async (req, res) => {
     // Clear existing auto-assigned slots and apply new ones
     // Keep only user-submitted slots (not auto-assigned ones) and slots with valid date
     const originalSlotsCount = room.timeSlots.length;
-    room.timeSlots = room.timeSlots.filter(slot =>
-      slot.status === 'confirmed' &&
-      slot.subject !== '자동 배정' &&
-      slot.date // Only keep slots with valid date field
-    );
+
+    // Aggressive cleanup: Remove ALL previous auto-assignments
+    console.log('Before cleanup, total slots:', room.timeSlots.length);
+
+    // First pass: Remove obvious auto-assigned slots
+    room.timeSlots = room.timeSlots.filter(slot => {
+      const isAutoAssigned = slot.subject === '자동 배정' ||
+                            slot.subject?.includes('자동') ||
+                            slot.subject?.includes('배정');
+      return !isAutoAssigned;
+    });
+
+    console.log('After removing auto-assigned slots:', room.timeSlots.length);
+
+    // Second pass: Remove any slots from owner (since owner is excluded from assignment)
+    room.timeSlots = room.timeSlots.filter(slot => {
+      const isFromOwner = slot.user && slot.user.toString() === room.owner._id.toString();
+      return !isFromOwner;
+    });
+
+    console.log('After removing owner slots:', room.timeSlots.length);
+
+    // Third pass: Remove any slots without valid user reference
+    room.timeSlots = room.timeSlots.filter(slot => {
+      const hasValidUser = slot.user !== undefined && slot.user !== null;
+      if (!hasValidUser) {
+        console.log('Removing slot without valid user:', slot);
+      }
+      return hasValidUser;
+    });
+
+    console.log('After removing slots without valid user:', room.timeSlots.length);
+
     console.log(`자동 배정 초기화: ${originalSlotsCount}개 슬롯에서 ${room.timeSlots.length}개 슬롯으로 필터링됨`);
     
+    // Add new auto-assigned slots with proper format
     Object.values(result.assignments).forEach(assignment => {
-      room.timeSlots.push(...assignment.slots); // Add new auto-assigned slots
+      console.log(`Processing assignment:`, assignment);
+
+      if (assignment.slots && assignment.slots.length > 0 && assignment.memberId) {
+        assignment.slots.forEach(slot => {
+          // Validate required fields
+          if (!slot.day || !slot.date || !slot.startTime || !slot.endTime) {
+            console.log('Skipping invalid slot:', slot);
+            return;
+          }
+
+          const newSlot = {
+            day: slot.day,
+            date: slot.date,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            subject: '자동 배정',
+            user: assignment.memberId,
+            status: 'confirmed'
+          };
+          console.log('Adding auto-assigned slot:', newSlot);
+          room.timeSlots.push(newSlot);
+        });
+      } else {
+        console.log('Skipping assignment - no slots or no memberId:', assignment);
+      }
     });
     console.log('runAutoSchedule: room.timeSlots after algorithm and before save:', room.timeSlots.length, room.timeSlots);
 
@@ -1153,11 +1210,16 @@ exports.runAutoSchedule = async (req, res) => {
     
     // After saving, fetch a fresh copy of the room and populate that.
     const freshRoom = await Room.findById(room._id)
-        .populate('timeSlots.user', 'firstName lastName email')
-        .populate('members.user', 'firstName lastName email name');
+        .populate('timeSlots.user', 'firstName lastName email name')
+        .populate('members.user', 'firstName lastName email name')
+        .populate('negotiations.conflictingMembers.user', 'firstName lastName email name')
+        .populate('negotiations.messages.from', 'firstName lastName email name');
 
     // Generate AI-powered conflict resolution suggestions
     let conflictSuggestions = [];
+    console.log('unresolvableConflicts:', result.unresolvableConflicts?.length || 0);
+    console.log('unresolvableConflicts details:', result.unresolvableConflicts);
+
     if (result.unresolvableConflicts && result.unresolvableConflicts.length > 0) {
       conflictSuggestions = await generateConflictSuggestions(result.unresolvableConflicts, result.unassignedMembersInfo, room.members);
 
@@ -1166,7 +1228,11 @@ exports.runAutoSchedule = async (req, res) => {
       const roomForNegotiations = await Room.findById(room._id)
         .populate('members.user', 'firstName lastName email name')
         .populate('owner', 'firstName lastName email name');
+      console.log('Creating negotiations for conflicts...');
       await createNegotiations(roomForNegotiations, result.unresolvableConflicts);
+      console.log('Negotiations created successfully');
+    } else {
+      console.log('No unresolvable conflicts found - no negotiations will be created');
     }
 
     res.json({
@@ -1841,6 +1907,66 @@ exports.respondToNegotiation = async (req, res) => {
     });
   } catch (error) {
     console.error('Error responding to negotiation:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// @desc    Reset all member carryover times
+// @route   POST /api/coordination/reset-carryover/:roomId
+// @access  Private (Owner only)
+exports.resetCarryOverTimes = async (req, res) => {
+  try {
+    console.log('resetCarryOverTimes called with roomId:', req.params.roomId);
+    console.log('User ID:', req.user?.id);
+
+    const { roomId } = req.params;
+
+    const room = await Room.findById(roomId);
+
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    if (!room.isOwner(req.user.id)) {
+      return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
+    }
+
+    let resetCount = 0;
+    console.log('Room members count:', room.members.length);
+
+    // Reset carryover times for all members
+    room.members.forEach((member, index) => {
+      console.log(`Member ${index}: carryOver = ${member.carryOver}`);
+      if (member.carryOver > 0) {
+        console.log(`Resetting carryOver for member ${index} from ${member.carryOver} to 0`);
+        member.carryOver = 0;
+        resetCount++;
+
+        // Add to carryover history for tracking
+        if (!member.carryOverHistory) {
+          member.carryOverHistory = [];
+        }
+        member.carryOverHistory.push({
+          week: new Date(),
+          amount: 0,
+          reason: 'manual_reset',
+          timestamp: new Date()
+        });
+      }
+    });
+
+    console.log('Total members reset:', resetCount);
+
+    await room.save();
+    console.log('Room saved successfully');
+
+    res.json({
+      message: '이월시간이 성공적으로 초기화되었습니다.',
+      resetCount: resetCount
+    });
+
+  } catch (error) {
+    console.error('Error resetting carryover times:', error);
     res.status(500).json({ msg: 'Server error' });
   }
 };

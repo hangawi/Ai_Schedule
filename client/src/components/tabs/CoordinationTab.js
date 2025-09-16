@@ -161,6 +161,35 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     }
   }, [currentRoom?._id, fetchRoomDetails, showAlert]);
 
+  // Reset carryover times function
+  const handleResetCarryOverTimes = useCallback(async () => {
+    if (!currentRoom?._id) return;
+
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiUrl}/api/coordination/reset-carryover/${currentRoom._id}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${user?.token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reset carryover times');
+      }
+
+      const result = await response.json();
+      showAlert(`${result.resetCount}명의 멤버 이월시간이 초기화되었습니다.`);
+
+      // Refresh room data
+      await fetchRoomDetails(currentRoom._id);
+    } catch (error) {
+      console.error('Error resetting carryover times:', error);
+      showAlert(`이월시간 초기화 실패: ${error.message}`);
+    }
+  }, [currentRoom?._id, fetchRoomDetails, showAlert, user?.token]);
+
   // Auto-scheduling function (moved after useCoordination)
   const handleRunAutoSchedule = async () => {
     if (!currentRoom || !currentWeekStartDate) return;
@@ -182,7 +211,10 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       setCurrentRoom(updatedRoom);
 
       // Check for active negotiations and show notification
-      const activeNegotiations = updatedRoom.negotiations?.filter(neg => neg.status === 'active') || [];
+      const activeNegotiations = updatedRoom.negotiations?.filter(neg =>
+        neg.status === 'active' && neg.conflictingMembers?.length > 0
+      ) || [];
+
       // Filter negotiations where current user is involved
       const userNegotiations = activeNegotiations.filter(neg =>
         neg.conflictingMembers?.some(cm =>
@@ -525,7 +557,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                               방장
                             </span>
                           )}
-                          {(member.carryOver > 0 || (currentRoom?.negotiations?.filter(neg => neg.status === 'active' && neg.conflictingMembers?.length > 0)?.length > 0)) && (
+                          {!memberIsOwner && (member.carryOver > 0 || (currentRoom?.negotiations?.filter(neg => neg.status === 'active' && neg.conflictingMembers?.length > 0)?.length > 0)) && (
                             <span className={`ml-2 px-2 py-0.5 text-xs rounded-full flex-shrink-0 font-semibold ${
                               member.carryOver > 0
                                 ? 'bg-yellow-100 text-yellow-800'
@@ -534,7 +566,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                               이월: {member.carryOver || 0}시간
                             </span>
                           )}
-                          {member.totalProgressTime > 0 && (
+                          {!memberIsOwner && member.totalProgressTime > 0 && (
                             <span className="ml-2 px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded-full flex-shrink-0 font-semibold">
                               완료: {member.totalProgressTime}시간
                             </span>
@@ -895,22 +927,34 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             </div>
 
             {/* 협의 관리 섹션 */}
-            {currentRoom?.negotiations && currentRoom.negotiations.filter(neg => neg.status === 'active').length > 0 && (
-              <div className="mt-6 pt-4 border-t border-gray-200">
-                <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                  <MessageSquare size={16} className="mr-2 text-orange-600" />
-                  협의 진행중 ({currentRoom.negotiations.filter(neg => neg.status === 'active').length}건)
-                </h4>
-                <div className="space-y-3">
-                  {currentRoom.negotiations
-                    .filter(neg => neg.status === 'active')
-                    .map((negotiation, index) => {
+            {(() => {
+              // Show all active negotiations (simplified filtering)
+              const activeNegotiations = currentRoom?.negotiations?.filter(neg =>
+                neg.status === 'active' &&
+                neg.conflictingMembers?.length > 0
+              ) || [];
+
+              return activeNegotiations.length > 0 && (
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                    <MessageSquare size={16} className="mr-2 text-orange-600" />
+                    협의 진행중 ({activeNegotiations.length}건)
+                  </h4>
+                  <div className="space-y-3">
+                    {activeNegotiations.map((negotiation, index) => {
                       const isUserInvolved = negotiation.conflictingMembers?.some(cm =>
                         (cm.user._id || cm.user) === user?.id
                       );
-                      const memberNames = negotiation.conflictingMembers?.map(cm =>
-                        cm.user?.name || `${cm.user?.firstName || ''} ${cm.user?.lastName || ''}`.trim() || '멤버'
-                      ).join(', ') || '';
+                      const memberNames = negotiation.conflictingMembers?.map(cm => {
+                        // Use name field first, then firstName/lastName combination
+                        if (cm.user?.name) {
+                          return cm.user.name;
+                        } else if (cm.user?.firstName || cm.user?.lastName) {
+                          return `${cm.user.firstName || ''} ${cm.user.lastName || ''}`.trim();
+                        } else {
+                          return '멤버';
+                        }
+                      }).join(', ') || '';
 
                       return (
                         <div key={index} className={`p-3 rounded-lg border ${
@@ -953,9 +997,10 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                         </div>
                       );
                     })}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           <div className="lg:col-span-3">
@@ -967,8 +1012,25 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 isLoading={isScheduling}
                 currentRoom={currentRoom}
                 onAutoResolveNegotiations={handleAutoResolveNegotiations}
+                currentWeekStartDate={currentWeekStartDate}
               />
             }
+
+            {/* 이월시간 초기화 버튼 */}
+            {isOwner && currentRoom?.members?.some(m => m.carryOver > 0) && (
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h4 className="text-sm font-semibold text-blue-800 mb-2">멤버 이월시간 관리</h4>
+                <p className="text-xs text-blue-600 mb-3">
+                  새로운 주가 시작되면서 이월시간을 초기화할 수 있습니다.
+                </p>
+                <button
+                  onClick={handleResetCarryOverTimes}
+                  className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  모든 이월시간 초기화
+                </button>
+              </div>
+            )}
             {scheduleError && 
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4" role="alert">
                 <strong className="font-bold">오류!</strong>
@@ -1296,7 +1358,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
 export default CoordinationTab;
 
-const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom, onAutoResolveNegotiations }) => {
+const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom, onAutoResolveNegotiations, currentWeekStartDate }) => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'ownerFocusTime') {
@@ -1306,11 +1368,9 @@ const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom
     }
   };
 
-  // Get active negotiations count
+  // Get active negotiations count (simplified)
   const activeNegotiationsCount = currentRoom?.negotiations?.filter(neg =>
-    neg.status === 'active' &&
-    neg.conflictingMembers &&
-    neg.conflictingMembers.length > 0
+    neg.status === 'active' && neg.conflictingMembers?.length > 0
   )?.length || 0;
 
   return (

@@ -27,21 +27,35 @@ if (!process.env.JWT_SECRET) {
 
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',')
-  : ['http://localhost:3000', 'http://127.0.0.1:3000'];
+  : [
+    'http://localhost:3000', 'http://127.0.0.1:3000',
+    'http://localhost:3001', 'http://127.0.0.1:3001',
+    'http://localhost:5000', 'http://127.0.0.1:5000'
+  ];
 
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or Postman)
     if (!origin) return callback(null, true);
-    
-    // Security fix: Don't allow wildcard with credentials
-    if (allowedOrigins.includes('*') && process.env.NODE_ENV === 'production') {
-      return callback(new Error('Wildcard CORS with credentials not allowed in production'));
+
+    console.log('CORS origin check:', { origin, allowedOrigins });
+
+    // In development, be more permissive
+    if (process.env.NODE_ENV !== 'production') {
+      // Allow localhost on any port
+      if (origin && origin.includes('localhost')) {
+        return callback(null, true);
+      }
+      // Allow 127.0.0.1 on any port
+      if (origin && origin.includes('127.0.0.1')) {
+        return callback(null, true);
+      }
     }
-    
+
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      console.log('CORS rejected origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },

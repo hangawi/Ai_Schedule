@@ -5,10 +5,13 @@ class SchedulingAlgorithm {
     // Convert hours to 30-minute slots (1 hour = 2 slots)
     const minSlotsPerWeek = minHoursPerWeek * 2;
     const startDate = currentWeek ? new Date(currentWeek) : new Date();
-    
+
     const timetable = this._createTimetable(roomTimeSlots, startDate, numWeeks);
 
-    let assignments = this._initializeMemberAssignments(members);
+    // Exclude owner from auto-assignment
+    const ownerId = owner._id.toString();
+    const nonOwnerMembers = members.filter(m => m.user._id.toString() !== ownerId);
+    let assignments = this._initializeMemberAssignments(nonOwnerMembers);
 
     // Phase 0: Assign Deferred Assignments (0-priority)
     this._assignDeferredAssignments(timetable, assignments, deferredAssignments);
@@ -18,7 +21,7 @@ class SchedulingAlgorithm {
 
     // Phase 2: Iteratively fill remaining hours
     // Since all submitted slots are treated as high priority, we only need to run this once.
-    this._iterativeAssignment(timetable, assignments, 3, minSlotsPerWeek);
+    this._iterativeAssignment(timetable, assignments, 3, minSlotsPerWeek, nonOwnerMembers, ownerPreferences);
 
     // Phase 2.5: Explicit Conflict Resolution by Owner Taking Slot (with preferences)
     this._resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, minSlotsPerWeek, ownerPreferences);
@@ -44,7 +47,6 @@ class SchedulingAlgorithm {
 
     // Identify unresolvable conflicts
     const unresolvableConflicts = [];
-    const ownerId = owner._id.toString(); 
     for (const key in timetable) {
       const slot = timetable[key];
       if (!slot.assignedTo) {
@@ -134,7 +136,12 @@ class SchedulingAlgorithm {
   _initializeMemberAssignments(members) {
     const assignments = {};
     members.forEach(m => {
-      assignments[m.user._id.toString()] = { assignedHours: 0, slots: [] };
+      const memberId = m.user._id.toString();
+      assignments[memberId] = {
+        memberId: memberId,
+        assignedHours: 0,
+        slots: []
+      };
     });
     return assignments;
   }
@@ -181,7 +188,7 @@ class SchedulingAlgorithm {
     }
   }
 
-  _iterativeAssignment(timetable, assignments, priority, minSlotsPerWeek) {
+  _iterativeAssignment(timetable, assignments, priority, minSlotsPerWeek, members = [], ownerPreferences = {}) {
     let changed = true;
     // Loop as long as we are successfully assigning slots
     while (changed) {
@@ -199,7 +206,7 @@ class SchedulingAlgorithm {
 
       // Iterate through the needy members and try to assign ONE slot to the most needy one
       for (const memberId of membersToAssign) {
-        const bestSlotResult = this._findBestSlotForMember(timetable, assignments, memberId, priority);
+        const bestSlotResult = this._findBestSlotForMember(timetable, assignments, memberId, priority, members, ownerPreferences);
 
         if (bestSlotResult && bestSlotResult.bestSlot) {
           this._assignSlot(timetable, assignments, bestSlotResult.bestSlot.key, memberId);
@@ -234,17 +241,23 @@ class SchedulingAlgorithm {
     return `${dateKey}-${prevTime}`;
   }
 
-  _findBestSlotForMember(timetable, assignments, memberId, priority) {
+  _findBestSlotForMember(timetable, assignments, memberId, priority, members = [], ownerPreferences = {}) {
     let bestSlot = null;
     let bestScore = -1;
+
+    // Find member's focus time preference from members array
+    const member = members.find(m => m.user._id.toString() === memberId);
+    const focusTimeType = ownerPreferences.focusTimeType || 'none';
 
     // 사용자의 이미 할당된 슬롯들에서 평균 시간대 계산
     const memberSlots = assignments[memberId].slots;
     let avgTime = 12; // 기본값 12시 (정오)
-    
+
     if (memberSlots.length > 0) {
       const times = memberSlots.map(slot => {
-        const [h, m] = slot.startTime.split(':').map(Number);
+        const timeStr = slot.startTime || slot.time; // Use startTime, fallback to time
+        if (!timeStr) return 12; // Default to noon if no time
+        const [h, m] = timeStr.split(':').map(Number);
         return h + (m / 60);
       });
       avgTime = times.reduce((sum, time) => sum + time, 0) / times.length;
@@ -277,7 +290,13 @@ class SchedulingAlgorithm {
             const proximityBonus = Math.max(0, 100 - (timeDiff * 20)); // 시간당 20점 감점
             score += proximityBonus;
 
-            console.log(`Score for ${memberId} at ${key}: base=${1000-(contenders*10)}, priority=${(memberAvailability.priority-priority)*50}, proximity=${proximityBonus}, total=${score}`);
+            // 집중시간 보너스: 설정된 집중시간에 맞는 시간대일 경우 추가 점수
+            const slotTimeString = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+            if (this._isInPreferredTime(slotTimeString, focusTimeType)) {
+              score += 150; // 집중시간 보너스
+            }
+
+            console.log(`Score for ${memberId} at ${key}: base=${1000-(contenders*10)}, priority=${(memberAvailability.priority-priority)*50}, proximity=${proximityBonus}, focus=${this._isInPreferredTime(slotTimeString, focusTimeType) ? 150 : 0}, total=${score}`);
 
             if (score > bestScore) {
                 bestScore = score;
@@ -442,15 +461,15 @@ class SchedulingAlgorithm {
     }
   }
 
-  // Helper function to check if a time slot matches owner preferences
-  _isInOwnerPreferredTime(time, ownerPreferences) {
-    if (!ownerPreferences.focusTimeType || ownerPreferences.focusTimeType === 'none') {
+  // Helper function to check if a time slot matches focus time preferences
+  _isInPreferredTime(time, focusTimeType) {
+    if (!focusTimeType || focusTimeType === 'none') {
       return false; // No preference
     }
 
     const [hour] = time.split(':').map(Number);
 
-    switch (ownerPreferences.focusTimeType) {
+    switch (focusTimeType) {
       case 'morning':
         return hour >= 9 && hour < 12;
       case 'lunch':
@@ -462,6 +481,11 @@ class SchedulingAlgorithm {
       default:
         return false;
     }
+  }
+
+  // Legacy function for backward compatibility
+  _isInOwnerPreferredTime(time, ownerPreferences) {
+    return this._isInPreferredTime(time, ownerPreferences.focusTimeType);
   }
 
   // Helper function to prioritize slots based on owner preferences
