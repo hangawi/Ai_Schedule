@@ -254,10 +254,30 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
             showAlert('로그인이 필요합니다.', 'error', '로그인 필요');
             return;
          }
+
+         // Handle different input formats
+         let date, time, duration;
+
+         if (eventData.startDateTime) {
+            // Format from chat: startDateTime and endDateTime
+            const startDate = new Date(eventData.startDateTime);
+            const endDate = eventData.endDateTime ? new Date(eventData.endDateTime) : new Date(startDate.getTime() + 60 * 60 * 1000);
+
+            date = startDate.toISOString().split('T')[0]; // YYYY-MM-DD
+            time = startDate.toTimeString().substring(0, 5); // HH:MM
+            duration = Math.round((endDate - startDate) / (60 * 1000)); // duration in minutes
+         } else {
+            // Original format: separate date and time
+            date = eventData.date;
+            time = eventData.time;
+            duration = eventData.duration || 60;
+         }
+
          const payload = {
             title: eventData.title,
-            date: eventData.date,
-            time: eventData.time,
+            date: date,
+            time: time,
+            duration: duration,
             color: eventData.color,
             description: eventData.description || '',
             priority: eventData.priority || 3,

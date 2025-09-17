@@ -35,7 +35,8 @@ const TimetableGrid = ({
   calculateEndTime,
   onWeekChange, // New prop to pass current week start date to parent
   initialStartDate, // New prop to set the initial week to display
-  onOpenNegotiation // New prop to handle negotiation modal opening
+  onOpenNegotiation, // New prop to handle negotiation modal opening
+  onCurrentWeekNegotiationsChange // New prop to pass current week negotiations to parent
 }) => {
 
   // CustomAlert 상태
@@ -193,6 +194,38 @@ const TimetableGrid = ({
 
     return negotiation || null;
   }, [roomData?.negotiations]);
+
+  // Helper to get current week's negotiations
+  const getCurrentWeekNegotiations = useCallback(() => {
+    if (!roomData?.negotiations || !weekDates || weekDates.length === 0) return [];
+
+    const currentWeekNegotiations = [];
+
+    weekDates.forEach((dateInfo, dayIndex) => {
+      timeSlotsInDay.forEach(time => {
+        const negotiationInfo = getNegotiationInfo(dateInfo.fullDate, time);
+        if (negotiationInfo) {
+          currentWeekNegotiations.push({
+            ...negotiationInfo,
+            dayIndex,
+            time,
+            date: dateInfo.fullDate,
+            dayDisplay: dateInfo.display
+          });
+        }
+      });
+    });
+
+    return currentWeekNegotiations;
+  }, [roomData?.negotiations, weekDates, getNegotiationInfo]);
+
+  // Notify parent component about current week's negotiations
+  useEffect(() => {
+    if (onCurrentWeekNegotiationsChange) {
+      const currentWeekNegotiations = getCurrentWeekNegotiations();
+      onCurrentWeekNegotiationsChange(currentWeekNegotiations);
+    }
+  }, [getCurrentWeekNegotiations, onCurrentWeekNegotiationsChange]);
 
   // Helper to get who booked a slot (based on Date object overlap)
   const getSlotOwner = useCallback((date, time) => {

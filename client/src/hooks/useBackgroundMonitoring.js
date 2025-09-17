@@ -133,6 +133,16 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
 
   const confirmSchedule = useCallback(async (schedule) => {
     try {
+      // Check if eventActions are available
+      if (!eventActions || !eventActions.addEvent) {
+        setNotification({
+          type: 'error',
+          title: '이벤트 액션 없음',
+          message: '일정 추가 기능이 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.'
+        });
+        return;
+      }
+
       // Combine date and time into ISO 8601 format for Google Calendar
       const startDateTime = new Date(`${schedule.date}T${schedule.time || '09:00'}:00`).toISOString();
       // Assume a 1-hour duration if no end time is detected
@@ -140,34 +150,13 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
 
       const eventData = {
         title: schedule.title || '감지된 약속',
-        description: `AI가 자동 감지한 일정\n\n원본 내용: ${schedule.originalText}\n\n참석자: ${schedule.participants?.join(', ') || '없음'}`, 
+        description: `AI가 자동 감지한 일정\n\n원본 내용: ${schedule.originalText}\n\n참석자: ${schedule.participants?.join(', ') || '없음'}`,
         startDateTime: startDateTime,
         endDateTime: endDateTime
       };
 
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setNotification({
-          type: 'error',
-          title: '로그인 필요',
-          message: '일정을 등록하려면 로그인이 필요합니다.'
-        });
-        return;
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/calendar/events/google`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-auth-token': token,
-        },
-        body: JSON.stringify(eventData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.msg || 'Google Calendar에 일정 추가를 실패했습니다.');
-      }
+      // Use eventActions.addEvent instead of direct API call
+      await eventActions.addEvent(eventData);
 
       setDetectedSchedules(prev => prev.filter(s => s !== schedule));
       setEventAddedKey(prev => prev + 1);
@@ -184,7 +173,7 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
         message: error.message
       });
     }
-  }, [setEventAddedKey]);
+  }, [eventActions, setEventAddedKey]);
 
   const dismissSchedule = useCallback((schedule) => {
     setDetectedSchedules(prev => prev.filter(s => s !== schedule));
