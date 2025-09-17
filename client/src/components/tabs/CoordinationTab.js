@@ -182,11 +182,50 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       const result = await response.json();
       showAlert(`${result.resetCount}명의 멤버 이월시간이 초기화되었습니다.`);
 
-      // Refresh room data
-      await fetchRoomDetails(currentRoom._id);
+      // Immediately update room data without refresh
+      if (result.room) {
+        setCurrentRoom(result.room);
+      } else {
+        // Fallback to refresh if room data not returned
+        await fetchRoomDetails(currentRoom._id);
+      }
     } catch (error) {
       console.error('Error resetting carryover times:', error);
       showAlert(`이월시간 초기화 실패: ${error.message}`);
+    }
+  }, [currentRoom?._id, fetchRoomDetails, showAlert, user?.token]);
+
+  // Reset completed times function
+  const handleResetCompletedTimes = useCallback(async () => {
+    if (!currentRoom?._id) return;
+
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiUrl}/api/coordination/reset-completed/${currentRoom._id}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${user?.token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reset completed times');
+      }
+
+      const result = await response.json();
+      showAlert(`${result.resetCount}명의 멤버 완료시간이 초기화되었습니다.`);
+
+      // Immediately update room data without refresh
+      if (result.room) {
+        setCurrentRoom(result.room);
+      } else {
+        // Fallback to refresh if room data not returned
+        await fetchRoomDetails(currentRoom._id);
+      }
+    } catch (error) {
+      console.error('Error resetting completed times:', error);
+      showAlert(`완료시간 초기화 실패: ${error.message}`);
     }
   }, [currentRoom?._id, fetchRoomDetails, showAlert, user?.token]);
 
@@ -1013,22 +1052,40 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 currentRoom={currentRoom}
                 onAutoResolveNegotiations={handleAutoResolveNegotiations}
                 currentWeekStartDate={currentWeekStartDate}
+                activeNegotiationsCount={(() => {
+                  const activeNegotiations = currentRoom?.negotiations?.filter(neg =>
+                    neg.status === 'active' && neg.conflictingMembers?.length > 0
+                  ) || [];
+                  return activeNegotiations.length;
+                })()}
               />
             }
 
-            {/* 이월시간 초기화 버튼 */}
-            {isOwner && currentRoom?.members?.some(m => m.carryOver > 0) && (
+            {/* 시간 관리 버튼들 */}
+            {isOwner && (currentRoom?.members?.some(m => m.carryOver > 0) || currentRoom?.members?.some(m => m.totalProgressTime > 0)) && (
               <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <h4 className="text-sm font-semibold text-blue-800 mb-2">멤버 이월시간 관리</h4>
+                <h4 className="text-sm font-semibold text-blue-800 mb-2">멤버 시간 관리</h4>
                 <p className="text-xs text-blue-600 mb-3">
-                  새로운 주가 시작되면서 이월시간을 초기화할 수 있습니다.
+                  테스트를 위해 멤버들의 이월시간 또는 완료시간을 초기화할 수 있습니다.
                 </p>
-                <button
-                  onClick={handleResetCarryOverTimes}
-                  className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                >
-                  모든 이월시간 초기화
-                </button>
+                <div className="flex gap-2">
+                  {currentRoom?.members?.some(m => m.carryOver > 0) && (
+                    <button
+                      onClick={handleResetCarryOverTimes}
+                      className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                      모든 이월시간 초기화
+                    </button>
+                  )}
+                  {currentRoom?.members?.some(m => m.totalProgressTime > 0) && (
+                    <button
+                      onClick={handleResetCompletedTimes}
+                      className="px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                    >
+                      모든 완료시간 초기화
+                    </button>
+                  )}
+                </div>
               </div>
             )}
             {scheduleError && 
@@ -1358,7 +1415,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
 export default CoordinationTab;
 
-const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom, onAutoResolveNegotiations, currentWeekStartDate }) => {
+const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom, onAutoResolveNegotiations, currentWeekStartDate, activeNegotiationsCount = 0 }) => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'ownerFocusTime') {
@@ -1367,11 +1424,6 @@ const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom
       setOptions(prev => ({ ...prev, [name]: Number(value) }));
     }
   };
-
-  // Get active negotiations count (simplified)
-  const activeNegotiationsCount = currentRoom?.negotiations?.filter(neg =>
-    neg.status === 'active' && neg.conflictingMembers?.length > 0
-  )?.length || 0;
 
   return (
     <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 mb-4">
