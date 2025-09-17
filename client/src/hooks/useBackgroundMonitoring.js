@@ -155,11 +155,31 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
         endDateTime: endDateTime
       };
 
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setNotification({
+          type: 'error',
+          title: '인증 오류',
+          message: 'Google 계정 인증이 필요합니다.'
+        });
+        return;
+      }
+
       // Use eventActions.addEvent instead of direct API call
-      await eventActions.addEvent(eventData);
+      await fetch(`${API_BASE_URL}/api/calendar/events/google`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token,
+        },
+        body: JSON.stringify(eventData),
+      });
 
       setDetectedSchedules(prev => prev.filter(s => s !== schedule));
-      setEventAddedKey(prev => prev + 1);
+      
+      setTimeout(() => {
+        setEventAddedKey(prev => prev + 1);
+      }, 1000); // 1초 지연
       setNotification({
         type: 'success',
         title: '일정 등록 완료',

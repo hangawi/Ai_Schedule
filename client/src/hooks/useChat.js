@@ -59,7 +59,11 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                }
             }
 
-            // Use eventActions.addEvent instead of direct API call
+            const token = localStorage.getItem('token');
+            if (!token) {
+              return { success: false, message: 'Google 계정 인증이 필요합니다.' };
+            }
+
             const eventData = {
                title: chatResponse.title || '일정',
                description: chatResponse.description || '',
@@ -67,8 +71,23 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                endDateTime: chatResponse.endDateTime
             };
 
-            await eventActions.addEvent(eventData);
-            setEventAddedKey(prevKey => prevKey + 1); // 캘린더 새로고침
+            const response = await fetch(`${API_BASE_URL}/api/calendar/events/google`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-auth-token': token,
+              },
+              body: JSON.stringify(eventData),
+            });
+
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.msg || 'Google 캘린더에 일정을 추가하지 못했습니다.');
+            }
+
+            setTimeout(() => {
+              setEventAddedKey(prevKey => prevKey + 1); // 캘린더 새로고침
+            }, 1000); // 1초 지연
 
             return {
                success: true,

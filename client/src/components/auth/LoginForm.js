@@ -79,12 +79,15 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
       const data = await response.json();
 
       if (!response.ok) {
+        localStorage.setItem('googleConnected', 'false');
         throw new Error(data.msg || 'Google 로그인 실패');
       }
 
       localStorage.setItem('token', data.token);
+      localStorage.setItem('googleConnected', 'true');
       onLoginSuccess(data.user, 'google');
     } catch (error) {
+      localStorage.setItem('googleConnected', 'false');
       showAlert(`Google 로그인 실패: ${error.message}`, 'error', 'Google 로그인 실패');
       console.error('Google Login Error:', error);
     }
