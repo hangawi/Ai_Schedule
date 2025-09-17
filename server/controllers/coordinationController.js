@@ -20,6 +20,7 @@ exports.deleteRoom = roomController.deleteRoom;
 exports.joinRoom = roomController.joinRoom;
 exports.getRoomDetails = roomController.getRoomDetails;
 exports.getMyRooms = roomController.getMyRooms;
+exports.getRoomExchangeCounts = roomController.getRoomExchangeCounts;
 
 // Re-export from timeSlotController
 exports.submitTimeSlots = timeSlotController.submitTimeSlots;
@@ -59,9 +60,9 @@ exports.createRequest = async (req, res) => {
 
       const existingRequest = await Room.findOne({
          _id: roomId,
-         'requests': {
-            $elemMatch: existingRequestQuery
-         }
+         requests: {
+            $elemMatch: existingRequestQuery,
+         },
       });
 
       if (existingRequest) {
@@ -75,13 +76,14 @@ exports.createRequest = async (req, res) => {
       }
 
       // 중복 요청 체크
-      const hasDuplicateRequest = room.requests.some(request =>
-         request.requester.toString() === req.user.id &&
-         request.status === 'pending' &&
-         request.timeSlot.day === timeSlot.day &&
-         request.timeSlot.startTime === timeSlot.startTime &&
-         request.timeSlot.endTime === timeSlot.endTime &&
-         (type !== 'slot_swap' || request.targetUserId?.toString() === targetUserId)
+      const hasDuplicateRequest = room.requests.some(
+         request =>
+            request.requester.toString() === req.user.id &&
+            request.status === 'pending' &&
+            request.timeSlot.day === timeSlot.day &&
+            request.timeSlot.startTime === timeSlot.startTime &&
+            request.timeSlot.endTime === timeSlot.endTime &&
+            (type !== 'slot_swap' || request.targetUserId?.toString() === targetUserId),
       );
 
       if (hasDuplicateRequest) {
@@ -179,23 +181,26 @@ exports.handleRequest = async (req, res) => {
                   slot.endTime === timeSlot.endTime
                );
             });
-
          } else if (type === 'slot_swap' && targetUserId && targetSlot) {
             // Find and swap the slots
             const requesterSlotIndex = room.timeSlots.findIndex(slot => {
                const slotUserId = slot.user._id || slot.user;
-               return slotUserId.toString() === requester._id.toString() &&
-                      slot.day === timeSlot.day &&
-                      slot.startTime === timeSlot.startTime &&
-                      slot.endTime === timeSlot.endTime;
+               return (
+                  slotUserId.toString() === requester._id.toString() &&
+                  slot.day === timeSlot.day &&
+                  slot.startTime === timeSlot.startTime &&
+                  slot.endTime === timeSlot.endTime
+               );
             });
 
             const targetSlotIndex = room.timeSlots.findIndex(slot => {
                const slotUserId = slot.user._id || slot.user;
-               return slotUserId.toString() === targetUserId.toString() &&
-                      slot.day === targetSlot.day &&
-                      slot.startTime === targetSlot.startTime &&
-                      slot.endTime === targetSlot.endTime;
+               return (
+                  slotUserId.toString() === targetUserId.toString() &&
+                  slot.day === targetSlot.day &&
+                  slot.startTime === targetSlot.startTime &&
+                  slot.endTime === targetSlot.endTime
+               );
             });
 
             if (requesterSlotIndex !== -1 && targetSlotIndex !== -1) {
@@ -204,7 +209,6 @@ exports.handleRequest = async (req, res) => {
                room.timeSlots[requesterSlotIndex].user = room.timeSlots[targetSlotIndex].user;
                room.timeSlots[targetSlotIndex].user = tempUser;
             }
-
          } else if (type === 'time_request' || type === 'time_change') {
             // Add new slot for requester
             room.timeSlots.push({
@@ -234,6 +238,98 @@ exports.handleRequest = async (req, res) => {
    } catch (error) {
       console.error('Error handling request:', error);
       res.status(500).json({ msg: 'Server error' });
+   }
+};
+
+// @desc    Cancel a request
+// @route   DELETE /api/coordination/requests/:requestId
+// @access  Private (Requester only)
+exports.cancelRequest = async (req, res) => {
+   try {
+      const { requestId } = req.params;
+
+      const room = await Room.findOne({ 'requests._id': requestId });
+
+      if (!room) {
+         return res.status(404).json({ msg: '요청을 찾을 수 없습니다.' });
+      }
+
+      const request = room.requests.id(requestId);
+
+      if (!request) {
+         return res.status(404).json({ msg: '요청을 찾을 수 없습니다.' });
+      }
+
+      // Only the requester can cancel
+      if (request.requester.toString() !== req.user.id) {
+         return res.status(403).json({ msg: '요청을 취소할 권한이 없습니다.' });
+      }
+
+      // Remove the request
+      room.requests.pull(requestId);
+      await room.save();
+
+      res.json({ msg: '요청이 취소되었습니다.' });
+   } catch (error) {
+      console.error('Error canceling request:', error);
+      res.status(500).json({ msg: 'Server error' });
+   }
+};
+
+// @desc    Get all requests sent by the user
+// @route   GET /api/coordination/sent-requests
+// @access  Private
+exports.getSentRequests = async (req, res) => {
+   try {
+      const userId = req.user.id;
+
+      // Find all rooms and filter requests by the current user
+      const rooms = await Room.find({
+         $or: [{ owner: userId }, { 'members.user': userId }],
+      })
+         .populate('requests.requester', 'firstName lastName email')
+         .populate('requests.targetUser', 'firstName lastName email');
+
+      const sentRequests = rooms.flatMap(room =>
+         room.requests.filter(req => req.requester && req.requester._id.toString() === userId),
+      );
+
+      res.json({ success: true, requests: sentRequests });
+   } catch (error) {
+      console.error('Error fetching sent requests:', error);
+      res.status(500).json({ success: false, msg: 'Server error' });
+   }
+};
+
+// @desc    Get count of pending exchange requests for the user
+// @route   GET /api/coordination/exchange-requests-count
+// @access  Private
+exports.getExchangeRequestsCount = async (req, res) => {
+   try {
+      const userId = req.user.id;
+
+      const rooms = await Room.find({
+         $or: [{ owner: userId }, { 'members.user': userId }],
+      });
+
+      let count = 0;
+      rooms.forEach(room => {
+         room.requests.forEach(request => {
+            if (
+               request.status === 'pending' &&
+               request.type === 'slot_swap' &&
+               request.targetUserId &&
+               request.targetUserId.toString() === userId
+            ) {
+               count++;
+            }
+         });
+      });
+
+      res.json({ success: true, count });
+   } catch (error) {
+      console.error('Error fetching exchange requests count:', error);
+      res.status(500).json({ success: false, msg: 'Server error' });
    }
 };
 
@@ -270,7 +366,9 @@ exports.runAutoSchedule = async (req, res) => {
       // Check if room has members (excluding owner)
       const nonOwnerMembers = room.members.filter(m => m.user._id.toString() !== room.owner._id.toString());
       if (nonOwnerMembers.length === 0) {
-         return res.status(400).json({ msg: '방에 멤버가 없습니다. 자동 배정을 위해서는 최소 1명의 멤버가 필요합니다.' });
+         return res
+            .status(400)
+            .json({ msg: '방에 멤버가 없습니다. 자동 배정을 위해서는 최소 1명의 멤버가 필요합니다.' });
       }
 
       // Update owner preferences in room settings
@@ -307,7 +405,7 @@ exports.runAutoSchedule = async (req, res) => {
             ownerPreferences: room.settings.ownerPreferences || {},
             roomSettings: room.settings || {},
          },
-         [] // deferredAssignments
+         [], // deferredAssignments
       );
 
       // Apply results...

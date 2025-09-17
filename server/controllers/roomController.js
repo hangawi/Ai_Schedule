@@ -226,3 +226,38 @@ exports.getMyRooms = async (req, res) => {
       res.status(500).json({ msg: 'Server error' });
    }
 };
+
+// @desc    Get counts of pending exchange requests for each room
+// @route   GET /api/coordination/rooms/exchange-counts
+// @access  Private
+exports.getRoomExchangeCounts = async (req, res) => {
+   try {
+      const userId = req.user.id;
+
+      // Find all rooms where the user is a member or owner
+      const userRooms = await Room.find({
+         $or: [{ owner: userId }, { 'members.user': userId }],
+      }).select('_id requests');
+
+      const roomCounts = {};
+
+      userRooms.forEach(room => {
+         const pendingRequests = room.requests.filter(request => {
+            return (
+               request.status === 'pending' &&
+               request.type === 'slot_swap' &&
+               request.targetUserId &&
+               request.targetUserId.toString() === userId
+            );
+         });
+         if (pendingRequests.length > 0) {
+            roomCounts[room._id.toString()] = pendingRequests.length;
+         }
+      });
+
+      res.json({ success: true, roomCounts });
+   } catch (error) {
+      console.error('Error fetching room exchange counts:', error);
+      res.status(500).json({ success: false, msg: 'Server error' });
+   }
+};
