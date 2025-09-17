@@ -124,10 +124,11 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
          }));
          setEvents(formattedEvents);
       } catch (error) {
-         // 구글 연동이 안된 경우 조용히 처리 (콘솔 로그도 제거)
-         setEvents([]);
+        console.error("Error fetching Google Calendar events:", error);
+        showAlert('Google 캘린더 이벤트를 가져오는 중 오류가 발생했습니다.', 'error', '오류');
+        setEvents([]);
       }
-   }, []);
+   }, [showAlert]);
 
    useEffect(() => {
       fetchEvents(date);
