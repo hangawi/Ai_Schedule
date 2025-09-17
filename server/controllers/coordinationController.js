@@ -30,6 +30,73 @@ exports.findCommonSlots = timeSlotController.findCommonSlots;
 exports.resetCarryOverTimes = timeSlotController.resetCarryOverTimes;
 exports.resetCompletedTimes = timeSlotController.resetCompletedTimes;
 
+// Negotiation management functions
+exports.getNegotiations = async (req, res) => {
+   try {
+      const { roomId } = req.params;
+      // Add your negotiation logic here
+      res.json({ negotiations: [] });
+   } catch (error) {
+      console.error('Error getting negotiations:', error);
+      res.status(500).json({ msg: 'Server error' });
+   }
+};
+
+exports.addNegotiationMessage = async (req, res) => {
+   try {
+      const { roomId, negotiationId } = req.params;
+      // Add your message logic here
+      res.json({ success: true });
+   } catch (error) {
+      console.error('Error adding negotiation message:', error);
+      res.status(500).json({ msg: 'Server error' });
+   }
+};
+
+exports.resolveNegotiation = async (req, res) => {
+   try {
+      const { roomId, negotiationId } = req.params;
+      // Add your resolve logic here
+      res.json({ success: true });
+   } catch (error) {
+      console.error('Error resolving negotiation:', error);
+      res.status(500).json({ msg: 'Server error' });
+   }
+};
+
+exports.respondToNegotiation = async (req, res) => {
+   try {
+      const { roomId, negotiationId } = req.params;
+      // Add your respond logic here
+      res.json({ success: true });
+   } catch (error) {
+      console.error('Error responding to negotiation:', error);
+      res.status(500).json({ msg: 'Server error' });
+   }
+};
+
+exports.autoResolveTimeoutNegotiations = async (req, res) => {
+   try {
+      const { roomId } = req.params;
+      // Add your auto-resolve logic here
+      res.json({ success: true });
+   } catch (error) {
+      console.error('Error auto-resolving negotiations:', error);
+      res.status(500).json({ msg: 'Server error' });
+   }
+};
+
+exports.forceResolveNegotiation = async (req, res) => {
+   try {
+      const { roomId, negotiationId } = req.params;
+      // Add your force resolve logic here
+      res.json({ success: true });
+   } catch (error) {
+      console.error('Error force resolving negotiation:', error);
+      res.status(500).json({ msg: 'Server error' });
+   }
+};
+
 // Keep complex functions that weren't moved yet
 // @desc    Handle a request
 // @route   POST /api/coordination/requests/:requestId/handle
