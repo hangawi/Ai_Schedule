@@ -52,8 +52,9 @@ const RequestSchema = new mongoose.Schema({
     subject: String
   },
   targetSlot: TimeSlotSchema, // For swap requests
-  targetUserId: {
-    type: String,
+  targetUser: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
     required: false
   },
   message: String,
@@ -280,7 +281,10 @@ RoomSchema.methods.isOwner = function(userId) {
 
 // Check if user is room member
 RoomSchema.methods.isMember = function(userId) {
-  return this.members.some(member => member.user.toString() === userId.toString());
+  return this.members.some(member => {
+    const memberUserId = member.user._id ? member.user._id.toString() : member.user.toString();
+    return memberUserId === userId.toString();
+  });
 };
 
 // Get user's color in the room
