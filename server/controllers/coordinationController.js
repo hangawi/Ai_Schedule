@@ -1947,6 +1947,103 @@ exports.resetCarryOverTimes = async (req, res) => {
           member.carryOverHistory = [];
         }
         member.carryOverHistory.push({
+          date: new Date(),
+          action: 'reset',
+          previousValue: member.carryOver
+        });
+      }
+    });
+
+    await room.save();
+
+    // Return updated room with populated fields
+    const updatedRoom = await Room.findById(roomId)
+      .populate('owner', 'firstName lastName email')
+      .populate('members.user', 'firstName lastName email');
+
+    console.log(`Reset ${resetCount} member carryover times`);
+    res.json({
+      resetCount,
+      message: `${resetCount}명의 멤버 이월시간이 초기화되었습니다.`,
+      room: updatedRoom
+    });
+  } catch (error) {
+    console.error('Error resetting carryover times:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// @desc    Reset all member completed times
+// @route   POST /api/coordination/reset-completed/:roomId
+// @access  Private (Owner only)
+exports.resetCompletedTimes = async (req, res) => {
+  try {
+    console.log('resetCompletedTimes called with roomId:', req.params.roomId);
+    console.log('User ID:', req.user?.id);
+
+    const { roomId } = req.params;
+
+    const room = await Room.findById(roomId);
+
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    if (!room.isOwner(req.user.id)) {
+      return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
+    }
+
+    let resetCount = 0;
+    console.log('Room members count:', room.members.length);
+
+    // Reset completed times for all members
+    room.members.forEach((member, index) => {
+      console.log(`Member ${index}: totalProgressTime = ${member.totalProgressTime}`);
+      if (member.totalProgressTime > 0) {
+        console.log(`Resetting totalProgressTime for member ${index} from ${member.totalProgressTime} to 0`);
+        member.totalProgressTime = 0;
+        resetCount++;
+
+        // Add to progress history for tracking
+        if (!member.progressHistory) {
+          member.progressHistory = [];
+        }
+        member.progressHistory.push({
+          date: new Date(),
+          action: 'reset',
+          previousValue: member.totalProgressTime
+        });
+      }
+    });
+
+    await room.save();
+
+    // Return updated room with populated fields
+    const updatedRoom = await Room.findById(roomId)
+      .populate('owner', 'firstName lastName email')
+      .populate('members.user', 'firstName lastName email');
+
+    console.log(`Reset ${resetCount} member completed times`);
+    res.json({
+      resetCount,
+      message: `${resetCount}명의 멤버 완료시간이 초기화되었습니다.`,
+      room: updatedRoom
+    });
+  } catch (error) {
+    console.error('Error resetting completed times:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+      if (member.carryOver > 0) {
+        console.log(`Resetting carryOver for member ${index} from ${member.carryOver} to 0`);
+        member.carryOver = 0;
+        resetCount++;
+
+        // Add to carryover history for tracking
+        if (!member.carryOverHistory) {
+          member.carryOverHistory = [];
+        }
+        member.carryOverHistory.push({
           week: new Date(),
           amount: 0,
           reason: 'manual_reset',

@@ -494,17 +494,41 @@ class SchedulingAlgorithm {
       return slots; // No preference, return as-is
     }
 
-    return slots.sort((keyA, keyB) => {
-      const timeA = keyA.split('-').pop();
-      const timeB = keyB.split('-').pop();
-
-      const isPreferredA = this._isInOwnerPreferredTime(timeA, ownerPreferences);
-      const isPreferredB = this._isInOwnerPreferredTime(timeB, ownerPreferences);
-
-      if (isPreferredA && !isPreferredB) return -1;
-      if (!isPreferredA && isPreferredB) return 1;
-      return 0;
+    // Group slots by date to find consecutive slots within preferred time
+    const slotsByDate = {};
+    slots.forEach(key => {
+      const [date] = key.split('-');
+      if (!slotsByDate[date]) {
+        slotsByDate[date] = [];
+      }
+      slotsByDate[date].push(key);
     });
+
+    // Prioritize slots within preferred time range and consecutive slots
+    const prioritizedSlots = [];
+    const nonPreferredSlots = [];
+
+    Object.keys(slotsByDate).forEach(date => {
+      const daySlots = slotsByDate[date].sort(); // Sort by time
+      const preferredSlots = [];
+      const otherSlots = [];
+
+      daySlots.forEach(key => {
+        const time = key.split('-').pop();
+        if (this._isInOwnerPreferredTime(time, ownerPreferences)) {
+          preferredSlots.push(key);
+        } else {
+          otherSlots.push(key);
+        }
+      });
+
+      // Add preferred slots first (these are already in time order)
+      prioritizedSlots.push(...preferredSlots);
+      nonPreferredSlots.push(...otherSlots);
+    });
+
+    // Return preferred slots first, then non-preferred
+    return [...prioritizedSlots, ...nonPreferredSlots];
   }
 }
 

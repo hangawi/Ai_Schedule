@@ -224,6 +224,21 @@ const TimetableGrid = ({
       return dateMatch && timeMatch;
     });
 
+    // 방장의 개인 시간은 시간표에서 제외 (협의에 참여하지 않음)
+    if (bookedSlot && isRoomOwner && currentUser) {
+      let slotUserId = bookedSlot.userId || bookedSlot.user;
+      if (typeof slotUserId === 'object' && slotUserId !== null) {
+        slotUserId = slotUserId._id || slotUserId.id;
+      }
+
+      const currentUserId = currentUser.id || currentUser._id;
+
+      // 방장의 슬롯이면 null 반환 (시간표에서 제외)
+      if (slotUserId && currentUserId && slotUserId.toString() === currentUserId.toString()) {
+        return null;
+      }
+    }
+
     if (bookedSlot) {
       let userId = bookedSlot.userId || bookedSlot.user;
 

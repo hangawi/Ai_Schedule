@@ -8,8 +8,9 @@ router.post('/rooms', auth, coordinationController.createRoom);
 router.get('/rooms/exchange-counts', auth, coordinationController.getRoomExchangeCounts); // 이거를 먼저 배치
 router.get('/my-rooms', auth, coordinationController.getMyRooms);
 
-// Carryover management (moved before dynamic room routes)
+// Member time management (moved before dynamic room routes)
 router.post('/reset-carryover/:roomId', auth, coordinationController.resetCarryOverTimes);
+router.post('/reset-completed/:roomId', auth, coordinationController.resetCompletedTimes);
 
 router.put('/rooms/:roomId', auth, coordinationController.updateRoom);
 router.delete('/rooms/:roomId', auth, coordinationController.deleteRoom);
