@@ -59,6 +59,9 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [showNegotiationModal, setShowNegotiationModal] = useState(false);
   const [selectedNegotiation, setSelectedNegotiation] = useState(null);
 
+  // Current week negotiations from timetable
+  const [currentWeekNegotiations, setCurrentWeekNegotiations] = useState([]);
+
 
   const loadRoomExchangeCounts = useCallback(async () => {
     if (!user?.id) return;
@@ -166,7 +169,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     if (!currentRoom?._id) return;
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
       const response = await fetch(`${apiUrl}/api/coordination/reset-carryover/${currentRoom._id}`, {
         method: 'POST',
         headers: {
@@ -200,7 +203,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     if (!currentRoom?._id) return;
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
       const response = await fetch(`${apiUrl}/api/coordination/reset-completed/${currentRoom._id}`, {
         method: 'POST',
         headers: {
@@ -231,7 +234,27 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
   // Auto-scheduling function (moved after useCoordination)
   const handleRunAutoSchedule = async () => {
-    if (!currentRoom || !currentWeekStartDate) return;
+    if (!currentRoom || !currentWeekStartDate) {
+      showAlert('현재 방 정보나 주차 정보가 없습니다.');
+      return;
+    }
+
+    // Check if there are any members
+    const nonOwnerMembers = currentRoom.members?.filter(m =>
+      (m.user._id || m.user) !== user?.id
+    ) || [];
+
+    if (nonOwnerMembers.length === 0) {
+      showAlert('자동 배정을 위해서는 최소 1명의 멤버가 필요합니다.');
+      return;
+    }
+
+    // Check if members have submitted their time slots
+    if (!currentRoom.timeSlots || currentRoom.timeSlots.length === 0) {
+      showAlert('자동 배정을 위해서는 멤버들이 시간을 입력해야 합니다.');
+      return;
+    }
+
     setIsScheduling(true);
     setScheduleError(null);
     setUnassignedMembersInfo(null);
@@ -965,22 +988,20 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
               </div>
             </div>
 
-            {/* 협의 관리 섹션 */}
+            {/* 협의 관리 섹션 - 현재 시간표에 표시된 협의만 표시 */}
             {(() => {
-              // Show all active negotiations (simplified filtering)
-              const activeNegotiations = currentRoom?.negotiations?.filter(neg =>
-                neg.status === 'active' &&
-                neg.conflictingMembers?.length > 0
-              ) || [];
+              // Show only negotiations visible in current week's timetable
+              const visibleNegotiations = currentWeekNegotiations || [];
 
-              return activeNegotiations.length > 0 && (
+              return visibleNegotiations.length > 0 && (
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
                     <MessageSquare size={16} className="mr-2 text-orange-600" />
-                    협의 진행중 ({activeNegotiations.length}건)
+                    협의 진행중 ({visibleNegotiations.length}건)
                   </h4>
                   <div className="space-y-3">
-                    {activeNegotiations.map((negotiation, index) => {
+                    {visibleNegotiations.map((weekNegotiation, index) => {
+                      const negotiation = weekNegotiation; // weekNegotiation is the negotiation itself, not nested under negotiationData
                       const isUserInvolved = negotiation.conflictingMembers?.some(cm =>
                         (cm.user._id || cm.user) === user?.id
                       );
@@ -1006,7 +1027,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                               <div className="flex items-center mb-1">
                                 <Clock size={14} className="mr-1 text-orange-500" />
                                 <span className="text-sm font-medium">
-                                  {new Date(negotiation.slotInfo.date).toLocaleDateString('ko-KR')} {negotiation.slotInfo.startTime}-{negotiation.slotInfo.endTime}
+                                  {weekNegotiation.dayDisplay} {weekNegotiation.time}-{calculateEndTime(weekNegotiation.time)}
                                 </span>
                                 {isUserInvolved && (
                                   <span className="ml-2 px-2 py-0.5 text-xs bg-orange-100 text-orange-800 rounded-full">
@@ -1147,6 +1168,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 onWeekChange={handleWeekChange}
                 initialStartDate={currentWeekStartDate}
                 onOpenNegotiation={handleOpenNegotiation}
+                onCurrentWeekNegotiationsChange={setCurrentWeekNegotiations}
               />
             </div>
           </div>

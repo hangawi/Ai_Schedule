@@ -24,7 +24,7 @@ function App() {
    });
    const [eventActions, setEventActions] = useState(null);
    const [areEventActionsReady, setAreEventActionsReady] = useState(false);
-   const { handleChatMessage } = useChat(isLoggedIn, setEventAddedKey);
+   const { handleChatMessage } = useChat(isLoggedIn, setEventAddedKey, eventActions);
    
    const {
       isListening,

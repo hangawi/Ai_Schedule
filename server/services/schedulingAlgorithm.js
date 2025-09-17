@@ -1,12 +1,26 @@
 class SchedulingAlgorithm {
 
   runAutoSchedule(members, owner, roomTimeSlots, options, deferredAssignments = []) {
-    const { minHoursPerWeek = 3, numWeeks = 2, currentWeek, ownerPreferences = {} } = options;
+    // Input validation
+    if (!members || !Array.isArray(members)) {
+      throw new Error('Invalid members data provided to scheduling algorithm');
+    }
+
+    if (!owner || !owner._id) {
+      throw new Error('Invalid owner data provided to scheduling algorithm');
+    }
+
+    if (!roomTimeSlots || !Array.isArray(roomTimeSlots)) {
+      throw new Error('Invalid timeSlots data provided to scheduling algorithm');
+    }
+
+    const { minHoursPerWeek = 3, numWeeks = 2, currentWeek, ownerPreferences = {}, roomSettings = {} } = options;
+
     // Convert hours to 30-minute slots (1 hour = 2 slots)
     const minSlotsPerWeek = minHoursPerWeek * 2;
     const startDate = currentWeek ? new Date(currentWeek) : new Date();
 
-    const timetable = this._createTimetable(roomTimeSlots, startDate, numWeeks);
+    const timetable = this._createTimetable(roomTimeSlots, startDate, numWeeks, roomSettings);
 
     // Exclude owner from auto-assignment
     const ownerId = owner._id.toString();
@@ -72,10 +86,21 @@ class SchedulingAlgorithm {
     return member.user.priority || 0;
   }
 
-  _createTimetable(roomTimeSlots, startDate, numWeeks) {
+  _createTimetable(roomTimeSlots, startDate, numWeeks, roomSettings = {}) {
     const timetable = {};
     const currentDay = new Date(startDate);
     currentDay.setUTCHours(0, 0, 0, 0);
+
+    // Extract schedule start and end hours from room settings
+    const getHourFromSettings = (setting, defaultValue) => {
+      if (!setting) return parseInt(defaultValue, 10);
+      if (typeof setting === 'string') return parseInt(String(setting).split(':')[0], 10);
+      if (typeof setting === 'number') return setting;
+      return parseInt(defaultValue, 10);
+    };
+
+    const scheduleStartHour = getHourFromSettings(roomSettings.scheduleStartTime, '9');
+    const scheduleEndHour = getHourFromSettings(roomSettings.scheduleEndTime, '18');
 
     for (let w = 0; w < numWeeks; w++) {
       for (let d = 0; d < 5; d++) { // Monday to Friday
@@ -87,7 +112,7 @@ class SchedulingAlgorithm {
         // Convert to 1-indexed day of week (1=Mon, 2=Tue, ..., 5=Fri)
         const oneIndexedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek; // Sunday becomes 7
 
-        for (let h = 9; h < 18; h++) {
+        for (let h = scheduleStartHour; h < scheduleEndHour; h++) {
           for (let m = 0; m < 60; m += 30) {
             const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
             const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD

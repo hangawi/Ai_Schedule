@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
-export const useChat = (isLoggedIn, setEventAddedKey) => {
+export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
    const handleChatMessage = useCallback(async (message) => {
       if (!isLoggedIn) return { success: false, message: '로그인이 필요합니다.' };
 
@@ -36,8 +36,13 @@ export const useChat = (isLoggedIn, setEventAddedKey) => {
          
          // 실제 일정 처리 로직 추가
          if (chatResponse.intent === 'add_event' && chatResponse.startDateTime) {
+            // Check if eventActions are available
+            if (!eventActions || !eventActions.addEvent) {
+               return { success: false, message: '일정 추가 기능이 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.' };
+            }
+
             // 일정 추가 처리 시작
-            
+
             // 기본값 설정
             if (!chatResponse.title) chatResponse.title = '약속';
             if (!chatResponse.endDateTime && chatResponse.startDateTime) {
@@ -53,35 +58,22 @@ export const useChat = (isLoggedIn, setEventAddedKey) => {
                   throw new Error('날짜 형식이 올바르지 않습니다.');
                }
             }
-            
-            // 데이터 처리 완료, Google Calendar에 일정 추가 준비
-            
-            // Google Calendar에 일정 추가
-            const token = localStorage.getItem('token');
+
+            // Use eventActions.addEvent instead of direct API call
             const eventData = {
                title: chatResponse.title || '일정',
                description: chatResponse.description || '',
                startDateTime: chatResponse.startDateTime,
                endDateTime: chatResponse.endDateTime
             };
-            const addResponse = await fetch(`${API_BASE_URL}/api/calendar/events/google`, {
-               method: 'POST',
-               headers: {
-                  'Content-Type': 'application/json',
-                  'x-auth-token': token,
-               },
-               body: JSON.stringify(eventData)
-            });
-            
-            if (!addResponse.ok) {
-               throw new Error('일정 추가에 실패했습니다.');
-            }
-            
+
+            await eventActions.addEvent(eventData);
             setEventAddedKey(prevKey => prevKey + 1); // 캘린더 새로고침
-            return { 
-               success: true, 
+
+            return {
+               success: true,
                message: `${chatResponse.title} 일정을 추가했어요!`,
-               data: chatResponse 
+               data: chatResponse
             };
          }
          
@@ -258,7 +250,7 @@ export const useChat = (isLoggedIn, setEventAddedKey) => {
          
          return { success: false, message: `오류: ${error.message}` };
       }
-   }, [isLoggedIn, setEventAddedKey]);
+   }, [isLoggedIn, setEventAddedKey, eventActions]);
 
    return { handleChatMessage };
 };
