@@ -155,8 +155,16 @@ exports.joinRoom = async (req, res) => {
          return res.status(400).json({ msg: '방이 가득 찼습니다.' });
       }
 
-      // Add user to room
-      room.members.push({ user: req.user.id, joinedAt: new Date() });
+      // Add user to room with unique color
+      const { getAvailableColor } = require('../utils/colorUtils');
+      const existingColors = room.members.map(member => member.color);
+      const newColor = getAvailableColor(existingColors);
+
+      room.members.push({
+         user: req.user.id,
+         joinedAt: new Date(),
+         color: newColor
+      });
       await room.save();
 
       await room.populate('owner', 'firstName lastName email');

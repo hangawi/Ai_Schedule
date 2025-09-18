@@ -66,6 +66,16 @@ const RequestSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  respondedAt: {
+    type: Date
+  },
+  respondedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  response: {
+    type: String
   }
 });
 
