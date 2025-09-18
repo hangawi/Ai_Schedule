@@ -16,6 +16,22 @@ const getMondayOfCurrentWeek = (date) => {
   return d;
 };
 
+// Safe date handling function to prevent Invalid time value errors
+const safeDateToISOString = (dateValue) => {
+  try {
+    if (!dateValue) return null;
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date value:', dateValue);
+      return null;
+    }
+    return date.toISOString();
+  } catch (error) {
+    console.warn('Error converting date to ISO string:', dateValue, error);
+    return null;
+  }
+};
+
 const TimetableGrid = ({
   roomId,
   roomSettings,
@@ -414,7 +430,7 @@ const TimetableGrid = ({
         }, 5000);
         
         const existingSlot = (timeSlots || []).find(slot => 
-          new Date(slot.date).toISOString().split('T')[0] === date.toISOString().split('T')[0] &&
+          safeDateToISOString(slot.date)?.split('T')[0] === safeDateToISOString(date)?.split('T')[0] &&
           slot.startTime === time &&
           (slot.user === ownerInfo.actualUserId || slot.user === ownerInfo.userId || 
            slot.user?.toString() === ownerInfo.actualUserId || slot.user?.toString() === ownerInfo.userId)
@@ -566,7 +582,7 @@ const TimetableGrid = ({
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: (() => {
               const existingSlot = (timeSlots || []).find(slot => 
-                new Date(slot.date).toISOString().split('T')[0] === slotToChange.date.toISOString().split('T')[0] &&
+                safeDateToISOString(slot.date)?.split('T')[0] === safeDateToISOString(slotToChange.date)?.split('T')[0] &&
                 slot.startTime === slotToChange.time &&
                 (slot.user === currentUser?.id || slot.user?.toString() === currentUser?.id?.toString())
               );
@@ -589,7 +605,7 @@ const TimetableGrid = ({
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: (() => {
               const existingSlot = (timeSlots || []).find(slot => 
-                new Date(slot.date).toISOString().split('T')[0] === slotToChange.date.toISOString().split('T')[0] &&
+                safeDateToISOString(slot.date)?.split('T')[0] === safeDateToISOString(slotToChange.date)?.split('T')[0] &&
                 slot.startTime === slotToChange.time &&
                 (slot.user === currentUser?.id || slot.user?.toString() === currentUser?.id?.toString())
               );
@@ -603,7 +619,7 @@ const TimetableGrid = ({
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: (() => {
               const existingSlot = (timeSlots || []).find(slot => 
-                new Date(slot.date).toISOString().split('T')[0] === slotToChange.date.toISOString().split('T')[0] &&
+                safeDateToISOString(slot.date)?.split('T')[0] === safeDateToISOString(slotToChange.date)?.split('T')[0] &&
                 slot.startTime === slotToChange.time &&
                 (slot.user === currentUser?.id || slot.user?.toString() === currentUser?.id?.toString())
               );

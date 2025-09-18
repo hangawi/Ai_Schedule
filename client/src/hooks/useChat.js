@@ -24,7 +24,19 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
          
          const prompt = generateAIPrompt(message);
 
-         const result = await model.generateContent(prompt);
+         const startTime = performance.now();
+         const result = await Promise.race([
+            model.generateContent(prompt),
+            new Promise((_, reject) =>
+               setTimeout(() => reject(new Error('응답 시간이 너무 길어 요청을 취소했습니다. 다시 시도해주세요.')), 5000)
+            )
+         ]);
+         const endTime = performance.now();
+         console.log(`AI 응답 시간: ${(endTime - startTime).toFixed(2)}ms`);
+
+         if (result instanceof Error) {
+            throw result;
+         }
          const response = await result.response;
          const text = response.text();
          const chatResponse = parseAIResponse(text);

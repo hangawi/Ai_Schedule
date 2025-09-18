@@ -129,10 +129,14 @@ exports.joinRoom = async (req, res) => {
    try {
       const { inviteCode } = req.body;
 
-      let room = await Room.findOne({ inviteCode });
+      if (!inviteCode || inviteCode.trim().length === 0) {
+         return res.status(400).json({ msg: '초대 코드를 입력해주세요.' });
+      }
+
+      let room = await Room.findOne({ inviteCode: inviteCode.trim().toUpperCase() });
 
       if (!room) {
-         return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+         return res.status(404).json({ msg: '방을 찾을 수 없습니다. 초대 코드를 확인해주세요.' });
       }
 
       // Check if user is a member or owner

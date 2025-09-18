@@ -43,11 +43,19 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
         return;
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/call-analysis/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
-        body: JSON.stringify({ transcript: transcriptToAnalyze }),
-      });
+      const analysisStartTime = performance.now();
+      const response = await Promise.race([
+        fetch(`${API_BASE_URL}/api/call-analysis/analyze`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+          body: JSON.stringify({ transcript: transcriptToAnalyze }),
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('분석 시간 초과')), 3000)
+        )
+      ]);
+      const analysisEndTime = performance.now();
+      console.log(`백그라운드 분석 시간: ${(analysisEndTime - analysisStartTime).toFixed(2)}ms`);
 
       if (response.ok) {
         const data = await response.json();

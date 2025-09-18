@@ -112,6 +112,12 @@ const RoomSchema = new mongoose.Schema({
     totalProgressTime: {
       type: Number,
       default: 0
+    },
+    priority: {
+      type: Number,
+      default: 3,
+      min: 1,
+      max: 5
     }
   }],
   inviteCode: {

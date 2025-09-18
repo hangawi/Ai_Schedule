@@ -64,14 +64,18 @@ export const coordinationService = {
     const token = getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${inviteCode}/join`, {
       method: 'POST',
-      headers: { 'x-auth-token': token },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-auth-token': token
+      },
+      body: JSON.stringify({ inviteCode: inviteCode.trim().toUpperCase() }),
     });
-    
+
     if (!response.ok) {
       const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
       throw new Error(errData.msg || 'Failed to join room');
     }
-    
+
     return await response.json();
   },
 
