@@ -122,7 +122,7 @@ exports.createRequest = async (req, res) => {
       };
 
       if (type === 'slot_swap' && targetUserId) {
-         existingRequestQuery.targetUserId = targetUserId;
+         existingRequestQuery.targetUser = targetUserId;
       }
 
       const existingRequest = await Room.findOne({
@@ -150,7 +150,7 @@ exports.createRequest = async (req, res) => {
             request.timeSlot.day === timeSlot.day &&
             request.timeSlot.startTime === timeSlot.startTime &&
             request.timeSlot.endTime === timeSlot.endTime &&
-            (type !== 'slot_swap' || request.targetUserId?.toString() === targetUserId),
+            (type !== 'slot_swap' || request.targetUser?.toString() === targetUserId),
       );
 
       if (hasDuplicateRequest) {
@@ -169,7 +169,7 @@ exports.createRequest = async (req, res) => {
 
       // Add type-specific fields
       if (type === 'slot_swap' && targetUserId) {
-         requestData.targetUserId = targetUserId;
+         requestData.targetUser = targetUserId;
          if (targetSlot) {
             requestData.targetSlot = targetSlot;
          }
@@ -217,7 +217,7 @@ exports.handleRequest = async (req, res) => {
 
       // Verify the user has permission to handle this request
       const isOwner = room.isOwner(req.user.id);
-      const isTargetUser = request.targetUserId && request.targetUserId.toString() === req.user.id;
+      const isTargetUser = request.targetUser && request.targetUser.toString() === req.user.id;
 
       if (!isOwner && !isTargetUser) {
          return res.status(403).json({ msg: '이 요청을 처리할 권한이 없습니다.' });
@@ -235,7 +235,7 @@ exports.handleRequest = async (req, res) => {
 
       // If approved, modify time slots
       if (action === 'approved') {
-         const { type, timeSlot, targetUserId, targetSlot, requester } = request;
+         const { type, timeSlot, targetUser, targetSlot, requester } = request;
 
          if (type === 'slot_release') {
             // Remove the slot from requester
@@ -248,7 +248,7 @@ exports.handleRequest = async (req, res) => {
                   slot.endTime === timeSlot.endTime
                );
             });
-         } else if (type === 'slot_swap' && targetUserId && targetSlot) {
+         } else if (type === 'slot_swap' && targetUser && targetSlot) {
             // Find and swap the slots
             const requesterSlotIndex = room.timeSlots.findIndex(slot => {
                const slotUserId = slot.user._id || slot.user;
@@ -263,7 +263,7 @@ exports.handleRequest = async (req, res) => {
             const targetSlotIndex = room.timeSlots.findIndex(slot => {
                const slotUserId = slot.user._id || slot.user;
                return (
-                  slotUserId.toString() === targetUserId.toString() &&
+                  slotUserId.toString() === targetUser.toString() &&
                   slot.day === targetSlot.day &&
                   slot.startTime === targetSlot.startTime &&
                   slot.endTime === targetSlot.endTime
@@ -354,8 +354,15 @@ exports.getSentRequests = async (req, res) => {
       const rooms = await Room.find({
          $or: [{ owner: userId }, { 'members.user': userId }],
       })
-         .populate('requests.requester', 'firstName lastName email')
-         .populate('requests.targetUser', 'firstName lastName email');
+         .populate({
+            path: 'requests.requester',
+            select: 'firstName lastName email'
+         })
+         .populate({
+            path: 'requests.targetUser',
+            select: 'firstName lastName email',
+            options: { strictPopulate: false }
+         });
 
       const sentRequests = rooms.flatMap(room =>
          room.requests.filter(req => req.requester && req.requester._id.toString() === userId),
@@ -385,8 +392,8 @@ exports.getExchangeRequestsCount = async (req, res) => {
             if (
                request.status === 'pending' &&
                request.type === 'slot_swap' &&
-               request.targetUserId &&
-               request.targetUserId.toString() === userId
+               request.targetUser &&
+               request.targetUser.toString() === userId
             ) {
                count++;
             }
