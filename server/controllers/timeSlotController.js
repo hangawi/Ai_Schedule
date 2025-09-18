@@ -1,51 +1,57 @@
 const Room = require('../models/room');
 
 // @desc    Submit time slots for a room
-// @route   POST /api/coordination/rooms/:roomId/timeslots
-// @access  Private
-exports.submitTimeSlots = async (req, res) => {
-   try {
-      const room = await Room.findById(req.params.roomId);
+  // @route   POST /api/coordination/rooms/:roomId/timeslots
+  // @access  Private
+  exports.submitTimeSlots = async (req, res) => {
+     try {
+        const room = await Room.findById(req.params.roomId);
 
-      if (!room) {
-         return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
-      }
+        if (!room) {
+           return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+        }
 
-      if (!room.isMember(req.user.id) && !room.isOwner(req.user.id)) {
-         return res.status(403).json({ msg: '이 방에 접근할 권한이 없습니다.' });
-      }
+        if (!room.isMember(req.user.id) && !room.isOwner(req.user.id)) {
+           return res.status(403).json({ msg: '이 방에 접근할 권한이 없습니다.' });
+        }
 
-      const { timeSlots } = req.body;
+        const { slots } = req.body;
 
-      // Remove existing time slots for this user
-      room.timeSlots = room.timeSlots.filter(slot => {
-         const slotUserId = slot.user?._id || slot.user;
-         return slotUserId?.toString() !== req.user.id.toString();
-      });
+        // 사용자가 제출한 새 슬롯만 추가합니다. (기존 슬롯은 그대로 둡니다)
+        if (Array.isArray(slots)) {
+          slots.forEach(slot => {
+             // 이미 해당 시간대에 슬롯이 있는지 확인
+             const existingSlot = room.timeSlots.find(s =>
+                  s.user.toString() === req.user.id &&
+                  s.day === slot.day &&
+                  s.startTime === slot.startTime
+             );
 
-      // Add new time slots
-      timeSlots.forEach(slot => {
-         room.timeSlots.push({
-            user: req.user.id,
-            date: slot.date,
-            startTime: slot.startTime,
-            endTime: slot.endTime,
-            day: slot.day,
-            priority: slot.priority || 3,
-            subject: slot.subject || '제출된 시간',
-            status: 'confirmed',
-         });
-      });
+             // 없을 경우에만 새로 추가
+             if (!existingSlot) {
+                 room.timeSlots.push({
+                    user: req.user.id,
+                    date: slot.date,
+                    startTime: slot.startTime,
+                    endTime: slot.endTime,
+                    day: slot.day,
+                    priority: slot.priority || 3,
+                    subject: slot.subject || '제출된 시간',
+                    status: 'confirmed',
+                 });
+             }
+          });
+        }
 
-      await room.save();
-      await room.populate('timeSlots.user', 'firstName lastName email');
+        await room.save();
+        await room.populate('timeSlots.user', 'firstName lastName email');
 
-      res.json(room);
-   } catch (error) {
-      console.error('Error submitting time slots:', error);
-      res.status(500).json({ msg: 'Server error' });
-   }
-};
+        res.json(room);
+     } catch (error) {
+        console.error('Error submitting time slots:', error);
+        res.status(500).json({ msg: 'Server error' });
+     }
+  };
 
 // @desc    Remove a specific time slot
 // @route   DELETE /api/coordination/rooms/:roomId/timeslots

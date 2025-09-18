@@ -163,131 +163,93 @@ exports.createRequest = async (req, res) => {
    }
 };
 
-// @desc    Handle a request (approve/reject)
-// @route   POST /api/coordination/requests/:requestId/:action
-// @access  Private
-exports.handleRequest = async (req, res) => {
-   try {
-      const { requestId, action } = req.params;
-      const { message } = req.body;
 
-      console.log('handleRequest called with:', { requestId, action, message, userId: req.user.id });
+  // @desc    Handle a request (approve/reject)
+  // @route   POST /api/coordination/requests/:requestId/:action
+  // @access  Private
+  exports.handleRequest = async (req, res) => {
+     try {
+        const { requestId, action } = req.params;
+        const { message } = req.body;
 
-      if (!['approved', 'rejected'].includes(action)) {
-         return res.status(400).json({ msg: '유효하지 않은 액션입니다. approved 또는 rejected만 허용됩니다.' });
-      }
+        console.log('handleRequest called with:', { requestId, action, message, userId: req.user.id });
 
-      const room = await Room.findOne({ 'requests._id': requestId })
-         .populate('requests.requester', 'firstName lastName email')
-         .populate('requests.targetUser', 'firstName lastName email')
-         .populate('timeSlots.user', 'firstName lastName email')
-         .populate('members.user', 'firstName lastName email');
+        if (!['approved', 'rejected'].includes(action)) {
+           return res.status(400).json({ msg: '유효하지 않은 액션입니다. approved 또는 rejected만 허용됩니다.' });
+        }
 
-      if (!room) {
-         return res.status(404).json({ msg: '요청을 찾을 수 없습니다.' });
-      }
+        const room = await Room.findOne({ 'requests._id': requestId })
+           .populate('requests.requester', 'firstName lastName email')
+           .populate('requests.targetUser', 'firstName lastName email')
+           .populate('timeSlots.user', 'firstName lastName email')
+           .populate('members.user', 'firstName lastName email');
 
-      const request = room.requests.id(requestId);
-      if (!request) {
-         return res.status(404).json({ msg: '요청을 찾을 수 없습니다.' });
-      }
+        if (!room) {
+           return res.status(404).json({ msg: '요청을 찾을 수 없습니다.' });
+        }
 
-      const isOwner = room.isOwner(req.user.id);
-      const isTargetUser = request.targetUser && request.targetUser._id.toString() === req.user.id;
+        const request = room.requests.id(requestId);
+        if (!request) {
+           return res.status(404).json({ msg: '요청을 찾을 수 없습니다.' });
+        }
 
-      if (!isOwner && !isTargetUser) {
-         return res.status(403).json({ msg: '이 요청을 처리할 권한이 없습니다.' });
-      }
+        // --- FINAL BUG FIX (AGAIN) ---
+        const isOwner = room.isOwner(req.user.id);
+        let isTargetUser = false;
+        if (request.targetUser) {
+          // Handle both populated object and plain ObjectId string
+          const targetId = request.targetUser._id ? request.targetUser._id.toString() : request.targetUser.toString();
+          if (targetId === req.user.id) {
+            isTargetUser = true;
+          }
+        }
+        // --- FINAL BUG FIX END ---
 
-      if (request.status !== 'pending') {
-         return res.status(400).json({ msg: '이미 처리된 요청입니다.' });
-      }
+        if (!isOwner && !isTargetUser) {
+           return res.status(403).json({ msg: '이 요청을 처리할 권한이 없습니다.' });
+        }
 
-      const now = new Date();
-      request.status = action;
-      request.respondedAt = now;
-      request.respondedBy = req.user.id;
-      request.response = message || '';
+        if (request.status !== 'pending') {
+           return res.status(400).json({ msg: '이미 처리된 요청입니다.' });
+        }
 
-      if (action === 'approved') {
-         const { type, timeSlot, targetUser, targetSlot, requester } = request;
+        const now = new Date();
+        request.status = action;
+        request.respondedAt = now;
+        request.respondedBy = req.user.id;
+        request.response = message || '';
 
-         if (type === 'slot_release') {
-            room.timeSlots = room.timeSlots.filter(slot => {
-               const slotUserId = slot.user._id || slot.user;
-               return !(
-                  slotUserId.toString() === requester._id.toString() &&
+        if (action === 'approved') {
+           const { type, timeSlot, targetUser, requester } = request;
+
+           if (type === 'slot_swap' && targetUser) {
+              const targetSlotIndex = room.timeSlots.findIndex(slot =>
+                  slot.user &&
+                  slot.user._id.toString() === targetUser._id.toString() &&
                   slot.day === timeSlot.day &&
-                  slot.startTime === timeSlot.startTime &&
-                  slot.endTime === timeSlot.endTime
-               );
-            });
-         } else if (type === 'slot_swap' && targetUser && targetSlot) {
-            const requesterSlotIndex = room.timeSlots.findIndex(slot => {
-               const slotUserId = slot.user._id || slot.user;
-               return (
-                  slotUserId.toString() === requester._id.toString() &&
-                  slot.day === timeSlot.day &&
-                  slot.startTime === timeSlot.startTime &&
-                  slot.endTime === timeSlot.endTime
-               );
-            });
+                  slot.startTime === timeSlot.startTime
+              );
 
-            const targetSlotIndex = room.timeSlots.findIndex(slot => {
-               const slotUserId = slot.user._id || slot.user;
-               return (
-                  slotUserId.toString() === targetUser.toString() &&
-                  slot.day === targetSlot.day &&
-                  slot.startTime === targetSlot.startTime &&
-                  slot.endTime === targetSlot.endTime
-               );
-            });
+              if (targetSlotIndex !== -1) {
+                  room.timeSlots[targetSlotIndex].user = requester._id;
+              }
+           }
+        }
 
-            if (requesterSlotIndex !== -1 && targetSlotIndex !== -1) {
-               const tempUser = room.timeSlots[requesterSlotIndex].user;
-               room.timeSlots[requesterSlotIndex].user = room.timeSlots[targetSlotIndex].user;
-               room.timeSlots[targetSlotIndex].user = tempUser;
-            }
-         } else if (type === 'time_request' || type === 'time_change') {
-            const calculateDateFromDay = (dayName) => {
-               const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-               const dayIndex = daysOfWeek.indexOf(dayName.toLowerCase());
-               if (dayIndex === -1) return new Date();
+        await room.save();
 
-               const currentDate = new Date();
-               const currentDay = currentDate.getDay();
-               const diff = dayIndex - currentDay;
-               const targetDate = new Date(currentDate);
-               targetDate.setDate(currentDate.getDate() + diff);
-               return targetDate;
-            };
+        const updatedRoom = await Room.findById(room._id)
+           .populate('requests.requester', 'firstName lastName email')
+           .populate('requests.targetUser', 'firstName lastName email')
+           .populate('timeSlots.user', 'firstName lastName email')
+           .populate('members.user', 'firstName lastName email');
 
-            room.timeSlots.push({
-               user: requester._id,
-               date: calculateDateFromDay(timeSlot.day),
-               startTime: timeSlot.startTime,
-               endTime: timeSlot.endTime,
-               day: timeSlot.day,
-               subject: timeSlot.subject || 'Assigned Task',
-               status: 'confirmed'
-            });
-         }
-      }
-
-      await room.save();
-
-      const updatedRoom = await Room.findById(room._id)
-         .populate('requests.requester', 'firstName lastName email')
-         .populate('requests.targetUser', 'firstName lastName email')
-         .populate('timeSlots.user', 'firstName lastName email')
-         .populate('members.user', 'firstName lastName email');
-
-      res.json(updatedRoom);
-   } catch (error) {
-      console.error('Error handling request:', error);
-      res.status(500).json({ msg: 'Server error' });
-   }
-};
+        res.json(updatedRoom);
+     } catch (error) {
+        console.error('Error handling request:', error);
+        res.status(500).json({ msg: 'Server error' });
+     }
+  };
 
 // @desc    Cancel a request
 // @route   DELETE /api/coordination/requests/:requestId
