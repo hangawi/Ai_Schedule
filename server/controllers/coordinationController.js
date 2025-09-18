@@ -460,6 +460,38 @@ exports.runAutoSchedule = async (req, res) => {
 
       console.log('runAutoSchedule: membersOnly filtered:', membersOnly.length);
 
+      // Additional validation before running algorithm
+      if (!room.timeSlots || room.timeSlots.length === 0) {
+        return res.status(400).json({ msg: '시간표 데이터에 오류가 있습니다. 멤버들이 시간을 입력했는지 확인해주세요.' });
+      }
+
+      // Validate timeSlots data
+      const invalidSlots = room.timeSlots.filter(slot =>
+        !slot.user || !slot.startTime || !slot.endTime || !slot.day
+      );
+      if (invalidSlots.length > 0) {
+        console.log('Invalid slots found:', invalidSlots);
+        return res.status(400).json({ msg: '시간표 데이터에 오류가 있습니다. 일부 시간 슬롯 정보가 불완전합니다.' });
+      }
+
+      // Validate members have submitted timeSlots
+      const membersWithSlots = [...new Set(room.timeSlots.map(slot => {
+        const userId = slot.user._id || slot.user;
+        return userId.toString();
+      }))];
+
+      const memberIds = membersOnly.map(m => {
+        const memberId = m.user._id ? m.user._id.toString() : m.user.toString();
+        return memberId;
+      });
+
+      const membersWithoutSlots = memberIds.filter(id => !membersWithSlots.includes(id));
+
+      if (membersWithoutSlots.length > 0) {
+        console.log('Members without slots:', membersWithoutSlots);
+        return res.status(400).json({ msg: '일부 멤버가 시간표를 입력하지 않았습니다. 모든 멤버가 시간을 입력해야 자동 배정이 가능합니다.' });
+      }
+
       // Continue with algorithm...
       const result = schedulingAlgorithm.runAutoSchedule(
          membersOnly,
@@ -497,6 +529,28 @@ exports.runAutoSchedule = async (req, res) => {
             });
          }
       });
+
+      // Update carry-over assignments for unassigned members
+      if (result.carryOverAssignments && result.carryOverAssignments.length > 0) {
+         for (const carryOver of result.carryOverAssignments) {
+            const memberIndex = room.members.findIndex(m =>
+               m.user.toString() === carryOver.memberId
+            );
+
+            if (memberIndex !== -1) {
+               // Add to carryOver field
+               room.members[memberIndex].carryOver += carryOver.neededHours;
+
+               // Add to carryOverHistory
+               room.members[memberIndex].carryOverHistory.push({
+                  week: carryOver.week,
+                  amount: carryOver.neededHours,
+                  reason: 'unassigned_from_auto_schedule',
+                  timestamp: new Date()
+               });
+            }
+         }
+      }
 
       await room.save();
 

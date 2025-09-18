@@ -81,6 +81,13 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
    const enhancedSetActiveTab = useCallback((newTab) => {
      setActiveTab(newTab);
      localStorage.setItem('activeTab', newTab);
+
+     // Clear room state when switching away from coordination tab
+     if (newTab !== 'coordination') {
+       localStorage.removeItem('currentRoomId');
+       localStorage.removeItem('currentRoomData');
+     }
+
      // Push new state to browser history
      window.history.pushState({ tab: newTab }, '', `#${newTab}`);
    }, []);

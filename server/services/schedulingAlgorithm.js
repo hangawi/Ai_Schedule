@@ -46,12 +46,26 @@ class SchedulingAlgorithm {
     // Phase 4: Carry-over assignments (prioritize unassigned members in future weeks)
     this._carryOverAssignments(timetable, assignments, minSlotsPerWeek);
 
+    // Store carry-over assignments for next week
+    const carryOverAssignments = [];
+
     // Identify unassigned members (for future carry-over)
     const unassignedMembersInfo = Object.keys(assignments)
       .filter(id => assignments[id].assignedHours < minSlotsPerWeek)
       .map(id => {
         const neededHours = (minSlotsPerWeek - assignments[id].assignedHours) / 2; // Convert back to hours
         console.log(`알고리즘: 멤버 ${id} - 할당된 슬롯: ${assignments[id].assignedHours}, 필요한 슬롯: ${minSlotsPerWeek}, 이월 시간: ${neededHours}시간`);
+
+        // Add to carry-over list
+        if (neededHours > 0) {
+          carryOverAssignments.push({
+            memberId: id,
+            neededHours: neededHours,
+            priority: this.getMemberPriority(members.find(m => m.user._id.toString() === id)),
+            week: startDate
+          });
+        }
+
         return {
           memberId: id,
           neededHours: neededHours,
@@ -79,11 +93,19 @@ class SchedulingAlgorithm {
       assignments,
       unassignedMembersInfo,
       unresolvableConflicts,
+      carryOverAssignments, // 다음 주 이월 정보
     };
   }
 
   getMemberPriority(member) {
-    return member.user.priority || 0;
+    // Check room-level priority first, then user-level priority
+    if (member.priority) {
+      return member.priority;
+    }
+    if (member.user && member.user.priority) {
+      return member.user.priority;
+    }
+    return 3; // Default medium priority
   }
 
   _createTimetable(roomTimeSlots, startDate, numWeeks, roomSettings = {}) {
@@ -222,8 +244,22 @@ class SchedulingAlgorithm {
       // Find all members who still need hours assigned
       const membersToAssign = Object.keys(assignments)
         .filter(id => assignments[id].assignedHours < minSlotsPerWeek)
-        // Prioritize members with the fewest hours assigned so far
-        .sort((a, b) => assignments[a].assignedHours - assignments[b].assignedHours);
+        // Sort by priority first, then by fewest hours assigned
+        .sort((a, b) => {
+          const memberA = members.find(m => m.user._id.toString() === a);
+          const memberB = members.find(m => m.user._id.toString() === b);
+
+          const priorityA = this.getMemberPriority(memberA);
+          const priorityB = this.getMemberPriority(memberB);
+
+          // Higher priority first (5 > 4 > 3 > 2 > 1)
+          if (priorityA !== priorityB) {
+            return priorityB - priorityA;
+          }
+
+          // If same priority, prioritize members with fewest hours
+          return assignments[a].assignedHours - assignments[b].assignedHours;
+        });
 
       if (membersToAssign.length === 0) {
         break; // All members have their minimum hours

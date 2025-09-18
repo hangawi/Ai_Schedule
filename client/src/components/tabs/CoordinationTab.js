@@ -619,7 +619,16 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                               방장
                             </span>
                           )}
-                          {!memberIsOwner && (member.carryOver > 0 || (currentRoom?.negotiations?.filter(neg => neg.status === 'active' && neg.conflictingMembers?.length > 0)?.length > 0)) && (
+                          {!memberIsOwner && (member.carryOver > 0 || (() => {
+                            if (!currentRoom?.negotiations) return false;
+                            const activeNegotiations = currentRoom.negotiations.filter(neg =>
+                              neg.status === 'active' &&
+                              neg.conflictingMembers &&
+                              Array.isArray(neg.conflictingMembers) &&
+                              neg.conflictingMembers.length > 1
+                            );
+                            return activeNegotiations.length > 0;
+                          })()) && (
                             <span className={`ml-2 px-2 py-0.5 text-xs rounded-full flex-shrink-0 font-semibold ${
                               member.carryOver > 0
                                 ? 'bg-yellow-100 text-yellow-800'
@@ -1072,43 +1081,24 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 isLoading={isScheduling}
                 currentRoom={currentRoom}
                 onAutoResolveNegotiations={handleAutoResolveNegotiations}
+                onResetCarryOverTimes={handleResetCarryOverTimes}
+                onResetCompletedTimes={handleResetCompletedTimes}
                 currentWeekStartDate={currentWeekStartDate}
                 activeNegotiationsCount={(() => {
-                  const activeNegotiations = currentRoom?.negotiations?.filter(neg =>
-                    neg.status === 'active' && neg.conflictingMembers?.length > 0
-                  ) || [];
+                  if (!currentRoom?.negotiations) return 0;
+
+                  const activeNegotiations = currentRoom.negotiations.filter(neg => {
+                    return neg.status === 'active' &&
+                           neg.conflictingMembers &&
+                           Array.isArray(neg.conflictingMembers) &&
+                           neg.conflictingMembers.length > 1; // 실제 충돌은 2명 이상일 때
+                  });
+
+                  console.log('AutoSchedulerPanel activeNegotiations:', activeNegotiations.length);
                   return activeNegotiations.length;
                 })()}
               />
             }
-
-            {/* 시간 관리 버튼들 */}
-            {isOwner && (currentRoom?.members?.some(m => m.carryOver > 0) || currentRoom?.members?.some(m => m.totalProgressTime > 0)) && (
-              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <h4 className="text-sm font-semibold text-blue-800 mb-2">멤버 시간 관리</h4>
-                <p className="text-xs text-blue-600 mb-3">
-                  테스트를 위해 멤버들의 이월시간 또는 완료시간을 초기화할 수 있습니다.
-                </p>
-                <div className="flex gap-2">
-                  {currentRoom?.members?.some(m => m.carryOver > 0) && (
-                    <button
-                      onClick={handleResetCarryOverTimes}
-                      className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                    >
-                      모든 이월시간 초기화
-                    </button>
-                  )}
-                  {currentRoom?.members?.some(m => m.totalProgressTime > 0) && (
-                    <button
-                      onClick={handleResetCompletedTimes}
-                      className="px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                    >
-                      모든 완료시간 초기화
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
             {scheduleError && 
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4" role="alert">
                 <strong className="font-bold">오류!</strong>
@@ -1437,7 +1427,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
 export default CoordinationTab;
 
-const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom, onAutoResolveNegotiations, currentWeekStartDate, activeNegotiationsCount = 0 }) => {
+const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom, onAutoResolveNegotiations, onResetCarryOverTimes, onResetCompletedTimes, currentWeekStartDate, activeNegotiationsCount = 0 }) => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'ownerFocusTime') {
@@ -1506,6 +1496,28 @@ const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom
           >
             협의 자동 해결 ({activeNegotiationsCount}개)
           </button>
+        )}
+
+        {/* 시간 관리 버튼들 */}
+        {(currentRoom?.members?.some(m => m.carryOver > 0) || currentRoom?.members?.some(m => m.totalProgressTime > 0)) && (
+          <div className="grid grid-cols-2 gap-2">
+            {currentRoom?.members?.some(m => m.carryOver > 0) && (
+              <button
+                onClick={onResetCarryOverTimes}
+                className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 text-xs transition-colors"
+              >
+                이월시간 초기화
+              </button>
+            )}
+            {currentRoom?.members?.some(m => m.totalProgressTime > 0) && (
+              <button
+                onClick={onResetCompletedTimes}
+                className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 text-xs transition-colors"
+              >
+                완료시간 초기화
+              </button>
+            )}
+          </div>
         )}
       </div>
 

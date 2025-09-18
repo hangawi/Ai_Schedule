@@ -65,9 +65,15 @@ const Header = ({
             className={`text-lg sm:text-xl transition-colors ${isVoiceRecognitionEnabled ? 'text-blue-500 hover:text-blue-600' : 'text-gray-400 hover:text-gray-500'}`}>
             {isVoiceRecognitionEnabled ? '🎙️' : '🔇'}
           </button>
-          <button 
-            className="w-8 h-8 bg-red-100 text-red-600 rounded-full flex items-center justify-center cursor-pointer ml-1 sm:ml-2" 
-            onClick={handleManualLogout}
+          <button
+            className="w-8 h-8 bg-red-100 text-red-600 rounded-full flex items-center justify-center cursor-pointer ml-1 sm:ml-2"
+            onClick={() => {
+              // Clear coordination room state on logout
+              localStorage.removeItem('currentRoomId');
+              localStorage.removeItem('currentRoomData');
+              localStorage.removeItem('activeTab');
+              handleManualLogout();
+            }}
             aria-label="로그아웃"
             title="로그아웃">
             <LogOut size={16} />

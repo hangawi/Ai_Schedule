@@ -22,7 +22,16 @@ export const useVoiceCommands = (isLoggedIn, isVoiceRecognitionEnabled, handleCh
     if (onCommandStart) onCommandStart();
 
     try {
-      const result = await handleChatMessage(command);
+      const commandStartTime = performance.now();
+      const result = await Promise.race([
+        handleChatMessage(command),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('명령 처리 시간이 너무 깁니다')), 8000)
+        )
+      ]);
+      const commandEndTime = performance.now();
+      console.log(`음성 명령 처리 시간: ${(commandEndTime - commandStartTime).toFixed(2)}ms`);
+
       speak(result.message);
     } catch (error) {
       speak(`음성 명령 처리에 실패했습니다. ${error.message}`);
