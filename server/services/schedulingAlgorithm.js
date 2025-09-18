@@ -73,17 +73,49 @@ class SchedulingAlgorithm {
         };
       });
 
-    // Identify unresolvable conflicts
+    // Identify unresolvable conflicts and create negotiations
     const unresolvableConflicts = [];
+    const negotiations = [];
+
     for (const key in timetable) {
       const slot = timetable[key];
       if (!slot.assignedTo) {
         const nonOwnerAvailable = slot.available.filter(a => a.memberId !== ownerId);
         if (nonOwnerAvailable.length > 1) {
-          unresolvableConflicts.push({
+          const conflict = {
             slotKey: key,
             date: slot.date,
             availableMembers: nonOwnerAvailable.map(a => a.memberId)
+          };
+          unresolvableConflicts.push(conflict);
+
+          // Create negotiation for this conflict
+          const [dateKey, timeKey] = key.split('-');
+          const [startHour, startMinute] = timeKey.split(':').map(Number);
+          const endHour = startMinute === 30 ? startHour + 1 : startHour;
+          const endMinute = startMinute === 30 ? 0 : 30;
+          const endTime = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
+
+          const dayMap = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday' };
+          const dayString = dayMap[slot.dayOfWeek];
+
+          negotiations.push({
+            slotInfo: {
+              day: dayString,
+              startTime: timeKey,
+              endTime: endTime,
+              date: slot.date
+            },
+            conflictingMembers: nonOwnerAvailable.map(a => {
+              const member = nonOwnerMembers.find(m => m.user._id.toString() === a.memberId);
+              return {
+                user: a.memberId,
+                priority: this.getMemberPriority(member)
+              };
+            }),
+            messages: [],
+            status: 'active',
+            createdAt: new Date()
           });
         }
       }
@@ -93,6 +125,7 @@ class SchedulingAlgorithm {
       assignments,
       unassignedMembersInfo,
       unresolvableConflicts,
+      negotiations, // 협의 목록 추가
       carryOverAssignments, // 다음 주 이월 정보
     };
   }

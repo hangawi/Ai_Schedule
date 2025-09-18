@@ -27,6 +27,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const { user } = useAuth();
   const [roomExchangeCounts, setRoomExchangeCounts] = useState({});
   const [sentRequests, setSentRequests] = useState([]);
+  const [receivedRequests, setReceivedRequests] = useState([]);
 
   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
   const showAlert = (message) => setCustomAlert({ show: true, message });
@@ -84,6 +85,18 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       }
     } catch (error) {
       console.error('Failed to load sent requests:', error);
+    }
+  }, [user?.id]);
+
+  const loadReceivedRequests = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const result = await coordinationService.getReceivedRequests();
+      if (result.success) {
+        setReceivedRequests(result.requests);
+      }
+    } catch (error) {
+      console.error('Failed to load received requests:', error);
     }
   }, [user?.id]);
 
@@ -380,6 +393,9 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       if (currentRoom?._id) {
         await fetchRoomDetails(currentRoom._id);
       }
+      // 받은 요청 목록도 새로고침
+      await loadReceivedRequests();
+      await loadSentRequests();
     } catch (error) {
       console.error('Failed to handle request:', error);
     }
@@ -472,9 +488,10 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       setTimeout(() => {
         loadRoomExchangeCounts();
         loadSentRequests();
+        loadReceivedRequests();
       }, 100);
     }
-  }, [user?.id, fetchMyRooms, loadRoomExchangeCounts, loadSentRequests]);
+  }, [user?.id, fetchMyRooms, loadRoomExchangeCounts, loadSentRequests, loadReceivedRequests]);
 
   useEffect(() => {
     if (!currentRoom && showManageRoomModal) {

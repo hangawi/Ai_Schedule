@@ -407,6 +407,65 @@ exports.getSentRequests = async (req, res) => {
    }
 };
 
+// @desc    Get all requests received by the user
+// @route   GET /api/coordination/received-requests
+// @access  Private
+exports.getReceivedRequests = async (req, res) => {
+   try {
+      const userId = req.user.id;
+
+      // Find all rooms and filter requests where current user is the target
+      const rooms = await Room.find({
+         $or: [{ owner: userId }, { 'members.user': userId }],
+      })
+         .populate({
+            path: 'requests.requester',
+            select: 'firstName lastName email'
+         })
+         .populate({
+            path: 'requests.targetUser',
+            select: 'firstName lastName email',
+            options: { strictPopulate: false }
+         });
+
+      const receivedRequests = rooms.flatMap(room =>
+         room.requests
+           .filter(req => {
+             // Check if current user is the target of the request
+             if (!req.targetUser) return false;
+
+             // Handle different ObjectId formats
+             let targetUserId;
+             if (typeof req.targetUser === 'string') {
+               targetUserId = req.targetUser;
+             } else if (typeof req.targetUser === 'object') {
+               if (req.targetUser._id) {
+                 targetUserId = req.targetUser._id.toString();
+               } else if (req.targetUser.toString && typeof req.targetUser.toString === 'function') {
+                 targetUserId = req.targetUser.toString();
+               } else {
+                 targetUserId = String(req.targetUser);
+               }
+             } else {
+               targetUserId = String(req.targetUser);
+             }
+
+             return targetUserId === userId;
+           })
+           .map(req => ({
+             ...req.toObject(),
+             roomId: room._id.toString(),
+             roomName: room.name
+           }))
+      );
+
+      res.json({ success: true, requests: receivedRequests });
+   } catch (error) {
+      console.error('Error fetching received requests:', error);
+      res.status(500).json({ success: false, msg: 'Server error' });
+   }
+};
+
 // @desc    Get count of pending exchange requests for the user
 // @route   GET /api/coordination/exchange-requests-count
 // @access  Private
@@ -664,6 +723,19 @@ exports.runAutoSchedule = async (req, res) => {
 
       console.log('runAutoSchedule: Owner blocked times:', ownerBlockedTimes.length);
 
+      // Get existing carry-over assignments for this week
+      const existingCarryOvers = [];
+      for (const member of room.members) {
+        if (member.carryOver > 0) {
+          existingCarryOvers.push({
+            memberId: member.user._id.toString(),
+            neededHours: member.carryOver,
+            priority: member.priority || 3,
+            week: startDate
+          });
+        }
+      }
+
       // Continue with algorithm...
       const result = schedulingAlgorithm.runAutoSchedule(
          membersOnly,
@@ -679,10 +751,10 @@ exports.runAutoSchedule = async (req, res) => {
                ownerBlockedTimes: ownerBlockedTimes
             },
          },
-         [], // deferredAssignments
+         existingCarryOvers, // Pass existing carry-over assignments
       );
 
-      // Apply results...
+      // Clear previous auto-assignments (only remove slots assigned by system)
       room.timeSlots = room.timeSlots.filter(slot => !slot.assignedBy);
 
       // Add new assignments
@@ -706,6 +778,37 @@ exports.runAutoSchedule = async (req, res) => {
          }
       });
 
+      // Add negotiations if any conflicts were found
+      if (result.negotiations && result.negotiations.length > 0) {
+        // Clear existing active negotiations first
+        room.negotiations = room.negotiations.filter(neg => neg.status !== 'active');
+
+        // Add new negotiations
+        room.negotiations.push(...result.negotiations);
+
+        console.log(`자동배정: ${result.negotiations.length}개의 협의가 생성되었습니다.`);
+      }
+
+      // Clear carry-over for members who were fully assigned this week
+      for (const member of room.members) {
+        const memberId = member.user._id.toString();
+        const assignment = result.assignments[memberId];
+
+        if (assignment && assignment.assignedHours >= minHoursPerWeek * 2) { // minHoursPerWeek * 2 because slots are 30min each
+          // Member got full assignment, clear their carry-over
+          if (member.carryOver > 0) {
+            console.log(`멤버 ${memberId} 이월시간 해소: ${member.carryOver}시간`);
+            member.carryOverHistory.push({
+              week: startDate,
+              amount: -member.carryOver,
+              reason: 'resolved_by_auto_schedule',
+              timestamp: new Date()
+            });
+            member.carryOver = 0;
+          }
+        }
+      }
+
       // Update carry-over assignments for unassigned members
       if (result.carryOverAssignments && result.carryOverAssignments.length > 0) {
          for (const carryOver of result.carryOverAssignments) {
@@ -714,16 +817,22 @@ exports.runAutoSchedule = async (req, res) => {
             );
 
             if (memberIndex !== -1) {
-               // Add to carryOver field
-               room.members[memberIndex].carryOver += carryOver.neededHours;
+               const member = room.members[memberIndex];
+               const previousCarryOver = member.carryOver;
 
-               // Add to carryOverHistory
-               room.members[memberIndex].carryOverHistory.push({
-                  week: carryOver.week,
-                  amount: carryOver.neededHours,
-                  reason: 'unassigned_from_auto_schedule',
-                  timestamp: new Date()
-               });
+               // Set new carryOver amount (don't add to existing, replace it)
+               member.carryOver = carryOver.neededHours;
+
+               // Add to carryOverHistory only if there's actually new carry-over time
+               if (carryOver.neededHours > 0) {
+                 member.carryOverHistory.push({
+                    week: carryOver.week,
+                    amount: carryOver.neededHours,
+                    reason: 'unassigned_from_auto_schedule',
+                    timestamp: new Date()
+                 });
+                 console.log(`멤버 ${carryOver.memberId} 이월시간 설정: ${carryOver.neededHours}시간 (이전: ${previousCarryOver}시간)`);
+               }
             }
          }
       }
