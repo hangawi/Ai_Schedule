@@ -33,7 +33,7 @@ const WeekView = ({
               <TimeSlot
                 key={`${date.toISOString().split('T')[0]}-${time}`}
                 date={date} // Pass date object
-                day={dayNamesKorean[date.getUTCDay() % 5]} // Pass Korean day name
+                day={dayNamesKorean[dayIndex]} // Use dayIndex directly
                 time={time}
                 ownerInfo={ownerInfo}
                 isSelected={isSelected}

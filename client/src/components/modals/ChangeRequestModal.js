@@ -17,8 +17,28 @@ const ChangeRequestModal = ({ onClose, onRequestChange, slotToChange }) => {
     }
   };
 
+  const getFormattedDateTime = () => {
+    // slotToChange에 실제 date 정보와 dayDisplay가 있다면 사용
+    if (slotToChange.dayDisplay) {
+      return `${slotToChange.dayDisplay} ${slotToChange.time}`;
+    }
+
+    // 실제 날짜가 있다면 포맷팅
+    if (slotToChange.date) {
+      const date = new Date(slotToChange.date);
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const dayOfMonth = String(date.getDate()).padStart(2, '0');
+      const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+      const dayName = dayNames[date.getDay()];
+      return `${dayName} (${month}.${dayOfMonth}) ${slotToChange.time}`;
+    }
+
+    // 기존 방식 (dayIndex 사용)
+    return `${days[slotToChange.dayIndex]}요일 ${slotToChange.time}`;
+  };
+
   const getMessage = () => {
-    const dayTime = `${days[slotToChange.dayIndex]}요일 ${slotToChange.time}`;
+    const dayTime = getFormattedDateTime();
     switch (slotToChange.action) {
       case 'release': return `${dayTime} 시간을 취소하시겠습니까?`;
       case 'swap': return `${slotToChange.currentOwner}님의 ${dayTime} 시간과 교환을 요청하시겠습니까?`;

@@ -140,11 +140,34 @@ class SchedulingAlgorithm {
       const slot = timetable[key];
       if (!slot.assignedTo) {
         const nonOwnerAvailable = slot.available.filter(a => a.memberId !== ownerId);
+
+        // 같은 우선순위의 멤버들이 2명 이상인 경우 협의 대상
         if (nonOwnerAvailable.length > 1) {
-          unresolvableConflicts.push({
-            slotKey: key,
-            availableMembers: nonOwnerAvailable.map(a => a.memberId)
+          // 우선순위별로 그룹화
+          const priorityGroups = {};
+          nonOwnerAvailable.forEach(a => {
+            if (!priorityGroups[a.priority]) {
+              priorityGroups[a.priority] = [];
+            }
+            priorityGroups[a.priority].push(a);
           });
+
+          // 가장 높은 우선순위부터 확인
+          const priorities = Object.keys(priorityGroups).map(p => parseInt(p)).sort((a, b) => b - a);
+
+          for (const priority of priorities) {
+            const group = priorityGroups[priority];
+            if (group.length > 1) {
+              // 단순히 같은 우선순위의 2명 이상이면 협의 대상
+              console.log(`협의 생성: ${key}에서 우선순위 ${priority}의 ${group.map(m => m.memberId).join(', ')} 간 협의 필요 (총 ${group.length}명)`);
+              unresolvableConflicts.push({
+                slotKey: key,
+                availableMembers: group.map(a => a.memberId),
+                priority: priority
+              });
+              break; // 가장 높은 우선순위 그룹만 처리
+            }
+          }
         }
       }
     }
@@ -168,7 +191,8 @@ class SchedulingAlgorithm {
           const member = nonOwnerMembers.find(m => m.user._id.toString() === memberId);
           return {
             user: memberId,
-            priority: this.getMemberPriority(member)
+            priority: this.getMemberPriority(member),
+            response: 'pending' // 초기 응답 상태
           };
         }),
         messages: [],
@@ -358,14 +382,14 @@ class SchedulingAlgorithm {
 
       // Iterate through the needy members and try to assign ONE slot to the most needy one
       for (const memberId of membersToAssign) {
-        const bestSlotResult = this._findBestSlotForMember(timetable, assignments, memberId, priority, members, ownerPreferences);
+        const bestSlotResult = this._findBestSlotForMember(timetable, assignments, memberId, priority, members, ownerPreferences, minSlotsPerWeek);
 
         if (bestSlotResult && bestSlotResult.bestSlot) {
           this._assignSlot(timetable, assignments, bestSlotResult.bestSlot.key, memberId);
           changed = true;
           // After assigning one slot, break from the for-loop and restart the while-loop
           // This re-evaluates who is the most "needy" member for the next assignment
-          break; 
+          break;
         }
       }
     }
@@ -393,7 +417,7 @@ class SchedulingAlgorithm {
     return `${dateKey}-${prevTime}`;
   }
 
-  _findBestSlotForMember(timetable, assignments, memberId, priority, members = [], ownerPreferences = {}) {
+  _findBestSlotForMember(timetable, assignments, memberId, priority, members = [], ownerPreferences = {}, minSlotsPerWeek = 6) {
     let bestSlot = null;
     let bestScore = -1;
 
@@ -422,7 +446,28 @@ class SchedulingAlgorithm {
         const memberAvailability = slot.available.find(a => a.memberId === memberId && a.priority >= priority && !a.isOwner);
         if (memberAvailability) {
             const contenders = slot.available.filter(a => !a.isOwner).length;
-            
+
+            // 같은 우선순위 멤버들 체크 - 협의 필요 판단
+            const samePriorityContenders = slot.available.filter(a =>
+              !a.isOwner && a.priority === memberAvailability.priority
+            );
+
+            // 같은 우선순위의 멤버가 2명 이상이면 협의가 필요함
+            if (samePriorityContenders.length > 1) {
+              // 이미 할당된 시간이 부족한 멤버가 포함되어 있는지 확인
+              const needyMembers = samePriorityContenders.filter(a => {
+                const assignment = assignments && assignments[a.memberId];
+                return assignment && assignment.assignedHours < minSlotsPerWeek;
+              });
+
+              // 필요한 멤버가 있으면 실제로 협의를 만들지 말고 할당하지 않음
+              if (needyMembers.length > 0) {
+                console.log(`협의 슬롯 발견: ${key}에서 ${samePriorityContenders.map(m => m.memberId).join(', ')} 간 협의 필요`);
+                // 이 슬롯을 아예 할당하지 않고 건너뜀
+                continue;
+              }
+            }
+
             // 기본 점수: 경쟁자 수에 따라 감점
             let score = 1000 - (contenders * 10);
 

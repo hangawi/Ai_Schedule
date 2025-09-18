@@ -265,14 +265,21 @@ const TimetableGrid = ({
     // Check if this slot is under negotiation first
     const negotiationInfo = getNegotiationInfo(date, time);
     if (negotiationInfo) {
+      // 협의 멤버 수와 우선순위 정보
+      const memberCount = negotiationInfo.conflictingMembers?.length || 0;
+      const isUserInvolved = negotiationInfo.conflictingMembers?.some(cm =>
+        (cm.user._id || cm.user) === currentUser?.id
+      );
+
       return {
-        name: '협의중',
-        color: '#F59E0B', // Orange color for negotiation
+        name: isUserInvolved ? `협의 참여 (${memberCount}명)` : `협의중 (${memberCount}명)`,
+        color: isUserInvolved ? '#DC2626' : '#F59E0B', // Red for user involvement, Orange for others
         userId: 'negotiation',
         actualUserId: 'negotiation',
-        subject: '협의중',
+        subject: isUserInvolved ? '내가 참여하는 협의' : '다른 멤버들의 협의',
         isNegotiation: true,
-        negotiationData: negotiationInfo
+        negotiationData: negotiationInfo,
+        isUserInvolved: isUserInvolved
       };
     }
 
@@ -358,6 +365,15 @@ const TimetableGrid = ({
     return null;
   }, [timeSlots, members, getNegotiationInfo]);
 
+  // Helper function to get correct day index from Date object
+  const getDayIndex = (date) => {
+    const dayOfWeek = date.getUTCDay(); // 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
+    // We want Monday=0, Tuesday=1, Wednesday=2, Thursday=3, Friday=4
+    if (dayOfWeek === 0) return -1; // Sunday, not valid
+    if (dayOfWeek === 6) return -1; // Saturday, not valid
+    return dayOfWeek - 1; // Monday(1)->0, Tuesday(2)->1, etc.
+  };
+
   // Helper to check if a slot is selected by the current user (uses currentSelectedSlots)
   const isSlotSelected = (date, time) => {
     // Add defensive check for date
@@ -365,7 +381,9 @@ const TimetableGrid = ({
       console.warn('isSlotSelected received an invalid date:', date);
       return false; // Or handle as appropriate
     }
-    const dayKey = dayNames[date.getUTCDay() % 5];
+    const dayIndex = getDayIndex(date);
+    if (dayIndex === -1) return false; // Weekend
+    const dayKey = dayNames[dayIndex];
     return currentSelectedSlots.some(s => s.day === dayKey && s.startTime === time);
   };
 
@@ -403,9 +421,12 @@ const TimetableGrid = ({
           const endHour = minute === 30 ? hour + 1 : hour;
           const endMinute = minute === 30 ? 0 : minute + 30;
 
+          const dayIndex = getDayIndex(date);
+          if (dayIndex === -1) return; // Weekend, skip
+
           onRemoveSlot({
             date: date, // Pass date object
-            day: dayNames[date.getUTCDay() % 5],
+            day: dayNames[dayIndex],
             startTime: time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`
           });
@@ -451,15 +472,23 @@ const TimetableGrid = ({
            slot.user?.toString() === ownerInfo.actualUserId || slot.user?.toString() === ownerInfo.userId)
         );
 
-        setSlotToChange({ 
+        // 정확한 날짜 표시를 위한 dayDisplay 생성
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const dayOfMonth = String(date.getDate()).padStart(2, '0');
+        const dayNames_kr = ['일', '월', '화', '수', '목', '금', '토'];
+        const dayName = dayNames_kr[date.getDay()];
+        const dayDisplay = `${dayName} (${month}.${dayOfMonth})`;
+
+        setSlotToChange({
           date: date, // Pass date object
-          time, 
-          currentOwner: ownerInfo.name, 
+          time,
+          currentOwner: ownerInfo.name,
           targetUserId: ownerInfo.actualUserId || ownerInfo.userId,
           action: 'swap',
-          targetSlot: { 
+          dayDisplay: dayDisplay, // 정확한 날짜 표시
+          targetSlot: {
             date: date, // Pass date object
-            day: dayNames[date.getUTCDay() % 5],
+            day: dayNames[getDayIndex(date)],
             startTime: time,
             endTime: calculateEndTime ? calculateEndTime(time) : (() => {
               const [h, m] = time.split(':').map(Number);
@@ -467,8 +496,8 @@ const TimetableGrid = ({
               const em = m === 30 ? 0 : m + 30;
               return `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
             })(),
-            subject: existingSlot?.subject || '교환 대상', 
-            user: ownerInfo.actualUserId || ownerInfo.userId 
+            subject: existingSlot?.subject || '교환 대상',
+            user: ownerInfo.actualUserId || ownerInfo.userId
           }
         });
         setShowChangeRequestModal(true);
@@ -479,11 +508,13 @@ const TimetableGrid = ({
         setShowAssignModal(true);
       } else {
         const daysKey = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
-        const isSelected = (selectedSlots || []).some(s => s.day === daysKey[date.getUTCDay() % 5] && s.startTime === time);
+        const dayIndex = getDayIndex(date);
+        if (dayIndex === -1) return; // Weekend, skip
+        const isSelected = (selectedSlots || []).some(s => s.day === daysKey[dayIndex] && s.startTime === time);
         
         let newSelectedSlots;
         if (isSelected) {
-          newSelectedSlots = (selectedSlots || []).filter(s => !(s.day === daysKey[date.getUTCDay() % 5] && s.startTime === time));
+          newSelectedSlots = (selectedSlots || []).filter(s => !(s.day === daysKey[dayIndex] && s.startTime === time));
         }
         else {
           const [hour, minute] = time.split(':').map(Number);
@@ -492,7 +523,7 @@ const TimetableGrid = ({
           
           const newSlot = {
             date: date, // Pass date object
-            day: daysKey[date.getUTCDay() % 5],
+            day: daysKey[dayIndex],
             startTime: time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: '새 일정'
@@ -527,7 +558,7 @@ const TimetableGrid = ({
 
       const assignmentData = {
         date: slotToAssign.date, // Pass date object
-        day: dayNames[slotToAssign.date.getUTCDay() % 5],
+        day: dayNames[getDayIndex(slotToAssign.date)],
         startTime: slotToAssign.time,
         endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
         userId: memberId,
@@ -551,7 +582,7 @@ const TimetableGrid = ({
         type: 'time_request', // Or 'time_change' if applicable
         timeSlot: {
           date: slotToRequest.date, // Pass date object
-          day: dayNames[slotToRequest.date.getUTCDay() % 5],
+          day: dayNames[getDayIndex(slotToRequest.date)],
           startTime: slotToRequest.time,
           endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
         },
@@ -579,7 +610,7 @@ const TimetableGrid = ({
           type: 'slot_release',
           timeSlot: {
             date: slotToChange.date, // Pass date object
-            day: dayNames[slotToChange.date.getUTCDay() % 5],
+            day: dayNames[getDayIndex(slotToChange.date)],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
           },
@@ -592,7 +623,7 @@ const TimetableGrid = ({
           type: 'slot_swap',
           timeSlot: {
             date: slotToChange.date, // Pass date object
-            day: dayNames[slotToChange.date.getUTCDay() % 5],
+            day: dayNames[getDayIndex(slotToChange.date)],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: (() => {
@@ -618,7 +649,7 @@ const TimetableGrid = ({
           type: 'time_change',
           timeSlot: {
             date: slotToChange.date, // Pass date object
-            day: dayNames[slotToChange.date.getUTCDay() % 5],
+            day: dayNames[getDayIndex(slotToChange.date)],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: (() => {
@@ -635,7 +666,7 @@ const TimetableGrid = ({
           },
           targetSlot: {
             date: slotToChange.date, // Pass date object
-            day: dayNames[slotToChange.date.getUTCDay() % 5],
+            day: dayNames[getDayIndex(slotToChange.date)],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: (() => {
@@ -686,7 +717,7 @@ const TimetableGrid = ({
           <div className="bg-white p-6 rounded-lg shadow-xl w-96">
             <h3 className="text-lg font-bold mb-4">시간 배정</h3>
             <p className="mb-4">
-              {days[slotToAssign.date.getUTCDay() % 5]}요일 {slotToAssign.time} 시간을 누구에게 배정하시겠습니까?
+              {days[getDayIndex(slotToAssign.date)]}요일 {slotToAssign.time} 시간을 누구에게 배정하시겠습니까?
             </p>
             <select className="w-full p-2 border rounded mb-4" onChange={(e) => handleAssign(e.target.value)} value="">
               <option value="">조원 선택</option>
@@ -718,7 +749,7 @@ const TimetableGrid = ({
           <div className="bg-white p-6 rounded-lg shadow-xl w-96">
             <h3 className="text-lg font-bold mb-4">시간 요청</h3>
             <p className="mb-4">
-              {days[slotToRequest.date.getUTCDay() % 5]}요일 {slotToRequest.time} 시간을 요청하시겠습니까?
+              {days[getDayIndex(slotToRequest.date)]}요일 {slotToRequest.time} 시간을 요청하시겠습니까?
             </p>
             <textarea
               className="w-full p-2 border rounded mb-4"
@@ -754,10 +785,10 @@ const TimetableGrid = ({
             </h3>
             <p className="mb-4">
               {slotToChange.action === 'release' ? 
-                `${days[slotToChange.date.getUTCDay() % 5]}요일 ${slotToChange.time} 시간을 취소하시겠습니까?` :
+                `${days[getDayIndex(slotToChange.date)]}요일 ${slotToChange.time} 시간을 취소하시겠습니까?` :
                slotToChange.action === 'swap' ? 
-                `${slotToChange.currentOwner}님의 ${days[slotToChange.date.getUTCDay() % 5]}요일 ${slotToChange.time} 시간과 교환을 요청하시겠습니까?` :
-                `${days[slotToChange.date.getUTCDay() % 5]}요일 ${slotToChange.time} 시간을 변경 요청하시겠습니까?`
+                `${slotToChange.currentOwner}님의 ${days[getDayIndex(slotToChange.date)]}요일 ${slotToChange.time} 시간과 교환을 요청하시겠습니까?` :
+                `${days[getDayIndex(slotToChange.date)]}요일 ${slotToChange.time} 시간을 변경 요청하시겠습니까?`
               }
             </p>
             <textarea

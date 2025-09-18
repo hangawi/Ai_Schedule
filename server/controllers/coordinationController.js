@@ -222,7 +222,17 @@ exports.createRequest = async (req, res) => {
         if (action === 'approved') {
            const { type, timeSlot, targetUser, requester } = request;
 
-           if (type === 'slot_swap' && targetUser) {
+           if (type === 'slot_release') {
+              // Remove the slot from the requester
+              room.timeSlots = room.timeSlots.filter(slot => {
+                 const slotUserId = slot.user._id || slot.user;
+                 return !(
+                    slotUserId.toString() === requester._id.toString() &&
+                    slot.day === timeSlot.day &&
+                    slot.startTime === timeSlot.startTime
+                 );
+              });
+           } else if (type === 'slot_swap' && targetUser) {
               const targetSlotIndex = room.timeSlots.findIndex(slot =>
                   slot.user &&
                   slot.user._id.toString() === targetUser._id.toString() &&
@@ -233,6 +243,30 @@ exports.createRequest = async (req, res) => {
               if (targetSlotIndex !== -1) {
                   room.timeSlots[targetSlotIndex].user = requester._id;
               }
+           } else if (type === 'time_request' || type === 'time_change') {
+              // Add the requested time slot
+              const calculateDateFromDay = (dayName) => {
+                 const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                 const dayIndex = daysOfWeek.indexOf(dayName.toLowerCase());
+                 if (dayIndex === -1) return new Date();
+
+                 const currentDate = new Date();
+                 const currentDay = currentDate.getDay();
+                 const diff = dayIndex - currentDay;
+                 const targetDate = new Date(currentDate);
+                 targetDate.setDate(currentDate.getDate() + diff);
+                 return targetDate;
+              };
+
+              room.timeSlots.push({
+                 user: requester._id,
+                 date: calculateDateFromDay(timeSlot.day),
+                 startTime: timeSlot.startTime,
+                 endTime: timeSlot.endTime,
+                 day: timeSlot.day,
+                 subject: timeSlot.subject || '승인된 요청',
+                 status: 'confirmed'
+              });
            }
         }
 
