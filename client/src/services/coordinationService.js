@@ -249,12 +249,27 @@ export const coordinationService = {
     const response = await fetch(`${API_BASE_URL}/api/coordination/sent-requests`, {
       headers: { 'x-auth-token': token },
     });
-    
+
     if (!response.ok) {
       const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
       throw new Error(errData.msg || 'Failed to get sent requests');
     }
-    
+
+    return await response.json();
+  },
+
+  // 받은 교환 요청 내역 가져오기
+  async getReceivedRequests() {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/coordination/received-requests`, {
+      headers: { 'x-auth-token': token },
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to get received requests');
+    }
+
     return await response.json();
   },
 
