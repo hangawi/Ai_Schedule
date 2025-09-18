@@ -506,6 +506,7 @@ exports.runAutoSchedule = async (req, res) => {
         if (!memberHasRoomSlots) {
           const userData = await User.findById(userId).select('defaultSchedule');
           console.log(`runAutoSchedule: Member ${userId} defaultSchedule:`, userData?.defaultSchedule?.length || 0, 'slots');
+          console.log(`runAutoSchedule: Member ${userId} defaultSchedule data:`, JSON.stringify(userData?.defaultSchedule, null, 2));
 
           if (userData && userData.defaultSchedule && userData.defaultSchedule.length > 0) {
             // Convert defaultSchedule to timeSlots for current week
@@ -524,7 +525,7 @@ exports.runAutoSchedule = async (req, res) => {
 
                 const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-                generatedTimeSlots.push({
+                const newSlot = {
                   user: userId,
                   date: targetDate,
                   startTime: schedule.startTime,
@@ -533,7 +534,9 @@ exports.runAutoSchedule = async (req, res) => {
                   priority: schedule.priority || 3,
                   subject: '선호 시간',
                   status: 'confirmed'
-                });
+                };
+                console.log(`runAutoSchedule: Generated slot for ${userId}:`, newSlot);
+                generatedTimeSlots.push(newSlot);
               }
             }
           }
@@ -542,6 +545,9 @@ exports.runAutoSchedule = async (req, res) => {
 
       // Combine room timeSlots with generated timeSlots
       const allTimeSlots = [...(room.timeSlots || []), ...generatedTimeSlots];
+      console.log('runAutoSchedule: Generated timeSlots count:', generatedTimeSlots.length);
+      console.log('runAutoSchedule: Room timeSlots count:', room.timeSlots?.length || 0);
+      console.log('runAutoSchedule: Total allTimeSlots count:', allTimeSlots.length);
 
       // Now validate that all members have some time data (either timeSlots or defaultSchedule)
       const memberIds = membersOnly.map(m => {
@@ -577,6 +583,47 @@ exports.runAutoSchedule = async (req, res) => {
         });
       }
 
+      // Generate blocked times from owner's schedule
+      const ownerBlockedTimes = [];
+
+      // Get owner's room timeSlots
+      const ownerRoomSlots = allTimeSlots.filter(slot => {
+         const slotUserId = slot.user._id || slot.user;
+         const ownerId = room.owner._id || room.owner;
+         return slotUserId.toString() === ownerId.toString();
+      });
+
+      // Get owner's defaultSchedule if they have one
+      const ownerUser = await User.findById(room.owner._id || room.owner).select('defaultSchedule');
+
+      // Add owner's timeSlots to blocked times
+      ownerRoomSlots.forEach(slot => {
+         ownerBlockedTimes.push({
+            day: slot.day,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            reason: 'owner_schedule'
+         });
+      });
+
+      // Add owner's defaultSchedule to blocked times if no room slots
+      if (ownerRoomSlots.length === 0 && ownerUser && ownerUser.defaultSchedule && ownerUser.defaultSchedule.length > 0) {
+         const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+         ownerUser.defaultSchedule.forEach(schedule => {
+            // Skip weekends
+            if (schedule.dayOfWeek === 0 || schedule.dayOfWeek === 6) return;
+
+            ownerBlockedTimes.push({
+               day: dayNames[schedule.dayOfWeek],
+               startTime: schedule.startTime,
+               endTime: schedule.endTime,
+               reason: 'owner_default_schedule'
+            });
+         });
+      }
+
+      console.log('runAutoSchedule: Owner blocked times:', ownerBlockedTimes.length);
+
       // Continue with algorithm...
       const result = schedulingAlgorithm.runAutoSchedule(
          membersOnly,
@@ -587,7 +634,10 @@ exports.runAutoSchedule = async (req, res) => {
             numWeeks,
             currentWeek,
             ownerPreferences: room.settings.ownerPreferences || {},
-            roomSettings: room.settings || {},
+            roomSettings: {
+               ...room.settings,
+               ownerBlockedTimes: ownerBlockedTimes
+            },
          },
          [], // deferredAssignments
       );
