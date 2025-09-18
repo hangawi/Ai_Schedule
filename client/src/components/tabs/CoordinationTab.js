@@ -374,10 +374,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   useEffect(() => {
     if (!currentRoom || !onExchangeRequestCountChange) return;
     
-    const exchangeRequestCount = (currentRoom.requests || []).filter(req => 
-      req.status === 'pending' && 
-      req.type === 'slot_swap' && 
-      (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())
+    const exchangeRequestCount = (currentRoom.requests || []).filter(req =>
+      req.status === 'pending' &&
+      req.type === 'slot_swap' &&
+      req.targetUser &&
+      (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString())
     ).length;
     
     onExchangeRequestCountChange(exchangeRequestCount);
@@ -754,12 +755,12 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
                 {requestViewMode === 'received' && (
                   <div>
-                    {(currentRoom.requests || []).filter(req => req.status === 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length > 0 && (
+                    {(currentRoom.requests || []).filter(req => req.status === 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString())).length > 0 && (
                       <div className="mb-4">
                         <h5 className="text-sm font-medium text-gray-700 mb-2">대기 중인 요청</h5>
                         <div className="space-y-2">
                           {(currentRoom.requests || [])
-                            .filter(req => req.status === 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString()))
+                            .filter(req => req.status === 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString()))
                             .slice(0, showAllRequests['receivedPending'] ? undefined : 3)
                             .map((request, index) => {
                               const requesterData = request.requester;
@@ -796,19 +797,19 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                 </div>
                               );
                             })}
-                          {(currentRoom.requests || []).filter(req => req.status === 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length > 3 && !showAllRequests['receivedPending'] && (
+                          {(currentRoom.requests || []).filter(req => req.status === 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString())).length > 3 && !showAllRequests['receivedPending'] && (
                             <button
                               onClick={() => setShowAllRequests(prev => ({...prev, receivedPending: true}))}
                               className="text-xs text-blue-500 hover:text-blue-600 text-center w-full"
                             >
-                              +{(currentRoom.requests || []).filter(req => req.status === 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length - 3}개 더 보기
+                              +{(currentRoom.requests || []).filter(req => req.status === 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString())).length - 3}개 더 보기
                             </button>
                           )}
                         </div>
                       </div>
                     )}
 
-                    {(currentRoom.requests || []).filter(req => req.status !== 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length > 0 && (
+                    {(currentRoom.requests || []).filter(req => req.status !== 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString())).length > 0 && (
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <h5 className="text-sm font-medium text-gray-700">처리된 요청</h5>
@@ -822,7 +823,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                         {expandedSections['receivedProcessed'] && (
                           <div className="space-y-2">
                             {(currentRoom.requests || [])
-                              .filter(req => req.status !== 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString()))
+                              .filter(req => req.status !== 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString()))
                               .slice(0, showAllRequests['receivedProcessed'] ? undefined : 3)
                               .map((request, index) => {
                                 const requesterData = request.requester;
@@ -859,12 +860,12 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                   </div>
                                 );
                               })}
-                            {(currentRoom.requests || []).filter(req => req.status !== 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length > 3 && !showAllRequests['receivedProcessed'] && (
+                            {(currentRoom.requests || []).filter(req => req.status !== 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString())).length > 3 && !showAllRequests['receivedProcessed'] && (
                               <button
                                 onClick={() => setShowAllRequests(prev => ({...prev, receivedProcessed: true}))}
                                 className="text-xs text-gray-500 hover:text-gray-600 text-center w-full"
                               >
-                                +{(currentRoom.requests || []).filter(req => req.status !== 'pending' && (req.targetUserId === user?.id || req.targetUserId === user?.email || req.targetUserId?.toString() === user?.id?.toString())).length - 3}개 더 보기
+                                +{(currentRoom.requests || []).filter(req => req.status !== 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString())).length - 3}개 더 보기
                               </button>
                             )}
                           </div>

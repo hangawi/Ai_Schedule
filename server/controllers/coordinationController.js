@@ -111,31 +111,7 @@ exports.createRequest = async (req, res) => {
          return res.status(400).json({ msg: '필수 필드가 누락되었습니다.' });
       }
 
-      // Duplicate request check
-      const existingRequestQuery = {
-         requester: req.user.id,
-         roomId,
-         status: 'pending',
-         'timeSlot.day': timeSlot.day,
-         'timeSlot.startTime': timeSlot.startTime,
-         'timeSlot.endTime': timeSlot.endTime,
-      };
-
-      if (type === 'slot_swap' && targetUserId) {
-         existingRequestQuery.targetUser = targetUserId;
-      }
-
-      const existingRequest = await Room.findOne({
-         _id: roomId,
-         requests: {
-            $elemMatch: existingRequestQuery,
-         },
-      });
-
-      if (existingRequest) {
-         return res.status(400).json({ msg: '동일한 요청이 이미 존재합니다.' });
-      }
-
+      // Check for existing room first
       const room = await Room.findById(roomId);
 
       if (!room) {
@@ -154,12 +130,11 @@ exports.createRequest = async (req, res) => {
       );
 
       if (hasDuplicateRequest) {
-         return res.status(400).json({ msg: '동일한 요청이 이미 존재합니다.' });
+         return res.status(400).json({ msg: '동일한 요청이 이미 존재합니다.', duplicateRequest: true });
       }
 
       const requestData = {
          requester: req.user.id,
-         roomId,
          type,
          timeSlot,
          message: message || '',
@@ -190,14 +165,19 @@ exports.createRequest = async (req, res) => {
 };
 
 // @desc    Handle a request (approve/reject)
-// @route   POST /api/coordination/requests/:requestId/handle
+// @route   POST /api/coordination/requests/:requestId/:action
 // @access  Private
 exports.handleRequest = async (req, res) => {
    try {
-      const { requestId } = req.params;
-      const { action, message } = req.body;
+      const { requestId, action } = req.params;
+      const { message } = req.body;
 
       console.log('handleRequest called with:', { requestId, action, message, userId: req.user.id });
+
+      // Validate action parameter
+      if (!['approved', 'rejected'].includes(action)) {
+         return res.status(400).json({ msg: '유효하지 않은 액션입니다. approved 또는 rejected만 허용됩니다.' });
+      }
 
       // Find room containing the request
       const room = await Room.findOne({ 'requests._id': requestId })
@@ -277,17 +257,29 @@ exports.handleRequest = async (req, res) => {
                room.timeSlots[targetSlotIndex].user = tempUser;
             }
          } else if (type === 'time_request' || type === 'time_change') {
+            // Calculate proper date from day name
+            const calculateDateFromDay = (dayName) => {
+               const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+               const dayIndex = daysOfWeek.indexOf(dayName.toLowerCase());
+               if (dayIndex === -1) return new Date();
+
+               const currentDate = new Date();
+               const currentDay = currentDate.getDay();
+               const diff = dayIndex - currentDay;
+               const targetDate = new Date(currentDate);
+               targetDate.setDate(currentDate.getDate() + diff);
+               return targetDate;
+            };
+
             // Add new slot for requester
             room.timeSlots.push({
                user: requester._id,
-               date: new Date(timeSlot.day), // This should be calculated properly
+               date: calculateDateFromDay(timeSlot.day),
                startTime: timeSlot.startTime,
                endTime: timeSlot.endTime,
                day: timeSlot.day,
-               priority: 3,
-               status: 'confirmed',
-               assignedBy: req.user.id,
-               assignedAt: now,
+               subject: timeSlot.subject || 'Assigned Task',
+               status: 'confirmed'
             });
          }
       }
@@ -467,43 +459,84 @@ exports.runAutoSchedule = async (req, res) => {
 
       console.log('runAutoSchedule: membersOnly filtered:', membersOnly.length);
 
-      // Additional validation before running algorithm
-      if (!room.timeSlots || room.timeSlots.length === 0) {
-        return res.status(400).json({ msg: '시간표 데이터에 오류가 있습니다. 멤버들이 시간을 입력했는지 확인해주세요.' });
+      // Populate member users to get their defaultSchedule
+      await room.populate('members.user', 'firstName lastName email defaultSchedule');
+
+      // Generate timeSlots from members' defaultSchedule if needed
+      const User = require('../models/user');
+      let generatedTimeSlots = [];
+
+      for (const member of membersOnly) {
+        const userId = member.user._id ? member.user._id.toString() : member.user.toString();
+
+        // Check if member has timeSlots in room
+        const memberHasRoomSlots = room.timeSlots.some(slot => {
+          const slotUserId = slot.user._id || slot.user;
+          return slotUserId.toString() === userId;
+        });
+
+        // If no room slots, generate from defaultSchedule
+        if (!memberHasRoomSlots) {
+          const userData = await User.findById(userId).select('defaultSchedule');
+          if (userData && userData.defaultSchedule && userData.defaultSchedule.length > 0) {
+            // Convert defaultSchedule to timeSlots for current week
+            const currentWeekDate = currentWeek ? new Date(currentWeek) : new Date();
+            const startOfWeek = new Date(currentWeekDate);
+            startOfWeek.setUTCDate(startOfWeek.getUTCDate() - startOfWeek.getUTCDay() + 1); // Monday
+
+            for (const schedule of userData.defaultSchedule) {
+              // Convert dayOfWeek (0=Sunday) to actual date
+              for (let weekOffset = 0; weekOffset < numWeeks; weekOffset++) {
+                const targetDate = new Date(startOfWeek);
+                targetDate.setUTCDate(startOfWeek.getUTCDate() + (schedule.dayOfWeek === 0 ? 6 : schedule.dayOfWeek - 1) + (weekOffset * 7));
+
+                // Skip weekends (Saturday=6, Sunday=0)
+                if (schedule.dayOfWeek === 0 || schedule.dayOfWeek === 6) continue;
+
+                const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+                generatedTimeSlots.push({
+                  user: userId,
+                  date: targetDate,
+                  startTime: schedule.startTime,
+                  endTime: schedule.endTime,
+                  day: dayNames[schedule.dayOfWeek],
+                  priority: schedule.priority || 3,
+                  subject: '선호 시간',
+                  status: 'confirmed'
+                });
+              }
+            }
+          }
+        }
       }
 
-      // Validate timeSlots data
-      const invalidSlots = room.timeSlots.filter(slot =>
-        !slot.user || !slot.startTime || !slot.endTime || !slot.day
-      );
-      if (invalidSlots.length > 0) {
-        console.log('Invalid slots found:', invalidSlots);
-        return res.status(400).json({ msg: '시간표 데이터에 오류가 있습니다. 일부 시간 슬롯 정보가 불완전합니다.' });
-      }
+      // Combine room timeSlots with generated timeSlots
+      const allTimeSlots = [...(room.timeSlots || []), ...generatedTimeSlots];
 
-      // Validate members have submitted timeSlots
-      const membersWithSlots = [...new Set(room.timeSlots.map(slot => {
-        const userId = slot.user._id || slot.user;
-        return userId.toString();
-      }))];
-
+      // Now validate that all members have some time data
       const memberIds = membersOnly.map(m => {
         const memberId = m.user._id ? m.user._id.toString() : m.user.toString();
         return memberId;
       });
 
-      const membersWithoutSlots = memberIds.filter(id => !membersWithSlots.includes(id));
+      const membersWithTimeData = [...new Set(allTimeSlots.map(slot => {
+        const userId = slot.user._id || slot.user;
+        return userId.toString();
+      }))];
 
-      if (membersWithoutSlots.length > 0) {
-        console.log('Members without slots:', membersWithoutSlots);
-        return res.status(400).json({ msg: '일부 멤버가 시간표를 입력하지 않았습니다. 모든 멤버가 시간을 입력해야 자동 배정이 가능합니다.' });
+      const membersWithoutTimeData = memberIds.filter(id => !membersWithTimeData.includes(id));
+
+      if (membersWithoutTimeData.length > 0) {
+        console.log('Members without time data:', membersWithoutTimeData);
+        return res.status(400).json({ msg: '일부 멤버가 시간표나 선호 시간을 설정하지 않았습니다. 모든 멤버가 시간 정보를 입력해야 자동 배정이 가능합니다.' });
       }
 
       // Continue with algorithm...
       const result = schedulingAlgorithm.runAutoSchedule(
          membersOnly,
          room.owner,
-         room.timeSlots || [],
+         allTimeSlots, // Use combined timeSlots including defaultSchedule
          {
             minHoursPerWeek,
             numWeeks,

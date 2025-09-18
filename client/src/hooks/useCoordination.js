@@ -22,29 +22,53 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
   // 페이지 로드 시 저장된 방 정보 복원
   useEffect(() => {
     const restoreCurrentRoom = async () => {
-      if (!userId) return;
-      
+      if (!userId) {
+        // 사용자가 없으면 방 상태 클리어
+        setCurrentRoomState(null);
+        localStorage.removeItem('currentRoomId');
+        localStorage.removeItem('currentRoomData');
+        return;
+      }
+
       const savedRoomId = localStorage.getItem('currentRoomId');
+      const savedUserId = localStorage.getItem('savedUserId');
+
+      // 사용자가 변경되었으면 방 상태 클리어
+      if (savedUserId && savedUserId !== userId) {
+        setCurrentRoomState(null);
+        localStorage.removeItem('currentRoomId');
+        localStorage.removeItem('currentRoomData');
+        localStorage.setItem('savedUserId', userId);
+        return;
+      }
+
+      // 사용자 ID 저장
+      localStorage.setItem('savedUserId', userId);
+
       if (savedRoomId) {
         try {
-          // 실제 서버에서 최신 방 정보 가져오기
+          // 실제 서버에서 최신 방 정보 가져오기 및 접근 권한 확인
           const data = await coordinationService.fetchRoomDetails(savedRoomId);
-          setCurrentRoomState(data);
-          localStorage.setItem('currentRoomData', JSON.stringify(data));
+
+          // 사용자가 해당 방에 접근할 수 있는지 확인
+          const isOwner = data.owner && data.owner._id === userId;
+          const isMember = data.members && data.members.some(m => m.user._id === userId);
+
+          if (isOwner || isMember) {
+            setCurrentRoomState(data);
+            localStorage.setItem('currentRoomData', JSON.stringify(data));
+          } else {
+            // 접근 권한이 없으면 방 상태 클리어
+            setCurrentRoomState(null);
+            localStorage.removeItem('currentRoomId');
+            localStorage.removeItem('currentRoomData');
+          }
         } catch (err) {
           console.error('Failed to restore room:', err);
-          // 서버에서 가져오기 실패시 로컬 저장된 데이터 사용
-          const savedRoomData = localStorage.getItem('currentRoomData');
-          if (savedRoomData) {
-            try {
-              const parsedRoom = JSON.parse(savedRoomData);
-              setCurrentRoomState(parsedRoom);
-            } catch (parseErr) {
-              // 파싱 실패시 저장된 데이터 삭제
-              localStorage.removeItem('currentRoomId');
-              localStorage.removeItem('currentRoomData');
-            }
-          }
+          // 서버에서 가져오기 실패시 저장된 데이터 삭제
+          setCurrentRoomState(null);
+          localStorage.removeItem('currentRoomId');
+          localStorage.removeItem('currentRoomData');
         }
       }
     };
