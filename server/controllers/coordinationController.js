@@ -549,11 +549,6 @@ exports.runAutoSchedule = async (req, res) => {
         return memberId;
       });
 
-      const membersWithTimeData = [...new Set(allTimeSlots.map(slot => {
-        const userId = slot.user._id || slot.user;
-        return userId.toString();
-      }))];
-
       // Check if all members have time data (either timeSlots or defaultSchedule from combined allTimeSlots)
       const membersWithTimeData = [...new Set(allTimeSlots.map(slot => {
         const userId = slot.user._id || slot.user;
