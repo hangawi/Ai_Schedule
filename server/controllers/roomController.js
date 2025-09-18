@@ -250,8 +250,8 @@ exports.getRoomExchangeCounts = async (req, res) => {
             return (
                request.status === 'pending' &&
                request.type === 'slot_swap' &&
-               request.targetUserId &&
-               request.targetUserId.toString() === userId
+               request.targetUser &&
+               request.targetUser.toString() === userId
             );
          });
          if (pendingRequests.length > 0) {
