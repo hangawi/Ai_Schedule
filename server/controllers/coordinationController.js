@@ -319,18 +319,35 @@ exports.cancelRequest = async (req, res) => {
          return res.status(404).json({ msg: '요청을 찾을 수 없습니다.' });
       }
 
-      // Only the requester can cancel
-      if (request.requester.toString() !== req.user.id) {
-         return res.status(403).json({ msg: '요청을 취소할 권한이 없습니다.' });
+      // Only the requester or target user can delete (for processed requests)
+      const canDelete = request.requester.toString() === req.user.id ||
+                       (request.targetUser && request.targetUser.toString() === req.user.id);
+
+      if (!canDelete) {
+         return res.status(403).json({ msg: '요청을 삭제할 권한이 없습니다.' });
       }
 
-      // Remove the request
-      room.requests.pull(requestId);
-      await room.save();
+      // For pending requests, only requester can cancel
+      if (request.status === 'pending' && request.requester.toString() !== req.user.id) {
+         return res.status(403).json({ msg: '대기 중인 요청은 요청자만 취소할 수 있습니다.' });
+      }
 
-      res.json({ msg: '요청이 취소되었습니다.' });
+      if (request.status === 'pending') {
+         // Cancel pending request (change status instead of deleting)
+         request.status = 'cancelled';
+         request.respondedAt = new Date();
+         request.respondedBy = req.user.id;
+         request.response = '요청자에 의해 취소됨';
+         await room.save();
+         res.json({ msg: '요청이 취소되었습니다.' });
+      } else {
+         // Delete processed requests (approved/rejected/cancelled)
+         room.requests.pull(requestId);
+         await room.save();
+         res.json({ msg: '요청 내역이 삭제되었습니다.' });
+      }
    } catch (error) {
-      console.error('Error canceling request:', error);
+      console.error('Error canceling/deleting request:', error);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -357,7 +374,13 @@ exports.getSentRequests = async (req, res) => {
          });
 
       const sentRequests = rooms.flatMap(room =>
-         room.requests.filter(req => req.requester && req.requester._id.toString() === userId),
+         room.requests
+           .filter(req => req.requester && req.requester._id.toString() === userId)
+           .map(req => ({
+             ...req.toObject(),
+             roomId: room._id.toString(),
+             roomName: room.name
+           }))
       );
 
       res.json({ success: true, requests: sentRequests });
@@ -466,6 +489,8 @@ exports.runAutoSchedule = async (req, res) => {
       const User = require('../models/user');
       let generatedTimeSlots = [];
 
+      console.log('runAutoSchedule: Starting timeSlots generation for', membersOnly.length, 'members');
+
       for (const member of membersOnly) {
         const userId = member.user._id ? member.user._id.toString() : member.user.toString();
 
@@ -475,9 +500,13 @@ exports.runAutoSchedule = async (req, res) => {
           return slotUserId.toString() === userId;
         });
 
+        console.log(`runAutoSchedule: Member ${userId} has room slots:`, memberHasRoomSlots);
+
         // If no room slots, generate from defaultSchedule
         if (!memberHasRoomSlots) {
           const userData = await User.findById(userId).select('defaultSchedule');
+          console.log(`runAutoSchedule: Member ${userId} defaultSchedule:`, userData?.defaultSchedule?.length || 0, 'slots');
+
           if (userData && userData.defaultSchedule && userData.defaultSchedule.length > 0) {
             // Convert defaultSchedule to timeSlots for current week
             const currentWeekDate = currentWeek ? new Date(currentWeek) : new Date();
@@ -514,7 +543,7 @@ exports.runAutoSchedule = async (req, res) => {
       // Combine room timeSlots with generated timeSlots
       const allTimeSlots = [...(room.timeSlots || []), ...generatedTimeSlots];
 
-      // Now validate that all members have some time data
+      // Now validate that all members have some time data (either timeSlots or defaultSchedule)
       const memberIds = membersOnly.map(m => {
         const memberId = m.user._id ? m.user._id.toString() : m.user.toString();
         return memberId;
@@ -525,11 +554,32 @@ exports.runAutoSchedule = async (req, res) => {
         return userId.toString();
       }))];
 
+      // Check if all members have time data (either timeSlots or defaultSchedule from combined allTimeSlots)
+      const membersWithTimeData = [...new Set(allTimeSlots.map(slot => {
+        const userId = slot.user._id || slot.user;
+        return userId.toString();
+      }))];
+
       const membersWithoutTimeData = memberIds.filter(id => !membersWithTimeData.includes(id));
+
+      console.log('runAutoSchedule: Total memberIds:', memberIds.length);
+      console.log('runAutoSchedule: Members with time data:', membersWithTimeData.length, membersWithTimeData);
+      console.log('runAutoSchedule: Members without time data:', membersWithoutTimeData.length, membersWithoutTimeData);
+      console.log('runAutoSchedule: All time slots count:', allTimeSlots.length);
 
       if (membersWithoutTimeData.length > 0) {
         console.log('Members without time data:', membersWithoutTimeData);
-        return res.status(400).json({ msg: '일부 멤버가 시간표나 선호 시간을 설정하지 않았습니다. 모든 멤버가 시간 정보를 입력해야 자동 배정이 가능합니다.' });
+
+        // Try to check defaultSchedule for missing members
+        for (const missingMemberId of membersWithoutTimeData) {
+          const userData = await User.findById(missingMemberId).select('defaultSchedule');
+          console.log(`Member ${missingMemberId} defaultSchedule:`, userData?.defaultSchedule);
+        }
+
+        return res.status(400).json({
+          msg: '일부 멤버가 시간표나 선호 시간을 설정하지 않았습니다. 모든 멤버가 시간 정보를 입력해야 자동 배정이 가능합니다.',
+          membersWithoutData: membersWithoutTimeData
+        });
       }
 
       // Continue with algorithm...
