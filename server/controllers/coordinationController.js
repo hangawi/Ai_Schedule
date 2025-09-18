@@ -399,9 +399,6 @@ exports.getExchangeRequestsCount = async (req, res) => {
    }
 };
 
-// @desc    Run auto-scheduling algorithm
-// @route   POST /api/coordination/rooms/:roomId/run-schedule
-// @access  Private (Owner only)
 exports.runAutoSchedule = async (req, res) => {
    try {
       const { roomId } = req.params;
@@ -421,15 +418,11 @@ exports.runAutoSchedule = async (req, res) => {
          return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
       }
 
+      // Clear previous auto-generated slots before running new schedule
+      room.timeSlots = room.timeSlots.filter(slot => !slot.assignedBy);
+
       if (minHoursPerWeek < 1 || minHoursPerWeek > 10) {
          return res.status(400).json({ msg: '주당 최소 할당 시간은 1-10시간 사이여야 합니다.' });
-      }
-
-      const nonOwnerMembers = room.members.filter(m => m.user._id.toString() !== room.owner._id.toString());
-      if (nonOwnerMembers.length === 0) {
-         return res
-            .status(400)
-            .json({ msg: '방에 멤버가 없습니다. 자동 배정을 위해서는 최소 1명의 멤버가 필요합니다.' });
       }
 
       if (!room.settings.ownerPreferences) {
@@ -597,6 +590,34 @@ exports.runAutoSchedule = async (req, res) => {
          existingCarryOvers,
       );
 
+      const twoWeeksAgo = new Date(startDate);
+      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+      const oneWeekAgo = new Date(startDate);
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+      const forcedNegotiationSuggestions = [];
+
+      for (const member of room.members) {
+        const memberUser = await User.findById(member.user);
+        if (member.carryOver > 0) { // They have a carry-over from last week
+            const history = member.carryOverHistory || [];
+            
+            const hasConsecutiveCarryOver = history.some(h => 
+                new Date(h.week).getTime() >= twoWeeksAgo.getTime() &&
+                new Date(h.week).getTime() < oneWeekAgo.getTime() &&
+                h.amount > 0
+            );
+
+            if (hasConsecutiveCarryOver) {
+                const memberName = memberUser.name || `${memberUser.firstName} ${memberUser.lastName}`;
+                forcedNegotiationSuggestions.push({
+                    title: '장기 이월 멤버 발생',
+                    content: `멤버 '${memberName}'의 시간이 2주 이상 연속으로 이월되었습니다. 최소 할당 시간을 줄이거나, 멤버의 참여 가능 시간을 늘리거나, 직접 시간을 할당하여 문제를 해결해야 합니다.`
+                });
+            }
+        }
+      }
+
       room.timeSlots = room.timeSlots.filter(slot => !slot.assignedBy);
 
       Object.values(result.assignments).forEach(assignment => {
@@ -673,7 +694,7 @@ exports.runAutoSchedule = async (req, res) => {
       res.json({
          room: freshRoom,
          unassignedMembersInfo: result.unassignedMembersInfo,
-         conflictSuggestions: [],
+         conflictSuggestions: forcedNegotiationSuggestions, // Use the new suggestions
       });
    } catch (error) {
       console.error('Error running auto-schedule:', error);
@@ -687,5 +708,41 @@ exports.runAutoSchedule = async (req, res) => {
       } else {
          res.status(500).json({ msg: `자동 배정 실행 중 오류가 발생했습니다: ${error.message}` });
       }
+   }
+};
+
+exports.deleteAllTimeSlots = async (req, res) => {
+   try {
+      const { roomId } = req.params;
+      const room = await Room.findById(roomId);
+
+      if (!room) {
+         return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+      }
+
+      if (!room.isOwner(req.user.id)) {
+         return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
+      }
+
+      // Clear the timeSlots array
+      room.timeSlots = [];
+      
+      // Also clear all active negotiations and non-pending requests as they are linked to slots
+      room.negotiations = [];
+      room.requests = room.requests.filter(r => r.status === 'pending');
+
+
+      await room.save();
+
+      const updatedRoom = await Room.findById(room._id)
+         .populate('owner', 'firstName lastName email')
+         .populate('members.user', 'firstName lastName email')
+         .populate('timeSlots.user', 'firstName lastName email');
+
+      res.json(updatedRoom);
+
+   } catch (error) {
+      console.error('Error deleting all time slots:', error);
+      res.status(500).json({ msg: 'Server error' });
    }
 };

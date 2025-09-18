@@ -115,6 +115,22 @@ export const coordinationService = {
     return await response.json();
   },
 
+  // 시간표 전체 삭제
+  async deleteAllTimeSlots(roomId) {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/time-slots`, {
+      method: 'DELETE',
+      headers: { 'x-auth-token': token },
+    });
+    
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to delete all time slots');
+    }
+    
+    return await response.json();
+  },
+
   // 타임슬롯 제출
   async submitTimeSlots(roomId, slots) {
     const token = getAuthToken();
