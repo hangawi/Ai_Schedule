@@ -60,6 +60,27 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [showNegotiationModal, setShowNegotiationModal] = useState(false);
   const [selectedNegotiation, setSelectedNegotiation] = useState(null);
 
+  // Delete confirmation modal state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const handleDeleteAllSlots = () => {
+    setShowDeleteConfirm(true);
+  };
+
+  const executeDeleteAllSlots = async () => {
+    if (!currentRoom?._id) return;
+    try {
+      const updatedRoom = await coordinationService.deleteAllTimeSlots(currentRoom._id);
+      setCurrentRoom(updatedRoom);
+      showAlert('시간표가 모두 삭제되었습니다.');
+    } catch (error) {
+      console.error('Failed to delete all time slots:', error);
+      showAlert(`시간표 삭제에 실패했습니다: ${error.message}`);
+    }
+    setShowDeleteConfirm(false);
+  };
+
+
   // Current week negotiations from timetable
   const [currentWeekNegotiations, setCurrentWeekNegotiations] = useState([]);
 
@@ -297,9 +318,9 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       if (newConflictSuggestions && newConflictSuggestions.length > 0) {
           setConflictSuggestions(newConflictSuggestions);
       }
-      // Directly update the current room state with the fresh room returned by the API
-      // This bypasses a potential race condition with fetchRoomDetails
-      setCurrentRoom(updatedRoom);
+      // Force a deep copy to break memoization in child components
+      const newRoomState = JSON.parse(JSON.stringify(updatedRoom));
+      setCurrentRoom(newRoomState);
 
       // Check for active negotiations and show notification
       const activeNegotiations = updatedRoom.negotiations?.filter(neg =>
@@ -375,7 +396,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [showAllRequests, setShowAllRequests] = useState({});
   const [expandedSections, setExpandedSections] = useState({});
   
-  const days = ['월요일', '화요일', '수요일', '목요일', '금요일'];
+  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
 
   const handleCancelRequest = async (requestId) => {
     try {
@@ -389,15 +410,20 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const handleRequestWithUpdate = async (requestId, action) => {
     try {
       await handleRequest(requestId, action);
-      // 요청 처리 후 방 정보 새로고침하여 시간표 업데이트 반영
+      showAlert(`요청을 ${action === 'approved' ? '승인' : '거절'}했습니다.`);
+
+      // To ensure the UI is fully updated, we'll refresh all relevant data sources.
       if (currentRoom?._id) {
         await fetchRoomDetails(currentRoom._id);
       }
-      // 받은 요청 목록도 새로고침
       await loadReceivedRequests();
       await loadSentRequests();
+      await loadRoomExchangeCounts();
+      onRefreshExchangeCount();
+
     } catch (error) {
       console.error('Failed to handle request:', error);
+      showAlert(`요청 처리에 실패했습니다: ${error.message || '알 수 없는 오류'}`);
     }
   };
   
@@ -942,42 +968,55 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                               <div className="space-y-2">
                                 {pendingRequests
                                   .slice(0, showAllRequests['sentPending'] ? undefined : 3)
-                                  .map((request, index) => (
-                                    <div key={request._id || index} className="p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                      <div className="flex justify-between items-center mb-1">
-                                        <div className="text-xs font-medium text-yellow-900">
-                                          {request.type === 'slot_swap' ? '교환 요청' : request.type === 'time_request' ? '시간 요청' : '시간 변경'}
+                                  .map((request, index) => {
+                                    const targetUserData = request.targetUser;
+                                    const targetUserName = targetUserData?.name || `${targetUserData?.firstName || ''} ${targetUserData?.lastName || ''}`.trim() || '방장';
+                                    return (
+                                      <div key={request._id || index} className="p-2 bg-gray-50 border border-gray-200 rounded-lg">
+                                        <div className="flex justify-between items-center mb-1">
+                                          <div className="text-xs font-medium text-gray-800">
+                                            To: {targetUserName}
+                                          </div>
+                                          <div className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800">
+                                            대기중
+                                          </div>
                                         </div>
-                                        <div className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800">
-                                          대기중
+                                        <div className="text-xs text-gray-700 mb-2">
+                                          {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+                                        </div>
+                                        {request.message && (
+                                          <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
+                                        )}
+                                        <div className="flex justify-end">
+                                          <button
+                                            onClick={() => handleCancelRequest(request._id)}
+                                            className="px-3 py-1 text-xs bg-gray-500 text-white rounded-md hover:bg-gray-600"
+                                          >
+                                            요청 취소
+                                          </button>
                                         </div>
                                       </div>
-                                      <div className="text-xs text-yellow-700 mb-2">
-                                        {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
-                                      </div>
-                                      {request.message && (
-                                        <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
-                                      )}
-                                      <div className="flex justify-end">
-                                        <button
-                                          onClick={() => handleCancelRequest(request._id)}
-                                          className="px-3 py-1 text-xs bg-gray-500 text-white rounded-md hover:bg-gray-600"
-                                        >
-                                          취소
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ))}
+                                    );
+                                  })}
                                 {pendingRequests.length > 3 && !showAllRequests['sentPending'] && (
                                   <button
                                     onClick={() => setShowAllRequests(prev => ({...prev, sentPending: true}))}
-                                    className="text-xs text-yellow-600 hover:text-yellow-700 text-center w-full"
+                                    className="text-xs text-blue-500 hover:text-blue-600 text-center w-full"
                                   >
                                     +{pendingRequests.length - 3}개 더 보기
                                   </button>
                                 )}
                               </div>
                             </div>
+                          )}
+
+                          {pendingRequests.length === 0 && (
+                             <div className="mb-4">
+                               <h5 className="text-sm font-medium text-gray-700 mb-2">대기 중인 요청</h5>
+                               <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-center">
+                                 <p className="text-xs text-gray-500">보낸 요청이 없습니다</p>
+                               </div>
+                             </div>
                           )}
 
                           {processedRequests.length > 0 && (
@@ -995,57 +1034,47 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                 <div className="space-y-2">
                                   {processedRequests
                                     .slice(0, showAllRequests['sentProcessed'] ? undefined : 3)
-                                    .map((request, index) => (
-                                      <div key={request._id || index} className={`p-2 border rounded-lg ${
-                                        request.status === 'approved' ? 'bg-green-50 border-green-200' :
-                                        request.status === 'cancelled' ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200'
-                                      }`}>
-                                        <div className="flex justify-between items-center mb-1">
-                                          <div className={`text-xs font-medium ${
-                                            request.status === 'approved' ? 'text-green-900' :
-                                            request.status === 'cancelled' ? 'text-gray-900' : 'text-red-900'
-                                          }`}>
-                                            {request.type === 'slot_swap' ? '교환 요청' : request.type === 'time_request' ? '시간 요청' : '시간 변경'}
-                                          </div>
-                                          <div className="flex items-center space-x-2">
-                                            <div className={`text-xs px-2 py-1 rounded-full ${
-                                              request.status === 'approved' ? 'bg-green-100 text-green-800' :
-                                              request.status === 'cancelled' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'
-                                            }`}>
-                                              {request.status === 'approved' ? '승인됨' :
-                                               request.status === 'cancelled' ? '취소됨' : '거절됨'}
-                                            </div>
-                                            <button
-                                              onClick={() => handleCancelRequest(request._id)}
-                                              className="text-xs text-gray-400 hover:text-red-500"
-                                              title="내역 삭제"
-                                            >
-                                              ✕
-                                            </button>
-                                          </div>
-                                        </div>
-                                        <div className={`text-xs mb-2 ${
-                                          request.status === 'approved' ? 'text-green-700' :
-                                          request.status === 'cancelled' ? 'text-gray-700' : 'text-red-700'
+                                    .map((request, index) => {
+                                      const targetUserData = request.targetUser;
+                                      const targetUserName = targetUserData?.name || `${targetUserData?.firstName || ''} ${targetUserData?.lastName || ''}`.trim() || '방장';
+                                      return (
+                                        <div key={request._id || index} className={`p-2 border rounded-lg ${
+                                          request.status === 'approved' ? 'bg-green-50 border-green-200' :
+                                          request.status === 'cancelled' ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200'
                                         }`}>
-                                          {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+                                          <div className="flex justify-between items-center mb-1">
+                                            <div className={`text-xs font-medium ${
+                                              request.status === 'approved' ? 'text-green-900' :
+                                              request.status === 'cancelled' ? 'text-gray-900' : 'text-red-900'
+                                            }`}>
+                                              To: {targetUserName}
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                              <div className={`text-xs px-2 py-1 rounded-full ${
+                                                request.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                                request.status === 'cancelled' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'
+                                              }`}>
+                                                {request.status === 'approved' ? '승인됨' :
+                                                 request.status === 'cancelled' ? '취소됨' : '거절됨'}
+                                              </div>
+                                              <button
+                                                onClick={() => handleCancelRequest(request._id)}
+                                                className="text-xs text-gray-400 hover:text-red-500"
+                                                title="내역 삭제"
+                                              >
+                                                ✕
+                                              </button>
+                                            </div>
+                                          </div>
+                                          <div className={`text-xs mb-2 ${
+                                            request.status === 'approved' ? 'text-green-700' :
+                                            request.status === 'cancelled' ? 'text-gray-700' : 'text-red-700'
+                                          }`}>
+                                            {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+                                          </div>
                                         </div>
-                                        <div className="text-xs text-gray-500">
-                                          {(() => {
-                                            try {
-                                              const date = new Date(request.createdAt);
-                                              if (isNaN(date.getTime())) {
-                                                return '날짜 정보 없음';
-                                              }
-                                              return `${date.toLocaleDateString('ko-KR')} ${date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`;
-                                            } catch (error) {
-                                              console.error('Date parsing error:', error, request.createdAt);
-                                              return '날짜 정보 없음';
-                                            }
-                                          })()}
-                                        </div>
-                                      </div>
-                                    ))}
+                                      );
+                                    })}
                                   {processedRequests.length > 3 && !showAllRequests['sentProcessed'] && (
                                     <button
                                       onClick={() => setShowAllRequests(prev => ({...prev, sentProcessed: true}))}
@@ -1152,6 +1181,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 onAutoResolveNegotiations={handleAutoResolveNegotiations}
                 onResetCarryOverTimes={handleResetCarryOverTimes}
                 onResetCompletedTimes={handleResetCompletedTimes}
+                onDeleteAllSlots={handleDeleteAllSlots}
                 currentWeekStartDate={currentWeekStartDate}
                 activeNegotiationsCount={(() => {
                   if (!currentRoom?.negotiations) return 0;
@@ -1270,14 +1300,17 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             onAssign={(memberId) => {
               handleAssignSlot({
                 roomId: currentRoom._id,
-                day: days[slotToAssign.dayIndex],
+                day: days[slotToAssign.dayIndex - 1],
                 startTime: slotToAssign.time,
                 endTime: calculateEndTime(slotToAssign.time),
                 userId: memberId
               });
               closeAssignModal();
             }}
-            slotInfo={slotToAssign}
+            slotInfo={{
+              ...slotToAssign,
+              day: dayMap[days[slotToAssign.dayIndex - 1]]
+            }}
             members={currentRoom.members}
           />
         )}
@@ -1289,7 +1322,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 roomId: currentRoom._id,
                 type: 'time_request',
                 timeSlot: {
-                  day: days[slotToRequest.dayIndex],
+                  day: days[slotToRequest.dayIndex - 1],
                   startTime: slotToRequest.time,
                   endTime: calculateEndTime(slotToRequest.time),
                 },
@@ -1297,7 +1330,10 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
               });
               closeRequestModal();
             }}
-            slotInfo={slotToRequest}
+            slotInfo={{
+              ...slotToRequest,
+              day: dayMap[days[slotToRequest.dayIndex - 1]]
+            }}
           />
         )}
         {showChangeRequestModal && slotToChange && (
@@ -1311,7 +1347,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   roomId: currentRoom._id,
                   type: 'slot_release',
                   timeSlot: {
-                    day: days[slotToChange.dayIndex],
+                    day: days[slotToChange.dayIndex - 1],
                     startTime: slotToChange.time,
                     endTime: calculateEndTime(slotToChange.time),
                   },
@@ -1322,7 +1358,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   roomId: currentRoom._id,
                   type: 'slot_swap',
                   timeSlot: {
-                    day: days[slotToChange.dayIndex],
+                    day: days[slotToChange.dayIndex - 1],
                     startTime: slotToChange.time,
                     endTime: calculateEndTime(slotToChange.time),
                   },
@@ -1335,12 +1371,12 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   roomId: currentRoom._id,
                   type: 'time_change',
                   timeSlot: {
-                    day: days[slotToChange.dayIndex],
+                    day: days[slotToChange.dayIndex - 1],
                     startTime: slotToChange.time,
                     endTime: calculateEndTime(slotToChange.time),
                   },
                   targetSlot: { // This is the slot being changed
-                    day: days[slotToChange.dayIndex],
+                    day: days[slotToChange.dayIndex - 1],
                     startTime: slotToChange.time,
                     endTime: calculateEndTime(slotToChange.time),
                     user: user.id
@@ -1351,7 +1387,10 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
               handleRequestSlot(requestData);
               closeChangeRequestModal();
             }}
-            slotToChange={slotToChange}
+            slotToChange={{
+              ...slotToChange,
+              day: dayMap[days[slotToChange.dayIndex - 1]]
+            }}
           />
         )}
         {showMemberScheduleModal && selectedMemberId && (
@@ -1397,6 +1436,18 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
           onClose={() => setMemberStatsModal({ isOpen: false, member: null })}
           member={memberStatsModal.member}
           isOwner={currentRoom && user && (currentRoom.owner._id === user.id || currentRoom.owner === user.id)}
+        />
+
+        <CustomAlertModal
+          isOpen={showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={executeDeleteAllSlots}
+          title="시간표 전체 삭제"
+          message="정말로 모든 시간표를 삭제하시겠습니까? 자동 배정으로 생성된 시간표와 협의 내역이 모두 사라지며, 이 작업은 되돌릴 수 없습니다."
+          type="danger"
+          confirmText="삭제"
+          cancelText="취소"
+          showCancel={true}
         />
       </div>
     );
@@ -1516,7 +1567,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
 export default CoordinationTab;
 
-const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom, onAutoResolveNegotiations, onResetCarryOverTimes, onResetCompletedTimes, currentWeekStartDate, activeNegotiationsCount = 0 }) => {
+const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom, onAutoResolveNegotiations, onResetCarryOverTimes, onResetCompletedTimes, onDeleteAllSlots, currentWeekStartDate, activeNegotiationsCount = 0 }) => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'ownerFocusTime') {
@@ -1600,6 +1651,15 @@ const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom
             className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 text-xs transition-colors"
           >
             완료시간 초기화
+          </button>
+        </div>
+
+        <div className="border-t border-gray-200 mt-4 pt-4">
+          <button
+            onClick={onDeleteAllSlots}
+            className="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 disabled:bg-red-300 flex items-center justify-center text-sm"
+          >
+            시간표 비우기
           </button>
         </div>
       </div>

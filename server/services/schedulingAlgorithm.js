@@ -1,5 +1,65 @@
 class SchedulingAlgorithm {
 
+  _calculateEndTime(startTime) {
+    const [h, m] = startTime.split(':').map(Number);
+    const endHour = m === 30 ? h + 1 : h;
+    const endMinute = m === 30 ? 0 : 30;
+    return `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
+  }
+
+  _mergeConsecutiveConflicts(conflicts, timetable) {
+    if (!conflicts || conflicts.length === 0) return [];
+
+    // 1. Sort conflicts by their slot key (date and time)
+    const sortedConflicts = [...conflicts].sort((a, b) => a.slotKey.localeCompare(b.slotKey));
+
+    const mergedBlocks = [];
+    let currentBlock = null;
+
+    for (const conflict of sortedConflicts) {
+      const { slotKey, availableMembers } = conflict;
+      const [date, time] = slotKey.split('-');
+      const membersKey = [...availableMembers].sort().join(',');
+
+      if (currentBlock === null) {
+        currentBlock = {
+          startDate: date,
+          startTime: time,
+          endTime: this._calculateEndTime(time),
+          membersKey: membersKey,
+          conflictingMembers: availableMembers,
+          dayOfWeek: timetable[slotKey].dayOfWeek,
+          dateObj: timetable[slotKey].date
+        };
+      } else {
+        const isSameDay = (date === currentBlock.startDate);
+        const isAdjacentTime = (currentBlock.endTime === time);
+        const isSameMembers = (membersKey === currentBlock.membersKey);
+
+        if (isSameDay && isAdjacentTime && isSameMembers) {
+          currentBlock.endTime = this._calculateEndTime(time);
+        } else {
+          mergedBlocks.push(currentBlock);
+          currentBlock = {
+            startDate: date,
+            startTime: time,
+            endTime: this._calculateEndTime(time),
+            membersKey: membersKey,
+            conflictingMembers: availableMembers,
+            dayOfWeek: timetable[slotKey].dayOfWeek,
+            dateObj: timetable[slotKey].date
+          };
+        }
+      }
+    }
+
+    if (currentBlock) {
+      mergedBlocks.push(currentBlock);
+    }
+
+    return mergedBlocks;
+  }
+
   runAutoSchedule(members, owner, roomTimeSlots, options, deferredAssignments = []) {
     // Input validation
     if (!members || !Array.isArray(members)) {
@@ -20,11 +80,12 @@ class SchedulingAlgorithm {
     const minSlotsPerWeek = minHoursPerWeek * 2;
     const startDate = currentWeek ? new Date(currentWeek) : new Date();
 
-    const timetable = this._createTimetable(roomTimeSlots, startDate, numWeeks, roomSettings);
-
-    // Exclude owner from auto-assignment
+    // Exclude owner from auto-assignment and define nonOwnerMembers before use
     const ownerId = owner._id.toString();
     const nonOwnerMembers = members.filter(m => m.user._id.toString() !== ownerId);
+
+    const timetable = this._createTimetable(roomTimeSlots, startDate, numWeeks, roomSettings, nonOwnerMembers);
+
     let assignments = this._initializeMemberAssignments(nonOwnerMembers);
 
     // Phase 0: Assign Deferred Assignments (0-priority)
@@ -75,50 +136,45 @@ class SchedulingAlgorithm {
 
     // Identify unresolvable conflicts and create negotiations
     const unresolvableConflicts = [];
-    const negotiations = [];
-
     for (const key in timetable) {
       const slot = timetable[key];
       if (!slot.assignedTo) {
         const nonOwnerAvailable = slot.available.filter(a => a.memberId !== ownerId);
         if (nonOwnerAvailable.length > 1) {
-          const conflict = {
+          unresolvableConflicts.push({
             slotKey: key,
-            date: slot.date,
             availableMembers: nonOwnerAvailable.map(a => a.memberId)
-          };
-          unresolvableConflicts.push(conflict);
-
-          // Create negotiation for this conflict
-          const [dateKey, timeKey] = key.split('-');
-          const [startHour, startMinute] = timeKey.split(':').map(Number);
-          const endHour = startMinute === 30 ? startHour + 1 : startHour;
-          const endMinute = startMinute === 30 ? 0 : 30;
-          const endTime = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
-
-          const dayMap = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday' };
-          const dayString = dayMap[slot.dayOfWeek];
-
-          negotiations.push({
-            slotInfo: {
-              day: dayString,
-              startTime: timeKey,
-              endTime: endTime,
-              date: slot.date
-            },
-            conflictingMembers: nonOwnerAvailable.map(a => {
-              const member = nonOwnerMembers.find(m => m.user._id.toString() === a.memberId);
-              return {
-                user: a.memberId,
-                priority: this.getMemberPriority(member)
-              };
-            }),
-            messages: [],
-            status: 'active',
-            createdAt: new Date()
           });
         }
       }
+    }
+
+    // Merge consecutive conflicts into blocks
+    const negotiationBlocks = this._mergeConsecutiveConflicts(unresolvableConflicts, timetable);
+    const negotiations = [];
+
+    for (const block of negotiationBlocks) {
+      const dayMap = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday' };
+      const dayString = dayMap[block.dayOfWeek];
+
+      negotiations.push({
+        slotInfo: {
+          day: dayString,
+          startTime: block.startTime,
+          endTime: block.endTime,
+          date: block.dateObj
+        },
+        conflictingMembers: block.conflictingMembers.map(memberId => {
+          const member = nonOwnerMembers.find(m => m.user._id.toString() === memberId);
+          return {
+            user: memberId,
+            priority: this.getMemberPriority(member)
+          };
+        }),
+        messages: [],
+        status: 'active',
+        createdAt: new Date()
+      });
     }
 
     return {
@@ -141,7 +197,7 @@ class SchedulingAlgorithm {
     return 3; // Default medium priority
   }
 
-  _createTimetable(roomTimeSlots, startDate, numWeeks, roomSettings = {}) {
+  _createTimetable(roomTimeSlots, startDate, numWeeks, roomSettings = {}, members = []) {
     const timetable = {};
     const currentDay = new Date(startDate);
     currentDay.setUTCHours(0, 0, 0, 0);
@@ -202,9 +258,11 @@ class SchedulingAlgorithm {
           return;
         }
         
-        // Mark all submitted slots as high priority
-        timetable[key].available.push({ memberId: userId, priority: 3, isOwner: false });
-        console.log(`Added availability for user ${userId} at ${key}`);
+        const member = members.find(m => (m.user._id || m.user).toString() === userId);
+        const priority = this.getMemberPriority(member);
+
+        timetable[key].available.push({ memberId: userId, priority: priority, isOwner: false });
+        console.log(`Added availability for user ${userId} with priority ${priority} at ${key}`);
       } else {
         console.warn(`Timetable slot not found for key: ${key}`);
       }
