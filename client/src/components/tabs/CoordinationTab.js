@@ -788,356 +788,142 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
                 {requestViewMode === 'received' && (
                   <div>
-                    {/* 받은 요청이 있는지 확인 */}
                     {(() => {
-                      console.log('DEBUG: currentRoom 전체 객체:', currentRoom);
-                      console.log('DEBUG: currentRoom.requests:', currentRoom?.requests);
-                      console.log('DEBUG: currentRoom._id:', currentRoom?._id);
+                      const pendingReceived = receivedRequests.filter(req => req.status === 'pending' && req.roomId === currentRoom._id);
+                      const processedReceived = receivedRequests.filter(req => req.status !== 'pending' && req.roomId === currentRoom._id);
 
-                      const allRequests = currentRoom.requests || [];
-                      console.log('DEBUG: 전체 요청 수:', allRequests.length);
-                      console.log('DEBUG: 현재 사용자 ID:', user?.id);
-                      console.log('DEBUG: 전체 요청 목록:', allRequests.map(req => ({
-                        id: req._id,
-                        type: req.type,
-                        status: req.status,
-                        targetUser: req.targetUser,
-                        targetUserType: typeof req.targetUser,
-                        targetUserId: req.targetUser?._id || req.targetUser?.$oid || req.targetUser,
-                        requester: req.requester,
-                        requesterType: typeof req.requester,
-                        requesterId: req.requester?._id || req.requester?.$oid || req.requester
-                      })));
-
-                      console.log('DEBUG: 현재 사용자 정보:', {
-                        userId: user?.id,
-                        userType: typeof user?.id,
-                        userObject: user
-                      });
-
-                      const receivedRequests = allRequests.filter(req => {
-                        console.log('DEBUG: 요청 상세 확인:', {
-                          requestId: req._id,
-                          type: req.type,
-                          status: req.status,
-                          targetUser: req.targetUser,
-                          targetUserType: typeof req.targetUser,
-                          targetUserId: req.targetUser?._id || req.targetUser,
-                          targetUserIdType: typeof (req.targetUser?._id || req.targetUser),
-                          currentUserId: user?.id,
-                          currentUserIdType: typeof user?.id,
-                          requester: req.requester,
-                          requesterType: typeof req.requester
-                        });
-
-                        if (req.status !== 'pending') {
-                          console.log('DEBUG: 요청 상태가 pending이 아님:', req.status);
-                          return false;
-                        }
-
-                        // slot_swap 타입: targetUser가 현재 사용자인지 확인
-                        if (req.type === 'slot_swap' && req.targetUser) {
-                          // targetUser는 ObjectId 객체이거나 문자열일 수 있음
-                          let targetUserId;
-
-                          if (typeof req.targetUser === 'string') {
-                            targetUserId = req.targetUser;
-                          } else if (typeof req.targetUser === 'object') {
-                            // MongoDB ObjectId 객체 처리
-                            if (req.targetUser._id) {
-                              targetUserId = req.targetUser._id;
-                            } else if (req.targetUser.$oid) {
-                              targetUserId = req.targetUser.$oid;
-                            } else if (req.targetUser.toString && typeof req.targetUser.toString === 'function') {
-                              // ObjectId 객체의 toString() 메서드 사용
-                              targetUserId = req.targetUser.toString();
-                            } else {
-                              targetUserId = String(req.targetUser);
-                            }
-                          } else {
-                            targetUserId = String(req.targetUser);
-                          }
-
-                          const currentUserId = user?.id;
-
-                          console.log('DEBUG: slot_swap 매치 상세:', {
-                            rawTargetUser: req.targetUser,
-                            targetUserType: typeof req.targetUser,
-                            targetUserId,
-                            targetUserIdString: String(targetUserId),
-                            currentUserId,
-                            currentUserIdString: String(currentUserId),
-                            rawObjectString: req.targetUser?.toString?.(),
-                          });
-
-                          // 문자열로 변환해서 비교
-                          const isMatch = String(targetUserId) === String(currentUserId);
-                          console.log('DEBUG: slot_swap 매치 결과:', isMatch);
-                          return isMatch;
-                        }
-
-                        // 다른 타입들도 targetUser 확인 (혹시 모를 경우)
-                        if (req.targetUser) {
-                          const targetUserId = req.targetUser._id || req.targetUser;
-                          const currentUserId = user?.id;
-                          const isMatch = targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
-                          console.log('DEBUG: 기타 타입 매치 결과:', isMatch);
-                          return isMatch;
-                        }
-
-                        console.log('DEBUG: targetUser가 없음');
-                        return false;
-                      });
-
-                      console.log('DEBUG: 필터링된 받은 요청 수:', receivedRequests.length);
-                      console.log('DEBUG: 필터링된 받은 요청:', receivedRequests);
-
-                      return receivedRequests.length > 0;
-                    })() && (
-                      <div className="mb-4">
-                        <h5 className="text-sm font-medium text-gray-700 mb-2">대기 중인 요청</h5>
-                        <div className="space-y-2">
-                          {(currentRoom.requests || [])
-                            .filter(req => {
-                              if (req.status !== 'pending') return false;
-
-                              // slot_swap 타입: targetUser가 현재 사용자인지 확인
-                              if (req.type === 'slot_swap' && req.targetUser) {
-                                // targetUser는 ObjectId 객체이거나 문자열일 수 있음
-                                let targetUserId;
-
-                                if (typeof req.targetUser === 'string') {
-                                  targetUserId = req.targetUser;
-                                } else if (typeof req.targetUser === 'object') {
-                                  // MongoDB ObjectId 객체 처리
-                                  if (req.targetUser._id) {
-                                    targetUserId = req.targetUser._id;
-                                  } else if (req.targetUser.$oid) {
-                                    targetUserId = req.targetUser.$oid;
-                                  } else if (req.targetUser.toString && typeof req.targetUser.toString === 'function') {
-                                    // ObjectId 객체의 toString() 메서드 사용
-                                    targetUserId = req.targetUser.toString();
-                                  } else {
-                                    targetUserId = String(req.targetUser);
-                                  }
-                                } else {
-                                  targetUserId = String(req.targetUser);
-                                }
-
-                                const currentUserId = user?.id;
-                                return String(targetUserId) === String(currentUserId);
-                              }
-
-                              // 다른 타입들도 targetUser 확인 (혹시 모를 경우)
-                              if (req.targetUser) {
-                                let targetUserId;
-                                if (typeof req.targetUser === 'object' && req.targetUser._id) {
-                                  targetUserId = req.targetUser._id;
-                                } else if (typeof req.targetUser === 'object' && req.targetUser.$oid) {
-                                  targetUserId = req.targetUser.$oid;
-                                } else {
-                                  targetUserId = req.targetUser;
-                                }
-
-                                const currentUserId = user?.id;
-                                return String(targetUserId) === String(currentUserId);
-                              }
-
-                              return false;
-                            })
-                            .slice(0, showAllRequests['receivedPending'] ? undefined : 3)
-                            .map((request, index) => {
-                              const requesterData = request.requester;
-                              const requesterName = requesterData?.name || `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
-
-                              return (
-                                <div key={request._id || index} className="p-2 bg-blue-50 border border-blue-200 rounded-lg">
-                                  <div className="flex justify-between items-center mb-1">
-                                    <div className="text-xs font-medium text-blue-900">{requesterName}</div>
-                                    <div className="text-xs text-blue-600">
-                                      {request.type === 'slot_swap' ? '교환 요청' : request.type === 'time_request' ? '시간 요청' : '시간 변경'}
-                                    </div>
-                                  </div>
-                                  <div className="text-xs text-blue-700 mb-2">
-                                    {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
-                                  </div>
-                                  {request.message && (
-                                    <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
-                                  )}
-                                  <div className="flex justify-end space-x-2 mt-2">
-                                    <button
-                                      onClick={() => handleRequestWithUpdate(request._id, 'approved')}
-                                      className="px-3 py-1 text-xs bg-green-500 text-white rounded-md hover:bg-green-600"
-                                    >
-                                      승인
-                                    </button>
-                                    <button
-                                      onClick={() => handleRequestWithUpdate(request._id, 'rejected')}
-                                      className="px-3 py-1 text-xs bg-red-500 text-white rounded-md hover:bg-red-600"
-                                    >
-                                      거절
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 받은 요청이 없을 때 표시 */}
-                    {(() => {
-                      const allRequests = currentRoom.requests || [];
-                      const receivedRequests = allRequests.filter(req => {
-                        if (req.status !== 'pending') return false;
-
-                        // slot_swap 타입: targetUser가 현재 사용자인지 확인
-                        if (req.type === 'slot_swap' && req.targetUser) {
-                          // targetUser는 ObjectId 객체이거나 문자열일 수 있음
-                          let targetUserId;
-
-                          if (typeof req.targetUser === 'string') {
-                            targetUserId = req.targetUser;
-                          } else if (typeof req.targetUser === 'object') {
-                            // MongoDB ObjectId 객체 처리
-                            if (req.targetUser._id) {
-                              targetUserId = req.targetUser._id;
-                            } else if (req.targetUser.$oid) {
-                              targetUserId = req.targetUser.$oid;
-                            } else if (req.targetUser.toString && typeof req.targetUser.toString === 'function') {
-                              // ObjectId 객체의 toString() 메서드 사용
-                              targetUserId = req.targetUser.toString();
-                            } else {
-                              targetUserId = String(req.targetUser);
-                            }
-                          } else {
-                            targetUserId = String(req.targetUser);
-                          }
-
-                          const currentUserId = user?.id;
-                          return String(targetUserId) === String(currentUserId);
-                        }
-
-                        // 다른 타입들도 targetUser 확인
-                        if (req.targetUser) {
-                          let targetUserId;
-                          if (typeof req.targetUser === 'object' && req.targetUser._id) {
-                            targetUserId = req.targetUser._id;
-                          } else if (typeof req.targetUser === 'object' && req.targetUser.$oid) {
-                            targetUserId = req.targetUser.$oid;
-                          } else {
-                            targetUserId = req.targetUser;
-                          }
-
-                          const currentUserId = user?.id;
-                          return String(targetUserId) === String(currentUserId);
-                        }
-
-                        return false;
-                      });
-
-                      return receivedRequests.length === 0;
-                    })() && (
-                      <div className="mb-4">
-                        <h5 className="text-sm font-medium text-gray-700 mb-2">받은 요청</h5>
-                        <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-center">
-                          <p className="text-xs text-gray-500">받은 요청이 없습니다</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {(currentRoom.requests || []).filter(req => {
-                      if (req.status === 'pending') return false;
-                      if (!req.targetUser) return false;
-                      const targetUserId = req.targetUser._id || req.targetUser;
-                      const currentUserId = user?.id;
-                      return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
-                    }).length > 0 && (
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <h5 className="text-sm font-medium text-gray-700">처리된 요청</h5>
-                          <button
-                            onClick={() => setExpandedSections(prev => ({...prev, receivedProcessed: !prev.receivedProcessed}))}
-                            className="text-xs text-gray-500 hover:text-gray-700"
-                          >
-                            {expandedSections['receivedProcessed'] ? '접기' : '펼치기'}
-                          </button>
-                        </div>
-                        {expandedSections['receivedProcessed'] && (
-                          <div className="space-y-2">
-                            {(currentRoom.requests || [])
-                              .filter(req => {
-                                if (req.status === 'pending') return false;
-                                if (!req.targetUser) return false;
-                                const targetUserId = req.targetUser._id || req.targetUser;
-                                const currentUserId = user?.id;
-                                return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
-                              })
-                              .slice(0, showAllRequests['receivedProcessed'] ? undefined : 3)
-                              .map((request, index) => {
-                                const requesterData = request.requester;
-                                const requesterName = requesterData?.name || `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
-                                
-                                return (
-                                  <div key={request._id || index} className={`p-2 border rounded-lg ${
-                                    request.status === 'approved' ? 'bg-green-50 border-green-200' :
-                                    request.status === 'cancelled' ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200'
-                                  }`}>
-                                    <div className="flex justify-between items-center mb-1">
-                                      <div className={`text-xs font-medium ${
-                                        request.status === 'approved' ? 'text-green-900' :
-                                        request.status === 'cancelled' ? 'text-gray-900' : 'text-red-900'
-                                      }`}>{requesterName}</div>
-                                      <div className="flex items-center space-x-2">
-                                        <div className={`text-xs px-2 py-1 rounded-full ${
-                                          request.status === 'approved' ? 'bg-green-100 text-green-800' :
-                                          request.status === 'cancelled' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'
-                                        }`}>
-                                          {request.status === 'approved' ? '승인됨' :
-                                           request.status === 'cancelled' ? '취소됨' : '거절됨'}
+                      return (
+                        <>
+                          {pendingReceived.length > 0 && (
+                            <div className="mb-4">
+                              <h5 className="text-sm font-medium text-gray-700 mb-2">대기 중인 요청</h5>
+                              <div className="space-y-2">
+                                {pendingReceived
+                                  .slice(0, showAllRequests['receivedPending'] ? undefined : 3)
+                                  .map((request, index) => {
+                                    const requesterData = request.requester;
+                                    const requesterName = requesterData?.name || `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
+                                    return (
+                                      <div key={request._id || index} className="p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                                        <div className="flex justify-between items-center mb-1">
+                                          <div className="text-xs font-medium text-blue-900">{requesterName}</div>
+                                          <div className="text-xs text-blue-600">
+                                            {request.type === 'slot_swap' ? '교환 요청' : '알 수 없는 요청'}
+                                          </div>
                                         </div>
-                                        <button
-                                          onClick={() => handleCancelRequest(request._id)}
-                                          className="text-xs text-gray-400 hover:text-red-500"
-                                          title="내역 삭제"
-                                        >
-                                          ✕
-                                        </button>
+                                        <div className="text-xs text-blue-700 mb-2">
+                                          {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+                                        </div>
+                                        {request.message && (
+                                          <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
+                                        )}
+                                        <div className="flex justify-end space-x-2 mt-2">
+                                          <button
+                                            onClick={() => handleRequestWithUpdate(request._id, 'approved')}
+                                            className="px-3 py-1 text-xs bg-green-500 text-white rounded-md hover:bg-green-600"
+                                          >
+                                            승인
+                                          </button>
+                                          <button
+                                            onClick={() => handleRequestWithUpdate(request._id, 'rejected')}
+                                            className="px-3 py-1 text-xs bg-red-500 text-white rounded-md hover:bg-red-600"
+                                          >
+                                            거절
+                                          </button>
+                                        </div>
                                       </div>
-                                    </div>
-                                    <div className={`text-xs mb-2 ${
-                                      request.status === 'approved' ? 'text-green-700' :
-                                      request.status === 'cancelled' ? 'text-gray-700' : 'text-red-700'
-                                    }`}>
-                                      {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            {(currentRoom.requests || []).filter(req => {
-                              if (req.status === 'pending') return false;
-                              if (!req.targetUser) return false;
-                              const targetUserId = req.targetUser._id || req.targetUser;
-                              const currentUserId = user?.id;
-                              return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
-                            }).length > 3 && !showAllRequests['receivedProcessed'] && (
-                              <button
-                                onClick={() => setShowAllRequests(prev => ({...prev, receivedProcessed: true}))}
-                                className="text-xs text-gray-500 hover:text-gray-600 text-center w-full"
-                              >
-                                +{(currentRoom.requests || []).filter(req => {
-                                  if (req.status === 'pending') return false;
-                                  if (!req.targetUser) return false;
-                                  const targetUserId = req.targetUser._id || req.targetUser;
-                                  const currentUserId = user?.id;
-                                  return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
-                                }).length - 3}개 더 보기
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                                    );
+                                  })}
+                                {pendingReceived.length > 3 && !showAllRequests['receivedPending'] && (
+                                  <button
+                                    onClick={() => setShowAllRequests(prev => ({ ...prev, receivedPending: true }))}
+                                    className="text-xs text-blue-500 hover:text-blue-600 text-center w-full"
+                                  >
+                                    +{pendingReceived.length - 3}개 더 보기
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {pendingReceived.length === 0 && (
+                             <div className="mb-4">
+                               <h5 className="text-sm font-medium text-gray-700 mb-2">대기 중인 요청</h5>
+                               <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-center">
+                                 <p className="text-xs text-gray-500">받은 요청이 없습니다</p>
+                               </div>
+                             </div>
+                          )}
+
+                          {processedReceived.length > 0 && (
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <h5 className="text-sm font-medium text-gray-700">처리된 요청</h5>
+                                <button
+                                  onClick={() => setExpandedSections(prev => ({ ...prev, receivedProcessed: !prev.receivedProcessed }))}
+                                  className="text-xs text-gray-500 hover:text-gray-700"
+                                >
+                                  {expandedSections['receivedProcessed'] ? '접기' : '펼치기'}
+                                </button>
+                              </div>
+                              {expandedSections['receivedProcessed'] && (
+                                <div className="space-y-2">
+                                  {processedReceived
+                                    .slice(0, showAllRequests['receivedProcessed'] ? undefined : 3)
+                                    .map((request, index) => {
+                                      const requesterData = request.requester;
+                                      const requesterName = requesterData?.name || `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
+                                      return (
+                                        <div key={request._id || index} className={`p-2 border rounded-lg ${
+                                          request.status === 'approved' ? 'bg-green-50 border-green-200' :
+                                          request.status === 'cancelled' ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200'
+                                        }`}>
+                                          <div className="flex justify-between items-center mb-1">
+                                            <div className={`text-xs font-medium ${
+                                              request.status === 'approved' ? 'text-green-900' :
+                                              request.status === 'cancelled' ? 'text-gray-900' : 'text-red-900'
+                                            }`}>{requesterName}</div>
+                                            <div className="flex items-center space-x-2">
+                                              <div className={`text-xs px-2 py-1 rounded-full ${
+                                                request.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                                request.status === 'cancelled' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'
+                                              }`}>
+                                                {request.status === 'approved' ? '승인됨' :
+                                                 request.status === 'cancelled' ? '취소됨' : '거절됨'}
+                                              </div>
+                                              <button
+                                                onClick={() => handleCancelRequest(request._id)}
+                                                className="text-xs text-gray-400 hover:text-red-500"
+                                                title="내역 삭제"
+                                              >
+                                                ✕
+                                              </button>
+                                            </div>
+                                          </div>
+                                          <div className={`text-xs mb-2 ${
+                                            request.status === 'approved' ? 'text-green-700' :
+                                            request.status === 'cancelled' ? 'text-gray-700' : 'text-red-700'
+                                          }`}>
+                                            {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  {processedReceived.length > 3 && !showAllRequests['receivedProcessed'] && (
+                                    <button
+                                      onClick={() => setShowAllRequests(prev => ({ ...prev, receivedProcessed: true }))}
+                                      className="text-xs text-gray-500 hover:text-gray-600 text-center w-full"
+                                    >
+                                      +{processedReceived.length - 3}개 더 보기
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 
