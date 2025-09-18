@@ -32,6 +32,7 @@ exports.submitTimeSlots = async (req, res) => {
             endTime: slot.endTime,
             day: slot.day,
             priority: slot.priority || 3,
+            subject: slot.subject || '제출된 시간',
             status: 'confirmed',
          });
       });
@@ -117,6 +118,7 @@ exports.assignTimeSlot = async (req, res) => {
          endTime,
          day,
          priority: 3,
+         subject: '수동 배정',
          status: 'confirmed',
          assignedBy: req.user.id,
          assignedAt: new Date(),

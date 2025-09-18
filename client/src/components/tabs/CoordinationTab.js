@@ -170,10 +170,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
     try {
       const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+      const token = localStorage.getItem('token');
       const response = await fetch(`${apiUrl}/api/coordination/reset-carryover/${currentRoom._id}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${user?.token}`,
+          'x-auth-token': token,
           'Content-Type': 'application/json'
         }
       });
@@ -204,10 +205,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
     try {
       const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+      const token = localStorage.getItem('token');
       const response = await fetch(`${apiUrl}/api/coordination/reset-completed/${currentRoom._id}`, {
         method: 'POST',
         headers: {
-          'x-auth-token': localStorage.getItem('token'),
+          'x-auth-token': token,
           'Content-Type': 'application/json'
         }
       });
@@ -230,41 +232,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       console.error('Error resetting completed times:', error);
       showAlert(`완료시간 초기화 실패: ${error.message}`);
     }
-  }, [currentRoom?._id, fetchRoomDetails, showAlert]);
+  }, [currentRoom?._id, fetchRoomDetails, showAlert, user?.token]);
 
-  // Reset carryover times function
-  const handleResetCarryOverTimes = useCallback(async () => {
-    if (!currentRoom?._id) return;
-
-    try {
-      const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-      const response = await fetch(`${apiUrl}/api/coordination/reset-carryover/${currentRoom._id}`, {
-        method: 'POST',
-        headers: {
-          'x-auth-token': localStorage.getItem('token'),
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to reset carryover times');
-      }
-
-      const result = await response.json();
-      showAlert(`${result.resetCount}명의 멤버 이월시간이 초기화되었습니다.`);
-
-      // Immediately update room data without refresh
-      if (result.room) {
-        setCurrentRoom(result.room);
-      } else {
-        // Fallback to refresh if room data not returned
-        await fetchRoomDetails(currentRoom._id);
-      }
-    } catch (error) {
-      console.error('Error resetting carryover times:', error);
-      showAlert(`이월시간 초기화 실패: ${error.message}`);
-    }
-  }, [currentRoom?._id, fetchRoomDetails, showAlert]);
 
   // Auto-scheduling function (moved after useCoordination)
   const handleRunAutoSchedule = async () => {
@@ -284,10 +253,23 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     }
 
     // Check if members have submitted their time slots
-    if (!currentRoom.timeSlots || currentRoom.timeSlots.length === 0) {
-      showAlert('자동 배정을 위해서는 멤버들이 시간을 입력해야 합니다.');
-      return;
-    }
+    console.log('DEBUG: currentRoom.timeSlots 확인:', {
+      timeSlots: currentRoom.timeSlots,
+      timeSlotsLength: currentRoom.timeSlots?.length,
+      members: currentRoom.members?.map(m => ({
+        userId: m.user._id || m.user,
+        name: m.user.name || `${m.user.firstName} ${m.user.lastName}`,
+        hasTimeSlots: currentRoom.timeSlots?.some(slot =>
+          (slot.user._id || slot.user) === (m.user._id || m.user)
+        )
+      }))
+    });
+
+    // 서버에서 멤버들의 defaultSchedule을 timeSlots로 변환하는 로직이 있으므로
+    // 클라이언트에서는 멤버가 있는지만 확인하고 서버로 요청을 보냄
+    console.log('DEBUG: 자동배정 실행 - 서버에서 멤버들의 선호시간표를 확인합니다...');
+
+    // 기존의 엄격한 체크를 제거하고 서버에서 처리하도록 함
 
     setIsScheduling(true);
     setScheduleError(null);
@@ -394,6 +376,10 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const handleRequestWithUpdate = async (requestId, action) => {
     try {
       await handleRequest(requestId, action);
+      // 요청 처리 후 방 정보 새로고침하여 시간표 업데이트 반영
+      if (currentRoom?._id) {
+        await fetchRoomDetails(currentRoom._id);
+      }
     } catch (error) {
       console.error('Failed to handle request:', error);
     }
@@ -785,27 +771,110 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
                 {requestViewMode === 'received' && (
                   <div>
+                    {/* 받은 요청이 있는지 확인 */}
                     {(() => {
-                      console.log('DEBUG: All requests:', currentRoom.requests);
-                      console.log('DEBUG: Current user ID:', user?.id);
-                      const receivedRequests = (currentRoom.requests || []).filter(req => {
-                        console.log('DEBUG: Request:', req);
-                        console.log('DEBUG: Request targetUser:', req.targetUser);
-                        console.log('DEBUG: User ID:', user?.id);
+                      console.log('DEBUG: currentRoom 전체 객체:', currentRoom);
+                      console.log('DEBUG: currentRoom.requests:', currentRoom?.requests);
+                      console.log('DEBUG: currentRoom._id:', currentRoom?._id);
 
-                        if (req.status !== 'pending') return false;
-                        if (!req.targetUser) return false;
+                      const allRequests = currentRoom.requests || [];
+                      console.log('DEBUG: 전체 요청 수:', allRequests.length);
+                      console.log('DEBUG: 현재 사용자 ID:', user?.id);
+                      console.log('DEBUG: 전체 요청 목록:', allRequests.map(req => ({
+                        id: req._id,
+                        type: req.type,
+                        status: req.status,
+                        targetUser: req.targetUser,
+                        targetUserType: typeof req.targetUser,
+                        targetUserId: req.targetUser?._id || req.targetUser?.$oid || req.targetUser,
+                        requester: req.requester,
+                        requesterType: typeof req.requester,
+                        requesterId: req.requester?._id || req.requester?.$oid || req.requester
+                      })));
 
-                        // Handle both populated and non-populated targetUser
-                        const targetUserId = req.targetUser._id || req.targetUser;
-                        const currentUserId = user?.id;
-
-                        const isMatch = targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
-                        console.log('DEBUG: Target match:', isMatch, 'targetUserId:', targetUserId, 'currentUserId:', currentUserId);
-
-                        return isMatch;
+                      console.log('DEBUG: 현재 사용자 정보:', {
+                        userId: user?.id,
+                        userType: typeof user?.id,
+                        userObject: user
                       });
-                      console.log('DEBUG: Filtered received requests:', receivedRequests);
+
+                      const receivedRequests = allRequests.filter(req => {
+                        console.log('DEBUG: 요청 상세 확인:', {
+                          requestId: req._id,
+                          type: req.type,
+                          status: req.status,
+                          targetUser: req.targetUser,
+                          targetUserType: typeof req.targetUser,
+                          targetUserId: req.targetUser?._id || req.targetUser,
+                          targetUserIdType: typeof (req.targetUser?._id || req.targetUser),
+                          currentUserId: user?.id,
+                          currentUserIdType: typeof user?.id,
+                          requester: req.requester,
+                          requesterType: typeof req.requester
+                        });
+
+                        if (req.status !== 'pending') {
+                          console.log('DEBUG: 요청 상태가 pending이 아님:', req.status);
+                          return false;
+                        }
+
+                        // slot_swap 타입: targetUser가 현재 사용자인지 확인
+                        if (req.type === 'slot_swap' && req.targetUser) {
+                          // targetUser는 ObjectId 객체이거나 문자열일 수 있음
+                          let targetUserId;
+
+                          if (typeof req.targetUser === 'string') {
+                            targetUserId = req.targetUser;
+                          } else if (typeof req.targetUser === 'object') {
+                            // MongoDB ObjectId 객체 처리
+                            if (req.targetUser._id) {
+                              targetUserId = req.targetUser._id;
+                            } else if (req.targetUser.$oid) {
+                              targetUserId = req.targetUser.$oid;
+                            } else if (req.targetUser.toString && typeof req.targetUser.toString === 'function') {
+                              // ObjectId 객체의 toString() 메서드 사용
+                              targetUserId = req.targetUser.toString();
+                            } else {
+                              targetUserId = String(req.targetUser);
+                            }
+                          } else {
+                            targetUserId = String(req.targetUser);
+                          }
+
+                          const currentUserId = user?.id;
+
+                          console.log('DEBUG: slot_swap 매치 상세:', {
+                            rawTargetUser: req.targetUser,
+                            targetUserType: typeof req.targetUser,
+                            targetUserId,
+                            targetUserIdString: String(targetUserId),
+                            currentUserId,
+                            currentUserIdString: String(currentUserId),
+                            rawObjectString: req.targetUser?.toString?.(),
+                          });
+
+                          // 문자열로 변환해서 비교
+                          const isMatch = String(targetUserId) === String(currentUserId);
+                          console.log('DEBUG: slot_swap 매치 결과:', isMatch);
+                          return isMatch;
+                        }
+
+                        // 다른 타입들도 targetUser 확인 (혹시 모를 경우)
+                        if (req.targetUser) {
+                          const targetUserId = req.targetUser._id || req.targetUser;
+                          const currentUserId = user?.id;
+                          const isMatch = targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
+                          console.log('DEBUG: 기타 타입 매치 결과:', isMatch);
+                          return isMatch;
+                        }
+
+                        console.log('DEBUG: targetUser가 없음');
+                        return false;
+                      });
+
+                      console.log('DEBUG: 필터링된 받은 요청 수:', receivedRequests.length);
+                      console.log('DEBUG: 필터링된 받은 요청:', receivedRequests);
+
                       return receivedRequests.length > 0;
                     })() && (
                       <div className="mb-4">
@@ -814,16 +883,56 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                           {(currentRoom.requests || [])
                             .filter(req => {
                               if (req.status !== 'pending') return false;
-                              if (!req.targetUser) return false;
-                              const targetUserId = req.targetUser._id || req.targetUser;
-                              const currentUserId = user?.id;
-                              return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
+
+                              // slot_swap 타입: targetUser가 현재 사용자인지 확인
+                              if (req.type === 'slot_swap' && req.targetUser) {
+                                // targetUser는 ObjectId 객체이거나 문자열일 수 있음
+                                let targetUserId;
+
+                                if (typeof req.targetUser === 'string') {
+                                  targetUserId = req.targetUser;
+                                } else if (typeof req.targetUser === 'object') {
+                                  // MongoDB ObjectId 객체 처리
+                                  if (req.targetUser._id) {
+                                    targetUserId = req.targetUser._id;
+                                  } else if (req.targetUser.$oid) {
+                                    targetUserId = req.targetUser.$oid;
+                                  } else if (req.targetUser.toString && typeof req.targetUser.toString === 'function') {
+                                    // ObjectId 객체의 toString() 메서드 사용
+                                    targetUserId = req.targetUser.toString();
+                                  } else {
+                                    targetUserId = String(req.targetUser);
+                                  }
+                                } else {
+                                  targetUserId = String(req.targetUser);
+                                }
+
+                                const currentUserId = user?.id;
+                                return String(targetUserId) === String(currentUserId);
+                              }
+
+                              // 다른 타입들도 targetUser 확인 (혹시 모를 경우)
+                              if (req.targetUser) {
+                                let targetUserId;
+                                if (typeof req.targetUser === 'object' && req.targetUser._id) {
+                                  targetUserId = req.targetUser._id;
+                                } else if (typeof req.targetUser === 'object' && req.targetUser.$oid) {
+                                  targetUserId = req.targetUser.$oid;
+                                } else {
+                                  targetUserId = req.targetUser;
+                                }
+
+                                const currentUserId = user?.id;
+                                return String(targetUserId) === String(currentUserId);
+                              }
+
+                              return false;
                             })
                             .slice(0, showAllRequests['receivedPending'] ? undefined : 3)
                             .map((request, index) => {
                               const requesterData = request.requester;
                               const requesterName = requesterData?.name || `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
-                              
+
                               return (
                                 <div key={request._id || index} className="p-2 bg-blue-50 border border-blue-200 rounded-lg">
                                   <div className="flex justify-between items-center mb-1">
@@ -855,26 +964,67 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                 </div>
                               );
                             })}
-                          {(currentRoom.requests || []).filter(req => {
-                            if (req.status !== 'pending') return false;
-                            if (!req.targetUser) return false;
-                            const targetUserId = req.targetUser._id || req.targetUser;
-                            const currentUserId = user?.id;
-                            return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
-                          }).length > 3 && !showAllRequests['receivedPending'] && (
-                            <button
-                              onClick={() => setShowAllRequests(prev => ({...prev, receivedPending: true}))}
-                              className="text-xs text-blue-500 hover:text-blue-600 text-center w-full"
-                            >
-                              +{(currentRoom.requests || []).filter(req => {
-                                if (req.status !== 'pending') return false;
-                                if (!req.targetUser) return false;
-                                const targetUserId = req.targetUser._id || req.targetUser;
-                                const currentUserId = user?.id;
-                                return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
-                              }).length - 3}개 더 보기
-                            </button>
-                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 받은 요청이 없을 때 표시 */}
+                    {(() => {
+                      const allRequests = currentRoom.requests || [];
+                      const receivedRequests = allRequests.filter(req => {
+                        if (req.status !== 'pending') return false;
+
+                        // slot_swap 타입: targetUser가 현재 사용자인지 확인
+                        if (req.type === 'slot_swap' && req.targetUser) {
+                          // targetUser는 ObjectId 객체이거나 문자열일 수 있음
+                          let targetUserId;
+
+                          if (typeof req.targetUser === 'string') {
+                            targetUserId = req.targetUser;
+                          } else if (typeof req.targetUser === 'object') {
+                            // MongoDB ObjectId 객체 처리
+                            if (req.targetUser._id) {
+                              targetUserId = req.targetUser._id;
+                            } else if (req.targetUser.$oid) {
+                              targetUserId = req.targetUser.$oid;
+                            } else if (req.targetUser.toString && typeof req.targetUser.toString === 'function') {
+                              // ObjectId 객체의 toString() 메서드 사용
+                              targetUserId = req.targetUser.toString();
+                            } else {
+                              targetUserId = String(req.targetUser);
+                            }
+                          } else {
+                            targetUserId = String(req.targetUser);
+                          }
+
+                          const currentUserId = user?.id;
+                          return String(targetUserId) === String(currentUserId);
+                        }
+
+                        // 다른 타입들도 targetUser 확인
+                        if (req.targetUser) {
+                          let targetUserId;
+                          if (typeof req.targetUser === 'object' && req.targetUser._id) {
+                            targetUserId = req.targetUser._id;
+                          } else if (typeof req.targetUser === 'object' && req.targetUser.$oid) {
+                            targetUserId = req.targetUser.$oid;
+                          } else {
+                            targetUserId = req.targetUser;
+                          }
+
+                          const currentUserId = user?.id;
+                          return String(targetUserId) === String(currentUserId);
+                        }
+
+                        return false;
+                      });
+
+                      return receivedRequests.length === 0;
+                    })() && (
+                      <div className="mb-4">
+                        <h5 className="text-sm font-medium text-gray-700 mb-2">받은 요청</h5>
+                        <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-center">
+                          <p className="text-xs text-gray-500">받은 요청이 없습니다</p>
                         </div>
                       </div>
                     )}
@@ -1078,7 +1228,18 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                           {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
                                         </div>
                                         <div className="text-xs text-gray-500">
-                                          {new Date(request.createdAt).toLocaleDateString('ko-KR')} {new Date(request.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                                          {(() => {
+                                            try {
+                                              const date = new Date(request.createdAt);
+                                              if (isNaN(date.getTime())) {
+                                                return '날짜 정보 없음';
+                                              }
+                                              return `${date.toLocaleDateString('ko-KR')} ${date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`;
+                                            } catch (error) {
+                                              console.error('Date parsing error:', error, request.createdAt);
+                                              return '날짜 정보 없음';
+                                            }
+                                          })()}
                                         </div>
                                       </div>
                                     ))}
@@ -1192,14 +1353,34 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 activeNegotiationsCount={(() => {
                   if (!currentRoom?.negotiations) return 0;
 
+                  console.log('DEBUG: 전체 협의 수:', currentRoom.negotiations.length);
+                  console.log('DEBUG: 전체 협의:', currentRoom.negotiations.map(neg => ({
+                    id: neg._id,
+                    status: neg.status,
+                    conflictingMembers: neg.conflictingMembers?.length || 0,
+                    day: neg.day,
+                    time: neg.time
+                  })));
+
                   const activeNegotiations = currentRoom.negotiations.filter(neg => {
-                    return neg.status === 'active' &&
-                           neg.conflictingMembers &&
-                           Array.isArray(neg.conflictingMembers) &&
-                           neg.conflictingMembers.length > 1; // 실제 충돌은 2명 이상일 때
+                    const isActive = neg.status === 'active';
+                    const hasMembers = neg.conflictingMembers && Array.isArray(neg.conflictingMembers);
+                    const hasConflict = hasMembers && neg.conflictingMembers.length > 1;
+
+                    console.log('DEBUG: 협의 필터링:', {
+                      id: neg._id,
+                      status: neg.status,
+                      isActive,
+                      hasMembers,
+                      memberCount: neg.conflictingMembers?.length || 0,
+                      hasConflict,
+                      pass: isActive && hasMembers && hasConflict
+                    });
+
+                    return isActive && hasMembers && hasConflict;
                   });
 
-                  console.log('AutoSchedulerPanel activeNegotiations:', activeNegotiations.length);
+                  console.log('DEBUG: 활성 협의 수:', activeNegotiations.length);
                   return activeNegotiations.length;
                 })()}
               />
@@ -1604,34 +1785,20 @@ const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom
         )}
 
         {/* 시간 관리 버튼들 */}
-        {(currentRoom?.members?.some(m => m.carryOver > 0) || currentRoom?.members?.some(m => m.totalProgressTime > 0)) && (
-          <div className="grid grid-cols-2 gap-2">
-            {currentRoom?.members?.some(m => m.carryOver > 0) && (
-              <button
-                onClick={onResetCarryOverTimes}
-                className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 text-xs transition-colors"
-              >
-                이월시간 초기화
-              </button>
-            )}
-            {currentRoom?.members?.some(m => m.totalProgressTime > 0) && (
-              <button
-                onClick={onResetCompletedTimes}
-                className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 text-xs transition-colors"
-              >
-                완료시간 초기화
-              </button>
-            )}
-            {(currentRoom?.members?.some(m => m.carryOver > 0) || isOwner) && (
-              <button
-                onClick={handleResetCarryOverTimes}
-                className="w-full bg-orange-600 text-white py-2 rounded-lg hover:bg-orange-700 text-xs transition-colors"
-              >
-                이월시간 초기화
-              </button>
-            )}
-          </div>
-        )}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={onResetCarryOverTimes}
+            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 text-xs transition-colors"
+          >
+            이월시간 초기화
+          </button>
+          <button
+            onClick={onResetCompletedTimes}
+            className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 text-xs transition-colors"
+          >
+            완료시간 초기화
+          </button>
+        </div>
       </div>
 
       {activeNegotiationsCount > 0 && (

@@ -308,7 +308,8 @@ export const coordinationService = {
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
-      throw new Error(errData.msg || 'Failed to run auto-schedule');
+      console.error('Auto-schedule error:', response.status, errData);
+      throw new Error(errData.msg || `Failed to run auto-schedule (${response.status})`);
     }
 
     return await response.json();
