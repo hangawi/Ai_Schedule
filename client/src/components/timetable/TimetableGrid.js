@@ -19,12 +19,27 @@ const getMondayOfCurrentWeek = (date) => {
 // Safe date handling function to prevent Invalid time value errors
 const safeDateToISOString = (dateValue) => {
   try {
-    if (!dateValue) return null;
-    const date = new Date(dateValue);
-    if (isNaN(date.getTime())) {
-      console.warn('Invalid date value:', dateValue);
+    if (!dateValue) {
+      console.warn('Null or undefined date value passed to safeDateToISOString');
       return null;
     }
+
+    // Handle various date formats
+    let date;
+    if (dateValue instanceof Date) {
+      date = dateValue;
+    } else if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+      date = new Date(dateValue);
+    } else {
+      console.warn('Unsupported date type:', typeof dateValue, dateValue);
+      return null;
+    }
+
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date value:', dateValue, 'resulted in:', date);
+      return null;
+    }
+
     return date.toISOString();
   } catch (error) {
     console.warn('Error converting date to ISO string:', dateValue, error);
@@ -581,11 +596,14 @@ const TimetableGrid = ({
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: (() => {
-              const existingSlot = (timeSlots || []).find(slot => 
-                safeDateToISOString(slot.date)?.split('T')[0] === safeDateToISOString(slotToChange.date)?.split('T')[0] &&
-                slot.startTime === slotToChange.time &&
-                (slot.user === currentUser?.id || slot.user?.toString() === currentUser?.id?.toString())
-              );
+              const existingSlot = (timeSlots || []).find(slot => {
+                const slotDateStr = safeDateToISOString(slot.date)?.split('T')[0];
+                const changeSlotDateStr = safeDateToISOString(slotToChange.date)?.split('T')[0];
+                return slotDateStr && changeSlotDateStr &&
+                       slotDateStr === changeSlotDateStr &&
+                       slot.startTime === slotToChange.time &&
+                       (slot.user === currentUser?.id || slot.user?.toString() === currentUser?.id?.toString());
+              });
               return existingSlot?.subject || '요청자 시간';
             })()
           },
@@ -604,11 +622,14 @@ const TimetableGrid = ({
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: (() => {
-              const existingSlot = (timeSlots || []).find(slot => 
-                safeDateToISOString(slot.date)?.split('T')[0] === safeDateToISOString(slotToChange.date)?.split('T')[0] &&
-                slot.startTime === slotToChange.time &&
-                (slot.user === currentUser?.id || slot.user?.toString() === currentUser?.id?.toString())
-              );
+              const existingSlot = (timeSlots || []).find(slot => {
+                const slotDateStr = safeDateToISOString(slot.date)?.split('T')[0];
+                const changeSlotDateStr = safeDateToISOString(slotToChange.date)?.split('T')[0];
+                return slotDateStr && changeSlotDateStr &&
+                       slotDateStr === changeSlotDateStr &&
+                       slot.startTime === slotToChange.time &&
+                       (slot.user === currentUser?.id || slot.user?.toString() === currentUser?.id?.toString());
+              });
               return existingSlot?.subject || '변경 요청';
             })()
           },
@@ -618,11 +639,14 @@ const TimetableGrid = ({
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: (() => {
-              const existingSlot = (timeSlots || []).find(slot => 
-                safeDateToISOString(slot.date)?.split('T')[0] === safeDateToISOString(slotToChange.date)?.split('T')[0] &&
-                slot.startTime === slotToChange.time &&
-                (slot.user === currentUser?.id || slot.user?.toString() === currentUser?.id?.toString())
-              );
+              const existingSlot = (timeSlots || []).find(slot => {
+                const slotDateStr = safeDateToISOString(slot.date)?.split('T')[0];
+                const changeSlotDateStr = safeDateToISOString(slotToChange.date)?.split('T')[0];
+                return slotDateStr && changeSlotDateStr &&
+                       slotDateStr === changeSlotDateStr &&
+                       slot.startTime === slotToChange.time &&
+                       (slot.user === currentUser?.id || slot.user?.toString() === currentUser?.id?.toString());
+              });
               return existingSlot?.subject || '변경 대상';
             })(),
             user: currentUser?.id

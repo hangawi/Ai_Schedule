@@ -87,7 +87,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     }
   }, [user?.id]);
 
-  const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest } = useCoordination(user?.id, onRefreshExchangeCount, loadSentRequests, showAlert);
+  const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest, cancelRequest } = useCoordination(user?.id, onRefreshExchangeCount, loadSentRequests, showAlert);
 
   // Handle custom events for room navigation (from browser back/forward navigation)
   useEffect(() => {
@@ -350,16 +350,10 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
   const handleCancelRequest = async (requestId) => {
     try {
-      await coordinationService.cancelRequest(requestId);
+      await cancelRequest(requestId);
+      await loadSentRequests(); // 보낸 요청 목록 새로고침
     } catch (error) {
-    }
-    
-    try {
-      if (currentRoom) {
-        await fetchRoomDetails(currentRoom._id);
-      }
-      await loadSentRequests();
-    } catch (updateError) {
+      console.error('Failed to cancel request:', error);
     }
   };
 
@@ -374,12 +368,14 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   useEffect(() => {
     if (!currentRoom || !onExchangeRequestCountChange) return;
     
-    const exchangeRequestCount = (currentRoom.requests || []).filter(req =>
-      req.status === 'pending' &&
-      req.type === 'slot_swap' &&
-      req.targetUser &&
-      (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString())
-    ).length;
+    const exchangeRequestCount = (currentRoom.requests || []).filter(req => {
+      if (req.status !== 'pending') return false;
+      if (req.type !== 'slot_swap') return false;
+      if (!req.targetUser) return false;
+      const targetUserId = req.targetUser._id || req.targetUser;
+      const currentUserId = user?.id;
+      return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
+    }).length;
     
     onExchangeRequestCountChange(exchangeRequestCount);
   }, [currentRoom, user?.id, user?.email, onExchangeRequestCountChange]);
@@ -755,12 +751,40 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
                 {requestViewMode === 'received' && (
                   <div>
-                    {(currentRoom.requests || []).filter(req => req.status === 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString())).length > 0 && (
+                    {(() => {
+                      console.log('DEBUG: All requests:', currentRoom.requests);
+                      console.log('DEBUG: Current user ID:', user?.id);
+                      const receivedRequests = (currentRoom.requests || []).filter(req => {
+                        console.log('DEBUG: Request:', req);
+                        console.log('DEBUG: Request targetUser:', req.targetUser);
+                        console.log('DEBUG: User ID:', user?.id);
+
+                        if (req.status !== 'pending') return false;
+                        if (!req.targetUser) return false;
+
+                        // Handle both populated and non-populated targetUser
+                        const targetUserId = req.targetUser._id || req.targetUser;
+                        const currentUserId = user?.id;
+
+                        const isMatch = targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
+                        console.log('DEBUG: Target match:', isMatch, 'targetUserId:', targetUserId, 'currentUserId:', currentUserId);
+
+                        return isMatch;
+                      });
+                      console.log('DEBUG: Filtered received requests:', receivedRequests);
+                      return receivedRequests.length > 0;
+                    })() && (
                       <div className="mb-4">
                         <h5 className="text-sm font-medium text-gray-700 mb-2">대기 중인 요청</h5>
                         <div className="space-y-2">
                           {(currentRoom.requests || [])
-                            .filter(req => req.status === 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString()))
+                            .filter(req => {
+                              if (req.status !== 'pending') return false;
+                              if (!req.targetUser) return false;
+                              const targetUserId = req.targetUser._id || req.targetUser;
+                              const currentUserId = user?.id;
+                              return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
+                            })
                             .slice(0, showAllRequests['receivedPending'] ? undefined : 3)
                             .map((request, index) => {
                               const requesterData = request.requester;
@@ -797,19 +821,37 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                 </div>
                               );
                             })}
-                          {(currentRoom.requests || []).filter(req => req.status === 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString())).length > 3 && !showAllRequests['receivedPending'] && (
+                          {(currentRoom.requests || []).filter(req => {
+                            if (req.status !== 'pending') return false;
+                            if (!req.targetUser) return false;
+                            const targetUserId = req.targetUser._id || req.targetUser;
+                            const currentUserId = user?.id;
+                            return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
+                          }).length > 3 && !showAllRequests['receivedPending'] && (
                             <button
                               onClick={() => setShowAllRequests(prev => ({...prev, receivedPending: true}))}
                               className="text-xs text-blue-500 hover:text-blue-600 text-center w-full"
                             >
-                              +{(currentRoom.requests || []).filter(req => req.status === 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString())).length - 3}개 더 보기
+                              +{(currentRoom.requests || []).filter(req => {
+                                if (req.status !== 'pending') return false;
+                                if (!req.targetUser) return false;
+                                const targetUserId = req.targetUser._id || req.targetUser;
+                                const currentUserId = user?.id;
+                                return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
+                              }).length - 3}개 더 보기
                             </button>
                           )}
                         </div>
                       </div>
                     )}
 
-                    {(currentRoom.requests || []).filter(req => req.status !== 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString())).length > 0 && (
+                    {(currentRoom.requests || []).filter(req => {
+                      if (req.status === 'pending') return false;
+                      if (!req.targetUser) return false;
+                      const targetUserId = req.targetUser._id || req.targetUser;
+                      const currentUserId = user?.id;
+                      return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
+                    }).length > 0 && (
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <h5 className="text-sm font-medium text-gray-700">처리된 요청</h5>
@@ -823,7 +865,13 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                         {expandedSections['receivedProcessed'] && (
                           <div className="space-y-2">
                             {(currentRoom.requests || [])
-                              .filter(req => req.status !== 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString()))
+                              .filter(req => {
+                                if (req.status === 'pending') return false;
+                                if (!req.targetUser) return false;
+                                const targetUserId = req.targetUser._id || req.targetUser;
+                                const currentUserId = user?.id;
+                                return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
+                              })
                               .slice(0, showAllRequests['receivedProcessed'] ? undefined : 3)
                               .map((request, index) => {
                                 const requesterData = request.requester;
@@ -831,17 +879,21 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                 
                                 return (
                                   <div key={request._id || index} className={`p-2 border rounded-lg ${
-                                    request.status === 'approved' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                                    request.status === 'approved' ? 'bg-green-50 border-green-200' :
+                                    request.status === 'cancelled' ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200'
                                   }`}>
                                     <div className="flex justify-between items-center mb-1">
                                       <div className={`text-xs font-medium ${
-                                        request.status === 'approved' ? 'text-green-900' : 'text-red-900'
+                                        request.status === 'approved' ? 'text-green-900' :
+                                        request.status === 'cancelled' ? 'text-gray-900' : 'text-red-900'
                                       }`}>{requesterName}</div>
                                       <div className="flex items-center space-x-2">
                                         <div className={`text-xs px-2 py-1 rounded-full ${
-                                          request.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                          request.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                          request.status === 'cancelled' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'
                                         }`}>
-                                          {request.status === 'approved' ? '승인됨' : '거절됨'}
+                                          {request.status === 'approved' ? '승인됨' :
+                                           request.status === 'cancelled' ? '취소됨' : '거절됨'}
                                         </div>
                                         <button
                                           onClick={() => handleCancelRequest(request._id)}
@@ -853,19 +905,32 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                       </div>
                                     </div>
                                     <div className={`text-xs mb-2 ${
-                                      request.status === 'approved' ? 'text-green-700' : 'text-red-700'
+                                      request.status === 'approved' ? 'text-green-700' :
+                                      request.status === 'cancelled' ? 'text-gray-700' : 'text-red-700'
                                     }`}>
                                       {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
                                     </div>
                                   </div>
                                 );
                               })}
-                            {(currentRoom.requests || []).filter(req => req.status !== 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString())).length > 3 && !showAllRequests['receivedProcessed'] && (
+                            {(currentRoom.requests || []).filter(req => {
+                              if (req.status === 'pending') return false;
+                              if (!req.targetUser) return false;
+                              const targetUserId = req.targetUser._id || req.targetUser;
+                              const currentUserId = user?.id;
+                              return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
+                            }).length > 3 && !showAllRequests['receivedProcessed'] && (
                               <button
                                 onClick={() => setShowAllRequests(prev => ({...prev, receivedProcessed: true}))}
                                 className="text-xs text-gray-500 hover:text-gray-600 text-center w-full"
                               >
-                                +{(currentRoom.requests || []).filter(req => req.status !== 'pending' && req.targetUser && (req.targetUser._id === user?.id || req.targetUser._id?.toString() === user?.id?.toString())).length - 3}개 더 보기
+                                +{(currentRoom.requests || []).filter(req => {
+                                  if (req.status === 'pending') return false;
+                                  if (!req.targetUser) return false;
+                                  const targetUserId = req.targetUser._id || req.targetUser;
+                                  const currentUserId = user?.id;
+                                  return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
+                                }).length - 3}개 더 보기
                               </button>
                             )}
                           </div>
@@ -945,19 +1010,23 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                     .slice(0, showAllRequests['sentProcessed'] ? undefined : 3)
                                     .map((request, index) => (
                                       <div key={request._id || index} className={`p-2 border rounded-lg ${
-                                        request.status === 'approved' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                                        request.status === 'approved' ? 'bg-green-50 border-green-200' :
+                                        request.status === 'cancelled' ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200'
                                       }`}>
                                         <div className="flex justify-between items-center mb-1">
                                           <div className={`text-xs font-medium ${
-                                            request.status === 'approved' ? 'text-green-900' : 'text-red-900'
+                                            request.status === 'approved' ? 'text-green-900' :
+                                            request.status === 'cancelled' ? 'text-gray-900' : 'text-red-900'
                                           }`}>
                                             {request.type === 'slot_swap' ? '교환 요청' : request.type === 'time_request' ? '시간 요청' : '시간 변경'}
                                           </div>
                                           <div className="flex items-center space-x-2">
                                             <div className={`text-xs px-2 py-1 rounded-full ${
-                                              request.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                              request.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                              request.status === 'cancelled' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'
                                             }`}>
-                                              {request.status === 'approved' ? '승인됨' : '거절됨'}
+                                              {request.status === 'approved' ? '승인됨' :
+                                               request.status === 'cancelled' ? '취소됨' : '거절됨'}
                                             </div>
                                             <button
                                               onClick={() => handleCancelRequest(request._id)}
@@ -969,7 +1038,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                           </div>
                                         </div>
                                         <div className={`text-xs mb-2 ${
-                                          request.status === 'approved' ? 'text-green-700' : 'text-red-700'
+                                          request.status === 'approved' ? 'text-green-700' :
+                                          request.status === 'cancelled' ? 'text-gray-700' : 'text-red-700'
                                         }`}>
                                           {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
                                         </div>

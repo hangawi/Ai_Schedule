@@ -60,7 +60,7 @@ const RequestSchema = new mongoose.Schema({
   message: String,
   status: {
     type: String,
-    enum: ['pending', 'approved', 'rejected'],
+    enum: ['pending', 'approved', 'rejected', 'cancelled'],
     default: 'pending'
   },
   createdAt: {
@@ -274,9 +274,10 @@ RoomSchema.pre('save', function(next) {
 // Add owner as first member when room is created
 RoomSchema.pre('save', function(next) {
   if (this.isNew && this.members.length === 0) {
-    this.members.push({ 
+    const { OWNER_COLOR } = require('../utils/colorUtils');
+    this.members.push({
       user: this.owner,
-      color: '#DC2626' // 방장은 항상 진한 빨간색으로 구분
+      color: OWNER_COLOR // 방장은 항상 고정된 색상으로 구분
     });
   }
   next();

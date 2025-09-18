@@ -250,6 +250,27 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
     }
   }, [currentRoomState, fetchRoomDetails, onRefreshExchangeCount]);
 
+  const cancelRequest = useCallback(async (requestId) => {
+    setError(null);
+    try {
+      await coordinationService.cancelRequest(requestId);
+      if (currentRoomState) {
+        await fetchRoomDetails(currentRoomState._id, true);
+      }
+      // 요청 취소/삭제 후 전역 카운트 및 보낸 요청 목록 새로고침
+      if (onRefreshExchangeCount) {
+        onRefreshExchangeCount();
+      }
+      if (onRefreshSentRequests) {
+        onRefreshSentRequests();
+      }
+    } catch (err) {
+      console.error('cancelRequest error:', err);
+      setError(err.message);
+      throw err;
+    }
+  }, [currentRoomState, fetchRoomDetails, onRefreshExchangeCount, onRefreshSentRequests]);
+
 
   useEffect(() => {
     if (userId) {
@@ -273,6 +294,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
     removeTimeSlot,
     assignTimeSlot,
     createRequest,
-    handleRequest
+    handleRequest,
+    cancelRequest
   };
 };
