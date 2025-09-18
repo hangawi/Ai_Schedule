@@ -120,13 +120,30 @@ exports.createRequest = async (req, res) => {
 
       // 중복 요청 체크
       const hasDuplicateRequest = room.requests.some(
-         request =>
-            request.requester.toString() === req.user.id &&
-            request.status === 'pending' &&
-            request.timeSlot.day === timeSlot.day &&
-            request.timeSlot.startTime === timeSlot.startTime &&
-            request.timeSlot.endTime === timeSlot.endTime &&
-            (type !== 'slot_swap' || request.targetUser?.toString() === targetUserId),
+         request => {
+            // 같은 요청자의 대기 중인 요청만 체크
+            if (request.requester.toString() !== req.user.id || request.status !== 'pending') {
+               return false;
+            }
+
+            // 같은 시간대의 요청인지 체크
+            const sameTimeSlot = request.timeSlot.day === timeSlot.day &&
+                                request.timeSlot.startTime === timeSlot.startTime &&
+                                request.timeSlot.endTime === timeSlot.endTime;
+
+            if (!sameTimeSlot) {
+               return false;
+            }
+
+            // slot_swap 타입의 경우 targetUser도 같은지 체크
+            if (type === 'slot_swap') {
+               return request.type === 'slot_swap' &&
+                      request.targetUser?.toString() === targetUserId;
+            }
+
+            // 다른 타입의 경우 타입이 같은지 체크
+            return request.type === type;
+         }
       );
 
       if (hasDuplicateRequest) {
@@ -561,6 +578,17 @@ exports.runAutoSchedule = async (req, res) => {
         return userId.toString();
       }))];
 
+      // Also check for members who have defaultSchedule but no room timeSlots
+      for (const memberId of memberIds) {
+        if (!membersWithTimeData.includes(memberId)) {
+          const userData = await User.findById(memberId).select('defaultSchedule');
+          if (userData && userData.defaultSchedule && userData.defaultSchedule.length > 0) {
+            membersWithTimeData.push(memberId);
+            console.log(`Member ${memberId} has defaultSchedule:`, userData.defaultSchedule.length, 'slots');
+          }
+        }
+      }
+
       const membersWithoutTimeData = memberIds.filter(id => !membersWithTimeData.includes(id));
 
       console.log('runAutoSchedule: Total memberIds:', memberIds.length);
@@ -571,15 +599,23 @@ exports.runAutoSchedule = async (req, res) => {
       if (membersWithoutTimeData.length > 0) {
         console.log('Members without time data:', membersWithoutTimeData);
 
-        // Try to check defaultSchedule for missing members
+        // Get member names for better error message
+        const membersWithoutDataInfo = [];
         for (const missingMemberId of membersWithoutTimeData) {
-          const userData = await User.findById(missingMemberId).select('defaultSchedule');
-          console.log(`Member ${missingMemberId} defaultSchedule:`, userData?.defaultSchedule);
+          const memberData = room.members.find(m => {
+            const memberId = m.user._id ? m.user._id.toString() : m.user.toString();
+            return memberId === missingMemberId;
+          });
+          if (memberData) {
+            const userName = memberData.user.name || `${memberData.user.firstName || ''} ${memberData.user.lastName || ''}`.trim() || '알 수 없음';
+            membersWithoutDataInfo.push(userName);
+          }
         }
 
         return res.status(400).json({
-          msg: '일부 멤버가 시간표나 선호 시간을 설정하지 않았습니다. 모든 멤버가 시간 정보를 입력해야 자동 배정이 가능합니다.',
-          membersWithoutData: membersWithoutTimeData
+          msg: `다음 멤버들이 시간표나 선호 시간을 설정하지 않았습니다: ${membersWithoutDataInfo.join(', ')}. 각 멤버는 내프로필에서 선호시간표를 설정하거나 방에서 직접 시간을 입력해야 합니다.`,
+          membersWithoutData: membersWithoutTimeData,
+          membersWithoutDataNames: membersWithoutDataInfo
         });
       }
 
@@ -606,20 +642,24 @@ exports.runAutoSchedule = async (req, res) => {
          });
       });
 
-      // Add owner's defaultSchedule to blocked times if no room slots
-      if (ownerRoomSlots.length === 0 && ownerUser && ownerUser.defaultSchedule && ownerUser.defaultSchedule.length > 0) {
+      // Add owner's defaultSchedule to blocked times
+      // 방장의 defaultSchedule을 항상 블록타임으로 추가 (금지시간으로 활용)
+      if (ownerUser && ownerUser.defaultSchedule && ownerUser.defaultSchedule.length > 0) {
          const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
          ownerUser.defaultSchedule.forEach(schedule => {
             // Skip weekends
             if (schedule.dayOfWeek === 0 || schedule.dayOfWeek === 6) return;
 
+            // 방장의 시간표는 다른 멤버들이 배정될 수 없는 금지시간으로 설정
             ownerBlockedTimes.push({
                day: dayNames[schedule.dayOfWeek],
                startTime: schedule.startTime,
                endTime: schedule.endTime,
-               reason: 'owner_default_schedule'
+               reason: 'owner_default_schedule_blocked'
             });
          });
+
+         console.log('runAutoSchedule: Added owner defaultSchedule as blocked times:', ownerBlockedTimes.length);
       }
 
       console.log('runAutoSchedule: Owner blocked times:', ownerBlockedTimes.length);
@@ -656,6 +696,7 @@ exports.runAutoSchedule = async (req, res) => {
                   endTime: slot.endTime,
                   day: slot.day,
                   priority: 3,
+                  subject: '자동 배정',
                   assignedBy: req.user.id,
                   assignedAt: new Date(),
                   status: 'confirmed',
