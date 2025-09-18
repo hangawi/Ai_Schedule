@@ -344,9 +344,9 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         setShowNegotiationAlert(true);
       } else if (activeNegotiations.length > 0) {
         // Show passive notification for other negotiations
-        showAlert(`자동 시간 배정이 완료되었습니다. ${activeNegotiations.length}개의 협의가 생성되었습니다.`);
+        showAlert(`자동 시간 배정이 완료되었습니다. ${activeNegotiations.length}개의 협의가 생성되었습니다. 같은 우선순위의 멤버들 간 조율이 필요한 시간대입니다.`);
       } else {
-        showAlert('자동 시간 배정이 완료되었습니다.');
+        showAlert('자동 시간 배정이 완료되었습니다. 모든 시간이 성공적으로 할당되었습니다.');
       }
     } catch (error) {
       setScheduleError(error.message);
@@ -1144,10 +1144,18 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                               </div>
                               <div className="text-xs text-gray-600 mb-2">
                                 충돌 멤버: {memberNames}
+                                {negotiation.priority && (
+                                  <span className="ml-2 px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded-full">
+                                    우선순위: {negotiation.priority}
+                                  </span>
+                                )}
                               </div>
                               <div className="text-xs text-gray-500">
                                 응답 현황: {negotiation.conflictingMembers?.filter(cm => cm.response !== 'pending').length || 0}
                                 /{negotiation.conflictingMembers?.length || 0}
+                                {negotiation.conflictingMembers?.some(cm => cm.response === 'accepted') &&
+                                  <span className="ml-2 text-green-600">✓ 일부 동의</span>
+                                }
                               </div>
                             </div>
                             <button
@@ -1342,12 +1350,26 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             onRequestChange={(message) => {
               let requestData;
 
+              // Helper function to get correct day index from Date object
+              const getDayIndex = (date) => {
+                const dayOfWeek = date.getUTCDay(); // 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
+                // We want Monday=0, Tuesday=1, Wednesday=2, Thursday=3, Friday=4
+                if (dayOfWeek === 0) return -1; // Sunday, not valid
+                if (dayOfWeek === 6) return -1; // Saturday, not valid
+                return dayOfWeek - 1; // Monday(1)->0, Tuesday(2)->1, etc.
+              };
+
+              // slotToChange.date가 있으면 해당 날짜의 day를 계산
+              const dayKey = slotToChange.date
+                ? days[getDayIndex(slotToChange.date)]
+                : days[slotToChange.dayIndex - 1];
+
               if (slotToChange.action === 'release') {
                 requestData = {
                   roomId: currentRoom._id,
                   type: 'slot_release',
                   timeSlot: {
-                    day: days[slotToChange.dayIndex - 1],
+                    day: dayKey,
                     startTime: slotToChange.time,
                     endTime: calculateEndTime(slotToChange.time),
                   },
@@ -1358,12 +1380,12 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   roomId: currentRoom._id,
                   type: 'slot_swap',
                   timeSlot: {
-                    day: days[slotToChange.dayIndex - 1],
+                    day: dayKey,
                     startTime: slotToChange.time,
                     endTime: calculateEndTime(slotToChange.time),
                   },
                   targetUserId: slotToChange.targetUserId,
-                  targetSlot: slotToChange.targetSlot, // <--- ADD THIS LINE
+                  targetSlot: slotToChange.targetSlot,
                   message: message || '시간 교환을 요청합니다.',
                 };
               } else {
@@ -1371,12 +1393,12 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   roomId: currentRoom._id,
                   type: 'time_change',
                   timeSlot: {
-                    day: days[slotToChange.dayIndex - 1],
+                    day: dayKey,
                     startTime: slotToChange.time,
                     endTime: calculateEndTime(slotToChange.time),
                   },
                   targetSlot: { // This is the slot being changed
-                    day: days[slotToChange.dayIndex - 1],
+                    day: dayKey,
                     startTime: slotToChange.time,
                     endTime: calculateEndTime(slotToChange.time),
                     user: user.id
@@ -1387,10 +1409,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
               handleRequestSlot(requestData);
               closeChangeRequestModal();
             }}
-            slotToChange={{
-              ...slotToChange,
-              day: dayMap[days[slotToChange.dayIndex - 1]]
-            }}
+            slotToChange={slotToChange} // 전체 객체를 전달 (dayDisplay 포함)
           />
         )}
         {showMemberScheduleModal && selectedMemberId && (
