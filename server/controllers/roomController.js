@@ -198,6 +198,15 @@ exports.getRoomDetails = async (req, res) => {
          return res.status(403).json({ msg: '이 방에 접근할 권한이 없습니다.' });
       }
 
+      console.log('getRoomDetails: Requests count:', room.requests?.length || 0);
+      console.log('getRoomDetails: Sample requests:', room.requests?.slice(0, 2).map(req => ({
+         id: req._id,
+         type: req.type,
+         status: req.status,
+         requester: req.requester?._id || req.requester,
+         targetUser: req.targetUser?._id || req.targetUser
+      })));
+
       res.json(room);
    } catch (error) {
       console.error('Error fetching room details:', error);

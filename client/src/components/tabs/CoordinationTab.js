@@ -207,7 +207,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       const response = await fetch(`${apiUrl}/api/coordination/reset-completed/${currentRoom._id}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${user?.token}`,
+          'x-auth-token': localStorage.getItem('token'),
           'Content-Type': 'application/json'
         }
       });
@@ -230,7 +230,41 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       console.error('Error resetting completed times:', error);
       showAlert(`완료시간 초기화 실패: ${error.message}`);
     }
-  }, [currentRoom?._id, fetchRoomDetails, showAlert, user?.token]);
+  }, [currentRoom?._id, fetchRoomDetails, showAlert]);
+
+  // Reset carryover times function
+  const handleResetCarryOverTimes = useCallback(async () => {
+    if (!currentRoom?._id) return;
+
+    try {
+      const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+      const response = await fetch(`${apiUrl}/api/coordination/reset-carryover/${currentRoom._id}`, {
+        method: 'POST',
+        headers: {
+          'x-auth-token': localStorage.getItem('token'),
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reset carryover times');
+      }
+
+      const result = await response.json();
+      showAlert(`${result.resetCount}명의 멤버 이월시간이 초기화되었습니다.`);
+
+      // Immediately update room data without refresh
+      if (result.room) {
+        setCurrentRoom(result.room);
+      } else {
+        // Fallback to refresh if room data not returned
+        await fetchRoomDetails(currentRoom._id);
+      }
+    } catch (error) {
+      console.error('Error resetting carryover times:', error);
+      showAlert(`이월시간 초기화 실패: ${error.message}`);
+    }
+  }, [currentRoom?._id, fetchRoomDetails, showAlert]);
 
   // Auto-scheduling function (moved after useCoordination)
   const handleRunAutoSchedule = async () => {
@@ -1586,6 +1620,14 @@ const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom
                 className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 text-xs transition-colors"
               >
                 완료시간 초기화
+              </button>
+            )}
+            {(currentRoom?.members?.some(m => m.carryOver > 0) || isOwner) && (
+              <button
+                onClick={handleResetCarryOverTimes}
+                className="w-full bg-orange-600 text-white py-2 rounded-lg hover:bg-orange-700 text-xs transition-colors"
+              >
+                이월시간 초기화
               </button>
             )}
           </div>

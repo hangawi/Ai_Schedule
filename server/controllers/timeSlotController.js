@@ -309,3 +309,68 @@ exports.resetCompletedTimes = async (req, res) => {
       res.status(500).json({ msg: 'Server error' });
    }
 };
+
+// @desc    Reset carryover times for all members in a room
+// @route   POST /api/coordination/reset-carryover/:roomId
+// @access  Private (Owner only)
+exports.resetCarryOverTimes = async (req, res) => {
+   try {
+      console.log('resetCarryOverTimes called with roomId:', req.params.roomId);
+      console.log('User ID:', req.user?.id);
+
+      const { roomId } = req.params;
+      const room = await Room.findById(roomId);
+
+      if (!room) {
+         return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+      }
+
+      if (!room.isOwner(req.user.id)) {
+         return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
+      }
+
+      let resetCount = 0;
+      console.log('Room members count:', room.members.length);
+
+      // Reset carryover times only
+      room.members.forEach((member, index) => {
+         console.log(
+            `Member ${index}: carryOver = ${member.carryOver}`,
+         );
+
+         // carryOver 초기화 (완료시간은 제외)
+         if (member.carryOver > 0) {
+            const prevValue = member.carryOver;
+            member.carryOver = 0;
+            resetCount++;
+
+            if (!member.carryOverHistory) member.carryOverHistory = [];
+            member.carryOverHistory.push({
+               week: new Date(),
+               amount: -prevValue,
+               reason: 'admin_reset',
+               timestamp: new Date()
+            });
+            console.log(`Reset carryOver for member ${index} from ${prevValue} to 0`);
+         }
+      });
+
+      await room.save();
+      console.log('Room saved successfully');
+      console.log('Total members reset:', resetCount);
+
+      // Return updated room with populated fields
+      const updatedRoom = await Room.findById(roomId)
+         .populate('owner', 'firstName lastName email')
+         .populate('members.user', 'firstName lastName email');
+
+      res.json({
+         resetCount,
+         message: `${resetCount}명의 멤버 이월시간이 초기화되었습니다.`,
+         room: updatedRoom,
+      });
+   } catch (error) {
+      console.error('Error resetting carryover times:', error);
+      res.status(500).json({ msg: 'Server error' });
+   }
+};
