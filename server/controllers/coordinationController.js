@@ -439,6 +439,7 @@ exports.runAutoSchedule = async (req, res) => {
       const { minHoursPerWeek = 3, numWeeks = 4, currentWeek, ownerFocusTime = 'none' } = req.body;
       console.log('자동 배정 요청 - 받은 옵션:', { minHoursPerWeek, numWeeks, currentWeek, ownerFocusTime });
       const startDate = currentWeek ? new Date(currentWeek) : new Date();
+      console.log('자동 배정 요청 - 계산된 startDate:', startDate.toISOString());
 
       const room = await Room.findById(roomId)
          .populate('owner', 'defaultSchedule scheduleExceptions')
@@ -520,6 +521,11 @@ exports.runAutoSchedule = async (req, res) => {
       }
 
       const allTimeSlots = [...(room.timeSlots || []), ...generatedTimeSlots];
+      console.log('자동 배정 요청 - allTimeSlots 샘플:', allTimeSlots.slice(0, 5).map(slot => ({
+        date: slot.date,
+        startTime: slot.startTime,
+        user: slot.user._id || slot.user
+      })));
 
       const memberIds = membersOnly.map(m => {
         const memberId = m.user._id ? m.user._id.toString() : m.user.toString();
@@ -606,6 +612,13 @@ exports.runAutoSchedule = async (req, res) => {
           });
         }
       }
+
+      console.log('자동 배정 요청 - 스케줄링 알고리즘에 전달할 옵션:', {
+        minHoursPerWeek,
+        numWeeks,
+        currentWeek,
+        allTimeSlotsCount: allTimeSlots.length
+      });
 
       const result = schedulingAlgorithm.runAutoSchedule(
          membersOnly,
@@ -723,7 +736,10 @@ exports.runAutoSchedule = async (req, res) => {
       const freshRoom = await Room.findById(roomId)
          .populate('owner', 'firstName lastName email')
          .populate('members.user', 'firstName lastName email')
-         .populate('timeSlots.user', 'firstName lastName email');
+         .populate('timeSlots.user', 'firstName lastName email')
+         .populate('requests.requester', 'firstName lastName email')
+         .populate('requests.targetUser', 'firstName lastName email')
+         .populate('negotiations.conflictingMembers.user', 'firstName lastName email name');
 
       res.json({
          room: freshRoom,

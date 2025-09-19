@@ -81,17 +81,24 @@ const TimetableGrid = ({
   const [weekDates, setWeekDates] = useState([]);
 
   useEffect(() => {
-    const today = new Date();
-    // If it's Sunday, show next week's calendar starting Monday
-    // This logic is already in getMondayOfCurrentWeek, but let's ensure today is a weekday for initial calculation
-    let startDay = new Date(today);
-    if (startDay.getUTCDay() === 0) { // If today is Sunday, start from tomorrow (Monday)
-      startDay.setUTCDate(startDay.getUTCDate() + 1);
-    } else if (startDay.getUTCDay() === 6) { // If today is Saturday, start from next Monday
-      startDay.setUTCDate(startDay.getUTCDate() + 2);
+    // Use initialStartDate if provided, otherwise use today
+    let baseDate;
+    if (initialStartDate) {
+      baseDate = new Date(initialStartDate);
+    } else {
+      const today = new Date();
+      // If it's Sunday, show next week's calendar starting Monday
+      // This logic is already in getMondayOfCurrentWeek, but let's ensure today is a weekday for initial calculation
+      let startDay = new Date(today);
+      if (startDay.getUTCDay() === 0) { // If today is Sunday, start from tomorrow (Monday)
+        startDay.setUTCDate(startDay.getUTCDate() + 1);
+      } else if (startDay.getUTCDay() === 6) { // If today is Saturday, start from next Monday
+        startDay.setUTCDate(startDay.getUTCDate() + 2);
+      }
+      baseDate = startDay;
     }
 
-    const mondayOfCurrentWeek = getMondayOfCurrentWeek(startDay);
+    const mondayOfCurrentWeek = getMondayOfCurrentWeek(baseDate);
 
     const dates = [];
     let currentDay = new Date(mondayOfCurrentWeek);
@@ -115,7 +122,7 @@ const TimetableGrid = ({
       const weekStartDate = dates[0].fullDate.toISOString().split('T')[0];
       onWeekChange(weekStartDate); // Pass YYYY-MM-DD format
     }
-  }, [onWeekChange]);
+  }, [onWeekChange, initialStartDate]);
 
 
   const days = ['월', '화', '수', '목', '금']; // Display labels (not used for logic)
@@ -213,12 +220,34 @@ const TimetableGrid = ({
   const getNegotiationInfo = useCallback((date, time) => {
     if (!roomData?.negotiations || roomData.negotiations.length === 0) return null;
 
+    console.log('getNegotiationInfo 호출:', {
+      date: date.toISOString().split('T')[0],
+      time: time.trim(),
+      negotiationsCount: roomData.negotiations.length
+    });
+
     const negotiation = roomData.negotiations.find(neg => {
-      if (neg.status !== 'active') return false;
+      if (neg.status !== 'active') {
+        return false;
+      }
+
+      if (!neg.slotInfo) {
+        return false;
+      }
 
       const negDate = new Date(neg.slotInfo.date);
       const dateMatch = negDate.toISOString().split('T')[0] === date.toISOString().split('T')[0];
       const timeMatch = time.trim() === neg.slotInfo.startTime.trim();
+
+      console.log('협의 매칭 체크:', {
+        negId: neg._id,
+        negDate: negDate.toISOString().split('T')[0],
+        negTime: neg.slotInfo.startTime.trim(),
+        inputDate: date.toISOString().split('T')[0],
+        inputTime: time.trim(),
+        dateMatch,
+        timeMatch
+      });
 
       return dateMatch && timeMatch;
     });
