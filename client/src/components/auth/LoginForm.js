@@ -149,7 +149,7 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
                <button
                   onClick={onRegisterClick}
                   className="px-4 py-2 border border-blue-500 text-blue-500 rounded-md hover:bg-blue-50">
-                  회원가입
+                  회ss원가입
                </button>
 
                <SocialLoginButtons googleLogin={googleLogin} showAlert={showAlert} />
