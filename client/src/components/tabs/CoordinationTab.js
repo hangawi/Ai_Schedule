@@ -641,6 +641,53 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 px-2 sm:px-4 lg:px-6">
           <div className="lg:col-span-1">
+            {isOwner && (
+              <AutoSchedulerPanel
+                options={scheduleOptions}
+                setOptions={setScheduleOptions}
+                onRun={handleRunAutoSchedule}
+                isLoading={isScheduling}
+                currentRoom={currentRoom}
+                onAutoResolveNegotiations={handleAutoResolveNegotiations}
+                onResetCarryOverTimes={handleResetCarryOverTimes}
+                onResetCompletedTimes={handleResetCompletedTimes}
+                onDeleteAllSlots={handleDeleteAllSlots}
+                currentWeekStartDate={currentWeekStartDate}
+                activeNegotiationsCount={(() => {
+                  if (!currentRoom?.negotiations) return 0;
+
+                  console.log('DEBUG: 전체 협의 수:', currentRoom.negotiations.length);
+                  console.log('DEBUG: 전체 협의:', currentRoom.negotiations.map(neg => ({
+                    id: neg._id,
+                    status: neg.status,
+                    conflictingMembers: neg.conflictingMembers?.length || 0,
+                    day: neg.day,
+                    time: neg.time
+                  })));
+
+                  const activeNegotiations = currentRoom.negotiations.filter(neg => {
+                    const isActive = neg.status === 'active';
+                    const hasMembers = neg.conflictingMembers && Array.isArray(neg.conflictingMembers);
+                    const hasConflict = hasMembers && neg.conflictingMembers.length > 1;
+
+                    console.log('DEBUG: 협의 필터링:', {
+                      id: neg._id,
+                      status: neg.status,
+                      isActive,
+                      hasMembers,
+                      memberCount: neg.conflictingMembers?.length || 0,
+                      hasConflict,
+                      pass: isActive && hasMembers && hasConflict
+                    });
+
+                    return isActive && hasMembers && hasConflict;
+                  });
+
+                  console.log('DEBUG: 활성 협의 수:', activeNegotiations.length);
+                  return activeNegotiations.length;
+                })()}
+              />
+            )}
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4">
               <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
                 <Users size={20} className="mr-2 text-blue-600" />
@@ -1196,53 +1243,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
           </div>
 
           <div className="lg:col-span-3">
-            {isOwner &&
-              <AutoSchedulerPanel
-                options={scheduleOptions}
-                setOptions={setScheduleOptions}
-                onRun={handleRunAutoSchedule}
-                isLoading={isScheduling}
-                currentRoom={currentRoom}
-                onAutoResolveNegotiations={handleAutoResolveNegotiations}
-                onResetCarryOverTimes={handleResetCarryOverTimes}
-                onResetCompletedTimes={handleResetCompletedTimes}
-                onDeleteAllSlots={handleDeleteAllSlots}
-                currentWeekStartDate={currentWeekStartDate}
-                activeNegotiationsCount={(() => {
-                  if (!currentRoom?.negotiations) return 0;
-
-                  console.log('DEBUG: 전체 협의 수:', currentRoom.negotiations.length);
-                  console.log('DEBUG: 전체 협의:', currentRoom.negotiations.map(neg => ({
-                    id: neg._id,
-                    status: neg.status,
-                    conflictingMembers: neg.conflictingMembers?.length || 0,
-                    day: neg.day,
-                    time: neg.time
-                  })));
-
-                  const activeNegotiations = currentRoom.negotiations.filter(neg => {
-                    const isActive = neg.status === 'active';
-                    const hasMembers = neg.conflictingMembers && Array.isArray(neg.conflictingMembers);
-                    const hasConflict = hasMembers && neg.conflictingMembers.length > 1;
-
-                    console.log('DEBUG: 협의 필터링:', {
-                      id: neg._id,
-                      status: neg.status,
-                      isActive,
-                      hasMembers,
-                      memberCount: neg.conflictingMembers?.length || 0,
-                      hasConflict,
-                      pass: isActive && hasMembers && hasConflict
-                    });
-
-                    return isActive && hasMembers && hasConflict;
-                  });
-
-                  console.log('DEBUG: 활성 협의 수:', activeNegotiations.length);
-                  return activeNegotiations.length;
-                })()}
-              />
-            }
             {scheduleError && 
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4" role="alert">
                 <strong className="font-bold">오류!</strong>
@@ -1614,97 +1614,92 @@ const AutoSchedulerPanel = ({ options, setOptions, onRun, isLoading, currentRoom
   };
 
   return (
-    <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 mb-4">
-      <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center">
-        <Zap size={20} className="mr-2 text-purple-600" />
+    <div className="bg-gradient-to-br from-white to-gray-50 p-3 rounded-lg shadow-md border border-gray-200 mb-3 max-w-sm">
+      <h3 className="text-base font-bold text-gray-800 mb-2 flex items-center">
+        <Zap size={16} className="mr-2 text-purple-600" />
         자동 시간 배정
       </h3>
-      <div className="grid grid-cols-1 gap-4">
+      <div className="space-y-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700">주당 최소 할당 시간 (시간)</label>
+          <label className="block text-xs font-medium text-gray-700 mb-1">주당 최소 시간</label>
           <input
             type="number"
             name="minHoursPerWeek"
             value={options.minHoursPerWeek}
             onChange={handleInputChange}
-            className="mt-1 block w-full p-2 border rounded-md"
+            className="w-full p-1.5 text-sm border rounded-md"
             min="1"
             max="10"
           />
         </div>
 
-        {/* 방장 시간대 선호도 설정 */}
-        <div className="border-t pt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">방장 시간대 선호도 (학습지 스타일)</label>
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">방장 선호 시간</label>
           <select
             name="ownerFocusTime"
             value={options.ownerFocusTime || 'none'}
             onChange={handleInputChange}
-            className="block w-full p-2 border rounded-md"
+            className="w-full p-1.5 text-sm border rounded-md"
           >
             <option value="none">선호도 없음</option>
-            <option value="morning">오전 집중 (09:00-12:00)</option>
-            <option value="lunch">점심시간 집중 (12:00-14:00)</option>
-            <option value="afternoon">오후 집중 (14:00-17:00)</option>
-            <option value="evening">저녁시간 집중 (17:00-20:00)</option>
+            <option value="morning">오전 (09-12시)</option>
+            <option value="lunch">점심 (12-14시)</option>
+            <option value="afternoon">오후 (14-17시)</option>
+            <option value="evening">저녁 (17-20시)</option>
           </select>
-          {options.ownerFocusTime && options.ownerFocusTime !== 'none' && (
-            <p className="text-sm text-gray-600 mt-1">
-              방장의 배정이 선호하는 시간대에 우선적으로 이루어집니다.
-            </p>
-          )}
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 mt-4">
+      <div className="space-y-2 mt-2">
+        {/* 메인 버튼 */}
         <button
           onClick={onRun}
           disabled={isLoading}
-          className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 disabled:bg-purple-300 flex items-center justify-center"
+          className="w-full bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-3 rounded-lg font-medium hover:from-purple-600 hover:to-purple-700 disabled:from-purple-300 disabled:to-purple-400 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 disabled:transform-none flex items-center justify-center text-sm"
         >
+          <WandSparkles size={16} className="mr-2" />
           {isLoading ? '배정 중...' : '자동 배정 실행'}
         </button>
 
-        {activeNegotiationsCount > 0 && (
-          <button
-            onClick={onAutoResolveNegotiations}
-            className="w-full bg-orange-600 text-white py-2 rounded-lg hover:bg-orange-700 flex items-center justify-center text-sm"
-          >
-            협의 자동 해결 ({activeNegotiationsCount}개)
-          </button>
-        )}
-
-        {/* 시간 관리 버튼들 */}
+        {/* 소형 버튼들 그리드 */}
         <div className="grid grid-cols-2 gap-2">
+          {activeNegotiationsCount > 0 && (
+            <button
+              onClick={onAutoResolveNegotiations}
+              className="bg-gradient-to-r from-orange-500 to-orange-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-orange-600 hover:to-orange-700 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 flex items-center justify-center text-xs"
+            >
+              <MessageSquare size={12} className="mr-1" />
+              협의해결
+            </button>
+          )}
           <button
             onClick={onResetCarryOverTimes}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 text-xs transition-colors"
+            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-blue-600 hover:to-blue-700 text-xs transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 flex items-center justify-center"
           >
-            이월시간 초기화
+            <Clock size={12} className="mr-1" />
+            이월초기화
           </button>
           <button
             onClick={onResetCompletedTimes}
-            className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 text-xs transition-colors"
+            className="bg-gradient-to-r from-green-500 to-green-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-green-600 hover:to-green-700 text-xs transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 flex items-center justify-center"
           >
-            완료시간 초기화
+            <Calendar size={12} className="mr-1" />
+            완료초기화
           </button>
-        </div>
-
-        <div className="border-t border-gray-200 mt-4 pt-4">
           <button
             onClick={onDeleteAllSlots}
-            className="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 disabled:bg-red-300 flex items-center justify-center text-sm"
+            className="bg-gradient-to-r from-red-500 to-red-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-red-600 hover:to-red-700 disabled:from-red-300 disabled:to-red-400 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 disabled:transform-none flex items-center justify-center text-xs"
           >
-            시간표 비우기
+            <X size={12} className="mr-1" />
+            비우기
           </button>
         </div>
       </div>
 
       {activeNegotiationsCount > 0 && (
-        <div className="mt-3 p-2 bg-orange-50 border border-orange-200 rounded-lg">
-          <p className="text-sm text-orange-700">
-            현재 {activeNegotiationsCount}개의 협의가 진행 중입니다.
-            24시간 후 자동으로 해결되거나 위 버튼으로 즉시 해결할 수 있습니다.
+        <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded-md">
+          <p className="text-xs text-orange-700">
+            {activeNegotiationsCount}개 협의 진행중 (24시간 후 자동해결)
           </p>
         </div>
       )}
