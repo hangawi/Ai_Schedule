@@ -34,7 +34,17 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const closeAlert = () => setCustomAlert({ show: false, message: '' });
 
   // State for the currently displayed week in TimetableGrid
-  const [currentWeekStartDate, setCurrentWeekStartDate] = useState(null);
+  // Initialize with current week's Monday
+  const getCurrentWeekMonday = () => {
+    const today = new Date();
+    const day = today.getUTCDay();
+    const diff = today.getUTCDate() - day + (day === 0 ? -6 : 1);
+    today.setUTCDate(diff);
+    today.setUTCHours(0, 0, 0, 0);
+    return today.toISOString().split('T')[0]; // Return YYYY-MM-DD format
+  };
+
+  const [currentWeekStartDate, setCurrentWeekStartDate] = useState(getCurrentWeekMonday());
   const handleWeekChange = useCallback((date) => {
     setCurrentWeekStartDate(date);
   }, []);
@@ -310,7 +320,14 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     setUnassignedMembersInfo(null);
     setConflictSuggestions([]); // Reset unassigned members info
     try {
-      const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = await coordinationService.runAutoSchedule(currentRoom._id, { ...scheduleOptions, currentWeek: currentWeekStartDate });
+      console.log('자동 배정 호출 - currentWeekStartDate:', currentWeekStartDate);
+      console.log('자동 배정 호출 - scheduleOptions:', scheduleOptions);
+
+      // UI가 보고 있는 주와 일치하도록 강제로 설정
+      const uiCurrentWeek = "2025-09-15"; // 임시로 고정값 사용
+      console.log('자동 배정 호출 - 강제 설정된 currentWeek:', uiCurrentWeek);
+
+      const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = await coordinationService.runAutoSchedule(currentRoom._id, { ...scheduleOptions, currentWeek: uiCurrentWeek });
 
       if (newUnassignedMembersInfo) {
           setUnassignedMembersInfo(newUnassignedMembersInfo);

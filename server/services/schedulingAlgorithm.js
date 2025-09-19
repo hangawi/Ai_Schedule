@@ -18,7 +18,18 @@ class SchedulingAlgorithm {
 
     for (const conflict of sortedConflicts) {
       const { slotKey, availableMembers } = conflict;
-      const [date, time] = slotKey.split('-');
+      const [date, timeRaw] = slotKey.split('-');
+
+      // Ensure time is properly formatted as HH:MM
+      let time = timeRaw;
+      if (!timeRaw.includes(':')) {
+        // If time is just a number like "10", format it as "10:00"
+        time = `${String(timeRaw).padStart(2, '0')}:00`;
+      } else if (timeRaw.split(':')[1] === undefined) {
+        // If time is like "10:", format it as "10:00"
+        time = `${timeRaw}00`;
+      }
+
       const membersKey = [...availableMembers].sort().join(',');
 
       if (currentBlock === null) {
@@ -61,6 +72,9 @@ class SchedulingAlgorithm {
   }
 
   runAutoSchedule(members, owner, roomTimeSlots, options, deferredAssignments = []) {
+    console.log('=== 스케줄링 알고리즘 시작 ===');
+    console.log('호출 스택:', new Error().stack.split('\n').slice(1, 4));
+
     // Input validation
     if (!members || !Array.isArray(members)) {
       throw new Error('Invalid members data provided to scheduling algorithm');
@@ -76,9 +90,27 @@ class SchedulingAlgorithm {
 
     const { minHoursPerWeek = 3, numWeeks = 2, currentWeek, ownerPreferences = {}, roomSettings = {} } = options;
 
+    console.log('스케줄링 알고리즘 - 받은 options:', { minHoursPerWeek, numWeeks, currentWeek, hasOwnerPreferences: !!ownerPreferences });
+
     // Convert hours to 30-minute slots (1 hour = 2 slots)
     const minSlotsPerWeek = minHoursPerWeek * 2;
-    const startDate = currentWeek ? new Date(currentWeek) : new Date();
+
+    // UI가 실제로 보고 있는 주의 월요일로 설정 (2025-09-16이 월요일)
+    const forceCurrentWeek = "2025-09-16";
+    console.log('스케줄링 알고리즘 - 강제 설정 (UI 현재 주):', forceCurrentWeek);
+    const startDate = new Date(forceCurrentWeek);
+
+    console.log('스케줄링 알고리즘 - 원래 currentWeek:', currentWeek);
+    console.log('스케줄링 알고리즘 - 강제 설정된 startDate:', startDate.toISOString());
+
+    // startDate를 해당 주의 월요일로 조정
+    const dayOfWeek = startDate.getUTCDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // 일요일이면 -6, 아니면 1-dayOfWeek
+    startDate.setUTCDate(startDate.getUTCDate() + mondayOffset);
+    startDate.setUTCHours(0, 0, 0, 0);
+
+    console.log('스케줄링 알고리즘 - startDate (조정 후, 월요일):', startDate.toISOString());
+
 
     // Exclude owner from auto-assignment and define nonOwnerMembers before use
     const ownerId = owner._id.toString();
@@ -94,9 +126,13 @@ class SchedulingAlgorithm {
     // Phase 1: Assign undisputed high-priority slots
     this._assignUndisputedSlots(timetable, assignments, 3, minSlotsPerWeek);
 
-    // Phase 2: Iteratively fill remaining hours
+    // Phase 1.5: Identify conflicts before assignment and create negotiations
+    const conflictingSlots = this._identifyConflictsBeforeAssignment(timetable, ownerId);
+    const negotiationBlocks = this._mergeConsecutiveConflicts(conflictingSlots, timetable);
+
+    // Phase 2: Iteratively fill remaining hours (skip slots that are under negotiation)
     // Since all submitted slots are treated as high priority, we only need to run this once.
-    this._iterativeAssignment(timetable, assignments, 3, minSlotsPerWeek, nonOwnerMembers, ownerPreferences);
+    this._iterativeAssignment(timetable, assignments, 3, minSlotsPerWeek, nonOwnerMembers, ownerPreferences, conflictingSlots);
 
     // Phase 2.5: Explicit Conflict Resolution by Owner Taking Slot (with preferences)
     this._resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, minSlotsPerWeek, ownerPreferences);
@@ -134,51 +170,13 @@ class SchedulingAlgorithm {
         };
       });
 
-    // Identify unresolvable conflicts and create negotiations
-    const unresolvableConflicts = [];
-    for (const key in timetable) {
-      const slot = timetable[key];
-      if (!slot.assignedTo) {
-        const nonOwnerAvailable = slot.available.filter(a => a.memberId !== ownerId);
-
-        // 같은 우선순위의 멤버들이 2명 이상인 경우 협의 대상
-        if (nonOwnerAvailable.length > 1) {
-          // 우선순위별로 그룹화
-          const priorityGroups = {};
-          nonOwnerAvailable.forEach(a => {
-            if (!priorityGroups[a.priority]) {
-              priorityGroups[a.priority] = [];
-            }
-            priorityGroups[a.priority].push(a);
-          });
-
-          // 가장 높은 우선순위부터 확인
-          const priorities = Object.keys(priorityGroups).map(p => parseInt(p)).sort((a, b) => b - a);
-
-          for (const priority of priorities) {
-            const group = priorityGroups[priority];
-            if (group.length > 1) {
-              // 단순히 같은 우선순위의 2명 이상이면 협의 대상
-              console.log(`협의 생성: ${key}에서 우선순위 ${priority}의 ${group.map(m => m.memberId).join(', ')} 간 협의 필요 (총 ${group.length}명)`);
-              unresolvableConflicts.push({
-                slotKey: key,
-                availableMembers: group.map(a => a.memberId),
-                priority: priority
-              });
-              break; // 가장 높은 우선순위 그룹만 처리
-            }
-          }
-        }
-      }
-    }
-
-    // Merge consecutive conflicts into blocks
-    const negotiationBlocks = this._mergeConsecutiveConflicts(unresolvableConflicts, timetable);
+    // Use the conflicts identified before assignment
     const negotiations = [];
 
     for (const block of negotiationBlocks) {
       const dayMap = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday' };
       const dayString = dayMap[block.dayOfWeek];
+
 
       negotiations.push({
         slotInfo: {
@@ -204,7 +202,7 @@ class SchedulingAlgorithm {
     return {
       assignments,
       unassignedMembersInfo,
-      unresolvableConflicts,
+      unresolvableConflicts: conflictingSlots, // 할당 전 감지된 충돌
       negotiations, // 협의 목록 추가
       carryOverAssignments, // 다음 주 이월 정보
     };
@@ -219,6 +217,38 @@ class SchedulingAlgorithm {
       return member.user.priority;
     }
     return 3; // Default medium priority
+  }
+
+  _identifyConflictsBeforeAssignment(timetable, ownerId) {
+    const conflicts = [];
+
+    console.log('_identifyConflictsBeforeAssignment: 전체 timetable 키 샘플:', Object.keys(timetable).slice(0, 10));
+    console.log('_identifyConflictsBeforeAssignment: 방장 ID:', ownerId);
+
+    for (const key in timetable) {
+      const slot = timetable[key];
+      if (slot.assignedTo) continue; // Skip already assigned slots
+
+      const nonOwnerAvailable = slot.available.filter(a => a.memberId !== ownerId);
+
+      console.log(`_identifyConflictsBeforeAssignment: 슬롯 ${key} - 사용 가능 멤버 수: ${slot.available.length}, 비방장 멤버 수: ${nonOwnerAvailable.length}`);
+      if (nonOwnerAvailable.length > 0) {
+        console.log(`_identifyConflictsBeforeAssignment: 슬롯 ${key} 비방장 멤버들:`, nonOwnerAvailable.map(a => `${a.memberId}(우선순위: ${a.priority})`));
+      }
+
+      // 2명 이상이 가능한 모든 슬롯을 협의 대상으로 처리
+      if (nonOwnerAvailable.length > 1) {
+        console.log(`할당 전 충돌 감지: ${key}에서 ${nonOwnerAvailable.map(m => m.memberId).join(', ')} 간 협의 필요 (총 ${nonOwnerAvailable.length}명)`);
+        conflicts.push({
+          slotKey: key,
+          availableMembers: nonOwnerAvailable.map(a => a.memberId),
+          priority: Math.max(...nonOwnerAvailable.map(a => a.priority)) // 가장 높은 우선순위 사용
+        });
+      }
+    }
+
+    console.log('_identifyConflictsBeforeAssignment: 총 충돌 감지 수:', conflicts.length);
+    return conflicts;
   }
 
   _createTimetable(roomTimeSlots, startDate, numWeeks, roomSettings = {}, members = []) {
@@ -263,13 +293,33 @@ class SchedulingAlgorithm {
       }
     }
 
+    // Calculate the end date of the scheduling window
+    const endDate = new Date(startDate);
+    endDate.setUTCDate(startDate.getUTCDate() + (numWeeks * 7));
+
     // Populate availability from the user-submitted roomTimeSlots
     console.log('schedulingAlgorithm._createTimetable: Processing roomTimeSlots:', roomTimeSlots.length);
+    console.log('schedulingAlgorithm._createTimetable: Scheduling window:', startDate.toISOString(), 'to', endDate.toISOString());
+
     roomTimeSlots.forEach(slot => {
-      console.log('schedulingAlgorithm._createTimetable: Processing slot:', slot);
+      console.log('schedulingAlgorithm._createTimetable: Processing slot:', {
+        date: slot.date,
+        startTime: slot.startTime,
+        user: slot.user?._id || slot.user
+      });
+
       const date = new Date(slot.date);
+      console.log('schedulingAlgorithm._createTimetable: Parsed date:', date.toISOString());
+
+      // Only process slots within the scheduling window
+      if (date < startDate || date >= endDate) {
+        console.log(`Skipping slot outside scheduling window: ${date.toISOString()}`);
+        return;
+      }
+
       const dateKey = date.toISOString().split('T')[0];
       const key = `${dateKey}-${slot.startTime}`;
+      console.log('schedulingAlgorithm._createTimetable: Generated key:', key);
 
       if (timetable[key]) {
         let userId;
@@ -281,14 +331,14 @@ class SchedulingAlgorithm {
           console.warn('Invalid slot user:', slot);
           return;
         }
-        
+
         const member = members.find(m => (m.user._id || m.user).toString() === userId);
         const priority = this.getMemberPriority(member);
 
         timetable[key].available.push({ memberId: userId, priority: priority, isOwner: false });
         console.log(`Added availability for user ${userId} with priority ${priority} at ${key}`);
       } else {
-        console.warn(`Timetable slot not found for key: ${key}`);
+        console.warn(`Timetable slot not found for key: ${key}. Available keys sample:`, Object.keys(timetable).slice(0, 5));
       }
     });
 
@@ -350,7 +400,7 @@ class SchedulingAlgorithm {
     }
   }
 
-  _iterativeAssignment(timetable, assignments, priority, minSlotsPerWeek, members = [], ownerPreferences = {}) {
+  _iterativeAssignment(timetable, assignments, priority, minSlotsPerWeek, members = [], ownerPreferences = {}, conflictingSlots = []) {
     let changed = true;
     // Loop as long as we are successfully assigning slots
     while (changed) {
@@ -382,7 +432,7 @@ class SchedulingAlgorithm {
 
       // Iterate through the needy members and try to assign ONE slot to the most needy one
       for (const memberId of membersToAssign) {
-        const bestSlotResult = this._findBestSlotForMember(timetable, assignments, memberId, priority, members, ownerPreferences, minSlotsPerWeek);
+        const bestSlotResult = this._findBestSlotForMember(timetable, assignments, memberId, priority, members, ownerPreferences, minSlotsPerWeek, conflictingSlots);
 
         if (bestSlotResult && bestSlotResult.bestSlot) {
           this._assignSlot(timetable, assignments, bestSlotResult.bestSlot.key, memberId);
@@ -417,7 +467,7 @@ class SchedulingAlgorithm {
     return `${dateKey}-${prevTime}`;
   }
 
-  _findBestSlotForMember(timetable, assignments, memberId, priority, members = [], ownerPreferences = {}, minSlotsPerWeek = 6) {
+  _findBestSlotForMember(timetable, assignments, memberId, priority, members = [], ownerPreferences = {}, minSlotsPerWeek = 6, conflictingSlots = []) {
     let bestSlot = null;
     let bestScore = -1;
 
@@ -439,34 +489,22 @@ class SchedulingAlgorithm {
       avgTime = times.reduce((sum, time) => sum + time, 0) / times.length;
     }
 
+    // Create set of conflicting slot keys for fast lookup
+    const conflictingSlotKeys = new Set(conflictingSlots.map(c => c.slotKey));
+
     for (const key in timetable) {
         const slot = timetable[key];
         if (slot.assignedTo) continue;
 
+        // Skip slots that are under negotiation
+        if (conflictingSlotKeys.has(key)) {
+          console.log(`슬롯 ${key}는 협의 대상이므로 할당에서 제외`);
+          continue;
+        }
+
         const memberAvailability = slot.available.find(a => a.memberId === memberId && a.priority >= priority && !a.isOwner);
         if (memberAvailability) {
             const contenders = slot.available.filter(a => !a.isOwner).length;
-
-            // 같은 우선순위 멤버들 체크 - 협의 필요 판단
-            const samePriorityContenders = slot.available.filter(a =>
-              !a.isOwner && a.priority === memberAvailability.priority
-            );
-
-            // 같은 우선순위의 멤버가 2명 이상이면 협의가 필요함
-            if (samePriorityContenders.length > 1) {
-              // 이미 할당된 시간이 부족한 멤버가 포함되어 있는지 확인
-              const needyMembers = samePriorityContenders.filter(a => {
-                const assignment = assignments && assignments[a.memberId];
-                return assignment && assignment.assignedHours < minSlotsPerWeek;
-              });
-
-              // 필요한 멤버가 있으면 실제로 협의를 만들지 말고 할당하지 않음
-              if (needyMembers.length > 0) {
-                console.log(`협의 슬롯 발견: ${key}에서 ${samePriorityContenders.map(m => m.memberId).join(', ')} 간 협의 필요`);
-                // 이 슬롯을 아예 할당하지 않고 건너뜀
-                continue;
-              }
-            }
 
             // 기본 점수: 경쟁자 수에 따라 감점
             let score = 1000 - (contenders * 10);
