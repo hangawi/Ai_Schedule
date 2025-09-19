@@ -388,7 +388,7 @@ exports.getReceivedRequests = async (req, res) => {
          console.log(`[getReceivedRequests] Room has ${room.requests.length} requests.`);
          return room.requests.filter(req => {
             const isTarget = req.targetUser && req.targetUser.toString() === userId;
-            console.log(`[getReceivedRequests]  - Request ${req._id}: targetUser=${req.targetUser}, isTarget=${isTarget}`);
+            console.log(`[getReceivedRequests]  - Request ${req._id}: targetUser=${req.targetUser}, isTarget=${isTarget}, status=${req.status}, type=${req.type}`);
             return isTarget;
          }).map(req => ({ ...req.toObject(), roomId: room._id, roomName: room.name }));
       });
@@ -399,6 +399,75 @@ exports.getReceivedRequests = async (req, res) => {
       console.error('[getReceivedRequests] Error:', error);
       res.status(500).json({ success: false, msg: 'Server error' });
    }
+};
+
+// @desc    Remove a member from a room (owner only)
+// @route   DELETE /api/coordination/rooms/:roomId/members/:memberId
+// @access  Private (Room Owner only)
+exports.removeMember = async (req, res) => {
+  try {
+    const { roomId, memberId } = req.params;
+
+    // 1. Find the room
+    const room = await Room.findById(roomId);
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    // 2. Validate owner
+    if (room.owner.toString() !== req.user.id) {
+      return res.status(403).json({ msg: '방장만 조원을 제거할 수 있습니다.' });
+    }
+
+    // 3. Prevent owner from removing themselves
+    if (room.owner.toString() === memberId) {
+      return res.status(400).json({ msg: '방장은 자신을 제거할 수 없습니다.' });
+    }
+
+    // 4. Check if member exists in the room
+    const initialMemberCount = room.members.length;
+    room.members = room.members.filter(member => member.user.toString() !== memberId);
+
+    if (room.members.length === initialMemberCount) {
+      return res.status(404).json({ msg: '해당 조원을 찾을 수 없습니다.' });
+    }
+
+    // 5. Remove all timeSlots associated with the removed member
+    room.timeSlots = room.timeSlots.filter(slot => slot.userId?.toString() !== memberId && slot.user?.toString() !== memberId);
+
+    // 6. Remove all requests associated with the removed member (as requester or target)
+    room.requests = room.requests.filter(request =>
+      request.requester?.toString() !== memberId &&
+      request.targetUser?.toString() !== memberId
+    );
+
+    // 7. Get member info for notification
+    const removedUser = await User.findById(memberId);
+
+    // 8. Save room
+    await room.save();
+    await room.populate('owner', 'firstName lastName email');
+    await room.populate('members.user', 'firstName lastName email');
+
+    // 9. Log notification
+    if (removedUser) {
+      console.log(`Member ${removedUser.name || removedUser.firstName + ' ' + removedUser.lastName} (${removedUser.email}) has been removed from room: ${room.name}`);
+    }
+
+    res.json({
+      msg: '조원이 성공적으로 제거되었습니다.',
+      room,
+      removedMember: {
+        name: removedUser?.name || `${removedUser?.firstName || ''} ${removedUser?.lastName || ''}`.trim(),
+        email: removedUser?.email,
+        id: memberId
+      }
+    });
+
+  } catch (error) {
+    console.error('Error removing member:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
 };
 
 // @desc    Get count of pending exchange requests for the user
@@ -695,25 +764,69 @@ exports.runAutoSchedule = async (req, res) => {
 
       room.timeSlots = room.timeSlots.filter(slot => !slot.assignedBy);
 
+      console.log('🔍 [저장] 개별 시간 할당 결과:');
+
+      // 중복 방지를 위한 Set 생성
+      const addedSlots = new Set();
+
       Object.values(result.assignments).forEach(assignment => {
+         console.log(`🔍 [저장] 멤버 ${assignment.memberId}: ${assignment.slots?.length || 0}개 개별 슬롯`);
          if (assignment.slots && assignment.slots.length > 0) {
             assignment.slots.forEach(slot => {
-               const newSlot = {
-                  user: assignment.memberId,
-                  date: slot.date,
-                  startTime: slot.startTime,
-                  endTime: slot.endTime,
-                  day: slot.day,
-                  priority: 3,
-                  subject: '자동 배정',
-                  assignedBy: req.user.id,
-                  assignedAt: new Date(),
-                  status: 'confirmed',
-               };
-               room.timeSlots.push(newSlot);
+               // 중복 체크를 위한 유니크 키 생성
+               const slotKey = `${assignment.memberId}-${slot.day}-${slot.startTime}-${slot.endTime}`;
+
+               if (!addedSlots.has(slotKey)) {
+                  console.log(`🔍 [저장] 개별 슬롯 추가: ${slot.day} ${slot.startTime}-${slot.endTime} (멤버: ${assignment.memberId})`);
+                  console.log(`🔍 [AUTH] req.user.id = "${req.user.id}" (타입: ${typeof req.user.id})`);
+                  const newSlot = {
+                     user: assignment.memberId,
+                     date: slot.date,
+                     startTime: slot.startTime,
+                     endTime: slot.endTime,
+                     day: slot.day,
+                     priority: 3,
+                     subject: '자동 배정',
+                     assignedBy: req.user.id || req.user._id || 'auto-scheduler',
+                     assignedAt: new Date(),
+                     status: 'confirmed',
+                  };
+                  console.log(`🔍 [슬롯생성] newSlot.assignedBy = "${newSlot.assignedBy}" (타입: ${typeof newSlot.assignedBy})`);
+                  room.timeSlots.push(newSlot);
+                  addedSlots.add(slotKey);
+                  console.log(`🔍 [PUSH성공] 슬롯이 room.timeSlots에 추가됨. 현재 총 개수: ${room.timeSlots.length}`);
+               } else {
+                  console.log(`🔍 [중복제거] 중복 슬롯 제거: ${slot.day} ${slot.startTime}-${slot.endTime} (멤버: ${assignment.memberId})`);
+               }
             });
          }
       });
+      // 디버깅: 모든 슬롯의 assignedBy 필드 확인
+      console.log(`🔍 [필드확인] 모든 슬롯의 assignedBy 필드:`, room.timeSlots.map((slot, index) => ({
+        index,
+        assignedBy: slot.assignedBy,
+        assignedByType: typeof slot.assignedBy,
+        subject: slot.subject,
+        hasAssignedBy: !!slot.assignedBy
+      })));
+
+      const autoAssignedCount = room.timeSlots.filter(slot => slot.assignedBy).length;
+      const totalSlotCount = room.timeSlots.length;
+      console.log(`🔍 [저장] 총 ${autoAssignedCount}개 개별 슬롯이 저장됨 (전체 슬롯: ${totalSlotCount}개)`);
+
+      // 다른 방법으로 자동 배정 슬롯 찾기
+      const autoSlotsBySubject = room.timeSlots.filter(slot => slot.subject === '자동 배정');
+      console.log(`🔍 [대안필터] subject='자동 배정'으로 찾은 슬롯: ${autoSlotsBySubject.length}개`);
+
+      // 디버깅을 위해 실제 저장된 슬롯들 확인
+      const recentlyAdded = room.timeSlots.filter(slot => slot.assignedBy || slot.subject === '자동 배정');
+      console.log(`🔍 [저장완료] 실제 저장된 개별 슬롯들:`, recentlyAdded.map(slot => ({
+        user: slot.user,
+        day: slot.day,
+        time: `${slot.startTime}-${slot.endTime}`,
+        assignedBy: slot.assignedBy,
+        subject: slot.subject
+      })));
 
       if (result.negotiations && result.negotiations.length > 0) {
         room.negotiations = room.negotiations.filter(neg => neg.status !== 'active');

@@ -17,6 +17,9 @@ router.delete('/rooms/:roomId', auth, coordinationController.deleteRoom);
 router.post('/rooms/:inviteCode/join', auth, coordinationController.joinRoom);
 router.get('/rooms/:roomId', auth, coordinationController.getRoomDetails);
 
+// Member management
+router.delete('/rooms/:roomId/members/:memberId', auth, coordinationController.removeMember);
+
 // TimeSlot management
 router.post('/rooms/:roomId/slots', auth, coordinationController.submitTimeSlots);
 router.post('/rooms/:roomId/slots/remove', auth, coordinationController.removeTimeSlot);
