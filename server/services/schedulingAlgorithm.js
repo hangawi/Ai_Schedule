@@ -8,35 +8,35 @@ class SchedulingAlgorithm {
   }
 
   _mergeConsecutiveConflicts(conflicts, timetable) {
-    if (!conflicts || conflicts.length === 0) {
-      console.log('📦 [병합처리] 충돌이 없어서 빈 배열 반환');
-      return [];
-    }
+    if (!conflicts || conflicts.length === 0) return [];
 
-    console.log('📦 [병합처리] ===========================================');
-    console.log('📦 [병합처리] 입력 충돌 수:', conflicts.length);
-    console.log('📦 [병합처리] 충돌 목록:', conflicts.map(c => `${c.slotKey}: ${c.availableMembers.join(', ')}`));
-
-    // 1. Sort conflicts by their slot key (date and time)
+    // Sort conflicts by their slot key (date and time)
     const sortedConflicts = [...conflicts].sort((a, b) => a.slotKey.localeCompare(b.slotKey));
 
-    console.log('📦 [병합처리] 정렬된 충돌:', sortedConflicts.map(c => `${c.slotKey}: ${c.availableMembers.join(', ')}`));
+    console.log(`[병합] 전체 충돌 슬롯 키:`, sortedConflicts.map(c => c.slotKey));
 
     const mergedBlocks = [];
     let currentBlock = null;
 
     for (const conflict of sortedConflicts) {
       const { slotKey, availableMembers } = conflict;
-      const [date, timeRaw] = slotKey.split('-');
+      // slotKey format: "2025-09-15-13:30"
+      const parts = slotKey.split('-');
+      const date = `${parts[0]}-${parts[1]}-${parts[2]}`; // "2025-09-15"
+      const timeRaw = parts[3]; // "13:30"
+
+      console.log(`[병합] 처리 중: ${slotKey} → date: ${date}, timeRaw: ${timeRaw}`);
 
       // Ensure time is properly formatted as HH:MM
       let time = timeRaw;
       if (!timeRaw.includes(':')) {
         // If time is just a number like "10", format it as "10:00"
         time = `${String(timeRaw).padStart(2, '0')}:00`;
+        console.log(`[병합] 시간 변환: ${timeRaw} → ${time}`);
       } else if (timeRaw.split(':')[1] === undefined) {
         // If time is like "10:", format it as "10:00"
         time = `${timeRaw}00`;
+        console.log(`[병합] 시간 변환: ${timeRaw} → ${time}`);
       }
 
       const membersKey = [...availableMembers].sort().join(',');
@@ -51,12 +51,19 @@ class SchedulingAlgorithm {
           dayOfWeek: timetable[slotKey].dayOfWeek,
           dateObj: timetable[slotKey].date
         };
+        console.log(`[병합] 새 블록 생성: ${date} ${time} (요일: ${timetable[slotKey].dayOfWeek})`);
       } else {
         const isSameDay = (date === currentBlock.startDate);
         const isAdjacentTime = (currentBlock.endTime === time);
         const isSameMembers = (membersKey === currentBlock.membersKey);
 
+        console.log(`[병합] 조건 확인: ${slotKey}`);
+        console.log(`  - 같은 날? ${isSameDay} (${date} === ${currentBlock.startDate})`);
+        console.log(`  - 연속 시간? ${isAdjacentTime} (${currentBlock.endTime} === ${time})`);
+        console.log(`  - 같은 멤버? ${isSameMembers}`);
+
         if (isSameDay && isAdjacentTime && isSameMembers) {
+          console.log(`[병합] 블록 확장: ${currentBlock.startTime} → ${this._calculateEndTime(time)}`);
           currentBlock.endTime = this._calculateEndTime(time);
         } else {
           mergedBlocks.push(currentBlock);
@@ -74,27 +81,14 @@ class SchedulingAlgorithm {
     }
 
     if (currentBlock) {
-      console.log('📦 [병합처리] 마지막 블록 추가:', {
-        startDate: currentBlock.startDate,
-        startTime: currentBlock.startTime,
-        endTime: currentBlock.endTime,
-        conflictingMembers: currentBlock.conflictingMembers
-      });
       mergedBlocks.push(currentBlock);
     }
 
-    console.log('📦 [병합처리] 최종 블록 수:', mergedBlocks.length);
-    console.log('📦 [병합처리] 최종 블록들:', mergedBlocks.map(block =>
-      `${block.startDate} ${block.startTime}-${block.endTime}: ${block.conflictingMembers.join(', ')}`
-    ));
-    console.log('📦 [병합처리] ===========================================');
-
+    console.log(`[협의] ${mergedBlocks.length}개 협의 블록 생성`);
     return mergedBlocks;
   }
 
   runAutoSchedule(members, owner, roomTimeSlots, options, deferredAssignments = []) {
-    console.log('=== 스케줄링 알고리즘 시작 ===');
-    console.log('호출 스택:', new Error().stack.split('\n').slice(1, 4));
 
     // Input validation
     if (!members || !Array.isArray(members)) {
@@ -116,21 +110,24 @@ class SchedulingAlgorithm {
     // Convert hours to 30-minute slots (1 hour = 2 slots)
     const minSlotsPerWeek = minHoursPerWeek * 2;
 
-    // UI가 실제로 보고 있는 주의 월요일로 설정 (2025-09-16이 월요일)
-    const forceCurrentWeek = "2025-09-16";
-    console.log('스케줄링 알고리즘 - 강제 설정 (UI 현재 주):', forceCurrentWeek);
-    const startDate = new Date(forceCurrentWeek);
+    // 현재 UI가 보고 있는 주 (2025년 9월 16일 월요일)
+    const startDate = new Date('2025-09-16');
+    startDate.setHours(0, 0, 0, 0);
 
-    console.log('스케줄링 알고리즘 - 원래 currentWeek:', currentWeek);
-    console.log('스케줄링 알고리즘 - 강제 설정된 startDate:', startDate.toISOString());
+    console.log(`[스케줄링] 처리 대상 주 월요일: ${startDate.toISOString().split('T')[0]} (현재 9월 16일-20일 주)`);
 
-    // startDate를 해당 주의 월요일로 조정
-    const dayOfWeek = startDate.getUTCDay();
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // 일요일이면 -6, 아니면 1-dayOfWeek
-    startDate.setUTCDate(startDate.getUTCDate() + mondayOffset);
-    startDate.setUTCHours(0, 0, 0, 0);
+    // currentWeek 파라미터가 있으면 해당 주 사용 (UI에서 다른 주를 선택한 경우)
+    if (currentWeek) {
+      const userSelectedDate = new Date(currentWeek);
+      const userDayOfWeek = userSelectedDate.getDay();
+      const userMondayOffset = userDayOfWeek === 0 ? -6 : 1 - userDayOfWeek;
 
-    console.log('스케줄링 알고리즘 - startDate (조정 후, 월요일):', startDate.toISOString());
+      startDate.setTime(userSelectedDate.getTime());
+      startDate.setDate(userSelectedDate.getDate() + userMondayOffset);
+      startDate.setHours(0, 0, 0, 0);
+
+      console.log(`[스케줄링] 사용자 선택 주 월요일: ${startDate.toISOString().split('T')[0]}`);
+    }
 
 
     // Exclude owner from auto-assignment and define nonOwnerMembers before use
@@ -194,21 +191,16 @@ class SchedulingAlgorithm {
     // Use the conflicts identified before assignment
     const negotiations = [];
 
-    console.log('🚀 [협의생성] ===========================================');
-    console.log('🚀 [협의생성] negotiationBlocks 수:', negotiationBlocks.length);
+    console.log(`[디버그] negotiationBlocks 수: ${negotiationBlocks.length}`);
+    negotiationBlocks.forEach((block, index) => {
+      console.log(`[디버그] Block ${index}: startDate=${block.startDate}, startTime=${block.startTime}, endTime=${block.endTime}, dayOfWeek=${block.dayOfWeek}`);
+    });
 
     for (const block of negotiationBlocks) {
       const dayMap = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday' };
       const dayString = dayMap[block.dayOfWeek];
 
-      console.log('🚀 [협의생성] 블록 처리:', {
-        dayOfWeek: block.dayOfWeek,
-        dayString,
-        startTime: block.startTime,
-        endTime: block.endTime,
-        dateObj: block.dateObj,
-        conflictingMembers: block.conflictingMembers
-      });
+      console.log(`[협의] 생성: ${dayString} ${block.startTime} - 멤버: ${block.conflictingMembers.join(', ')}`);
 
       const negotiation = {
         slotInfo: {
@@ -219,14 +211,10 @@ class SchedulingAlgorithm {
         },
         conflictingMembers: block.conflictingMembers.map(memberId => {
           const member = nonOwnerMembers.find(m => m.user._id.toString() === memberId);
-          console.log(`🚀 [협의생성] 멤버 ${memberId} 매핑:`, {
-            found: !!member,
-            priority: member ? this.getMemberPriority(member) : 'NOT_FOUND'
-          });
           return {
             user: memberId,
             priority: this.getMemberPriority(member),
-            response: 'pending' // 초기 응답 상태
+            response: 'pending'
           };
         }),
         messages: [],
@@ -234,17 +222,10 @@ class SchedulingAlgorithm {
         createdAt: new Date()
       };
 
-      console.log('🚀 [협의생성] 생성된 협의:', {
-        slotInfo: negotiation.slotInfo,
-        conflictingMembersCount: negotiation.conflictingMembers.length,
-        conflictingMembers: negotiation.conflictingMembers.map(cm => `${cm.user}(우선순위: ${cm.priority})`)
-      });
-
       negotiations.push(negotiation);
     }
 
-    console.log('🚀 [협의생성] 총 생성된 협의 수:', negotiations.length);
-    console.log('🚀 [협의생성] ===========================================')
+    console.log(`[협의] 총 ${negotiations.length}개 협의 생성 완료`);
 
     return {
       assignments,
@@ -269,37 +250,15 @@ class SchedulingAlgorithm {
   _identifyConflictsBeforeAssignment(timetable, ownerId) {
     const conflicts = [];
 
-    console.log('🔍 [충돌감지] ===========================================');
-    console.log('🔍 [충돌감지] 전체 timetable 키 수:', Object.keys(timetable).length);
-    console.log('🔍 [충돌감지] 방장 ID:', ownerId);
-    console.log('🔍 [충돌감지] timetable 키 샘플:', Object.keys(timetable).slice(0, 5));
-
-    // 각 슬롯을 상세히 분석
     for (const key in timetable) {
       const slot = timetable[key];
-      if (slot.assignedTo) {
-        console.log(`🔍 [충돌감지] 슬롯 ${key}: 이미 할당됨 (${slot.assignedTo}) - 스킵`);
-        continue;
-      }
+      if (slot.assignedTo) continue; // Skip already assigned slots
 
       const nonOwnerAvailable = slot.available.filter(a => a.memberId !== ownerId);
 
-      console.log(`🔍 [충돌감지] 슬롯 ${key}:`);
-      console.log(`   - 전체 가능 멤버: ${slot.available.length}명`);
-      console.log(`   - 비방장 가능 멤버: ${nonOwnerAvailable.length}명`);
-
-      if (slot.available.length > 0) {
-        console.log(`   - 전체 멤버들:`, slot.available.map(a => `${a.memberId}(우선순위: ${a.priority})`));
-      }
-
-      if (nonOwnerAvailable.length > 0) {
-        console.log(`   - 비방장 멤버들:`, nonOwnerAvailable.map(a => `${a.memberId}(우선순위: ${a.priority})`));
-      }
-
-      // ❌ 문제의 로직: 2명 이상이 가능한 모든 슬롯을 협의 대상으로 처리
-      // ✅ 수정된 로직: 실제로 같은 우선순위의 멤버들이 충돌하는 경우만 협의 대상
+      // 2명 이상의 비방장 멤버가 같은 시간대를 원할 때만 충돌 분석
       if (nonOwnerAvailable.length > 1) {
-        // 같은 우선순위 그룹별로 분석
+        // 우선순위별로 그룹화
         const priorityGroups = {};
         nonOwnerAvailable.forEach(member => {
           if (!priorityGroups[member.priority]) {
@@ -308,40 +267,25 @@ class SchedulingAlgorithm {
           priorityGroups[member.priority].push(member);
         });
 
-        console.log(`   - 우선순위 그룹:`, priorityGroups);
-
         // 가장 높은 우선순위 그룹 찾기
         const highestPriority = Math.max(...Object.keys(priorityGroups).map(p => parseInt(p)));
         const highestPriorityMembers = priorityGroups[highestPriority];
 
-        console.log(`   - 가장 높은 우선순위: ${highestPriority}`);
-        console.log(`   - 최고 우선순위 멤버들:`, highestPriorityMembers.map(m => m.memberId));
-
         // 최고 우선순위 그룹에 2명 이상 있을 때만 충돌로 처리
         if (highestPriorityMembers.length > 1) {
-          console.log(`⚡ [충돌감지] ${key}에서 ${highestPriorityMembers.map(m => m.memberId).join(', ')} 간 실제 충돌 발생! (우선순위 ${highestPriority})`);
+          console.log(`[협의] ${key}에서 같은 우선순위(${highestPriority}) 멤버들 간 충돌:`,
+            highestPriorityMembers.map(m => m.memberId).join(', '));
+
           conflicts.push({
             slotKey: key,
             availableMembers: highestPriorityMembers.map(a => a.memberId),
             priority: highestPriority
           });
-        } else {
-          console.log(`✅ [충돌감지] ${key}: 우선순위가 다르므로 충돌 없음 (${highestPriorityMembers[0].memberId}가 자동 할당)`);
         }
-      } else if (nonOwnerAvailable.length === 1) {
-        console.log(`✅ [충돌감지] ${key}: 단일 멤버 ${nonOwnerAvailable[0].memberId} 자동 할당`);
-      } else {
-        console.log(`➖ [충돌감지] ${key}: 가능한 비방장 멤버 없음`);
       }
     }
 
-    console.log('🔍 [충돌감지] ===========================================');
-    console.log('🔍 [충돌감지] 총 실제 충돌 수:', conflicts.length);
-    if (conflicts.length > 0) {
-      console.log('🔍 [충돌감지] 충돌 목록:', conflicts.map(c => `${c.slotKey}: ${c.availableMembers.join(', ')}`));
-    }
-    console.log('🔍 [충돌감지] ===========================================');
-
+    console.log(`[협의] 총 ${conflicts.length}개 실제 충돌 감지`);
     return conflicts;
   }
 
@@ -361,80 +305,73 @@ class SchedulingAlgorithm {
     const scheduleStartHour = getHourFromSettings(roomSettings.scheduleStartTime, '9');
     const scheduleEndHour = getHourFromSettings(roomSettings.scheduleEndTime, '18');
 
-    for (let w = 0; w < numWeeks; w++) {
-      for (let d = 0; d < 5; d++) { // Monday to Friday
-        const date = new Date(currentDay);
-        date.setUTCDate(currentDay.getUTCDate() + d + (w * 7));
-        const dayOfWeek = date.getUTCDay(); // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
-        if (dayOfWeek === 0 || dayOfWeek === 6) continue; // Skip Saturday and Sunday
-
-        // Convert to 1-indexed day of week (1=Mon, 2=Tue, ..., 5=Fri)
-        const oneIndexedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek; // Sunday becomes 7
-
-        for (let h = scheduleStartHour; h < scheduleEndHour; h++) {
-          for (let m = 0; m < 60; m += 30) {
-            const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-            const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
-            const key = `${dateKey}-${time}`;
-            timetable[key] = {
-              assignedTo: null,
-              available: [],
-              date: date, // Store the actual date object
-              dayOfWeek: oneIndexedDayOfWeek, // Store 1-indexed day of week
-            };
-          }
-        }
-      }
-    }
+    // ❌ 모든 시간대를 미리 생성하지 않음
+    // ✅ 사용자가 실제로 제출한 시간표만 처리
 
     // Calculate the end date of the scheduling window
     const endDate = new Date(startDate);
     endDate.setUTCDate(startDate.getUTCDate() + (numWeeks * 7));
 
-    // Populate availability from the user-submitted roomTimeSlots
-    console.log('schedulingAlgorithm._createTimetable: Processing roomTimeSlots:', roomTimeSlots.length);
-    console.log('schedulingAlgorithm._createTimetable: Scheduling window:', startDate.toISOString(), 'to', endDate.toISOString());
+    // 사용자가 실제로 제출한 시간표만으로 timetable 구성
+    console.log(`[타임테이블] 사용자 제출 슬롯 ${roomTimeSlots.length}개 처리 시작`);
 
     roomTimeSlots.forEach(slot => {
-      console.log('schedulingAlgorithm._createTimetable: Processing slot:', {
-        date: slot.date,
-        startTime: slot.startTime,
-        user: slot.user?._id || slot.user
-      });
-
       const date = new Date(slot.date);
-      console.log('schedulingAlgorithm._createTimetable: Parsed date:', date.toISOString());
 
-      // Only process slots within the scheduling window
-      if (date < startDate || date >= endDate) {
-        console.log(`Skipping slot outside scheduling window: ${date.toISOString()}`);
+      // 스케줄링 윈도우 내의 슬롯만 처리 (날짜 비교를 문자열로)
+      const slotDateStr = date.toISOString().split('T')[0];
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = endDate.toISOString().split('T')[0];
+
+      if (slotDateStr < startDateStr || slotDateStr >= endDateStr) {
+        console.log(`[타임테이블] 윈도우 외부 슬롯 스킵: ${slotDateStr} (윈도우: ${startDateStr} ~ ${endDateStr})`);
         return;
       }
 
       const dateKey = date.toISOString().split('T')[0];
       const key = `${dateKey}-${slot.startTime}`;
-      console.log('schedulingAlgorithm._createTimetable: Generated key:', key);
 
-      if (timetable[key]) {
-        let userId;
-        if (slot.user && slot.user._id) {
-          userId = slot.user._id.toString();
-        } else if (slot.user) {
-          userId = slot.user.toString();
-        } else {
-          console.warn('Invalid slot user:', slot);
-          return;
-        }
+      // 해당 시간대 슬롯이 아직 없다면 생성
+      if (!timetable[key]) {
+        const dayOfWeek = date.getDay(); // UTC 대신 로컬 시간 기준
+        const oneIndexedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
 
-        const member = members.find(m => (m.user._id || m.user).toString() === userId);
-        const priority = this.getMemberPriority(member);
+        timetable[key] = {
+          assignedTo: null,
+          available: [],
+          date: new Date(date),
+          dayOfWeek: oneIndexedDayOfWeek,
+        };
 
-        timetable[key].available.push({ memberId: userId, priority: priority, isOwner: false });
-        console.log(`Added availability for user ${userId} with priority ${priority} at ${key}`);
+        console.log(`[타임테이블] 새 슬롯 생성: ${key} (요일: ${oneIndexedDayOfWeek})`);
+      }
+
+      // 사용자 정보 추출
+      let userId;
+      if (slot.user && slot.user._id) {
+        userId = slot.user._id.toString();
+      } else if (slot.user) {
+        userId = slot.user.toString();
       } else {
-        console.warn(`Timetable slot not found for key: ${key}. Available keys sample:`, Object.keys(timetable).slice(0, 5));
+        console.warn('[타임테이블] 유효하지 않은 사용자:', slot);
+        return;
+      }
+
+      const member = members.find(m => (m.user._id || m.user).toString() === userId);
+      const priority = this.getMemberPriority(member);
+
+      // 중복 추가 방지
+      const existingAvailability = timetable[key].available.find(a => a.memberId === userId);
+      if (!existingAvailability) {
+        timetable[key].available.push({
+          memberId: userId,
+          priority: priority,
+          isOwner: false
+        });
       }
     });
+
+    console.log(`[타임테이블] 총 ${Object.keys(timetable).length}개 시간대 생성 (사용자 제출 기준)`);
 
     return timetable;
   }
