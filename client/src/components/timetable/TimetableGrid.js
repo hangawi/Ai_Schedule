@@ -223,19 +223,33 @@ const TimetableGrid = ({
     console.log('getNegotiationInfo 호출:', {
       date: date.toISOString().split('T')[0],
       time: time.trim(),
-      negotiationsCount: roomData.negotiations.length
+      negotiationsCount: roomData.negotiations.length,
+      negotiations: roomData.negotiations.map(neg => ({
+        id: neg._id,
+        status: neg.status,
+        slotInfo: neg.slotInfo
+      }))
     });
 
     const negotiation = roomData.negotiations.find(neg => {
       if (neg.status !== 'active') {
+        console.log('협의 스킵 - 비활성:', neg._id);
         return false;
       }
 
       if (!neg.slotInfo) {
+        console.log('협의 스킵 - slotInfo 없음:', neg._id);
         return false;
       }
 
-      const negDate = new Date(neg.slotInfo.date);
+      // slotInfo.date가 Date 객체인지 문자열인지 확인
+      let negDate;
+      if (neg.slotInfo.date instanceof Date) {
+        negDate = neg.slotInfo.date;
+      } else {
+        negDate = new Date(neg.slotInfo.date);
+      }
+
       const dateMatch = negDate.toISOString().split('T')[0] === date.toISOString().split('T')[0];
       const timeMatch = time.trim() === neg.slotInfo.startTime.trim();
 
@@ -246,11 +260,18 @@ const TimetableGrid = ({
         inputDate: date.toISOString().split('T')[0],
         inputTime: time.trim(),
         dateMatch,
-        timeMatch
+        timeMatch,
+        slotInfo: neg.slotInfo
       });
 
       return dateMatch && timeMatch;
     });
+
+    if (negotiation) {
+      console.log('협의 찾음:', negotiation._id);
+    } else {
+      console.log('협의 없음 for:', { date: date.toISOString().split('T')[0], time });
+    }
 
     return negotiation || null;
   }, [roomData?.negotiations]);
