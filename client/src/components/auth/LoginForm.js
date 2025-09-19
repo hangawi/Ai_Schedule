@@ -144,7 +144,7 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
 
             <div className="mt-6 flex flex-col space-y-3">
                <button onClick={handleLogin} className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
-                  로ff그인
+                  로ffasdsad그인
                </button>
                <button
                   onClick={onRegisterClick}
