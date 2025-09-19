@@ -8,10 +8,19 @@ class SchedulingAlgorithm {
   }
 
   _mergeConsecutiveConflicts(conflicts, timetable) {
-    if (!conflicts || conflicts.length === 0) return [];
+    if (!conflicts || conflicts.length === 0) {
+      console.log('📦 [병합처리] 충돌이 없어서 빈 배열 반환');
+      return [];
+    }
+
+    console.log('📦 [병합처리] ===========================================');
+    console.log('📦 [병합처리] 입력 충돌 수:', conflicts.length);
+    console.log('📦 [병합처리] 충돌 목록:', conflicts.map(c => `${c.slotKey}: ${c.availableMembers.join(', ')}`));
 
     // 1. Sort conflicts by their slot key (date and time)
     const sortedConflicts = [...conflicts].sort((a, b) => a.slotKey.localeCompare(b.slotKey));
+
+    console.log('📦 [병합처리] 정렬된 충돌:', sortedConflicts.map(c => `${c.slotKey}: ${c.availableMembers.join(', ')}`));
 
     const mergedBlocks = [];
     let currentBlock = null;
@@ -65,8 +74,20 @@ class SchedulingAlgorithm {
     }
 
     if (currentBlock) {
+      console.log('📦 [병합처리] 마지막 블록 추가:', {
+        startDate: currentBlock.startDate,
+        startTime: currentBlock.startTime,
+        endTime: currentBlock.endTime,
+        conflictingMembers: currentBlock.conflictingMembers
+      });
       mergedBlocks.push(currentBlock);
     }
+
+    console.log('📦 [병합처리] 최종 블록 수:', mergedBlocks.length);
+    console.log('📦 [병합처리] 최종 블록들:', mergedBlocks.map(block =>
+      `${block.startDate} ${block.startTime}-${block.endTime}: ${block.conflictingMembers.join(', ')}`
+    ));
+    console.log('📦 [병합처리] ===========================================');
 
     return mergedBlocks;
   }
@@ -173,12 +194,23 @@ class SchedulingAlgorithm {
     // Use the conflicts identified before assignment
     const negotiations = [];
 
+    console.log('🚀 [협의생성] ===========================================');
+    console.log('🚀 [협의생성] negotiationBlocks 수:', negotiationBlocks.length);
+
     for (const block of negotiationBlocks) {
       const dayMap = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday' };
       const dayString = dayMap[block.dayOfWeek];
 
+      console.log('🚀 [협의생성] 블록 처리:', {
+        dayOfWeek: block.dayOfWeek,
+        dayString,
+        startTime: block.startTime,
+        endTime: block.endTime,
+        dateObj: block.dateObj,
+        conflictingMembers: block.conflictingMembers
+      });
 
-      negotiations.push({
+      const negotiation = {
         slotInfo: {
           day: dayString,
           startTime: block.startTime,
@@ -187,6 +219,10 @@ class SchedulingAlgorithm {
         },
         conflictingMembers: block.conflictingMembers.map(memberId => {
           const member = nonOwnerMembers.find(m => m.user._id.toString() === memberId);
+          console.log(`🚀 [협의생성] 멤버 ${memberId} 매핑:`, {
+            found: !!member,
+            priority: member ? this.getMemberPriority(member) : 'NOT_FOUND'
+          });
           return {
             user: memberId,
             priority: this.getMemberPriority(member),
@@ -196,8 +232,19 @@ class SchedulingAlgorithm {
         messages: [],
         status: 'active',
         createdAt: new Date()
+      };
+
+      console.log('🚀 [협의생성] 생성된 협의:', {
+        slotInfo: negotiation.slotInfo,
+        conflictingMembersCount: negotiation.conflictingMembers.length,
+        conflictingMembers: negotiation.conflictingMembers.map(cm => `${cm.user}(우선순위: ${cm.priority})`)
       });
+
+      negotiations.push(negotiation);
     }
+
+    console.log('🚀 [협의생성] 총 생성된 협의 수:', negotiations.length);
+    console.log('🚀 [협의생성] ===========================================')
 
     return {
       assignments,
@@ -222,32 +269,79 @@ class SchedulingAlgorithm {
   _identifyConflictsBeforeAssignment(timetable, ownerId) {
     const conflicts = [];
 
-    console.log('_identifyConflictsBeforeAssignment: 전체 timetable 키 샘플:', Object.keys(timetable).slice(0, 10));
-    console.log('_identifyConflictsBeforeAssignment: 방장 ID:', ownerId);
+    console.log('🔍 [충돌감지] ===========================================');
+    console.log('🔍 [충돌감지] 전체 timetable 키 수:', Object.keys(timetable).length);
+    console.log('🔍 [충돌감지] 방장 ID:', ownerId);
+    console.log('🔍 [충돌감지] timetable 키 샘플:', Object.keys(timetable).slice(0, 5));
 
+    // 각 슬롯을 상세히 분석
     for (const key in timetable) {
       const slot = timetable[key];
-      if (slot.assignedTo) continue; // Skip already assigned slots
+      if (slot.assignedTo) {
+        console.log(`🔍 [충돌감지] 슬롯 ${key}: 이미 할당됨 (${slot.assignedTo}) - 스킵`);
+        continue;
+      }
 
       const nonOwnerAvailable = slot.available.filter(a => a.memberId !== ownerId);
 
-      console.log(`_identifyConflictsBeforeAssignment: 슬롯 ${key} - 사용 가능 멤버 수: ${slot.available.length}, 비방장 멤버 수: ${nonOwnerAvailable.length}`);
-      if (nonOwnerAvailable.length > 0) {
-        console.log(`_identifyConflictsBeforeAssignment: 슬롯 ${key} 비방장 멤버들:`, nonOwnerAvailable.map(a => `${a.memberId}(우선순위: ${a.priority})`));
+      console.log(`🔍 [충돌감지] 슬롯 ${key}:`);
+      console.log(`   - 전체 가능 멤버: ${slot.available.length}명`);
+      console.log(`   - 비방장 가능 멤버: ${nonOwnerAvailable.length}명`);
+
+      if (slot.available.length > 0) {
+        console.log(`   - 전체 멤버들:`, slot.available.map(a => `${a.memberId}(우선순위: ${a.priority})`));
       }
 
-      // 2명 이상이 가능한 모든 슬롯을 협의 대상으로 처리
+      if (nonOwnerAvailable.length > 0) {
+        console.log(`   - 비방장 멤버들:`, nonOwnerAvailable.map(a => `${a.memberId}(우선순위: ${a.priority})`));
+      }
+
+      // ❌ 문제의 로직: 2명 이상이 가능한 모든 슬롯을 협의 대상으로 처리
+      // ✅ 수정된 로직: 실제로 같은 우선순위의 멤버들이 충돌하는 경우만 협의 대상
       if (nonOwnerAvailable.length > 1) {
-        console.log(`할당 전 충돌 감지: ${key}에서 ${nonOwnerAvailable.map(m => m.memberId).join(', ')} 간 협의 필요 (총 ${nonOwnerAvailable.length}명)`);
-        conflicts.push({
-          slotKey: key,
-          availableMembers: nonOwnerAvailable.map(a => a.memberId),
-          priority: Math.max(...nonOwnerAvailable.map(a => a.priority)) // 가장 높은 우선순위 사용
+        // 같은 우선순위 그룹별로 분석
+        const priorityGroups = {};
+        nonOwnerAvailable.forEach(member => {
+          if (!priorityGroups[member.priority]) {
+            priorityGroups[member.priority] = [];
+          }
+          priorityGroups[member.priority].push(member);
         });
+
+        console.log(`   - 우선순위 그룹:`, priorityGroups);
+
+        // 가장 높은 우선순위 그룹 찾기
+        const highestPriority = Math.max(...Object.keys(priorityGroups).map(p => parseInt(p)));
+        const highestPriorityMembers = priorityGroups[highestPriority];
+
+        console.log(`   - 가장 높은 우선순위: ${highestPriority}`);
+        console.log(`   - 최고 우선순위 멤버들:`, highestPriorityMembers.map(m => m.memberId));
+
+        // 최고 우선순위 그룹에 2명 이상 있을 때만 충돌로 처리
+        if (highestPriorityMembers.length > 1) {
+          console.log(`⚡ [충돌감지] ${key}에서 ${highestPriorityMembers.map(m => m.memberId).join(', ')} 간 실제 충돌 발생! (우선순위 ${highestPriority})`);
+          conflicts.push({
+            slotKey: key,
+            availableMembers: highestPriorityMembers.map(a => a.memberId),
+            priority: highestPriority
+          });
+        } else {
+          console.log(`✅ [충돌감지] ${key}: 우선순위가 다르므로 충돌 없음 (${highestPriorityMembers[0].memberId}가 자동 할당)`);
+        }
+      } else if (nonOwnerAvailable.length === 1) {
+        console.log(`✅ [충돌감지] ${key}: 단일 멤버 ${nonOwnerAvailable[0].memberId} 자동 할당`);
+      } else {
+        console.log(`➖ [충돌감지] ${key}: 가능한 비방장 멤버 없음`);
       }
     }
 
-    console.log('_identifyConflictsBeforeAssignment: 총 충돌 감지 수:', conflicts.length);
+    console.log('🔍 [충돌감지] ===========================================');
+    console.log('🔍 [충돌감지] 총 실제 충돌 수:', conflicts.length);
+    if (conflicts.length > 0) {
+      console.log('🔍 [충돌감지] 충돌 목록:', conflicts.map(c => `${c.slotKey}: ${c.availableMembers.join(', ')}`));
+    }
+    console.log('🔍 [충돌감지] ===========================================');
+
     return conflicts;
   }
 
