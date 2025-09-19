@@ -207,6 +207,19 @@ exports.getRoomDetails = async (req, res) => {
          targetUser: req.targetUser?._id || req.targetUser
       })));
 
+      console.log('🔍 [DEBUG] getRoomDetails: timeSlots count:', room.timeSlots?.length || 0);
+      console.log('🔍 [DEBUG] getRoomDetails: sample timeSlots:', room.timeSlots?.slice(0, 3).map(slot => ({
+         user: slot.user?._id || slot.user,
+         day: slot.day,
+         startTime: slot.startTime,
+         endTime: slot.endTime,
+         assignedBy: slot.assignedBy ? 'auto' : 'manual'
+      })));
+
+      const autoAssignedSlots = room.timeSlots?.filter(slot => slot.subject === '자동 배정') || [];
+      const manualSlots = room.timeSlots?.filter(slot => slot.subject !== '자동 배정') || [];
+      console.log(`🔍 [DEBUG] getRoomDetails: ${autoAssignedSlots.length}개 자동배정 슬롯, ${manualSlots.length}개 수동 슬롯`);
+
       res.json(room);
    } catch (error) {
       console.error('Error fetching room details:', error);

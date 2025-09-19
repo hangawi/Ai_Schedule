@@ -256,6 +256,10 @@ class SchedulingAlgorithm {
 
       const nonOwnerAvailable = slot.available.filter(a => a.memberId !== ownerId);
 
+      if (nonOwnerAvailable.length > 0) {
+        console.log(`🔍 [가용성] ${key}: ${nonOwnerAvailable.map(a => a.memberId).join(', ')} 사용 가능`);
+      }
+
       // 2명 이상의 비방장 멤버가 같은 시간대를 원할 때만 충돌 분석
       if (nonOwnerAvailable.length > 1) {
         // 우선순위별로 그룹화
@@ -281,6 +285,8 @@ class SchedulingAlgorithm {
             availableMembers: highestPriorityMembers.map(a => a.memberId),
             priority: highestPriority
           });
+
+          console.log(`🔍 [충돌추가] ${key} 슬롯을 충돌 목록에 추가: ${highestPriorityMembers.map(a => a.memberId).join(', ')}`);
         }
       }
     }
@@ -529,7 +535,7 @@ class SchedulingAlgorithm {
 
         // Skip slots that are under negotiation
         if (conflictingSlotKeys.has(key)) {
-          console.log(`슬롯 ${key}는 협의 대상이므로 할당에서 제외`);
+          console.log(`🔍 [제외] 슬롯 ${key}는 협의 대상이므로 할당에서 제외 (memberId: ${memberId})`);
           continue;
         }
 

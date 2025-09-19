@@ -70,6 +70,19 @@ const TimetableGrid = ({
   onCurrentWeekNegotiationsChange // New prop to pass current week negotiations to parent
 }) => {
 
+  // 🔍 DEBUG: timeSlots 전달 확인
+  console.log('🔍 [DEBUG] TimetableGrid received timeSlots:', {
+    timeSlots,
+    timeSlotsLength: timeSlots?.length || 0,
+    sampleSlots: timeSlots?.slice(0, 3).map(slot => ({
+      user: slot.user?._id || slot.user,
+      day: slot.day,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      assignedBy: slot.assignedBy ? 'auto' : 'manual'
+    }))
+  });
+
   // CustomAlert 상태
   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
   const showAlert = (message) => setCustomAlert({ show: true, message });
@@ -315,17 +328,126 @@ const TimetableGrid = ({
       };
     }
 
-    const bookedSlot = (timeSlots || []).find(booked => {
-      // Defensive check for data integrity
-      if (!booked || !booked.date || !booked.startTime) return false;
+    // Helper functions for time conversion
+    const timeToMinutes = (timeStr) => {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
 
-      // Robust comparison using date and time
-      const bookedDate = new Date(booked.date);
-      const dateMatch = bookedDate.toISOString().split('T')[0] === date.toISOString().split('T')[0];
-      const timeMatch = time.trim() === booked.startTime.trim();
+    const minutesToTime = (minutes) => {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+    };
 
-      return dateMatch && timeMatch;
+    const currentTime = time.trim();
+    const currentMinutes = timeToMinutes(currentTime);
+    const currentDateStr = date.toISOString().split('T')[0];
+
+    // Debug log for C slots (temporary)
+    if (currentTime === '13:30' && currentDateStr === '2025-09-15') {
+      console.log(`[DEBUG] Checking slot 13:30 on 2025-09-15`);
+      console.log(`[DEBUG] All timeSlots:`, timeSlots?.length || 0);
+    }
+
+    // Find all slots for this date and user, then check if current time falls in any continuous block
+    const sameDaySlots = (timeSlots || []).filter(slot => {
+      if (!slot || !slot.date || !slot.startTime) return false;
+      const slotDate = new Date(slot.date);
+      return slotDate.toISOString().split('T')[0] === currentDateStr;
     });
+
+    // Debug log for same day slots
+    if (currentTime === '13:30' && currentDateStr === '2025-09-15') {
+      console.log(`[DEBUG] Same day slots found:`, sameDaySlots.length);
+      sameDaySlots.forEach((slot, i) => {
+        console.log(`[DEBUG] Slot ${i}:`, {
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          userId: slot.userId || slot.user,
+          subject: slot.subject
+        });
+      });
+    }
+
+    // Group slots by user and find continuous blocks
+    const userSlotGroups = {};
+    sameDaySlots.forEach(slot => {
+      const userId = slot.userId || slot.user;
+      const userKey = typeof userId === 'object' ? userId?._id || userId?.id : userId;
+      if (userKey) {
+        if (!userSlotGroups[userKey]) {
+          userSlotGroups[userKey] = [];
+        }
+        userSlotGroups[userKey].push(slot);
+      }
+    });
+
+    // Check each user's continuous blocks
+    let bookedSlot = null;
+    for (const [userId, userSlots] of Object.entries(userSlotGroups)) {
+      // Sort slots by start time
+      const sortedSlots = userSlots.sort((a, b) => {
+        return timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
+      });
+
+      // Find continuous blocks and check if current time falls within any block
+      let blockStart = null;
+      let blockEnd = null;
+
+      for (let i = 0; i < sortedSlots.length; i++) {
+        const slot = sortedSlots[i];
+        const slotStart = timeToMinutes(slot.startTime);
+        const slotEnd = timeToMinutes(slot.endTime || slot.startTime); // fallback if no endTime
+
+        if (blockStart === null) {
+          blockStart = slotStart;
+          blockEnd = slotEnd;
+        } else if (slotStart === blockEnd) {
+          // Continuous slot, extend the block
+          blockEnd = slotEnd;
+        } else {
+          // Gap found, check if current time was in the previous block
+          if (currentMinutes >= blockStart && currentMinutes < blockEnd) {
+            bookedSlot = {
+              ...sortedSlots[0], // Use first slot as base
+              startTime: minutesToTime(blockStart),
+              endTime: minutesToTime(blockEnd)
+            };
+            break;
+          }
+          // Start new block
+          blockStart = slotStart;
+          blockEnd = slotEnd;
+        }
+      }
+
+      // Check the last block
+      if (!bookedSlot && blockStart !== null && currentMinutes >= blockStart && currentMinutes < blockEnd) {
+        bookedSlot = {
+          ...sortedSlots[0], // Use first slot as base
+          startTime: minutesToTime(blockStart),
+          endTime: minutesToTime(blockEnd)
+        };
+        break;
+      }
+    }
+
+    // Fallback to original logic if no continuous block found
+    if (!bookedSlot) {
+      bookedSlot = sameDaySlots.find(booked => {
+        const startTime = booked.startTime ? booked.startTime.trim() : '';
+        const endTime = booked.endTime ? booked.endTime.trim() : '';
+
+        if (startTime && endTime) {
+          const startMinutes = timeToMinutes(startTime);
+          const endMinutes = timeToMinutes(endTime);
+          return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+        } else {
+          return currentTime === startTime;
+        }
+      });
+    }
 
     // 방장의 개인 시간은 시간표에서 제외 (협의에 참여하지 않음)
     if (bookedSlot && isRoomOwner && currentUser) {
