@@ -521,11 +521,39 @@ exports.runAutoSchedule = async (req, res) => {
       }
 
       const allTimeSlots = [...(room.timeSlots || []), ...generatedTimeSlots];
-      console.log('자동 배정 요청 - allTimeSlots 샘플:', allTimeSlots.slice(0, 5).map(slot => ({
-        date: slot.date,
-        startTime: slot.startTime,
-        user: slot.user._id || slot.user
-      })));
+
+      console.log('🔍 [자동배정] ===========================================');
+      console.log('🔍 [자동배정] room.timeSlots 수:', room.timeSlots?.length || 0);
+      console.log('🔍 [자동배정] generatedTimeSlots 수:', generatedTimeSlots.length);
+      console.log('🔍 [자동배정] 전체 allTimeSlots 수:', allTimeSlots.length);
+
+      // 사용자별 시간표 분석
+      const userSlotMap = {};
+      allTimeSlots.forEach(slot => {
+        const userId = slot.user._id || slot.user;
+        if (!userSlotMap[userId]) {
+          userSlotMap[userId] = [];
+        }
+        userSlotMap[userId].push({
+          date: slot.date.toISOString().split('T')[0],
+          startTime: slot.startTime,
+          endTime: slot.endTime
+        });
+      });
+
+      console.log('🔍 [자동배정] 사용자별 시간표:');
+      Object.keys(userSlotMap).forEach(userId => {
+        const member = room.members.find(m => (m.user._id || m.user).toString() === userId);
+        const userName = member?.user?.name || '알 수 없음';
+        console.log(`  - ${userName} (${userId}): ${userSlotMap[userId].length}개 슬롯`);
+        userSlotMap[userId].slice(0, 3).forEach(slot => {
+          console.log(`    ${slot.date} ${slot.startTime}-${slot.endTime}`);
+        });
+        if (userSlotMap[userId].length > 3) {
+          console.log(`    ... 총 ${userSlotMap[userId].length}개`);
+        }
+      });
+      console.log('🔍 [자동배정] ===========================================');
 
       const memberIds = membersOnly.map(m => {
         const memberId = m.user._id ? m.user._id.toString() : m.user.toString();

@@ -220,27 +220,9 @@ const TimetableGrid = ({
   const getNegotiationInfo = useCallback((date, time) => {
     if (!roomData?.negotiations || roomData.negotiations.length === 0) return null;
 
-    console.log('getNegotiationInfo 호출:', {
-      date: date.toISOString().split('T')[0],
-      time: time.trim(),
-      negotiationsCount: roomData.negotiations.length,
-      negotiations: roomData.negotiations.map(neg => ({
-        id: neg._id,
-        status: neg.status,
-        slotInfo: neg.slotInfo
-      }))
-    });
-
     const negotiation = roomData.negotiations.find(neg => {
-      if (neg.status !== 'active') {
-        console.log('협의 스킵 - 비활성:', neg._id);
-        return false;
-      }
-
-      if (!neg.slotInfo) {
-        console.log('협의 스킵 - slotInfo 없음:', neg._id);
-        return false;
-      }
+      if (neg.status !== 'active') return false;
+      if (!neg.slotInfo) return false;
 
       // slotInfo.date가 Date 객체인지 문자열인지 확인
       let negDate;
@@ -251,27 +233,27 @@ const TimetableGrid = ({
       }
 
       const dateMatch = negDate.toISOString().split('T')[0] === date.toISOString().split('T')[0];
-      const timeMatch = time.trim() === neg.slotInfo.startTime.trim();
 
-      console.log('협의 매칭 체크:', {
-        negId: neg._id,
-        negDate: negDate.toISOString().split('T')[0],
-        negTime: neg.slotInfo.startTime.trim(),
-        inputDate: date.toISOString().split('T')[0],
-        inputTime: time.trim(),
-        dateMatch,
-        timeMatch,
-        slotInfo: neg.slotInfo
-      });
+      // Check if the time slot falls within the negotiation time range
+      const startTime = neg.slotInfo.startTime.trim();
+      const endTime = neg.slotInfo.endTime.trim();
+      const currentTime = time.trim();
+
+      // Convert time strings to minutes for comparison
+      const timeToMinutes = (timeStr) => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+      };
+
+      const startMinutes = timeToMinutes(startTime);
+      const endMinutes = timeToMinutes(endTime);
+      const currentMinutes = timeToMinutes(currentTime);
+
+      // Check if current time slot is within or touches the negotiation time range
+      const timeMatch = currentMinutes >= startMinutes && currentMinutes < endMinutes;
 
       return dateMatch && timeMatch;
     });
-
-    if (negotiation) {
-      console.log('협의 찾음:', negotiation._id);
-    } else {
-      console.log('협의 없음 for:', { date: date.toISOString().split('T')[0], time });
-    }
 
     return negotiation || null;
   }, [roomData?.negotiations]);
