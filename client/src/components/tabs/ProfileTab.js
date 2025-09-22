@@ -31,6 +31,8 @@ const ProfileTab = () => {
     try {
       setIsLoading(true);
       const data = await userService.getUserSchedule();
+      console.log('Fetched schedule data:', data);
+      console.log('Personal times from server:', data.personalTimes);
       setDefaultSchedule(data.defaultSchedule || []);
       setScheduleExceptions(data.scheduleExceptions || []);
       setPersonalTimes(data.personalTimes || []);
@@ -46,14 +48,39 @@ const ProfileTab = () => {
     fetchSchedule();
   }, [fetchSchedule]);
 
+  // 개인시간 상태 변화 추적
+  useEffect(() => {
+    console.log('Personal times state changed:', personalTimes);
+  }, [personalTimes]);
+
+  // 편집 모드 진입 추적
+  const [editingStarted, setEditingStarted] = useState(false);
+
+  useEffect(() => {
+    if (isEditing && !editingStarted) {
+      setEditingStarted(true);
+    } else if (!isEditing) {
+      setEditingStarted(false);
+    }
+  }, [isEditing]);
+
+  useEffect(() => {
+    if (isEditing && !editingStarted) {
+      setEditingStarted(true);
+    } else if (!isEditing) {
+      setEditingStarted(false);
+    }
+  }, [isEditing]);
+
   const handleSave = async () => {
-    // 서버로 보내기 전에 데이터를 정리합니다.
+    // 서버로 보낼 데이터를 현재 최신 상태(state) 기준으로 정리합니다.
     const exceptionsToSave = scheduleExceptions.map(
-      ({ title, startTime, endTime }) => ({ title, startTime, endTime })
+      ({ title, startTime, endTime, isHoliday, isAllDay, _id }) => 
+      ({ title, startTime, endTime, isHoliday, isAllDay, _id })
     );
     const personalTimesToSave = personalTimes.map(
-      ({ title, type, startTime, endTime, days, isRecurring }) =>
-      ({ title, type, startTime, endTime, days, isRecurring })
+      ({ title, type, startTime, endTime, days, isRecurring, id }) =>
+      ({ title, type, startTime, endTime, days, isRecurring, id })
     );
 
     try {
@@ -64,6 +91,7 @@ const ProfileTab = () => {
         });
         showAlert('기본 시간표, 예외 일정 및 개인 시간이 저장되었습니다!', '저장 완료');
         setIsEditing(false);
+        // 저장 후 데이터를 다시 불러와 UI를 최신 상태로 동기화합니다.
         fetchSchedule();
     } catch (err) {
         setError(err.message);
@@ -82,11 +110,15 @@ const ProfileTab = () => {
   };
 
   const handleDateClick = (date) => {
+    if (!isEditing) return; // 편집 모드에서만 동작
     setSelectedDate(date);
     setShowDetailGrid(true);
   };
 
   const handleCloseDetailGrid = () => {
+    if (isEditing) { // 닫기 전에 자동 저장
+      autoSave();
+    }
     setShowDetailGrid(false);
     setSelectedDate(null);
   };
@@ -114,11 +146,21 @@ const ProfileTab = () => {
                 저장
               </button>
               <button
-                onClick={() => {
-                  setDefaultSchedule([]);
-                  setScheduleExceptions([]);
-                  setPersonalTimes([]);
-                  showAlert('모든 일정이 초기화되었습니다.', '초기화 완료');
+                onClick={async () => {
+                  try {
+                    // 서버에 먼저 초기화 요청
+                    await userService.updateUserSchedule({
+                      defaultSchedule: [],
+                      scheduleExceptions: [],
+                      personalTimes: []
+                    });
+
+                    showAlert('모든 일정이 초기화되었습니다.', '초기화 완료');
+                    // 서버 저장 성공 후 UI 상태를 다시 불러와 동기화
+                    fetchSchedule(); 
+                  } catch (err) {
+                    showAlert('초기화에 실패했습니다: ' + err.message, '오류');
+                  }
                 }}
                 className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 flex items-center"
               >
@@ -215,9 +257,11 @@ const ProfileTab = () => {
           setSchedule={setDefaultSchedule}
           readOnly={!isEditing}
           exceptions={scheduleExceptions}
+          setExceptions={setScheduleExceptions}
           personalTimes={personalTimes}
           onClose={handleCloseDetailGrid}
           showFullDay={false}
+          viewMode={viewMode}
         />
       )}
     </div>
