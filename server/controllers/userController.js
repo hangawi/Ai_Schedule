@@ -41,7 +41,8 @@ exports.getUserSchedule = async (req, res) => {
     }
     res.json({
       defaultSchedule: user.defaultSchedule,
-      scheduleExceptions: user.scheduleExceptions
+      scheduleExceptions: user.scheduleExceptions,
+      personalTimes: user.personalTimes || []
     });
   } catch (err) {
     console.error(err.message);
@@ -53,7 +54,7 @@ exports.getUserSchedule = async (req, res) => {
 // @route   PUT /api/users/profile/schedule
 // @access  Private
 exports.updateUserSchedule = async (req, res) => {
-  const { defaultSchedule, scheduleExceptions } = req.body;
+  const { defaultSchedule, scheduleExceptions, personalTimes } = req.body;
 
   try {
     const user = await User.findById(req.user.id);
@@ -84,12 +85,27 @@ exports.updateUserSchedule = async (req, res) => {
         user.scheduleExceptions = [];
     }
 
+    // Explicitly rebuild the personalTimes array
+    if (personalTimes) {
+        user.personalTimes = personalTimes.map(pt => ({
+            title: pt.title,
+            type: pt.type,
+            startTime: pt.startTime,
+            endTime: pt.endTime,
+            days: pt.days,
+            isRecurring: pt.isRecurring || true
+        }));
+    } else {
+        user.personalTimes = [];
+    }
+
     await user.save();
 
     res.json({
       msg: 'Schedule updated successfully',
       defaultSchedule: user.defaultSchedule,
-      scheduleExceptions: user.scheduleExceptions
+      scheduleExceptions: user.scheduleExceptions,
+      personalTimes: user.personalTimes
     });
   } catch (err) {
     console.error('Error updating user schedule:', err);
@@ -103,13 +119,14 @@ exports.updateUserSchedule = async (req, res) => {
 exports.getUserScheduleById = async (req, res) => {
   try {
     const { userId } = req.params;
-    const user = await User.findById(userId).select('defaultSchedule scheduleExceptions firstName lastName'); // Include name for display
+    const user = await User.findById(userId).select('defaultSchedule scheduleExceptions personalTimes firstName lastName'); // Include name for display
     if (!user) {
       return res.status(404).json({ msg: 'User not found' });
     }
     res.json({
       defaultSchedule: user.defaultSchedule,
       scheduleExceptions: user.scheduleExceptions,
+      personalTimes: user.personalTimes || [],
       firstName: user.firstName,
       lastName: user.lastName
     });

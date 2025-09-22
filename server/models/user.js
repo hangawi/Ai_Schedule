@@ -178,6 +178,33 @@ const UserSchema = new mongoose.Schema({
     startTime: { type: Date, required: true },
     endTime: { type: Date, required: true }
   }],
+
+  // 개인 시간 설정 (수면, 식사, 출퇴근 등)
+  personalTimes: [{
+    title: { type: String, required: true },
+    type: {
+      type: String,
+      required: true,
+      enum: ['sleep', 'meal', 'commute', 'study', 'break', 'custom']
+    },
+    startTime: {
+      type: String,
+      required: true,
+      match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+    },
+    endTime: {
+      type: String,
+      required: true,
+      match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+    },
+    days: [{
+      type: Number,
+      required: true,
+      min: 1,
+      max: 7
+    }], // 1: 월, 2: 화, ..., 7: 일
+    isRecurring: { type: Boolean, default: true }
+  }],
 }, {
   // 스키마 옵션
   timestamps: true, // createdAt, updatedAt 자동 관리
