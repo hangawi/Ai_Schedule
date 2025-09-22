@@ -762,7 +762,8 @@ exports.runAutoSchedule = async (req, res) => {
         }
       }
 
-      room.timeSlots = room.timeSlots.filter(slot => !slot.assignedBy);
+      // 중복 삭제 방지 - 이미 위에서 삭제했으므로 주석 처리
+      // room.timeSlots = room.timeSlots.filter(slot => !slot.assignedBy);
 
       console.log('🔍 [저장] 개별 시간 할당 결과:');
 

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import TimetableGrid from '../timetable/TimetableGrid';
+import CoordinationCalendarView from '../calendar/CoordinationCalendarView';
+import CoordinationDetailGrid from '../calendar/CoordinationDetailGrid';
 import RoomCreationModal from '../modals/RoomCreationModal';
 import RoomJoinModal from '../modals/RoomJoinModal';
 import RoomManagementModal from '../modals/RoomManagementModal';
@@ -11,7 +13,7 @@ import { useCoordination } from '../../hooks/useCoordination';
 import { useCoordinationModals } from '../../hooks/useCoordinationModals';
 import { useAuth } from '../../hooks/useAuth';
 import { coordinationService } from '../../services/coordinationService';
-import { Users, Calendar, PlusCircle, LogIn, WandSparkles, Zap, X, MessageSquare, Clock } from 'lucide-react';
+import { Users, Calendar, PlusCircle, LogIn, WandSparkles, Zap, X, MessageSquare, Clock, Grid } from 'lucide-react';
 import { translateEnglishDays } from '../../utils';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import MemberScheduleModal from '../modals/MemberScheduleModal';
@@ -398,6 +400,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [showMemberScheduleModal, setShowMemberScheduleModal] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState(null);
 
+  // Calendar view states
+  const [viewMode, setViewMode] = useState('month'); // 'month' or 'week'
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [showDetailGrid, setShowDetailGrid] = useState(false);
+
   const handleMemberClick = (memberId) => {
     const member = currentRoom?.members?.find(m => (m.user._id || m.user.id) === memberId);
     if (member) {
@@ -408,6 +415,37 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const handleMemberScheduleClick = (memberId) => {
     setSelectedMemberId(memberId);
     setShowMemberScheduleModal(true);
+  };
+
+  // Calendar view handlers
+  const handleDateClick = (date) => {
+    setSelectedDate(date);
+    setShowDetailGrid(true);
+  };
+
+  const handleCloseDetailGrid = () => {
+    setShowDetailGrid(false);
+    setSelectedDate(null);
+  };
+
+  const handleSlotSelect = (slotData) => {
+    setSelectedSlots(prev => {
+      const isSelected = prev.some(slot =>
+        slot.date === slotData.date &&
+        slot.day === slotData.day &&
+        slot.startTime === slotData.startTime
+      );
+
+      if (isSelected) {
+        return prev.filter(slot =>
+          !(slot.date === slotData.date &&
+            slot.day === slotData.day &&
+            slot.startTime === slotData.startTime)
+        );
+      } else {
+        return [...prev, slotData];
+      }
+    });
   };
   
   const [requestViewMode, setRequestViewMode] = useState('received');
@@ -591,8 +629,9 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     
   const calculateEndTime = (startTime) => {
     const [hour, minute] = startTime.split(':').map(Number);
-    const endHour = minute === 30 ? hour + 1 : hour;
-    const endMinute = minute === 30 ? 0 : minute + 30;
+    const totalMinutes = hour * 60 + minute + 10; // Changed to 10-minute intervals
+    const endHour = Math.floor(totalMinutes / 60);
+    const endMinute = totalMinutes % 60;
     return `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
   };
 
@@ -1299,35 +1338,48 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
               </div>
             )}
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mt-4">
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
-                <Calendar size={20} className="mr-2 text-green-600" />
-                시간표 ({scheduleStartHour}:00 - {scheduleEndHour}:00)
-              </h3>
-              <TimetableGrid
-                roomId={currentRoom._id}
-                roomSettings={currentRoom.settings}
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-gray-800 flex items-center">
+                  <Calendar size={20} className="mr-2 text-green-600" />
+                  시간표 ({scheduleStartHour}:00 - {scheduleEndHour}:00)
+                </h3>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setViewMode('month')}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                      viewMode === 'month'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    <Calendar size={16} className="mr-1 inline" />
+                    월간
+                  </button>
+                  <button
+                    onClick={() => setViewMode('week')}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                      viewMode === 'week'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    <Grid size={16} className="mr-1 inline" />
+                    주간
+                  </button>
+                </div>
+              </div>
+
+              <CoordinationCalendarView
+                roomData={currentRoom}
                 timeSlots={currentRoom.timeSlots || []}
                 members={currentRoom.members || []}
-                roomData={currentRoom}
-                onSlotSelect={setSelectedSlots}
                 currentUser={user}
                 isRoomOwner={isOwner}
-                onAssignSlot={handleAssignSlot}
-                onRequestSlot={handleRequestSlot}
-                onRemoveSlot={async (slotData) => {
-                  await removeTimeSlot(currentRoom._id, slotData.day, slotData.startTime, slotData.endTime);
-                  await fetchRoomDetails(currentRoom._id);
-                }}
-                onDirectSubmit={async (slots) => {
-                  await submitTimeSlots(currentRoom._id, slots);
-                  await fetchRoomDetails(currentRoom._id);
-                }}
-                selectedSlots={selectedSlots}
-                calculateEndTime={calculateEndTime}
+                onDateClick={handleDateClick}
+                selectedDate={selectedDate}
+                viewMode={viewMode}
+                currentWeekStartDate={currentWeekStartDate}
                 onWeekChange={handleWeekChange}
-                initialStartDate={currentWeekStartDate}
-                onOpenNegotiation={handleOpenNegotiation}
-                onCurrentWeekNegotiationsChange={setCurrentWeekNegotiations}
               />
             </div>
           </div>
@@ -1510,6 +1562,28 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
           cancelText="취소"
           showCancel={true}
         />
+
+        {/* Detail Grid Modal */}
+        {showDetailGrid && selectedDate && (
+          <CoordinationDetailGrid
+            selectedDate={selectedDate}
+            timeSlots={currentRoom.timeSlots || []}
+            members={currentRoom.members || []}
+            currentUser={user}
+            isRoomOwner={isOwner}
+            roomData={currentRoom}
+            onClose={handleCloseDetailGrid}
+            onSlotSelect={handleSlotSelect}
+            selectedSlots={selectedSlots}
+            onAssignSlot={handleAssignSlot}
+            onRequestSlot={handleRequestSlot}
+            onRemoveSlot={async (slotData) => {
+              await removeTimeSlot(currentRoom._id, slotData.day, slotData.startTime, slotData.endTime);
+              await fetchRoomDetails(currentRoom._id);
+            }}
+            onOpenNegotiation={handleOpenNegotiation}
+          />
+        )}
       </div>
     );
   }
