@@ -99,13 +99,22 @@ exports.updateUserSchedule = async (req, res) => {
         user.personalTimes = [];
     }
 
-    await user.save();
+    // 버전 충돌을 방지하기 위해 findOneAndUpdate 사용
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.id,
+      {
+        defaultSchedule: user.defaultSchedule,
+        scheduleExceptions: user.scheduleExceptions,
+        personalTimes: user.personalTimes
+      },
+      { new: true }
+    );
 
     res.json({
       msg: 'Schedule updated successfully',
-      defaultSchedule: user.defaultSchedule,
-      scheduleExceptions: user.scheduleExceptions,
-      personalTimes: user.personalTimes
+      defaultSchedule: updatedUser.defaultSchedule,
+      scheduleExceptions: updatedUser.scheduleExceptions,
+      personalTimes: updatedUser.personalTimes
     });
   } catch (err) {
     console.error('Error updating user schedule:', err);

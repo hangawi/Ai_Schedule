@@ -348,11 +348,19 @@ const TimetableGrid = ({
     if (currentTime === '13:30' && currentDateStr === '2025-09-15') {
       console.log(`[DEBUG] Checking slot 13:30 on 2025-09-15`);
       console.log(`[DEBUG] All timeSlots:`, timeSlots?.length || 0);
+      console.log(`[DEBUG] Sample slot structure:`, timeSlots?.[0]);
     }
 
     // Find all slots for this date and user, then check if current time falls in any continuous block
     const sameDaySlots = (timeSlots || []).filter(slot => {
-      if (!slot || !slot.date || !slot.startTime) return false;
+      if (!slot || !slot.date) return false;
+
+      // Handle both startTime field and time field formats
+      const hasStartTime = slot.startTime;
+      const hasTimeField = slot.time && slot.time.includes('-');
+
+      if (!hasStartTime && !hasTimeField) return false;
+
       const slotDate = new Date(slot.date);
       return slotDate.toISOString().split('T')[0] === currentDateStr;
     });
@@ -386,9 +394,16 @@ const TimetableGrid = ({
     // Check each user's continuous blocks
     let bookedSlot = null;
     for (const [userId, userSlots] of Object.entries(userSlotGroups)) {
-      // Sort slots by start time
+      // Sort slots by start time - handle both startTime and time field formats
       const sortedSlots = userSlots.sort((a, b) => {
-        return timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
+        const getSlotStartTime = (slot) => {
+          if (slot.startTime) return slot.startTime;
+          if (slot.time && slot.time.includes('-')) {
+            return slot.time.split('-')[0];
+          }
+          return '00:00';
+        };
+        return timeToMinutes(getSlotStartTime(a)) - timeToMinutes(getSlotStartTime(b));
       });
 
       // Find continuous blocks and check if current time falls within any block
@@ -397,8 +412,22 @@ const TimetableGrid = ({
 
       for (let i = 0; i < sortedSlots.length; i++) {
         const slot = sortedSlots[i];
-        const slotStart = timeToMinutes(slot.startTime);
-        const slotEnd = timeToMinutes(slot.endTime || slot.startTime); // fallback if no endTime
+
+        // Extract start and end times from both formats
+        let slotStartTime, slotEndTime;
+        if (slot.startTime) {
+          slotStartTime = slot.startTime;
+          slotEndTime = slot.endTime || slot.startTime;
+        } else if (slot.time && slot.time.includes('-')) {
+          const [start, end] = slot.time.split('-');
+          slotStartTime = start;
+          slotEndTime = end;
+        } else {
+          continue;
+        }
+
+        const slotStart = timeToMinutes(slotStartTime);
+        const slotEnd = timeToMinutes(slotEndTime);
 
         if (blockStart === null) {
           blockStart = slotStart;
@@ -436,8 +465,19 @@ const TimetableGrid = ({
     // Fallback to original logic if no continuous block found
     if (!bookedSlot) {
       bookedSlot = sameDaySlots.find(booked => {
-        const startTime = booked.startTime ? booked.startTime.trim() : '';
-        const endTime = booked.endTime ? booked.endTime.trim() : '';
+        // Handle both startTime/endTime and time field formats
+        let startTime, endTime;
+
+        if (booked.startTime) {
+          startTime = booked.startTime.trim();
+          endTime = booked.endTime ? booked.endTime.trim() : startTime;
+        } else if (booked.time && booked.time.includes('-')) {
+          const [start, end] = booked.time.split('-');
+          startTime = start.trim();
+          endTime = end.trim();
+        } else {
+          return false;
+        }
 
         if (startTime && endTime) {
           const startMinutes = timeToMinutes(startTime);

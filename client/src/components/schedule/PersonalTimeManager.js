@@ -106,11 +106,16 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing }
       id: editingId || Date.now()
     };
 
+    let updatedPersonalTimes;
     if (editingId) {
-      setPersonalTimes(personalTimes.map(pt => pt.id === editingId ? personalTimeData : pt));
+      updatedPersonalTimes = personalTimes.map(pt => pt.id === editingId ? personalTimeData : pt);
+      setPersonalTimes(updatedPersonalTimes);
       setEditingId(null);
+      showAlert('개인 시간이 수정되었습니다.', '수정 완료');
     } else {
-      setPersonalTimes([...personalTimes, personalTimeData]);
+      updatedPersonalTimes = [...personalTimes, personalTimeData];
+      setPersonalTimes(updatedPersonalTimes);
+      showAlert('개인 시간이 추가되었습니다.', '추가 완료');
     }
 
     setNewPersonalTime({
@@ -124,7 +129,11 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing }
   }, [newPersonalTime, personalTimes, setPersonalTimes, showAlert, editingId]);
 
   const handleRemovePersonalTime = useCallback((id) => {
-    setPersonalTimes(personalTimes.filter(pt => pt.id !== id));
+    const updatedPersonalTimes = personalTimes.filter(pt => pt.id !== id);
+    console.log('Removing personal time with id:', id);
+    console.log('Updated personal times after removal:', updatedPersonalTimes);
+
+    setPersonalTimes(updatedPersonalTimes);
     if (id === editingId) {
       setEditingId(null);
       setNewPersonalTime({

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
-import 'moment/locale/ko'; // 한국어 로케일 임포트
+import 'moment/locale/ko';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import './Calendar.css';
 import AddEventModal from '../modals/AddEventModal';
@@ -9,10 +9,46 @@ import EventDetailsModal from '../modals/EventDetailsModal';
 import EditEventModal from '../modals/EditEventModal';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import { Mic } from 'lucide-react';
+import { userService } from '../../services/userService'; // Import userService
 
-moment.locale('ko'); // moment 전역 로케일 설정
+moment.locale('ko');
 const localizer = momentLocalizer(moment);
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+
+// Helper function to generate event instances from recurring personal times
+const generatePersonalEvents = (personalTimes, timeMin, timeMax) => {
+  const events = [];
+  const start = moment(timeMin);
+  const end = moment(timeMax);
+
+  for (let m = moment(start); m.isBefore(end); m.add(1, 'days')) {
+    const dayOfWeek = m.isoWeekday(); // Monday=1, Sunday=7
+    personalTimes.forEach(pt => {
+      if (pt.days.includes(dayOfWeek)) {
+        const [startHour, startMinute] = pt.startTime.split(':').map(Number);
+        const [endHour, endMinute] = pt.endTime.split(':').map(Number);
+
+        const startDate = m.clone().hour(startHour).minute(startMinute).second(0).toDate();
+        const endDate = m.clone().hour(endHour).minute(endMinute).second(0).toDate();
+        
+        if (endDate < startDate) {
+          endDate.setDate(endDate.getDate() + 1);
+        }
+
+        events.push({
+          id: `personal-${pt.id}-${m.format('YYYY-MM-DD')}`,
+          title: pt.title,
+          start: startDate,
+          end: endDate,
+          allDay: false,
+          isPersonal: true, // Flag for styling
+        });
+      }
+    });
+  }
+  return events;
+};
+
 
 const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onToggleVoiceRecognition }) => {
    const [events, setEvents] = useState([]);
@@ -22,7 +58,6 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
    const [showEditEventModal, setShowEditEventModal] = useState(false);
    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
    
-   // CustomAlert 상태
    const [alertModal, setAlertModal] = useState({
      isOpen: false,
      title: '',
@@ -32,19 +67,10 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
      onConfirm: null
    });
 
-   // Alert 표시 유틸리티 함수
    const showAlert = useCallback((message, type = 'info', title = '', showCancel = false, onConfirm = null) => {
-     setAlertModal({
-       isOpen: true,
-       title,
-       message,
-       type,
-       showCancel,
-       onConfirm
-     });
+     setAlertModal({ isOpen: true, title, message, type, showCancel, onConfirm });
    }, []);
 
-   // Alert 닫기 함수
    const closeAlert = useCallback(() => {
      setAlertModal(prev => ({ ...prev, isOpen: false }));
    }, []);
@@ -82,50 +108,54 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
    const fetchEvents = useCallback(async currentDate => {
       try {
          const token = localStorage.getItem('token');
-
-         // 구글 인증 상태 확인 - 토큰이 없거나 구글 연결이 안된 경우 요청하지 않음
-         const googleConnected = localStorage.getItem('googleConnected');
-         if (!token || !googleConnected || googleConnected === 'false') {
-            setEvents([]);
-            return;
-         }
-
          const startOfMonth = moment(currentDate).startOf('month').toISOString();
          const endOfMonth = moment(currentDate).endOf('month').toISOString();
 
-         const response = await fetch(
-            `${API_BASE_URL}/api/calendar/events?timeMin=${startOfMonth}&timeMax=${endOfMonth}`,
-            {
-               headers: {
-                  'x-auth-token': token,
-               },
-            },
-         );
+         let googleEvents = [];
+         const googleConnected = localStorage.getItem('googleConnected');
+         if (token && googleConnected && googleConnected !== 'false') {
+            const response = await fetch(
+               `${API_BASE_URL}/api/calendar/events?timeMin=${startOfMonth}&timeMax=${endOfMonth}`,
+               { headers: { 'x-auth-token': token } }
+            );
 
-         if (!response.ok) {
-            if (response.status === 401) {
-               // 구글 인증이 안된 경우 조용히 처리
+            if (response.ok) {
+               const data = await response.json();
+               googleEvents = data.map(event => ({
+                  id: event.id,
+                  title: event.summary,
+                  start: new Date(event.start.dateTime || event.start.date),
+                  end: new Date(event.end.dateTime || event.end.date),
+                  allDay: !event.start.dateTime,
+                  description: event.description,
+                  etag: event.etag,
+               }));
+            } else if (response.status === 401) {
                localStorage.setItem('googleConnected', 'false');
-               setEvents([]);
-               return;
+            } else {
+               console.error('Google 캘린더 이벤트를 가져오는 데 실패했습니다.');
             }
-            throw new Error('캘린더 이벤트를 가져오는 데 실패했습니다.');
          }
 
-         const data = await response.json();
-         const formattedEvents = data.map(event => ({
-            id: event.id,
-            title: event.summary,
-            start: new Date(event.start.dateTime || event.start.date),
-            end: new Date(event.end.dateTime || event.end.date),
-            allDay: !event.start.dateTime,
-            description: event.description,
-            etag: event.etag,
-         }));
-         setEvents(formattedEvents);
+         let personalEvents = [];
+         if (token) {
+            try {
+               const scheduleData = await userService.getUserSchedule();
+               if (scheduleData && scheduleData.personalTimes) {
+                  const timeMin = moment(currentDate).startOf('month').toDate();
+                  const timeMax = moment(currentDate).endOf('month').toDate();
+                  personalEvents = generatePersonalEvents(scheduleData.personalTimes, timeMin, timeMax);
+               }
+            } catch (error) {
+               console.error("Error fetching personal schedule:", error);
+               // 개인 일정 로드 실패 시에도 구글 캘린더는 표시되도록 함
+            }
+         }
+
+         setEvents([...googleEvents, ...personalEvents]);
       } catch (error) {
-        console.error("Error fetching Google Calendar events:", error);
-        showAlert('Google 캘린더 이벤트를 가져오는 중 오류가 발생했습니다.', 'error', '오류');
+        console.error("Error fetching calendar events:", error);
+        showAlert('캘린더 이벤트를 가져오는 중 오류가 발생했습니다.', 'error', '오류');
         setEvents([]);
       }
    }, [showAlert]);
@@ -144,13 +174,15 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
    };
 
    const handleDeleteEvent = async eventToDelete => {
+      if (eventToDelete.isPersonal) {
+         showAlert('개인 시간은 프로필 탭에서만 삭제할 수 있습니다.', 'info', '알림');
+         return;
+      }
       try {
          const token = localStorage.getItem('token');
          const response = await fetch(`${API_BASE_URL}/api/calendar/events/${eventToDelete.id}`, {
             method: 'DELETE',
-            headers: {
-               'x-auth-token': token,
-            },
+            headers: { 'x-auth-token': token },
          });
 
          if (!response.ok) {
@@ -170,6 +202,10 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
    };
 
    const handleEditEvent = eventToEdit => {
+      if (eventToEdit.isPersonal) {
+         showAlert('개인 시간은 프로필 탭에서만 수정할 수 있습니다.', 'info', '알림');
+         return;
+      }
       setSelectedEvent(eventToEdit);
       setShowEditEventModal(true);
    };
@@ -178,6 +214,20 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
       fetchEvents(date);
       setShowEditEventModal(false);
       setSelectedEvent(null);
+   };
+
+   const eventStyleGetter = (event, start, end, isSelected) => {
+      if (event.isPersonal) {
+         return {
+            style: {
+               backgroundColor: '#a78bfa', // purple-400
+               borderColor: '#8b5cf6', // purple-500
+               color: 'white',
+               opacity: 0.8,
+            }
+         };
+      }
+      return {};
    };
 
    return (
@@ -213,6 +263,7 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
                defaultView={isMobile ? 'agenda' : 'month'}
                formats={formats}
                messages={messages}
+               eventPropGetter={eventStyleGetter}
             />
          </div>
          {showAddEventModal && (

@@ -11,7 +11,8 @@ const CalendarView = ({
   onDateClick,
   selectedDate,
   viewMode = 'month', // 'month' or 'week'
-  onShowAlert
+  onShowAlert,
+  onAutoSave
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [calendarDates, setCalendarDates] = useState([]);
@@ -64,7 +65,9 @@ const CalendarView = ({
         isSelected,
         hasSchedule: hasScheduleForDate(date),
         hasException: hasExceptionForDate(date),
-        hasPersonalTime: hasPersonalTimeForDate(date)
+        hasPersonalTime: hasPersonalTimeForDate(date),
+        hasBlockedTime: hasBlockedTimeForDate(date),
+        hasHoliday: hasHolidayForDate(date)
       });
     }
 
@@ -89,7 +92,9 @@ const CalendarView = ({
         isSelected,
         hasSchedule: hasScheduleForDate(date),
         hasException: hasExceptionForDate(date),
-        hasPersonalTime: hasPersonalTimeForDate(date)
+        hasPersonalTime: hasPersonalTimeForDate(date),
+        hasBlockedTime: hasBlockedTimeForDate(date),
+        hasHoliday: hasHolidayForDate(date)
       });
     }
 
@@ -105,14 +110,27 @@ const CalendarView = ({
 
   const hasScheduleForDate = (date) => {
     const dayOfWeek = date.getDay();
-    return schedule.some(s => s.dayOfWeek === dayOfWeek);
+    return schedule.some(s => s.dayOfWeek === dayOfWeek && !s.isBlocked);
+  };
+
+  const hasBlockedTimeForDate = (date) => {
+    const dayOfWeek = date.getDay();
+    return schedule.some(s => s.dayOfWeek === dayOfWeek && s.isBlocked);
   };
 
   const hasExceptionForDate = (date) => {
     const dateStr = date.toISOString().split('T')[0];
     return exceptions.some(ex => {
       const exDate = new Date(ex.startTime).toISOString().split('T')[0];
-      return exDate === dateStr;
+      return exDate === dateStr && ex.title !== '휴무일';
+    });
+  };
+
+  const hasHolidayForDate = (date) => {
+    const dateStr = date.toISOString().split('T')[0];
+    return exceptions.some(ex => {
+      const exDate = new Date(ex.startTime).toISOString().split('T')[0];
+      return exDate === dateStr && ex.title === '휴무일';
     });
   };
 
@@ -174,6 +192,11 @@ const CalendarView = ({
     if (previousWeekSchedule.length > 0) {
       setSchedule([...schedule, ...previousWeekSchedule]);
       onShowAlert && onShowAlert(`이전 주 스케줄에서 ${previousWeekSchedule.length}개 시간대를 복사했습니다.`, '복사 완료');
+
+      // 즉시 저장
+      if (onAutoSave) {
+        onAutoSave();
+      }
     } else {
       onShowAlert && onShowAlert('복사할 새로운 시간대가 없습니다.', '알림');
     }
@@ -215,6 +238,11 @@ const CalendarView = ({
 
     setSchedule(filteredSchedule);
     onShowAlert && onShowAlert(`현재 주에서 ${removedCount}개 시간대를 삭제했습니다.`, '초기화 완료');
+
+    // 즉시 저장
+    if (onAutoSave) {
+      onAutoSave();
+    }
   };
 
   const renderCalendarHeader = () => (
@@ -301,31 +329,42 @@ const CalendarView = ({
           <div
             key={index}
             className={`
-              h-20 border-r border-b border-gray-100 p-2 cursor-pointer transition-colors
-              ${dateInfo.isCurrentMonth ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 text-gray-400'}
-              ${dateInfo.isToday ? 'bg-blue-100' : ''}
-              ${dateInfo.isSelected ? 'bg-blue-200 ring-2 ring-blue-500' : ''}
+              h-20 border-r border-b border-gray-100 p-2 transition-colors
+              ${dateInfo.hasHoliday ? 'bg-gray-200 text-gray-500' : ''}
+              ${!dateInfo.hasHoliday && (dateInfo.isCurrentMonth ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 text-gray-400')}
+              ${dateInfo.isToday && !dateInfo.hasHoliday ? 'bg-blue-100' : ''}
+              ${dateInfo.isSelected && !dateInfo.hasHoliday ? 'bg-blue-200 ring-2 ring-blue-500' : ''}
+              ${!readOnly || !dateInfo.hasHoliday ? 'cursor-pointer' : 'cursor-not-allowed'}
             `}
-            onClick={() => handleDateClick(dateInfo.date)}
+            onClick={() => (!dateInfo.hasHoliday || !readOnly) && handleDateClick(dateInfo.date)}
           >
             <div className="flex flex-col h-full">
               <div className={`text-sm font-medium mb-1 ${
-                dateInfo.isToday ? 'text-blue-600' : ''
+                dateInfo.isToday && !dateInfo.hasHoliday ? 'text-blue-600' : ''
               }`}>
                 {dateInfo.day}
               </div>
 
-              <div className="flex-1 flex flex-col space-y-1">
-                {dateInfo.hasSchedule && (
-                  <div className="w-full h-1 bg-blue-500 rounded-full"></div>
-                )}
-                {dateInfo.hasException && (
-                  <div className="w-full h-1 bg-gray-500 rounded-full"></div>
-                )}
-                {dateInfo.hasPersonalTime && (
-                  <div className="w-full h-1 bg-red-500 rounded-full"></div>
-                )}
-              </div>
+              {dateInfo.hasHoliday ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <span className="text-xs text-gray-600 font-medium">휴무일</span>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col space-y-1">
+                  {dateInfo.hasSchedule && (
+                    <div className="w-full h-1 bg-blue-500 rounded-full"></div>
+                  )}
+                  {dateInfo.hasException && (
+                    <div className="w-full h-1 bg-gray-500 rounded-full"></div>
+                  )}
+                  {dateInfo.hasPersonalTime && (
+                    <div className="w-full h-1 bg-red-500 rounded-full"></div>
+                  )}
+                  {dateInfo.hasBlockedTime && (
+                    <div className="w-full h-1 bg-gray-400 rounded-full"></div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -362,27 +401,42 @@ const CalendarView = ({
           <div
             key={index}
             className={`
-              border-r border-gray-100 last:border-r-0 p-3 cursor-pointer transition-colors
-              ${dateInfo.isToday ? 'bg-blue-50' : 'hover:bg-gray-50'}
-              ${dateInfo.isSelected ? 'bg-blue-200 ring-2 ring-blue-500' : ''}
+              border-r border-gray-100 last:border-r-0 p-3 transition-colors
+              ${dateInfo.hasHoliday ? 'bg-gray-200 text-gray-500' : ''}
+              ${!dateInfo.hasHoliday && (dateInfo.isToday ? 'bg-blue-50' : 'hover:bg-gray-50')}
+              ${dateInfo.isSelected && !dateInfo.hasHoliday ? 'bg-blue-200 ring-2 ring-blue-500' : ''}
+              ${!readOnly || !dateInfo.hasHoliday ? 'cursor-pointer' : 'cursor-not-allowed'}
             `}
-            onClick={() => handleDateClick(dateInfo.date)}
+            onClick={() => (!dateInfo.hasHoliday || !readOnly) && handleDateClick(dateInfo.date)}
           >
             <div className="space-y-2">
-              {dateInfo.hasSchedule && (
-                <div className="p-2 bg-blue-100 text-blue-800 rounded text-xs">
-                  기본 일정
+              {dateInfo.hasHoliday ? (
+                <div className="p-2 bg-gray-300 text-gray-700 rounded text-xs flex items-center justify-center h-full">
+                  휴무일
                 </div>
-              )}
-              {dateInfo.hasException && (
-                <div className="p-2 bg-gray-100 text-gray-800 rounded text-xs">
-                  예외 일정
-                </div>
-              )}
-              {dateInfo.hasPersonalTime && (
-                <div className="p-2 bg-red-100 text-red-800 rounded text-xs">
-                  개인 시간
-                </div>
+              ) : (
+                <>
+                  {dateInfo.hasSchedule && (
+                    <div className="p-2 bg-blue-100 text-blue-800 rounded text-xs">
+                      기본 일정
+                    </div>
+                  )}
+                  {dateInfo.hasException && (
+                    <div className="p-2 bg-gray-100 text-gray-800 rounded text-xs">
+                      예외 일정
+                    </div>
+                  )}
+                  {dateInfo.hasPersonalTime && (
+                    <div className="p-2 bg-red-100 text-red-800 rounded text-xs">
+                      개인 시간
+                    </div>
+                  )}
+                  {dateInfo.hasBlockedTime && (
+                    <div className="p-2 bg-gray-300 text-gray-700 rounded text-xs">
+                      휴무일
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
