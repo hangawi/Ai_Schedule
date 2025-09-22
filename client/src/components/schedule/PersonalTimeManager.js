@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Clock, Plus, Trash2, Edit, X, Coffee, Moon, Utensils, Car, BookOpen } from 'lucide-react';
 import CustomAlertModal from '../modals/CustomAlertModal';
 
-const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing }) => {
+const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, onAutoSave }) => {
   const [newPersonalTime, setNewPersonalTime] = useState({
     title: '',
     type: 'sleep',
@@ -118,15 +118,37 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing }
       showAlert('개인 시간이 추가되었습니다.', '추가 완료');
     }
 
-    setNewPersonalTime({
-      title: '',
-      type: 'sleep',
-      startTime: '22:00',
-      endTime: '08:00',
-      days: [1, 2, 3, 4, 5],
-      isRecurring: true
-    });
-  }, [newPersonalTime, personalTimes, setPersonalTimes, showAlert, editingId]);
+    // 수정 완료 후에만 폼 초기화 (새로 추가 시에는 폼 유지하지 않음)
+    if (editingId) {
+      setNewPersonalTime({
+        title: '',
+        type: 'sleep',
+        startTime: '22:00',
+        endTime: '08:00',
+        days: [1, 2, 3, 4, 5],
+        isRecurring: true
+      });
+    } else {
+      // 새로 추가했을 때는 폼을 초기화하여 다시 입력할 수 있게 함
+      setNewPersonalTime({
+        title: '',
+        type: 'sleep',
+        startTime: '22:00',
+        endTime: '08:00',
+        days: [1, 2, 3, 4, 5],
+        isRecurring: true
+      });
+    }
+
+    // 개인시간 추가/수정 후 자동 저장 및 달력 업데이트
+    if (onAutoSave) {
+      setTimeout(() => {
+        onAutoSave();
+        // 달력 실시간 업데이트
+        window.dispatchEvent(new CustomEvent('calendarUpdate'));
+      }, 100); // 상태 업데이트 후 저장
+    }
+  }, [newPersonalTime, personalTimes, setPersonalTimes, showAlert, editingId, onAutoSave]);
 
   const handleRemovePersonalTime = useCallback((id) => {
     const updatedPersonalTimes = personalTimes.filter(pt => pt.id !== id);
@@ -134,6 +156,15 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing }
     console.log('Updated personal times after removal:', updatedPersonalTimes);
 
     setPersonalTimes(updatedPersonalTimes);
+
+    // 개인시간 삭제 후 자동 저장 및 달력 업데이트
+    if (onAutoSave) {
+      setTimeout(() => {
+        onAutoSave();
+        // 달력 실시간 업데이트
+        window.dispatchEvent(new CustomEvent('calendarUpdate'));
+      }, 100); // 상태 업데이트 후 저장
+    }
     if (id === editingId) {
       setEditingId(null);
       setNewPersonalTime({
@@ -145,7 +176,7 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing }
         isRecurring: true
       });
     }
-  }, [personalTimes, setPersonalTimes, editingId]);
+  }, [personalTimes, setPersonalTimes, editingId, onAutoSave]);
 
   const handleEditClick = (personalTime) => {
     setEditingId(personalTime.id);

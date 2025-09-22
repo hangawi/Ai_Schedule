@@ -75,8 +75,8 @@ const ProfileTab = () => {
   const handleSave = async () => {
     // 서버로 보낼 데이터를 현재 최신 상태(state) 기준으로 정리합니다.
     const exceptionsToSave = scheduleExceptions.map(
-      ({ title, startTime, endTime, isHoliday, isAllDay, _id }) => 
-      ({ title, startTime, endTime, isHoliday, isAllDay, _id })
+      ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority }) =>
+      ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority })
     );
     const personalTimesToSave = personalTimes.map(
       ({ title, type, startTime, endTime, days, isRecurring, id }) =>
@@ -91,8 +91,15 @@ const ProfileTab = () => {
         });
         showAlert('기본 시간표, 예외 일정 및 개인 시간이 저장되었습니다!', '저장 완료');
         setIsEditing(false);
-        // 저장 후 데이터를 다시 불러와 UI를 최신 상태로 동기화합니다.
-        fetchSchedule();
+
+        // 저장 후 서버에서 최신 데이터 동기화
+        const freshData = await userService.getUserSchedule();
+        setDefaultSchedule(freshData.defaultSchedule || []);
+        setScheduleExceptions(freshData.scheduleExceptions || []);
+        setPersonalTimes(freshData.personalTimes || []);
+
+        // CalendarView 강제 리렌더링
+        window.dispatchEvent(new Event('calendarUpdate'));
     } catch (err) {
         setError(err.message);
         showAlert('저장에 실패했습니다: ' + err.message, '오류');
@@ -110,15 +117,38 @@ const ProfileTab = () => {
   };
 
   const handleDateClick = (date) => {
-    if (!isEditing) return; // 편집 모드에서만 동작
     setSelectedDate(date);
     setShowDetailGrid(true);
   };
 
-  const handleCloseDetailGrid = () => {
-    if (isEditing) { // 닫기 전에 자동 저장
-      autoSave();
+  const autoSave = async () => {
+    try {
+      const exceptionsToSave = scheduleExceptions.map(
+        ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority }) =>
+        ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority })
+      );
+      const personalTimesToSave = personalTimes.map(
+        ({ title, type, startTime, endTime, days, isRecurring, id }) =>
+        ({ title, type, startTime, endTime, days, isRecurring, id })
+      );
+
+      await userService.updateUserSchedule({
+        defaultSchedule,
+        scheduleExceptions: exceptionsToSave,
+        personalTimes: personalTimesToSave
+      });
+
+      // 저장 후 서버에서 최신 데이터 동기화
+      const freshData = await userService.getUserSchedule();
+      setDefaultSchedule(freshData.defaultSchedule || []);
+      setScheduleExceptions(freshData.scheduleExceptions || []);
+      setPersonalTimes(freshData.personalTimes || []);
+    } catch (err) {
+      console.error('자동 저장 실패:', err);
     }
+  };
+
+  const handleCloseDetailGrid = () => {
     setShowDetailGrid(false);
     setSelectedDate(null);
   };
@@ -148,7 +178,12 @@ const ProfileTab = () => {
               <button
                 onClick={async () => {
                   try {
-                    // 서버에 먼저 초기화 요청
+                    // UI 상태를 먼저 초기화
+                    setDefaultSchedule([]);
+                    setScheduleExceptions([]);
+                    setPersonalTimes([]);
+
+                    // 서버에 초기화 요청
                     await userService.updateUserSchedule({
                       defaultSchedule: [],
                       scheduleExceptions: [],
@@ -156,16 +191,38 @@ const ProfileTab = () => {
                     });
 
                     showAlert('모든 일정이 초기화되었습니다.', '초기화 완료');
-                    // 서버 저장 성공 후 UI 상태를 다시 불러와 동기화
-                    fetchSchedule(); 
                   } catch (err) {
                     showAlert('초기화에 실패했습니다: ' + err.message, '오류');
+                    // 실패 시 원본 데이터 복구
+                    fetchSchedule();
                   }
                 }}
                 className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 flex items-center"
               >
                 <Trash2 size={16} className="mr-2" />
                 전체 초기화
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    // 예외 일정만 초기화 (DB 스키마 업데이트 후 필요)
+                    setScheduleExceptions([]);
+
+                    await userService.updateUserSchedule({
+                      defaultSchedule,
+                      scheduleExceptions: [],
+                      personalTimes
+                    });
+
+                    showAlert('예외 일정이 초기화되었습니다. 이제 새로운 형식으로 추가할 수 있습니다.', 'DB 초기화 완료');
+                  } catch (err) {
+                    showAlert('초기화에 실패했습니다: ' + err.message, '오류');
+                    fetchSchedule();
+                  }
+                }}
+                className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 flex items-center"
+              >
+                DB 초기화
               </button>
               <button
                 onClick={handleCancel}
@@ -233,6 +290,7 @@ const ProfileTab = () => {
           selectedDate={selectedDate}
           viewMode={viewMode}
           onShowAlert={showAlert}
+          onAutoSave={autoSave}
         />
       </div>
 
@@ -241,6 +299,7 @@ const ProfileTab = () => {
         personalTimes={personalTimes}
         setPersonalTimes={setPersonalTimes}
         isEditing={isEditing}
+        onAutoSave={autoSave}
       />
 
       <CustomAlertModal
@@ -260,6 +319,7 @@ const ProfileTab = () => {
           setExceptions={setScheduleExceptions}
           personalTimes={personalTimes}
           onClose={handleCloseDetailGrid}
+          onSave={autoSave}
           showFullDay={false}
           viewMode={viewMode}
         />
