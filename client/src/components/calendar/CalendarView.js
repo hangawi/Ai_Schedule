@@ -26,7 +26,18 @@ const CalendarView = ({
 
   useEffect(() => {
     generateCalendarDates();
-  }, [currentDate, viewMode]);
+  }, [currentDate, viewMode, schedule, exceptions, personalTimes]);
+
+  useEffect(() => {
+    const handleCalendarUpdate = () => {
+      generateCalendarDates();
+    };
+
+    window.addEventListener('calendarUpdate', handleCalendarUpdate);
+    return () => {
+      window.removeEventListener('calendarUpdate', handleCalendarUpdate);
+    };
+  }, []);
 
   const generateCalendarDates = () => {
     if (viewMode === 'month') {
@@ -136,7 +147,9 @@ const CalendarView = ({
 
   const hasPersonalTimeForDate = (date) => {
     const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay();
-    return personalTimes.some(pt => pt.days.includes(dayOfWeek));
+    return personalTimes.some(pt => {
+      return pt.days && pt.days.includes(dayOfWeek);
+    });
   };
 
   const navigateMonth = (direction) => {

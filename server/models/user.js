@@ -176,7 +176,11 @@ const UserSchema = new mongoose.Schema({
   scheduleExceptions: [{
     title: { type: String, required: true },
     startTime: { type: Date, required: true },
-    endTime: { type: Date, required: true }
+    endTime: { type: Date, required: true },
+    priority: { type: Number, enum: [1, 2, 3] }, // 1: 조정가능, 2: 보통, 3: 선호 (기본값 제거)
+    specificDate: { type: String }, // YYYY-MM-DD 형태
+    isHoliday: { type: Boolean, default: false },
+    isAllDay: { type: Boolean, default: false }
   }],
 
   // 개인 시간 설정 (수면, 식사, 출퇴근 등)
