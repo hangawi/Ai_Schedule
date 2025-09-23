@@ -106,7 +106,6 @@ const CalendarView = ({
       const isMatch = exDateStr === dateStr && ex.title !== '휴무일' && !ex.isHoliday;
 
       if (isMatch) {
-        console.log(`예외 일정 발견 - 날짜: ${dateStr}, 제목: ${ex.title}`);
       }
 
       return isMatch;
@@ -160,7 +159,7 @@ const CalendarView = ({
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center space-x-4">
         <h2 className="text-xl font-semibold">
-`${currentDate.getFullYear()}년 ${monthNames[currentDate.getMonth()]}`
+          {`${currentDate.getFullYear()}년 ${monthNames[currentDate.getMonth()]}`}
         </h2>
 
         <div className="flex items-center space-x-2">
@@ -217,9 +216,9 @@ onClick={() => navigateMonth(1)}
               ${!dateInfo.hasHoliday && (dateInfo.isCurrentMonth ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 text-gray-400')}
               ${dateInfo.isToday && !dateInfo.hasHoliday ? 'bg-blue-100' : ''}
               ${dateInfo.isSelected && !dateInfo.hasHoliday ? 'bg-blue-200 ring-2 ring-blue-500' : ''}
-              ${!readOnly || !dateInfo.hasHoliday ? 'cursor-pointer' : 'cursor-not-allowed'}
+              cursor-pointer
             `}
-            onClick={() => (!dateInfo.hasHoliday || !readOnly) && handleDateClick(dateInfo.date)}
+            onClick={() => handleDateClick(dateInfo.date)}
           >
             <div className="flex flex-col h-full">
               <div className={`text-sm font-medium mb-1 ${
