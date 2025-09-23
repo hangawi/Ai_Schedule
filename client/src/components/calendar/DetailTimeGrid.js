@@ -30,8 +30,7 @@ const DetailTimeGrid = ({
   personalTimes = [],
   onClose,
   onSave,
-  showFullDay = false,
-  viewMode = 'month' // 'month' or 'week'
+  showFullDay = false
 }) => {
   const [timeRange, setTimeRange] = useState({ start: 9, end: 18 });
   const [selectionStart, setSelectionStart] = useState(null);
@@ -469,8 +468,11 @@ const DetailTimeGrid = ({
     const month = selectedDate.getMonth();
     const day = selectedDate.getDate();
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const dayOfWeek = selectedDate.getDay();
 
-    console.log('하루 전체 삭제 시작:', dateStr);
+    console.log('하루 전체 삭제 시작:', dateStr, '요일:', dayOfWeek);
+
+    let totalDeleted = 0;
 
     // 해당 날짜의 모든 예외 일정 삭제
     const filteredExceptions = exceptions.filter(ex => {
@@ -482,25 +484,36 @@ const DetailTimeGrid = ({
       return exDateStr !== dateStr;
     });
 
-    const deletedCount = exceptions.length - filteredExceptions.length;
-    console.log(`${deletedCount}개의 예외 일정 삭제됨`);
+    const deletedExceptions = exceptions.length - filteredExceptions.length;
+    totalDeleted += deletedExceptions;
 
+    // 해당 요일의 기본 스케줄 삭제
+    const filteredSchedule = schedule.filter(s => s.dayOfWeek !== dayOfWeek);
+    const deletedSchedule = schedule.length - filteredSchedule.length;
+    totalDeleted += deletedSchedule;
+
+    console.log(`삭제된 항목: 예외 일정 ${deletedExceptions}개, 기본 스케줄 ${deletedSchedule}개, 총 ${totalDeleted}개`);
+
+    // 상태 업데이트
     if (setExceptions) {
       setExceptions(filteredExceptions);
-      setHasUnsavedChanges(true);
+    }
+    if (setSchedule) {
+      setSchedule(filteredSchedule);
+    }
+    setHasUnsavedChanges(true);
 
-      // 즉시 자동 저장 실행
-      if (onSave) {
-        setTimeout(async () => {
-          try {
-            await onSave();
-            setHasUnsavedChanges(false);
-            console.log('하루 전체 삭제 후 자동 저장 완료');
-          } catch (error) {
-            console.error('하루 전체 삭제 후 자동 저장 실패:', error);
-          }
-        }, 200);
-      }
+    // 즉시 자동 저장 실행
+    if (onSave) {
+      setTimeout(async () => {
+        try {
+          await onSave();
+          setHasUnsavedChanges(false);
+          console.log('하루 전체 삭제 후 자동 저장 완료');
+        } catch (error) {
+          console.error('하루 전체 삭제 후 자동 저장 실패:', error);
+        }
+      }, 200);
     }
   };
 
