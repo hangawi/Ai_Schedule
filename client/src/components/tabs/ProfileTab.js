@@ -4,14 +4,13 @@ import CalendarView from '../calendar/CalendarView';
 import DetailTimeGrid from '../calendar/DetailTimeGrid';
 import PersonalTimeManager from '../schedule/PersonalTimeManager';
 import CustomAlertModal from '../modals/CustomAlertModal';
-import { Edit, Save, XCircle, Trash2, Calendar, Grid } from 'lucide-react';
+import { Edit, Save, XCircle, Trash2 } from 'lucide-react';
 
 const ProfileTab = () => {
   const [defaultSchedule, setDefaultSchedule] = useState([]);
   const [scheduleExceptions, setScheduleExceptions] = useState([]);
   const [personalTimes, setPersonalTimes] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
-  const [viewMode, setViewMode] = useState('month'); // 'month' or 'week'
   const [selectedDate, setSelectedDate] = useState(null);
   const [showDetailGrid, setShowDetailGrid] = useState(false);
   
@@ -240,36 +239,12 @@ const ProfileTab = () => {
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold">일정 관리</h3>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setViewMode('month')}
-              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                viewMode === 'month'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              <Calendar size={16} className="mr-1 inline" />
-              월간
-            </button>
-            <button
-              onClick={() => setViewMode('week')}
-              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                viewMode === 'week'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              <Grid size={16} className="mr-1 inline" />
-              주간
-            </button>
-          </div>
         </div>
 
         <p className="text-sm text-gray-600 mb-4">
           {!isEditing
             ? "현재 설정된 기본 일정을 확인할 수 있습니다. 날짜를 클릭하면 세부 시간표를 볼 수 있습니다."
-            : "날짜를 클릭하여 세부 시간표를 설정하세요. 파란색은 기본 일정, 회색은 예외 일정, 빨간색은 개인 시간입니다."}
+            : "날짜를 클릭하여 세부 시간표를 설정하세요. 파란색은 기본 일정, 초록색은 예외 일정, 빨간색은 개인 시간입니다."}
         </p>
 
         <CalendarView
@@ -281,7 +256,6 @@ const ProfileTab = () => {
           onRemoveException={handleRemoveException}
           onDateClick={handleDateClick}
           selectedDate={selectedDate}
-          viewMode={viewMode}
           onShowAlert={showAlert}
           onAutoSave={autoSave}
         />
@@ -314,7 +288,6 @@ const ProfileTab = () => {
           onClose={handleCloseDetailGrid}
           onSave={autoSave}
           showFullDay={false}
-          viewMode={viewMode}
         />
       )}
     </div>
