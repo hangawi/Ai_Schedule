@@ -35,10 +35,11 @@ exports.connectCalendar = async (req, res) => {
 // @access  Private
 exports.getUserSchedule = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('defaultSchedule scheduleExceptions');
+    const user = await User.findById(req.user.id).select('defaultSchedule scheduleExceptions personalTimes');
     if (!user) {
       return res.status(404).json({ msg: 'User not found' });
     }
+    console.log('서버에서 조회한 personalTimes:', user.personalTimes);
     res.json({
       defaultSchedule: user.defaultSchedule,
       scheduleExceptions: user.scheduleExceptions,
@@ -55,6 +56,9 @@ exports.getUserSchedule = async (req, res) => {
 // @access  Private
 exports.updateUserSchedule = async (req, res) => {
   const { defaultSchedule, scheduleExceptions, personalTimes } = req.body;
+
+  console.log('=== 서버 업데이트 요청 ===');
+  console.log('받은 personalTimes:', personalTimes);
 
   try {
     const user = await User.findById(req.user.id);
@@ -77,10 +81,16 @@ exports.updateUserSchedule = async (req, res) => {
     // Explicitly rebuild the scheduleExceptions array
     if (scheduleExceptions) {
         user.scheduleExceptions = scheduleExceptions.map(ex => ({
+            _id: ex._id, // ID 필드 추가
             title: ex.title,
             startTime: ex.startTime,
             endTime: ex.endTime,
+            isHoliday: ex.isHoliday,
+            isAllDay: ex.isAllDay,
+            specificDate: ex.specificDate,
+            priority: ex.priority
         }));
+        console.log('서버에서 scheduleExceptions 저장:', user.scheduleExceptions.length, '개');
     } else {
         user.scheduleExceptions = [];
     }
@@ -88,6 +98,7 @@ exports.updateUserSchedule = async (req, res) => {
     // Explicitly rebuild the personalTimes array
     if (personalTimes) {
         user.personalTimes = personalTimes.map(pt => ({
+            id: pt.id, // ID 필드 추가
             title: pt.title,
             type: pt.type,
             startTime: pt.startTime,
@@ -95,6 +106,7 @@ exports.updateUserSchedule = async (req, res) => {
             days: pt.days,
             isRecurring: pt.isRecurring || true
         }));
+        console.log('서버에서 personalTimes 저장:', user.personalTimes);
     } else {
         user.personalTimes = [];
     }

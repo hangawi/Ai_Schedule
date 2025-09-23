@@ -17,14 +17,15 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
   useEffect(() => {
     if (!isEditing) {
       setEditingId(null);
-      setNewPersonalTime({
-        title: '',
-        type: 'sleep',
-        startTime: '22:00',
-        endTime: '08:00',
-        days: [1, 2, 3, 4, 5],
-        isRecurring: true
-      });
+      // 편집 모드가 아닐 때는 폼을 초기화하지 않고 유지
+      // setNewPersonalTime({
+      //   title: '',
+      //   type: 'sleep',
+      //   startTime: '22:00',
+      //   endTime: '08:00',
+      //   days: [1, 2, 3, 4, 5],
+      //   isRecurring: true
+      // });
     }
   }, [isEditing]);
 
@@ -56,7 +57,7 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
       type,
       startTime: typeConfig.defaultStart,
       endTime: typeConfig.defaultEnd,
-      title: newPersonalTime.title || typeConfig.label
+      title: typeConfig.label // 항상 새로운 타입의 기본 라벨로 변경
     });
   };
 
@@ -118,7 +119,7 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
       showAlert('개인 시간이 추가되었습니다.', '추가 완료');
     }
 
-    // 수정 완료 후에만 폼 초기화 (새로 추가 시에는 폼 유지하지 않음)
+    // 수정 완료 시에만 폼 초기화, 새로 추가할 때는 폼 유지
     if (editingId) {
       setNewPersonalTime({
         title: '',
@@ -128,26 +129,26 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
         days: [1, 2, 3, 4, 5],
         isRecurring: true
       });
-    } else {
-      // 새로 추가했을 때는 폼을 초기화하여 다시 입력할 수 있게 함
-      setNewPersonalTime({
-        title: '',
-        type: 'sleep',
-        startTime: '22:00',
-        endTime: '08:00',
-        days: [1, 2, 3, 4, 5],
-        isRecurring: true
-      });
+    }
+    // 새로 추가할 때는 폼을 유지하지만 제목만 비워서 다음 입력을 위해 준비
+    else {
+      setNewPersonalTime(prev => ({
+        ...prev,
+        title: ''
+      }));
     }
 
     // 개인시간 추가/수정 후 자동 저장 및 달력 업데이트
-    if (onAutoSave) {
-      setTimeout(() => {
-        onAutoSave();
-        // 달력 실시간 업데이트
-        window.dispatchEvent(new CustomEvent('calendarUpdate'));
-      }, 100); // 상태 업데이트 후 저장
-    }
+    console.log('개인시간 저장 시도:', personalTimeData);
+    console.log('onAutoSave 함수 존재:', !!onAutoSave);
+
+    // 자동 저장 대신 즉시 달력 업데이트만 수행
+    // (저장은 사용자가 프로필 탭에서 '저장' 버튼을 클릭할 때 수행)
+    window.dispatchEvent(new CustomEvent('calendarUpdate', {
+      detail: { type: 'personalTime', action: editingId ? 'update' : 'add', data: personalTimeData }
+    }));
+
+    console.log('개인시간 추가/수정 완료. 저장하려면 프로필 탭의 "저장" 버튼을 클릭하세요.');
   }, [newPersonalTime, personalTimes, setPersonalTimes, showAlert, editingId, onAutoSave]);
 
   const handleRemovePersonalTime = useCallback((id) => {
@@ -157,14 +158,12 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
 
     setPersonalTimes(updatedPersonalTimes);
 
-    // 개인시간 삭제 후 자동 저장 및 달력 업데이트
-    if (onAutoSave) {
-      setTimeout(() => {
-        onAutoSave();
-        // 달력 실시간 업데이트
-        window.dispatchEvent(new CustomEvent('calendarUpdate'));
-      }, 100); // 상태 업데이트 후 저장
-    }
+    // 개인시간 삭제 후 달력 업데이트 (자동 저장 제거)
+    window.dispatchEvent(new CustomEvent('calendarUpdate', {
+      detail: { type: 'personalTime', action: 'remove', id: id }
+    }));
+
+    console.log('개인시간 삭제 완료. 저장하려면 프로필 탭의 "저장" 버튼을 클릭하세요.');
     if (id === editingId) {
       setEditingId(null);
       setNewPersonalTime({
@@ -354,6 +353,23 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
             >
               {editingId ? <><Edit size={16} className="mr-1" /> 수정 완료</> : <><Plus size={16} className="mr-1" /> 추가</>}
             </button>
+            {!editingId && (
+              <button
+                onClick={() => {
+                  setNewPersonalTime({
+                    title: '',
+                    type: 'sleep',
+                    startTime: '22:00',
+                    endTime: '08:00',
+                    days: [1, 2, 3, 4, 5],
+                    isRecurring: true
+                  });
+                }}
+                className="px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+              >
+                초기화
+              </button>
+            )}
             {editingId && (
               <button onClick={handleCancelEdit} className="px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">
                 <X size={16}/>
