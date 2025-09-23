@@ -22,10 +22,17 @@ import CoordinationTab from './components/tabs/CoordinationTab';
 import CreateProposalModal from './components/forms/CreateProposalModal';
 import TimeSelectionModal from './components/forms/TimeSelectionModal';
 import CustomAlertModal from './components/modals/CustomAlertModal';
+import ChatBox from './components/chat/ChatBox';
+import CommandModal from './components/modals/CommandModal';
+import AutoDetectedScheduleModal from './components/modals/AutoDetectedScheduleModal';
+import MobileStatusIndicator from './components/indicators/MobileStatusIndicator';
+import NotificationModal from './components/modals/NotificationModal';
 import { coordinationService } from './services/coordinationService';
 
 // 백그라운드 음성 인식 관련 imports
 import BackgroundCallIndicator from './components/indicators/BackgroundCallIndicator';
+import { useIntegratedVoiceSystem } from './hooks/useIntegratedVoiceSystem';
+import { useChat } from './hooks/useChat';
 
 // NavItem component
 const NavItem = ({ icon, label, active, onClick, badge }) => (
@@ -70,7 +77,7 @@ const formatEventForClient = (event, color) => {
 };
 
 
-const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAddedKey, setEventAddedKey, speak, setEventActions, setAreEventActionsReady, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled, loginMethod, isBackgroundMonitoring, isCallDetected, callStartTime, toggleBackgroundMonitoring, voiceStatus, isAnalyzing }) => {
+const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled, loginMethod }) => {
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
    const [activeTab, setActiveTab] = useState(() => {
      const savedTab = localStorage.getItem('activeTab');
@@ -139,7 +146,11 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
    
    // 교환 요청 수 관리
    const [exchangeRequestCount, setExchangeRequestCount] = useState(0);
-   
+   const [eventAddedKey, setEventAddedKey] = useState(0);
+   const [eventActions, setEventActions] = useState(null);
+   const [areEventActionsReady, setAreEventActionsReady] = useState(false);
+   const [isProfileEditing, setIsProfileEditing] = useState(false);
+
    // CustomAlert 상태
    const [alertModal, setAlertModal] = useState({
      isOpen: false,
@@ -386,6 +397,28 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
       }
    }, [isLoggedIn, eventsLoaded, fetchEvents]);
 
+   // eventAddedKey가 변경될 때마다 로컬 이벤트를 다시 가져옴 (실시간 동기화)
+   useEffect(() => {
+      if (isLoggedIn && eventAddedKey > 0) {
+         fetchEvents();
+      }
+   }, [eventAddedKey, isLoggedIn, fetchEvents]);
+
+   // eventActions 설정
+   useEffect(() => {
+      if (isLoggedIn) {
+         setEventActions({
+            addEvent: handleAddGlobalEvent,
+            deleteEvent: handleDeleteEvent,
+            editEvent: handleEditEvent
+         });
+         setAreEventActionsReady(true);
+      }
+   }, [isLoggedIn, handleAddGlobalEvent, handleDeleteEvent, handleEditEvent]);
+
+   // SchedulingSystem 내에서 useChat 호출
+   const { handleChatMessage } = useChat(isLoggedIn, setEventAddedKey, eventActions);
+
    const { todayEvents, upcomingEvents } = useMemo(() => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -402,6 +435,56 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
 
       return { todayEvents, upcomingEvents };
    }, [globalEvents]);
+
+   // 탭별 챗봇 메시지 처리 함수
+   const handleTabSpecificChatMessage = async (message) => {
+      try {
+         // 현재 탭에 따라 다른 처리
+         switch (activeTab) {
+            case 'profile':
+               // 내 프로필 탭 - 로컬 일정 관리
+               return await handleChatMessage(message, { context: 'profile', tabType: 'local' });
+
+            case 'events':
+               // 나의 일정 탭 - 로컬 일정 관리
+               return await handleChatMessage(message, { context: 'events', tabType: 'local' });
+
+            case 'googleCalendar':
+               // Google 캘린더 탭 - Google 캘린더 연동
+               return await handleChatMessage(message, { context: 'googleCalendar', tabType: 'google' });
+
+            default:
+               // 기본값 - 일반 처리
+               return await handleChatMessage(message, { context: activeTab, tabType: 'default' });
+         }
+      } catch (error) {
+         console.error('탭별 챗봇 메시지 처리 오류:', error);
+         return {
+            success: false,
+            message: '메시지 처리 중 오류가 발생했습니다.'
+         };
+      }
+   };
+
+   // useIntegratedVoiceSystem을 SchedulingSystem 내에서 호출
+   const {
+      isListening,
+      modalText,
+      setModalText,
+      isBackgroundMonitoring,
+      isCallDetected,
+      callStartTime,
+      detectedSchedules,
+      backgroundTranscript,
+      toggleBackgroundMonitoring,
+      confirmSchedule,
+      dismissSchedule,
+      voiceStatus,
+      isAnalyzing: voiceAnalyzing,
+      micVolume,
+      notification,
+      clearNotification
+   } = useIntegratedVoiceSystem(isLoggedIn, isVoiceRecognitionEnabled, eventActions, areEventActionsReady, setEventAddedKey, handleTabSpecificChatMessage);
 
    return (
       <div className="flex flex-col h-screen bg-gray-50">
@@ -434,7 +517,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                         callStartTime={callStartTime}
                         onToggleMonitoring={toggleBackgroundMonitoring}
                         voiceStatus={voiceStatus}
-                        isAnalyzing={isAnalyzing}
+                        isAnalyzing={voiceAnalyzing}
                      />
                   </div>
                   
@@ -492,7 +575,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
                {activeTab === 'googleCalendar' && <MyCalendar isListening={isListening} onEventAdded={eventAddedKey} isVoiceRecognitionEnabled={isVoiceRecognitionEnabled} onToggleVoiceRecognition={() => setIsVoiceRecognitionEnabled(prev => !prev)} />}
                {activeTab === 'coordination' && <CoordinationTab user={user} onExchangeRequestCountChange={setExchangeRequestCount} onRefreshExchangeCount={refreshExchangeRequestCount} />}
                {activeTab === 'agent' && <AgentTab />}
-               {activeTab === 'profile' && <ProfileTab user={user} />}
+               {activeTab === 'profile' && <ProfileTab user={user} onEditingChange={setIsProfileEditing} />}
             </main>
          </div>
 
@@ -509,6 +592,49 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, isListening, eventAd
             type={alertModal.type}
             showCancel={alertModal.showCancel}
          />
+
+         {/* 탭별 컨텍스트를 가진 ChatBox - 내 프로필 탭에서는 편집 모드일 때만 활성화 */}
+         {(activeTab !== 'profile' || isProfileEditing) && (
+            <ChatBox
+               onSendMessage={handleTabSpecificChatMessage}
+               speak={speak}
+               currentTab={activeTab}
+            />
+         )}
+
+         {/* Voice System 관련 모달들 */}
+         {modalText && <CommandModal text={modalText} onClose={() => setModalText('')} />}
+
+         {detectedSchedules.length > 0 && (
+            <AutoDetectedScheduleModal
+               detectedSchedules={detectedSchedules}
+               backgroundTranscript={backgroundTranscript}
+               callStartTime={callStartTime}
+               onConfirm={confirmSchedule}
+               onDismiss={dismissSchedule}
+               onClose={() => detectedSchedules.forEach(dismissSchedule)}
+            />
+         )}
+
+         <MobileStatusIndicator
+            isListening={isListening}
+            isBackgroundMonitoring={isBackgroundMonitoring}
+            isCallDetected={isCallDetected}
+            callStartTime={callStartTime}
+            voiceStatus={voiceStatus}
+            isAnalyzing={voiceAnalyzing}
+            micVolume={micVolume}
+         />
+
+         {notification && (
+            <NotificationModal
+               isOpen={!!notification}
+               onClose={clearNotification}
+               type={notification.type}
+               title={notification.title}
+               message={notification.message}
+            />
+         )}
 
       </div>
    );

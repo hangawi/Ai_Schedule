@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, MessageCircle, Image, X } from 'lucide-react';
 
-const ChatBox = ({ onSendMessage, speak }) => {
+const ChatBox = ({ onSendMessage, speak, currentTab }) => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -244,7 +244,12 @@ const ChatBox = ({ onSendMessage, speak }) => {
             {/* 헤더 */}
             <div className="bg-blue-500 text-white p-3 rounded-t-lg">
               <h3 className="font-semibold">AI 일정 도우미</h3>
-              <p className="text-xs opacity-90">일정 추가, 수정, 삭제를 도와드립니다</p>
+              <p className="text-xs opacity-90">
+                {currentTab === 'profile' && '내 프로필 일정 관리'}
+                {currentTab === 'events' && '나의 일정 관리'}
+                {currentTab === 'googleCalendar' && 'Google 캘린더 관리'}
+                {!['profile', 'events', 'googleCalendar'].includes(currentTab) && '일정 추가, 수정, 삭제를 도와드립니다'}
+              </p>
             </div>
 
             {/* 메시지 영역 */}

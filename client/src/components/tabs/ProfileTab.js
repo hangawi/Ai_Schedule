@@ -6,7 +6,7 @@ import PersonalTimeManager from '../schedule/PersonalTimeManager';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import { Edit, Save, XCircle, Trash2 } from 'lucide-react';
 
-const ProfileTab = () => {
+const ProfileTab = ({ onEditingChange }) => {
   const [defaultSchedule, setDefaultSchedule] = useState([]);
   const [scheduleExceptions, setScheduleExceptions] = useState([]);
   const [personalTimes, setPersonalTimes] = useState([]);
@@ -29,12 +29,18 @@ const ProfileTab = () => {
   const fetchSchedule = useCallback(async () => {
     try {
       setIsLoading(true);
+      console.log('📥 [PROFILE] fetchSchedule 시작');
       const data = await userService.getUserSchedule();
+      console.log('📥 [PROFILE] 받은 데이터:', data);
+
       setDefaultSchedule(data.defaultSchedule || []);
       setScheduleExceptions(data.scheduleExceptions || []);
       setPersonalTimes(data.personalTimes || []);
+
+      console.log('📥 [PROFILE] 예외 일정 개수:', (data.scheduleExceptions || []).length);
       setError(null);
     } catch (err) {
+      console.error('📥 [PROFILE] fetchSchedule 오류:', err);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -43,6 +49,26 @@ const ProfileTab = () => {
 
   useEffect(() => {
     fetchSchedule();
+  }, [fetchSchedule]);
+
+  // 편집 상태가 변경될 때 부모 컴포넌트에 알림
+  useEffect(() => {
+    if (onEditingChange) {
+      onEditingChange(isEditing);
+    }
+  }, [isEditing, onEditingChange]);
+
+  // calendarUpdate 이벤트 수신하여 스케줄 새로고침
+  useEffect(() => {
+    const handleCalendarUpdate = () => {
+      console.log('🔄 [PROFILE] calendarUpdate 이벤트 수신됨, fetchSchedule 호출');
+      fetchSchedule();
+    };
+
+    window.addEventListener('calendarUpdate', handleCalendarUpdate);
+    return () => {
+      window.removeEventListener('calendarUpdate', handleCalendarUpdate);
+    };
   }, [fetchSchedule]);
 
 
@@ -86,19 +112,13 @@ const ProfileTab = () => {
         showAlert('기본 시간표, 예외 일정 및 개인 시간이 저장되었습니다!', '저장 완료');
         setIsEditing(false);
 
-        // 저장 후 서버에서 최신 데이터 동기화 (선택적으로 처리)
+        // 저장 후 서버에서 최신 데이터 동기화
         const freshData = await userService.getUserSchedule();
 
-        // 서버에서 받은 데이터가 현재 상태보다 많은 경우만 업데이트
-        if (freshData.defaultSchedule && freshData.defaultSchedule.length >= defaultSchedule.length) {
-          setDefaultSchedule(freshData.defaultSchedule);
-        }
-        if (freshData.scheduleExceptions && freshData.scheduleExceptions.length >= scheduleExceptions.length) {
-          setScheduleExceptions(freshData.scheduleExceptions);
-        }
-        if (freshData.personalTimes && freshData.personalTimes.length >= personalTimes.length) {
-          setPersonalTimes(freshData.personalTimes);
-        }
+        // 서버 데이터로 무조건 업데이트 (길이 조건 제거)
+        setDefaultSchedule(freshData.defaultSchedule || []);
+        setScheduleExceptions(freshData.scheduleExceptions || []);
+        setPersonalTimes(freshData.personalTimes || []);
 
         // CalendarView 강제 리렌더링
         window.dispatchEvent(new Event('calendarUpdate'));
