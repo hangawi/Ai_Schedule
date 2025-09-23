@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Merge, Split } from 'lucide-react';
 
 // 10분 단위 시간 슬롯 생성
 const generateTimeSlots = (startHour = 0, endHour = 24) => {
@@ -18,6 +18,65 @@ const priorityConfig = {
   2: { label: '보통', color: 'bg-blue-400', next: 1 },
   1: { label: '조정 가능', color: 'bg-blue-200', next: 0 },
   0: { label: '휴무일', color: 'bg-gray-400', next: 3 },
+};
+
+// 연속된 시간대 병합 함수
+const mergeConsecutiveTimeSlots = (schedule) => {
+  if (!schedule || schedule.length === 0) return [];
+
+  const sortedSchedule = [...schedule].sort((a, b) => {
+    if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
+    return a.startTime.localeCompare(b.startTime);
+  });
+
+  const merged = [];
+  let currentGroup = null;
+
+  for (const slot of sortedSchedule) {
+    if (currentGroup &&
+        currentGroup.dayOfWeek === slot.dayOfWeek &&
+        currentGroup.priority === slot.priority &&
+        currentGroup.endTime === slot.startTime) {
+      // 연속된 슬롯이므로 병합
+      currentGroup.endTime = slot.endTime;
+      currentGroup.isMerged = true;
+      if (!currentGroup.originalSlots) {
+        currentGroup.originalSlots = [{ ...currentGroup }];
+      }
+      currentGroup.originalSlots.push(slot);
+    } else {
+      // 새로운 그룹 시작
+      if (currentGroup) {
+        merged.push(currentGroup);
+      }
+      currentGroup = { ...slot };
+      // 기존 속성 정리
+      delete currentGroup.isMerged;
+      delete currentGroup.originalSlots;
+    }
+  }
+
+  if (currentGroup) {
+    merged.push(currentGroup);
+  }
+
+  return merged;
+};
+
+// 다음 시간 슬롯 계산
+const getNextTimeSlot = (timeString) => {
+  const [hour, minute] = timeString.split(':').map(Number);
+  const nextMinute = minute + 10;
+  const nextHour = nextMinute >= 60 ? hour + 1 : hour;
+  const finalMinute = nextMinute >= 60 ? 0 : nextMinute;
+  return `${String(nextHour).padStart(2, '0')}:${String(finalMinute).padStart(2, '0')}`;
+};
+
+// 시간 차이 계산 (분 단위)
+const getTimeDifferenceInMinutes = (startTime, endTime) => {
+  const [startHour, startMin] = startTime.split(':').map(Number);
+  const [endHour, endMin] = endTime.split(':').map(Number);
+  return (endHour * 60 + endMin) - (startHour * 60 + startMin);
 };
 
 const DetailTimeGrid = ({
@@ -49,10 +108,37 @@ const DetailTimeGrid = ({
     includeNextWeek: false,
     includeWholeMonth: false
   });
+  const [showMerged, setShowMerged] = useState(false); // 병합 모드 토글
+  const [mergedSchedule, setMergedSchedule] = useState([]);
 
   // 초기 상태 저장 (저장하지 않고 닫을 때 복원용)
   const [initialExceptions] = useState([...exceptions]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // 복사옵션 외부 클릭 감지를 위한 ref
+  const copyOptionsRef = useRef(null);
+
+  // 스케줄이 변경될 때마다 병합된 스케줄 업데이트
+  useEffect(() => {
+    setMergedSchedule(mergeConsecutiveTimeSlots(schedule));
+  }, [schedule]);
+
+  // 외부 클릭 감지하여 복사옵션 닫기
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (copyOptionsRef.current && !copyOptionsRef.current.contains(event.target)) {
+        setShowCopyOptions(false);
+      }
+    };
+
+    if (showCopyOptions) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCopyOptions]);
 
   useEffect(() => {
     if (showFullDay) {
@@ -130,9 +216,32 @@ const DetailTimeGrid = ({
 
   const getSlotInfo = (startTime) => {
     const dayOfWeek = selectedDate.getDay();
-    return schedule.find(
-      s => s.dayOfWeek === dayOfWeek && s.startTime === startTime
-    );
+    const currentSchedule = showMerged ? mergedSchedule : schedule;
+
+    if (showMerged) {
+      // 병합 모드에서는 해당 시간이 병합된 슬롯에 포함되는지 확인
+      for (const slot of currentSchedule) {
+        if (slot.dayOfWeek === dayOfWeek) {
+          const slotStartMinutes = timeToMinutes(slot.startTime);
+          const slotEndMinutes = timeToMinutes(slot.endTime);
+          const currentTimeMinutes = timeToMinutes(startTime);
+
+          if (currentTimeMinutes >= slotStartMinutes && currentTimeMinutes < slotEndMinutes) {
+            return slot;
+          }
+        }
+      }
+      return null;
+    } else {
+      return currentSchedule.find(
+        s => s.dayOfWeek === dayOfWeek && s.startTime === startTime
+      );
+    }
+  };
+
+  const timeToMinutes = (timeString) => {
+    const [hour, minute] = timeString.split(':').map(Number);
+    return hour * 60 + minute;
   };
 
   const getExceptionForSlot = (startTime) => {
@@ -155,12 +264,6 @@ const DetailTimeGrid = ({
         const exStartMinute = exStart.getMinutes();
 
         if (hour === exStartHour && minute === exStartMinute) {
-          // 매칭 성공 시에만 로그 출력
-          console.log(`슬롯 ${startTime} 매칭:`, {
-            title: ex.title,
-            priority: ex.priority,
-            isHoliday: ex.isHoliday
-          });
           return ex;
         }
       }
@@ -206,70 +309,125 @@ const DetailTimeGrid = ({
     return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일 (${days[date.getDay()]})`;
   };
 
+  // 특정 시간대에 예외가 있는지 확인하는 함수
+  const hasExceptionInTimeRange = (startHour, endHour) => {
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
+    const day = selectedDate.getDate();
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+    for (let hour = startHour; hour < endHour; hour++) {
+      for (let minute = 0; minute < 60; minute += 10) {
+        const checkDateTime = new Date(year, month, day, hour, minute, 0);
+        const hasException = exceptions.some(ex => {
+          const exStartTime = new Date(ex.startTime);
+          return exStartTime.getTime() === checkDateTime.getTime() &&
+                 ex.specificDate === dateStr &&
+                 ex.title === '일정';
+        });
+        if (hasException) return true;
+      }
+    }
+    return false;
+  };
+
+  // 특정 시간대의 예외들을 제거하는 함수
+  const removeExceptionsInTimeRange = (startHour, endHour) => {
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
+    const day = selectedDate.getDate();
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+    const filteredExceptions = exceptions.filter(ex => {
+      const exStartTime = new Date(ex.startTime);
+      const exHour = exStartTime.getHours();
+      const exMinute = exStartTime.getMinutes();
+
+      // 해당 시간대이고 해당 날짜이며 '일정' 제목인 것들을 제거
+      if (ex.specificDate === dateStr &&
+          ex.title === '일정' &&
+          exHour >= startHour &&
+          exHour < endHour) {
+        return false; // 제거
+      }
+      return true; // 유지
+    });
+
+    setExceptions(filteredExceptions);
+    setHasUnsavedChanges(true);
+  };
+
   const addQuickTimeSlot = (startHour, endHour, priority = 3) => {
     if (readOnly) return;
 
-    // 항상 특정 날짜의 예외로 추가 (복사 옵션이 선택된 경우에만 다른 날짜에도 적용)
-    if (setExceptions) {
-      const exceptions_to_add = [];
+    // 해당 시간대에 이미 예외가 있는지 확인
+    const hasExisting = hasExceptionInTimeRange(startHour, endHour);
 
-      for (let hour = startHour; hour < endHour; hour++) {
-        for (let minute = 0; minute < 60; minute += 10) {
-          const slotStartTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-          const endMinute = minute + 10;
-          const actualEndHour = endMinute >= 60 ? hour + 1 : hour;
-          const actualEndMinute = endMinute >= 60 ? 0 : endMinute;
-          const slotEndTime = `${String(actualEndHour).padStart(2, '0')}:${String(actualEndMinute).padStart(2, '0')}`;
+    if (hasExisting) {
+      // 이미 있으면 제거 (토글)
+      removeExceptionsInTimeRange(startHour, endHour);
+    } else {
+      // 없으면 추가
+      if (setExceptions) {
+        const exceptions_to_add = [];
 
-          // 로컬 날짜로 정확하게 생성
-          const year = selectedDate.getFullYear();
-          const month = selectedDate.getMonth();
-          const day = selectedDate.getDate();
+        for (let hour = startHour; hour < endHour; hour++) {
+          for (let minute = 0; minute < 60; minute += 10) {
+            const slotStartTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+            const endMinute = minute + 10;
+            const actualEndHour = endMinute >= 60 ? hour + 1 : hour;
+            const actualEndMinute = endMinute >= 60 ? 0 : endMinute;
+            const slotEndTime = `${String(actualEndHour).padStart(2, '0')}:${String(actualEndMinute).padStart(2, '0')}`;
 
-          const startDateTime = new Date(year, month, day, hour, minute, 0);
-          const endDateTime = new Date(year, month, day, actualEndHour, actualEndMinute, 0);
+            // 로컬 날짜로 정확하게 생성
+            const year = selectedDate.getFullYear();
+            const month = selectedDate.getMonth();
+            const day = selectedDate.getDate();
 
-          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const startDateTime = new Date(year, month, day, hour, minute, 0);
+            const endDateTime = new Date(year, month, day, actualEndHour, actualEndMinute, 0);
 
-          const newException = {
-            _id: Date.now().toString() + Math.random(),
-            title: '일정',
-            startTime: startDateTime.toISOString(),
-            endTime: endDateTime.toISOString(),
-            priority: priority,
-            specificDate: dateStr
-          };
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-          exceptions_to_add.push(newException);
+            const newException = {
+              _id: Date.now().toString() + Math.random(),
+              title: '일정',
+              startTime: startDateTime.toISOString(),
+              endTime: endDateTime.toISOString(),
+              priority: priority,
+              specificDate: dateStr
+            };
+
+            exceptions_to_add.push(newException);
+          }
+        }
+
+        setExceptions([...exceptions, ...exceptions_to_add]);
+        setHasUnsavedChanges(true);
+
+        // 복사 옵션이 선택된 경우에만 추가 날짜에 적용
+        if (copyOptions.copyType !== 'none') {
+          exceptions_to_add.forEach(exc => applyCopyOptions(exc));
         }
       }
-
-      setExceptions([...exceptions, ...exceptions_to_add]);
-      setHasUnsavedChanges(true);
-
-      // 복사 옵션이 선택된 경우에만 추가 날짜에 적용
-      if (copyOptions.copyType !== 'none') {
-        exceptions_to_add.forEach(exc => applyCopyOptions(exc));
-      }
-
-      // 즉시 자동 저장 실행
-      if (onSave) {
-        setTimeout(async () => {
-          try {
-            await onSave();
-            setHasUnsavedChanges(false);
-            console.log('Quick time slot auto-saved successfully');
-          } catch (error) {
-            console.error('Quick time slot auto-save failed:', error);
-          }
-        }, 200);
-      }
-
-      // 강제 리렌더링
-      setTimeout(() => {
-        window.dispatchEvent(new Event('resize'));
-      }, 10);
     }
+
+    // 즉시 자동 저장 실행
+    if (onSave) {
+      setTimeout(async () => {
+        try {
+          await onSave();
+          setHasUnsavedChanges(false);
+        } catch (error) {
+          console.error('Quick time slot auto-save failed:', error);
+        }
+      }, 200);
+    }
+
+    // 강제 리렌더링
+    setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 10);
   };
 
 
@@ -277,7 +435,6 @@ const DetailTimeGrid = ({
     // 복사 옵션에 따라 다른 날짜에도 동일한 예외 추가
     if (!setExceptions || copyOptions.copyType === 'none') return;
 
-    console.log('복사 옵션 적용:', copyOptions.copyType, baseException);
 
     const additionalExceptions = [];
     const baseDate = new Date(selectedDate);
@@ -306,7 +463,6 @@ const DetailTimeGrid = ({
         specificDate: nextDateStr
       };
       additionalExceptions.push(newException);
-      console.log('다음주 복사 생성:', newException);
 
     } else if (copyOptions.copyType === 'prevWeek') {
       // 이전주 같은 요일에 복사
@@ -332,7 +488,6 @@ const DetailTimeGrid = ({
         specificDate: prevDateStr
       };
       additionalExceptions.push(newException);
-      console.log('이전주 복사 생성:', newException);
 
     } else if (copyOptions.copyType === 'wholeMonth') {
       // 이번달 모든 같은 요일에 복사
@@ -374,14 +529,89 @@ const DetailTimeGrid = ({
 
         firstTargetDate += 7; // 다음 주 같은 요일
       }
-      console.log('전체 월 복사 생성:', additionalExceptions.length, '개');
     }
 
     if (additionalExceptions.length > 0) {
       setTimeout(() => {
         setExceptions(prev => [...prev, ...additionalExceptions]);
-        console.log('복사된 예외 일정 추가 완료:', additionalExceptions.length, '개');
       }, 100);
+    }
+  };
+
+  // 휴무일 설정/해제 함수
+  const addHolidayForDay = () => {
+    if (readOnly) return;
+
+    // 휴무일 설정 시 전체 시간 범위로 변경
+    setTimeRange({ start: 0, end: 24 });
+
+    // 선택된 날짜를 로컬 날짜로 정확히 처리
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
+    // 해당 날짜의 모든 휴무일 관련 예외 찾기
+    const existingHolidayExceptions = exceptions.filter(ex => {
+      const exStartTime = new Date(ex.startTime);
+      const exYear = exStartTime.getFullYear();
+      const exMonth = String(exStartTime.getMonth() + 1).padStart(2, '0');
+      const exDay = String(exStartTime.getDate()).padStart(2, '0');
+      const exDateStr = `${exYear}-${exMonth}-${exDay}`;
+      return exDateStr === dateStr && (ex.title === '휴무일' || ex.isHoliday);
+    });
+
+    if (existingHolidayExceptions.length > 0) {
+      // 이미 휴무일로 설정된 경우 해당 날짜의 모든 예외 제거
+      const filteredExceptions = exceptions.filter(ex => {
+        const exStartTime = new Date(ex.startTime);
+        const exYear = exStartTime.getFullYear();
+        const exMonth = String(exStartTime.getMonth() + 1).padStart(2, '0');
+        const exDay = String(exStartTime.getDate()).padStart(2, '0');
+        const exDateStr = `${exYear}-${exMonth}-${exDay}`;
+        return exDateStr !== dateStr;
+      });
+      setExceptions(filteredExceptions);
+      setHasUnsavedChanges(true);
+    } else {
+      // 해당 날짜의 모든 기존 예외를 완전히 제거하고 새로운 휴무일 설정
+      const filteredExceptions = exceptions.filter(ex => {
+        const exStartTime = new Date(ex.startTime);
+        const exYear = exStartTime.getFullYear();
+        const exMonth = String(exStartTime.getMonth() + 1).padStart(2, '0');
+        const exDay = String(exStartTime.getDate()).padStart(2, '0');
+        const exDateStr = `${exYear}-${exMonth}-${exDay}`;
+        return exDateStr !== dateStr;
+      });
+
+      // 휴무일을 위한 10분 단위 예외들을 생성 (전체 하루를 덮도록)
+      const holidayExceptions = [];
+
+      // 00:00부터 23:59까지 10분 단위로 휴무일 예외 생성
+      for (let hour = 0; hour < 24; hour++) {
+        for (let minute = 0; minute < 60; minute += 10) {
+          const startDateTime = new Date(year, selectedDate.getMonth(), selectedDate.getDate(), hour, minute, 0);
+          const endMinute = minute + 10;
+          const endHour = endMinute >= 60 ? hour + 1 : hour;
+          const adjustedEndMinute = endMinute >= 60 ? 0 : endMinute;
+          const endDateTime = new Date(year, selectedDate.getMonth(), selectedDate.getDate(), endHour, adjustedEndMinute, 0);
+
+          const newException = {
+            _id: Date.now().toString() + Math.random() + hour + minute,
+            title: '휴무일',
+            startTime: startDateTime.toISOString(),
+            endTime: endDateTime.toISOString(),
+            isHoliday: true,
+            isAllDay: true,
+            specificDate: dateStr
+          };
+
+          holidayExceptions.push(newException);
+        }
+      }
+
+      setExceptions([...filteredExceptions, ...holidayExceptions]);
+      setHasUnsavedChanges(true);
     }
   };
 
@@ -470,7 +700,6 @@ const DetailTimeGrid = ({
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const dayOfWeek = selectedDate.getDay();
 
-    console.log('하루 전체 삭제 시작:', dateStr, '요일:', dayOfWeek);
 
     let totalDeleted = 0;
 
@@ -492,7 +721,6 @@ const DetailTimeGrid = ({
     const deletedSchedule = schedule.length - filteredSchedule.length;
     totalDeleted += deletedSchedule;
 
-    console.log(`삭제된 항목: 예외 일정 ${deletedExceptions}개, 기본 스케줄 ${deletedSchedule}개, 총 ${totalDeleted}개`);
 
     // 상태 업데이트
     if (setExceptions) {
@@ -509,7 +737,6 @@ const DetailTimeGrid = ({
         try {
           await onSave();
           setHasUnsavedChanges(false);
-          console.log('하루 전체 삭제 후 자동 저장 완료');
         } catch (error) {
           console.error('하루 전체 삭제 후 자동 저장 실패:', error);
         }
@@ -569,7 +796,6 @@ const DetailTimeGrid = ({
           specificDate: dateStr
         };
 
-        console.log('직접입력으로 생성된 예외:', newException);
 
         exceptions_to_add.push(newException);
       }
@@ -588,7 +814,6 @@ const DetailTimeGrid = ({
           try {
             await onSave();
             setHasUnsavedChanges(false);
-            console.log('Direct input auto-saved successfully');
           } catch (error) {
             console.error('Direct input auto-save failed:', error);
           }
@@ -612,15 +837,435 @@ const DetailTimeGrid = ({
 
   const timeSlots = getCurrentTimeSlots();
 
+  // 병합된 뷰 렌더링 (연속 시간대를 실제로 단일 슬롯으로 병합)
+  const renderMergedView = () => {
+    const dayOfWeek = selectedDate.getDay();
+
+    // 병합된 슬롯들과 개별 슬롯들을 모두 수집
+    const displaySlots = [];
+
+    // 병합된 기본 스케줄 추가
+    mergedSchedule.filter(slot => slot.dayOfWeek === dayOfWeek).forEach(slot => {
+      displaySlots.push({
+        type: 'schedule',
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        priority: slot.priority,
+        isMerged: slot.isMerged,
+        data: slot
+      });
+    });
+
+    // 예외 일정들도 추가 (병합 처리를 위해 10분 단위로 분할)
+    const exceptionSlots = [];
+    exceptions.forEach(ex => {
+      const exStartTime = new Date(ex.startTime);
+      const year = selectedDate.getFullYear();
+      const month = selectedDate.getMonth();
+      const day = selectedDate.getDate();
+
+      if (exStartTime.getFullYear() === year &&
+          exStartTime.getMonth() === month &&
+          exStartTime.getDate() === day) {
+
+        const startTime = `${String(exStartTime.getHours()).padStart(2, '0')}:${String(exStartTime.getMinutes()).padStart(2, '0')}`;
+        const endTime = new Date(ex.endTime);
+        const endTimeStr = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
+
+        // 예외 일정을 10분 단위로 분할하여 병합 대상으로 만들기
+        const startMinutes = timeToMinutes(startTime);
+        const endMinutes = timeToMinutes(endTimeStr);
+
+        for (let minutes = startMinutes; minutes < endMinutes; minutes += 10) {
+          const hour = Math.floor(minutes / 60);
+          const minute = minutes % 60;
+          const slotStartTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+          const slotEndTime = getNextTimeSlot(slotStartTime);
+
+          exceptionSlots.push({
+            startTime: slotStartTime,
+            endTime: slotEndTime,
+            priority: ex.priority,
+            dayOfWeek: selectedDate.getDay(),
+            title: ex.title,
+            isException: true
+          });
+        }
+      }
+    });
+
+    // 예외 일정도 병합 처리
+    const mergedExceptions = mergeConsecutiveTimeSlots(exceptionSlots);
+    mergedExceptions.forEach(slot => {
+      displaySlots.push({
+        type: 'exception',
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        data: slot,
+        isMerged: slot.isMerged
+      });
+    });
+
+    // 개인 시간도 추가 (자정 넘어가는 시간 처리)
+    const dayOfWeekPersonal = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
+    personalTimes.forEach(pt => {
+      if (pt.days && pt.days.includes(dayOfWeekPersonal)) {
+        const [startHour, startMin] = pt.startTime.split(':').map(Number);
+        const [endHour, endMin] = pt.endTime.split(':').map(Number);
+        const startMinutes = startHour * 60 + startMin;
+        const endMinutes = endHour * 60 + endMin;
+
+        // 자정을 넘나드는 시간인지 확인 (예: 22:00 - 08:00)
+        if (endMinutes <= startMinutes) {
+          // 수면시간처럼 자정을 넘나드는 경우
+          // 22:00-08:00를 22:00-23:50과 00:00-08:00으로 분할
+
+          // 밤 부분 (예: 22:00-23:50)
+          displaySlots.push({
+            type: 'personal',
+            startTime: pt.startTime,
+            endTime: '23:50',
+            data: { ...pt, title: pt.title }
+          });
+
+          // 아침 부분 (예: 00:00-08:00)
+          displaySlots.push({
+            type: 'personal',
+            startTime: '00:00',
+            endTime: pt.endTime,
+            data: { ...pt, title: pt.title }
+          });
+        } else {
+          // 일반적인 하루 내 시간 (학습시간 등)
+          displaySlots.push({
+            type: 'personal',
+            startTime: pt.startTime,
+            endTime: pt.endTime,
+            data: pt
+          });
+        }
+      }
+    });
+
+    // 시간순 정렬
+    displaySlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    // 모든 시간 슬롯을 순회하면서 병합된 슬롯이나 빈 슬롯으로 분류
+    const allSlots = [];
+    const currentTimeSlots = getCurrentTimeSlots();
+    const processedTimes = new Set();
+
+    for (const timeSlot of currentTimeSlots) {
+      if (processedTimes.has(timeSlot)) continue;
+
+      let foundSlot = null;
+
+      // 현재 시간 슬롯이 어떤 표시 슬롯에 포함되는지 확인
+      for (const displaySlot of displaySlots) {
+        const startMinutes = timeToMinutes(displaySlot.startTime);
+        const endMinutes = timeToMinutes(displaySlot.endTime);
+        const currentMinutes = timeToMinutes(timeSlot);
+
+        if (currentMinutes >= startMinutes && currentMinutes < endMinutes) {
+          foundSlot = displaySlot;
+          break;
+        }
+      }
+
+      if (foundSlot) {
+        // 병합된 슬롯 추가
+        allSlots.push({
+          ...foundSlot,
+          displayTime: timeSlot,
+          duration: getTimeDifferenceInMinutes(foundSlot.startTime, foundSlot.endTime)
+        });
+
+        // 이 슬롯이 차지하는 모든 시간을 processed로 표시
+        const startMinutes = timeToMinutes(foundSlot.startTime);
+        const endMinutes = timeToMinutes(foundSlot.endTime);
+        for (let minutes = startMinutes; minutes < endMinutes; minutes += 10) {
+          const hour = Math.floor(minutes / 60);
+          const minute = minutes % 60;
+          const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+          processedTimes.add(time);
+        }
+      } else {
+        // 빈 슬롯들을 연속으로 병합
+        const emptyStartTime = timeSlot;
+        let emptyEndTime = getNextTimeSlot(timeSlot);
+        let duration = 10;
+
+        // 다음 슬롯들도 빈 슬롯인지 확인하며 병합
+        let nextTimeIndex = currentTimeSlots.indexOf(timeSlot) + 1;
+        while (nextTimeIndex < currentTimeSlots.length) {
+          const nextTime = currentTimeSlots[nextTimeIndex];
+          if (processedTimes.has(nextTime)) break;
+
+          // 다음 시간이 어떤 슬롯에 포함되는지 확인
+          let nextIsEmpty = true;
+          for (const displaySlot of displaySlots) {
+            const startMinutes = timeToMinutes(displaySlot.startTime);
+            const endMinutes = timeToMinutes(displaySlot.endTime);
+            const nextMinutes = timeToMinutes(nextTime);
+
+            if (nextMinutes >= startMinutes && nextMinutes < endMinutes) {
+              nextIsEmpty = false;
+              break;
+            }
+          }
+
+          if (nextIsEmpty && emptyEndTime === nextTime) {
+            emptyEndTime = getNextTimeSlot(nextTime);
+            duration += 10;
+            processedTimes.add(nextTime);
+            nextTimeIndex++;
+          } else {
+            break;
+          }
+        }
+
+        allSlots.push({
+          type: 'empty',
+          displayTime: emptyStartTime,
+          startTime: emptyStartTime,
+          endTime: emptyEndTime,
+          duration: duration
+        });
+        processedTimes.add(timeSlot);
+      }
+    }
+
+    return (
+      <div className="grid grid-cols-7 gap-0">
+        {/* 시간 컬럼 */}
+        <div className="bg-gray-50 border-r border-gray-200">
+          <div className="p-3 text-center font-semibold text-gray-700 border-b border-gray-200">
+            시간
+          </div>
+          {allSlots.map((slot, index) => {
+            const height = Math.max(20, (slot.duration / 10) * 12); // 10분당 12px (더욱 작게)
+
+            return (
+              <div
+                key={index}
+                className="text-center text-sm font-medium text-gray-600 border-b border-gray-100 flex items-center justify-center"
+                style={{ height: `${height}px` }}
+              >
+                {slot.duration > 10 ? (
+                  <div className="text-xs">
+                    <div>{slot.startTime || slot.displayTime}</div>
+                    <div className="text-gray-400">~</div>
+                    <div>{slot.endTime || getNextTimeSlot(slot.displayTime)}</div>
+                    {slot.type === 'empty' && (
+                      <div className="text-gray-500 text-xs">({slot.duration}분)</div>
+                    )}
+                  </div>
+                ) : (
+                  slot.displayTime
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 시간 슬롯 컬럼 */}
+        <div className="col-span-6">
+          <div className="p-3 text-center font-semibold text-gray-700 border-b border-gray-200">
+            {formatDate(selectedDate)}
+          </div>
+          {allSlots.map((slot, index) => {
+            const height = Math.max(20, (slot.duration / 10) * 12); // 10분당 12px (더욱 작게)
+
+            let slotClass = 'bg-gray-50 hover:bg-gray-100';
+            let content = '';
+            let title = '';
+
+            if (slot.type === 'schedule') {
+              const baseColor = priorityConfig[slot.priority]?.color || 'bg-blue-400';
+              slotClass = slot.isMerged ? `${baseColor} border-2 border-green-400` : baseColor;
+              content = slot.isMerged ?
+                `${priorityConfig[slot.priority]?.label} (${slot.duration}분)` :
+                priorityConfig[slot.priority]?.label;
+              title = `${priorityConfig[slot.priority]?.label} - ${slot.startTime}~${slot.endTime}`;
+            } else if (slot.type === 'exception') {
+              if (slot.data.title === '휴무일' || slot.data.isHoliday) {
+                slotClass = 'bg-gray-300 text-gray-600';
+                content = '휴무일';
+              } else {
+                const exceptionPriority = slot.data.priority !== undefined ? slot.data.priority : 3;
+                slotClass = priorityConfig[exceptionPriority]?.color || 'bg-blue-600';
+                content = `${slot.data.title} (${slot.duration}분)`;
+              }
+              title = slot.data.title;
+            } else if (slot.type === 'personal') {
+              slotClass = 'bg-red-300';
+              content = `${slot.data.title} (${slot.duration}분)`;
+              title = `개인시간: ${slot.data.title}`;
+            } else if (slot.type === 'empty') {
+              slotClass = 'bg-gray-50 hover:bg-gray-100';
+              content = slot.duration > 10 ? `빈 시간 (${slot.duration}분)` : '';
+              title = `빈 시간 - ${slot.startTime || slot.displayTime}~${slot.endTime || getNextTimeSlot(slot.displayTime)}`;
+            }
+
+            return (
+              <div
+                key={index}
+                className={`border-b border-gray-100 flex items-center justify-center transition-colors cursor-pointer ${slotClass}`}
+                style={{ height: `${height}px` }}
+                onClick={() => {
+                  if (slot.type === 'schedule' || slot.type === 'empty') {
+                    handleSlotClick(slot.displayTime || slot.startTime);
+                  }
+                }}
+                title={title || '클릭하여 선택'}
+              >
+                <span className={`font-medium text-sm text-center px-2 ${slot.type === 'empty' ? 'text-gray-700' : 'text-white'}`}>
+                  {content}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // 기존 상세 뷰 렌더링
+  const renderDetailedView = () => {
+    return (
+      <div className="grid grid-cols-7 gap-0">
+        {/* 시간 컬럼 */}
+        <div className="bg-gray-50 border-r border-gray-200">
+          <div className="p-3 text-center font-semibold text-gray-700 border-b border-gray-200">
+            시간
+          </div>
+          {timeSlots.map(time => (
+            <div
+              key={time}
+              className="p-2 text-center text-sm font-medium text-gray-600 border-b border-gray-100 h-6 flex items-center justify-center"
+            >
+              {time}
+            </div>
+          ))}
+        </div>
+
+        {/* 시간 슬롯 컬럼 */}
+        <div className="col-span-6">
+          <div className="p-3 text-center font-semibold text-gray-700 border-b border-gray-200">
+            {formatDate(selectedDate)}
+          </div>
+          {timeSlots.map(time => {
+            const slotInfo = getSlotInfo(time);
+            const exception = getExceptionForSlot(time);
+            const personalTime = getPersonalTimeForSlot(time);
+            const isExceptionSlot = !!exception;
+            const isPersonalTimeSlot = !!personalTime;
+
+            let slotClass = 'bg-gray-50 hover:bg-gray-100';
+            if (isExceptionSlot) {
+              if (exception.title === '휴무일' || exception.isHoliday) {
+                slotClass = 'bg-gray-300 text-gray-600';
+              } else {
+                const exceptionPriority = exception.priority !== undefined ? exception.priority : 3;
+                slotClass = priorityConfig[exceptionPriority]?.color || 'bg-blue-600';
+              }
+            } else if (isPersonalTimeSlot) {
+              slotClass = 'bg-red-300';
+            } else if (slotInfo) {
+              slotClass = priorityConfig[slotInfo.priority]?.color || 'bg-blue-400';
+              if (slotInfo.isBlocked) {
+                slotClass = 'bg-gray-400 text-gray-600';
+              }
+            }
+
+            let cursorClass = 'cursor-pointer';
+            if (isExceptionSlot && (exception.title === '휴무일' || exception.isHoliday)) {
+              cursorClass = 'cursor-not-allowed';
+            }
+
+            return (
+              <div
+                key={time}
+                className={`border-b border-gray-100 h-6 flex items-center justify-center transition-colors ${slotClass} ${cursorClass}`}
+                onClick={() => {
+                  if (isExceptionSlot && (exception.title === '휴무일' || exception.isHoliday)) {
+                    return;
+                  }
+                  handleSlotClick(time);
+                }}
+                title={
+                  isExceptionSlot
+                    ? exception.title
+                    : isPersonalTimeSlot
+                    ? `개인시간: ${personalTime.title}`
+                    : (slotInfo ? priorityConfig[slotInfo.priority]?.label : '클릭하여 선택')
+                }
+              >
+                {isExceptionSlot && (exception.title === '휴무일' || exception.isHoliday) && (
+                  <div className="flex items-center justify-center w-full h-full">
+                    <span className="bg-gray-500 text-white px-2 py-1 rounded-full text-xs font-semibold shadow-sm">
+                      휴무일
+                    </span>
+                  </div>
+                )}
+                {isExceptionSlot && exception.title !== '휴무일' && !exception.isHoliday && (
+                  <span className="text-white font-medium text-xs">
+                    {priorityConfig[exception.priority !== undefined ? exception.priority : 3]?.label || '일정'}
+                  </span>
+                )}
+                {!isExceptionSlot && slotInfo && (
+                  <span className="text-white font-medium text-xs">
+                    {priorityConfig[slotInfo.priority]?.label}
+                  </span>
+                )}
+                {isPersonalTimeSlot && !isExceptionSlot && (
+                  <span className="text-white font-medium text-xs">개인</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl w-11/12 max-w-4xl max-h-[90vh] overflow-hidden">
         {/* 헤더 */}
-        <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {formatDate(selectedDate)} 세부 시간표
-            </h3>
+        <div className="bg-white px-6 py-4 border-b border-gray-200 shadow-sm">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                {formatDate(selectedDate)} 세부 시간표
+              </h3>
+              {/* 뷰 옵션들을 헤더 아래로 이동 */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    if (timeRange.start === 0 && timeRange.end === 24) {
+                      setTimeRange({ start: 9, end: 18 });
+                    } else {
+                      setTimeRange({ start: 0, end: 24 });
+                    }
+                  }}
+                  className="px-3 py-1 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 transition-colors font-medium"
+                >
+                  {timeRange.start === 0 && timeRange.end === 24 ? '기본' : '24시간'}
+                </button>
+                <button
+                  onClick={() => setShowMerged(!showMerged)}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                    showMerged
+                      ? 'bg-green-500 text-white hover:bg-green-600'
+                      : 'bg-gray-500 text-white hover:bg-gray-600'
+                  }`}
+                >
+                  {showMerged ? '분할' : '병합'}
+                </button>
+              </div>
+            </div>
+
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -633,7 +1278,89 @@ const DetailTimeGrid = ({
             <div className="space-y-4">
               {/* 시간대 추가 버튼들 */}
               <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <h4 className="text-sm font-semibold text-blue-800 mb-3">⏰ 빠른 시간 추가</h4>
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="text-sm font-semibold text-blue-800">빠른 시간 추가</h4>
+                  <div className="flex gap-2 relative">
+                    <div className="relative" ref={copyOptionsRef}>
+                      <button
+                        onClick={() => setShowCopyOptions(!showCopyOptions)}
+                        className={`px-3 py-1 rounded-lg text-xs transition-all font-medium ${
+                          showCopyOptions
+                            ? 'bg-purple-600 text-white hover:bg-purple-700'
+                            : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                        }`}
+                      >
+                        복사옵션
+                      </button>
+
+                      {showCopyOptions && (
+                        <div className="absolute top-full right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                          {/* 말풍선 화살표 */}
+                          <div className="absolute -top-2 right-4 w-4 h-4 bg-white border-l border-t border-gray-200 rotate-45"></div>
+
+                          <div className="p-4">
+                            <h4 className="text-sm font-semibold mb-3 text-gray-800">복사 옵션 설정</h4>
+                            <div className="space-y-2">
+                              <label className="flex items-center">
+                                <input
+                                  type="radio"
+                                  name="copyType"
+                                  value="none"
+                                  checked={copyOptions.copyType === 'none'}
+                                  onChange={(e) => setCopyOptions({...copyOptions, copyType: e.target.value})}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm">복사하지 않음 (현재 날짜만)</span>
+                              </label>
+                              <label className="flex items-center">
+                                <input
+                                  type="radio"
+                                  name="copyType"
+                                  value="nextWeek"
+                                  checked={copyOptions.copyType === 'nextWeek'}
+                                  onChange={(e) => setCopyOptions({...copyOptions, copyType: e.target.value})}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm">다음주 같은 요일에 복사</span>
+                              </label>
+                              <label className="flex items-center">
+                                <input
+                                  type="radio"
+                                  name="copyType"
+                                  value="prevWeek"
+                                  checked={copyOptions.copyType === 'prevWeek'}
+                                  onChange={(e) => setCopyOptions({...copyOptions, copyType: e.target.value})}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm">이전주 같은 요일에 복사</span>
+                              </label>
+                              <label className="flex items-center">
+                                <input
+                                  type="radio"
+                                  name="copyType"
+                                  value="wholeMonth"
+                                  checked={copyOptions.copyType === 'wholeMonth'}
+                                  onChange={(e) => setCopyOptions({...copyOptions, copyType: e.target.value})}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm">이번달 모든 같은 요일에 복사</span>
+                              </label>
+                            </div>
+                            <p className="text-xs text-gray-600 mt-2">
+                              선택한 옵션은 시간 추가 시 자동으로 적용됩니다.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={deleteEntireDay}
+                      className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-xs hover:bg-red-200 transition-all font-medium"
+                    >
+                      전체삭제
+                    </button>
+                  </div>
+                </div>
                 <div className="space-y-3">
                   {/* 선호도 선택 */}
                   <div className="flex items-center space-x-2">
@@ -649,136 +1376,50 @@ const DetailTimeGrid = ({
                     </select>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <button
-                        onClick={() => addQuickTimeSlot(9, 12, directInput.priority)}
-                        className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors shadow-sm"
-                      >
-오전 (9-12시)
-                      </button>
-                      <button
-                        onClick={() => addQuickTimeSlot(13, 17, directInput.priority)}
-                        className="w-full px-4 py-2 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600 transition-colors shadow-sm"
-                      >
-오후 (13-17시)
-                      </button>
-                    </div>
-                    <div className="space-y-2">
-                      <button
-                        onClick={() => addQuickTimeSlot(18, 22, directInput.priority)}
-                        className="w-full px-4 py-2 bg-pink-600 text-white rounded-lg text-sm hover:bg-pink-700 transition-colors shadow-sm"
-                      >
-저녁 (18-22시)
-                      </button>
-                      <button
-                        onClick={() => addQuickTimeSlot(9, 17, directInput.priority)}
-                        className="w-full px-4 py-2 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 transition-colors shadow-sm"
-                      >
-                        💼 전체 근무시간
-                      </button>
-                    </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    <button
+                      onClick={() => addQuickTimeSlot(9, 12, directInput.priority)}
+                      className={`px-4 py-2 rounded-lg text-sm transition-colors shadow-sm ${
+                        hasExceptionInTimeRange(9, 12)
+                          ? 'bg-red-500 text-white hover:bg-red-600'
+                          : 'bg-blue-500 text-white hover:bg-blue-600'
+                      }`}
+                    >
+                      {hasExceptionInTimeRange(9, 12) ? '오전 제거' : '오전 (9-12시)'}
+                    </button>
+                    <button
+                      onClick={() => addQuickTimeSlot(13, 17, directInput.priority)}
+                      className={`px-4 py-2 rounded-lg text-sm transition-colors shadow-sm ${
+                        hasExceptionInTimeRange(13, 17)
+                          ? 'bg-red-500 text-white hover:bg-red-600'
+                          : 'bg-green-500 text-white hover:bg-green-600'
+                      }`}
+                    >
+                      {hasExceptionInTimeRange(13, 17) ? '오후 제거' : '오후 (13-17시)'}
+                    </button>
+                    <button
+                      onClick={() => setShowDirectInput(!showDirectInput)}
+                      className={`px-4 py-2 rounded-lg text-sm transition-all transform hover:scale-105 font-medium shadow-md ${
+                        showDirectInput
+                          ? 'bg-yellow-600 text-white hover:bg-yellow-700'
+                          : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                      }`}
+                    >
+                      직접입력
+                    </button>
+                    <button
+                      onClick={() => addHolidayForDay()}
+                      className="px-4 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-700 transition-all transform hover:scale-105 font-medium shadow-md"
+                    >
+                      휴무일
+                    </button>
                   </div>
                 </div>
               </div>
 
-              {/* 기타 옵션들 */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <button
-                  onClick={() => setShowDirectInput(!showDirectInput)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors shadow-md font-medium"
-                >
-직접 입력
-                </button>
-                <button
-                  onClick={() => setShowCopyOptions(!showCopyOptions)}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition-colors shadow-md font-medium"
-                >
-복사 옵션
-                </button>
-                <button
-                  onClick={() => {
-                    if (timeRange.start === 0 && timeRange.end === 24) {
-                      setTimeRange({ start: 9, end: 18 }); // 기본 시간으로 돌아가기
-                    } else {
-                      setTimeRange({ start: 0, end: 24 }); // 24시간으로 변경
-                    }
-                  }}
-                  className="px-4 py-2 bg-green-700 text-white rounded-lg text-sm hover:bg-green-800 transition-colors shadow-md font-medium border border-green-600"
-                  style={{backgroundColor: '#15803d', color: '#ffffff'}}
-                >
-                  {timeRange.start === 0 && timeRange.end === 24 ? '기본 보기' : '24시간 보기'}
-                </button>
-                <button
-                  onClick={blockEntireDay}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-700 transition-colors shadow-md font-medium"
-                >
-휴무일 설정
-                </button>
-                <button
-                  onClick={deleteEntireDay}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors shadow-md font-medium"
-                >
-하루 전체 삭제
-                </button>
-              </div>
             </div>
           )}
 
-          {showCopyOptions && (
-            <div className="mt-4 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
-              <h4 className="text-sm font-semibold mb-3 text-indigo-800">복사 옵션 설정</h4>
-              <div className="space-y-2">
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="copyType"
-                    value="none"
-                    checked={copyOptions.copyType === 'none'}
-                    onChange={(e) => setCopyOptions({...copyOptions, copyType: e.target.value})}
-                    className="mr-2"
-                  />
-                  <span className="text-sm">복사하지 않음 (현재 날짜만)</span>
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="copyType"
-                    value="nextWeek"
-                    checked={copyOptions.copyType === 'nextWeek'}
-                    onChange={(e) => setCopyOptions({...copyOptions, copyType: e.target.value})}
-                    className="mr-2"
-                  />
-                  <span className="text-sm">다음주 같은 요일에 복사</span>
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="copyType"
-                    value="prevWeek"
-                    checked={copyOptions.copyType === 'prevWeek'}
-                    onChange={(e) => setCopyOptions({...copyOptions, copyType: e.target.value})}
-                    className="mr-2"
-                  />
-                  <span className="text-sm">이전주 같은 요일에 복사</span>
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="copyType"
-                    value="wholeMonth"
-                    checked={copyOptions.copyType === 'wholeMonth'}
-                    onChange={(e) => setCopyOptions({...copyOptions, copyType: e.target.value})}
-                    className="mr-2"
-                  />
-                  <span className="text-sm">이번달 모든 같은 요일에 복사</span>
-                </label>
-              </div>
-              <p className="text-xs text-indigo-600 mt-2">
-                선택한 옵션은 시간 추가 시 자동으로 적용됩니다.
-              </p>
-            </div>
-          )}
 
           {showDirectInput && (
             <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
@@ -830,7 +1471,7 @@ const DetailTimeGrid = ({
         {/* 범례 */}
         {!readOnly && (
           <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
-            <div className="flex items-center justify-center space-x-4">
+            <div className="flex items-center justify-center space-x-4 mb-2">
               <span className="text-sm font-semibold text-gray-700">범례:</span>
               {Object.entries(priorityConfig).filter(([priority]) => priority !== '0').sort(([p1], [p2]) => p2 - p1).map(([priority, {label, color}]) => (
                 <div key={priority} className="flex items-center">
@@ -843,107 +1484,24 @@ const DetailTimeGrid = ({
                 <span className="text-sm text-gray-600">휴무일</span>
               </div>
             </div>
+            {showMerged && (
+              <div className="flex items-center justify-center space-x-4 border-t pt-2">
+                <div className="flex items-center">
+                  <div className="w-4 h-4 rounded-full bg-blue-400 border-2 border-green-400 mr-2"></div>
+                  <span className="text-sm text-gray-600">병합된 시간대</span>
+                </div>
+                <div className="flex items-center">
+                  <span className="text-xs text-white font-bold bg-green-600 px-2 py-1 rounded mr-2">30분</span>
+                  <span className="text-sm text-gray-600">병합 지속시간</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* 시간표 그리드 */}
         <div className="overflow-auto" style={{ maxHeight: '60vh' }}>
-          <div className="grid grid-cols-7 gap-0">
-            {/* 시간 컬럼 */}
-            <div className="bg-gray-50 border-r border-gray-200">
-              <div className="p-3 text-center font-semibold text-gray-700 border-b border-gray-200">
-                시간
-              </div>
-              {timeSlots.map(time => (
-                <div
-                  key={time}
-                  className="p-2 text-center text-sm font-medium text-gray-600 border-b border-gray-100 h-8 flex items-center justify-center"
-                >
-                  {time}
-                </div>
-              ))}
-            </div>
-
-            {/* 시간 슬롯 컬럼 */}
-            <div className="col-span-6">
-              <div className="p-3 text-center font-semibold text-gray-700 border-b border-gray-200">
-                {formatDate(selectedDate)}
-              </div>
-              {timeSlots.map(time => {
-                const slotInfo = getSlotInfo(time);
-                const exception = getExceptionForSlot(time);
-                const personalTime = getPersonalTimeForSlot(time);
-                const isExceptionSlot = !!exception;
-                const isPersonalTimeSlot = !!personalTime;
-
-
-                let slotClass = 'bg-gray-50 hover:bg-gray-100';
-                if (isExceptionSlot) {
-                  if (exception.title === '휴무일' || exception.isHoliday) {
-                    slotClass = 'bg-gray-300 text-gray-600';
-                  } else {
-                    // 일반 예외 일정 (직접입력으로 추가된 일정)
-                    const exceptionPriority = exception.priority !== undefined ? exception.priority : 3;
-                    slotClass = priorityConfig[exceptionPriority]?.color || 'bg-blue-600';
-                  }
-                } else if (isPersonalTimeSlot) {
-                  slotClass = 'bg-red-300';
-                } else if (slotInfo) {
-                  slotClass = priorityConfig[slotInfo.priority]?.color || 'bg-blue-400';
-                  if (slotInfo.isBlocked) {
-                    slotClass = 'bg-gray-400 text-gray-600';
-                  }
-                }
-
-                let cursorClass = 'cursor-pointer';
-                if (isExceptionSlot && (exception.title === '휴무일' || exception.isHoliday)) {
-                  cursorClass = 'cursor-not-allowed'; // 휴무일은 항상 클릭 불가
-                }
-
-                return (
-                  <div
-                    key={time}
-                    className={`border-b border-gray-100 h-8 flex items-center justify-center transition-colors ${slotClass} ${cursorClass}`}
-                    onClick={() => {
-                      // 휴무일은 클릭 불가
-                      if (isExceptionSlot && (exception.title === '휴무일' || exception.isHoliday)) {
-                        return;
-                      }
-                      handleSlotClick(time);
-                    }}
-                    title={
-                      isExceptionSlot
-                        ? exception.title
-                        : isPersonalTimeSlot
-                        ? `개인시간: ${personalTime.title}`
-                        : (slotInfo ? priorityConfig[slotInfo.priority]?.label : '클릭하여 선택')
-                    }
-                  >
-                    {isExceptionSlot && (exception.title === '휴무일' || exception.isHoliday) && (
-                      <div className="flex items-center justify-center w-full h-full">
-                        <span className="bg-gray-500 text-white px-2 py-1 rounded-full text-xs font-semibold shadow-sm">
-                          휴무일
-                        </span>
-                      </div>
-                    )}
-                    {isExceptionSlot && exception.title !== '휴무일' && !exception.isHoliday && (
-                      <span className="text-white font-medium text-xs">
-                        {priorityConfig[exception.priority !== undefined ? exception.priority : 3]?.label || '일정'}
-                      </span>
-                    )}
-                    {!isExceptionSlot && slotInfo && (
-                      <span className="text-white font-medium text-xs">
-                        {priorityConfig[slotInfo.priority]?.label}
-                      </span>
-                    )}
-                    {isPersonalTimeSlot && !isExceptionSlot && (
-                      <span className="text-white font-medium text-xs">개인</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          {showMerged ? renderMergedView() : renderDetailedView()}
         </div>
 
         {/* 푸터 */}
