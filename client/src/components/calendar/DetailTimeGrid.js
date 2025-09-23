@@ -44,7 +44,7 @@ const DetailTimeGrid = ({
   });
   const [showCopyOptions, setShowCopyOptions] = useState(false);
   const [copyOptions, setCopyOptions] = useState({
-    copyType: viewMode === 'month' ? 'none' : 'none', // 월간 뷰에서는 기본적으로 복사 안함
+    copyType: 'none', // 기본적으로 복사 안함
     includePrevWeek: false,
     includeNextWeek: false,
     includeWholeMonth: false
@@ -697,11 +697,17 @@ const DetailTimeGrid = ({
 복사 옵션
                 </button>
                 <button
-                  onClick={() => setTimeRange({ start: 0, end: 24 })}
+                  onClick={() => {
+                    if (timeRange.start === 0 && timeRange.end === 24) {
+                      setTimeRange({ start: 9, end: 18 }); // 기본 시간으로 돌아가기
+                    } else {
+                      setTimeRange({ start: 0, end: 24 }); // 24시간으로 변경
+                    }
+                  }}
                   className="px-4 py-2 bg-green-700 text-white rounded-lg text-sm hover:bg-green-800 transition-colors shadow-md font-medium border border-green-600"
                   style={{backgroundColor: '#15803d', color: '#ffffff'}}
                 >
-24시간 보기
+                  {timeRange.start === 0 && timeRange.end === 24 ? '기본 보기' : '24시간 보기'}
                 </button>
                 <button
                   onClick={blockEntireDay}
