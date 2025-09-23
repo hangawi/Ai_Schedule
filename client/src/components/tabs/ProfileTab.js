@@ -31,8 +31,6 @@ const ProfileTab = () => {
     try {
       setIsLoading(true);
       const data = await userService.getUserSchedule();
-      console.log('Fetched schedule data:', data);
-      console.log('Personal times from server:', data.personalTimes);
       setDefaultSchedule(data.defaultSchedule || []);
       setScheduleExceptions(data.scheduleExceptions || []);
       setPersonalTimes(data.personalTimes || []);
@@ -79,8 +77,9 @@ const ProfileTab = () => {
       ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority })
     );
     const personalTimesToSave = personalTimes.map(
-      ({ title, type, startTime, endTime, days, isRecurring, id }) =>
-      ({ title, type, startTime, endTime, days, isRecurring, id })
+      ({ title, type, startTime, endTime, days, isRecurring, id }) => {
+        return { title, type, startTime, endTime, days, isRecurring, id };
+      }
     );
 
     try {
@@ -92,11 +91,19 @@ const ProfileTab = () => {
         showAlert('기본 시간표, 예외 일정 및 개인 시간이 저장되었습니다!', '저장 완료');
         setIsEditing(false);
 
-        // 저장 후 서버에서 최신 데이터 동기화
+        // 저장 후 서버에서 최신 데이터 동기화 (선택적으로 처리)
         const freshData = await userService.getUserSchedule();
-        setDefaultSchedule(freshData.defaultSchedule || []);
-        setScheduleExceptions(freshData.scheduleExceptions || []);
-        setPersonalTimes(freshData.personalTimes || []);
+
+        // 서버에서 받은 데이터가 현재 상태보다 많은 경우만 업데이트
+        if (freshData.defaultSchedule && freshData.defaultSchedule.length >= defaultSchedule.length) {
+          setDefaultSchedule(freshData.defaultSchedule);
+        }
+        if (freshData.scheduleExceptions && freshData.scheduleExceptions.length >= scheduleExceptions.length) {
+          setScheduleExceptions(freshData.scheduleExceptions);
+        }
+        if (freshData.personalTimes && freshData.personalTimes.length >= personalTimes.length) {
+          setPersonalTimes(freshData.personalTimes);
+        }
 
         // CalendarView 강제 리렌더링
         window.dispatchEvent(new Event('calendarUpdate'));
@@ -122,15 +129,18 @@ const ProfileTab = () => {
   };
 
   const autoSave = async () => {
+
     try {
       const exceptionsToSave = scheduleExceptions.map(
         ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority }) =>
         ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority })
       );
       const personalTimesToSave = personalTimes.map(
-        ({ title, type, startTime, endTime, days, isRecurring, id }) =>
-        ({ title, type, startTime, endTime, days, isRecurring, id })
+        ({ title, type, startTime, endTime, days, isRecurring, id }) => {
+          return { title, type, startTime, endTime, days, isRecurring, id };
+        }
       );
+
 
       await userService.updateUserSchedule({
         defaultSchedule,
@@ -138,13 +148,17 @@ const ProfileTab = () => {
         personalTimes: personalTimesToSave
       });
 
-      // 저장 후 서버에서 최신 데이터 동기화
-      const freshData = await userService.getUserSchedule();
-      setDefaultSchedule(freshData.defaultSchedule || []);
-      setScheduleExceptions(freshData.scheduleExceptions || []);
-      setPersonalTimes(freshData.personalTimes || []);
+
+      // 저장 후 서버에서 최신 데이터 동기화 (주석처리해서 덮어쓰기 방지)
+      // const freshData = await userService.getUserSchedule();
+      // console.log('서버에서 받은 최신 데이터:', freshData);
+
+      // setDefaultSchedule(freshData.defaultSchedule || []);
+      // setScheduleExceptions(freshData.scheduleExceptions || []);
+      // setPersonalTimes(freshData.personalTimes || []);
+
+
     } catch (err) {
-      console.error('자동 저장 실패:', err);
     }
   };
 
@@ -165,16 +179,24 @@ const ProfileTab = () => {
     <div className="p-4">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">나의 기본 시간표 설정</h2>
-        <div className="flex space-x-2">
+        <div className="flex flex-wrap gap-2 items-center">
           {isEditing ? (
             <>
               <button
                 onClick={handleSave}
-                className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center"
+                className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 flex items-center shadow-md transition-all duration-200"
               >
                 <Save size={16} className="mr-2" />
                 저장
               </button>
+              <button
+                onClick={handleCancel}
+                className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 flex items-center shadow-md transition-all duration-200"
+              >
+                <XCircle size={16} className="mr-2" />
+                취소
+              </button>
+              <div className="border-l-2 border-gray-300 h-8 mx-1"></div>
               <button
                 onClick={async () => {
                   try {
@@ -197,45 +219,16 @@ const ProfileTab = () => {
                     fetchSchedule();
                   }
                 }}
-                className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 flex items-center"
+                className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 flex items-center shadow-md transition-all duration-200 text-sm"
               >
-                <Trash2 size={16} className="mr-2" />
+                <Trash2 size={14} className="mr-1" />
                 전체 초기화
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    // 예외 일정만 초기화 (DB 스키마 업데이트 후 필요)
-                    setScheduleExceptions([]);
-
-                    await userService.updateUserSchedule({
-                      defaultSchedule,
-                      scheduleExceptions: [],
-                      personalTimes
-                    });
-
-                    showAlert('예외 일정이 초기화되었습니다. 이제 새로운 형식으로 추가할 수 있습니다.', 'DB 초기화 완료');
-                  } catch (err) {
-                    showAlert('초기화에 실패했습니다: ' + err.message, '오류');
-                    fetchSchedule();
-                  }
-                }}
-                className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 flex items-center"
-              >
-                DB 초기화
-              </button>
-              <button
-                onClick={handleCancel}
-                className="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400 flex items-center"
-              >
-                <XCircle size={16} className="mr-2" />
-                취소
               </button>
             </>
           ) : (
             <button
               onClick={() => setIsEditing(true)}
-              className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 flex items-center"
+              className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center shadow-md transition-all duration-200"
             >
               <Edit size={16} className="mr-2" />
               편집

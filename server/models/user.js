@@ -185,6 +185,7 @@ const UserSchema = new mongoose.Schema({
 
   // 개인 시간 설정 (수면, 식사, 출퇴근 등)
   personalTimes: [{
+    id: { type: Number, required: true }, // ID 필드 추가
     title: { type: String, required: true },
     type: {
       type: String,

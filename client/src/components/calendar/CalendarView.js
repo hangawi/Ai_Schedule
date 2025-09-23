@@ -29,7 +29,8 @@ const CalendarView = ({
   }, [currentDate, viewMode, schedule, exceptions, personalTimes]);
 
   useEffect(() => {
-    const handleCalendarUpdate = () => {
+    const handleCalendarUpdate = (event) => {
+      console.log('Calendar update triggered:', event.detail);
       generateCalendarDates();
     };
 
@@ -37,7 +38,7 @@ const CalendarView = ({
     return () => {
       window.removeEventListener('calendarUpdate', handleCalendarUpdate);
     };
-  }, []);
+  }, [schedule, exceptions, personalTimes]);
 
   const generateCalendarDates = () => {
     if (viewMode === 'month') {
@@ -130,18 +131,42 @@ const CalendarView = ({
   };
 
   const hasExceptionForDate = (date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    return exceptions.some(ex => {
-      const exDate = new Date(ex.startTime).toISOString().split('T')[0];
-      return exDate === dateStr && ex.title !== '휴무일';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
+    const hasException = exceptions.some(ex => {
+      const exStartTime = new Date(ex.startTime);
+      const exYear = exStartTime.getFullYear();
+      const exMonth = String(exStartTime.getMonth() + 1).padStart(2, '0');
+      const exDay = String(exStartTime.getDate()).padStart(2, '0');
+      const exDateStr = `${exYear}-${exMonth}-${exDay}`;
+      const isMatch = exDateStr === dateStr && ex.title !== '휴무일' && !ex.isHoliday;
+
+      if (isMatch) {
+        console.log(`예외 일정 발견 - 날짜: ${dateStr}, 제목: ${ex.title}`);
+      }
+
+      return isMatch;
     });
+
+    return hasException;
   };
 
   const hasHolidayForDate = (date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
     return exceptions.some(ex => {
-      const exDate = new Date(ex.startTime).toISOString().split('T')[0];
-      return exDate === dateStr && ex.title === '휴무일';
+      const exStartTime = new Date(ex.startTime);
+      const exYear = exStartTime.getFullYear();
+      const exMonth = String(exStartTime.getMonth() + 1).padStart(2, '0');
+      const exDay = String(exStartTime.getDate()).padStart(2, '0');
+      const exDateStr = `${exYear}-${exMonth}-${exDay}`;
+      return exDateStr === dateStr && (ex.title === '휴무일' || ex.isHoliday);
     });
   };
 
@@ -360,7 +385,9 @@ const CalendarView = ({
 
               {dateInfo.hasHoliday ? (
                 <div className="flex-1 flex items-center justify-center">
-                  <span className="text-xs text-gray-600 font-medium">휴무일</span>
+                  <div className="bg-black text-white px-2 py-1 rounded-full text-xs font-bold shadow-md border border-gray-600 flex items-center justify-center min-h-[20px]">
+                    휴무일
+                  </div>
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col space-y-1">
@@ -368,7 +395,7 @@ const CalendarView = ({
                     <div className="w-full h-1 bg-blue-500 rounded-full"></div>
                   )}
                   {dateInfo.hasException && (
-                    <div className="w-full h-1 bg-gray-500 rounded-full"></div>
+                    <div className="w-full h-1 bg-green-500 rounded-full"></div>
                   )}
                   {dateInfo.hasPersonalTime && (
                     <div className="w-full h-1 bg-red-500 rounded-full"></div>
@@ -424,8 +451,10 @@ const CalendarView = ({
           >
             <div className="space-y-2">
               {dateInfo.hasHoliday ? (
-                <div className="p-2 bg-gray-300 text-gray-700 rounded text-xs flex items-center justify-center h-full">
-                  휴무일
+                <div className="p-2 flex items-center justify-center h-full">
+                  <div className="bg-black text-white px-3 py-2 rounded-full text-xs font-bold shadow-lg border border-gray-600 flex items-center justify-center min-h-[24px]">
+                    휴무일
+                  </div>
                 </div>
               ) : (
                 <>
@@ -435,8 +464,8 @@ const CalendarView = ({
                     </div>
                   )}
                   {dateInfo.hasException && (
-                    <div className="p-2 bg-gray-100 text-gray-800 rounded text-xs">
-                      예외 일정
+                    <div className="p-2 bg-green-100 text-green-800 rounded text-xs">
+                      추가 일정
                     </div>
                   )}
                   {dateInfo.hasPersonalTime && (
@@ -445,8 +474,10 @@ const CalendarView = ({
                     </div>
                   )}
                   {dateInfo.hasBlockedTime && (
-                    <div className="p-2 bg-gray-300 text-gray-700 rounded text-xs">
-                      휴무일
+                    <div className="p-2 flex items-center justify-center">
+                      <div className="bg-black text-white px-2 py-1 rounded-full text-xs font-bold shadow-md border border-gray-600 flex items-center justify-center min-h-[20px]">
+                        휴무일
+                      </div>
                     </div>
                   )}
                 </>
