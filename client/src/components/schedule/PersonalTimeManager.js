@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Clock, Plus, Trash2, Edit, X, Coffee, Moon, Utensils, Car, BookOpen } from 'lucide-react';
+import { Clock, Plus, Trash2, Edit, X, Moon, Utensils, Car, BookOpen, Coffee, Settings } from 'lucide-react';
 import CustomAlertModal from '../modals/CustomAlertModal';
 
 const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, onAutoSave }) => {
@@ -30,12 +30,12 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
   }, [isEditing]);
 
   const personalTimeTypes = {
-    sleep: { label: '수면시간', icon: Moon, color: 'bg-purple-500', defaultStart: '22:00', defaultEnd: '08:00' },
-    meal: { label: '식사시간', icon: Utensils, color: 'bg-orange-500', defaultStart: '12:00', defaultEnd: '13:00' },
-    commute: { label: '출퇴근시간', icon: Car, color: 'bg-green-500', defaultStart: '08:00', defaultEnd: '09:00' },
-    study: { label: '개인학습', icon: BookOpen, color: 'bg-blue-500', defaultStart: '19:00', defaultEnd: '21:00' },
-    break: { label: '휴식시간', icon: Coffee, color: 'bg-yellow-500', defaultStart: '15:00', defaultEnd: '15:30' },
-    custom: { label: '기타', icon: Clock, color: 'bg-gray-500', defaultStart: '10:00', defaultEnd: '11:00' }
+    sleep: { label: '수면시간', color: 'bg-purple-500', defaultStart: '22:00', defaultEnd: '08:00', icon: Moon },
+    meal: { label: '식사시간', color: 'bg-orange-500', defaultStart: '12:00', defaultEnd: '13:00', icon: Utensils },
+    commute: { label: '출퇴근시간', color: 'bg-green-500', defaultStart: '08:00', defaultEnd: '09:00', icon: Car },
+    study: { label: '개인학습', color: 'bg-blue-500', defaultStart: '19:00', defaultEnd: '21:00', icon: BookOpen },
+    break: { label: '휴식시간', color: 'bg-yellow-500', defaultStart: '15:00', defaultEnd: '15:30', icon: Coffee },
+    custom: { label: '기타', color: 'bg-gray-500', defaultStart: '10:00', defaultEnd: '11:00', icon: Settings }
   };
 
   const dayNames = {
@@ -139,8 +139,6 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
     }
 
     // 개인시간 추가/수정 후 자동 저장 및 달력 업데이트
-    console.log('개인시간 저장 시도:', personalTimeData);
-    console.log('onAutoSave 함수 존재:', !!onAutoSave);
 
     // 자동 저장 대신 즉시 달력 업데이트만 수행
     // (저장은 사용자가 프로필 탭에서 '저장' 버튼을 클릭할 때 수행)
@@ -148,13 +146,10 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
       detail: { type: 'personalTime', action: editingId ? 'update' : 'add', data: personalTimeData }
     }));
 
-    console.log('개인시간 추가/수정 완료. 저장하려면 프로필 탭의 "저장" 버튼을 클릭하세요.');
   }, [newPersonalTime, personalTimes, setPersonalTimes, showAlert, editingId, onAutoSave]);
 
   const handleRemovePersonalTime = useCallback((id) => {
     const updatedPersonalTimes = personalTimes.filter(pt => pt.id !== id);
-    console.log('Removing personal time with id:', id);
-    console.log('Updated personal times after removal:', updatedPersonalTimes);
 
     setPersonalTimes(updatedPersonalTimes);
 
@@ -163,7 +158,6 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
       detail: { type: 'personalTime', action: 'remove', id: id }
     }));
 
-    console.log('개인시간 삭제 완료. 저장하려면 프로필 탭의 "저장" 버튼을 클릭하세요.');
     if (id === editingId) {
       setEditingId(null);
       setNewPersonalTime({
@@ -202,10 +196,10 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
   };
 
   const renderPersonalTimeIcon = (type) => {
-    const IconComponent = personalTimeTypes[type]?.icon || Clock;
-    const color = personalTimeTypes[type]?.color || 'bg-gray-500';
+    const config = personalTimeTypes[type] || personalTimeTypes.custom;
+    const IconComponent = config.icon;
     return (
-      <div className={`w-8 h-8 rounded-full ${color} flex items-center justify-center text-white`}>
+      <div className={`w-8 h-8 rounded-full ${config.color} flex items-center justify-center text-white`}>
         <IconComponent size={16} />
       </div>
     );
@@ -283,7 +277,6 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
                       : 'border-gray-300 hover:bg-gray-50'
                   }`}
                 >
-                  <config.icon size={16} />
                   <span>{config.label}</span>
                 </button>
               ))}

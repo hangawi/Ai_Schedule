@@ -45,10 +45,6 @@ const ProfileTab = () => {
     fetchSchedule();
   }, [fetchSchedule]);
 
-  // 개인시간 상태 변화 추적
-  useEffect(() => {
-    console.log('Personal times state changed:', personalTimes);
-  }, [personalTimes]);
 
   // 편집 모드 진입 추적
   const [editingStarted, setEditingStarted] = useState(false);
@@ -150,7 +146,6 @@ const ProfileTab = () => {
 
       // 저장 후 서버에서 최신 데이터 동기화 (주석처리해서 덮어쓰기 방지)
       // const freshData = await userService.getUserSchedule();
-      // console.log('서버에서 받은 최신 데이터:', freshData);
 
       // setDefaultSchedule(freshData.defaultSchedule || []);
       // setScheduleExceptions(freshData.scheduleExceptions || []);

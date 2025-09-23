@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Grid, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Grid, Clock, Merge, Split } from 'lucide-react';
 
 // Constants
 const days = [
@@ -18,7 +18,7 @@ const monthNames = [
 const generateTimeSlots = (startHour = 0, endHour = 24) => {
   const slots = [];
   for (let h = startHour; h < endHour; h++) {
-    for (let m = 0; m < 60; m += 30) {
+    for (let m = 0; m < 60; m += 10) { // 10분 단위로 변경
       const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
       slots.push(time);
     }
@@ -32,6 +32,70 @@ const priorityConfig = {
   3: { label: '선호', color: 'bg-blue-600', next: 2 },      // 선호 -> 보통
   2: { label: '보통', color: 'bg-blue-400', next: 1 },      // 보통 -> 조정 가능
   1: { label: '조정 가능', color: 'bg-blue-200', next: 0 }, // 조정 가능 -> 해제
+};
+
+// 연속된 시간대 병합 함수
+const mergeConsecutiveTimeSlots = (schedule) => {
+  if (!schedule || schedule.length === 0) return [];
+
+  const sortedSchedule = [...schedule].sort((a, b) => {
+    if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
+    return a.startTime.localeCompare(b.startTime);
+  });
+
+  const merged = [];
+  let currentGroup = null;
+
+  for (const slot of sortedSchedule) {
+    if (currentGroup &&
+        currentGroup.dayOfWeek === slot.dayOfWeek &&
+        currentGroup.priority === slot.priority &&
+        getNextTimeSlot(currentGroup.endTime) === slot.startTime) {
+      // 연속된 슬롯이므로 병합
+      currentGroup.endTime = slot.endTime;
+      currentGroup.isMerged = true;
+      // originalSlots 초기화 개선
+      if (!currentGroup.originalSlots) {
+        currentGroup.originalSlots = [{
+          ...currentGroup,
+          isMerged: false,
+          originalSlots: undefined
+        }];
+      }
+      currentGroup.originalSlots.push(slot);
+    } else {
+      // 새로운 그룹 시작
+      if (currentGroup) {
+        merged.push(currentGroup);
+      }
+      currentGroup = { ...slot };
+      // 기존 isMerged 속성 제거
+      delete currentGroup.isMerged;
+      delete currentGroup.originalSlots;
+    }
+  }
+
+  if (currentGroup) {
+    merged.push(currentGroup);
+  }
+
+  return merged;
+};
+
+// 다음 시간 슬롯 계산
+const getNextTimeSlot = (timeString) => {
+  const [hour, minute] = timeString.split(':').map(Number);
+  const nextMinute = minute + 10;
+  const nextHour = nextMinute >= 60 ? hour + 1 : hour;
+  const finalMinute = nextMinute >= 60 ? 0 : nextMinute;
+  return `${String(nextHour).padStart(2, '0')}:${String(finalMinute).padStart(2, '0')}`;
+};
+
+// 시간 차이 계산 (분 단위)
+const getTimeDifferenceInMinutes = (startTime, endTime) => {
+  const [startHour, startMin] = startTime.split(':').map(Number);
+  const [endHour, endMin] = endTime.split(':').map(Number);
+  return (endHour * 60 + endMin) - (startHour * 60 + startMin);
 };
 
 // Helper function to get the Monday of the current week
@@ -52,6 +116,13 @@ const ScheduleGridSelector = ({ schedule, setSchedule, readOnly, exceptions = []
   const [monthDates, setMonthDates] = useState([]);
   const [timeRange, setTimeRange] = useState({ start: 9, end: 18 });
   const [showFullDay, setShowFullDay] = useState(false);
+  const [showMerged, setShowMerged] = useState(false); // 병합 모드 토글
+  const [mergedSchedule, setMergedSchedule] = useState([]);
+
+  // 스케줄이 변경될 때마다 병합된 스케줄 업데이트
+  useEffect(() => {
+    setMergedSchedule(mergeConsecutiveTimeSlots(schedule));
+  }, [schedule]);
 
   useEffect(() => {
     if (viewMode === 'week') {
@@ -149,17 +220,41 @@ const ScheduleGridSelector = ({ schedule, setSchedule, readOnly, exceptions = []
     } else {
       // Add new slot with default high priority
       const [hour, minute] = startTime.split(':').map(Number);
-      const endHour = minute === 30 ? hour + 1 : hour;
-      const endMinute = minute === 30 ? 0 : 30;
-      const endTime = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
+      const endMinute = minute + 10;
+      const endHour = endMinute >= 60 ? hour + 1 : hour;
+      const finalEndMinute = endMinute >= 60 ? 0 : endMinute;
+      const endTime = `${String(endHour).padStart(2, '0')}:${String(finalEndMinute).padStart(2, '0')}`;
       setSchedule([...schedule, { dayOfWeek, startTime, endTime, priority: 3 }]);
     }
   };
 
   const getSlotInfo = (dayOfWeek, startTime) => {
-    return schedule.find(
-      s => s.dayOfWeek === dayOfWeek && s.startTime === startTime
-    );
+    const currentSchedule = showMerged ? mergedSchedule : schedule;
+
+    if (showMerged) {
+      // 병합 모드에서는 해당 시간이 병합된 슬롯에 포함되는지 확인
+      for (const slot of currentSchedule) {
+        if (slot.dayOfWeek === dayOfWeek) {
+          const slotStartMinutes = timeToMinutes(slot.startTime);
+          const slotEndMinutes = timeToMinutes(slot.endTime);
+          const currentTimeMinutes = timeToMinutes(startTime);
+
+          if (currentTimeMinutes >= slotStartMinutes && currentTimeMinutes < slotEndMinutes) {
+            return slot;
+          }
+        }
+      }
+      return null;
+    } else {
+      return currentSchedule.find(
+        s => s.dayOfWeek === dayOfWeek && s.startTime === startTime
+      );
+    }
+  };
+
+  const timeToMinutes = (timeString) => {
+    const [hour, minute] = timeString.split(':').map(Number);
+    return hour * 60 + minute;
   };
 
   const getExceptionForSlot = (date, startTime) => {
@@ -220,6 +315,21 @@ const ScheduleGridSelector = ({ schedule, setSchedule, readOnly, exceptions = []
     return generateTimeSlots(timeRange.start, timeRange.end);
   };
 
+  // 저장시 자동 병합 기능 - 외부에서 호출 가능한 함수
+  const getOptimizedSchedule = () => {
+    return mergeConsecutiveTimeSlots(schedule);
+  };
+
+  // 컴포넌트가 이 함수를 외부로 노출
+  React.useImperativeHandle(React.forwardRef(), () => ({
+    getOptimizedSchedule,
+    mergeConsecutiveTimeSlots: () => {
+      const merged = mergeConsecutiveTimeSlots(schedule);
+      setSchedule(merged);
+      return merged;
+    }
+  }));
+
   const renderViewControls = () => (
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center space-x-2">
@@ -246,7 +356,7 @@ const ScheduleGridSelector = ({ schedule, setSchedule, readOnly, exceptions = []
           월간
         </button>
 
-        <div className="border-l border-gray-300 pl-2 ml-2">
+        <div className="border-l border-gray-300 pl-2 ml-2 flex space-x-2">
           <button
             onClick={toggleTimeRange}
             className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
@@ -257,6 +367,21 @@ const ScheduleGridSelector = ({ schedule, setSchedule, readOnly, exceptions = []
           >
             <Clock size={16} className="mr-1 inline" />
             {showFullDay ? '24시간' : '근무시간'}
+          </button>
+
+          <button
+            onClick={() => setShowMerged(!showMerged)}
+            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+              showMerged
+                ? 'bg-green-500 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            {showMerged ? (
+              <><Split size={16} className="mr-1 inline" />분할보기</>
+            ) : (
+              <><Merge size={16} className="mr-1 inline" />병합보기</>
+            )}
           </button>
         </div>
       </div>
@@ -345,12 +470,20 @@ const ScheduleGridSelector = ({ schedule, setSchedule, readOnly, exceptions = []
                   const isPersonalTimeSlot = !!personalTime;
 
                   let slotClass = 'bg-white';
+                  let slotContent = null;
                   if (isExceptionSlot) {
                     slotClass = 'bg-gray-400';
                   } else if (isPersonalTimeSlot) {
                     slotClass = 'bg-red-300'; // Personal time color
                   } else if (slotInfo) {
-                    slotClass = priorityConfig[slotInfo.priority]?.color || 'bg-blue-400';
+                    const baseColor = priorityConfig[slotInfo.priority]?.color || 'bg-blue-400';
+                    slotClass = slotInfo.isMerged ? `${baseColor} border-2 border-green-400` : baseColor;
+
+                    // 병합된 슬롯의 첫 번째 시간 슬롯에만 시간 정보 표시
+                    if (showMerged && slotInfo.isMerged && slotInfo.startTime === time) {
+                      const duration = getTimeDifferenceInMinutes(slotInfo.startTime, slotInfo.endTime);
+                      slotContent = `${duration}분`;
+                    }
                   }
 
                   let cursorClass = readOnly ? 'cursor-default' : 'cursor-pointer';
@@ -385,6 +518,9 @@ const ScheduleGridSelector = ({ schedule, setSchedule, readOnly, exceptions = []
                       )}
                       {isPersonalTimeSlot && (
                         <span className="text-xs text-white truncate px-1">{personalTime.title}</span>
+                      )}
+                      {slotContent && (
+                        <span className="text-xs text-white font-bold bg-green-600 px-1 rounded">{slotContent}</span>
                       )}
                     </div>
                   );
@@ -421,12 +557,20 @@ const ScheduleGridSelector = ({ schedule, setSchedule, readOnly, exceptions = []
             const isPersonalTimeSlot = !!personalTime;
 
             let slotClass = 'bg-white';
+            let slotContent = null;
             if (isExceptionSlot) {
               slotClass = 'bg-gray-400';
             } else if (isPersonalTimeSlot) {
               slotClass = 'bg-red-300'; // Personal time color
             } else if (slotInfo) {
-              slotClass = priorityConfig[slotInfo.priority]?.color || 'bg-blue-400';
+              const baseColor = priorityConfig[slotInfo.priority]?.color || 'bg-blue-400';
+              slotClass = slotInfo.isMerged ? `${baseColor} border-2 border-green-400` : baseColor;
+
+              // 병합된 슬롯의 첫 번째 시간 슬롯에만 시간 정보 표시
+              if (showMerged && slotInfo.isMerged && slotInfo.startTime === time) {
+                const duration = getTimeDifferenceInMinutes(slotInfo.startTime, slotInfo.endTime);
+                slotContent = `${duration}분`;
+              }
             }
 
             let cursorClass = readOnly ? 'cursor-default' : 'cursor-pointer';
@@ -458,6 +602,8 @@ const ScheduleGridSelector = ({ schedule, setSchedule, readOnly, exceptions = []
                   <span className="text-xs text-white truncate px-1">{exception.title}</span>
                 ) : isPersonalTimeSlot ? (
                   <span className="text-xs text-white truncate px-1">{personalTime.title}</span>
+                ) : slotContent ? (
+                  <span className="text-xs text-white font-bold bg-green-600 px-1 rounded">{slotContent}</span>
                 ) : null}
               </div>
             );
@@ -472,19 +618,36 @@ const ScheduleGridSelector = ({ schedule, setSchedule, readOnly, exceptions = []
       {renderViewControls()}
 
       {!readOnly && (
-        <div className="mb-4 p-3 bg-gray-50 rounded-lg flex items-center justify-center space-x-4">
-          <span className="text-sm font-semibold text-gray-700">범례:</span>
-          {Object.entries(priorityConfig).sort(([p1], [p2]) => p2 - p1).map(([priority, {label, color}]) => (
-            <div key={priority} className="flex items-center">
-              <div className={`w-4 h-4 rounded-full ${color} mr-2`}></div>
-              <span className="text-sm text-gray-600">{label}</span>
+        <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+          <div className="flex items-center justify-center space-x-4 mb-2">
+            <span className="text-sm font-semibold text-gray-700">범례:</span>
+            {Object.entries(priorityConfig).sort(([p1], [p2]) => p2 - p1).map(([priority, {label, color}]) => (
+              <div key={priority} className="flex items-center">
+                <div className={`w-4 h-4 rounded-full ${color} mr-2`}></div>
+                <span className="text-sm text-gray-600">{label}</span>
+              </div>
+            ))}
+          </div>
+          {showMerged && (
+            <div className="flex items-center justify-center space-x-4 border-t pt-2">
+              <div className="flex items-center">
+                <div className="w-4 h-4 rounded-full bg-blue-400 border-2 border-green-400 mr-2"></div>
+                <span className="text-sm text-gray-600">병합된 시간대</span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-xs text-white font-bold bg-green-600 px-2 py-1 rounded mr-2">30분</span>
+                <span className="text-sm text-gray-600">병합 지속시간</span>
+              </div>
             </div>
-          ))}
+          )}
         </div>
       )}
       {viewMode === 'week' ? renderWeekView() : renderMonthView()}
     </div>
   );
 };
+
+// 외부에서 사용할 수 있는 유틸리티 함수도 export
+export { mergeConsecutiveTimeSlots, getTimeDifferenceInMinutes };
 
 export default ScheduleGridSelector;
