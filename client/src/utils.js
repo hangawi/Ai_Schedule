@@ -92,13 +92,37 @@ export const speak = text => {
 };
 
 // 🧠 AI 프롬프트 생성
-export const generateAIPrompt = command => {
+export const generateAIPrompt = (command, context = {}) => {
    const now = new Date();
 
+   // 탭별 컨텍스트 정보 추가
+   let contextInfo = '';
+   if (context.context) {
+      switch (context.context) {
+         case 'profile':
+            contextInfo = '현재 위치: 내 프로필 탭 - 로컬 일정 관리';
+            break;
+         case 'events':
+            contextInfo = '현재 위치: 나의 일정 탭 - 로컬 일정 관리';
+            break;
+         case 'googleCalendar':
+            contextInfo = '현재 위치: Google 캘린더 탭 - Google 캘린더 연동';
+            break;
+         default:
+            contextInfo = '현재 위치: 일반 탭';
+      }
+   }
+
    return [
+      `명령어: "${command}"`,
       `오늘 = ${formatDate(now, 'YYYY-MM-DD dddd')} (${formatDate(now, 'MM월 DD일')})`,
       `현재 시간 = ${formatDate(now, 'YYYY-MM-DD HH:mm:ss')}`,
-      `명령어: "${command}"`,
+      contextInfo ? `${contextInfo}` : '',
+      ``,
+      `**매우 중요: intent 판단 규칙**`,
+      `- "추가", "만들어", "생성", "넣어", "등록", "일정", "약속", "회의" = add_event`,
+      `- "삭제", "제거", "없애", "지워" = delete_event`,
+      `- 삭제 키워드가 없으면 무조건 add_event!`,
       ``,
       `**정확한 날짜 계산 (오늘 기준):**`,
       `어제 = ${formatDate(addDays(now, -1))}`,
@@ -128,16 +152,20 @@ export const generateAIPrompt = command => {
       ``,
       `**중요: 일정=약속=미팅=회의=모임 (동일 의미)**`,
       ``,
-      `**필수 JSON 형식:**`,
-      `{"intent": "add_event", "title": "일정", "startDateTime": "2025-09-08T16:00:00+09:00", "endDateTime": "2025-09-08T17:00:00+09:00", "response": "추가!"}`,
+      `**중요: "추가", "만들어", "생성", "넣어", "등록" = add_event**`,
+      `**중요: "삭제", "제거", "없애", "지워" = delete_event**`,
       ``,
-      `{"intent": "delete_event", "title": "일정", "startDateTime": "2025-09-08T09:00:00+09:00", "endDateTime": "2025-09-08T10:00:00+09:00", "response": "삭제!"}`,
-      ``,
-      `{"intent": "delete_range", "title": "일정", "startDateTime": "2025-09-01T00:00:00+09:00", "endDateTime": "2025-09-07T23:59:59+09:00", "response": "삭제!"}`,
+      `**추가 예시 (매우 중요!):**`,
+      `"내일 회의 추가해줘" -> {"intent": "add_event", "title": "회의", "startDateTime": "${formatDate(addDays(now, 1))}T14:00:00+09:00", "endDateTime": "${formatDate(addDays(now, 1))}T15:00:00+09:00", "response": "회의 일정을 추가했어요!"}`,
+      `"오후 3시에 약속 만들어줘" -> {"intent": "add_event", "title": "약속", "startDateTime": "${formatDate(now)}T15:00:00+09:00", "endDateTime": "${formatDate(now)}T16:00:00+09:00", "response": "약속을 추가했어요!"}`,
+      `"다음주 월요일 프레젠테이션" -> {"intent": "add_event", "title": "프레젠테이션", "startDateTime": "${formatDate(getWeekday(now, 1, 1))}T10:00:00+09:00", "endDateTime": "${formatDate(getWeekday(now, 1, 1))}T11:00:00+09:00", "response": "프레젠테이션 일정을 추가했어요!"}`,
       ``,
       `**삭제 예시:**`,
       `"다음주 목요일 약속 삭제" -> {"intent": "delete_event", "title": "약속", "startDateTime": "${formatDate(getWeekday(now, 4, 1))}T00:00:00+09:00", "endDateTime": "${formatDate(getWeekday(now, 4, 1))}T23:59:59+09:00", "response": "삭제!"}`,
       `"이번주 일정 전부 삭제" -> {"intent": "delete_range", "title": "일정", "startDateTime": "${formatDate(startOfWeek(now))}T00:00:00+09:00", "endDateTime": "${formatDate(endOfWeek(now))}T23:59:59+09:00", "response": "삭제!"}`,
+      ``,
+      `**기본 JSON 형식:**`,
+      `{"intent": "add_event", "title": "일정", "startDateTime": "2025-09-08T16:00:00+09:00", "endDateTime": "2025-09-08T17:00:00+09:00", "response": "추가!"}`,
       ``,
       `**매우 중요:** 일정 관련이 아닌 단순 대화일 경우 → {"intent": "clarification", "response": "안녕하세요! 일정 관리를 도와드릴까요?"}`,
    ].join('\n');

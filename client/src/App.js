@@ -25,25 +25,6 @@ function App() {
    const [eventActions, setEventActions] = useState(null);
    const [areEventActionsReady, setAreEventActionsReady] = useState(false);
    const { handleChatMessage } = useChat(isLoggedIn, setEventAddedKey, eventActions);
-   
-   const {
-      isListening,
-      modalText,
-      setModalText,
-      isBackgroundMonitoring,
-      isCallDetected,
-      callStartTime,
-      detectedSchedules,
-      backgroundTranscript,
-      toggleBackgroundMonitoring,
-      confirmSchedule,
-      dismissSchedule,
-      voiceStatus,
-      isAnalyzing: voiceAnalyzing,
-      micVolume,
-      notification,
-      clearNotification
-   } = useIntegratedVoiceSystem(isLoggedIn, isVoiceRecognitionEnabled, eventActions, areEventActionsReady, setEventAddedKey, handleChatMessage);
 
    
    const [sharedText, setSharedText] = useState(null);
@@ -167,13 +148,9 @@ function App() {
    }, []);
 
    const schedulingSystemProps = useMemo(() => ({
-      isLoggedIn, user, handleLogout, isListening, eventAddedKey, setEventAddedKey,
-      setEventActions, setAreEventActionsReady, isVoiceRecognitionEnabled,
-      setIsVoiceRecognitionEnabled: handleToggleVoiceRecognition, loginMethod,
-      isBackgroundMonitoring, isCallDetected, callStartTime, toggleBackgroundMonitoring,
-      voiceStatus, 
-      isAnalyzing: voiceAnalyzing
-   }), [isLoggedIn, user, handleLogout, isListening, eventAddedKey, setEventAddedKey, isVoiceRecognitionEnabled, handleToggleVoiceRecognition, loginMethod, isBackgroundMonitoring, isCallDetected, callStartTime, toggleBackgroundMonitoring, voiceStatus, voiceAnalyzing]);
+      isLoggedIn, user, handleLogout, isVoiceRecognitionEnabled,
+      setIsVoiceRecognitionEnabled: handleToggleVoiceRecognition, loginMethod
+   }), [isLoggedIn, user, handleLogout, isVoiceRecognitionEnabled, handleToggleVoiceRecognition, loginMethod]);
 
    const handleConfirmSharedText = (text) => {
       handleChatMessage(`다음 내용으로 일정 추가: ${text}`);
@@ -203,43 +180,13 @@ function App() {
             <Route path="/auth" element={isLoggedIn ? <Navigate to="/" /> : <AuthScreen onLoginSuccess={handleLoginSuccess} />} />
             <Route path="/" element={isLoggedIn ? <SchedulingSystem {...schedulingSystemProps} speak={speak} /> : <Navigate to="/auth" />} />
          </Routes>
-         {isLoggedIn && <ChatBox onSendMessage={handleChatMessage} speak={speak} />}
-         {modalText && <CommandModal text={modalText} onClose={() => setModalText('')} />}
          {isLoggedIn && sharedText && (
             <SharedTextModal text={sharedText} onClose={() => setSharedText(null)} onConfirm={handleConfirmSharedText} />
          )}
          {isLoggedIn && copiedText && !sharedText && (
             <CopiedTextModal text={copiedText} isAnalyzing={isAnalyzing} onClose={() => handleCloseCopiedText(copiedText)} onConfirm={handleConfirmCopiedText} />
          )}
-         {isLoggedIn && detectedSchedules.length > 0 && (
-            <AutoDetectedScheduleModal
-               detectedSchedules={detectedSchedules}
-               backgroundTranscript={backgroundTranscript}
-               callStartTime={callStartTime}
-               onConfirm={confirmSchedule}
-               onDismiss={dismissSchedule}
-               onClose={() => detectedSchedules.forEach(dismissSchedule)}
-            />
-         )}
          {isLoggedIn && showBackgroundGuide && <BackgroundGuide onClose={handleCloseBackgroundGuide} />}
-         {isLoggedIn && notification && (
-            <NotificationModal
-               isOpen={!!notification}
-               onClose={clearNotification}
-               type={notification.type}
-               title={notification.title}
-               message={notification.message}
-            />
-         )}
-         {isLoggedIn && (
-            <MobileStatusIndicator 
-               isBackgroundMonitoring={isBackgroundMonitoring}
-               isCallDetected={isCallDetected}
-               micVolume={micVolume}
-               voiceStatus={voiceStatus}
-               isAnalyzing={voiceAnalyzing}
-            />
-         )}
       </Router>
    );
 }

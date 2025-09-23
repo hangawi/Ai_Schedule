@@ -5,7 +5,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
 export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
-   const handleChatMessage = useCallback(async (message) => {
+   const handleChatMessage = useCallback(async (message, context = {}) => {
       if (!isLoggedIn) return { success: false, message: '로그인이 필요합니다.' };
 
       const API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
@@ -22,7 +22,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
          const genAI = new GoogleGenerativeAI(API_KEY);
          const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
          
-         const prompt = generateAIPrompt(message);
+         const prompt = generateAIPrompt(message, context);
 
          const startTime = performance.now();
          const result = await Promise.race([
@@ -83,23 +83,119 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                endDateTime: chatResponse.endDateTime
             };
 
-            const response = await fetch(`${API_BASE_URL}/api/calendar/events/google`, {
-              method: 'POST',
+            // 탭별로 다른 API 엔드포인트 호출
+            let apiEndpoint;
+            let requestBody = eventData;
+
+            switch (context.tabType) {
+               case 'google':
+                  // Google 캘린더 탭
+                  apiEndpoint = `${API_BASE_URL}/api/calendar/events/google`;
+                  break;
+               case 'local':
+                  if (context.context === 'profile') {
+                     // 내 프로필 탭 - 현재 스케줄 가져와서 새 예외 추가
+                     const currentScheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+                        headers: { 'x-auth-token': token }
+                     });
+
+                     if (!currentScheduleResponse.ok) {
+                        throw new Error('현재 스케줄을 가져올 수 없습니다.');
+                     }
+
+                     const currentSchedule = await currentScheduleResponse.json();
+
+                     // 새로운 예외 일정 추가
+                     const newException = {
+                        title: eventData.title,
+                        startTime: eventData.startDateTime.split('T')[1].substring(0, 5),
+                        endTime: eventData.endDateTime.split('T')[1].substring(0, 5),
+                        specificDate: eventData.startDateTime.split('T')[0],
+                        isHoliday: false,
+                        isAllDay: false,
+                        priority: 3
+                     };
+
+                     console.log('🔍 [PROFILE] 기존 스케줄:', currentSchedule);
+                     console.log('🔍 [PROFILE] 프로필 예외 일정 추가:', newException);
+
+                     apiEndpoint = `${API_BASE_URL}/api/users/profile/schedule`;
+                     requestBody = {
+                        defaultSchedule: currentSchedule.defaultSchedule,
+                        scheduleExceptions: [...(currentSchedule.scheduleExceptions || []), newException],
+                        personalTimes: currentSchedule.personalTimes
+                     };
+
+                     console.log('🔍 [PROFILE] 최종 요청 데이터:', requestBody);
+                  } else {
+                     // 나의 일정 탭 - 일반 로컬 DB 저장
+                     apiEndpoint = `${API_BASE_URL}/api/events`;
+                     requestBody = {
+                        title: eventData.title,
+                        date: eventData.startDateTime.split('T')[0],
+                        time: eventData.startDateTime.split('T')[1].substring(0, 5),
+                        participants: [],
+                        priority: 3,
+                        description: eventData.description
+                     };
+                  }
+                  break;
+               default:
+                  // 기본값은 Google 캘린더
+                  apiEndpoint = `${API_BASE_URL}/api/calendar/events/google`;
+            }
+
+            const httpMethod = (context.context === 'profile' && context.tabType === 'local') ? 'PUT' : 'POST';
+
+            console.log('🔍 [PROFILE] API 요청:', {
+               endpoint: apiEndpoint,
+               method: httpMethod,
+               body: requestBody
+            });
+
+            const response = await fetch(apiEndpoint, {
+              method: httpMethod,
               headers: {
                 'Content-Type': 'application/json',
                 'x-auth-token': token,
               },
-              body: JSON.stringify(eventData),
+              body: JSON.stringify(requestBody),
             });
+
+            console.log('🔍 [PROFILE] API 응답 상태:', response.status);
 
             if (!response.ok) {
               const errorData = await response.json();
-              throw new Error(errorData.msg || 'Google 캘린더에 일정을 추가하지 못했습니다.');
+              console.log('🔍 [PROFILE] API 오류 응답:', errorData);
+
+              if (context.tabType === 'google') {
+                 throw new Error(errorData.msg || 'Google 캘린더에 일정을 추가하지 못했습니다.');
+              } else {
+                 throw new Error(errorData.msg || '로컬 일정을 추가하지 못했습니다.');
+              }
             }
 
-            setTimeout(() => {
-              setEventAddedKey(prevKey => prevKey + 1); // 캘린더 새로고침
-            }, 1000); // 1초 지연
+            const responseData = await response.json();
+            console.log('🔍 [PROFILE] API 성공 응답:', responseData);
+
+            // 로컬 일정의 경우 eventActions.addEvent도 호출하여 즉시 UI에 반영 (나의 일정 탭만)
+            // setEventAddedKey가 fetchEvents를 호출하므로 eventActions.addEvent는 제거
+
+            // 나의 일정 탭에서는 fetchEvents만 호출 (중복 방지)
+
+            // 로컬 일정의 경우 즉시 캘린더 새로고침
+            if (context.tabType === 'local') {
+              if (context.context === 'profile') {
+                // 프로필 탭의 경우 calendarUpdate 이벤트 발생
+                window.dispatchEvent(new Event('calendarUpdate'));
+              }
+              setEventAddedKey(prevKey => prevKey + 1);
+            } else {
+              // Google 캘린더의 경우에만 약간의 지연
+              setTimeout(() => {
+                setEventAddedKey(prevKey => prevKey + 1);
+              }, 1000);
+            }
 
             return {
                success: true,
@@ -119,17 +215,36 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             const oneYearLater = new Date();
             oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
             
-            // 일정 목록 가져오기 API 호출
-            const eventsResponse = await fetch(`${API_BASE_URL}/api/calendar/events?timeMin=${threeMonthsAgo.toISOString()}&timeMax=${oneYearLater.toISOString()}`, {
-               headers: { 'x-auth-token': token }
-            });
+            // 탭별로 다른 일정 목록 가져오기 API 호출
+            let eventsResponse;
+            if (context.tabType === 'local') {
+               // 로컬 일정 목록 가져오기
+               eventsResponse = await fetch(`${API_BASE_URL}/api/events`, {
+                  headers: { 'x-auth-token': token }
+               });
+            } else {
+               // 구글 캘린더 일정 목록 가져오기
+               eventsResponse = await fetch(`${API_BASE_URL}/api/calendar/events?timeMin=${threeMonthsAgo.toISOString()}&timeMax=${oneYearLater.toISOString()}`, {
+                  headers: { 'x-auth-token': token }
+               });
+            }
             
             if (!eventsResponse.ok) {
                throw new Error('일정 목록을 가져올 수 없습니다.');
             }
             
-            const events = await eventsResponse.json();
-            
+            const eventsData = await eventsResponse.json();
+
+            // 탭별로 다른 이벤트 구조 처리
+            let events;
+            if (context.tabType === 'local') {
+               // 로컬 이벤트는 { events: [...] } 형태
+               events = eventsData.events || eventsData;
+            } else {
+               // 구글 캘린더 이벤트는 배열 형태
+               events = eventsData;
+            }
+
             // events 배열 유효성 검사
             if (!events || !Array.isArray(events)) {
                throw new Error('일정 목록 형식이 올바르지 않습니다.');
@@ -144,17 +259,32 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                // 삭제할 범위 설정 완료
                
                matchingEvents = events.filter(event => {
-                  if (!event || !event.start) return false;
-                  const eventDate = new Date(event.start.dateTime || event.start.date);
+                  if (!event) return false;
+
+                  let eventDate;
+                  let eventTitle;
+
+                  if (context.tabType === 'local') {
+                     // 로컬 이벤트 구조: { startTime, endTime, title }
+                     if (!event.startTime) return false;
+                     eventDate = new Date(event.startTime);
+                     eventTitle = event.title;
+                  } else {
+                     // 구글 이벤트 구조: { start: { dateTime || date }, summary }
+                     if (!event.start) return false;
+                     eventDate = new Date(event.start.dateTime || event.start.date);
+                     eventTitle = event.summary;
+                  }
+
                   const inRange = eventDate >= startDate && eventDate <= endDate;
-                  
+
+
                   // 제목 매칭 - 모든 일정 관련 키워드 포함
                   const scheduleKeywords = ['일정', '약속', '미팅', '회의', '모임', '전체', '전부', '모든', '모두'];
                   const isGeneralSchedule = !chatResponse.title || scheduleKeywords.includes(chatResponse.title);
-                  const titleMatch = isGeneralSchedule || 
-                                    event.summary?.toLowerCase().includes(chatResponse.title.toLowerCase());
-                  
-                  
+                  const titleMatch = isGeneralSchedule ||
+                                    eventTitle?.toLowerCase().includes(chatResponse.title.toLowerCase());
+
                   return inRange && titleMatch;
                });
             } else {
@@ -163,35 +293,46 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                // 삭제 대상 날짜 및 검색 키워드 설정 완료
                
                matchingEvents = events.filter(event => {
-                  if (!event || !event.start) return false;
-                  const eventDate = new Date(event.start.dateTime || event.start.date);
-                  
+                  if (!event) return false;
+
+                  let eventDate;
+                  let eventTitle;
+
+                  if (context.tabType === 'local') {
+                     // 로컬 이벤트 구조: { startTime, endTime, title }
+                     if (!event.startTime) return false;
+                     eventDate = new Date(event.startTime);
+                     eventTitle = event.title;
+                  } else {
+                     // 구글 이벤트 구조: { start: { dateTime || date }, summary }
+                     if (!event.start) return false;
+                     eventDate = new Date(event.start.dateTime || event.start.date);
+                     eventTitle = event.summary;
+                  }
+
                   // 날짜 매칭 - 같은 날이면 OK
                   const isSameDay = eventDate.toDateString() === targetDate.toDateString();
-                  
+
                   // 제목 매칭 - 더 유연하게
                   const scheduleKeywords = ['일정', '약속', '미팅', '회의', '모임', '전체', '전부', '모든', '모두'];
                   const isGeneralSchedule = !chatResponse.title || scheduleKeywords.includes(chatResponse.title);
-                  
+
                   let titleMatch = false;
                   if (isGeneralSchedule) {
                      // 일반 키워드면 모든 일정 매칭
                      titleMatch = true;
-                  } else if (event.summary) {
+                  } else if (eventTitle) {
                      // 구체적 제목이면 포함 여부 검사
-                     titleMatch = event.summary.toLowerCase().includes(chatResponse.title.toLowerCase());
+                     titleMatch = eventTitle.toLowerCase().includes(chatResponse.title.toLowerCase());
                   }
-                  
+
                   const isMatch = isSameDay && titleMatch;
-                  
-                  // 매칭된 일정이 있으면 삭제 대상으로 추가
-                  
+
                   return isMatch;
                });
             }
-            
-            // 매칭된 일정 개수 확인 완료
-            
+
+
             if (matchingEvents.length === 0) {
                return { success: false, message: '해당 일정을 찾을 수 없어요.' };
             }
@@ -209,10 +350,20 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                let deletedCount = 0;
                for (const event of matchingEvents) {
                   try {
-                     const deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${event.id}`, {
-                        method: 'DELETE',
-                        headers: { 'x-auth-token': token }
-                     });
+                     let deleteResponse;
+                     if (context.tabType === 'local') {
+                        // 로컬 이벤트 삭제
+                        deleteResponse = await fetch(`${API_BASE_URL}/api/events/${event._id || event.id}`, {
+                           method: 'DELETE',
+                           headers: { 'x-auth-token': token }
+                        });
+                     } else {
+                        // 구글 캘린더 이벤트 삭제
+                        deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${event.id}`, {
+                           method: 'DELETE',
+                           headers: { 'x-auth-token': token }
+                        });
+                     }
                      
                      if (deleteResponse.ok) {
                         deletedCount++;
@@ -232,20 +383,31 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             
             // 일정 삭제
             const eventToDelete = matchingEvents[0];
-            const deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${eventToDelete.id}`, {
-               method: 'DELETE',
-               headers: { 'x-auth-token': token }
-            });
+            let deleteResponse;
+            if (context.tabType === 'local') {
+               // 로컬 이벤트 삭제
+               deleteResponse = await fetch(`${API_BASE_URL}/api/events/${eventToDelete._id || eventToDelete.id}`, {
+                  method: 'DELETE',
+                  headers: { 'x-auth-token': token }
+               });
+            } else {
+               // 구글 캘린더 이벤트 삭제
+               deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${eventToDelete.id}`, {
+                  method: 'DELETE',
+                  headers: { 'x-auth-token': token }
+               });
+            }
             
             if (!deleteResponse.ok) {
                throw new Error('일정 삭제에 실패했습니다.');
             }
             
             setEventAddedKey(prevKey => prevKey + 1); // 캘린더 새로고침
-            return { 
-               success: true, 
-               message: `${eventToDelete.summary || '일정'}을 삭제했어요!`,
-               data: chatResponse 
+            const deletedTitle = context.tabType === 'local' ? eventToDelete.title : eventToDelete.summary;
+            return {
+               success: true,
+               message: `${deletedTitle || '일정'}을 삭제했어요!`,
+               data: chatResponse
             };
          }
          

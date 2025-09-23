@@ -98,15 +98,16 @@ const CalendarView = ({
     const dateStr = `${year}-${month}-${day}`;
 
     const hasException = exceptions.some(ex => {
-      const exStartTime = new Date(ex.startTime);
-      const exYear = exStartTime.getFullYear();
-      const exMonth = String(exStartTime.getMonth() + 1).padStart(2, '0');
-      const exDay = String(exStartTime.getDate()).padStart(2, '0');
-      const exDateStr = `${exYear}-${exMonth}-${exDay}`;
+      // specificDate 필드를 사용해야 함 (startTime은 "10:00" 형식이므로 날짜가 아님)
+      const exDateStr = ex.specificDate;
       const isMatch = exDateStr === dateStr && ex.title !== '휴무일' && !ex.isHoliday;
 
-      if (isMatch) {
-      }
+      console.log('🔍 [CALENDAR] 예외 일정 매칭 확인:', {
+        currentDate: dateStr,
+        exceptionDate: exDateStr,
+        exceptionTitle: ex.title,
+        isMatch
+      });
 
       return isMatch;
     });
@@ -121,11 +122,8 @@ const CalendarView = ({
     const dateStr = `${year}-${month}-${day}`;
 
     return exceptions.some(ex => {
-      const exStartTime = new Date(ex.startTime);
-      const exYear = exStartTime.getFullYear();
-      const exMonth = String(exStartTime.getMonth() + 1).padStart(2, '0');
-      const exDay = String(exStartTime.getDate()).padStart(2, '0');
-      const exDateStr = `${exYear}-${exMonth}-${exDay}`;
+      // specificDate 필드를 사용해야 함
+      const exDateStr = ex.specificDate;
       return exDateStr === dateStr && (ex.title === '휴무일' || ex.isHoliday);
     });
   };
