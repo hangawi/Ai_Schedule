@@ -1,7 +1,24 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const auth = require('../middleware/auth');
 const calendarController = require('../controllers/calendarController');
+
+// Multer 설정 (메모리 저장)
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB 제한
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('이미지 파일만 업로드 가능합니다.'), false);
+    }
+  }
+});
 
 // @route   GET api/calendar/events
 // @desc    Get Google Calendar events
@@ -22,5 +39,10 @@ router.delete('/events/:eventId', auth, calendarController.deleteGoogleCalendarE
 // @desc    Update Google Calendar event
 // @access  Private
 router.put('/events/:eventId', auth, calendarController.updateGoogleCalendarEvent);
+
+// @route   POST api/calendar/analyze-image
+// @desc    Analyze image for schedule information using Gemini Vision API
+// @access  Private
+router.post('/analyze-image', auth, upload.single('image'), calendarController.analyzeImage);
 
 module.exports = router;

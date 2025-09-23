@@ -1,5 +1,10 @@
 const { google } = require('googleapis');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const User = require('../models/user');
+const multer = require('multer');
+
+// Gemini AI 초기화
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Access Token 갱신 함수
 const updateAccessToken = async (user) => {
@@ -192,5 +197,182 @@ exports.updateGoogleCalendarEvent = async (req, res) => {
       console.error('Google API 상세 오류:', error.response.data.error.errors);
     }
     res.status(500).json({ msg: 'Google 캘린더 이벤트를 업데이트하는 데 실패했습니다.', error: error.message });
+  }
+};
+
+// 이미지에서 스케줄 정보 추출
+exports.analyzeImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: '이미지 파일이 업로드되지 않았습니다.'
+      });
+    }
+
+    // Gemini Vision 모델 가져오기
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    // 이미지를 Base64로 변환
+    const imageBase64 = req.file.buffer.toString('base64');
+
+    // 현재 날짜 정보 생성
+    const today = new Date();
+    const currentDate = today.toISOString().split('T')[0];
+    const currentDay = today.getDay(); // 0=일요일, 1=월요일, ...
+
+    // 이번 주 월요일부터 금요일까지의 날짜 계산
+    const getThisWeekDates = (today) => {
+      const dates = {};
+      const daysOfWeek = ['월', '화', '수', '목', '금'];
+
+      // 이번 주 월요일 찾기
+      const thisMonday = new Date(today);
+      const dayOfWeek = today.getDay(); // 0=일요일, 1=월요일, ...
+      const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 일요일인 경우 지난 주 월요일로
+      thisMonday.setDate(today.getDate() - daysFromMonday);
+
+      daysOfWeek.forEach((day, index) => {
+        const date = new Date(thisMonday);
+        date.setDate(thisMonday.getDate() + index);
+        dates[day] = date.toISOString().split('T')[0];
+      });
+
+      return dates;
+    };
+
+    const weekDates = getThisWeekDates(today);
+
+    // 프롬프트 구성
+    const prompt = `
+이 이미지에서 학교 시간표나 일정 정보를 추출해주세요. 정확한 JSON 형태로만 반환해주세요.
+
+중요: 응답은 반드시 유효한 JSON 형식이어야 하며, 주석이나 추가 설명 없이 오직 JSON만 반환해주세요.
+
+현재 정보:
+- 오늘 날짜: ${currentDate}
+- 이번 주 날짜: 월(${weekDates.월}), 화(${weekDates.화}), 수(${weekDates.수}), 목(${weekDates.목}), 금(${weekDates.금})
+
+학교 시간표 인식 규칙:
+- 1교시: 09:00-09:50 (50분 수업)
+- 2교시: 10:00-10:50
+- 3교시: 11:00-11:50
+- 4교시: 12:00-12:50
+- 5교시: 13:40-14:30 (점심시간 후)
+- 6교시: 14:40-15:30
+- 7교시: 15:40-16:30
+- 8교시: 16:40-17:30
+
+요일별 날짜 매핑:
+- 월요일 → ${weekDates.월}
+- 화요일 → ${weekDates.화}
+- 수요일 → ${weekDates.수}
+- 목요일 → ${weekDates.목}
+- 금요일 → ${weekDates.금}
+
+반환 형식:
+{
+  "schedules": [
+    {
+      "title": "과목명 (예: 수학, 영어, 과학 등)",
+      "date": "YYYY-MM-DD",
+      "time": "HH:MM-HH:MM",
+      "location": "교실",
+      "description": "N교시"
+    }
+  ]
+}
+
+처리 예시:
+- 이미지에 "월요일 1교시 수학"이 있으면 → title: "수학", date: "${weekDates.월}", time: "09:00-09:50", description: "1교시"
+- "화 3교시 영어"가 있으면 → title: "영어", date: "${weekDates.화}", time: "11:00-11:50", description: "3교시"
+
+일반 일정의 경우:
+- 시간 범위가 있는 경우: "HH:MM-HH:MM" 형식 사용
+- 시간이 없는 경우: "00:00-00:00" 사용
+
+이미지에서 일정을 찾을 수 없는 경우:
+{
+  "schedules": []
+}
+`;
+
+    // 이미지와 함께 API 호출
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          data: imageBase64,
+          mimeType: req.file.mimetype
+        }
+      }
+    ]);
+
+    const response = await result.response;
+    const text = response.text();
+
+    try {
+      // JSON 응답에서 스케줄 정보 추출
+      console.log('Gemini 원본 응답:', text);
+
+      // ```json으로 감싸진 JSON 블록 찾기
+      let jsonString = '';
+      const jsonBlockMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonBlockMatch) {
+        jsonString = jsonBlockMatch[1];
+      } else {
+        // 일반 JSON 객체 찾기
+        const jsonMatch = text.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
+          jsonString = jsonMatch[0];
+        }
+      }
+
+      if (jsonString) {
+        // 주석 제거 (// 주석)
+        jsonString = jsonString.replace(/\/\/.*$/gm, '');
+        // 여러 줄 주석 제거 (/* */ 주석)
+        jsonString = jsonString.replace(/\/\*[\s\S]*?\*\//g, '');
+        // 마지막 쉼표 제거
+        jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
+
+        console.log('정제된 JSON 문자열:', jsonString);
+
+        const scheduleData = JSON.parse(jsonString);
+
+        if (scheduleData.schedules && scheduleData.schedules.length > 0) {
+          // 추출된 스케줄이 있는 경우
+          return res.json({
+            success: true,
+            message: `총 ${scheduleData.schedules.length}개의 일정을 찾았습니다. 이 일정들을 추가하시겠습니까?`,
+            extractedSchedules: scheduleData.schedules
+          });
+        } else {
+          // 스케줄을 찾지 못한 경우
+          return res.json({
+            success: false,
+            message: '이미지에서 일정 정보를 찾을 수 없습니다. 다른 이미지를 시도해보시거나 텍스트로 일정을 입력해주세요.'
+          });
+        }
+      } else {
+        throw new Error('JSON 형식을 찾을 수 없음');
+      }
+    } catch (parseError) {
+      console.error('JSON 파싱 오류:', parseError);
+      console.error('원본 응답:', text);
+
+      // JSON 파싱 실패 시 텍스트 응답 처리
+      return res.json({
+        success: false,
+        message: '이미지 분석 중 오류가 발생했습니다. AI 응답을 처리할 수 없습니다. 다시 시도해보세요.'
+      });
+    }
+
+  } catch (error) {
+    console.error('이미지 분석 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '이미지 분석 중 오류가 발생했습니다: ' + error.message
+    });
   }
 };
