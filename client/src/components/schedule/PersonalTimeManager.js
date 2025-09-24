@@ -139,13 +139,10 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
     }
 
     // 개인시간 추가/수정 후 자동 저장 및 달력 업데이트
-    console.log('🔍 [PERSONAL] 개인시간 추가/수정 후 자동저장 시작');
-
-    // 자동 저장 실행
-    if (onAutoSave) {
+    // 편집 모드가 아닐 때만 자동 저장 실행
+    if (onAutoSave && !isEditing) {
       try {
         await onAutoSave();
-        console.log('🔍 [PERSONAL] 자동저장 완료');
       } catch (error) {
         console.error('🔍 [PERSONAL] 자동저장 실패:', error);
         showAlert('저장에 실패했습니다: ' + error.message, '오류');
@@ -169,13 +166,10 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
 
     setPersonalTimes(updatedPersonalTimes);
 
-    console.log('🔍 [PERSONAL] 개인시간 삭제 후 자동저장 시작');
-
-    // 자동 저장 실행
-    if (onAutoSave) {
+    // 편집 모드가 아닐 때만 자동 저장 실행
+    if (onAutoSave && !isEditing) {
       try {
         await onAutoSave();
-        console.log('🔍 [PERSONAL] 삭제 후 자동저장 완료');
       } catch (error) {
         console.error('🔍 [PERSONAL] 삭제 후 자동저장 실패:', error);
       }

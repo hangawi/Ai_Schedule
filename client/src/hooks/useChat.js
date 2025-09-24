@@ -32,7 +32,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             )
          ]);
          const endTime = performance.now();
-         console.log(`AI 응답 시간: ${(endTime - startTime).toFixed(2)}ms`);
 
          if (result instanceof Error) {
             throw result;
@@ -105,28 +104,40 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
 
                      const currentSchedule = await currentScheduleResponse.json();
 
-                     // 새로운 예외 일정 추가
-                     const newException = {
-                        title: eventData.title,
-                        startTime: eventData.startDateTime.split('T')[1].substring(0, 5),
-                        endTime: eventData.endDateTime.split('T')[1].substring(0, 5),
-                        specificDate: eventData.startDateTime.split('T')[0],
-                        isHoliday: false,
-                        isAllDay: false,
-                        priority: 3
-                     };
+                     // 10분 단위로 분할하여 예외 일정들 생성
+                     const newExceptions = [];
+                     const startDateTime = new Date(eventData.startDateTime);
+                     const endDateTime = new Date(eventData.endDateTime);
 
-                     console.log('🔍 [PROFILE] 기존 스케줄:', currentSchedule);
-                     console.log('🔍 [PROFILE] 프로필 예외 일정 추가:', newException);
+                     // 시작 시간부터 종료 시간까지 10분 단위로 분할
+                     for (let current = new Date(startDateTime); current < endDateTime; current.setMinutes(current.getMinutes() + 10)) {
+                        const slotEndTime = new Date(current);
+                        slotEndTime.setMinutes(slotEndTime.getMinutes() + 10);
+
+                        // 마지막 슬롯이 종료 시간을 넘지 않도록 조정
+                        if (slotEndTime > endDateTime) {
+                           slotEndTime.setTime(endDateTime.getTime());
+                        }
+
+                        const newException = {
+                           title: eventData.title,
+                           startTime: current.toISOString(),
+                           endTime: slotEndTime.toISOString(),
+                           specificDate: eventData.startDateTime.split('T')[0],
+                           isHoliday: false,
+                           isAllDay: false,
+                           priority: 3
+                        };
+
+                        newExceptions.push(newException);
+                     }
 
                      apiEndpoint = `${API_BASE_URL}/api/users/profile/schedule`;
                      requestBody = {
                         defaultSchedule: currentSchedule.defaultSchedule,
-                        scheduleExceptions: [...(currentSchedule.scheduleExceptions || []), newException],
+                        scheduleExceptions: [...(currentSchedule.scheduleExceptions || []), ...newExceptions],
                         personalTimes: currentSchedule.personalTimes
                      };
-
-                     console.log('🔍 [PROFILE] 최종 요청 데이터:', requestBody);
                   } else {
                      // 나의 일정 탭 - 일반 로컬 DB 저장
                      apiEndpoint = `${API_BASE_URL}/api/events`;
@@ -147,12 +158,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
 
             const httpMethod = (context.context === 'profile' && context.tabType === 'local') ? 'PUT' : 'POST';
 
-            console.log('🔍 [PROFILE] API 요청:', {
-               endpoint: apiEndpoint,
-               method: httpMethod,
-               body: requestBody
-            });
-
             const response = await fetch(apiEndpoint, {
               method: httpMethod,
               headers: {
@@ -162,11 +167,8 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
               body: JSON.stringify(requestBody),
             });
 
-            console.log('🔍 [PROFILE] API 응답 상태:', response.status);
-
             if (!response.ok) {
               const errorData = await response.json();
-              console.log('🔍 [PROFILE] API 오류 응답:', errorData);
 
               if (context.tabType === 'google') {
                  throw new Error(errorData.msg || 'Google 캘린더에 일정을 추가하지 못했습니다.');
@@ -176,7 +178,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             }
 
             const responseData = await response.json();
-            console.log('🔍 [PROFILE] API 성공 응답:', responseData);
 
             // 로컬 일정의 경우 eventActions.addEvent도 호출하여 즉시 UI에 반영 (나의 일정 탭만)
             // setEventAddedKey가 fetchEvents를 호출하므로 eventActions.addEvent는 제거
@@ -217,8 +218,13 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             
             // 탭별로 다른 일정 목록 가져오기 API 호출
             let eventsResponse;
-            if (context.tabType === 'local') {
-               // 로컬 일정 목록 가져오기
+            if (context.context === 'profile' && context.tabType === 'local') {
+               // 내 프로필 탭 - scheduleExceptions 가져오기
+               eventsResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+                  headers: { 'x-auth-token': token }
+               });
+            } else if (context.tabType === 'local') {
+               // 나의 일정 탭 - 로컬 일정 목록 가져오기
                eventsResponse = await fetch(`${API_BASE_URL}/api/events`, {
                   headers: { 'x-auth-token': token }
                });
@@ -237,8 +243,21 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
 
             // 탭별로 다른 이벤트 구조 처리
             let events;
-            if (context.tabType === 'local') {
-               // 로컬 이벤트는 { events: [...] } 형태
+            if (context.context === 'profile' && context.tabType === 'local') {
+               // 내 프로필 탭 - scheduleExceptions와 personalTimes 모두 포함
+               const exceptions = eventsData.scheduleExceptions || [];
+               const personalTimes = eventsData.personalTimes || [];
+
+               // personalTimes를 scheduleException 형태로 변환하여 합치기
+               const convertedPersonalTimes = personalTimes.map(pt => ({
+                  ...pt,
+                  _id: pt.id,
+                  isPersonalTime: true // 개인시간임을 표시
+               }));
+
+               events = [...exceptions, ...convertedPersonalTimes];
+            } else if (context.tabType === 'local') {
+               // 나의 일정 탭 - 로컬 이벤트는 { events: [...] } 형태
                events = eventsData.events || eventsData;
             } else {
                // 구글 캘린더 이벤트는 배열 형태
@@ -257,15 +276,28 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                const startDate = new Date(chatResponse.startDateTime);
                const endDate = new Date(chatResponse.endDateTime);
                // 삭제할 범위 설정 완료
-               
+
                matchingEvents = events.filter(event => {
                   if (!event) return false;
 
                   let eventDate;
                   let eventTitle;
 
-                  if (context.tabType === 'local') {
-                     // 로컬 이벤트 구조: { startTime, endTime, title }
+                  if (context.context === 'profile' && context.tabType === 'local') {
+                     // 내 프로필 탭 - scheduleExceptions와 personalTimes 처리
+                     if (event.isPersonalTime) {
+                        // personalTimes는 범위 삭제에서 매일 적용되므로 범위 내 모든 날짜에 대해 매칭
+                        eventTitle = event.title;
+                        // 범위 내 모든 날짜에 대해 개인시간이 적용되는지 확인 (임시로 startDate 사용)
+                        eventDate = startDate;
+                     } else {
+                        // scheduleExceptions 구조: { startTime (ISO), endTime (ISO), title, specificDate }
+                        if (!event.startTime) return false;
+                        eventDate = new Date(event.startTime);
+                        eventTitle = event.title;
+                     }
+                  } else if (context.tabType === 'local') {
+                     // 나의 일정 탭 - 로컬 이벤트 구조: { startTime, endTime, title }
                      if (!event.startTime) return false;
                      eventDate = new Date(event.startTime);
                      eventTitle = event.title;
@@ -291,15 +323,32 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                // 단일 날짜 삭제 - 더 유연하게
                const targetDate = new Date(chatResponse.startDateTime);
                // 삭제 대상 날짜 및 검색 키워드 설정 완료
-               
+
                matchingEvents = events.filter(event => {
                   if (!event) return false;
 
                   let eventDate;
                   let eventTitle;
 
-                  if (context.tabType === 'local') {
-                     // 로컬 이벤트 구조: { startTime, endTime, title }
+                  if (context.context === 'profile' && context.tabType === 'local') {
+                     // 내 프로필 탭 - scheduleExceptions와 personalTimes 처리
+                     if (event.isPersonalTime) {
+                        // personalTimes 구조: { startTime: "HH:MM", endTime: "HH:MM", title, days: [1,2,3,...] }
+                        // 삭제할 날짜의 요일이 days 배열에 포함되는지 확인
+                        const dayOfWeek = targetDate.getDay() === 0 ? 7 : targetDate.getDay(); // 일요일=7, 월요일=1
+                        if (!event.days || !event.days.includes(dayOfWeek)) return false;
+
+                        // 개인시간은 매일 반복되므로 targetDate를 기준으로 eventDate 생성
+                        eventDate = targetDate;
+                        eventTitle = event.title;
+                     } else {
+                        // scheduleExceptions 구조: { startTime (ISO), endTime (ISO), title, specificDate }
+                        if (!event.startTime) return false;
+                        eventDate = new Date(event.startTime);
+                        eventTitle = event.title;
+                     }
+                  } else if (context.tabType === 'local') {
+                     // 나의 일정 탭 - 로컬 이벤트 구조: { startTime, endTime, title }
                      if (!event.startTime) return false;
                      eventDate = new Date(event.startTime);
                      eventTitle = event.title;
@@ -348,44 +397,109 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             // 여러 개 삭제 처리
             if (matchingEvents.length > 1 && shouldDeleteAll) {
                let deletedCount = 0;
-               for (const event of matchingEvents) {
-                  try {
-                     let deleteResponse;
-                     if (context.tabType === 'local') {
-                        // 로컬 이벤트 삭제
-                        deleteResponse = await fetch(`${API_BASE_URL}/api/events/${event._id || event.id}`, {
-                           method: 'DELETE',
-                           headers: { 'x-auth-token': token }
-                        });
-                     } else {
-                        // 구글 캘린더 이벤트 삭제
-                        deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${event.id}`, {
-                           method: 'DELETE',
-                           headers: { 'x-auth-token': token }
-                        });
+
+               if (context.context === 'profile' && context.tabType === 'local') {
+                  // 내 프로필 탭 - scheduleExceptions와 personalTimes에서 삭제
+                  const remainingExceptions = eventsData.scheduleExceptions.filter(ex =>
+                     !matchingEvents.some(match => !match.isPersonalTime && match._id === ex._id)
+                  );
+
+                  const remainingPersonalTimes = eventsData.personalTimes.filter(pt =>
+                     !matchingEvents.some(match => match.isPersonalTime && match._id === pt.id)
+                  );
+
+                  const updateResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+                     method: 'PUT',
+                     headers: {
+                        'Content-Type': 'application/json',
+                        'x-auth-token': token,
+                     },
+                     body: JSON.stringify({
+                        defaultSchedule: eventsData.defaultSchedule,
+                        scheduleExceptions: remainingExceptions,
+                        personalTimes: remainingPersonalTimes
+                     }),
+                  });
+
+                  if (updateResponse.ok) {
+                     deletedCount = matchingEvents.length;
+                     window.dispatchEvent(new Event('calendarUpdate'));
+                  }
+               } else {
+                  // 나의 일정 탭 또는 구글 캘린더
+                  for (const event of matchingEvents) {
+                     try {
+                        let deleteResponse;
+                        if (context.tabType === 'local') {
+                           // 나의 일정 탭 - 로컬 이벤트 삭제
+                           deleteResponse = await fetch(`${API_BASE_URL}/api/events/${event._id || event.id}`, {
+                              method: 'DELETE',
+                              headers: { 'x-auth-token': token }
+                           });
+                        } else {
+                           // 구글 캘린더 이벤트 삭제
+                           deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${event.id}`, {
+                              method: 'DELETE',
+                              headers: { 'x-auth-token': token }
+                           });
+                        }
+
+                        if (deleteResponse.ok) {
+                           deletedCount++;
+                        }
+                     } catch (error) {
+                        console.error('[채팅] 개별 일정 삭제 오류:', error);
                      }
-                     
-                     if (deleteResponse.ok) {
-                        deletedCount++;
-                     }
-                  } catch (error) {
-                     console.error('[채팅] 개별 일정 삭제 오류:', error);
                   }
                }
-               
+
                setEventAddedKey(prevKey => prevKey + 1);
-               return { 
-                  success: true, 
+               return {
+                  success: true,
                   message: `${deletedCount}개의 일정을 삭제했어요!`,
-                  data: chatResponse 
+                  data: chatResponse
                };
             }
             
             // 일정 삭제
             const eventToDelete = matchingEvents[0];
             let deleteResponse;
-            if (context.tabType === 'local') {
-               // 로컬 이벤트 삭제
+
+            if (context.context === 'profile' && context.tabType === 'local') {
+               // 내 프로필 탭 - scheduleExceptions와 personalTimes에서 삭제
+               let remainingExceptions = eventsData.scheduleExceptions;
+               let remainingPersonalTimes = eventsData.personalTimes;
+
+               if (eventToDelete.isPersonalTime) {
+                  // 개인시간 삭제
+                  remainingPersonalTimes = eventsData.personalTimes.filter(pt =>
+                     pt.id !== eventToDelete._id
+                  );
+               } else {
+                  // scheduleExceptions 삭제
+                  remainingExceptions = eventsData.scheduleExceptions.filter(ex =>
+                     ex._id !== eventToDelete._id
+                  );
+               }
+
+               deleteResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+                  method: 'PUT',
+                  headers: {
+                     'Content-Type': 'application/json',
+                     'x-auth-token': token,
+                  },
+                  body: JSON.stringify({
+                     defaultSchedule: eventsData.defaultSchedule,
+                     scheduleExceptions: remainingExceptions,
+                     personalTimes: remainingPersonalTimes
+                  }),
+               });
+
+               if (deleteResponse.ok) {
+                  window.dispatchEvent(new Event('calendarUpdate'));
+               }
+            } else if (context.tabType === 'local') {
+               // 나의 일정 탭 - 로컬 이벤트 삭제
                deleteResponse = await fetch(`${API_BASE_URL}/api/events/${eventToDelete._id || eventToDelete.id}`, {
                   method: 'DELETE',
                   headers: { 'x-auth-token': token }
@@ -397,13 +511,13 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   headers: { 'x-auth-token': token }
                });
             }
-            
+
             if (!deleteResponse.ok) {
                throw new Error('일정 삭제에 실패했습니다.');
             }
-            
+
             setEventAddedKey(prevKey => prevKey + 1); // 캘린더 새로고침
-            const deletedTitle = context.tabType === 'local' ? eventToDelete.title : eventToDelete.summary;
+            const deletedTitle = (context.context === 'profile' && context.tabType === 'local') || context.tabType === 'local' ? eventToDelete.title : eventToDelete.summary;
             return {
                success: true,
                message: `${deletedTitle || '일정'}을 삭제했어요!`,
