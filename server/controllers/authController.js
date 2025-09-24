@@ -138,6 +138,9 @@ exports.googleAuth = async (req, res) => {
         lastName: family_name || '',
         email,
         password: Math.random().toString(36).slice(-8), // 임시 비밀번호
+        defaultSchedule: [], // 빈 배열로 초기화
+        scheduleExceptions: [], // 빈 배열로 초기화
+        personalTimes: [], // 빈 배열로 초기화
         google: {
           id: googleId,
           accessToken: tokens.access_token,

@@ -152,10 +152,15 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
       }
     }
 
-    // 달력 업데이트
+    // 달력 업데이트 및 강제 리렌더링
     window.dispatchEvent(new CustomEvent('calendarUpdate', {
       detail: { type: 'personalTime', action: editingId ? 'update' : 'add', data: personalTimeData }
     }));
+
+    // 컴포넌트 강제 리렌더링을 위한 상태 업데이트
+    setTimeout(() => {
+      setPersonalTimes(prev => [...updatedPersonalTimes]);
+    }, 100);
 
   }, [newPersonalTime, personalTimes, setPersonalTimes, showAlert, editingId, onAutoSave]);
 
