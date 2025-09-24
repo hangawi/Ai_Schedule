@@ -260,8 +260,16 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   };
 
   const handleMemberScheduleClick = (memberId) => {
+    console.log('handleMemberScheduleClick called with memberId:', memberId);
+    console.log('Current room members:', currentRoom?.members?.map(m => ({ id: m.user._id || m.user.id, name: m.user.name })));
     setSelectedMemberId(memberId);
     setShowMemberScheduleModal(true);
+    console.log('MemberScheduleModal state set:', { selectedMemberId: memberId, showMemberScheduleModal: true });
+
+    // 상태 업데이트 후 강제 리렌더링을 위한 작은 지연
+    setTimeout(() => {
+      console.log('After timeout - Modal states:', { selectedMemberId, showMemberScheduleModal });
+    }, 100);
   };
 
   // Calendar view handlers
@@ -1296,12 +1304,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             slotToChange={slotToChange} // 전체 객체를 전달 (dayDisplay 포함)
           />
         )}
-        {showMemberScheduleModal && selectedMemberId && (
-          <MemberScheduleModal
-            memberId={selectedMemberId}
-            onClose={() => setShowMemberScheduleModal(false)}
-          />
-        )}
         <CustomAlertModal
             isOpen={customAlert.show}
             onClose={closeAlert}
@@ -1372,6 +1374,18 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
               await fetchRoomDetails(currentRoom._id);
             }}
             onOpenNegotiation={handleOpenNegotiation}
+          />
+        )}
+
+        {/* Member Schedule Modal - 방 안에서도 보여야 하므로 여기에 위치 */}
+        {showMemberScheduleModal && selectedMemberId && (
+          <MemberScheduleModal
+            memberId={selectedMemberId}
+            onClose={() => {
+              console.log('Closing MemberScheduleModal from room view');
+              setShowMemberScheduleModal(false);
+              setSelectedMemberId(null);
+            }}
           />
         )}
       </div>
@@ -1482,7 +1496,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       {showMemberScheduleModal && selectedMemberId && (
         <MemberScheduleModal
           memberId={selectedMemberId}
-          onClose={() => setShowMemberScheduleModal(false)}
+          onClose={() => {
+            console.log('Closing MemberScheduleModal');
+            setShowMemberScheduleModal(false);
+            setSelectedMemberId(null);
+          }}
         />
       )}
     </div>

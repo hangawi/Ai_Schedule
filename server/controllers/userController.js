@@ -134,7 +134,7 @@ exports.updateUserSchedule = async (req, res) => {
 exports.getUserScheduleById = async (req, res) => {
   try {
     const { userId } = req.params;
-    const user = await User.findById(userId).select('defaultSchedule scheduleExceptions personalTimes firstName lastName'); // Include name for display
+    const user = await User.findById(userId).select('defaultSchedule scheduleExceptions personalTimes firstName lastName name'); // Include name for display
     if (!user) {
       return res.status(404).json({ msg: 'User not found' });
     }
@@ -143,7 +143,8 @@ exports.getUserScheduleById = async (req, res) => {
       scheduleExceptions: user.scheduleExceptions,
       personalTimes: user.personalTimes || [],
       firstName: user.firstName,
-      lastName: user.lastName
+      lastName: user.lastName,
+      name: user.name
     });
   } catch (err) {
     console.error(err.message);

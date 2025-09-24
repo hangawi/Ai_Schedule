@@ -37,11 +37,14 @@ const RoomManagementModal = ({
 
   const handleUpdate = async () => {
     try {
+      console.log('Updating room with data:', formData);
       const updatedRoom = await updateRoom(room._id, formData);
       setIsEditing(false);
       onRoomUpdated(updatedRoom);
+      showAlert('방 정보가 성공적으로 업데이트되었습니다.');
     } catch (error) {
-      // Failed to update room - silently handle error
+      console.error('Failed to update room:', error);
+      showAlert(`방 정보 업데이트 실패: ${error.message}`);
     }
   };
 

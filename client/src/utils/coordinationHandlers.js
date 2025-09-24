@@ -11,6 +11,8 @@ import { days, getDayIndex, calculateEndTime } from './coordinationUtils';
 export const handleAutoResolveNegotiations = async (currentRoom, fetchRoomDetails, showAlert) => {
   if (!currentRoom?._id) return;
 
+  console.log('Auto-resolving negotiations for room:', currentRoom._id);
+
   try {
     const result = await coordinationService.autoResolveTimeoutNegotiations(currentRoom._id, 24);
 
@@ -50,6 +52,8 @@ export const handleForceResolveNegotiation = async (currentRoom, negotiationId, 
 export const handleResetCarryOverTimes = async (currentRoom, fetchRoomDetails, setCurrentRoom, showAlert) => {
   if (!currentRoom?._id) return;
 
+  console.log('Resetting carryover times for room:', currentRoom._id);
+
   try {
     const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
     const token = localStorage.getItem('token');
@@ -76,6 +80,7 @@ export const handleResetCarryOverTimes = async (currentRoom, fetchRoomDetails, s
       await fetchRoomDetails(currentRoom._id);
     }
   } catch (error) {
+    console.error('Carryover reset failed:', error);
     showAlert(`이월시간 초기화 실패: ${error.message}`);
   }
 };
@@ -85,6 +90,8 @@ export const handleResetCarryOverTimes = async (currentRoom, fetchRoomDetails, s
  */
 export const handleResetCompletedTimes = async (currentRoom, fetchRoomDetails, setCurrentRoom, showAlert) => {
   if (!currentRoom?._id) return;
+
+  console.log('Resetting completed times for room:', currentRoom._id);
 
   try {
     const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
@@ -157,7 +164,11 @@ export const handleRunAutoSchedule = async (
     // UI가 보고 있는 주와 일치하도록 설정
     const uiCurrentWeek = currentWeekStartDate; // Use actual current week from UI
 
+    console.log('Starting auto-schedule with options:', { ...scheduleOptions, currentWeek: uiCurrentWeek });
+
     const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = await coordinationService.runAutoSchedule(currentRoom._id, { ...scheduleOptions, currentWeek: uiCurrentWeek });
+
+    console.log('Auto-schedule completed:', { updatedRoom, newUnassignedMembersInfo, newConflictSuggestions });
 
     if (newUnassignedMembersInfo) {
       setUnassignedMembersInfo(newUnassignedMembersInfo);
@@ -197,6 +208,7 @@ export const handleRunAutoSchedule = async (
       showAlert('자동 시간 배정이 완료되었습니다. 모든 시간이 성공적으로 할당되었습니다.');
     }
   } catch (error) {
+    console.error('Auto-schedule failed:', error);
     setScheduleError(error.message);
     showAlert(`자동 배정 실패: ${error.message}`);
   } finally {
