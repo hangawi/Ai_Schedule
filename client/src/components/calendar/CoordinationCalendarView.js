@@ -113,17 +113,73 @@ const CoordinationCalendarView = ({
 
   const getSlotCountForDate = (date) => {
     const dateStr = date.toISOString().split('T')[0];
+    const dayOfWeek = date.getDay();
+    const dayNameMap = {
+      0: 'sunday',
+      1: 'monday',
+      2: 'tuesday',
+      3: 'wednesday',
+      4: 'thursday',
+      5: 'friday',
+      6: 'saturday'
+    };
+    const dayName = dayNameMap[dayOfWeek];
+
     return timeSlots.filter(slot => {
-      const slotDate = new Date(slot.date).toISOString().split('T')[0];
-      return slotDate === dateStr;
+      // Check for slots with specific dates first
+      if (slot.date) {
+        try {
+          const slotDate = new Date(slot.date).toISOString().split('T')[0];
+          return slotDate === dateStr;
+        } catch (e) {
+          // Invalid date format, skip
+          return false;
+        }
+      }
+
+      // Check for recurring weekly slots by day name
+      if (slot.day && slot.day.toLowerCase() === dayName) {
+        return true;
+      }
+
+      return false;
     }).length;
   };
 
   const hasAutoAssignedForDate = (date) => {
     const dateStr = date.toISOString().split('T')[0];
+    const dayOfWeek = date.getDay();
+    const dayNameMap = {
+      0: 'sunday',
+      1: 'monday',
+      2: 'tuesday',
+      3: 'wednesday',
+      4: 'thursday',
+      5: 'friday',
+      6: 'saturday'
+    };
+    const dayName = dayNameMap[dayOfWeek];
+
     return timeSlots.some(slot => {
-      const slotDate = new Date(slot.date).toISOString().split('T')[0];
-      return slotDate === dateStr && (slot.assignedBy || slot.subject === '자동 배정');
+      const isAutoAssigned = slot.assignedBy || slot.subject === '자동 배정';
+      if (!isAutoAssigned) return false;
+
+      // Check for slots with specific dates first
+      if (slot.date) {
+        try {
+          const slotDate = new Date(slot.date).toISOString().split('T')[0];
+          return slotDate === dateStr;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      // Check for recurring weekly slots by day name
+      if (slot.day && slot.day.toLowerCase() === dayName) {
+        return true;
+      }
+
+      return false;
     });
   };
 

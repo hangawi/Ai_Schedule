@@ -320,15 +320,6 @@ const ScheduleGridSelector = ({ schedule, setSchedule, readOnly, exceptions = []
     return mergeConsecutiveTimeSlots(schedule);
   };
 
-  // 컴포넌트가 이 함수를 외부로 노출
-  React.useImperativeHandle(React.forwardRef(), () => ({
-    getOptimizedSchedule,
-    mergeConsecutiveTimeSlots: () => {
-      const merged = mergeConsecutiveTimeSlots(schedule);
-      setSchedule(merged);
-      return merged;
-    }
-  }));
 
   const renderViewControls = () => (
     <div className="flex items-center justify-between mb-4">
