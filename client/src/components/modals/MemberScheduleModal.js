@@ -25,7 +25,7 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
           setRenderKey(prev => prev + 1);
         }, 50);
       } catch (err) {
-        console.error('Failed to fetch member schedule:', err);
+        // Failed to fetch member schedule - silently handle error
         setError('조원 일정을 불러오는데 실패했습니다.');
       } finally {
         setIsLoading(false);

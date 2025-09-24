@@ -110,7 +110,7 @@ const CreateProposalModal = ({ onClose, onProposalCreated }) => {
            onClose();
          });
       } catch (error) {
-         console.error('Error creating proposal:', error.message);
+         // Error creating proposal - silently handle error
          showAlert(`일정 조율 요청 실패: ${error.message}`, 'error', '생성 실패');
       }
    };

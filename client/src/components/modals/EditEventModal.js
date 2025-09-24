@@ -53,7 +53,7 @@ const EditEventModal = ({ event, onClose, onUpdateEvent }) => {
       onUpdateEvent(updatedEvent);
       onClose();
     } catch (error) {
-      console.error('Error updating event:', error);
+      // Error updating event - silently handle error
       showAlert('일정 업데이트 중 오류가 발생했습니다.');
     }
   };

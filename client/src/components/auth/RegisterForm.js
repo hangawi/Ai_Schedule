@@ -149,7 +149,7 @@ const RegisterForm = ({ onClose, onRegisterSuccess, onLoginClick }) => {
       onRegisterSuccess();
     } catch (error) {
       showAlert(`회원가입 실패: ${error.message}`, 'error', '회원가입 실패');
-      console.error('Register error:', error);
+      // Register error - silently handle error
     }
   };
 

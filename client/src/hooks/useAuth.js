@@ -37,7 +37,7 @@ export const useAuth = () => {
             }
          } catch (error) {
             if (error.name !== 'AbortError') {
-               console.error('Error fetching user data:', error);
+               // Error fetching user data - silently handle error
             }
             localStorage.removeItem('token');
             localStorage.removeItem('loginMethod');

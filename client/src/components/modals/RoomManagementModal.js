@@ -41,7 +41,7 @@ const RoomManagementModal = ({
       setIsEditing(false);
       onRoomUpdated(updatedRoom);
     } catch (error) {
-      console.error("Failed to update room:", error);
+      // Failed to update room - silently handle error
     }
   };
 
@@ -55,7 +55,7 @@ const RoomManagementModal = ({
         await deleteRoom(room._id);
         onClose();
       } catch (error) {
-        console.error("Failed to delete room:", error);
+        // Failed to delete room - silently handle error
       }
     }
   };
@@ -91,7 +91,7 @@ const RoomManagementModal = ({
           showAlert("조원이 성공적으로 제거되었습니다.");
         }
       } catch (error) {
-        console.error("Failed to remove member:", error);
+        // Failed to remove member - silently handle error
         showAlert(`조원 제거 실패: ${error.message}`);
       }
     }

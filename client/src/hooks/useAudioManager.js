@@ -59,7 +59,7 @@ export const useAudioManager = () => {
       };
       draw();
     } catch (err) {
-      console.error('Error setting up audio analysis:', err);
+      // Error setting up audio analysis - silently handle error
     }
   }, []);
 

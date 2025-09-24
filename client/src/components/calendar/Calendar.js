@@ -133,7 +133,7 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
             } else if (response.status === 401) {
                localStorage.setItem('googleConnected', 'false');
             } else {
-               console.error('Google 캘린더 이벤트를 가져오는 데 실패했습니다.');
+               // Failed to fetch Google calendar events
             }
          }
 
@@ -147,14 +147,14 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
                   personalEvents = generatePersonalEvents(scheduleData.personalTimes, timeMin, timeMax);
                }
             } catch (error) {
-               console.error("Error fetching personal schedule:", error);
+               // Error fetching personal schedule - silently handle error
                // 개인 일정 로드 실패 시에도 구글 캘린더는 표시되도록 함
             }
          }
 
          setEvents([...googleEvents, ...personalEvents]);
       } catch (error) {
-        console.error("Error fetching calendar events:", error);
+        // Error fetching calendar events - silently handle error
         showAlert('캘린더 이벤트를 가져오는 중 오류가 발생했습니다.', 'error', '오류');
         setEvents([]);
       }

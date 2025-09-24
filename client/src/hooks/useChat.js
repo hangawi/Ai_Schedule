@@ -65,7 +65,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   start.setHours(start.getHours() + 1);
                   chatResponse.endDateTime = start.toISOString();
                } catch (timeError) {
-                  console.error('시간 변환 오류:', timeError);
                   throw new Error('날짜 형식이 올바르지 않습니다.');
                }
             }
@@ -455,7 +454,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                            deletedCount++;
                         }
                      } catch (error) {
-                        console.error('[채팅] 개별 일정 삭제 오류:', error);
+                        // Silently handle individual deletion errors
                      }
                   }
                }
@@ -543,9 +542,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             data: chatResponse 
          };
       } catch (error) {
-         console.error('Chat error:', error);
-         console.error('Error details:', error.message, error.stack);
-         
          // API 키 관련 오류 체크
          if (error.message.includes('API key not valid') || 
              error.message.includes('API_KEY_INVALID') ||

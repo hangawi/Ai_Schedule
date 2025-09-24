@@ -121,7 +121,7 @@ function App() {
             }
          }
       } catch (err) {
-         console.error('Clipboard read failed: ', err);
+         // Clipboard read failed - silently handle error
       }
    }, [dismissedCopiedTexts, analyzeClipboard, addToDismissedTexts]);
 

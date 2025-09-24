@@ -49,7 +49,7 @@ const AddEventModal = ({ onClose, onAddEvent }) => {
         const data = await response.json();
         onAddEvent(data);
       } catch (error) {
-        console.error('Error adding event:', error.message);
+        // Error adding event - silently handle error
         showAlert(`일정 추가 실패: ${error.message}`);
       }
     } else {

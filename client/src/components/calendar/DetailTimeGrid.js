@@ -465,7 +465,6 @@ const DetailTimeGrid = ({
           await onSave();
           setHasUnsavedChanges(false);
         } catch (error) {
-          console.error('Quick time slot auto-save failed:', error);
         }
       }, 200);
     }
@@ -784,7 +783,6 @@ const DetailTimeGrid = ({
           await onSave();
           setHasUnsavedChanges(false);
         } catch (error) {
-          console.error('하루 전체 삭제 후 자동 저장 실패:', error);
         }
       }, 200);
     }
@@ -861,7 +859,6 @@ const DetailTimeGrid = ({
             await onSave();
             setHasUnsavedChanges(false);
           } catch (error) {
-            console.error('Direct input auto-save failed:', error);
           }
         }, 200);
       }
