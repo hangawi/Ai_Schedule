@@ -103,7 +103,10 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
       scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
       access_type: 'offline',
       prompt: 'consent',
-      redirect_uri: 'https://aisch-9258c2a376c0.herokuapp.com', // 명시적으로 redirect_uri 설정
+      // 환경에 따른 redirect_uri 설정
+      redirect_uri: process.env.NODE_ENV === 'production'
+         ? 'https://aisch-9258c2a376c0.herokuapp.com'
+         : 'http://localhost:3000',
    });
 
    const handleKeyPress = event => {
@@ -144,12 +147,12 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
 
             <div className="mt-6 flex flex-col space-y-3">
                <button onClick={handleLogin} className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
-                  로ffasdsad그인
+                  로그인
                </button>
                <button
                   onClick={onRegisterClick}
                   className="px-4 py-2 border border-blue-500 text-blue-500 rounded-md hover:bg-blue-50">
-                  회ss원가입
+                  회원가입
                </button>
 
                <SocialLoginButtons googleLogin={googleLogin} showAlert={showAlert} />
