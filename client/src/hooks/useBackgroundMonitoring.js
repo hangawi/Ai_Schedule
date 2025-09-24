@@ -70,7 +70,7 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
         }
       }
     } catch (error) {
-      console.error("Error analyzing full transcript:", error);
+      // Error analyzing full transcript - silently handle error
     } finally {
       // 분석 완료 후 대기 상태로 복귀
       setIsAnalyzing(false);

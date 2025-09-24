@@ -13,7 +13,7 @@ import { useCoordination } from '../../hooks/useCoordination';
 import { useCoordinationModals } from '../../hooks/useCoordinationModals';
 import { useAuth } from '../../hooks/useAuth';
 import { coordinationService } from '../../services/coordinationService';
-import { Users, Calendar, PlusCircle, LogIn, WandSparkles, Zap, X, MessageSquare, Clock, Grid } from 'lucide-react';
+import { Calendar, Grid, PlusCircle, LogIn, Users, MessageSquare, Clock } from 'lucide-react';
 import { translateEnglishDays } from '../../utils';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import MemberScheduleModal from '../modals/MemberScheduleModal';
@@ -21,10 +21,33 @@ import NotificationModal from '../modals/NotificationModal';
 import NegotiationModal from '../modals/NegotiationModal';
 import MemberStatsModal from '../modals/MemberStatsModal';
 
-const dayMap = {
-  'monday': '월요일', 'tuesday': '화요일', 'wednesday': '수요일',
-  'thursday': '목요일', 'friday': '금요일', 'saturday': '토요일', 'sunday': '일요일'
-};
+// Extracted components
+import RoomList from '../coordination/RoomList';
+import MemberList from '../coordination/MemberList';
+import { RequestManagement, OwnerRequestsSection } from '../coordination/RequestManagement';
+import NegotiationSection from '../coordination/NegotiationSection';
+
+// Utilities
+import {
+  dayMap,
+  days,
+  getCurrentWeekMonday,
+  calculateEndTime,
+  getHourFromSettings,
+  isRoomOwner,
+  countActiveNegotiations
+} from '../../utils/coordinationUtils';
+import {
+  handleAutoResolveNegotiations,
+  handleForceResolveNegotiation,
+  handleResetCarryOverTimes,
+  handleResetCompletedTimes,
+  handleRunAutoSchedule,
+  handleCancelRequest,
+  handleRequestWithUpdate,
+  createChangeRequestData
+} from '../../utils/coordinationHandlers';
+
 
 const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount }) => {
   const { user } = useAuth();
@@ -37,15 +60,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const closeAlert = () => setCustomAlert({ show: false, message: '' });
 
   // State for the currently displayed week in TimetableGrid
-  // Initialize with current week's Monday
-  const getCurrentWeekMonday = () => {
-    const today = new Date();
-    const day = today.getUTCDay();
-    const diff = today.getUTCDate() - day + (day === 0 ? -6 : 1);
-    today.setUTCDate(diff);
-    today.setUTCHours(0, 0, 0, 0);
-    return today.toISOString().split('T')[0]; // Return YYYY-MM-DD format
-  };
 
   const [currentWeekStartDate, setCurrentWeekStartDate] = useState(getCurrentWeekMonday());
   const handleWeekChange = useCallback((date) => {
@@ -87,7 +101,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       setCurrentRoom(updatedRoom);
       showAlert('시간표가 모두 삭제되었습니다.');
     } catch (error) {
-      console.error('Failed to delete all time slots:', error);
       showAlert(`시간표 삭제에 실패했습니다: ${error.message}`);
     }
     setShowDeleteConfirm(false);
@@ -106,7 +119,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         setRoomExchangeCounts(result.roomCounts);
       }
     } catch (error) {
-      console.error('Failed to load room exchange counts:', error);
     }
   }, [user?.id]);
 
@@ -118,7 +130,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         setSentRequests(result.requests);
       }
     } catch (error) {
-      console.error('Failed to load sent requests:', error);
     }
   }, [user?.id]);
 
@@ -130,7 +141,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         setReceivedRequests(result.requests);
       }
     } catch (error) {
-      console.error('Failed to load received requests:', error);
     }
   }, [user?.id]);
 
@@ -148,7 +158,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         try {
           await fetchRoomDetails(roomId);
         } catch (error) {
-          console.error('Failed to restore room:', error);
           setCurrentRoom(null);
         }
       }
@@ -175,205 +184,43 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     closeChangeRequestModal
   } = useCoordinationModals();
 
-  // Handle auto-resolution of timeout negotiations (moved after useCoordination)
-  const handleAutoResolveNegotiations = useCallback(async () => {
-    if (!currentRoom?._id) return;
+  // Handle auto-resolution of timeout negotiations
+  const handleAutoResolveNegotiationsCallback = useCallback(async () => {
+    await handleAutoResolveNegotiations(currentRoom, fetchRoomDetails, showAlert);
+  }, [currentRoom, fetchRoomDetails, showAlert]);
 
-    try {
-      const result = await coordinationService.autoResolveTimeoutNegotiations(currentRoom._id, 24);
-
-      if (result.resolvedCount > 0) {
-        // Show notification about auto-resolved negotiations
-        showAlert(`${result.resolvedCount}개의 협의가 자동으로 해결되었습니다.`);
-
-        // Refresh room data
-        await fetchRoomDetails(currentRoom._id);
-      }
-    } catch (error) {
-      console.error('Error auto-resolving negotiations:', error);
-    }
-  }, [currentRoom?._id, fetchRoomDetails, showAlert]);
-
-  // Force resolve negotiation function (moved after useCoordination)
-  const handleForceResolveNegotiation = useCallback(async (negotiationId, method = 'random') => {
-    if (!currentRoom?._id) return;
-
-    try {
-      const result = await coordinationService.forceResolveNegotiation(currentRoom._id, negotiationId, method);
-
-      showAlert(`협의가 ${result.assignmentMethod}으로 해결되었습니다.`);
-
-      // Refresh room data
-      await fetchRoomDetails(currentRoom._id);
-    } catch (error) {
-      console.error('Error force resolving negotiation:', error);
-      showAlert(`협의 해결 실패: ${error.message}`);
-    }
-  }, [currentRoom?._id, fetchRoomDetails, showAlert]);
+  // Force resolve negotiation function
+  const handleForceResolveNegotiationCallback = useCallback(async (negotiationId, method = 'random') => {
+    await handleForceResolveNegotiation(currentRoom, negotiationId, fetchRoomDetails, showAlert, method);
+  }, [currentRoom, fetchRoomDetails, showAlert]);
 
   // Reset carryover times function
-  const handleResetCarryOverTimes = useCallback(async () => {
-    if (!currentRoom?._id) return;
-
-    try {
-      const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${apiUrl}/api/coordination/reset-carryover/${currentRoom._id}`, {
-        method: 'POST',
-        headers: {
-          'x-auth-token': token,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to reset carryover times');
-      }
-
-      const result = await response.json();
-      showAlert(`${result.resetCount}명의 멤버 이월시간이 초기화되었습니다.`);
-
-      // Immediately update room data without refresh
-      if (result.room) {
-        setCurrentRoom(result.room);
-      } else {
-        // Fallback to refresh if room data not returned
-        await fetchRoomDetails(currentRoom._id);
-      }
-    } catch (error) {
-      console.error('Error resetting carryover times:', error);
-      showAlert(`이월시간 초기화 실패: ${error.message}`);
-    }
-  }, [currentRoom?._id, fetchRoomDetails, showAlert, user?.token]);
+  const handleResetCarryOverTimesCallback = useCallback(async () => {
+    await handleResetCarryOverTimes(currentRoom, fetchRoomDetails, setCurrentRoom, showAlert);
+  }, [currentRoom, fetchRoomDetails, setCurrentRoom, showAlert]);
 
   // Reset completed times function
-  const handleResetCompletedTimes = useCallback(async () => {
-    if (!currentRoom?._id) return;
-
-    try {
-      const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${apiUrl}/api/coordination/reset-completed/${currentRoom._id}`, {
-        method: 'POST',
-        headers: {
-          'x-auth-token': token,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to reset completed times');
-      }
-
-      const result = await response.json();
-      showAlert(`${result.resetCount}명의 멤버 완료시간이 초기화되었습니다.`);
-
-      // Immediately update room data without refresh
-      if (result.room) {
-        setCurrentRoom(result.room);
-      } else {
-        // Fallback to refresh if room data not returned
-        await fetchRoomDetails(currentRoom._id);
-      }
-    } catch (error) {
-      console.error('Error resetting completed times:', error);
-      showAlert(`완료시간 초기화 실패: ${error.message}`);
-    }
-  }, [currentRoom?._id, fetchRoomDetails, showAlert, user?.token]);
+  const handleResetCompletedTimesCallback = useCallback(async () => {
+    await handleResetCompletedTimes(currentRoom, fetchRoomDetails, setCurrentRoom, showAlert);
+  }, [currentRoom, fetchRoomDetails, setCurrentRoom, showAlert]);
 
 
-  // Auto-scheduling function (moved after useCoordination)
-  const handleRunAutoSchedule = async () => {
-    if (!currentRoom || !currentWeekStartDate) {
-      showAlert('현재 방 정보나 주차 정보가 없습니다.');
-      return;
-    }
-
-    // Check if there are any members
-    const nonOwnerMembers = currentRoom.members?.filter(m =>
-      (m.user._id || m.user) !== user?.id
-    ) || [];
-
-    if (nonOwnerMembers.length === 0) {
-      showAlert('자동 배정을 위해서는 최소 1명의 멤버가 필요합니다.');
-      return;
-    }
-
-    // Check if members have submitted their time slots
-    console.log('DEBUG: currentRoom.timeSlots 확인:', {
-      timeSlots: currentRoom.timeSlots,
-      timeSlotsLength: currentRoom.timeSlots?.length,
-      members: currentRoom.members?.map(m => ({
-        userId: m.user._id || m.user,
-        name: m.user.name || `${m.user.firstName} ${m.user.lastName}`,
-        hasTimeSlots: currentRoom.timeSlots?.some(slot =>
-          (slot.user._id || slot.user) === (m.user._id || m.user)
-        )
-      }))
-    });
-
-    // 서버에서 멤버들의 defaultSchedule을 timeSlots로 변환하는 로직이 있으므로
-    // 클라이언트에서는 멤버가 있는지만 확인하고 서버로 요청을 보냄
-    console.log('DEBUG: 자동배정 실행 - 서버에서 멤버들의 선호시간표를 확인합니다...');
-
-    // 기존의 엄격한 체크를 제거하고 서버에서 처리하도록 함
-
-    setIsScheduling(true);
-    setScheduleError(null);
-    setUnassignedMembersInfo(null);
-    setConflictSuggestions([]); // Reset unassigned members info
-    try {
-      console.log('자동 배정 호출 - currentWeekStartDate:', currentWeekStartDate);
-      console.log('자동 배정 호출 - scheduleOptions:', scheduleOptions);
-
-      // UI가 보고 있는 주와 일치하도록 강제로 설정
-      const uiCurrentWeek = "2025-09-15"; // 임시로 고정값 사용
-      console.log('자동 배정 호출 - 강제 설정된 currentWeek:', uiCurrentWeek);
-
-      const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = await coordinationService.runAutoSchedule(currentRoom._id, { ...scheduleOptions, currentWeek: uiCurrentWeek });
-
-      if (newUnassignedMembersInfo) {
-          setUnassignedMembersInfo(newUnassignedMembersInfo);
-      }
-      if (newConflictSuggestions && newConflictSuggestions.length > 0) {
-          setConflictSuggestions(newConflictSuggestions);
-      }
-      // Force a deep copy to break memoization in child components
-      const newRoomState = JSON.parse(JSON.stringify(updatedRoom));
-      setCurrentRoom(newRoomState);
-
-      // Check for active negotiations and show notification
-      const activeNegotiations = updatedRoom.negotiations?.filter(neg =>
-        neg.status === 'active' && neg.conflictingMembers?.length > 0
-      ) || [];
-
-      // Filter negotiations where current user is involved
-      const userNegotiations = activeNegotiations.filter(neg =>
-        neg.conflictingMembers?.some(cm =>
-          (cm.user._id || cm.user) === user?.id
-        )
-      );
-
-      if (userNegotiations.length > 0) {
-        // Show alert for negotiations user is involved in
-        setNegotiationAlertData({
-          count: userNegotiations.length,
-          negotiations: userNegotiations,
-          totalCount: activeNegotiations.length
-        });
-        setShowNegotiationAlert(true);
-      } else if (activeNegotiations.length > 0) {
-        // Show passive notification for other negotiations
-        showAlert(`자동 시간 배정이 완료되었습니다. ${activeNegotiations.length}개의 협의가 생성되었습니다. 같은 우선순위의 멤버들 간 조율이 필요한 시간대입니다.`);
-      } else {
-        showAlert('자동 시간 배정이 완료되었습니다. 모든 시간이 성공적으로 할당되었습니다.');
-      }
-    } catch (error) {
-      setScheduleError(error.message);
-      showAlert(`자동 배정 실패: ${error.message}`);
-    } finally {
-      setIsScheduling(false);
-    }
+  // Auto-scheduling function
+  const handleRunAutoScheduleCallback = async () => {
+    await handleRunAutoSchedule(
+      currentRoom,
+      currentWeekStartDate,
+      user,
+      scheduleOptions,
+      setIsScheduling,
+      setScheduleError,
+      setUnassignedMembersInfo,
+      setConflictSuggestions,
+      setCurrentRoom,
+      setNegotiationAlertData,
+      setShowNegotiationAlert,
+      showAlert
+    );
   };
 
   // Handle opening negotiation modal
@@ -452,59 +299,33 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [showAllRequests, setShowAllRequests] = useState({});
   const [expandedSections, setExpandedSections] = useState({});
   
-  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
 
-  const handleCancelRequest = async (requestId) => {
-    try {
-      console.log('🗑️ [내역삭제] 요청 내역 삭제 시작:', requestId);
-
-      // 먼저 UI에서 즉시 제거 (낙관적 업데이트)
-      setSentRequests(prev => prev.filter(req => req._id !== requestId));
-      setReceivedRequests(prev => prev.filter(req => req._id !== requestId));
-
-      console.log('🗑️ [내역삭제] UI에서 즉시 제거 완료');
-
-      // 백그라운드에서 서버 삭제 실행 (알림 없음)
-      await cancelRequest(requestId);
-
-      console.log('🗑️ [내역삭제] 서버 삭제 완료');
-
-      // 상위 컴포넌트의 교환 요청 카운트 업데이트 (현재 룸의 pending 요청만 영향)
-      if (onRefreshExchangeCount) {
-        onRefreshExchangeCount();
-      }
-
-    } catch (error) {
-      console.error('🗑️ [내역삭제] 삭제 실패, UI 롤백:', error);
-
-      // 삭제 실패 시 데이터 새로고침으로 롤백
-      await Promise.all([
-        loadSentRequests(),
-        loadReceivedRequests()
-      ]);
-
-      showAlert(`내역 삭제에 실패했습니다: ${error.message}`);
-    }
+  const handleCancelRequestCallback = async (requestId) => {
+    await handleCancelRequest(
+      requestId,
+      setSentRequests,
+      setReceivedRequests,
+      cancelRequest,
+      loadSentRequests,
+      loadReceivedRequests,
+      onRefreshExchangeCount,
+      showAlert
+    );
   };
 
-  const handleRequestWithUpdate = async (requestId, action) => {
-    try {
-      await handleRequest(requestId, action);
-      showAlert(`요청을 ${action === 'approved' ? '승인' : '거절'}했습니다.`);
-
-      // To ensure the UI is fully updated, we'll refresh all relevant data sources.
-      if (currentRoom?._id) {
-        await fetchRoomDetails(currentRoom._id);
-      }
-      await loadReceivedRequests();
-      await loadSentRequests();
-      await loadRoomExchangeCounts();
-      onRefreshExchangeCount();
-
-    } catch (error) {
-      console.error('Failed to handle request:', error);
-      showAlert(`요청 처리에 실패했습니다: ${error.message || '알 수 없는 오류'}`);
-    }
+  const handleRequestWithUpdateCallback = async (requestId, action) => {
+    await handleRequestWithUpdate(
+      requestId,
+      action,
+      handleRequest,
+      currentRoom,
+      fetchRoomDetails,
+      loadReceivedRequests,
+      loadSentRequests,
+      loadRoomExchangeCounts,
+      onRefreshExchangeCount,
+      showAlert
+    );
   };
   
   useEffect(() => {
@@ -526,7 +347,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     await createRoom(roomData);
     closeCreateRoomModal();
     fetchMyRooms();
-    console.log('Room created, currentRoom after creation:', currentRoom); // Note: currentRoom might not be immediately updated here due to async state updates
+    // Note: currentRoom might not be immediately updated here due to async state updates
   };
 
   const handleJoinRoom = async (inviteCode) => {
@@ -542,7 +363,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       setSelectedSlots([]);
       await fetchRoomDetails(currentRoom._id);
     } catch (error) {
-      console.error('Error submitting slots:', error);
     }
   };
 
@@ -574,7 +394,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
           roomId: room._id
         }, '', '#coordination-room');
       } catch (error) {
-        console.error('Failed to fetch room details:', error);
         showAlert(`방 접근 실패: ${error.message || error}`);
       }
     } else {
@@ -614,44 +433,17 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   }
 
   if (currentRoom) {
-    let isOwner = false;
-    if (user?.id && currentRoom) {
-      const currentUserId = user.id;
-      const roomOwnerId = currentRoom.owner?._id || currentRoom.owner?.id || currentRoom.owner;
-      
-      if (roomOwnerId && currentUserId.toString() === roomOwnerId.toString()) {
-        isOwner = true;
-      }
-      if (currentRoom.roomMasterId && currentUserId.toString() === currentRoom.roomMasterId._id?.toString()) {
-        isOwner = true;
-      }
-    }
-    
-  const calculateEndTime = (startTime) => {
-    const [hour, minute] = startTime.split(':').map(Number);
-    const totalMinutes = hour * 60 + minute + 10; // Changed to 10-minute intervals
-    const endHour = Math.floor(totalMinutes / 60);
-    const endMinute = totalMinutes % 60;
-    return `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
-  };
-
-    const getHourFromSettings = (setting, defaultValue) => {
-      if (!setting) return parseInt(defaultValue);
-      if (typeof setting === 'string') return parseInt(setting.split(':')[0]);
-      if (typeof setting === 'number') return setting;
-      return parseInt(defaultValue);
-    };
+    const isOwner = isRoomOwner(user, currentRoom);
 
     const scheduleStartHour = getHourFromSettings(
-      currentRoom.settings?.scheduleStart || currentRoom.settings?.startHour, 
+      currentRoom.settings?.scheduleStart || currentRoom.settings?.startHour,
       '9'
     );
     const scheduleEndHour = getHourFromSettings(
-      currentRoom.settings?.scheduleEnd || currentRoom.settings?.endHour, 
+      currentRoom.settings?.scheduleEnd || currentRoom.settings?.endHour,
       '18'
     );
     
-    console.log("CoordinationTab: currentWeekStartDate before rendering TimetableGrid:", currentWeekStartDate);
 
     return (
       <div className="p-1">
@@ -709,47 +501,15 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
               <AutoSchedulerPanel
                 options={scheduleOptions}
                 setOptions={setScheduleOptions}
-                onRun={handleRunAutoSchedule}
+                onRun={handleRunAutoScheduleCallback}
                 isLoading={isScheduling}
                 currentRoom={currentRoom}
-                onAutoResolveNegotiations={handleAutoResolveNegotiations}
-                onResetCarryOverTimes={handleResetCarryOverTimes}
-                onResetCompletedTimes={handleResetCompletedTimes}
+                onAutoResolveNegotiations={handleAutoResolveNegotiationsCallback}
+                onResetCarryOverTimes={handleResetCarryOverTimesCallback}
+                onResetCompletedTimes={handleResetCompletedTimesCallback}
                 onDeleteAllSlots={handleDeleteAllSlots}
                 currentWeekStartDate={currentWeekStartDate}
-                activeNegotiationsCount={(() => {
-                  if (!currentRoom?.negotiations) return 0;
-
-                  console.log('DEBUG: 전체 협의 수:', currentRoom.negotiations.length);
-                  console.log('DEBUG: 전체 협의:', currentRoom.negotiations.map(neg => ({
-                    id: neg._id,
-                    status: neg.status,
-                    conflictingMembers: neg.conflictingMembers?.length || 0,
-                    day: neg.day,
-                    time: neg.time
-                  })));
-
-                  const activeNegotiations = currentRoom.negotiations.filter(neg => {
-                    const isActive = neg.status === 'active';
-                    const hasMembers = neg.conflictingMembers && Array.isArray(neg.conflictingMembers);
-                    const hasConflict = hasMembers && neg.conflictingMembers.length > 1;
-
-                    console.log('DEBUG: 협의 필터링:', {
-                      id: neg._id,
-                      status: neg.status,
-                      isActive,
-                      hasMembers,
-                      memberCount: neg.conflictingMembers?.length || 0,
-                      hasConflict,
-                      pass: isActive && hasMembers && hasConflict
-                    });
-
-                    return isActive && hasMembers && hasConflict;
-                  });
-
-                  console.log('DEBUG: 활성 협의 수:', activeNegotiations.length);
-                  return activeNegotiations.length;
-                })()}
+                activeNegotiationsCount={countActiveNegotiations(currentRoom)}
               />
             )}
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4">
@@ -762,9 +522,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   const memberData = member.user || member;
                   const memberName = memberData.name || `${memberData.firstName || ''} ${memberData.lastName || ''}`.trim() || '알 수 없음';
                   const isCurrentUser = memberData._id === user?.id || memberData.id === user?.id;
-                  
-                  console.log(`렌더링 - Member ${memberName}: carryOver = ${member.carryOver}`);
-                  
                   let memberIsOwner = false;
                   if (currentRoom.owner) {
                     const ownerId = currentRoom.owner._id || currentRoom.owner.id || currentRoom.owner;

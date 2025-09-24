@@ -58,7 +58,7 @@ export const useIntegratedVoiceSystem = (
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      console.error("Speech Recognition not supported.");
+      // Speech Recognition not supported - silently handle error
       return;
     }
 
@@ -104,7 +104,7 @@ export const useIntegratedVoiceSystem = (
 
     recognition.onerror = event => {
       if (event.error !== 'no-speech' && event.error !== 'aborted') {
-        console.error("Speech recognition error:", event.error);
+        // Speech recognition error - silently handle error
       }
     };
 
@@ -117,7 +117,7 @@ export const useIntegratedVoiceSystem = (
     try {
       recognition.start();
     } catch (error) {
-      console.error("Error starting recognition: ", error);
+      // Error starting recognition - silently handle error
     }
   }, [getStream]);
 

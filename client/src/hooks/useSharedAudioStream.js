@@ -22,7 +22,7 @@ export const useSharedAudioStream = () => {
       return audioStream;
     } catch (e) {
       setError(e);
-      console.error('Error getting audio stream:', e);
+      // Error getting audio stream - silently handle error
       return null;
     }
   }, []);

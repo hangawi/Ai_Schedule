@@ -37,7 +37,7 @@ const TimeSelectionModal = ({ onClose, proposal, onFinalize }) => {
          onFinalize(newEvent);
          onClose();
       } catch (error) {
-         console.error('Error finalizing time:', error);
+         // Error finalizing time - silently handle error
          showAlert(`시간 확정에 실패했습니다: ${error.message}`);
       }
    };

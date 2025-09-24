@@ -55,7 +55,6 @@ export const coordinationService = {
     }
     
     const newRoom = await response.json();
-    console.log('coordinationService.createRoom response:', newRoom);
     return newRoom;
   },
 
@@ -339,7 +338,6 @@ export const coordinationService = {
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
-      console.error('Auto-schedule error:', response.status, errData);
       throw new Error(errData.msg || `Failed to run auto-schedule (${response.status})`);
     }
 

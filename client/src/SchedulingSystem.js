@@ -190,7 +190,6 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
            setExchangeRequestCount(result.count);
          }
        } catch (error) {
-         console.error('Failed to load exchange requests count:', error);
          setExchangeRequestCount(0);
        }
      };
@@ -209,7 +208,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
            setExchangeRequestCount(result.count);
          }
        } catch (error) {
-         console.error('Failed to refresh exchange requests count:', error);
+         // Silently handle refresh errors
        }
      }, 30000); // 30초마다 업데이트
 
@@ -226,7 +225,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
          setExchangeRequestCount(result.count);
        }
      } catch (error) {
-       console.error('Failed to refresh exchange requests count:', error);
+       // Silently handle refresh errors
      }
    }, [isLoggedIn, user]);
 
@@ -260,7 +259,6 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
          setGlobalEvents(formattedEvents);
          setEventsLoaded(true);
       } catch (error) {
-         console.error('Error fetching events:', error.message);
          setEventsLoaded(true);
       }
    }, [isLoggedIn, handleLogout]);
@@ -318,7 +316,6 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
          setGlobalEvents(prevEvents => [...prevEvents, newEvent]);
          return newEvent;
       } catch (error) {
-         console.error('Error adding global event:', error.message);
          throw error;
       }
    }, [showAlert]);
@@ -342,7 +339,6 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
             setGlobalEvents(prevEvents => prevEvents.filter(event => event.id !== eventId));
             showAlert('일정이 성공적으로 삭제되었습니다!', 'success', '삭제 완료');
          } catch (error) {
-            console.error('Error deleting event:', error);
             showAlert(`일정 삭제 실패: ${error.message}`, 'error', '삭제 실패');
          }
       };
@@ -386,7 +382,6 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
          setEditingEvent(null);
          showAlert('일정이 성공적으로 수정되었습니다!', 'success', '수정 완료');
       } catch (error) {
-         console.error('Error updating event:', error);
          showAlert(`일정 수정 실패: ${error.message}`, 'error', '수정 실패');
       }
    }, [showAlert]);
@@ -458,7 +453,6 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                return await handleChatMessage(message, { context: activeTab, tabType: 'default' });
          }
       } catch (error) {
-         console.error('탭별 챗봇 메시지 처리 오류:', error);
          return {
             success: false,
             message: '메시지 처리 중 오류가 발생했습니다.'

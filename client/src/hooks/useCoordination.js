@@ -64,7 +64,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
             localStorage.removeItem('currentRoomData');
           }
         } catch (err) {
-          console.error('Failed to restore room:', err);
+          // Failed to restore room - silently handle error
           // 서버에서 가져오기 실패시 저장된 데이터 삭제
           setCurrentRoomState(null);
           localStorage.removeItem('currentRoomId');
@@ -83,7 +83,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       const data = await coordinationService.fetchRoomDetails(roomId);
       setCurrentRoom(data);
     } catch (err) {
-      console.error('fetchRoomDetails error:', err);
+      // fetchRoomDetails error - silently handle error
       if (!silent) {
         setError(err.message);
         setCurrentRoom(null);
@@ -106,7 +106,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       const data = await coordinationService.fetchMyRooms();
       setMyRooms(data);
     } catch (err) {
-      console.error('fetchMyRooms error:', err);
+      // fetchMyRooms error - silently handle error
       setError(err.message);
       setMyRooms([]);
     } finally {
@@ -121,7 +121,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       setCurrentRoom(newRoom);
       return newRoom;
     } catch (err) {
-      console.error('createRoom error:', err);
+      // createRoom error - silently handle error
       setError(err.message);
       throw err;
     }
@@ -134,7 +134,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       setCurrentRoom(joinedRoom);
       return joinedRoom;
     } catch (err) {
-      console.error('joinRoom error:', err);
+      // joinRoom error - silently handle error
       setError(err.message);
       throw err;
     }
@@ -147,7 +147,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       setCurrentRoom(updatedRoom);
       return updatedRoom;
     } catch (err) {
-      console.error('updateRoom error:', err);
+      // updateRoom error - silently handle error
       setError(err.message);
       throw err;
     }
@@ -161,7 +161,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       // 방 삭제 후 방 목록을 다시 가져옴
       await fetchMyRooms();
     } catch (err) {
-      console.error('deleteRoom error:', err);
+      // deleteRoom error - silently handle error
       setError(err.message);
       throw err;
     }
@@ -173,7 +173,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       await coordinationService.submitTimeSlots(roomId, slots);
       await fetchRoomDetails(roomId, true);
     } catch (err) {
-      console.error('submitTimeSlots error:', err);
+      // submitTimeSlots error - silently handle error
       setError(err.message);
       throw err;
     }
@@ -185,7 +185,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       await coordinationService.removeTimeSlot(roomId, day, startTime, endTime);
       await fetchRoomDetails(roomId, true);
     } catch (err) {
-      console.error('removeTimeSlot error:', err);
+      // removeTimeSlot error - silently handle error
       setError(err.message);
       throw err;
     }
@@ -197,7 +197,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       await coordinationService.assignTimeSlot(roomId, day, startTime, endTime, userId);
       await fetchRoomDetails(roomId, true);
     } catch (err) {
-      console.error('assignTimeSlot error:', err);
+      // assignTimeSlot error - silently handle error
       setError(err.message);
       throw err;
     }
@@ -217,8 +217,8 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
         onRefreshSentRequests();
       }
     } catch (err) {
-      console.error('createRequest error:', err);
-      
+      // createRequest error - silently handle error
+
       // 중복 요청 오류인 경우 더 친화적인 메시지로 표시하고 에러를 다시 throw하지 않음
       if (err.isDuplicate) {
         if (showAlert) {
@@ -244,7 +244,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
         onRefreshExchangeCount();
       }
     } catch (err) {
-      console.error('handleRequest error:', err);
+      // handleRequest error - silently handle error
       setError(err.message);
       throw err;
     }
@@ -265,7 +265,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
         onRefreshSentRequests();
       }
     } catch (err) {
-      console.error('cancelRequest error:', err);
+      // cancelRequest error - silently handle error
       setError(err.message);
       throw err;
     }

@@ -72,25 +72,40 @@ const ProfileTab = ({ onEditingChange }) => {
         if (event.detail && event.detail.type === 'add' && event.detail.chatResponse) {
           const { chatResponse } = event.detail;
 
-          // 챗봇에서 추가된 일정 정보를 scheduleExceptions 형태로 변환하여 추가
+          // 챗봇에서 추가된 일정 정보를 10분 단위로 분할하여 scheduleExceptions에 추가
           if (chatResponse.startDateTime && chatResponse.endDateTime) {
-            const newException = {
-              _id: `temp_${Date.now()}`, // 임시 ID (서버에서 실제 ID 부여됨)
-              title: chatResponse.title || '새 일정',
-              startTime: chatResponse.startDateTime,
-              endTime: chatResponse.endDateTime,
-              specificDate: new Date(chatResponse.startDateTime).toISOString().split('T')[0],
-              isHoliday: false,
-              isAllDay: chatResponse.isAllDay || false,
-              priority: chatResponse.priority || 1
-            };
+            const startDateTime = new Date(chatResponse.startDateTime);
+            const endDateTime = new Date(chatResponse.endDateTime);
+            const newExceptions = [];
 
-            setScheduleExceptions(prev => [...prev, newException]);
-            console.log('편집 모드에서 새 일정 추가:', newException);
+            // 10분 단위로 분할하여 예외 일정들 생성
+            for (let current = new Date(startDateTime); current < endDateTime; current.setMinutes(current.getMinutes() + 10)) {
+              const slotEndTime = new Date(current);
+              slotEndTime.setMinutes(slotEndTime.getMinutes() + 10);
+
+              // 마지막 슬롯이 종료 시간을 넘지 않도록 조정
+              if (slotEndTime > endDateTime) {
+                slotEndTime.setTime(endDateTime.getTime());
+              }
+
+              const newException = {
+                _id: `temp_${Date.now()}_${current.getTime()}`, // 임시 ID (각 슬롯마다 고유)
+                title: chatResponse.title || '새 일정',
+                startTime: current.toISOString(),
+                endTime: slotEndTime.toISOString(),
+                specificDate: startDateTime.toISOString().split('T')[0],
+                isHoliday: false,
+                isAllDay: chatResponse.isAllDay || false,
+                priority: chatResponse.priority || 3
+              };
+
+              newExceptions.push(newException);
+            }
+
+            setScheduleExceptions(prev => [...prev, ...newExceptions]);
           }
         } else {
           // 이벤트 데이터가 없는 경우 기존 방식으로 폴백 (하지만 편집 모드에서는 아무것도 하지 않음)
-          console.log('편집 모드에서 calendarUpdate 이벤트 무시됨');
         }
       }
     };
@@ -176,7 +191,6 @@ const ProfileTab = ({ onEditingChange }) => {
         personalTimes: personalTimesToRestore
       });
     } catch (err) {
-      console.error('취소 중 서버 복원 실패:', err);
       // 서버 복원 실패해도 UI는 복원된 상태로 유지
     }
 

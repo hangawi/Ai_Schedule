@@ -144,7 +144,7 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
       try {
         await onAutoSave();
       } catch (error) {
-        console.error('🔍 [PERSONAL] 자동저장 실패:', error);
+        // Personal autosave failed - silently handle error
         showAlert('저장에 실패했습니다: ' + error.message, '오류');
       }
     }
@@ -171,7 +171,7 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
       try {
         await onAutoSave();
       } catch (error) {
-        console.error('🔍 [PERSONAL] 삭제 후 자동저장 실패:', error);
+        // Personal delete autosave failed - silently handle error
       }
     }
 
