@@ -18,6 +18,13 @@ const ProfileTab = ({ onEditingChange }) => {
   const [error, setError] = useState(null);
   const [customAlert, setCustomAlert] = useState({ show: false, message: '', title: '' });
 
+  // 편집 모드 진입 시 초기 상태 저장 (취소 시 복원용)
+  const [initialState, setInitialState] = useState({
+    defaultSchedule: [],
+    scheduleExceptions: [],
+    personalTimes: []
+  });
+
   const showAlert = useCallback((message, title = '알림') => {
     setCustomAlert({ show: true, message, title });
   }, []);
@@ -124,7 +131,10 @@ const ProfileTab = ({ onEditingChange }) => {
   };
 
   const handleCancel = () => {
-    fetchSchedule(); // 원본 데이터 다시 불러오기
+    // 편집 모드 진입 시 저장된 초기 상태로 복원
+    setDefaultSchedule([...initialState.defaultSchedule]);
+    setScheduleExceptions([...initialState.scheduleExceptions]);
+    setPersonalTimes([...initialState.personalTimes]);
     setIsEditing(false);
   };
 
@@ -202,26 +212,12 @@ const ProfileTab = ({ onEditingChange }) => {
               </button>
               <div className="border-l-2 border-gray-300 h-8 mx-1"></div>
               <button
-                onClick={async () => {
-                  try {
-                    // UI 상태를 먼저 초기화
-                    setDefaultSchedule([]);
-                    setScheduleExceptions([]);
-                    setPersonalTimes([]);
-
-                    // 서버에 초기화 요청
-                    await userService.updateUserSchedule({
-                      defaultSchedule: [],
-                      scheduleExceptions: [],
-                      personalTimes: []
-                    });
-
-                    showAlert('모든 일정이 초기화되었습니다.', '초기화 완료');
-                  } catch (err) {
-                    showAlert('초기화에 실패했습니다: ' + err.message, '오류');
-                    // 실패 시 원본 데이터 복구
-                    fetchSchedule();
-                  }
+                onClick={() => {
+                  // 편집 모드에서는 UI에서만 초기화 (서버에는 저장 안함)
+                  setDefaultSchedule([]);
+                  setScheduleExceptions([]);
+                  setPersonalTimes([]);
+                  showAlert('편집 모드에서 초기화되었습니다. 저장 버튼을 눌러야 실제로 저장됩니다.', '초기화');
                 }}
                 className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 flex items-center shadow-md transition-all duration-200 text-sm"
               >
@@ -231,7 +227,15 @@ const ProfileTab = ({ onEditingChange }) => {
             </>
           ) : (
             <button
-              onClick={() => setIsEditing(true)}
+              onClick={() => {
+                // 편집 모드 진입 시 현재 상태 저장
+                setInitialState({
+                  defaultSchedule: [...defaultSchedule],
+                  scheduleExceptions: [...scheduleExceptions],
+                  personalTimes: [...personalTimes]
+                });
+                setIsEditing(true);
+              }}
               className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center shadow-md transition-all duration-200"
             >
               <Edit size={16} className="mr-2" />
