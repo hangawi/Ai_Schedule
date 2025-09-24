@@ -80,6 +80,7 @@ export const coordinationService = {
 
   // 방 수정
   async updateRoom(roomId, updateData) {
+    console.log('coordinationService.updateRoom called with:', { roomId, updateData });
     const token = getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}`, {
       method: 'PUT',
@@ -89,13 +90,18 @@ export const coordinationService = {
       },
       body: JSON.stringify(updateData),
     });
-    
+
+    console.log('updateRoom response status:', response.status);
+
     if (!response.ok) {
       const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
-      throw new Error(errData.msg || 'Failed to update room');
+      console.error('updateRoom error response:', errData);
+      throw new Error(errData.msg || errData.error || 'Failed to update room');
     }
-    
-    return await response.json();
+
+    const result = await response.json();
+    console.log('updateRoom success result:', result);
+    return result;
   },
 
   // 방 삭제

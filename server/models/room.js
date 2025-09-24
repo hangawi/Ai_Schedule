@@ -273,14 +273,19 @@ RoomSchema.pre('save', function(next) {
 
 // Add owner as first member when room is created
 RoomSchema.pre('save', function(next) {
-  if (this.isNew && this.members.length === 0) {
-    const { OWNER_COLOR } = require('../utils/colorUtils');
-    this.members.push({
-      user: this.owner,
-      color: OWNER_COLOR // 방장은 항상 고정된 색상으로 구분
-    });
+  try {
+    if (this.isNew && this.members.length === 0) {
+      const { OWNER_COLOR } = require('../utils/colorUtils');
+      this.members.push({
+        user: this.owner,
+        color: OWNER_COLOR // 방장은 항상 고정된 색상으로 구분
+      });
+    }
+    next();
+  } catch (error) {
+    console.error('Error in room pre-save hook:', error);
+    next(error);
   }
-  next();
 });
 
 // Virtual for member count

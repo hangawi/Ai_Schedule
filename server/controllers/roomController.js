@@ -1,6 +1,5 @@
 const Room = require('../models/room');
 const User = require('../models/user');
-const { translateEnglishDays } = require('../utils/colorUtils');
 
 // @desc    Create a new coordination room
 // @route   POST /api/coordination/rooms
@@ -67,34 +66,52 @@ exports.createRoom = async (req, res) => {
 // @access  Private (Owner only)
 exports.updateRoom = async (req, res) => {
    try {
+      console.log('updateRoom called with roomId:', req.params.roomId);
+      console.log('updateRoom body:', req.body);
+      console.log('updateRoom user:', req.user.id);
+
       const room = await Room.findById(req.params.roomId);
 
       if (!room) {
+         console.log('Room not found:', req.params.roomId);
          return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
       }
 
+      console.log('Found room:', room.name);
+      console.log('Room owner:', room.owner);
+      console.log('Is owner check:', room.isOwner(req.user.id));
+
       // Check if user is owner
       if (!room.isOwner(req.user.id)) {
+         console.log('User is not owner');
          return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
       }
 
       // Update room properties
       const { name, description, maxMembers, settings } = req.body;
+      console.log('Updating room with:', { name, description, maxMembers, settings });
+
       if (name) room.name = name;
-      if (description) room.description = description;
+      if (description !== undefined) room.description = description;
       if (maxMembers) room.maxMembers = maxMembers;
       if (settings) {
+         console.log('Merging settings:', room.settings, settings);
          room.settings = { ...room.settings, ...settings };
       }
 
+      console.log('Saving room...');
       await room.save();
+      console.log('Room saved successfully');
+
       await room.populate('owner', 'firstName lastName email');
       await room.populate('members.user', 'firstName lastName email');
 
+      console.log('Room populated and ready to send');
       res.json(room);
    } catch (error) {
       console.error('Error updating room:', error);
-      res.status(500).json({ msg: 'Server error' });
+      console.error('Error stack:', error.stack);
+      res.status(500).json({ msg: 'Server error', error: error.message });
    }
 };
 
