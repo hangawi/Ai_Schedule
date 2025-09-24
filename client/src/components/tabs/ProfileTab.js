@@ -63,27 +63,49 @@ const ProfileTab = ({ onEditingChange }) => {
 
   // calendarUpdate 이벤트 수신하여 스케줄 새로고침
   useEffect(() => {
-    const handleCalendarUpdate = () => {
-      fetchSchedule();
+    const handleCalendarUpdate = async (event) => {
+      if (!isEditing) {
+        // 편집 모드가 아닐 때는 전체 새로고침
+        fetchSchedule();
+      } else {
+        // 편집 모드일 때는 새로 추가된 항목만 처리
+        if (event.detail && event.detail.type === 'add' && event.detail.chatResponse) {
+          const { chatResponse } = event.detail;
+
+          // 챗봇에서 추가된 일정 정보를 scheduleExceptions 형태로 변환하여 추가
+          if (chatResponse.startDateTime && chatResponse.endDateTime) {
+            const newException = {
+              _id: `temp_${Date.now()}`, // 임시 ID (서버에서 실제 ID 부여됨)
+              title: chatResponse.title || '새 일정',
+              startTime: chatResponse.startDateTime,
+              endTime: chatResponse.endDateTime,
+              specificDate: new Date(chatResponse.startDateTime).toISOString().split('T')[0],
+              isHoliday: false,
+              isAllDay: chatResponse.isAllDay || false,
+              priority: chatResponse.priority || 1
+            };
+
+            setScheduleExceptions(prev => [...prev, newException]);
+            console.log('편집 모드에서 새 일정 추가:', newException);
+          }
+        } else {
+          // 이벤트 데이터가 없는 경우 기존 방식으로 폴백 (하지만 편집 모드에서는 아무것도 하지 않음)
+          console.log('편집 모드에서 calendarUpdate 이벤트 무시됨');
+        }
+      }
     };
 
     window.addEventListener('calendarUpdate', handleCalendarUpdate);
     return () => {
       window.removeEventListener('calendarUpdate', handleCalendarUpdate);
     };
-  }, [fetchSchedule]);
+  }, [fetchSchedule, isEditing]);
 
 
   // 편집 모드 진입 추적
   const [editingStarted, setEditingStarted] = useState(false);
-
-  useEffect(() => {
-    if (isEditing && !editingStarted) {
-      setEditingStarted(true);
-    } else if (!isEditing) {
-      setEditingStarted(false);
-    }
-  }, [isEditing]);
+  const [justCancelled, setJustCancelled] = useState(false);
+  const [wasCleared, setWasCleared] = useState(false);
 
   useEffect(() => {
     if (isEditing && !editingStarted) {
@@ -130,12 +152,42 @@ const ProfileTab = ({ onEditingChange }) => {
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     // 편집 모드 진입 시 저장된 초기 상태로 복원
     setDefaultSchedule([...initialState.defaultSchedule]);
     setScheduleExceptions([...initialState.scheduleExceptions]);
     setPersonalTimes([...initialState.personalTimes]);
+
+    try {
+      // 서버에도 초기 상태로 복원
+      const exceptionsToRestore = initialState.scheduleExceptions.map(
+        ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority }) =>
+        ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority })
+      );
+      const personalTimesToRestore = initialState.personalTimes.map(
+        ({ title, type, startTime, endTime, days, isRecurring, id }) => {
+          return { title, type, startTime, endTime, days, isRecurring, id };
+        }
+      );
+
+      await userService.updateUserSchedule({
+        defaultSchedule: initialState.defaultSchedule,
+        scheduleExceptions: exceptionsToRestore,
+        personalTimes: personalTimesToRestore
+      });
+    } catch (err) {
+      console.error('취소 중 서버 복원 실패:', err);
+      // 서버 복원 실패해도 UI는 복원된 상태로 유지
+    }
+
     setIsEditing(false);
+    setWasCleared(false); // 초기화 상태도 리셋
+    setJustCancelled(true);
+
+    // 일정 시간 후 취소 상태 해제
+    setTimeout(() => {
+      setJustCancelled(false);
+    }, 1000);
   };
 
   const handleRemoveException = (exceptionId) => {
@@ -149,9 +201,9 @@ const ProfileTab = ({ onEditingChange }) => {
   };
 
   const autoSave = async () => {
-    // 편집 모드가 아닐 때만 자동 저장
-    if (isEditing) {
-      return; // 편집 모드일 때는 저장하지 않음
+    // 편집 모드이거나 방금 취소한 상태일 때는 자동 저장하지 않음
+    if (isEditing || justCancelled) {
+      return;
     }
 
     try {
@@ -217,6 +269,8 @@ const ProfileTab = ({ onEditingChange }) => {
                   setDefaultSchedule([]);
                   setScheduleExceptions([]);
                   setPersonalTimes([]);
+                  setWasCleared(true); // 초기화됨을 표시
+
                   showAlert('편집 모드에서 초기화되었습니다. 저장 버튼을 눌러야 실제로 저장됩니다.', '초기화');
                 }}
                 className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 flex items-center shadow-md transition-all duration-200 text-sm"
@@ -234,6 +288,7 @@ const ProfileTab = ({ onEditingChange }) => {
                   scheduleExceptions: [...scheduleExceptions],
                   personalTimes: [...personalTimes]
                 });
+                setWasCleared(false); // 편집 시작 시 초기화 상태 리셋
                 setIsEditing(true);
               }}
               className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center shadow-md transition-all duration-200"

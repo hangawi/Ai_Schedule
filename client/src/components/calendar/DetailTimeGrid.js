@@ -16,8 +16,8 @@ const generateTimeSlots = (startHour = 0, endHour = 24) => {
 const priorityConfig = {
   3: { label: '선호', color: 'bg-blue-600', next: 2 },
   2: { label: '보통', color: 'bg-blue-400', next: 1 },
-  1: { label: '조정 가능', color: 'bg-blue-200', next: 0 },
-  0: { label: '휴무일', color: 'bg-gray-400', next: 3 },
+  1: { label: '조정 가능', color: 'bg-blue-200', next: null },
+  0: { label: '없어짐', color: 'bg-gray-200', next: null },
 };
 
 // 연속된 시간대 병합 함수
@@ -179,17 +179,51 @@ const DetailTimeGrid = ({
     const selectedDateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
 
     // 해당 시간과 날짜에 이미 예외가 있는지 확인
-    const existingException = exceptions.find(
-      ex => ex.specificDate === selectedDateStr &&
-            ex.startTime &&
-            ex.startTime.includes(startTime)
-    );
+    const [hour, minute] = startTime.split(':').map(Number);
+
+    const existingException = exceptions.find(ex => {
+      if (ex.specificDate !== selectedDateStr || !ex.startTime) return false;
+
+      // ISO 시간을 Date 객체로 변환하여 시간 비교
+      const exceptionStartTime = new Date(ex.startTime);
+      const exceptionHour = exceptionStartTime.getHours();
+      const exceptionMinute = exceptionStartTime.getMinutes();
+
+      // 같은 시간대인지 확인 (10분 단위)
+      return exceptionHour === hour && exceptionMinute === minute;
+    });
 
     if (existingException) {
-      // 기존 예외가 있으면 제거
-      setExceptions(exceptions.filter(ex => ex._id !== existingException._id));
+      // 기존 예외가 있으면 우선순위를 순환시킴: 선호(3) → 보통(2) → 조정 가능(1) → 없어짐(삭제)
+      const currentPriority = existingException.priority || 3;
+
+      if (currentPriority === 3) {
+        // 선호 → 보통
+        setExceptions(exceptions.map(ex =>
+          ex._id === existingException._id
+            ? { ...ex, priority: 2, title: '일정' }
+            : ex
+        ));
+      } else if (currentPriority === 2) {
+        // 보통 → 조정 가능
+        setExceptions(exceptions.map(ex =>
+          ex._id === existingException._id
+            ? { ...ex, priority: 1, title: '일정' }
+            : ex
+        ));
+      } else if (currentPriority === 1) {
+        // 조정 가능 → 없어짐 (삭제)
+        setExceptions(exceptions.filter(ex => ex._id !== existingException._id));
+      } else {
+        // 다른 우선순위는 선호로 초기화
+        setExceptions(exceptions.map(ex =>
+          ex._id === existingException._id
+            ? { ...ex, priority: 3, title: '일정' }
+            : ex
+        ));
+      }
     } else {
-      // 새로운 예외 생성 (특정 날짜에만 적용)
+      // 새로운 예외 생성 (선호로 시작)
       const [hour, minute] = startTime.split(':').map(Number);
       const endMinute = minute + 10;
       const endHour = endMinute >= 60 ? hour + 1 : hour;
