@@ -867,22 +867,32 @@ const DetailTimeGrid = ({
     // 예외 일정들도 추가 (병합 처리를 위해 10분 단위로 분할)
     const exceptionSlots = [];
     exceptions.forEach(ex => {
-      const exStartTime = new Date(ex.startTime);
+      // 유효하지 않은 데이터 필터링
+      if (!ex || !ex.specificDate || !ex.startTime || !ex.endTime) return;
+
       const year = selectedDate.getFullYear();
-      const month = selectedDate.getMonth();
-      const day = selectedDate.getDate();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
 
-      if (exStartTime.getFullYear() === year &&
-          exStartTime.getMonth() === month &&
-          exStartTime.getDate() === day) {
+      // 날짜 비교 (specificDate 사용)
+      if (ex.specificDate === dateStr) {
+        console.log('🔍 [DETAIL] 예외 일정 렌더링 시작:', ex);
 
-        const startTime = `${String(exStartTime.getHours()).padStart(2, '0')}:${String(exStartTime.getMinutes()).padStart(2, '0')}`;
-        const endTime = new Date(ex.endTime);
-        const endTimeStr = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
+        // startTime과 endTime은 이미 "10:00", "11:00" 형식
+        const startTime = ex.startTime;
+        const endTimeStr = ex.endTime;
 
         // 예외 일정을 10분 단위로 분할하여 병합 대상으로 만들기
         const startMinutes = timeToMinutes(startTime);
         const endMinutes = timeToMinutes(endTimeStr);
+
+        console.log('🔍 [DETAIL] 시간 변환:', {
+          startTime,
+          endTimeStr,
+          startMinutes,
+          endMinutes
+        });
 
         for (let minutes = startMinutes; minutes < endMinutes; minutes += 10) {
           const hour = Math.floor(minutes / 60);
@@ -890,28 +900,36 @@ const DetailTimeGrid = ({
           const slotStartTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
           const slotEndTime = getNextTimeSlot(slotStartTime);
 
-          exceptionSlots.push({
+          const slotData = {
             startTime: slotStartTime,
             endTime: slotEndTime,
-            priority: ex.priority,
+            priority: ex.priority || 3,
             dayOfWeek: selectedDate.getDay(),
             title: ex.title,
             isException: true
-          });
+          };
+
+          console.log('🔍 [DETAIL] 예외 슬롯 추가:', slotData);
+          exceptionSlots.push(slotData);
         }
       }
     });
 
     // 예외 일정도 병합 처리
+    console.log('🔍 [DETAIL] 병합 전 예외 슬롯들:', exceptionSlots);
     const mergedExceptions = mergeConsecutiveTimeSlots(exceptionSlots);
+    console.log('🔍 [DETAIL] 병합 후 예외 슬롯들:', mergedExceptions);
+
     mergedExceptions.forEach(slot => {
-      displaySlots.push({
+      const displaySlot = {
         type: 'exception',
         startTime: slot.startTime,
         endTime: slot.endTime,
         data: slot,
         isMerged: slot.isMerged
-      });
+      };
+      console.log('🔍 [DETAIL] 디스플레이에 추가할 예외 슬롯:', displaySlot);
+      displaySlots.push(displaySlot);
     });
 
     // 개인 시간도 추가 (자정 넘어가는 시간 처리)

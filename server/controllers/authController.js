@@ -148,11 +148,34 @@ exports.googleAuth = async (req, res) => {
         },
       });
     } else {
+      // 기존 사용자의 Google 정보 업데이트
+      if (!user.google) {
+        user.google = {};
+      }
       user.google.id = googleId;
       user.google.accessToken = tokens.access_token;
       if (tokens.refresh_token) {
         user.google.refreshToken = tokens.refresh_token;
       }
+
+      // 기존 사용자의 잘못된 스케줄 데이터 정리
+      if (!user.defaultSchedule) user.defaultSchedule = [];
+      if (!user.personalTimes) user.personalTimes = [];
+
+      // 잘못된 scheduleExceptions 데이터 정리
+      if (user.scheduleExceptions && Array.isArray(user.scheduleExceptions)) {
+        user.scheduleExceptions = user.scheduleExceptions.filter(ex =>
+          ex && ex.startTime && ex.endTime && ex.title && ex.specificDate
+        );
+      } else {
+        user.scheduleExceptions = [];
+      }
+
+      console.log('🔍 [GOOGLE] 기존 사용자 데이터 정리 완료:', {
+        scheduleExceptionsCount: user.scheduleExceptions.length,
+        defaultScheduleCount: user.defaultSchedule.length,
+        personalTimesCount: user.personalTimes.length
+      });
     }
     await user.save();
 
