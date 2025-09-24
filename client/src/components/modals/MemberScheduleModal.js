@@ -31,24 +31,29 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
         // Process personalTimes (personal blocked times)
         const personalTimes = data.personalTimes || [];
 
-        // Combine all schedule data for display
-        setMemberSchedule([...weekdaySchedule, ...exceptions]);
+        // Separate schedule data for display
+        setMemberSchedule(weekdaySchedule);
         setMemberExceptions(exceptions);
         setMemberPersonalTimes(personalTimes);
+
+        const totalEvents = weekdaySchedule.length + exceptions.length + personalTimes.length;
 
         console.log('Processed schedule data:', {
           weekdaySchedule: weekdaySchedule.length,
           exceptions: exceptions.length,
           personalTimes: personalTimes.length,
-          totalScheduleSlots: weekdaySchedule.length + exceptions.length
+          totalScheduleSlots: totalEvents
         });
         console.log('weekdaySchedule details:', JSON.stringify(weekdaySchedule.slice(0, 3), null, 2));
         console.log('exceptions details:', JSON.stringify(exceptions.slice(0, 3), null, 2));
         console.log('personalTimes details:', JSON.stringify(personalTimes.slice(0, 3), null, 2));
         setMemberName(`${data.firstName || ''} ${data.lastName || ''}`.trim() || data.name || '알 수 없음');
+        
+        // Force re-render to ensure grid updates
         setTimeout(() => {
           setRenderKey(prev => prev + 1);
         }, 50);
+
       } catch (err) {
         console.error('Failed to fetch member schedule:', err);
         setError(`조원 일정을 불러오는데 실패했습니다: ${err.message}`);
@@ -66,7 +71,7 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
       <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold text-gray-800">{memberName}님의 주간 반복 일정 (ID: {memberId})</h3>
+          <h3 className="text-xl font-bold text-gray-800">{memberName}님의 시간표 (ID: {memberId})</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-800">
             <X size={24} />
           </button>
@@ -79,8 +84,8 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
           <div>
             <div className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded">
               <div><strong>데이터 요약:</strong></div>
-              <div>• 총 일정: {memberSchedule.length}개</div>
-              <div>• 주간 반복 일정: {memberSchedule.length - memberExceptions.length}개</div>
+              <div>• 총 일정: {memberSchedule.length + memberExceptions.length + memberPersonalTimes.length}개</div>
+              <div>• 주간 반복 일정: {memberSchedule.length}개</div>
               <div>• 예외 일정: {memberExceptions.length}개</div>
               <div>• 개인 시간: {memberPersonalTimes.length}개</div>
               <div className="text-xs mt-2 text-gray-500">

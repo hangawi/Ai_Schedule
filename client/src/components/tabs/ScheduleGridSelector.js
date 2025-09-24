@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Grid, Clock, Merge, Split } from 'lucide-react';
 
-// Constants
+// --- Constants and Helpers ---
 const days = [
   { name: '월', dayOfWeek: 1 },
   { name: '화', dayOfWeek: 2 },
@@ -15,10 +15,16 @@ const monthNames = [
   '7월', '8월', '9월', '10월', '11월', '12월'
 ];
 
+const priorityConfig = {
+  3: { label: '선호', color: 'bg-blue-600' },
+  2: { label: '보통', color: 'bg-blue-400' },
+  1: { label: '조정 가능', color: 'bg-blue-200' },
+};
+
 const generateTimeSlots = (startHour = 0, endHour = 24) => {
   const slots = [];
   for (let h = startHour; h < endHour; h++) {
-    for (let m = 0; m < 60; m += 10) { // 10분 단위로 변경
+    for (let m = 0; m < 60; m += 10) {
       const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
       slots.push(time);
     }
@@ -26,156 +32,47 @@ const generateTimeSlots = (startHour = 0, endHour = 24) => {
   return slots;
 };
 
-const timeSlots = generateTimeSlots(9, 18); // 기본 9시-18시
-
-const priorityConfig = {
-  3: { label: '선호', color: 'bg-blue-600', next: 2 },      // 선호 -> 보통
-  2: { label: '보통', color: 'bg-blue-400', next: 1 },      // 보통 -> 조정 가능
-  1: { label: '조정 가능', color: 'bg-blue-200', next: 0 }, // 조정 가능 -> 해제
-};
-
-// 연속된 시간대 병합 함수
-const mergeConsecutiveTimeSlots = (schedule) => {
-  if (!schedule || schedule.length === 0) return [];
-
-  const sortedSchedule = [...schedule].sort((a, b) => {
-    if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
-    return a.startTime.localeCompare(b.startTime);
-  });
-
-  const merged = [];
-  let currentGroup = null;
-
-  for (const slot of sortedSchedule) {
-    if (currentGroup &&
-        currentGroup.dayOfWeek === slot.dayOfWeek &&
-        currentGroup.priority === slot.priority &&
-        getNextTimeSlot(currentGroup.endTime) === slot.startTime) {
-      // 연속된 슬롯이므로 병합
-      currentGroup.endTime = slot.endTime;
-      currentGroup.isMerged = true;
-      // originalSlots 초기화 개선
-      if (!currentGroup.originalSlots) {
-        currentGroup.originalSlots = [{
-          ...currentGroup,
-          isMerged: false,
-          originalSlots: undefined
-        }];
-      }
-      currentGroup.originalSlots.push(slot);
-    } else {
-      // 새로운 그룹 시작
-      if (currentGroup) {
-        merged.push(currentGroup);
-      }
-      currentGroup = { ...slot };
-      // 기존 isMerged 속성 제거
-      delete currentGroup.isMerged;
-      delete currentGroup.originalSlots;
-    }
-  }
-
-  if (currentGroup) {
-    merged.push(currentGroup);
-  }
-
-  return merged;
-};
-
-// 다음 시간 슬롯 계산
-const getNextTimeSlot = (timeString) => {
-  const [hour, minute] = timeString.split(':').map(Number);
-  const nextMinute = minute + 10;
-  const nextHour = nextMinute >= 60 ? hour + 1 : hour;
-  const finalMinute = nextMinute >= 60 ? 0 : nextMinute;
-  return `${String(nextHour).padStart(2, '0')}:${String(finalMinute).padStart(2, '0')}`;
-};
-
-// 시간 차이 계산 (분 단위)
-const getTimeDifferenceInMinutes = (startTime, endTime) => {
-  const [startHour, startMin] = startTime.split(':').map(Number);
-  const [endHour, endMin] = endTime.split(':').map(Number);
-  return (endHour * 60 + endMin) - (startHour * 60 + startMin);
-};
-
-// Helper function to get the Monday of the current week
 const getMondayOfCurrentWeek = (date) => {
   const d = new Date(date);
-  const day = d.getUTCDay(); // Sunday - 0, Monday - 1, ..., Saturday - 6
-  const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
+  const day = d.getUTCDay();
+  const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1);
   d.setUTCDate(diff);
   d.setUTCHours(0, 0, 0, 0);
   d.setUTCMilliseconds(0);
   return d;
 };
 
-const ScheduleGridSelector = ({ schedule, setSchedule, readOnly, exceptions = [], onRemoveException, personalTimes = [] }) => {
-  const [viewMode, setViewMode] = useState('week'); // 'week' or 'month'
+const timeToMinutes = (timeString) => {
+  if (!timeString || !timeString.includes(':')) return 0;
+  const [hour, minute] = timeString.split(':').map(Number);
+  return hour * 60 + minute;
+};
+
+// --- Main Component ---
+const ScheduleGridSelector = ({ schedule, exceptions, personalTimes, readOnly = true }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [weekDates, setWeekDates] = useState([]);
-  const [monthDates, setMonthDates] = useState([]);
-  const [timeRange, setTimeRange] = useState({ start: 9, end: 18 });
-  const [showFullDay, setShowFullDay] = useState(false);
-  const [showMerged, setShowMerged] = useState(false); // 병합 모드 토글
-  const [mergedSchedule, setMergedSchedule] = useState([]);
-
-  // 스케줄이 변경될 때마다 병합된 스케줄 업데이트
-  useEffect(() => {
-    setMergedSchedule(mergeConsecutiveTimeSlots(schedule));
-  }, [schedule]);
+  const [timeRange, setTimeRange] = useState({ start: 0, end: 24 });
+  const [showFullDay, setShowFullDay] = useState(true);
+  const [showMerged, setShowMerged] = useState(false);
 
   useEffect(() => {
-    if (viewMode === 'week') {
-      const monday = getMondayOfCurrentWeek(currentDate);
-      const dates = [];
-      const dayNamesKorean = ['월', '화', '수', '목', '금'];
-      for (let i = 0; i < 5; i++) {
-        const date = new Date(monday);
-        date.setUTCDate(monday.getUTCDate() + i);
-        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const dayOfMonth = String(date.getUTCDate()).padStart(2, '0');
-        dates.push({
-          fullDate: date,
-          display: `${dayNamesKorean[i]} (${month}.${dayOfMonth})`,
-          dayOfWeek: i + 1
-        });
-      }
-      setWeekDates(dates);
-    } else {
-      // Month view
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth();
-      const firstDay = new Date(year, month, 1);
-      const lastDay = new Date(year, month + 1, 0);
-
-      // Get first Monday to show
-      const startDate = new Date(firstDay);
-      const firstDayOfWeek = firstDay.getDay();
-      const daysToSubtract = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
-      startDate.setDate(firstDay.getDate() - daysToSubtract);
-
-      const dates = [];
-      const totalDays = 35; // 5 weeks * 7 days
-
-      for (let i = 0; i < totalDays; i++) {
-        const date = new Date(startDate);
-        date.setDate(startDate.getDate() + i);
-        const isCurrentMonth = date.getMonth() === month;
-        const dayOfWeek = date.getDay();
-        const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
-
-        if (isWeekday) {
-          dates.push({
-            fullDate: date,
-            display: date.getDate(),
-            isCurrentMonth,
-            dayOfWeek: dayOfWeek === 0 ? 7 : dayOfWeek
-          });
-        }
-      }
-      setMonthDates(dates);
+    const monday = getMondayOfCurrentWeek(currentDate);
+    const dates = [];
+    const dayNamesKorean = ['월', '화', '수', '목', '금'];
+    for (let i = 0; i < 5; i++) {
+      const date = new Date(monday);
+      date.setUTCDate(monday.getUTCDate() + i);
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const dayOfMonth = String(date.getUTCDate()).padStart(2, '0');
+      dates.push({
+        fullDate: date,
+        display: `${dayNamesKorean[i]} (${month}.${dayOfMonth})`,
+        dayOfWeek: i + 1
+      });
     }
-  }, [currentDate, viewMode]);
+    setWeekDates(dates);
+  }, [currentDate]);
 
   const navigateWeek = (direction) => {
     const newDate = new Date(currentDate);
@@ -183,462 +80,229 @@ const ScheduleGridSelector = ({ schedule, setSchedule, readOnly, exceptions = []
     setCurrentDate(newDate);
   };
 
-  const navigateMonth = (direction) => {
-    const newDate = new Date(currentDate);
-    newDate.setMonth(currentDate.getMonth() + direction);
-    setCurrentDate(newDate);
-  };
-
   const goToToday = () => {
     setCurrentDate(new Date());
   };
 
-  const handleSlotClick = (dayOfWeek, startTime) => {
-    if (readOnly) return;
-
-    const existingSlot = schedule.find(
-      s => s.dayOfWeek === dayOfWeek && s.startTime === startTime
-    );
-
-    if (existingSlot) {
-      const currentPriority = existingSlot.priority || 2;
-      const nextPriority = priorityConfig[currentPriority].next;
-
-      if (nextPriority === 0) {
-        // Deselect by filtering based on day and time
-        setSchedule(schedule.filter(s => 
-          !(s.dayOfWeek === dayOfWeek && s.startTime === startTime)
-        ));
-      } else {
-        // Update priority by mapping based on day and time
-        setSchedule(schedule.map(s => 
-          (s.dayOfWeek === dayOfWeek && s.startTime === startTime)
-          ? { ...s, priority: nextPriority } 
-          : s
-        ));
-      }
-    } else {
-      // Add new slot with default high priority
-      const [hour, minute] = startTime.split(':').map(Number);
-      const endMinute = minute + 10;
-      const endHour = endMinute >= 60 ? hour + 1 : hour;
-      const finalEndMinute = endMinute >= 60 ? 0 : endMinute;
-      const endTime = `${String(endHour).padStart(2, '0')}:${String(finalEndMinute).padStart(2, '0')}`;
-      setSchedule([...schedule, { dayOfWeek, startTime, endTime, priority: 3 }]);
-    }
-  };
-
-  const getSlotInfo = (dayOfWeek, startTime) => {
-    const currentSchedule = showMerged ? mergedSchedule : schedule;
-
-    if (showMerged) {
-      // 병합 모드에서는 해당 시간이 병합된 슬롯에 포함되는지 확인
-      for (const slot of currentSchedule) {
-        if (slot.dayOfWeek === dayOfWeek) {
-          const slotStartMinutes = timeToMinutes(slot.startTime);
-          const slotEndMinutes = timeToMinutes(slot.endTime);
-          const currentTimeMinutes = timeToMinutes(startTime);
-
-          if (currentTimeMinutes >= slotStartMinutes && currentTimeMinutes < slotEndMinutes) {
-            return slot;
-          }
-        }
-      }
-      return null;
-    } else {
-      return currentSchedule.find(
-        s => s.dayOfWeek === dayOfWeek && s.startTime === startTime
-      );
-    }
-  };
-
-  const timeToMinutes = (timeString) => {
-    const [hour, minute] = timeString.split(':').map(Number);
-    return hour * 60 + minute;
-  };
-
-  const getExceptionForSlot = (date, startTime) => {
-    if (!date) return null;
-    const slotStart = new Date(`${date.toISOString().split('T')[0]}T${startTime}:00.000Z`);
-    for (const ex of exceptions) {
-      const exStart = new Date(ex.startTime);
-      const exEnd = new Date(ex.endTime);
-      if (slotStart >= exStart && slotStart < exEnd) {
-        return ex;
-      }
-    }
-    return null;
-  };
-
-  const getPersonalTimeForSlot = (date, startTime) => {
-    if (!date || !personalTimes) return null;
-    const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay(); // Convert to 1-7
-    const [hour, minute] = startTime.split(':').map(Number);
-    const slotMinutes = hour * 60 + minute;
-
-    for (const pt of personalTimes) {
-      if (!pt.days.includes(dayOfWeek)) continue;
-
-      const [startHour, startMin] = pt.startTime.split(':').map(Number);
-      const [endHour, endMin] = pt.endTime.split(':').map(Number);
-      const startMinutes = startHour * 60 + startMin;
-      let endMinutes = endHour * 60 + endMin;
-
-      // Handle overnight times (like sleep 22:00 - 08:00)
-      if (endMinutes <= startMinutes) {
-        endMinutes += 24 * 60; // Add 24 hours
-        // Check if slot is in the overnight period
-        if (slotMinutes >= startMinutes || slotMinutes < (endMinutes - 24 * 60)) {
-          return pt;
-        }
-      } else {
-        // Normal time range within same day
-        if (slotMinutes >= startMinutes && slotMinutes < endMinutes) {
-          return pt;
-        }
-      }
-    }
-    return null;
-  };
-
   const toggleTimeRange = () => {
-    if (showFullDay) {
-      setTimeRange({ start: 9, end: 18 });
-      setShowFullDay(false);
-    } else {
-      setTimeRange({ start: 0, end: 24 });
-      setShowFullDay(true);
+    const newShowFullDay = !showFullDay;
+    setShowFullDay(newShowFullDay);
+    setTimeRange(newShowFullDay ? { start: 0, end: 24 } : { start: 9, end: 18 });
+  };
+
+  const getCurrentTimeSlots = () => generateTimeSlots(timeRange.start, timeRange.end);
+
+  const getBlocksForDay = (date, dayOfWeek) => {
+    const allPossibleSlots = getCurrentTimeSlots();
+    const eventSlots = new Set();
+    let blocks = [];
+
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+    const dailySchedule = schedule.filter(s => s.dayOfWeek === dayOfWeek).map(s => ({...s, type: 'schedule'}));
+    const dailyExceptions = exceptions.filter(e => e.specificDate === dateStr).map(e => ({...e, type: 'exception'}));
+    const dailyPersonal = personalTimes.filter(p => p.days.includes(dayOfWeek)).map(p => ({...p, type: 'personal'}));
+
+    const allEvents = [...dailySchedule, ...dailyExceptions, ...dailyPersonal];
+
+    allEvents.forEach(event => {
+        let startMins, endMins;
+        let eventStartTime = event.startTime;
+
+        if (event.type === 'exception') {
+            const startDate = new Date(event.startTime);
+            const endDate = new Date(event.endTime);
+            startMins = startDate.getHours() * 60 + startDate.getMinutes();
+            endMins = endDate.getHours() * 60 + endDate.getMinutes();
+            if (endMins === 0 && endDate.getHours() === 0 && startDate < endDate) endMins = 24 * 60;
+            eventStartTime = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`;
+        } else { // Recurring schedule or personal time
+            startMins = timeToMinutes(event.startTime);
+            endMins = timeToMinutes(event.endTime);
+        }
+
+        for (let t = startMins; t < endMins; t += 10) {
+            const timeStr = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+            if(allPossibleSlots.includes(timeStr)) eventSlots.add(timeStr);
+        }
+        blocks.push({ ...event, startTime: eventStartTime, startMins, endMins });
+    });
+
+    let currentEmptyBlock = null;
+    for (const time of allPossibleSlots) {
+        if (!eventSlots.has(time)) {
+            if (currentEmptyBlock === null) {
+                currentEmptyBlock = { type: 'empty', startTime: time, duration: 10 };
+            } else {
+                currentEmptyBlock.duration += 10;
+            }
+        } else {
+            if (currentEmptyBlock) {
+                blocks.push(currentEmptyBlock);
+                currentEmptyBlock = null;
+            }
+        }
     }
-  };
+    if (currentEmptyBlock) blocks.push(currentEmptyBlock);
 
-  const getCurrentTimeSlots = () => {
-    return generateTimeSlots(timeRange.start, timeRange.end);
-  };
+    const sortedBlocks = blocks.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+    
+    const finalBlocks = [];
+    const processed = new Set();
 
-  // 저장시 자동 병합 기능 - 외부에서 호출 가능한 함수
-  const getOptimizedSchedule = () => {
-    return mergeConsecutiveTimeSlots(schedule);
-  };
+    allPossibleSlots.forEach(time => {
+        if (processed.has(time)) return;
 
+        const block = sortedBlocks.find(b => b.startTime === time);
+        if (block) {
+            let duration;
+            if (block.type === 'empty') {
+                duration = block.duration;
+            } else {
+                duration = block.endMins - block.startMins;
+            }
+
+            finalBlocks.push({ ...block, duration });
+
+            for (let i = 0; i < duration; i += 10) {
+                const min = timeToMinutes(time) + i;
+                const t = `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+                processed.add(t);
+            }
+        }
+    });
+    return finalBlocks;
+  };
 
   const renderViewControls = () => (
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center space-x-2">
-        <button
-          onClick={() => setViewMode('week')}
-          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-            viewMode === 'week'
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
-        >
-          <Grid size={16} className="mr-1 inline" />
-          주간
-        </button>
-        <button
-          onClick={() => setViewMode('month')}
-          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-            viewMode === 'month'
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
-        >
-          <Calendar size={16} className="mr-1 inline" />
-          월간
-        </button>
-
-        <div className="border-l border-gray-300 pl-2 ml-2 flex space-x-2">
-          <button
-            onClick={toggleTimeRange}
-            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-              showFullDay
-                ? 'bg-purple-500 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            <Clock size={16} className="mr-1 inline" />
-            {showFullDay ? '24시간' : '근무시간'}
-          </button>
-
-          <button
-            onClick={() => setShowMerged(!showMerged)}
-            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-              showMerged
-                ? 'bg-green-500 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            {showMerged ? (
-              <><Split size={16} className="mr-1 inline" />분할보기</>
-            ) : (
-              <><Merge size={16} className="mr-1 inline" />병합보기</>
-            )}
-          </button>
+    <div className="flex items-center justify-between mb-4 flex-wrap gap-y-2">
+        <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+            <button disabled className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-not-allowed bg-gray-100 text-gray-400`}><Grid size={16} className="mr-2 inline" />주간</button>
+            <button disabled className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-not-allowed bg-gray-100 text-gray-400`}><Calendar size={16} className="mr-2 inline" />월간 (개발 중)</button>
+            <div className="border-l border-gray-300 pl-3 ml-1 flex space-x-2 flex-wrap gap-y-2">
+                <button onClick={toggleTimeRange} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${showFullDay ? 'bg-purple-500 text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}><Clock size={16} className="mr-2 inline" />{showFullDay ? '24시간' : '기본'}</button>
+                <button onClick={() => setShowMerged(!showMerged)} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${showMerged ? 'bg-green-500 text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>{showMerged ? <><Split size={16} className="mr-2 inline" />분할</> : <><Merge size={16} className="mr-2 inline" />병합</>}</button>
+            </div>
         </div>
-      </div>
-
-      <div className="flex items-center space-x-2">
-        <button
-          onClick={() => viewMode === 'week' ? navigateWeek(-1) : navigateMonth(-1)}
-          className="p-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition-colors"
-        >
-          <ChevronLeft size={16} />
-        </button>
-
-        <div className="text-lg font-semibold min-w-40 text-center">
-          {viewMode === 'week'
-            ? `${currentDate.getFullYear()}년 ${currentDate.getMonth() + 1}월 ${Math.ceil(currentDate.getDate() / 7)}주차`
-            : `${currentDate.getFullYear()}년 ${monthNames[currentDate.getMonth()]}`
-          }
+        <div className="flex items-center space-x-2">
+            <button onClick={() => navigateWeek(-1)} className="p-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition-colors"><ChevronLeft size={20} /></button>
+            <div className="text-lg font-semibold min-w-40 text-center whitespace-nowrap">{`${currentDate.getFullYear()}년 ${monthNames[currentDate.getMonth()]}`}</div>
+            <button onClick={() => navigateWeek(1)} className="p-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition-colors"><ChevronRight size={20} /></button>
+            <button onClick={goToToday} className="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors text-sm whitespace-nowrap shadow-md">오늘</button>
         </div>
-
-        <button
-          onClick={() => viewMode === 'week' ? navigateWeek(1) : navigateMonth(1)}
-          className="p-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition-colors"
-        >
-          <ChevronRight size={16} />
-        </button>
-
-        <button
-          onClick={goToToday}
-          className="px-3 py-2 rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors text-sm"
-        >
-          오늘
-        </button>
-      </div>
     </div>
   );
 
-  const renderMonthView = () => {
-    const weeks = [];
-    for (let i = 0; i < monthDates.length; i += 5) {
-      weeks.push(monthDates.slice(i, i + 5));
-    }
+  const renderMergedWeekView = () => {
+    const dayBlocks = weekDates.map(d => getBlocksForDay(d.fullDate, d.dayOfWeek));
+    const timeSlots = getCurrentTimeSlots();
+    const slotHeight = 1.2; // 1.2rem per 10min slot
 
     return (
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
-        {/* Month header */}
-        <div className="grid grid-cols-6 bg-gray-100">
-          <div className="p-2 text-center font-semibold text-gray-700">시간</div>
-          {['월', '화', '수', '목', '금'].map((day) => (
-            <div key={day} className="p-2 text-center font-semibold text-gray-700 border-l border-gray-200">
-              {day}
-            </div>
-          ))}
-        </div>
-
-        {/* Month grid */}
-        {weeks.map((week, weekIndex) => (
-          <div key={weekIndex}>
-            {/* Date row */}
-            <div className="grid grid-cols-6 border-b border-gray-200 bg-gray-50">
-              <div className="p-2 text-center text-sm font-medium text-gray-600">
-                {week[0] && `${week[0].fullDate.getMonth() + 1}/${week[0].fullDate.getDate()}`}
-              </div>
-              {week.map((date, index) => (
-                <div
-                  key={index}
-                  className={`p-2 text-center text-sm border-l border-gray-200 ${
-                    date.isCurrentMonth ? 'text-gray-800' : 'text-gray-400'
-                  }`}
-                >
-                  {date.display}
+        <div className="grid grid-cols-6 border border-gray-200 rounded-lg bg-white text-sm shadow-inner">
+            <div className="col-span-1 border-r border-gray-200 bg-gray-50">
+                <div className="p-2 text-center font-semibold text-gray-700 border-b border-gray-200 sticky top-0 bg-gray-100 z-10 h-12 flex items-center justify-center">시간</div>
+                <div className="relative" style={{ height: `${timeSlots.length * slotHeight}rem`}}>
+                    {timeSlots.map((time, i) => time.endsWith(':00') && (
+                        <div key={time} style={{top: `${i * slotHeight}rem`, height: `${6 * slotHeight}rem`}} className="absolute w-full text-center text-xs font-medium text-gray-400 border-t border-gray-200 flex items-center justify-center">{time}</div>
+                    ))}
                 </div>
-              ))}
             </div>
+            {weekDates.map((date, index) => (
+                <div key={date.dayOfWeek} className="col-span-1 border-r border-gray-200 last:border-r-0 relative">
+                    <div className="p-2 text-center font-semibold text-gray-700 border-b border-gray-200 sticky top-0 bg-gray-100 z-10 h-12 flex items-center justify-center">{date.display}</div>
+                    {dayBlocks[index].map((block, i) => {
+                        const height = (block.duration / 10) * slotHeight;
+                        const top = (timeToMinutes(block.startTime) - timeToMinutes(timeSlots[0])) / 10 * slotHeight;
+                        let content = '';
+                        let slotClass = '';
+                        let title = '';
 
-            {/* Time slots for this week */}
-            {getCurrentTimeSlots().slice(0, showFullDay ? 12 : 6).map(time => ( // Show fewer time slots for month view
-              <div key={time} className="grid grid-cols-6 border-b border-gray-200 last:border-b-0">
-                <div className="p-1 text-center text-xs font-medium text-gray-600 flex items-center justify-center">
-                  {time}
-                </div>
-                {week.map((date, dayIndex) => {
-                  const slotInfo = getSlotInfo(date.dayOfWeek, time);
-                  const exception = getExceptionForSlot(date.fullDate, time);
-                  const personalTime = getPersonalTimeForSlot(date.fullDate, time);
-                  const isExceptionSlot = !!exception;
-                  const isPersonalTimeSlot = !!personalTime;
-
-                  let slotClass = 'bg-white';
-                  let slotContent = null;
-                  if (isExceptionSlot) {
-                    slotClass = 'bg-gray-400';
-                  } else if (isPersonalTimeSlot) {
-                    slotClass = 'bg-red-300'; // Personal time color
-                  } else if (slotInfo) {
-                    const baseColor = priorityConfig[slotInfo.priority]?.color || 'bg-blue-400';
-                    slotClass = slotInfo.isMerged ? `${baseColor} border-2 border-green-400` : baseColor;
-
-                    // 병합된 슬롯의 첫 번째 시간 슬롯에만 시간 정보 표시
-                    if (showMerged && slotInfo.isMerged && slotInfo.startTime === time) {
-                      const duration = getTimeDifferenceInMinutes(slotInfo.startTime, slotInfo.endTime);
-                      slotContent = `${duration}분`;
-                    }
-                  }
-
-                  let cursorClass = readOnly ? 'cursor-default' : 'cursor-pointer';
-                  if (isExceptionSlot || isPersonalTimeSlot) {
-                    cursorClass = 'cursor-not-allowed';
-                  }
-
-                  return (
-                    <div
-                      key={`${date.fullDate.toISOString()}-${time}`}
-                      className={`border-l border-gray-200 h-6 flex items-center justify-center transition-colors ${slotClass} ${cursorClass} ${
-                        !date.isCurrentMonth ? 'opacity-30' : ''
-                      }`}
-                      onClick={() => {
-                        if (readOnly || !date.isCurrentMonth) return;
-                        if (isExceptionSlot) {
-                          onRemoveException?.(exception._id);
-                        } else {
-                          handleSlotClick(date.dayOfWeek, time);
+                        if (block.type === 'schedule') {
+                            slotClass = priorityConfig[block.priority]?.color || 'bg-blue-400';
+                            content = `${priorityConfig[block.priority]?.label} (${block.duration}분)`;
+                            title = `${content}`;
+                        } else if (block.type === 'exception') {
+                            slotClass = priorityConfig[block.priority]?.color || 'bg-blue-600';
+                            content = `${block.title} (${block.duration}분)`;
+                            title = block.title;
+                        } else if (block.type === 'personal') {
+                            slotClass = 'bg-red-400';
+                            content = `${block.title} (${block.duration}분)`;
+                            title = `개인시간: ${block.title}`;
+                        } else { // empty
+                            slotClass = 'bg-gray-50 hover:bg-gray-100';
+                            content = block.duration >= 30 ? `(${block.duration}분)` : '';
+                            title = `빈 시간: ${block.startTime}`;
                         }
-                      }}
-                      title={
-                        isExceptionSlot
-                          ? exception.title
-                          : isPersonalTimeSlot
-                          ? `개인시간: ${personalTime.title}`
-                          : (slotInfo ? priorityConfig[slotInfo.priority]?.label : '클릭하여 선택')
-                      }
-                    >
-                      {isExceptionSlot && (
-                        <span className="text-xs text-white truncate px-1">{exception.title}</span>
-                      )}
-                      {isPersonalTimeSlot && (
-                        <span className="text-xs text-white truncate px-1">{personalTime.title}</span>
-                      )}
-                      {slotContent && (
-                        <span className="text-xs text-white font-bold bg-green-600 px-1 rounded">{slotContent}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+
+                        return (
+                            <div key={i} title={title} style={{ height: `${height}rem`, top: `${top}rem` }} className={`absolute w-full flex items-center justify-center text-center transition-colors cursor-pointer border-y border-white/50 ${slotClass}`}>
+                                <span className={`font-medium text-xs px-1 ${block.type === 'empty' ? 'text-gray-500' : 'text-white'}`}>{content}</span>
+                            </div>
+                        );
+                    })}
+                </div>
             ))}
-          </div>
-        ))}
-      </div>
+        </div>
     );
   };
 
-  const renderWeekView = () => (
-    <div className="timetable-grid border border-gray-200 rounded-lg overflow-auto" style={{ maxHeight: '500px' }}>
-      <div className="grid grid-cols-6 bg-gray-100 sticky top-0 z-10">
-        <div className="col-span-1 p-2 text-center font-semibold text-gray-700">시간</div>
-        {weekDates.map((date, index) => (
-          <div key={index} className="col-span-1 p-2 text-center font-semibold text-gray-700 border-l border-gray-200">
-            {date.display}
-          </div>
-        ))}
-      </div>
+  const renderDetailedWeekView = () => {
+    const timeSlots = getCurrentTimeSlots();
+    return (
+        <div className="timetable-grid border border-gray-200 rounded-lg overflow-auto" style={{ maxHeight: '60vh' }}>
+            <div className="grid grid-cols-6 bg-gray-100 sticky top-0 z-10">
+                <div className="col-span-1 p-2 text-center font-semibold text-gray-700">시간</div>
+                {weekDates.map((date, index) => (
+                    <div key={index} className="col-span-1 p-2 text-center font-semibold text-gray-700 border-l border-gray-200">{date.display}</div>
+                ))}
+            </div>
+            {timeSlots.map(time => (
+                <div key={time} className="grid grid-cols-6 border-b border-gray-200 last:border-b-0">
+                    <div className="col-span-1 p-2 text-center text-sm font-medium text-gray-600 flex items-center justify-center">{time}</div>
+                    {days.map((day, index) => {
+                        const date = weekDates[index]?.fullDate;
+                        if (!date) return <div key={day.dayOfWeek} className="col-span-1 border-l border-gray-200"></div>;
 
-      {getCurrentTimeSlots().map(time => (
-        <div key={time} className="grid grid-cols-6 border-b border-gray-200 last:border-b-0">
-          <div className="col-span-1 p-2 text-center text-sm font-medium text-gray-600 flex items-center justify-center">
-            {time}
-          </div>
-          {days.map((day, index) => {
-            const slotInfo = getSlotInfo(day.dayOfWeek, time);
-            const exception = getExceptionForSlot(weekDates[index]?.fullDate, time);
-            const personalTime = getPersonalTimeForSlot(weekDates[index]?.fullDate, time);
-            const isExceptionSlot = !!exception;
-            const isPersonalTimeSlot = !!personalTime;
+                        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                        
+                        const recurringSlot = schedule.find(s => s.dayOfWeek === day.dayOfWeek && s.startTime === time);
+                        const exceptionSlot = exceptions.find(e => e.specificDate === dateStr && timeToMinutes(new Date(e.startTime).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'})) === timeToMinutes(time));
+                        const personalSlot = personalTimes.find(p => p.days.includes(day.dayOfWeek) && timeToMinutes(p.startTime) <= timeToMinutes(time) && timeToMinutes(time) < timeToMinutes(p.endTime));
 
-            let slotClass = 'bg-white';
-            let slotContent = null;
-            if (isExceptionSlot) {
-              slotClass = 'bg-gray-400';
-            } else if (isPersonalTimeSlot) {
-              slotClass = 'bg-red-300'; // Personal time color
-            } else if (slotInfo) {
-              const baseColor = priorityConfig[slotInfo.priority]?.color || 'bg-blue-400';
-              slotClass = slotInfo.isMerged ? `${baseColor} border-2 border-green-400` : baseColor;
+                        let slotClass = 'bg-white';
+                        let content = null;
 
-              // 병합된 슬롯의 첫 번째 시간 슬롯에만 시간 정보 표시
-              if (showMerged && slotInfo.isMerged && slotInfo.startTime === time) {
-                const duration = getTimeDifferenceInMinutes(slotInfo.startTime, slotInfo.endTime);
-                slotContent = `${duration}분`;
-              }
-            }
+                        if (exceptionSlot) {
+                            slotClass = priorityConfig[exceptionSlot.priority]?.color || 'bg-blue-600';
+                            content = <span className="text-xs text-white truncate px-1">{exceptionSlot.title}</span>;
+                        } else if (personalSlot) {
+                            slotClass = 'bg-red-400';
+                            content = <span className="text-xs text-white truncate px-1">{personalSlot.title}</span>;
+                        } else if (recurringSlot) {
+                            slotClass = priorityConfig[recurringSlot.priority]?.color || 'bg-blue-400';
+                            content = <span className="text-xs text-white truncate px-1">{priorityConfig[recurringSlot.priority]?.label}</span>;
+                        }
 
-            let cursorClass = readOnly ? 'cursor-default' : 'cursor-pointer';
-            if (isExceptionSlot || isPersonalTimeSlot) {
-              cursorClass = 'cursor-not-allowed';
-            }
-
-            return (
-              <div
-                key={`${day.dayOfWeek}-${time}`}
-                className={`col-span-1 border-l border-gray-200 h-8 flex items-center justify-center transition-colors ${slotClass} ${cursorClass}`}
-                onClick={() => {
-                  if (readOnly) return;
-                  if (isExceptionSlot) {
-                    onRemoveException?.(exception._id);
-                  } else {
-                    handleSlotClick(day.dayOfWeek, time);
-                  }
-                }}
-                title={
-                  isExceptionSlot
-                    ? exception.title
-                    : isPersonalTimeSlot
-                    ? `개인시간: ${personalTime.title}`
-                    : (slotInfo ? priorityConfig[slotInfo.priority]?.label : '클릭하여 선택')
-                }
-              >
-                {isExceptionSlot ? (
-                  <span className="text-xs text-white truncate px-1">{exception.title}</span>
-                ) : isPersonalTimeSlot ? (
-                  <span className="text-xs text-white truncate px-1">{personalTime.title}</span>
-                ) : slotContent ? (
-                  <span className="text-xs text-white font-bold bg-green-600 px-1 rounded">{slotContent}</span>
-                ) : null}
-              </div>
-            );
-          })}
+                        return (
+                            <div key={day.dayOfWeek} className={`col-span-1 border-l border-gray-200 h-8 flex items-center justify-center transition-colors ${slotClass}`}>
+                                {content}
+                            </div>
+                        );
+                    })}
+                </div>
+            ))}
         </div>
-      ))}
-    </div>
-  );
+    );
+  };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+    <div className="bg-white p-4 rounded-lg shadow-md mb-6">
       {renderViewControls()}
-
-      {!readOnly && (
-        <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-          <div className="flex items-center justify-center space-x-4 mb-2">
-            <span className="text-sm font-semibold text-gray-700">범례:</span>
-            {Object.entries(priorityConfig).sort(([p1], [p2]) => p2 - p1).map(([priority, {label, color}]) => (
-              <div key={priority} className="flex items-center">
-                <div className={`w-4 h-4 rounded-full ${color} mr-2`}></div>
-                <span className="text-sm text-gray-600">{label}</span>
-              </div>
-            ))}
-          </div>
-          {showMerged && (
-            <div className="flex items-center justify-center space-x-4 border-t pt-2">
-              <div className="flex items-center">
-                <div className="w-4 h-4 rounded-full bg-blue-400 border-2 border-green-400 mr-2"></div>
-                <span className="text-sm text-gray-600">병합된 시간대</span>
-              </div>
-              <div className="flex items-center">
-                <span className="text-xs text-white font-bold bg-green-600 px-2 py-1 rounded mr-2">30분</span>
-                <span className="text-sm text-gray-600">병합 지속시간</span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      {viewMode === 'week' ? renderWeekView() : renderMonthView()}
+      {showMerged ? renderMergedWeekView() : renderDetailedWeekView() }
     </div>
   );
-};
-
-// 외부에서 사용할 수 있는 유틸리티 함수도 export
-export { mergeConsecutiveTimeSlots, getTimeDifferenceInMinutes };
+}; 
 
 export default ScheduleGridSelector;

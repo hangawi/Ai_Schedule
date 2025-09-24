@@ -96,7 +96,7 @@ exports.updateRoom = async (req, res) => {
       if (maxMembers) room.maxMembers = maxMembers;
       if (settings) {
          console.log('Merging settings:', room.settings, settings);
-         room.settings = { ...room.settings, ...settings };
+         room.settings = { ...room.settings.toObject(), ...settings };
       }
 
       console.log('Saving room...');
