@@ -30,7 +30,6 @@ export const useVoiceCommands = (isLoggedIn, isVoiceRecognitionEnabled, handleCh
         )
       ]);
       const commandEndTime = performance.now();
-      console.log(`음성 명령 처리 시간: ${(commandEndTime - commandStartTime).toFixed(2)}ms`);
 
       speak(result.message);
     } catch (error) {

@@ -70,18 +70,6 @@ const TimetableGrid = ({
   onCurrentWeekNegotiationsChange // New prop to pass current week negotiations to parent
 }) => {
 
-  // 🔍 DEBUG: timeSlots 전달 확인
-  console.log('🔍 [DEBUG] TimetableGrid received timeSlots:', {
-    timeSlots,
-    timeSlotsLength: timeSlots?.length || 0,
-    sampleSlots: timeSlots?.slice(0, 3).map(slot => ({
-      user: slot.user?._id || slot.user,
-      day: slot.day,
-      startTime: slot.startTime,
-      endTime: slot.endTime,
-      assignedBy: slot.assignedBy ? 'auto' : 'manual'
-    }))
-  });
 
   // CustomAlert 상태
   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });

@@ -102,13 +102,6 @@ const CalendarView = ({
       const exDateStr = ex.specificDate;
       const isMatch = exDateStr === dateStr && ex.title !== '휴무일' && !ex.isHoliday;
 
-      console.log('🔍 [CALENDAR] 예외 일정 매칭 확인:', {
-        currentDate: dateStr,
-        exceptionDate: exDateStr,
-        exceptionTitle: ex.title,
-        isMatch
-      });
-
       return isMatch;
     });
 

@@ -55,7 +55,6 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
         )
       ]);
       const analysisEndTime = performance.now();
-      console.log(`백그라운드 분석 시간: ${(analysisEndTime - analysisStartTime).toFixed(2)}ms`);
 
       if (response.ok) {
         const data = await response.json();

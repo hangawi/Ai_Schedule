@@ -166,52 +166,55 @@ const DetailTimeGrid = ({
     const personalTime = getPersonalTimeForSlot(startTime);
     const slotInfo = getSlotInfo(startTime);
 
-    // 시간대 정보를 콘솔에 출력 (디버깅 및 정보 확인용)
-
     // readOnly 모드에서는 정보만 표시하고 수정하지 않음
     if (readOnly) {
       return;
     }
 
-    const dayOfWeek = selectedDate.getDay();
-    const existingSlot = schedule.find(
-      s => s.dayOfWeek === dayOfWeek && s.startTime === startTime
+    // 특정 날짜에 대한 예외 처리 - 기본 스케줄 대신 해당 날짜에만 적용되는 예외 생성
+    if (!setExceptions) {
+      return;
+    }
+
+    const selectedDateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+
+    // 해당 시간과 날짜에 이미 예외가 있는지 확인
+    const existingException = exceptions.find(
+      ex => ex.specificDate === selectedDateStr &&
+            ex.startTime &&
+            ex.startTime.includes(startTime)
     );
 
-    if (existingSlot) {
-      const currentPriority = existingSlot.priority || 2;
-      const nextPriority = priorityConfig[currentPriority].next;
-
-      if (nextPriority === 0) {
-        setSchedule(schedule.filter(s =>
-          !(s.dayOfWeek === dayOfWeek && s.startTime === startTime)
-        ));
-      } else {
-        setSchedule(schedule.map(s =>
-          (s.dayOfWeek === dayOfWeek && s.startTime === startTime)
-          ? { ...s, priority: nextPriority }
-          : s
-        ));
-      }
+    if (existingException) {
+      // 기존 예외가 있으면 제거
+      setExceptions(exceptions.filter(ex => ex._id !== existingException._id));
     } else {
-      // 빈 슬롯 클릭 시 우선순위 3(선호)으로 시작
+      // 새로운 예외 생성 (특정 날짜에만 적용)
       const [hour, minute] = startTime.split(':').map(Number);
       const endMinute = minute + 10;
       const endHour = endMinute >= 60 ? hour + 1 : hour;
       const adjustedEndMinute = endMinute >= 60 ? endMinute - 60 : endMinute;
       const endTime = `${String(endHour).padStart(2, '0')}:${String(adjustedEndMinute).padStart(2, '0')}`;
 
-      // 새로운 슬롯을 기본 스케줄에 추가 (우선순위 3: 선호)
-      setSchedule([...schedule, {
-        dayOfWeek: dayOfWeek,
-        startTime: startTime,
-        endTime: endTime,
-        priority: 3  // 선호로 시작
-      }]);
-      setHasUnsavedChanges(true);
-      return;
+      // 시작 시간과 종료 시간을 해당 날짜의 정확한 Date 객체로 생성
+      const startDateTime = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), hour, minute, 0);
+      const endDateTime = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), endHour, adjustedEndMinute, 0);
 
+      const newException = {
+        _id: Date.now().toString() + Math.random(),
+        title: '일정',
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
+        specificDate: selectedDateStr,
+        priority: 3, // 선호로 시작
+        isHoliday: false,
+        isAllDay: false
+      };
+
+      setExceptions([...exceptions, newException]);
     }
+
+    setHasUnsavedChanges(true);
   };
 
   const getSlotInfo = (startTime) => {
@@ -258,20 +261,21 @@ const DetailTimeGrid = ({
       // specificDate 필드를 사용해야 함 (startTime은 "10:00" 형식이므로 날짜가 아님)
       const exDateStr = ex.specificDate;
 
-      console.log('🔍 [DETAIL] 예외 일정 매칭 확인:', {
-        selectedDate: dateStr,
-        exceptionDate: exDateStr,
-        slotTime: startTime,
-        exceptionStartTime: ex.startTime,
-        exceptionTitle: ex.title
-      });
-
       if (exDateStr === dateStr) {
-        // startTime과 endTime은 "10:00", "11:00" 형식
-        const [exStartHour, exStartMinute] = ex.startTime.split(':').map(Number);
+        // startTime이 ISO 형식인 경우와 "HH:MM" 형식인 경우를 모두 처리
+        let exStartHour, exStartMinute;
+
+        if (ex.startTime.includes('T')) {
+          // ISO 형식 (예: "2025-09-26T10:00:00.000Z")
+          const exStartTime = new Date(ex.startTime);
+          exStartHour = exStartTime.getHours();
+          exStartMinute = exStartTime.getMinutes();
+        } else {
+          // "HH:MM" 형식
+          [exStartHour, exStartMinute] = ex.startTime.split(':').map(Number);
+        }
 
         if (hour === exStartHour && minute === exStartMinute) {
-          console.log('🔍 [DETAIL] 예외 일정 매칭됨!', ex);
           return ex;
         }
       }
@@ -420,8 +424,8 @@ const DetailTimeGrid = ({
       }
     }
 
-    // 즉시 자동 저장 실행
-    if (onSave) {
+    // 편집 모드가 아닐 때만 자동 저장 실행
+    if (onSave && readOnly) {
       setTimeout(async () => {
         try {
           await onSave();
@@ -739,8 +743,8 @@ const DetailTimeGrid = ({
     }
     setHasUnsavedChanges(true);
 
-    // 즉시 자동 저장 실행
-    if (onSave) {
+    // 편집 모드가 아닐 때만 자동 저장 실행
+    if (onSave && readOnly) {
       setTimeout(async () => {
         try {
           await onSave();
@@ -816,8 +820,8 @@ const DetailTimeGrid = ({
         exceptions_to_add.forEach(exc => applyCopyOptions(exc));
       }
 
-      // 즉시 자동 저장 실행
-      if (onSave) {
+      // 편집 모드가 아닐 때만 자동 저장 실행
+      if (onSave && readOnly) {
         setTimeout(async () => {
           try {
             await onSave();
@@ -866,33 +870,38 @@ const DetailTimeGrid = ({
 
     // 예외 일정들도 추가 (병합 처리를 위해 10분 단위로 분할)
     const exceptionSlots = [];
+
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
     exceptions.forEach(ex => {
       // 유효하지 않은 데이터 필터링
-      if (!ex || !ex.specificDate || !ex.startTime || !ex.endTime) return;
-
-      const year = selectedDate.getFullYear();
-      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-      const day = String(selectedDate.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
+      if (!ex || !ex.specificDate || !ex.startTime || !ex.endTime) {
+        return;
+      }
 
       // 날짜 비교 (specificDate 사용)
       if (ex.specificDate === dateStr) {
-        console.log('🔍 [DETAIL] 예외 일정 렌더링 시작:', ex);
+        // startTime과 endTime을 올바른 형식으로 변환
+        let startTime, endTimeStr;
 
-        // startTime과 endTime은 이미 "10:00", "11:00" 형식
-        const startTime = ex.startTime;
-        const endTimeStr = ex.endTime;
+        if (ex.startTime.includes('T')) {
+          // ISO 형식인 경우
+          const startDate = new Date(ex.startTime);
+          const endDate = new Date(ex.endTime);
+          startTime = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`;
+          endTimeStr = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
+        } else {
+          // 이미 "HH:MM" 형식인 경우
+          startTime = ex.startTime;
+          endTimeStr = ex.endTime;
+        }
 
         // 예외 일정을 10분 단위로 분할하여 병합 대상으로 만들기
         const startMinutes = timeToMinutes(startTime);
         const endMinutes = timeToMinutes(endTimeStr);
-
-        console.log('🔍 [DETAIL] 시간 변환:', {
-          startTime,
-          endTimeStr,
-          startMinutes,
-          endMinutes
-        });
 
         for (let minutes = startMinutes; minutes < endMinutes; minutes += 10) {
           const hour = Math.floor(minutes / 60);
@@ -909,16 +918,13 @@ const DetailTimeGrid = ({
             isException: true
           };
 
-          console.log('🔍 [DETAIL] 예외 슬롯 추가:', slotData);
           exceptionSlots.push(slotData);
         }
       }
     });
 
     // 예외 일정도 병합 처리
-    console.log('🔍 [DETAIL] 병합 전 예외 슬롯들:', exceptionSlots);
     const mergedExceptions = mergeConsecutiveTimeSlots(exceptionSlots);
-    console.log('🔍 [DETAIL] 병합 후 예외 슬롯들:', mergedExceptions);
 
     mergedExceptions.forEach(slot => {
       const displaySlot = {
@@ -928,12 +934,12 @@ const DetailTimeGrid = ({
         data: slot,
         isMerged: slot.isMerged
       };
-      console.log('🔍 [DETAIL] 디스플레이에 추가할 예외 슬롯:', displaySlot);
       displaySlots.push(displaySlot);
     });
 
     // 개인 시간도 추가 (자정 넘어가는 시간 처리)
     const dayOfWeekPersonal = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
+
     personalTimes.forEach(pt => {
       if (pt.days && pt.days.includes(dayOfWeekPersonal)) {
         const [startHour, startMin] = pt.startTime.split(':').map(Number);
@@ -947,28 +953,31 @@ const DetailTimeGrid = ({
           // 22:00-08:00를 22:00-23:50과 00:00-08:00으로 분할
 
           // 밤 부분 (예: 22:00-23:50)
-          displaySlots.push({
+          const nightSlot = {
             type: 'personal',
             startTime: pt.startTime,
             endTime: '23:50',
             data: { ...pt, title: pt.title }
-          });
+          };
+          displaySlots.push(nightSlot);
 
           // 아침 부분 (예: 00:00-08:00)
-          displaySlots.push({
+          const morningSlot = {
             type: 'personal',
             startTime: '00:00',
             endTime: pt.endTime,
             data: { ...pt, title: pt.title }
-          });
+          };
+          displaySlots.push(morningSlot);
         } else {
           // 일반적인 하루 내 시간 (학습시간 등)
-          displaySlots.push({
+          const normalSlot = {
             type: 'personal',
             startTime: pt.startTime,
             endTime: pt.endTime,
             data: pt
-          });
+          };
+          displaySlots.push(normalSlot);
         }
       }
     });
@@ -999,6 +1008,7 @@ const DetailTimeGrid = ({
       }
 
       if (foundSlot) {
+
         // 병합된 슬롯 추가
         allSlots.push({
           ...foundSlot,
@@ -1293,7 +1303,13 @@ const DetailTimeGrid = ({
             </div>
 
             <button
-              onClick={onClose}
+              onClick={() => {
+                // 편집 모드가 아닐 때만 저장하지 않은 변경사항을 초기 상태로 복원
+                if (hasUnsavedChanges && setExceptions && readOnly) {
+                  setExceptions([...initialExceptions]);
+                }
+                onClose();
+              }}
               className="text-gray-400 hover:text-gray-600 transition-colors"
             >
               <X size={24} />
@@ -1540,33 +1556,12 @@ const DetailTimeGrid = ({
               }
             </p>
             <div className="flex space-x-3">
-              {!readOnly && onSave && (
-                <button
-                  onClick={async () => {
-                    try {
-                      await onSave();
-                      setHasUnsavedChanges(false);
-                      const btn = document.activeElement;
-                      const originalText = btn.textContent;
-                      btn.textContent = '저장됨!';
-                      btn.style.backgroundColor = '#10B981';
-                      setTimeout(() => {
-                        btn.textContent = originalText;
-                        btn.style.backgroundColor = '';
-                      }, 1000);
-
-                      window.dispatchEvent(new Event('calendarUpdate'));
-                    } catch (error) {
-                      console.error('저장 실패:', error);
-                    }
-                  }}
-                  className="px-5 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-all duration-200 shadow-md hover:shadow-lg font-medium"
-                >
-저장
-                </button>
-              )}
               <button
                 onClick={() => {
+                  // 편집 모드가 아닐 때만 저장하지 않은 변경사항을 초기 상태로 복원
+                  if (hasUnsavedChanges && setExceptions && readOnly) {
+                    setExceptions([...initialExceptions]);
+                  }
                   onClose();
                 }}
                 className="px-5 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-all duration-200 shadow-md hover:shadow-lg font-medium"

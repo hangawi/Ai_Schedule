@@ -29,18 +29,14 @@ const ProfileTab = ({ onEditingChange }) => {
   const fetchSchedule = useCallback(async () => {
     try {
       setIsLoading(true);
-      console.log('📥 [PROFILE] fetchSchedule 시작');
       const data = await userService.getUserSchedule();
-      console.log('📥 [PROFILE] 받은 데이터:', data);
 
       setDefaultSchedule(data.defaultSchedule || []);
       setScheduleExceptions(data.scheduleExceptions || []);
       setPersonalTimes(data.personalTimes || []);
 
-      console.log('📥 [PROFILE] 예외 일정 개수:', (data.scheduleExceptions || []).length);
       setError(null);
     } catch (err) {
-      console.error('📥 [PROFILE] fetchSchedule 오류:', err);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -61,7 +57,6 @@ const ProfileTab = ({ onEditingChange }) => {
   // calendarUpdate 이벤트 수신하여 스케줄 새로고침
   useEffect(() => {
     const handleCalendarUpdate = () => {
-      console.log('🔄 [PROFILE] calendarUpdate 이벤트 수신됨, fetchSchedule 호출');
       fetchSchedule();
     };
 
@@ -144,6 +139,10 @@ const ProfileTab = ({ onEditingChange }) => {
   };
 
   const autoSave = async () => {
+    // 편집 모드가 아닐 때만 자동 저장
+    if (isEditing) {
+      return; // 편집 모드일 때는 저장하지 않음
+    }
 
     try {
       const exceptionsToSave = scheduleExceptions.map(
@@ -156,23 +155,14 @@ const ProfileTab = ({ onEditingChange }) => {
         }
       );
 
-
       await userService.updateUserSchedule({
         defaultSchedule,
         scheduleExceptions: exceptionsToSave,
         personalTimes: personalTimesToSave
       });
 
-
-      // 저장 후 서버에서 최신 데이터 동기화 (주석처리해서 덮어쓰기 방지)
-      // const freshData = await userService.getUserSchedule();
-
-      // setDefaultSchedule(freshData.defaultSchedule || []);
-      // setScheduleExceptions(freshData.scheduleExceptions || []);
-      // setPersonalTimes(freshData.personalTimes || []);
-
-
     } catch (err) {
+      // 에러 발생 시 무시 (편집 모드가 아닐 때만 호출되므로 사용자에게 알리지 않음)
     }
   };
 
