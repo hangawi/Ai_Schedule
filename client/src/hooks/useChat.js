@@ -187,8 +187,15 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             // 로컬 일정의 경우 즉시 캘린더 새로고침
             if (context.tabType === 'local') {
               if (context.context === 'profile') {
-                // 프로필 탭의 경우 calendarUpdate 이벤트 발생
-                window.dispatchEvent(new Event('calendarUpdate'));
+                // 프로필 탭의 경우 calendarUpdate 이벤트 발생 (추가된 데이터와 함께)
+                const updateEvent = new CustomEvent('calendarUpdate', {
+                  detail: {
+                    type: 'add',
+                    data: responseData,
+                    chatResponse: chatResponse
+                  }
+                });
+                window.dispatchEvent(updateEvent);
               }
               setEventAddedKey(prevKey => prevKey + 1);
             } else {
