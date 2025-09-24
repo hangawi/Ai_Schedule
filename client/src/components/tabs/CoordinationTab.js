@@ -1123,21 +1123,54 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                     <Grid size={16} className="mr-1 inline" />
                     주간
                   </button>
+                  {!isOwner && (
+                    <button
+                      onClick={() => setViewMode('grid')}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                        viewMode === 'grid'
+                          ? 'bg-green-500 text-white'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      <Grid size={16} className="mr-1 inline" />
+                      선택
+                    </button>
+                  )}
                 </div>
               </div>
 
-              <CoordinationCalendarView
-                roomData={currentRoom}
-                timeSlots={currentRoom.timeSlots || []}
-                members={currentRoom.members || []}
-                currentUser={user}
-                isRoomOwner={isOwner}
-                onDateClick={handleDateClick}
-                selectedDate={selectedDate}
-                viewMode={viewMode}
-                currentWeekStartDate={currentWeekStartDate}
-                onWeekChange={handleWeekChange}
-              />
+              {viewMode === 'grid' && !isOwner ? (
+                <TimetableGrid
+                  roomId={currentRoom._id}
+                  roomSettings={{
+                    startHour: scheduleStartHour,
+                    endHour: scheduleEndHour
+                  }}
+                  timeSlots={currentRoom.timeSlots || []}
+                  members={currentRoom.members || []}
+                  roomData={currentRoom}
+                  currentUser={user}
+                  isRoomOwner={false}
+                  selectedSlots={selectedSlots}
+                  onSlotSelect={handleSlotSelect}
+                  onWeekChange={handleWeekChange}
+                  initialStartDate={currentWeekStartDate}
+                  calculateEndTime={calculateEndTime}
+                />
+              ) : (
+                <CoordinationCalendarView
+                  roomData={currentRoom}
+                  timeSlots={currentRoom.timeSlots || []}
+                  members={currentRoom.members || []}
+                  currentUser={user}
+                  isRoomOwner={isOwner}
+                  onDateClick={handleDateClick}
+                  selectedDate={selectedDate}
+                  viewMode={viewMode}
+                  currentWeekStartDate={currentWeekStartDate}
+                  onWeekChange={handleWeekChange}
+                />
+              )}
             </div>
           </div>
         </div>

@@ -154,8 +154,8 @@ export const handleRunAutoSchedule = async (
   setConflictSuggestions([]); // Reset unassigned members info
 
   try {
-    // UI가 보고 있는 주와 일치하도록 강제로 설정
-    const uiCurrentWeek = "2025-09-15"; // 임시로 고정값 사용
+    // UI가 보고 있는 주와 일치하도록 설정
+    const uiCurrentWeek = currentWeekStartDate; // Use actual current week from UI
 
     const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = await coordinationService.runAutoSchedule(currentRoom._id, { ...scheduleOptions, currentWeek: uiCurrentWeek });
 

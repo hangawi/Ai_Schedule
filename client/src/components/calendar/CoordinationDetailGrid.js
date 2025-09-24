@@ -57,14 +57,19 @@ const CoordinationDetailGrid = ({
     return timeSlots.filter(slot => {
       // 날짜로 필터링 (날짜가 있는 경우)
       if (slot.date) {
-        const dateStr = selectedDate.toISOString().split('T')[0];
-        const slotDate = new Date(slot.date).toISOString().split('T')[0];
-        return slotDate === dateStr && slot.startTime === time;
+        try {
+          const dateStr = selectedDate.toISOString().split('T')[0];
+          const slotDate = new Date(slot.date).toISOString().split('T')[0];
+          return slotDate === dateStr && slot.startTime === time;
+        } catch (e) {
+          // Invalid date format, skip
+          return false;
+        }
       }
 
       // 요일로 필터링 (자동배정 슬롯의 경우)
       if (slot.day) {
-        return slot.day === selectedDayName && slot.startTime === time;
+        return slot.day.toLowerCase() === selectedDayName && slot.startTime === time;
       }
 
       return false;
