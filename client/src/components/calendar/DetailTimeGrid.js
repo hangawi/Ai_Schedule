@@ -252,18 +252,23 @@ const DetailTimeGrid = ({
     const [hour, minute] = startTime.split(':').map(Number);
 
     for (const ex of exceptions) {
-      // Date 방식으로 날짜 비교 (로컬 날짜 기준)
-      const exStart = new Date(ex.startTime);
-      const exYear = exStart.getFullYear();
-      const exMonth = String(exStart.getMonth() + 1).padStart(2, '0');
-      const exDay = String(exStart.getDate()).padStart(2, '0');
-      const exDateStr = `${exYear}-${exMonth}-${exDay}`;
+      // specificDate 필드를 사용해야 함 (startTime은 "10:00" 형식이므로 날짜가 아님)
+      const exDateStr = ex.specificDate;
+
+      console.log('🔍 [DETAIL] 예외 일정 매칭 확인:', {
+        selectedDate: dateStr,
+        exceptionDate: exDateStr,
+        slotTime: startTime,
+        exceptionStartTime: ex.startTime,
+        exceptionTitle: ex.title
+      });
 
       if (exDateStr === dateStr) {
-        const exStartHour = exStart.getHours();
-        const exStartMinute = exStart.getMinutes();
+        // startTime과 endTime은 "10:00", "11:00" 형식
+        const [exStartHour, exStartMinute] = ex.startTime.split(':').map(Number);
 
         if (hour === exStartHour && minute === exStartMinute) {
+          console.log('🔍 [DETAIL] 예외 일정 매칭됨!', ex);
           return ex;
         }
       }
@@ -318,12 +323,12 @@ const DetailTimeGrid = ({
 
     for (let hour = startHour; hour < endHour; hour++) {
       for (let minute = 0; minute < 60; minute += 10) {
-        const checkDateTime = new Date(year, month, day, hour, minute, 0);
         const hasException = exceptions.some(ex => {
-          const exStartTime = new Date(ex.startTime);
-          return exStartTime.getTime() === checkDateTime.getTime() &&
-                 ex.specificDate === dateStr &&
-                 ex.title === '일정';
+          // specificDate로 날짜 비교, startTime으로 시간 비교
+          if (ex.specificDate !== dateStr) return false;
+
+          const [exHour, exMinute] = ex.startTime.split(':').map(Number);
+          return exHour === hour && exMinute === minute && ex.title === '일정';
         });
         if (hasException) return true;
       }

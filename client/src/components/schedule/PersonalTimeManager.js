@@ -86,7 +86,7 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
     return endMinutes > startMinutes;
   };
 
-  const handleFormSubmit = useCallback(() => {
+  const handleFormSubmit = useCallback(async () => {
     if (!newPersonalTime.title.trim()) {
       showAlert('제목을 입력해주세요.');
       return;
@@ -139,21 +139,44 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
     }
 
     // 개인시간 추가/수정 후 자동 저장 및 달력 업데이트
+    console.log('🔍 [PERSONAL] 개인시간 추가/수정 후 자동저장 시작');
 
-    // 자동 저장 대신 즉시 달력 업데이트만 수행
-    // (저장은 사용자가 프로필 탭에서 '저장' 버튼을 클릭할 때 수행)
+    // 자동 저장 실행
+    if (onAutoSave) {
+      try {
+        await onAutoSave();
+        console.log('🔍 [PERSONAL] 자동저장 완료');
+      } catch (error) {
+        console.error('🔍 [PERSONAL] 자동저장 실패:', error);
+        showAlert('저장에 실패했습니다: ' + error.message, '오류');
+      }
+    }
+
+    // 달력 업데이트
     window.dispatchEvent(new CustomEvent('calendarUpdate', {
       detail: { type: 'personalTime', action: editingId ? 'update' : 'add', data: personalTimeData }
     }));
 
   }, [newPersonalTime, personalTimes, setPersonalTimes, showAlert, editingId, onAutoSave]);
 
-  const handleRemovePersonalTime = useCallback((id) => {
+  const handleRemovePersonalTime = useCallback(async (id) => {
     const updatedPersonalTimes = personalTimes.filter(pt => pt.id !== id);
 
     setPersonalTimes(updatedPersonalTimes);
 
-    // 개인시간 삭제 후 달력 업데이트 (자동 저장 제거)
+    console.log('🔍 [PERSONAL] 개인시간 삭제 후 자동저장 시작');
+
+    // 자동 저장 실행
+    if (onAutoSave) {
+      try {
+        await onAutoSave();
+        console.log('🔍 [PERSONAL] 삭제 후 자동저장 완료');
+      } catch (error) {
+        console.error('🔍 [PERSONAL] 삭제 후 자동저장 실패:', error);
+      }
+    }
+
+    // 개인시간 삭제 후 달력 업데이트
     window.dispatchEvent(new CustomEvent('calendarUpdate', {
       detail: { type: 'personalTime', action: 'remove', id: id }
     }));

@@ -102,12 +102,24 @@ exports.login = async (req, res) => {
 exports.googleAuth = async (req, res) => {
   const { code } = req.body;
 
+  console.log('🔍 [GOOGLE] Google Auth 시작:', {
+    code: code ? 'EXISTS' : 'MISSING',
+    redirectUri: process.env.GOOGLE_REDIRECT_URI,
+    clientId: process.env.GOOGLE_CLIENT_ID ? 'EXISTS' : 'MISSING'
+  });
+
   try {
 
     const { tokens } = await client.getToken({
       code,
       redirect_uri: process.env.GOOGLE_REDIRECT_URI,
       scope: 'https://www.googleapis.com/auth/calendar', // 캘린더 읽기/쓰기 권한
+    });
+
+    console.log('🔍 [GOOGLE] 토큰 획득 성공:', {
+      hasAccessToken: !!tokens.access_token,
+      hasRefreshToken: !!tokens.refresh_token,
+      hasIdToken: !!tokens.id_token
     });
     client.setCredentials(tokens);
 
@@ -157,8 +169,13 @@ exports.googleAuth = async (req, res) => {
       }
     );
   } catch (err) {
-    console.error('Google Auth Error:', err.message);
-    res.status(500).json({ msg: 'Google 인증 실패' });
+    console.error('🔍 [GOOGLE] Google Auth Error:', {
+      message: err.message,
+      code: err.code,
+      stack: err.stack,
+      details: err.details
+    });
+    res.status(500).json({ msg: 'Google 인증 실패: ' + err.message });
   }
 };
 
