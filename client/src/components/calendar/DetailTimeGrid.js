@@ -252,6 +252,9 @@ const DetailTimeGrid = ({
     const [hour, minute] = startTime.split(':').map(Number);
 
     for (const ex of exceptions) {
+      // 유효하지 않은 데이터 필터링
+      if (!ex || !ex.specificDate || !ex.startTime) continue;
+
       // specificDate 필드를 사용해야 함 (startTime은 "10:00" 형식이므로 날짜가 아님)
       const exDateStr = ex.specificDate;
 
@@ -325,7 +328,7 @@ const DetailTimeGrid = ({
       for (let minute = 0; minute < 60; minute += 10) {
         const hasException = exceptions.some(ex => {
           // specificDate로 날짜 비교, startTime으로 시간 비교
-          if (ex.specificDate !== dateStr) return false;
+          if (!ex || ex.specificDate !== dateStr || !ex.startTime) return false;
 
           const [exHour, exMinute] = ex.startTime.split(':').map(Number);
           return exHour === hour && exMinute === minute && ex.title === '일정';
