@@ -13,7 +13,7 @@ import { DAY_NAMES, DEFAULT_COLORS, NEGOTIATION_STATUS } from './timetableConsta
  * @returns {number} - The hour as number
  */
 export const getHourFromSettings = (setting, defaultValue) => {
-  if (!setting) return parseInt(defaultValue, 10);
+  if (setting === null || setting === undefined) return parseInt(defaultValue, 10);
   if (typeof setting === 'string') return parseInt(String(setting).split(':')[0], 10);
   if (typeof setting === 'number') return setting;
   return parseInt(defaultValue, 10);

@@ -71,6 +71,17 @@ const TimetableGrid = ({
   showMerged = true // New prop for merged view
 }) => {
 
+  // Debug log for TimetableGrid props
+  console.log('TimetableGrid - Props received:', {
+    showMerged,
+    roomSettings: {
+      startHour: roomSettings?.startHour,
+      endHour: roomSettings?.endHour,
+      scheduleStart: roomSettings?.scheduleStart,
+      scheduleEnd: roomSettings?.scheduleEnd
+    }
+  });
+
 
   // CustomAlert 상태
   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
@@ -101,16 +112,32 @@ const TimetableGrid = ({
   const days = DAYS; // Display labels (not used for logic)
 
   // Generate time slots using utility functions
+  // Use startHour/endHour first (passed from parent), then fall back to scheduleStart/scheduleEnd
   const scheduleStartHour = getHourFromSettings(
-    roomSettings?.scheduleStart || roomSettings?.startHour,
+    roomSettings?.startHour || roomSettings?.scheduleStart,
     DEFAULT_SCHEDULE_START_HOUR.toString()
   );
   const scheduleEndHour = getHourFromSettings(
-    roomSettings?.scheduleEnd || roomSettings?.endHour,
+    roomSettings?.endHour || roomSettings?.scheduleEnd,
     DEFAULT_SCHEDULE_END_HOUR.toString()
   );
 
+  // Debug log for calculated hours
+  console.log('TimetableGrid - Calculated hours:', {
+    scheduleStartHour,
+    scheduleEndHour,
+    roomSettingsStartHour: roomSettings?.startHour,
+    roomSettingsEndHour: roomSettings?.endHour
+  });
+
   const timeSlotsInDay = generateDayTimeSlots(scheduleStartHour, scheduleEndHour);
+
+  // Debug log for generated time slots
+  console.log('TimetableGrid - Generated time slots:', {
+    totalSlots: timeSlotsInDay.length,
+    firstFewSlots: timeSlotsInDay.slice(0, 5),
+    lastFewSlots: timeSlotsInDay.slice(-5)
+  });
 
 
   // Helper function to check if a time slot is blocked and return block info
