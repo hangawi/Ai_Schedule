@@ -37,8 +37,8 @@ const generateTimeSlots = (startHour = 0, endHour = 24) => {
 const getSundayOfCurrentWeek = (date) => {
   const d = new Date(date);
   const day = d.getDay();
-  const diff = d.getDate() - day; // 일요일이 기준 (0)
-  d.setDate(diff);
+  // 현재 날짜에서 요일만큼 빼서 해당 주의 일요일을 구함
+  d.setDate(d.getDate() - day);
   d.setHours(0, 0, 0, 0);
   return d;
 };
@@ -78,10 +78,12 @@ const ScheduleGridSelector = ({
       date.setDate(sunday.getDate() + i);
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const dayOfMonth = String(date.getDate()).padStart(2, '0');
+      // 실제 요일을 확인 (JavaScript의 getDay()는 0=일요일, 1=월요일, ...)
+      const actualDayOfWeek = date.getDay();
       dates.push({
         fullDate: date,
-        display: `${dayNamesKorean[i]} (${month}.${dayOfMonth})`,
-        dayOfWeek: i
+        display: `${dayNamesKorean[actualDayOfWeek]} (${month}.${dayOfMonth})`,
+        dayOfWeek: actualDayOfWeek
       });
     }
     setWeekDates(dates);
@@ -157,9 +159,11 @@ const ScheduleGridSelector = ({
 
                 // 반복 개인시간인 경우에만 처리
                 if (p.isRecurring !== false && personalDays.length > 0) {
-                    // JavaScript 요일 시스템 (0=일요일) vs 데이터베이스 시스템 비교
-                    // 데이터베이스에서 7이 일요일인 경우를 0으로 변환
-                    const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
+                    // 데이터베이스 요일 시스템 (1=월요일, 2=화요일, ..., 7=일요일)을
+                    // JavaScript 요일 시스템 (0=일요일, 1=월요일, 2=화요일, ...)으로 변환
+                    const convertedDays = personalDays.map(day => {
+                        return day === 7 ? 0 : day; // 7(일요일) -> 0, 나머지는 그대로
+                    });
 
                     if (convertedDays.includes(dayOfWeek)) {
                         const startMinutes = timeToMinutes(p.startTime);
@@ -579,7 +583,9 @@ const ScheduleGridSelector = ({
                             const personalSlot = personalTimes.find(p => {
                                 const personalDays = p.days || [];
                                 if (p.isRecurring !== false && personalDays.length > 0) {
-                                    const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
+                                    const convertedDays = personalDays.map(day => {
+                                        return day === 7 ? 0 : day; // 7(일요일) -> 0, 나머지는 그대로
+                                    });
                                     if (convertedDays.includes(day.dayOfWeek)) {
                                         const startMinutes = timeToMinutes(p.startTime);
                                         const endMinutes = timeToMinutes(p.endTime);
@@ -837,7 +843,9 @@ const ScheduleGridSelector = ({
                   const personalSlot = personalTimes.find(p => {
                     const personalDays = p.days || [];
                     if (p.isRecurring !== false && personalDays.length > 0) {
-                      const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
+                      const convertedDays = personalDays.map(day => {
+                        return day === 7 ? 0 : day; // 7(일요일) -> 0, 나머지는 그대로
+                      });
                       if (convertedDays.includes(dayData.dayOfWeek)) {
                         const startMinutes = timeToMinutes(p.startTime);
                         const endMinutes = timeToMinutes(p.endTime);
