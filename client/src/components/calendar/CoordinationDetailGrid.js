@@ -107,7 +107,16 @@ const CoordinationDetailGrid = ({
     if (time === '23:00') {
       console.log('🔍 모든 roomExceptions 이름 확인:', {
         roomExceptionsCount: roomData?.settings?.roomExceptions?.length,
-        모든이름들: roomData?.settings?.roomExceptions?.map(ex => ex.name)
+        모든이름들: roomData?.settings?.roomExceptions?.map(ex => ex.name),
+        전체데이터: roomData?.settings?.roomExceptions?.map(ex => ({
+          name: ex.name,
+          type: ex.type,
+          dayOfWeek: ex.dayOfWeek,
+          startTime: ex.startTime,
+          endTime: ex.endTime,
+          isPersonalTime: ex.isPersonalTime,
+          isSynced: ex.isSynced
+        }))
       });
     }
 

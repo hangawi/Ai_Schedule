@@ -3,17 +3,18 @@ import TimeSlot from './TimeSlot';
 
 const dayNamesKorean = ['월', '화', '수', '목', '금'];
 
-const WeekView = ({ 
-  filteredTimeSlotsInDay, 
-  weekDates, 
-  days, 
-  getSlotOwner, 
-  isSlotSelected, 
-  getBlockedTimeInfo, 
+const WeekView = ({
+  filteredTimeSlotsInDay,
+  weekDates,
+  days,
+  getSlotOwner,
+  isSlotSelected,
+  getBlockedTimeInfo,
   getRoomExceptionInfo, // New prop
-  isRoomOwner, 
-  currentUser, 
-  handleSlotClick 
+  isRoomOwner,
+  currentUser,
+  handleSlotClick,
+  showMerged = true // New prop for merged view
 }) => {
   return (
     <>
@@ -43,6 +44,7 @@ const WeekView = ({
                 isRoomOwner={isRoomOwner}
                 currentUser={currentUser}
                 onSlotClick={handleSlotClick}
+                showMerged={showMerged}
               />
             );
           })}
