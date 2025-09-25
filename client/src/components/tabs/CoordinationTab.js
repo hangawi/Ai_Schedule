@@ -13,7 +13,8 @@ import { useCoordination } from '../../hooks/useCoordination';
 import { useCoordinationModals } from '../../hooks/useCoordinationModals';
 import { useAuth } from '../../hooks/useAuth';
 import { coordinationService } from '../../services/coordinationService';
-import { Calendar, Grid, PlusCircle, LogIn, Users, MessageSquare, Clock } from 'lucide-react';
+import { userService } from '../../services/userService';
+import { Calendar, Grid, PlusCircle, LogIn, Users, MessageSquare, Clock, RefreshCw, Merge, Split } from 'lucide-react';
 import { translateEnglishDays } from '../../utils';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import MemberScheduleModal from '../modals/MemberScheduleModal';
@@ -58,6 +59,216 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
   const showAlert = (message) => setCustomAlert({ show: true, message });
   const closeAlert = () => setCustomAlert({ show: false, message: '' });
+
+  // 방장 개인시간 동기화 함수
+  const syncOwnerPersonalTimes = async () => {
+    if (!currentRoom || !isRoomOwner(user, currentRoom)) {
+      showAlert('방장만 개인시간을 동기화할 수 있습니다.');
+      return;
+    }
+
+    try {
+      console.log('🔍 방장 개인시간 동기화 시작');
+
+      // 현재 사용자의 개인시간 데이터 가져오기
+      const ownerScheduleData = await userService.getUserSchedule();
+      console.log('🔍 방장 개인시간 데이터:', {
+        personalTimesCount: ownerScheduleData.personalTimes?.length || 0,
+        personalTimes: ownerScheduleData.personalTimes
+      });
+
+      // 현재 방 세부정보 가져오기
+      const roomData = await coordinationService.fetchRoomDetails(currentRoom._id);
+      const existingSettings = roomData.settings || { roomExceptions: [] };
+
+      // 기존의 방장 연동 예외들 제거 (isSynced: true인 것들)
+      const nonSyncedExceptions = existingSettings.roomExceptions.filter(ex => !ex.isSynced);
+      console.log('🔍 기존 non-synced exceptions:', nonSyncedExceptions.length);
+
+      // 요일 매핑 (0: 일, 1: 월, ..., 6: 토)
+      const dayOfWeekMap = {
+        0: '일요일', 1: '월요일', 2: '화요일', 3: '수요일', 4: '목요일', 5: '금요일', 6: '토요일'
+      };
+
+      // 새로운 방장 시간표 예외들 생성
+      const syncedExceptions = [];
+
+      // defaultSchedule을 roomExceptions으로 변환
+      (ownerScheduleData.defaultSchedule || []).forEach(schedule => {
+        syncedExceptions.push({
+          type: 'daily_recurring',
+          name: `기본 시간표 (방장)`,
+          dayOfWeek: schedule.dayOfWeek,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          isSynced: true
+        });
+      });
+
+      // scheduleExceptions을 roomExceptions으로 변환 (시간대별 병합)
+      const scheduleExceptionGroups = {};
+      (ownerScheduleData.scheduleExceptions || []).forEach(exception => {
+        const startDate = new Date(exception.startTime);
+        const dateKey = startDate.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+        const title = exception.title || '일정';
+        const groupKey = `${dateKey}_${title}`;
+
+        if (!scheduleExceptionGroups[groupKey]) {
+          scheduleExceptionGroups[groupKey] = [];
+        }
+        scheduleExceptionGroups[groupKey].push(exception);
+      });
+
+      // 각 그룹별로 시간 범위 병합
+      Object.values(scheduleExceptionGroups).forEach(group => {
+        // 시작 시간 순으로 정렬
+        group.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+
+        const mergedRanges = [];
+        let currentRange = null;
+
+        group.forEach(exception => {
+          const startDate = new Date(exception.startTime);
+          const endDate = new Date(exception.endTime);
+
+          if (!currentRange) {
+            currentRange = {
+              title: exception.title || '일정',
+              startTime: exception.startTime,
+              endTime: exception.endTime,
+              startDate: startDate,
+              endDate: endDate
+            };
+          } else {
+            // 현재 범위의 끝 시간과 새 예외의 시작 시간이 연속되는지 확인
+            if (new Date(currentRange.endTime).getTime() === startDate.getTime()) {
+              // 연속되므로 현재 범위 확장
+              currentRange.endTime = exception.endTime;
+              currentRange.endDate = endDate;
+            } else {
+              // 연속되지 않으므로 현재 범위를 완성하고 새 범위 시작
+              mergedRanges.push(currentRange);
+              currentRange = {
+                title: exception.title || '일정',
+                startTime: exception.startTime,
+                endTime: exception.endTime,
+                startDate: startDate,
+                endDate: endDate
+              };
+            }
+          }
+        });
+
+        // 마지막 범위 추가
+        if (currentRange) {
+          mergedRanges.push(currentRange);
+        }
+
+        // 병합된 범위들을 syncedExceptions에 추가
+        mergedRanges.forEach(range => {
+          const displayDate = range.startDate.toLocaleDateString('ko-KR', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          }).replace(/\. /g, '.').replace(/\.$/, '');
+
+          const displayStartTime = range.startDate.toLocaleTimeString('en-GB', {
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+
+          const displayEndTime = range.endDate.toLocaleTimeString('en-GB', {
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+
+          syncedExceptions.push({
+            type: 'date_specific',
+            name: `${displayDate} ${displayStartTime}~${displayEndTime} (방장)`,
+            startTime: displayStartTime,
+            endTime: displayEndTime,
+            startDate: range.startTime,
+            endDate: range.endTime,
+            isSynced: true
+          });
+        });
+      });
+
+      // personalTimes을 roomExceptions으로 변환
+      (ownerScheduleData.personalTimes || []).forEach(personalTime => {
+        if (personalTime.isRecurring !== false && personalTime.days && personalTime.days.length > 0) {
+          personalTime.days.forEach(dayOfWeek => {
+            const jsDay = dayOfWeek === 7 ? 0 : dayOfWeek;
+
+            // 시간을 분으로 변환하여 자정 넘나드는지 확인
+            const [startHour, startMin] = personalTime.startTime.split(':').map(Number);
+            const [endHour, endMin] = personalTime.endTime.split(':').map(Number);
+            const startMinutes = startHour * 60 + startMin;
+            const endMinutes = endHour * 60 + endMin;
+
+            if (endMinutes <= startMinutes) {
+              // 자정을 넘나드는 시간 (예: 23:00~07:00) 분할
+              syncedExceptions.push({
+                type: 'daily_recurring',
+                name: `${personalTime.title || '개인시간'} (방장)`,
+                dayOfWeek: jsDay,
+                startTime: personalTime.startTime,
+                endTime: '23:50',
+                isPersonalTime: true,
+                isSynced: true
+              });
+
+              syncedExceptions.push({
+                type: 'daily_recurring',
+                name: `${personalTime.title || '개인시간'} (방장)`,
+                dayOfWeek: jsDay,
+                startTime: '00:00',
+                endTime: personalTime.endTime,
+                isPersonalTime: true,
+                isSynced: true
+              });
+            } else {
+              // 일반적인 하루 내 시간
+              syncedExceptions.push({
+                type: 'daily_recurring',
+                name: `${personalTime.title || '개인시간'} (방장)`,
+                dayOfWeek: jsDay,
+                startTime: personalTime.startTime,
+                endTime: personalTime.endTime,
+                isPersonalTime: true,
+                isSynced: true
+              });
+            }
+          });
+        }
+      });
+
+      // 업데이트된 설정으로 방 업데이트
+      const updatedSettings = {
+        ...existingSettings,
+        roomExceptions: [...nonSyncedExceptions, ...syncedExceptions]
+      };
+
+      console.log('🔍 방 업데이트 시도 - syncedExceptions:', {
+        count: syncedExceptions.length,
+        exceptions: syncedExceptions.map(ex => ({ name: ex.name, type: ex.type, dayOfWeek: ex.dayOfWeek }))
+      });
+
+      await coordinationService.updateRoom(currentRoom._id, {
+        settings: updatedSettings
+      });
+
+      // 현재 방 데이터 새로고침
+      await refreshCurrentRoom();
+
+      showAlert(`방장 개인시간이 성공적으로 동기화되었습니다! (${syncedExceptions.length}개 항목)`);
+      console.log('✅ 방장 개인시간 동기화 완료');
+
+    } catch (err) {
+      console.error('방장 개인시간 동기화 실패:', err);
+      showAlert(`개인시간 동기화에 실패했습니다: ${err.message}`);
+    }
+  };
 
   // State for the currently displayed week in TimetableGrid
 
@@ -248,9 +459,34 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [selectedMemberId, setSelectedMemberId] = useState(null);
 
   // Calendar view states
-  const [viewMode, setViewMode] = useState('month'); // 'month' or 'week'
+  const [viewMode, setViewMode] = useState('week'); // 'month' or 'week'
   const [selectedDate, setSelectedDate] = useState(null);
   const [showDetailGrid, setShowDetailGrid] = useState(false);
+  const [showMerged, setShowMerged] = useState(true); // 병합/분할 모드
+  const [showFullDay, setShowFullDay] = useState(false); // true: 24시간(0~24시), false: 기본(9~18시)
+
+  // Schedule time settings
+  const scheduleStartHour = getHourFromSettings(
+    currentRoom?.settings?.scheduleStart || currentRoom?.settings?.startHour,
+    '9'
+  );
+  const scheduleEndHour = getHourFromSettings(
+    currentRoom?.settings?.scheduleEnd || currentRoom?.settings?.endHour,
+    '18'
+  );
+
+  // 주간 모드에서는 기본/24시간 토글 가능, 월간 모드에서는 기본 시간만
+  const effectiveShowFullDay = viewMode === 'week' ? showFullDay : false;
+
+  // Debug log
+  console.log('CoordinationTab - Time settings:', {
+    showFullDay,
+    effectiveShowFullDay,
+    scheduleStartHour,
+    scheduleEndHour,
+    finalStartHour: effectiveShowFullDay ? 0 : scheduleStartHour,
+    finalEndHour: effectiveShowFullDay ? 24 : scheduleEndHour
+  });
 
   const handleMemberClick = (memberId) => {
     const member = currentRoom?.members?.find(m => (m.user._id || m.user.id) === memberId);
@@ -442,15 +678,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
   if (currentRoom) {
     const isOwner = isRoomOwner(user, currentRoom);
-
-    const scheduleStartHour = getHourFromSettings(
-      currentRoom.settings?.scheduleStart || currentRoom.settings?.startHour,
-      '9'
-    );
-    const scheduleEndHour = getHourFromSettings(
-      currentRoom.settings?.scheduleEnd || currentRoom.settings?.endHour,
-      '18'
-    );
     
 
     return (
@@ -467,12 +694,20 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
               </div>
             </div>
             {isOwner && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-1">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-1 flex gap-2">
                 <button
                   onClick={openManageRoomModal}
                   className="px-4 py-2 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors font-medium shadow-sm"
                 >
                   방 관리
+                </button>
+                <button
+                  onClick={syncOwnerPersonalTimes}
+                  className="px-3 py-2 text-sm bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors font-medium shadow-sm flex items-center"
+                  title="내 프로필의 개인시간을 이 방에 동기화합니다"
+                >
+                  <RefreshCw size={14} className="mr-1" />
+                  개인시간 동기화
                 </button>
               </div>
             )}
@@ -1109,17 +1344,41 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   시간표 ({scheduleStartHour}:00 - {scheduleEndHour}:00)
                 </h3>
                 <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setViewMode('month')}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                      viewMode === 'month'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                  >
-                    <Calendar size={16} className="mr-1 inline" />
-                    월간
-                  </button>
+                  {viewMode === 'week' && (
+                    <>
+                      <button
+                        onClick={() => setShowFullDay(!showFullDay)}
+                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                          showFullDay
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        <Clock size={16} className="mr-1 inline" />
+                        {showFullDay ? '24시간' : '기본'}
+                      </button>
+                      <button
+                        onClick={() => setShowMerged(!showMerged)}
+                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                          showMerged
+                            ? 'bg-green-500 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        {showMerged ? (
+                          <>
+                            <Split size={16} className="mr-1 inline" />
+                            분할
+                          </>
+                        ) : (
+                          <>
+                            <Merge size={16} className="mr-1 inline" />
+                            병합
+                          </>
+                        )}
+                      </button>
+                    </>
+                  )}
                   <button
                     onClick={() => setViewMode('week')}
                     className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
@@ -1130,6 +1389,17 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   >
                     <Grid size={16} className="mr-1 inline" />
                     주간
+                  </button>
+                  <button
+                    onClick={() => setViewMode('month')}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                      viewMode === 'month'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    <Calendar size={16} className="mr-1 inline" />
+                    월간
                   </button>
                   {!isOwner && (
                     <button
@@ -1166,6 +1436,28 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   initialStartDate={currentWeekStartDate}
                   calculateEndTime={calculateEndTime}
                 />
+              ) : viewMode === 'week' ? (
+                <TimetableGrid
+                  key={`week-${effectiveShowFullDay ? 'full' : 'basic'}-${showMerged ? 'merged' : 'split'}`} // Force re-render on state change
+                  roomId={currentRoom._id}
+                  roomSettings={{
+                    startHour: effectiveShowFullDay ? 0 : scheduleStartHour,
+                    endHour: effectiveShowFullDay ? 24 : scheduleEndHour,
+                    ...currentRoom.settings
+                  }}
+                  timeSlots={currentRoom.timeSlots || []}
+                  members={currentRoom.members || []}
+                  roomData={currentRoom}
+                  currentUser={user}
+                  isRoomOwner={isOwner}
+                  selectedSlots={selectedSlots}
+                  onSlotSelect={isOwner ? null : handleSlotSelect}
+                  onWeekChange={handleWeekChange}
+                  initialStartDate={currentWeekStartDate}
+                  calculateEndTime={calculateEndTime}
+                  readOnly={isOwner}
+                  showMerged={showMerged}
+                />
               ) : (
                 <CoordinationCalendarView
                   roomData={currentRoom}
@@ -1178,6 +1470,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   viewMode={viewMode}
                   currentWeekStartDate={currentWeekStartDate}
                   onWeekChange={handleWeekChange}
+                  showFullDay={effectiveShowFullDay}
+                  showMerged={showMerged}
                 />
               )}
             </div>
@@ -1476,10 +1770,14 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       )}
 
       {showCreateRoomModal && (
-        <RoomCreationModal 
-          onClose={closeCreateRoomModal} 
-          onCreateRoom={handleCreateRoom} 
-          ownerProfileSchedule={user ? { defaultSchedule: user.defaultSchedule, scheduleExceptions: user.scheduleExceptions } : null}
+        <RoomCreationModal
+          onClose={closeCreateRoomModal}
+          onCreateRoom={handleCreateRoom}
+          ownerProfileSchedule={user ? {
+            defaultSchedule: user.defaultSchedule,
+            scheduleExceptions: user.scheduleExceptions,
+            personalTimes: user.personalTimes
+          } : null}
         />
       )}
       {showJoinRoomModal && (

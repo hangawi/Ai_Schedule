@@ -28,7 +28,7 @@ export const getHourFromSettings = (setting, defaultValue) => {
 export const generateDayTimeSlots = (scheduleStartHour, scheduleEndHour) => {
   const timeSlotsInDay = [];
   for (let h = scheduleStartHour; h < scheduleEndHour; h++) {
-    for (let m = 0; m < 60; m += 30) {
+    for (let m = 0; m < 60; m += 10) {
       const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
       timeSlotsInDay.push(time);
     }

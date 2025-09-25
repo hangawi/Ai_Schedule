@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import CustomAlertModal from './CustomAlertModal';
+import { userService } from '../../services/userService';
 
-const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule }) => {
+const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initialOwnerSchedule }) => {
+  const [ownerProfileSchedule, setOwnerProfileSchedule] = useState(initialOwnerSchedule);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [maxMembers, setMaxMembers] = useState(10);
@@ -26,6 +28,28 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule }) => {
   const showAlert = (message) => setCustomAlert({ show: true, message });
   const closeAlert = () => setCustomAlert({ show: false, message: '' });
 
+  // 컴포넌트 마운트 시 최신 사용자 일정 데이터 로드
+  useEffect(() => {
+    const loadOwnerSchedule = async () => {
+      try {
+        console.log('🔍 RoomCreationModal - 방장 일정 데이터 로드 시작');
+        const scheduleData = await userService.getUserSchedule();
+        console.log('🔍 RoomCreationModal - 로드된 일정 데이터:', {
+          hasDefaultSchedule: !!(scheduleData.defaultSchedule),
+          hasScheduleExceptions: !!(scheduleData.scheduleExceptions),
+          hasPersonalTimes: !!(scheduleData.personalTimes),
+          personalTimesCount: scheduleData.personalTimes?.length || 0,
+          personalTimesData: scheduleData.personalTimes
+        });
+        setOwnerProfileSchedule(scheduleData);
+      } catch (err) {
+        console.error('방장 일정 데이터 로드 실패:', err);
+      }
+    };
+
+    loadOwnerSchedule();
+  }, []);
+
   // 요일 매핑 (0: 일, 1: 월, ..., 6: 토)
   const dayOfWeekMap = {
     0: '일요일', 1: '월요일', 2: '화요일', 3: '수요일', 4: '목요일', 5: '금요일', 6: '토요일'
@@ -38,13 +62,23 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule }) => {
 
   useEffect(() => {
     if (syncOwnerSchedule && ownerProfileSchedule) {
+      console.log('🔍 방장 시간표 연동 시작:', {
+        hasDefaultSchedule: !!(ownerProfileSchedule.defaultSchedule),
+        defaultScheduleCount: ownerProfileSchedule.defaultSchedule?.length || 0,
+        hasScheduleExceptions: !!(ownerProfileSchedule.scheduleExceptions),
+        scheduleExceptionsCount: ownerProfileSchedule.scheduleExceptions?.length || 0,
+        hasPersonalTimes: !!(ownerProfileSchedule.personalTimes),
+        personalTimesCount: ownerProfileSchedule.personalTimes?.length || 0,
+        personalTimesData: ownerProfileSchedule.personalTimes
+      });
+
       const syncedExceptions = [];
 
       // defaultSchedule을 roomExceptions으로 변환
-      ownerProfileSchedule.defaultSchedule.forEach(schedule => {
+      (ownerProfileSchedule.defaultSchedule || []).forEach(schedule => {
         syncedExceptions.push({
           type: 'daily_recurring',
-          name: `${dayOfWeekMap[schedule.dayOfWeek]} ${schedule.startTime}-${schedule.endTime} (방장 시간표)`,
+          name: `기본 시간표 (방장)`,
           dayOfWeek: schedule.dayOfWeek,
           startTime: schedule.startTime,
           endTime: schedule.endTime,
@@ -52,21 +86,158 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule }) => {
         });
       });
 
-      // scheduleExceptions을 roomExceptions으로 변환
-      ownerProfileSchedule.scheduleExceptions.forEach(exception => {
+      // scheduleExceptions을 날짜/제목별로 그룹화하여 병합 처리
+      const exceptionGroups = {};
+      (ownerProfileSchedule.scheduleExceptions || []).forEach(exception => {
         const startDate = new Date(exception.startTime);
-        const endDate = new Date(exception.endTime);
+        const dateKey = startDate.toLocaleDateString('ko-KR'); // 2025. 9. 30. 형태
+        const title = exception.title || '일정';
+        const groupKey = `${dateKey}-${title}`;
 
-        syncedExceptions.push({
-          type: 'date_specific',
-          name: `${exception.title} (${startDate.toLocaleDateString()}) (방장 시간표)`,
-          startTime: startDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), // HH:MM 형식
-          endTime: endDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), // HH:MM 형식
-          startDate: exception.startTime,
-          endDate: exception.endTime,
-          isSynced: true // 연동된 예외임을 표시
+        if (!exceptionGroups[groupKey]) {
+          exceptionGroups[groupKey] = {
+            title: title,
+            date: dateKey,
+            exceptions: []
+          };
+        }
+        exceptionGroups[groupKey].exceptions.push(exception);
+      });
+
+      // 각 그룹별로 시간대를 병합하여 roomException 생성
+      Object.values(exceptionGroups).forEach(group => {
+        // 시간순으로 정렬
+        group.exceptions.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+
+        // 연속된 시간대들을 병합
+        const mergedTimeRanges = [];
+        let currentRange = null;
+
+        group.exceptions.forEach(exception => {
+          const startDate = new Date(exception.startTime);
+          const endDate = new Date(exception.endTime);
+
+          if (!currentRange) {
+            currentRange = {
+              startTime: startDate,
+              endTime: endDate,
+              originalException: exception
+            };
+          } else {
+            // 현재 범위의 끝과 다음 예외의 시작이 연결되는지 확인
+            if (currentRange.endTime.getTime() === startDate.getTime()) {
+              // 연속되므로 끝시간을 확장
+              currentRange.endTime = endDate;
+            } else {
+              // 연속되지 않으므로 현재 범위를 저장하고 새로운 범위 시작
+              mergedTimeRanges.push(currentRange);
+              currentRange = {
+                startTime: startDate,
+                endTime: endDate,
+                originalException: exception
+              };
+            }
+          }
+        });
+
+        if (currentRange) {
+          mergedTimeRanges.push(currentRange);
+        }
+
+        // 병합된 시간대들을 roomException으로 변환
+        mergedTimeRanges.forEach(range => {
+          const startTimeStr = range.startTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+          const endTimeStr = range.endTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+          syncedExceptions.push({
+            type: 'date_specific',
+            name: `${group.title} (${group.date} ${startTimeStr}~${endTimeStr}) (방장)`,
+            startTime: startTimeStr,
+            endTime: endTimeStr,
+            startDate: range.startTime.toISOString(),
+            endDate: range.endTime.toISOString(),
+            isSynced: true
+          });
         });
       });
+
+      // personalTimes을 roomExceptions으로 변환
+      (ownerProfileSchedule.personalTimes || []).forEach((personalTime, index) => {
+        console.log(`🔍 개인시간 ${index} 처리:`, {
+          title: personalTime.title,
+          startTime: personalTime.startTime,
+          endTime: personalTime.endTime,
+          days: personalTime.days,
+          isRecurring: personalTime.isRecurring,
+          type: personalTime.type
+        });
+
+        // 반복 개인시간인 경우에만 처리
+        if (personalTime.isRecurring !== false && personalTime.days && personalTime.days.length > 0) {
+          personalTime.days.forEach(dayOfWeek => {
+            // 데이터베이스 요일 시스템 (1=월요일, 2=화요일, ..., 7=일요일)을
+            // JavaScript 요일 시스템 (0=일요일, 1=월요일, 2=화요일, ...)으로 변환
+            const jsDay = dayOfWeek === 7 ? 0 : dayOfWeek;
+
+            // 시간을 분으로 변환하여 자정 넘나드는지 확인
+            const [startHour, startMin] = personalTime.startTime.split(':').map(Number);
+            const [endHour, endMin] = personalTime.endTime.split(':').map(Number);
+            const startMinutes = startHour * 60 + startMin;
+            const endMinutes = endHour * 60 + endMin;
+
+            if (endMinutes <= startMinutes) {
+              // 자정을 넘나드는 시간 (예: 23:00~07:00)
+              console.log(`🔍 자정 넘나드는 개인시간 분할: ${personalTime.startTime}~${personalTime.endTime}`);
+
+              // 밤 부분 (예: 23:00~23:50)
+              const nightException = {
+                type: 'daily_recurring',
+                name: `${personalTime.title || '개인시간'} (방장)`,
+                dayOfWeek: jsDay,
+                startTime: personalTime.startTime,
+                endTime: '23:50',
+                isPersonalTime: true,
+                isSynced: true
+              };
+
+              // 아침 부분 (예: 00:00~07:00)
+              const morningException = {
+                type: 'daily_recurring',
+                name: `${personalTime.title || '개인시간'} (방장)`,
+                dayOfWeek: jsDay,
+                startTime: '00:00',
+                endTime: personalTime.endTime,
+                isPersonalTime: true,
+                isSynced: true
+              };
+
+              console.log('✅ 자정 넘나드는 개인시간 - 밤 부분:', nightException);
+              console.log('✅ 자정 넘나드는 개인시간 - 새벽 부분:', morningException);
+
+              syncedExceptions.push(nightException);
+              syncedExceptions.push(morningException);
+            } else {
+              // 일반적인 하루 내 시간
+              const personalException = {
+                type: 'daily_recurring',
+                name: `${personalTime.title || '개인시간'} (방장)`,
+                dayOfWeek: jsDay,
+                startTime: personalTime.startTime,
+                endTime: personalTime.endTime,
+                isPersonalTime: true,
+                isSynced: true
+              };
+
+              console.log('✅ 일반 개인시간 roomException 생성:', personalException);
+              syncedExceptions.push(personalException);
+            }
+          });
+        } else {
+          console.log('⚠️ 개인시간 건너뜀 - 반복 설정이 아니거나 요일이 없음');
+        }
+      });
+
+      console.log(`🔍 최종 생성된 syncedExceptions (총 ${syncedExceptions.length}개):`, syncedExceptions);
 
       setSettings(prevSettings => ({
         ...prevSettings,

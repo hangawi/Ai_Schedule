@@ -67,7 +67,8 @@ const TimetableGrid = ({
   onWeekChange, // New prop to pass current week start date to parent
   initialStartDate, // New prop to set the initial week to display
   onOpenNegotiation, // New prop to handle negotiation modal opening
-  onCurrentWeekNegotiationsChange // New prop to pass current week negotiations to parent
+  onCurrentWeekNegotiationsChange, // New prop to pass current week negotiations to parent
+  showMerged = true // New prop for merged view
 }) => {
 
 
@@ -206,8 +207,8 @@ const TimetableGrid = ({
       if (isOwnedByCurrentUser) {
         if (onRemoveSlot && window.confirm('이 시간을 삭제하시겠습니까?')) {
           const [hour, minute] = time.split(':').map(Number);
-          const endHour = minute === 30 ? hour + 1 : hour;
-          const endMinute = minute === 30 ? 0 : minute + 30;
+          const endHour = minute >= 50 ? hour + 1 : hour;
+          const endMinute = minute >= 50 ? 0 : minute + 10;
 
           const dayIndex = getDayIndex(date);
           if (dayIndex === -1) return; // Weekend, skip
@@ -286,8 +287,8 @@ const TimetableGrid = ({
         }
         else {
           const [hour, minute] = time.split(':').map(Number);
-          const endHour = minute === 30 ? hour + 1 : hour;
-          const endMinute = minute === 30 ? 0 : minute + 30;
+          const endHour = minute >= 50 ? hour + 1 : hour;
+          const endMinute = minute >= 50 ? 0 : minute + 10;
           
           const newSlot = {
             date: date, // Pass date object
@@ -466,17 +467,18 @@ const TimetableGrid = ({
       <TimetableControls weekDates={weekDates} days={days} />
 
       {/* Time Rows */}
-      <WeekView 
+      <WeekView
         filteredTimeSlotsInDay={filteredTimeSlotsInDay}
         weekDates={weekDates} // Pass weekDates to WeekView
         days={days}
         getSlotOwner={getSlotOwner}
         isSlotSelected={isSlotSelected}
-                getBlockedTimeInfo={getBlockedTimeInfo} 
-        getRoomExceptionInfo={getRoomExceptionInfo} 
+                getBlockedTimeInfo={getBlockedTimeInfo}
+        getRoomExceptionInfo={getRoomExceptionInfo}
         isRoomOwner={isRoomOwner}
         currentUser={currentUser}
         handleSlotClick={handleSlotClick}
+        showMerged={showMerged}
       />
 
       {/* Assignment Modal Placeholder */}

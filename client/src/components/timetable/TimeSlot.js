@@ -2,16 +2,17 @@ import React from 'react';
 
 const TimeSlot = ({
   date, // New prop
-  day, 
-  time, 
-  ownerInfo, 
-  isSelected, 
-  blockedInfo, 
+  day,
+  time,
+  ownerInfo,
+  isSelected,
+  blockedInfo,
   roomExceptionInfo, // New prop
   isBlocked, // This prop will now be derived from blockedInfo OR roomExceptionInfo
-  isRoomOwner, 
-  currentUser, 
-  onSlotClick 
+  isRoomOwner,
+  currentUser,
+  onSlotClick,
+  showMerged = true // New prop for merged view
 }) => {
   const isEffectivelyBlocked = isBlocked || !!roomExceptionInfo; // Combine existing blocked with new room exceptions
 
@@ -25,14 +26,16 @@ const TimeSlot = ({
     <div
       key={`${date.toISOString().split('T')[0]}-${time}`}
       className={`col-span-1 border-l border-gray-200 h-10 flex items-center justify-center
-        ${isEffectivelyBlocked ? 'bg-gray-300 cursor-not-allowed' : ''} // Use isEffectivelyBlocked for styling
+        ${showMerged ? 'border-2 border-blue-100' : 'border border-gray-300'}
+        ${!showMerged ? 'bg-gray-50' : ''}
+        ${isEffectivelyBlocked ? 'bg-gray-300 cursor-not-allowed' : ''}
         ${!isEffectivelyBlocked && !ownerInfo && isSelected ? 'bg-blue-200 border-2 border-blue-400' : ''}
         ${!isEffectivelyBlocked && !ownerInfo && !isSelected && currentUser ? 'hover:bg-blue-50 cursor-pointer' : ''}
         ${!isEffectivelyBlocked && ownerInfo && currentUser ? 'cursor-pointer hover:opacity-80' : ''}
         ${!isEffectivelyBlocked && isRoomOwner && !ownerInfo ? 'cursor-pointer hover:bg-green-50' : ''}
       `}
-      style={!isEffectivelyBlocked && ownerInfo ? { backgroundColor: `${ownerInfo.color}20`, borderColor: ownerInfo.color } : 
-             isEffectivelyBlocked && roomExceptionInfo ? { backgroundColor: '#FEEBC8', borderColor: '#F6AD55' } : {} // Light orange for room exceptions
+      style={!isEffectivelyBlocked && ownerInfo ? { backgroundColor: `${ownerInfo.color}20`, borderColor: ownerInfo.color } :
+             isEffectivelyBlocked && roomExceptionInfo ? { backgroundColor: '#FEEBC8', borderColor: '#F6AD55' } : {}
             }
       onClick={handleClick}
     >
