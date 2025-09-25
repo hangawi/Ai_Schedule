@@ -51,7 +51,7 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
         });
         console.log('weekdaySchedule details:', JSON.stringify(weekdaySchedule.slice(0, 3), null, 2));
         console.log('exceptions details:', JSON.stringify(exceptions.slice(0, 3), null, 2));
-        console.log('personalTimes details (ALL):', JSON.stringify(personalTimes, null, 2));
+        console.log('personalTimes details (all personal times):', JSON.stringify(personalTimes, null, 2));
 
         // 수면시간 특별 체크
         const sleepTimes = personalTimes.filter(p => p.title && p.title.includes('수면'));
