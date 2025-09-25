@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Users, Zap, Clock, MessageSquare } from 'lucide-react';
+import { X, Users, Zap, Clock, MessageSquare, Ban } from 'lucide-react';
+import {
+  getBlockedTimeInfo,
+  getRoomExceptionInfo
+} from '../../utils/timetableHelpers';
 
 // 10분 단위 시간 슬롯 생성
 const generateTimeSlots = (startHour = 9, endHour = 18) => {
@@ -36,6 +40,7 @@ const CoordinationDetailGrid = ({
 }) => {
   const [timeRange, setTimeRange] = useState({ start: 9, end: 18 });
   const [showFullDay, setShowFullDay] = useState(false);
+
 
   const getCurrentTimeSlots = () => {
     return generateTimeSlots(timeRange.start, timeRange.end);
@@ -87,6 +92,49 @@ const CoordinationDetailGrid = ({
     });
   };
 
+  // Blocked time과 room exception을 체크하는 함수들
+  const getBlockedInfo = (time) => {
+    const result = getBlockedTimeInfo(time, roomData?.settings);
+
+
+    return result;
+  };
+
+  const getRoomExceptionForSlot = (time) => {
+    const result = getRoomExceptionInfo(selectedDate, time, roomData?.settings);
+
+    // 모든 roomExceptions 이름 확인 (23:00에서만)
+    if (time === '23:00') {
+      console.log('🔍 모든 roomExceptions 이름 확인:', {
+        roomExceptionsCount: roomData?.settings?.roomExceptions?.length,
+        모든이름들: roomData?.settings?.roomExceptions?.map(ex => ex.name)
+      });
+    }
+
+    return result;
+  };
+
+  // 시간대가 차단되어 있는지 확인하는 함수
+  const isTimeBlocked = (time) => {
+    const blockedInfo = getBlockedInfo(time);
+    const roomException = getRoomExceptionForSlot(time);
+    return !!(blockedInfo || roomException);
+  };
+
+  // 차단 정보를 가져오는 함수 (표시용)
+  const getBlockingInfo = (time) => {
+    const blockedInfo = getBlockedInfo(time);
+    const roomException = getRoomExceptionForSlot(time);
+
+    if (blockedInfo) {
+      return { type: 'blocked', name: blockedInfo.name, info: blockedInfo };
+    }
+    if (roomException) {
+      return { type: 'exception', name: roomException.name, info: roomException };
+    }
+    return null;
+  };
+
   const getSlotUsers = (time) => {
     const slots = getSlotData(time);
     const users = [];
@@ -103,7 +151,48 @@ const CoordinationDetailGrid = ({
       }
     });
 
+    // 방장의 개인시간 추가 (roomExceptions 및 blockedTimes 기반)
+    const ownerBlockedInfo = getOwnerPersonalTime(time);
+    if (ownerBlockedInfo) {
+      users.push({
+        user: { firstName: '방장', _id: 'owner-personal' },
+        slot: ownerBlockedInfo,
+        isAssigned: false,
+        isOwnerPersonal: true,
+        priority: 1
+      });
+    }
+
     return users;
+  };
+
+  // 방장의 개인시간 정보를 가져오는 함수
+  const getOwnerPersonalTime = (time) => {
+    const blockedInfo = getBlockedInfo(time);
+    const roomException = getRoomExceptionForSlot(time);
+
+
+    if (blockedInfo) {
+      return {
+        subject: blockedInfo.name,
+        startTime: time,
+        endTime: calculateEndTime(time),
+        isOwnerPersonal: true,
+        type: 'blocked'
+      };
+    }
+
+    if (roomException) {
+      return {
+        subject: roomException.name || '개인시간',
+        startTime: time,
+        endTime: calculateEndTime(time),
+        isOwnerPersonal: true,
+        type: 'exception'
+      };
+    }
+
+    return null;
   };
 
   const isSlotSelected = (time) => {
@@ -206,8 +295,12 @@ const CoordinationDetailGrid = ({
                 <span className="text-sm text-gray-600">협의 중</span>
               </div>
               <div className="flex items-center">
-                <div className="w-4 h-4 rounded-full bg-purple-500 mr-2"></div>
+                <div className="w-4 h-4 rounded-full bg-blue-500 mr-2"></div>
                 <span className="text-sm text-gray-600">선택됨</span>
+              </div>
+              <div className="flex items-center">
+                <div className="w-4 h-4 rounded-full bg-purple-500 mr-2"></div>
+                <span className="text-sm text-gray-600">방장 개인시간</span>
               </div>
             </div>
           </div>
@@ -238,6 +331,7 @@ const CoordinationDetailGrid = ({
               </div>
               {timeSlots_generated.map(time => {
                 const slotUsers = getSlotUsers(time);
+
                 return (
                   <div key={time} className="border-b border-gray-100 h-12 p-1">
                     <div className="flex flex-wrap gap-1">
@@ -245,12 +339,16 @@ const CoordinationDetailGrid = ({
                         <div
                           key={index}
                           className={`text-xs px-2 py-1 rounded flex items-center ${
-                            userInfo.isAssigned
-                              ? 'bg-green-100 text-green-800'
-                              : priorityConfig[userInfo.priority]?.color?.replace('bg-', 'bg-') + ' text-white' || 'bg-blue-100 text-blue-800'
+                            userInfo.isOwnerPersonal
+                              ? 'bg-purple-100 text-purple-800'
+                              : userInfo.isAssigned
+                                ? 'bg-green-100 text-green-800'
+                                : priorityConfig[userInfo.priority]?.color?.replace('bg-', 'bg-') + ' text-white' || 'bg-blue-100 text-blue-800'
                           }`}
+                          title={userInfo.isOwnerPersonal ? userInfo.slot?.subject : ''}
                         >
-                          {userInfo.isAssigned && <Zap size={10} className="mr-1" />}
+                          {userInfo.isOwnerPersonal && <Ban size={10} className="mr-1" />}
+                          {userInfo.isAssigned && !userInfo.isOwnerPersonal && <Zap size={10} className="mr-1" />}
                           {userInfo.user.firstName}
                         </div>
                       ))}
@@ -268,7 +366,8 @@ const CoordinationDetailGrid = ({
               {timeSlots_generated.map(time => {
                 const slotUsers = getSlotUsers(time);
                 const negotiation = getNegotiationForSlot(time);
-                const hasConflict = slotUsers.filter(u => !u.isAssigned).length > 1;
+                const hasConflict = slotUsers.filter(u => !u.isAssigned && !u.isOwnerPersonal).length > 1;
+                const hasOwnerPersonal = slotUsers.some(u => u.isOwnerPersonal);
 
                 return (
                   <div key={time} className="border-b border-gray-100 h-12 p-1 flex items-center justify-center">
@@ -286,6 +385,16 @@ const CoordinationDetailGrid = ({
                       <div className="flex items-center text-green-600">
                         <Zap size={14} className="mr-1" />
                         <span className="text-xs">배정됨</span>
+                      </div>
+                    ) : hasOwnerPersonal && slotUsers.filter(u => !u.isOwnerPersonal).length > 0 ? (
+                      <div className="flex items-center text-blue-600">
+                        <Users size={14} className="mr-1" />
+                        <span className="text-xs">신청됨</span>
+                      </div>
+                    ) : hasOwnerPersonal ? (
+                      <div className="flex items-center text-purple-600">
+                        <Ban size={14} className="mr-1" />
+                        <span className="text-xs">방장시간</span>
                       </div>
                     ) : slotUsers.length > 0 ? (
                       <div className="flex items-center text-blue-600">
@@ -307,19 +416,25 @@ const CoordinationDetailGrid = ({
               </div>
               {timeSlots_generated.map(time => {
                 const isSelected = isSlotSelected(time);
+                const slotUsers = getSlotUsers(time);
+                const hasOwnerPersonal = slotUsers.some(u => u.isOwnerPersonal);
 
                 return (
                   <div key={time} className="border-b border-gray-100 h-12 p-1 flex items-center justify-center">
-                    <button
-                      onClick={() => handleSlotClick(time)}
-                      className={`px-2 py-1 rounded text-xs transition-colors ${
-                        isSelected
-                          ? 'bg-purple-500 text-white'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                    >
-                      {isSelected ? '선택됨' : '선택'}
-                    </button>
+                    {hasOwnerPersonal ? (
+                      <span className="text-xs text-purple-400">방장시간</span>
+                    ) : (
+                      <button
+                        onClick={() => handleSlotClick(time)}
+                        className={`px-2 py-1 rounded text-xs transition-colors ${
+                          isSelected
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        {isSelected ? '선택됨' : '선택'}
+                      </button>
+                    )}
                   </div>
                 );
               })}

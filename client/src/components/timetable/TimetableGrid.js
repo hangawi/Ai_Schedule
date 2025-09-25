@@ -111,6 +111,7 @@ const TimetableGrid = ({
 
   const timeSlotsInDay = generateDayTimeSlots(scheduleStartHour, scheduleEndHour);
 
+
   // Helper function to check if a time slot is blocked and return block info
   const getBlockedTimeInfo = useCallback((time) => {
     return getBlockedTimeInfoHelper(time, roomSettings);

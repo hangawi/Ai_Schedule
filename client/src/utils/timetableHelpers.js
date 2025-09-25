@@ -66,11 +66,6 @@ export const getRoomExceptionInfo = (date, time, roomSettings) => {
     return null;
   }
 
-  console.log('getRoomExceptionInfo called with:', {
-    date: date,
-    time: time,
-    roomExceptions: roomSettings.roomExceptions
-  });
 
   const slotDateTime = new Date(date);
   slotDateTime.setHours(parseInt(time.split(':')[0]), parseInt(time.split(':')[1]), 0, 0);
@@ -78,44 +73,20 @@ export const getRoomExceptionInfo = (date, time, roomSettings) => {
   slotEndTime.setHours(parseInt(time.split(':')[0]), parseInt(time.split(':')[1]) + 30, 0, 0);
 
   const exception = roomSettings.roomExceptions.find(ex => {
-    console.log('Checking exception:', ex);
-
     if (ex.type === 'daily_recurring') {
-      // UTC 대신 로컬 시간 사용
-      const slotDayOfWeek = date.getDay(); // 0 for Sunday, 1 for Monday, etc.
-      console.log('Daily recurring check:', {
-        slotDayOfWeek: slotDayOfWeek,
-        exceptionDayOfWeek: ex.dayOfWeek,
-        time: time,
-        exStartTime: ex.startTime,
-        exEndTime: ex.endTime
-      });
-
+      const slotDayOfWeek = date.getDay();
       if (slotDayOfWeek === ex.dayOfWeek) {
-        const timeInRange = time >= ex.startTime && time < ex.endTime;
-        console.log('Time in range:', timeInRange);
-        return timeInRange;
+        return time >= ex.startTime && time < ex.endTime;
       }
     } else if (ex.type === 'date_specific') {
       const exStartDate = new Date(ex.startDate);
       const exEndDate = new Date(ex.endDate);
-
-      console.log('Date specific check:', {
-        slotDateTime: slotDateTime,
-        slotEndTime: slotEndTime,
-        exStartDate: exStartDate,
-        exEndDate: exEndDate
-      });
-
-      // Check if the slot overlaps with the exception date range
-      const overlaps = (slotDateTime < exEndDate && slotEndTime > exStartDate);
-      console.log('Date overlaps:', overlaps);
-      return overlaps;
+      return (slotDateTime < exEndDate && slotEndTime > exStartDate);
     }
     return false;
   });
 
-  console.log('Found exception:', exception);
+
   return exception || null;
 };
 
