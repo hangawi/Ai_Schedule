@@ -15,6 +15,7 @@ const TimeSlot = ({
 }) => {
   const isEffectivelyBlocked = isBlocked || !!roomExceptionInfo; // Combine existing blocked with new room exceptions
 
+
   const handleClick = () => {
     if (isEffectivelyBlocked) return; // Prevent clicks on blocked/exception slots
     onSlotClick(date, time); // Pass date object

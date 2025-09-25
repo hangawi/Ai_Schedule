@@ -284,36 +284,40 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule }) => {
                   </button>
                 </div>
                 {settings.roomExceptions.length > 0 && (
-                  <div className="mb-3 space-y-2">
-                    {settings.roomExceptions.map((exception, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 bg-yellow-50 rounded border border-yellow-200">
-                        <div className="flex-1">
-                          <span className="text-sm font-medium text-yellow-700">{exception.name}</span>
-                          {exception.type === 'daily_recurring' && (
-                            <span className="text-xs text-yellow-600 ml-2">
-                              ({dayOfWeekMap[exception.dayOfWeek]}) {exception.startTime} ~ {exception.endTime}
+                  <div className="mb-3">
+                    <div className="text-sm text-gray-600 mb-2">
+                      금지시간 목록 ({settings.roomExceptions.length}개)
+                    </div>
+                    <div className="max-h-32 overflow-y-auto space-y-1 border border-gray-200 rounded p-2 bg-gray-50">
+                      {settings.roomExceptions.map((exception, index) => (
+                        <div key={index} className="flex items-center justify-between p-1 bg-white rounded text-xs">
+                          <div className="flex-1 truncate">
+                            <span className="font-medium text-gray-700">
+                              {exception.type === 'daily_recurring'
+                                ? `${dayOfWeekMap[exception.dayOfWeek]} ${exception.startTime}-${exception.endTime}`
+                                : `${new Date(exception.startDate).toLocaleDateString()} ${exception.startTime}-${exception.endTime}`
+                              }
                             </span>
-                          )}
-                          {exception.type === 'date_specific' && (
-                            <span className="text-xs text-yellow-600 ml-2">
-                              ({new Date(exception.startDate).toLocaleDateString()} ~ {new Date(exception.endDate).toLocaleDateString()})
-                            </span>
+                            {exception.isSynced && (
+                              <span className="text-blue-500 ml-1">(연동)</span>
+                            )}
+                          </div>
+                          {!exception.isSynced && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updatedExceptions = settings.roomExceptions.filter((_, i) => i !== index);
+                                setSettings({...settings, roomExceptions: updatedExceptions});
+                              }}
+                              className="text-red-500 hover:text-red-700 px-1"
+                              title="삭제"
+                            >
+                              ✕
+                            </button>
                           )}
                         </div>
-                        {!exception.isSynced && ( // 연동된 예외는 삭제 버튼 없음
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updatedExceptions = settings.roomExceptions.filter((_, i) => i !== index);
-                              setSettings({...settings, roomExceptions: updatedExceptions});
-                            }}
-                            className="text-red-500 hover:text-red-700 text-sm px-2"
-                          >
-                            삭제
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

@@ -1152,7 +1152,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   roomId={currentRoom._id}
                   roomSettings={{
                     startHour: scheduleStartHour,
-                    endHour: scheduleEndHour
+                    endHour: scheduleEndHour,
+                    ...currentRoom.settings // Include all room settings (roomExceptions, blockedTimes, etc.)
                   }}
                   timeSlots={currentRoom.timeSlots || []}
                   members={currentRoom.members || []}

@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Grid, Clock, Users, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Grid, Clock, Users, Zap, Ban } from 'lucide-react';
+import {
+  getBlockedTimeInfo,
+  getRoomExceptionInfo,
+  generateDayTimeSlots
+} from '../../utils/timetableHelpers';
 
 const CoordinationCalendarView = ({
   roomData,
@@ -72,7 +77,9 @@ const CoordinationCalendarView = ({
         isSelected,
         slotsCount: getSlotCountForDate(date),
         hasAutoAssigned: hasAutoAssignedForDate(date),
-        hasNegotiation: hasNegotiationForDate(date)
+        hasNegotiation: hasNegotiationForDate(date),
+        hasBlockedTime: hasBlockedTimeForDate(date),
+        blockedTimeCount: getBlockedTimeCountForDate(date)
       });
     }
 
@@ -97,7 +104,9 @@ const CoordinationCalendarView = ({
         isSelected,
         slotsCount: getSlotCountForDate(date),
         hasAutoAssigned: hasAutoAssignedForDate(date),
-        hasNegotiation: hasNegotiationForDate(date)
+        hasNegotiation: hasNegotiationForDate(date),
+        hasBlockedTime: hasBlockedTimeForDate(date),
+        blockedTimeCount: getBlockedTimeCountForDate(date)
       });
     }
 
@@ -193,6 +202,45 @@ const CoordinationCalendarView = ({
     });
   };
 
+  // 차단된 시간이 있는 날짜인지 확인하는 함수
+  const hasBlockedTimeForDate = (date) => {
+    if (!roomData?.settings) return false;
+
+    // 24시간 전체에서 차단된 시간 확인 (0-24시)
+    const timeSlots = generateDayTimeSlots(0, 24);
+
+    return timeSlots.some(time => {
+      const blockedInfo = getBlockedTimeInfo(time, roomData.settings);
+      const roomException = getRoomExceptionInfo(date, time, roomData.settings);
+      return !!(blockedInfo || roomException);
+    });
+  };
+
+  // 차단된 시간의 개수를 반환하는 함수 (시간 단위로 계산)
+  const getBlockedTimeCountForDate = (date) => {
+    if (!roomData?.settings) return 0;
+
+    // 시간 단위로 확인 (0-23시)
+    const blockedHours = new Set();
+
+    for (let hour = 0; hour < 24; hour++) {
+      // 해당 시간의 30분 단위 슬롯들을 확인
+      const timeSlots = [`${hour.toString().padStart(2, '0')}:00`, `${hour.toString().padStart(2, '0')}:30`];
+
+      for (const time of timeSlots) {
+        const blockedInfo = getBlockedTimeInfo(time, roomData.settings);
+        const roomException = getRoomExceptionInfo(date, time, roomData.settings);
+
+        if (blockedInfo || roomException) {
+          blockedHours.add(hour);
+          break; // 해당 시간대에서 차단이 발견되면 다음 시간으로
+        }
+      }
+    }
+
+    return blockedHours.size;
+  };
+
   const navigateMonth = (direction) => {
     const newDate = new Date(currentDate);
     newDate.setMonth(currentDate.getMonth() + direction);
@@ -275,6 +323,10 @@ const CoordinationCalendarView = ({
             <div className="w-3 h-3 rounded-full bg-orange-500 mr-1"></div>
             <span>협의 중</span>
           </div>
+          <div className="flex items-center">
+            <div className="w-3 h-3 rounded-full bg-purple-500 mr-1"></div>
+            <span>방장 개인시간</span>
+          </div>
         </div>
       </div>
     </div>
@@ -321,6 +373,9 @@ const CoordinationCalendarView = ({
                   <div className="text-xs bg-blue-100 text-blue-800 px-1 rounded">
                     {dateInfo.slotsCount}개 슬롯
                   </div>
+                )}
+                {dateInfo.hasBlockedTime && (
+                  <div className="w-full h-1 bg-purple-500 rounded-full"></div>
                 )}
                 {dateInfo.hasAutoAssigned && (
                   <div className="w-full h-1 bg-green-500 rounded-full"></div>
@@ -377,6 +432,9 @@ const CoordinationCalendarView = ({
                   <Users size={12} className="mr-1" />
                   {dateInfo.slotsCount}개 슬롯
                 </div>
+              )}
+              {dateInfo.hasBlockedTime && (
+                <div className="w-full h-2 bg-purple-500 rounded-full"></div>
               )}
               {dateInfo.hasAutoAssigned && (
                 <div className="p-2 bg-green-100 text-green-800 rounded text-xs flex items-center">
