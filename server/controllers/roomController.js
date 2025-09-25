@@ -6,7 +6,7 @@ const User = require('../models/user');
 // @access  Private
 exports.createRoom = async (req, res) => {
    try {
-      console.log('Backend createRoom: roomData received:', req.body);
+      console.log('Backend createRoom: roomData received:', JSON.stringify(req.body, null, 2));
       const { name, description, maxMembers, settings } = req.body;
 
       if (!name || name.trim().length === 0) {
