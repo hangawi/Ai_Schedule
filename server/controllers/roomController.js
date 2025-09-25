@@ -48,11 +48,11 @@ exports.createRoom = async (req, res) => {
          room.settings.roomExceptions = settings.roomExceptions;
       }
 
-      console.log('Backend createRoom: new room created (before save):', room);
+      console.log('Backend createRoom: new room created (before save):', JSON.stringify(room, null, 2));
       await room.save();
       await room.populate('owner', 'firstName lastName email');
       await room.populate('members.user', 'firstName lastName email');
-      console.log('Backend createRoom: room saved and populated (before response):', room);
+      console.log('Backend createRoom: room saved and populated (before response):', JSON.stringify(room, null, 2));
 
       res.status(201).json(room);
    } catch (error) {
@@ -249,6 +249,8 @@ exports.getRoomDetails = async (req, res) => {
          return res.status(403).json({ msg: '이 방에 접근할 권한이 없습니다.' });
       }
 
+      console.log('getRoomDetails: roomExceptions:', JSON.stringify(room.settings?.roomExceptions, null, 2));
+      console.log('getRoomDetails: blockedTimes:', JSON.stringify(room.settings?.blockedTimes, null, 2));
       console.log('getRoomDetails: Requests count:', room.requests?.length || 0);
       console.log('getRoomDetails: Sample requests:', room.requests?.slice(0, 2).map(req => ({
          id: req._id,
