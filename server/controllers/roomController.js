@@ -57,7 +57,41 @@ exports.createRoom = async (req, res) => {
       res.status(201).json(room);
    } catch (error) {
       console.error('Backend createRoom: error:', error);
-      res.status(500).json({ msg: 'Server error' });
+      console.error('Error stack:', error.stack);
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+
+      // Mongoose validation error
+      if (error.name === 'ValidationError') {
+         const errors = Object.values(error.errors).map(err => err.message);
+         return res.status(400).json({
+            msg: 'Validation error',
+            errors: errors,
+            details: error.message
+         });
+      }
+
+      // MongoDB duplicate key error
+      if (error.code === 11000) {
+         return res.status(400).json({
+            msg: 'Duplicate key error',
+            details: error.message
+         });
+      }
+
+      // Cast error (invalid ObjectId, etc.)
+      if (error.name === 'CastError') {
+         return res.status(400).json({
+            msg: 'Invalid data type',
+            details: error.message
+         });
+      }
+
+      res.status(500).json({
+         msg: 'Server error',
+         error: error.message,
+         details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
    }
 };
 

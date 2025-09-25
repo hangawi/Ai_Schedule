@@ -51,7 +51,18 @@ export const coordinationService = {
     
     if (!response.ok) {
       const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
-      throw new Error(errData.msg || 'Failed to create room');
+      console.error('createRoom error response:', errData);
+
+      // 구체적인 에러 메시지 구성
+      let errorMessage = errData.msg || 'Failed to create room';
+      if (errData.errors && Array.isArray(errData.errors)) {
+        errorMessage += '\n상세: ' + errData.errors.join(', ');
+      }
+      if (errData.details) {
+        errorMessage += '\n상세: ' + errData.details;
+      }
+
+      throw new Error(errorMessage);
     }
     
     const newRoom = await response.json();
