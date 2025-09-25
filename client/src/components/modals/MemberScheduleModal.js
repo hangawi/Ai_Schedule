@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ScheduleGridSelector from '../tabs/ScheduleGridSelector'; // ScheduleGridSelector 재사용
 import { userService } from '../../services/userService';
-import { X } from 'lucide-react';
+import { X, Grid, Calendar, Clock, Merge, Split, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const MemberScheduleModal = ({ memberId, onClose }) => {
   const [memberSchedule, setMemberSchedule] = useState([]);
@@ -11,6 +11,11 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [renderKey, setRenderKey] = useState(0); // New state for forcing re-render
+
+  // 보기 모드 상태 추가
+  const [viewMode, setViewMode] = useState('week'); // 'week', 'month'
+  const [showFullDay, setShowFullDay] = useState(false); // 24시간 vs 기본시간 (9-18시)
+  const [showMerged, setShowMerged] = useState(false); // 병합 vs 분할 보기
 
   useEffect(() => {
     const fetchMemberSchedule = async () => {
@@ -46,7 +51,23 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
         });
         console.log('weekdaySchedule details:', JSON.stringify(weekdaySchedule.slice(0, 3), null, 2));
         console.log('exceptions details:', JSON.stringify(exceptions.slice(0, 3), null, 2));
-        console.log('personalTimes details:', JSON.stringify(personalTimes.slice(0, 3), null, 2));
+        console.log('personalTimes details (ALL):', JSON.stringify(personalTimes, null, 2));
+
+        // 수면시간 특별 체크
+        const sleepTimes = personalTimes.filter(p => p.title && p.title.includes('수면'));
+        console.log('Sleep times found:', sleepTimes);
+
+        // 개인시간 요일 분석
+        personalTimes.forEach((p, index) => {
+          console.log(`Personal time ${index}:`, {
+            title: p.title,
+            days: p.days,
+            startTime: p.startTime,
+            endTime: p.endTime,
+            isRecurring: p.isRecurring,
+            type: p.type
+          });
+        });
         setMemberName(`${data.firstName || ''} ${data.lastName || ''}`.trim() || data.name || '알 수 없음');
         
         // Force re-render to ensure grid updates
@@ -67,40 +88,51 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
 
   if (!memberId) return null;
 
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold text-gray-800">{memberName}님의 시간표 (ID: {memberId})</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-800">
-            <X size={24} />
-          </button>
+          <h3 className="text-xl font-bold text-gray-800">{memberName}님의 시간표</h3>
         </div>
 
         {isLoading && <div className="text-center py-4">로딩 중...</div>}
         {error && <div className="text-red-500 text-center py-4">오류: {error}</div>}
-        
+
         {!isLoading && !error && (
-          <div>
+          <div className="flex-1 overflow-hidden">
             <div className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded">
-              <div><strong>데이터 요약:</strong></div>
-              <div>• 총 일정: {memberSchedule.length + memberExceptions.length + memberPersonalTimes.length}개</div>
-              <div>• 주간 반복 일정: {memberSchedule.length}개</div>
-              <div>• 예외 일정: {memberExceptions.length}개</div>
-              <div>• 개인 시간: {memberPersonalTimes.length}개</div>
-              <div className="text-xs mt-2 text-gray-500">
-                콘솔에서 상세 데이터를 확인하세요.
+              <div className="flex items-center justify-between">
+                <div>
+                  <div><strong>데이터 요약:</strong></div>
+                  <div>• 총 일정: {memberSchedule.length + memberExceptions.length + memberPersonalTimes.length}개</div>
+                  <div>• 주간 반복 일정: {memberSchedule.length}개 • 예외 일정: {memberExceptions.length}개 • 개인 시간: {memberPersonalTimes.length}개</div>
+                </div>
+                <div className="text-xs text-gray-500">
+                  💡 스크롤하여 전체 시간표를 확인하세요
+                </div>
               </div>
             </div>
+
             {(memberSchedule.length > 0 || memberExceptions.length > 0 || memberPersonalTimes.length > 0) ? (
-              <ScheduleGridSelector
-                key={renderKey}
-                schedule={memberSchedule}
-                setSchedule={() => {}} // Read-only
-                readOnly={true}
-                exceptions={memberExceptions} // Pass exceptions to the grid
-                personalTimes={memberPersonalTimes} // Pass personal times to the grid
-              />
+              <div className="overflow-auto max-h-[60vh]">
+                <ScheduleGridSelector
+                  key={renderKey}
+                  schedule={memberSchedule}
+                  exceptions={memberExceptions}
+                  personalTimes={memberPersonalTimes}
+                  readOnly={true}
+                  enableMonthView={true}
+                  showViewControls={true}
+                />
+              </div>
             ) : (
               <div className="text-center py-8 text-gray-500 space-y-2">
                 <div className="text-lg">📅</div>
