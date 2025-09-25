@@ -416,10 +416,28 @@ const ScheduleGridSelector = ({
   const renderMergedWeekView = () => {
     // 각 날짜별로 병합된 시간 슬롯들을 수집
     const dayDisplaySlots = weekDates.map(date => {
-      const displaySlots = [];
       const dayBlocks = getBlocksForDay(date.fullDate, date.dayOfWeek);
       const mergedBlocks = mergeConsecutiveBlocks(dayBlocks);
 
+      // 빈 시간만 있는 날인지 확인
+      const hasOnlyEmptyTime = mergedBlocks.length === 1 && mergedBlocks[0].type === 'empty';
+
+      if (hasOnlyEmptyTime) {
+        // 빈 시간만 있는 날은 하나의 큰 블록으로 표시
+        const emptyBlock = mergedBlocks[0];
+        return [{
+          type: 'empty',
+          startTime: emptyBlock.startTime,
+          endTime: getEndTimeForBlock(emptyBlock),
+          duration: emptyBlock.duration,
+          data: emptyBlock,
+          isMerged: true,
+          isFullDay: true // 전체 시간대 표시 플래그
+        }];
+      }
+
+      // 일정이 있는 날은 기존 로직대로 처리
+      const displaySlots = [];
       mergedBlocks.forEach(block => {
         displaySlots.push({
           type: block.type,
@@ -427,32 +445,13 @@ const ScheduleGridSelector = ({
           endTime: getEndTimeForBlock(block),
           duration: block.duration,
           data: block,
-          isMerged: block.duration > 10
+          isMerged: block.duration > 10,
+          isFullDay: false
         });
       });
 
       displaySlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
       return displaySlots;
-    });
-
-    // 모든 시간 범위에서 병합된 슬롯들을 생성
-    const allTimeSlots = [];
-    const processedTimes = new Set();
-    const currentTimeSlots = getCurrentTimeSlots();
-
-    dayDisplaySlots.forEach((daySlots, dayIndex) => {
-      daySlots.forEach(slot => {
-        const startMinutes = timeToMinutes(slot.startTime);
-        const endMinutes = timeToMinutes(slot.endTime);
-
-        // 10분 단위로 시간 슬롯 처리
-        for (let minutes = startMinutes; minutes < endMinutes; minutes += 10) {
-          const timeSlot = minutesToTime(minutes);
-          if (!processedTimes.has(`${dayIndex}-${timeSlot}`)) {
-            processedTimes.add(`${dayIndex}-${timeSlot}`);
-          }
-        }
-      });
     });
 
     return (
@@ -470,26 +469,44 @@ const ScheduleGridSelector = ({
               </tr>
             </thead>
             <tbody>
-              {dayDisplaySlots[0]?.length > 0 || dayDisplaySlots.some(slots => slots.length > 0) ? (
-                // 모든 시간대를 순회하면서 각 날짜의 병합된 슬롯을 표시
+              {dayDisplaySlots.some(slots => slots.length > 0) ? (
                 (() => {
                   const rows = [];
                   const maxSlots = Math.max(...dayDisplaySlots.map(slots => slots.length), 1);
 
+                  // 각 날짜별로 rowspan을 추적하기 위한 배열
+                  const dayRowSpans = weekDates.map((date, dayIndex) => {
+                    const daySlots = dayDisplaySlots[dayIndex];
+                    if (daySlots.length === 1 && daySlots[0].isFullDay) {
+                      return maxSlots; // 빈 시간만 있는 날은 전체 행에 걸쳐 표시
+                    }
+                    return 1;
+                  });
+
                   for (let slotIndex = 0; slotIndex < maxSlots; slotIndex++) {
-                    rows.push(
+                    const row = (
                       <tr key={slotIndex} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="p-3 text-sm font-medium text-gray-600 border-r border-gray-200 bg-gray-50 whitespace-nowrap">
-                          {dayDisplaySlots.find(slots => slots[slotIndex])?.length > slotIndex
-                            ? dayDisplaySlots.find(slots => slots[slotIndex])[slotIndex]?.isMerged
-                              ? `${dayDisplaySlots.find(slots => slots[slotIndex])[slotIndex].startTime}~${dayDisplaySlots.find(slots => slots[slotIndex])[slotIndex].endTime}`
-                              : dayDisplaySlots.find(slots => slots[slotIndex])[slotIndex]?.startTime
-                            : ''
-                          }
+                          {(() => {
+                            // 시간 레이블을 표시할 슬롯 찾기
+                            const slotWithTime = dayDisplaySlots.find(slots => slots[slotIndex]);
+                            if (slotWithTime && slotWithTime[slotIndex]) {
+                              const slot = slotWithTime[slotIndex];
+                              return slot.isMerged ? `${slot.startTime}~${slot.endTime}` : slot.startTime;
+                            }
+                            return '';
+                          })()}
                         </td>
                         {weekDates.map((date, dayIndex) => {
                           const daySlots = dayDisplaySlots[dayIndex];
+
+                          // 빈 시간만 있는 날이고 첫 번째 행이 아니면 셀을 건너뜀 (rowspan으로 이미 처리됨)
+                          if (daySlots.length === 1 && daySlots[0].isFullDay && slotIndex > 0) {
+                            return null;
+                          }
+
                           const slot = daySlots[slotIndex];
+                          const rowSpan = (daySlots.length === 1 && daySlots[0].isFullDay) ? maxSlots : 1;
 
                           if (!slot) {
                             return (
@@ -504,7 +521,9 @@ const ScheduleGridSelector = ({
                           let content = '';
                           let timeLabel = '';
 
-                          if (slot.isMerged) {
+                          if (slot.isFullDay) {
+                            timeLabel = `${slot.startTime}~${slot.endTime}`;
+                          } else if (slot.isMerged) {
                             timeLabel = `${slot.startTime}~${slot.endTime}`;
                           } else {
                             timeLabel = slot.startTime;
@@ -526,8 +545,17 @@ const ScheduleGridSelector = ({
                             content = '빈 시간';
                           }
 
+                          // 빈 시간이 전체 시간대를 차지하는 경우 더 큰 스타일 적용
+                          if (slot.isFullDay) {
+                            contentClass += ' min-h-[100px] flex items-center justify-center';
+                          }
+
                           return (
-                            <td key={dayIndex} className={cellClass}>
+                            <td
+                              key={dayIndex}
+                              className={cellClass}
+                              rowSpan={rowSpan}
+                            >
                               <div className={contentClass} title={`${content} (${timeLabel})`}>
                                 <div className="font-medium truncate">{content}</div>
                                 <div className="text-xs opacity-90 mt-1">{timeLabel}</div>
@@ -537,6 +565,7 @@ const ScheduleGridSelector = ({
                         })}
                       </tr>
                     );
+                    rows.push(row);
                   }
 
                   return rows;
@@ -636,15 +665,15 @@ const ScheduleGridSelector = ({
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
 
-    // 월의 첫 주 월요일부터 시작
+    // 월의 첫 주 일요일부터 시작 (헤더와 맞춤)
     const startDate = new Date(firstDay);
     const startDayOfWeek = firstDay.getDay();
-    startDate.setDate(startDate.getDate() - (startDayOfWeek === 0 ? 6 : startDayOfWeek - 1));
+    startDate.setDate(startDate.getDate() - startDayOfWeek); // 일요일부터 시작
 
-    // 월의 마지막 주 일요일까지
+    // 월의 마지막 주 토요일까지
     const endDate = new Date(lastDay);
     const endDayOfWeek = lastDay.getDay();
-    endDate.setDate(endDate.getDate() + (endDayOfWeek === 0 ? 0 : 7 - endDayOfWeek));
+    endDate.setDate(endDate.getDate() + (6 - endDayOfWeek)); // 토요일까지
 
     const weeks = [];
     let currentWeek = [];

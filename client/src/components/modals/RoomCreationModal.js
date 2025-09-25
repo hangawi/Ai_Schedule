@@ -54,9 +54,14 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule }) => {
 
       // scheduleExceptions을 roomExceptions으로 변환
       ownerProfileSchedule.scheduleExceptions.forEach(exception => {
+        const startDate = new Date(exception.startTime);
+        const endDate = new Date(exception.endTime);
+
         syncedExceptions.push({
           type: 'date_specific',
-          name: `${exception.title} (${new Date(exception.startTime).toLocaleDateString()}) (방장 시간표)`,
+          name: `${exception.title} (${startDate.toLocaleDateString()}) (방장 시간표)`,
+          startTime: startDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), // HH:MM 형식
+          endTime: endDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), // HH:MM 형식
           startDate: exception.startTime,
           endDate: exception.endTime,
           isSynced: true // 연동된 예외임을 표시
@@ -81,16 +86,19 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule }) => {
       showAlert('방 이름을 입력해주세요.');
       return;
     }
-    onCreateRoom({ 
-      name: name.trim(), 
+    const roomData = {
+      name: name.trim(),
       description: description.trim(),
-      maxMembers, 
+      maxMembers,
       settings: {
         ...settings,
         // 빈 roomExceptions 배열은 보내지 않도록 필터링
         roomExceptions: settings.roomExceptions.length > 0 ? settings.roomExceptions : undefined
       }
-    });
+    };
+
+    console.log('RoomCreationModal: Sending room data:', JSON.stringify(roomData, null, 2));
+    onCreateRoom(roomData);
   };
 
   return (
