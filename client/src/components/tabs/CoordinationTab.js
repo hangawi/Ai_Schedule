@@ -1347,7 +1347,14 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   {viewMode === 'week' && (
                     <>
                       <button
-                        onClick={() => setShowFullDay(!showFullDay)}
+                        onClick={() => {
+                          console.log('기본/24시간 버튼 클릭:', {
+                            currentShowFullDay: showFullDay,
+                            willBecome: !showFullDay,
+                            effectiveShowFullDay: viewMode === 'week' ? showFullDay : false
+                          });
+                          setShowFullDay(!showFullDay);
+                        }}
                         className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
                           showFullDay
                             ? 'bg-purple-500 text-white'
@@ -1358,7 +1365,13 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                         {showFullDay ? '24시간' : '기본'}
                       </button>
                       <button
-                        onClick={() => setShowMerged(!showMerged)}
+                        onClick={() => {
+                          console.log('병합/분할 버튼 클릭:', {
+                            currentShowMerged: showMerged,
+                            willBecome: !showMerged
+                          });
+                          setShowMerged(!showMerged);
+                        }}
                         className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
                           showMerged
                             ? 'bg-green-500 text-white'
@@ -1441,9 +1454,9 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   key={`week-${effectiveShowFullDay ? 'full' : 'basic'}-${showMerged ? 'merged' : 'split'}`} // Force re-render on state change
                   roomId={currentRoom._id}
                   roomSettings={{
+                    ...currentRoom.settings,
                     startHour: effectiveShowFullDay ? 0 : scheduleStartHour,
-                    endHour: effectiveShowFullDay ? 24 : scheduleEndHour,
-                    ...currentRoom.settings
+                    endHour: effectiveShowFullDay ? 24 : scheduleEndHour
                   }}
                   timeSlots={currentRoom.timeSlots || []}
                   members={currentRoom.members || []}

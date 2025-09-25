@@ -16,6 +16,12 @@ const WeekView = ({
   handleSlotClick,
   showMerged = true // New prop for merged view
 }) => {
+
+  // Debug log for WeekView props
+  console.log('WeekView - Props received:', {
+    showMerged,
+    totalTimeSlots: filteredTimeSlotsInDay?.length
+  });
   return (
     <>
       {filteredTimeSlotsInDay.map(time => (
