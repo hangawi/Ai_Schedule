@@ -70,7 +70,7 @@ export const getRoomExceptionInfo = (date, time, roomSettings) => {
   const slotDateTime = new Date(date);
   slotDateTime.setHours(parseInt(time.split(':')[0]), parseInt(time.split(':')[1]), 0, 0);
   const slotEndTime = new Date(date);
-  slotEndTime.setHours(parseInt(time.split(':')[0]), parseInt(time.split(':')[1]) + 30, 0, 0);
+  slotEndTime.setHours(parseInt(time.split(':')[0]), parseInt(time.split(':')[1]) + 10, 0, 0);
 
   const exception = roomSettings.roomExceptions.find(ex => {
     if (ex.type === 'daily_recurring') {
@@ -81,6 +81,23 @@ export const getRoomExceptionInfo = (date, time, roomSettings) => {
     } else if (ex.type === 'date_specific') {
       const exStartDate = new Date(ex.startDate);
       const exEndDate = new Date(ex.endDate);
+
+      // 14:40 문제 디버깅용 로깅
+      if (time === '14:40' || time === '15:00') {
+        console.log('🔍 getRoomExceptionInfo - 14:40/15:00 시간대 체크:', {
+          time,
+          date: date.toISOString(),
+          exception: ex,
+          exStartDate: exStartDate.toISOString(),
+          exEndDate: exEndDate.toISOString(),
+          slotDateTime: slotDateTime.toISOString(),
+          slotEndTime: slotEndTime.toISOString(),
+          isMatch: (slotDateTime < exEndDate && slotEndTime > exStartDate),
+          localStartTime: exStartDate.toLocaleString('ko-KR'),
+          localEndTime: exEndDate.toLocaleString('ko-KR')
+        });
+      }
+
       return (slotDateTime < exEndDate && slotEndTime > exStartDate);
     }
     return false;

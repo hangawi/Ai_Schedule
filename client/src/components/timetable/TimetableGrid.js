@@ -123,10 +123,14 @@ const TimetableGrid = ({
   initialStartDate, // New prop to set the initial week to display
   onOpenNegotiation, // New prop to handle negotiation modal opening
   onCurrentWeekNegotiationsChange, // New prop to pass current week negotiations to parent
-  showMerged = true // New prop for merged view
+  showMerged = true, // New prop for merged view
+  ownerOriginalSchedule = null // 방장의 원본 시간표 데이터
 }) => {
-
-
+  // 14:40 문제 디버깅용 로깅
+  console.log('🔍 TimetableGrid - timeSlots 전체 데이터:', timeSlots);
+  const ownerSlots = timeSlots?.filter(slot => slot.userId === currentUser?.id || slot.user === currentUser?.id);
+  console.log('🔍 TimetableGrid - 방장 시간 슬롯들:', ownerSlots);
+  console.log('🔍 TimetableGrid - 방장 원본 시간표:', ownerOriginalSchedule);
 
   // CustomAlert 상태
   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
@@ -568,6 +572,7 @@ const TimetableGrid = ({
         currentUser={currentUser}
         handleSlotClick={handleSlotClick}
         showMerged={showMerged}
+        ownerOriginalSchedule={ownerOriginalSchedule}
       />
 
       {/* Assignment Modal Placeholder */}

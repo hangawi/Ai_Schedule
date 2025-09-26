@@ -93,22 +93,34 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
           title: exception.title,
           startTime: exception.startTime,
           endTime: exception.endTime,
+          startTimeType: typeof exception.startTime,
+          endTimeType: typeof exception.endTime,
           rawStartTime: exception.startTime,
           rawEndTime: exception.endTime
         });
 
         const startDate = new Date(exception.startTime);
+        const endDate = new Date(exception.endTime);
         const dateKey = startDate.toLocaleDateString('ko-KR'); // 2025. 9. 30. 형태
         const title = exception.title || '일정';
         const groupKey = `${dateKey}-${title}`;
 
         console.log('🔍 Date 객체로 변환 결과:', {
           originalStartTime: exception.startTime,
-          dateObject: startDate,
+          originalEndTime: exception.endTime,
+          startDateObject: startDate,
+          endDateObject: endDate,
           dateKey: dateKey,
-          getHours: startDate.getHours(),
-          getMinutes: startDate.getMinutes()
+          startHours: startDate.getHours(),
+          startMinutes: startDate.getMinutes(),
+          endHours: endDate.getHours(),
+          endMinutes: endDate.getMinutes(),
+          startToISOString: startDate.toISOString(),
+          startToLocaleString: startDate.toLocaleString('ko-KR'),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
         });
+
+
 
         if (!exceptionGroups[groupKey]) {
           exceptionGroups[groupKey] = {
@@ -162,11 +174,21 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
 
         // 병합된 시간대들을 roomException으로 변환
         mergedTimeRanges.forEach(range => {
+          console.log('🔍 roomException 생성 전 시간 체크:', {
+            rangeStartTime: range.startTime,
+            rangeEndTime: range.endTime,
+            startHours: range.startTime.getHours(),
+            startMinutes: range.startTime.getMinutes(),
+            endHours: range.endTime.getHours(),
+            endMinutes: range.endTime.getMinutes(),
+            originalException: range.originalException
+          });
+
           // 시간 변환 시 올바른 형식으로 변환 (HH:MM)
           const startTimeStr = `${String(range.startTime.getHours()).padStart(2, '0')}:${String(range.startTime.getMinutes()).padStart(2, '0')}`;
           const endTimeStr = `${String(range.endTime.getHours()).padStart(2, '0')}:${String(range.endTime.getMinutes()).padStart(2, '0')}`;
 
-          syncedExceptions.push({
+          const roomException = {
             type: 'date_specific',
             name: `${group.title} (${group.date} ${startTimeStr}~${endTimeStr}) (방장)`,
             startTime: startTimeStr,
@@ -174,11 +196,24 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
             startDate: range.startTime.toISOString(),
             endDate: range.endTime.toISOString(),
             isSynced: true
+          };
+
+          console.log('✅ 최종 생성된 scheduleException roomException:', {
+            original: range.originalException,
+            created: roomException
           });
+
+          syncedExceptions.push(roomException);
         });
       });
 
       // personalTimes을 roomExceptions으로 변환
+      console.log('🔍 전체 개인시간 데이터 (길이:', ownerProfileSchedule.personalTimes?.length, '):', ownerProfileSchedule.personalTimes);
+
+      if (!ownerProfileSchedule.personalTimes || ownerProfileSchedule.personalTimes.length === 0) {
+        console.log('⚠️ 개인시간이 없거나 빈 배열입니다!');
+      }
+
       (ownerProfileSchedule.personalTimes || []).forEach((personalTime, index) => {
         console.log(`🔍 개인시간 ${index} 처리:`, {
           title: personalTime.title,
@@ -186,7 +221,8 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
           endTime: personalTime.endTime,
           days: personalTime.days,
           isRecurring: personalTime.isRecurring,
-          type: personalTime.type
+          type: personalTime.type,
+          raw: personalTime
         });
 
         // 반복 개인시간인 경우에만 처리
@@ -245,7 +281,10 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
                 isSynced: true
               };
 
-              console.log('✅ 일반 개인시간 roomException 생성:', personalException);
+              console.log('✅ 일반 개인시간 roomException 생성:', {
+                original: { startTime: personalTime.startTime, endTime: personalTime.endTime },
+                created: personalException
+              });
               syncedExceptions.push(personalException);
             }
           });
@@ -256,10 +295,38 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
 
       console.log(`🔍 최종 생성된 syncedExceptions (총 ${syncedExceptions.length}개):`, syncedExceptions);
 
-      setSettings(prevSettings => ({
-        ...prevSettings,
-        roomExceptions: [...prevSettings.roomExceptions.filter(ex => !ex.isSynced), ...syncedExceptions]
-      }));
+      // 14:40 관련 예외 확인
+      const suspicious = syncedExceptions.filter(ex =>
+        ex.startTime?.includes('14:4') ||
+        ex.endTime?.includes('15:0') ||
+        ex.name?.includes('14:4')
+      );
+      if (suspicious.length > 0) {
+        console.log('⚠️ 14:40 관련 의심스러운 예외 발견:', suspicious);
+      }
+
+      setSettings(prevSettings => {
+        const existingNonSynced = prevSettings.roomExceptions.filter(ex => !ex.isSynced);
+        console.log('🔍 기존 비동기 roomExceptions:', existingNonSynced);
+
+        // 14:40 관련 기존 예외 확인
+        const suspiciousExisting = existingNonSynced.filter(ex =>
+          ex.startTime?.includes('14:4') ||
+          ex.endTime?.includes('15:0') ||
+          ex.name?.includes('14:4')
+        );
+        if (suspiciousExisting.length > 0) {
+          console.log('⚠️ 기존 roomExceptions에서 14:40 관련 발견:', suspiciousExisting);
+        }
+
+        const finalExceptions = [...existingNonSynced, ...syncedExceptions];
+        console.log('🔍 최종 roomExceptions (총 ' + finalExceptions.length + '개):', finalExceptions);
+
+        return {
+          ...prevSettings,
+          roomExceptions: finalExceptions
+        };
+      });
     } else if (!syncOwnerSchedule) {
       // 연동 해제 시, 연동된 예외만 제거
       setSettings(prevSettings => ({

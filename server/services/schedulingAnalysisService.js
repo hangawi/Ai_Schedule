@@ -5,7 +5,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 async function findOptimalSlots(membersAvailability, constraints) {
    try {
       // 모델 가져오기 (비동기일 수 있음)
-      const model = await genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = await genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
       // AI에게 줄 prompt 생성
       const prompt = `

@@ -3,6 +3,12 @@ import TimeSlot from './TimeSlot';
 
 const dayNamesKorean = ['월', '화', '수', '목', '금'];
 
+// ScheduleGridSelector의 로직을 참고한 시간 변환 함수들
+const timeToMinutes = (timeStr) => {
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  return hours * 60 + minutes;
+};
+
 const WeekView = ({
   filteredTimeSlotsInDay,
   weekDates,
@@ -14,8 +20,103 @@ const WeekView = ({
   isRoomOwner,
   currentUser,
   handleSlotClick,
-  showMerged = true // New prop for merged view
+  showMerged = true, // New prop for merged view
+  ownerOriginalSchedule // 방장의 원본 시간표 데이터
 }) => {
+  // 방장의 원본 시간표에서 해당 시간대의 일정을 확인하는 함수
+  const getOwnerOriginalScheduleInfo = (date, time) => {
+    if (!ownerOriginalSchedule || !isRoomOwner) return null;
+
+    const timeMinutes = timeToMinutes(time);
+    const dayOfWeek = date.getDay(); // 0=일요일, 1=월요일, ...
+    const dateStr = date.toISOString().split('T')[0];
+
+    console.log('🔍 getOwnerOriginalScheduleInfo 체크:', {
+      time,
+      timeMinutes,
+      dayOfWeek,
+      dateStr,
+      ownerOriginalSchedule
+    });
+
+    // scheduleExceptions 확인 (특정 날짜 일정)
+    const exceptionSlot = ownerOriginalSchedule.scheduleExceptions?.find(e => {
+      if (e.specificDate !== dateStr) return false;
+
+      const startDate = new Date(e.startTime);
+      const endDate = new Date(e.endTime);
+      const startMinutes = startDate.getHours() * 60 + startDate.getMinutes();
+      const endMinutes = endDate.getHours() * 60 + endDate.getMinutes();
+
+      // 디버깅용 로깅 - 시간 매치가 될 때만 출력
+      const isMatch = timeMinutes >= startMinutes && timeMinutes < endMinutes;
+
+      if (isMatch || (time === '14:40' || time === '15:00')) {
+        console.log('🔍 scheduleException 체크:', {
+          time,
+          exception: e,
+          startDate: startDate.toLocaleString('ko-KR'),
+          endDate: endDate.toLocaleString('ko-KR'),
+          startMinutes,
+          endMinutes,
+          timeMinutes,
+          isMatch
+        });
+      }
+
+      return isMatch;
+    });
+
+    if (exceptionSlot) {
+      return {
+        ...exceptionSlot,
+        type: 'exception',
+        name: `${exceptionSlot.title || '일정'} (방장)`
+      };
+    }
+
+    // personalTimes 확인 (반복 개인시간)
+    const personalSlot = ownerOriginalSchedule.personalTimes?.find(p => {
+      const personalDays = p.days || [];
+      if (p.isRecurring !== false && personalDays.length > 0) {
+        const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
+        if (convertedDays.includes(dayOfWeek)) {
+          const startMinutes = timeToMinutes(p.startTime);
+          const endMinutes = timeToMinutes(p.endTime);
+
+          console.log('🔍 personalTime 체크:', {
+            personal: p,
+            dayOfWeek,
+            convertedDays,
+            startMinutes,
+            endMinutes,
+            timeMinutes,
+            isMatch: (endMinutes <= startMinutes) ?
+              (timeMinutes >= startMinutes || timeMinutes < endMinutes) :
+              (timeMinutes >= startMinutes && timeMinutes < endMinutes)
+          });
+
+          // 자정을 넘나드는 시간 처리
+          if (endMinutes <= startMinutes) {
+            return timeMinutes >= startMinutes || timeMinutes < endMinutes;
+          } else {
+            return timeMinutes >= startMinutes && timeMinutes < endMinutes;
+          }
+        }
+      }
+      return false;
+    });
+
+    if (personalSlot) {
+      return {
+        ...personalSlot,
+        type: 'personal',
+        name: `${personalSlot.title || '개인시간'} (방장)`
+      };
+    }
+
+    return null;
+  };
 
   // 연속된 시간대를 자동으로 병합하는 함수
   const getMergedTimeBlocks = (dateInfo, dayIndex) => {
@@ -24,6 +125,9 @@ const WeekView = ({
     let currentBlock = null;
 
     for (const time of filteredTimeSlotsInDay) {
+      // 방장의 원본 시간표를 우선적으로 확인
+      const ownerOriginalInfo = getOwnerOriginalScheduleInfo(date, time);
+
       const ownerInfo = getSlotOwner(date, time);
       const isSelected = isSlotSelected(date, time);
       const blockedInfo = getBlockedTimeInfo(time);
@@ -34,8 +138,17 @@ const WeekView = ({
       let slotType = 'empty';
       let slotData = null;
 
+      // 0순위: 방장의 원본 시간표 정보 (최우선)
+      if (ownerOriginalInfo) {
+        slotType = 'blocked';
+        slotData = {
+          name: ownerOriginalInfo.name,
+          info: ownerOriginalInfo,
+          isOwnerOriginalSchedule: true
+        };
+      }
       // 1순위: blocked 또는 room exception
-      if (isBlocked) {
+      else if (isBlocked) {
         slotType = 'blocked';
         let displayName = roomExceptionInfo ? roomExceptionInfo.name : blockedInfo?.name;
 
@@ -95,11 +208,14 @@ const WeekView = ({
           const newIsRoomOwnerPersonal = slotData?.isRoomOwnerPersonal;
           const currentIsRoomOwnerSchedule = currentBlock.data?.isRoomOwnerSchedule;
           const newIsRoomOwnerSchedule = slotData?.isRoomOwnerSchedule;
+          const currentIsOwnerOriginalSchedule = currentBlock.data?.isOwnerOriginalSchedule;
+          const newIsOwnerOriginalSchedule = slotData?.isOwnerOriginalSchedule;
 
           if ((currentIsRoomOwnerPersonal && newIsRoomOwnerPersonal) ||
-              (currentIsRoomOwnerSchedule && newIsRoomOwnerSchedule)) {
-            // 둘 다 방장 관련 시간이면 병합
-            isSameType = true;
+              (currentIsRoomOwnerSchedule && newIsRoomOwnerSchedule) ||
+              (currentIsOwnerOriginalSchedule && newIsOwnerOriginalSchedule)) {
+            // 둘 다 방장 관련 시간이면 병합 (이름이 같은지도 확인)
+            isSameType = currentName === newName;
           } else {
             // 일반 blocked 시간은 이름이 정확히 같아야 병합
             isSameType = currentName === newName;
@@ -169,33 +285,33 @@ const WeekView = ({
       return filteredTimeSlotsInDay.findIndex(slot => slot === time);
     };
 
-    // 각 날짜별로 독립적인 렌더링 (행 기반이 아닌 컬럼 기반)
+    // 그리드 기반으로 렌더링 (헤더와 일치)
     return (
-      <div className="flex">
-        {/* 시간 컬럼은 전체 시간대 표시 */}
-        <div className="w-12 flex-shrink-0">
+      <div className="grid grid-cols-6">
+        {/* 시간 컬럼 - 첫 번째 행만 렌더링 */}
+        <div className="col-span-1 relative">
           {filteredTimeSlotsInDay.map(time => (
             <div
               key={time}
-              className="h-4 px-1 text-center text-xs font-medium text-gray-600 border-b border-gray-200 flex items-center justify-center"
+              className="h-8 px-1 text-center text-xs font-medium text-gray-600 border-b border-gray-200 flex items-center justify-center"
             >
               {time}
             </div>
           ))}
         </div>
 
-        {/* 각 날짜별 독립적 컬럼 */}
+        {/* 각 날짜별 컬럼 */}
         {weekDates.slice(0, 5).map((dateInfo, dayIndex) => {
           const blocks = dayBlocks[dayIndex];
-          const totalHeight = filteredTimeSlotsInDay.length * 16; // 전체 컬럼 높이 (h-4 = 16px)
+          const totalHeight = filteredTimeSlotsInDay.length * 32; // 전체 컬럼 높이 (h-8 = 32px)
 
           return (
-            <div key={dayIndex} className="flex-1 border-l border-gray-200 relative" style={{ height: `${totalHeight}px` }}>
+            <div key={dayIndex} className="col-span-1 border-l border-gray-200 relative" style={{ height: `${totalHeight}px` }}>
               {blocks.map((block, blockIndex) => {
                 const date = dateInfo.fullDate;
-                const blockHeight = block.duration * 1.6; // 10분 = 1.6px (16px/10)
+                const blockHeight = block.duration * 3.2; // 10분 = 3.2px (32px/10)
                 const startIndex = getTimeSlotIndex(block.startTime);
-                const topPosition = startIndex * 16; // 각 시간 슬롯은 16px (h-4)
+                const topPosition = startIndex * 32; // 각 시간 슬롯은 32px (h-8)
 
                 return (
                   <div
@@ -269,28 +385,37 @@ const WeekView = ({
         {filteredTimeSlotsInDay.map(time => (
           <div key={time} className="grid grid-cols-6 border-b border-gray-200 last:border-b-0">
             {/* 시간 컬럼 */}
-            <div className="col-span-1 p-2 text-center text-sm font-medium text-gray-600 flex items-center justify-center">
+            <div className="col-span-1 px-1 text-center text-xs font-medium text-gray-600 flex items-center justify-center h-8">
               {time}
             </div>
 
             {/* 평일 5개 컬럼만 */}
             {weekdays.map((dateInfo, dayIndex) => {
               const date = dateInfo.fullDate;
+
+              // 방장의 원본 시간표를 우선적으로 확인
+              const ownerOriginalInfo = getOwnerOriginalScheduleInfo(date, time);
+
               const ownerInfo = getSlotOwner(date, time);
               const isSelected = isSlotSelected(date, time);
               const blockedInfo = getBlockedTimeInfo(time);
               const roomExceptionInfo = getRoomExceptionInfo(date, time);
-              const isBlocked = !!blockedInfo;
+
+              // 방장의 원본 시간표 정보가 있으면 그것을 사용, 없으면 기존 로직 사용
+              const finalBlockedInfo = ownerOriginalInfo || blockedInfo;
+              const finalRoomExceptionInfo = ownerOriginalInfo ? null : roomExceptionInfo;
+              const isBlocked = !!(finalBlockedInfo || finalRoomExceptionInfo);
+
               return (
                 <TimeSlot
                   key={`${date.toISOString().split('T')[0]}-${time}`}
                   date={date}
                   day={dayNamesKorean[dayIndex]}
                   time={time}
-                  ownerInfo={ownerInfo}
+                  ownerInfo={ownerOriginalInfo ? null : ownerInfo}
                   isSelected={isSelected}
-                  blockedInfo={blockedInfo}
-                  roomExceptionInfo={roomExceptionInfo}
+                  blockedInfo={finalBlockedInfo}
+                  roomExceptionInfo={finalRoomExceptionInfo}
                   isBlocked={isBlocked}
                   isRoomOwner={isRoomOwner}
                   currentUser={currentUser}
