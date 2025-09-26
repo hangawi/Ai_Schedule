@@ -1490,6 +1490,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   selectedSlots={selectedSlots}
                   onSlotSelect={isOwner ? null : handleSlotSelect}
                   onWeekChange={handleWeekChange}
+                  ownerOriginalSchedule={isOwner && user ? {
+                    defaultSchedule: user.defaultSchedule,
+                    scheduleExceptions: user.scheduleExceptions,
+                    personalTimes: user.personalTimes
+                  } : null}
                   initialStartDate={currentWeekStartDate}
                   calculateEndTime={calculateEndTime}
                   readOnly={isOwner}
@@ -1811,11 +1816,14 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         <RoomCreationModal
           onClose={closeCreateRoomModal}
           onCreateRoom={handleCreateRoom}
-          ownerProfileSchedule={user ? {
-            defaultSchedule: user.defaultSchedule,
-            scheduleExceptions: user.scheduleExceptions,
-            personalTimes: user.personalTimes
-          } : null}
+          ownerProfileSchedule={user ? (() => {
+            console.log('🔍 CoordinationTab - user.personalTimes 전달:', user.personalTimes);
+            return {
+              defaultSchedule: user.defaultSchedule,
+              scheduleExceptions: user.scheduleExceptions,
+              personalTimes: user.personalTimes
+            };
+          })() : null}
         />
       )}
       {showJoinRoomModal && (

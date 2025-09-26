@@ -33,6 +33,19 @@ exports.createRoom = async (req, res) => {
 
       // roomExceptions가 존재하면 유효성 검사 및 추가
       if (settings && settings.roomExceptions && Array.isArray(settings.roomExceptions)) {
+         console.log('🔍 서버 - 받은 roomExceptions (총 ' + settings.roomExceptions.length + '개):',
+                    JSON.stringify(settings.roomExceptions, null, 2));
+
+         // 14:40 관련 예외 확인
+         const suspicious = settings.roomExceptions.filter(ex =>
+            ex.startTime?.includes('14:4') ||
+            ex.endTime?.includes('15:0') ||
+            ex.name?.includes('14:4')
+         );
+         if (suspicious.length > 0) {
+            console.log('⚠️ 서버에서 14:40 관련 roomException 발견:', suspicious);
+         }
+
          settings.roomExceptions.forEach(ex => {
             // 기본적인 유효성 검사 (스키마에 정의된 enum, required 등)
             if (!ex.type || !ex.name || !ex.startTime || !ex.endTime) {

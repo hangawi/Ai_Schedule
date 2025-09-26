@@ -248,6 +248,8 @@ const ProfileTab = ({ onEditingChange }) => {
       setIsLoading(true);
       const data = await userService.getUserSchedule();
 
+      console.log('🔍 ProfileTab - 로드된 개인시간 데이터:', data.personalTimes);
+      console.log('🔍 ProfileTab - 로드된 예외일정 데이터:', data.scheduleExceptions);
       setDefaultSchedule(data.defaultSchedule || []);
       setScheduleExceptions(data.scheduleExceptions || []);
       setPersonalTimes(data.personalTimes || []);

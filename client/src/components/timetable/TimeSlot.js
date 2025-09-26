@@ -25,7 +25,7 @@ const TimeSlot = ({
   return (
     <div
       key={`${date.toISOString().split('T')[0]}-${time}`}
-      className={`col-span-1 border-l border-gray-200 h-10 flex items-center justify-center
+      className={`col-span-1 border-l border-gray-200 h-8 flex items-center justify-center
         ${isEffectivelyBlocked ? 'bg-gray-300 cursor-not-allowed' : ''}
         ${!isEffectivelyBlocked && !ownerInfo && isSelected ? 'bg-blue-200 border-2 border-blue-400' : ''}
         ${!isEffectivelyBlocked && !ownerInfo && !isSelected && currentUser ? 'hover:bg-blue-50 cursor-pointer' : ''}

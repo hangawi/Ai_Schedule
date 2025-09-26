@@ -211,7 +211,7 @@ exports.analyzeImage = async (req, res) => {
     }
 
     // Gemini Vision 모델 가져오기
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // 이미지를 Base64로 변환
     const imageBase64 = req.file.buffer.toString('base64');
