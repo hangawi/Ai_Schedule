@@ -475,8 +475,29 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     '18'
   );
 
-  // 주간 모드에서는 기본/24시간 토글 가능, 월간 모드에서는 기본 시간만
-  const effectiveShowFullDay = viewMode === 'week' ? showFullDay : false;
+  // 모든 모드에서 24시간 토글 가능
+  const effectiveShowFullDay = showFullDay;
+
+  // showMerged 상태 변화 추적
+  useEffect(() => {
+    console.log('🔥 showMerged 상태 변화 감지:', {
+      newShowMerged: showMerged,
+      timestamp: new Date().toISOString()
+    });
+  }, [showMerged]);
+
+  // showFullDay 상태 변화 추적
+  useEffect(() => {
+    console.log('🔥 showFullDay 상태 변화 감지:', {
+      newShowFullDay: showFullDay,
+      effectiveShowFullDay: effectiveShowFullDay,
+      willAffectScheduleHours: {
+        from: `${scheduleStartHour}-${scheduleEndHour}`,
+        to: showFullDay ? '0-24' : '9-18'
+      },
+      timestamp: new Date().toISOString()
+    });
+  }, [showFullDay, effectiveShowFullDay, scheduleStartHour, scheduleEndHour]);
 
   // Debug log
   console.log('CoordinationTab - Time settings:', {
@@ -1344,54 +1365,56 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   시간표 ({scheduleStartHour}:00 - {scheduleEndHour}:00)
                 </h3>
                 <div className="flex items-center space-x-2">
-                  {viewMode === 'week' && (
-                    <>
-                      <button
-                        onClick={() => {
-                          console.log('기본/24시간 버튼 클릭:', {
-                            currentShowFullDay: showFullDay,
-                            willBecome: !showFullDay,
-                            effectiveShowFullDay: viewMode === 'week' ? showFullDay : false
-                          });
-                          setShowFullDay(!showFullDay);
-                        }}
-                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                          showFullDay
-                            ? 'bg-purple-500 text-white'
-                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                        }`}
-                      >
-                        <Clock size={16} className="mr-1 inline" />
-                        {showFullDay ? '24시간' : '기본'}
-                      </button>
-                      <button
-                        onClick={() => {
-                          console.log('병합/분할 버튼 클릭:', {
-                            currentShowMerged: showMerged,
-                            willBecome: !showMerged
-                          });
-                          setShowMerged(!showMerged);
-                        }}
-                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                          showMerged
-                            ? 'bg-green-500 text-white'
-                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                        }`}
-                      >
-                        {showMerged ? (
-                          <>
-                            <Split size={16} className="mr-1 inline" />
-                            분할
-                          </>
-                        ) : (
-                          <>
-                            <Merge size={16} className="mr-1 inline" />
-                            병합
-                          </>
-                        )}
-                      </button>
-                    </>
-                  )}
+                  <button
+                    onClick={() => {
+                      console.log('🔥 24시간 버튼 클릭 시작:', {
+                        currentShowFullDay: showFullDay,
+                        willBecome: !showFullDay,
+                        effectiveShowFullDay: showFullDay,
+                        viewMode: viewMode,
+                        currentScheduleHours: { scheduleStartHour, scheduleEndHour }
+                      });
+                      setShowFullDay(!showFullDay);
+                      console.log('🔥 setShowFullDay 호출 완료, 새 값:', !showFullDay);
+                    }}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                      showFullDay
+                        ? 'bg-purple-500 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    <Clock size={16} className="mr-1 inline" />
+                    {showFullDay ? '24시간' : '기본'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      console.log('🔥 병합/분할 버튼 클릭 시작:', {
+                        currentShowMerged: showMerged,
+                        willBecome: !showMerged,
+                        viewMode: viewMode,
+                        isOwner: isOwner
+                      });
+                      setShowMerged(!showMerged);
+                      console.log('🔥 setShowMerged 호출 완료, 새 값:', !showMerged);
+                    }}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                      showMerged
+                        ? 'bg-green-500 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    {showMerged ? (
+                      <>
+                        <Split size={16} className="mr-1 inline" />
+                        분할
+                      </>
+                    ) : (
+                      <>
+                        <Merge size={16} className="mr-1 inline" />
+                        병합
+                      </>
+                    )}
+                  </button>
                   <button
                     onClick={() => setViewMode('week')}
                     className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
@@ -1434,9 +1457,9 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 <TimetableGrid
                   roomId={currentRoom._id}
                   roomSettings={{
-                    startHour: scheduleStartHour,
-                    endHour: scheduleEndHour,
-                    ...currentRoom.settings // Include all room settings (roomExceptions, blockedTimes, etc.)
+                    ...currentRoom.settings, // Include all room settings (roomExceptions, blockedTimes, etc.)
+                    startHour: effectiveShowFullDay ? 0 : scheduleStartHour,
+                    endHour: effectiveShowFullDay ? 24 : scheduleEndHour
                   }}
                   timeSlots={currentRoom.timeSlots || []}
                   members={currentRoom.members || []}
@@ -1448,6 +1471,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   onWeekChange={handleWeekChange}
                   initialStartDate={currentWeekStartDate}
                   calculateEndTime={calculateEndTime}
+                  showMerged={showMerged}
                 />
               ) : viewMode === 'week' ? (
                 <TimetableGrid
@@ -1470,6 +1494,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   calculateEndTime={calculateEndTime}
                   readOnly={isOwner}
                   showMerged={showMerged}
+                  onNegotiationUpdate={setCurrentWeekNegotiations}
                 />
               ) : (
                 <CoordinationCalendarView
