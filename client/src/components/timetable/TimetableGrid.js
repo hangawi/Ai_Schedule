@@ -45,6 +45,61 @@ import {
 const dayNames = DAY_NAMES;
 const dayNamesKorean = DAY_NAMES_KOREAN;
 
+// 연속된 시간대 병합 함수 (DetailTimeGrid와 동일)
+const mergeConsecutiveTimeSlots = (slots) => {
+  if (!slots || slots.length === 0) return [];
+
+  // 날짜와 사용자별로 그룹화
+  const groupedSlots = {};
+
+  slots.forEach(slot => {
+    const userId = slot.user?._id || slot.user;
+    const dateKey = slot.date ? new Date(slot.date).toISOString().split('T')[0] : 'no-date';
+    const key = `${userId}-${dateKey}`;
+
+    if (!groupedSlots[key]) {
+      groupedSlots[key] = [];
+    }
+    groupedSlots[key].push(slot);
+  });
+
+  const mergedSlots = [];
+
+  Object.values(groupedSlots).forEach(userSlots => {
+    const sortedSlots = userSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    let currentGroup = null;
+
+    for (const slot of sortedSlots) {
+      if (currentGroup &&
+          currentGroup.endTime === slot.startTime &&
+          currentGroup.user === slot.user) {
+        // 연속된 슬롯이므로 병합
+        currentGroup.endTime = slot.endTime;
+        currentGroup.isMerged = true;
+        if (!currentGroup.originalSlots) {
+          currentGroup.originalSlots = [{ ...currentGroup }];
+        }
+        currentGroup.originalSlots.push(slot);
+      } else {
+        // 새로운 그룹 시작
+        if (currentGroup) {
+          mergedSlots.push(currentGroup);
+        }
+        currentGroup = { ...slot };
+        delete currentGroup.isMerged;
+        delete currentGroup.originalSlots;
+      }
+    }
+
+    if (currentGroup) {
+      mergedSlots.push(currentGroup);
+    }
+  });
+
+  return mergedSlots;
+};
+
 // Helper functions are now imported from utility files
 
 const TimetableGrid = ({
@@ -72,14 +127,19 @@ const TimetableGrid = ({
 }) => {
 
   // Debug log for TimetableGrid props
-  console.log('TimetableGrid - Props received:', {
+  console.log('🔥 TimetableGrid - Props received:', {
     showMerged,
     roomSettings: {
       startHour: roomSettings?.startHour,
       endHour: roomSettings?.endHour,
       scheduleStart: roomSettings?.scheduleStart,
       scheduleEnd: roomSettings?.scheduleEnd
-    }
+    },
+    willCalculateHours: {
+      expectedStart: roomSettings?.startHour || roomSettings?.scheduleStart,
+      expectedEnd: roomSettings?.endHour || roomSettings?.scheduleEnd
+    },
+    timestamp: new Date().toISOString()
   });
 
 
@@ -90,8 +150,11 @@ const TimetableGrid = ({
   
   // 최근 요청 추적 (중복 방지)
   const [recentRequests, setRecentRequests] = useState(new Set());
-  
+
   const [weekDates, setWeekDates] = useState([]);
+
+  // 병합된 슬롯들을 추적하는 상태
+  const [mergedTimeSlots, setMergedTimeSlots] = useState([]);
 
   useEffect(() => {
     // Use utility function to get base date
@@ -108,17 +171,27 @@ const TimetableGrid = ({
     }
   }, [onWeekChange, initialStartDate]);
 
+  // timeSlots가 변경될 때마다 병합된 슬롯 업데이트
+  useEffect(() => {
+    const merged = mergeConsecutiveTimeSlots(timeSlots);
+    setMergedTimeSlots(merged);
+    console.log('🔥 TimetableGrid - 병합된 슬롯 업데이트:', {
+      originalCount: timeSlots?.length || 0,
+      mergedCount: merged.length,
+      showMerged
+    });
+  }, [timeSlots, showMerged]);
 
   const days = DAYS; // Display labels (not used for logic)
 
   // Generate time slots using utility functions
   // Use startHour/endHour first (passed from parent), then fall back to scheduleStart/scheduleEnd
   const scheduleStartHour = getHourFromSettings(
-    roomSettings?.startHour || roomSettings?.scheduleStart,
+    roomSettings?.startHour,
     DEFAULT_SCHEDULE_START_HOUR.toString()
   );
   const scheduleEndHour = getHourFromSettings(
-    roomSettings?.endHour || roomSettings?.scheduleEnd,
+    roomSettings?.endHour,
     DEFAULT_SCHEDULE_END_HOUR.toString()
   );
 
@@ -191,16 +264,40 @@ const TimetableGrid = ({
 
   // Helper to get who booked a slot (based on Date object overlap)
   const getSlotOwner = useCallback((date, time) => {
-    return getSlotOwnerHelper(
+    const slotsToUse = showMerged ? mergedTimeSlots : timeSlots;
+
+    const baseOwnerInfo = getSlotOwnerHelper(
       date,
       time,
-      timeSlots,
+      slotsToUse,
       members,
       currentUser,
       isRoomOwner,
       getNegotiationInfo
     );
-  }, [timeSlots, members, currentUser, isRoomOwner, getNegotiationInfo]);
+
+    // 병합 모드에서 병합된 슬롯인지 확인
+    if (showMerged && baseOwnerInfo) {
+      const mergedSlot = mergedTimeSlots.find(slot => {
+        const slotDate = slot.date ? new Date(slot.date).toISOString().split('T')[0] : null;
+        const currentDate = date.toISOString().split('T')[0];
+
+        return slotDate === currentDate &&
+               (slot.user === baseOwnerInfo.actualUserId || slot.user?._id === baseOwnerInfo.actualUserId) &&
+               time >= slot.startTime && time < slot.endTime;
+      });
+
+      if (mergedSlot && mergedSlot.isMerged) {
+        return {
+          ...baseOwnerInfo,
+          isMergedSlot: true,
+          mergedDuration: mergedSlot.originalSlots?.length * 10 || 10 // 10분 단위
+        };
+      }
+    }
+
+    return baseOwnerInfo;
+  }, [timeSlots, mergedTimeSlots, members, currentUser, isRoomOwner, getNegotiationInfo, showMerged]);
 
   // Helper to check if a slot is selected by the current user (uses currentSelectedSlots)
   const isSlotSelected = (date, time) => {

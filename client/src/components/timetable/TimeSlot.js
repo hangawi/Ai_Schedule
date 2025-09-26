@@ -18,10 +18,11 @@ const TimeSlot = ({
 
   // Debug log for TimeSlot (only for first few slots to avoid spam)
   if (time === '09:00' || time === '00:00') {
-    console.log(`TimeSlot (${time}) - Props received:`, {
+    console.log(`🔥 TimeSlot (${time}) - Props received:`, {
       showMerged,
       time,
-      ownerInfo: ownerInfo?.name
+      ownerInfo: ownerInfo?.name,
+      timestamp: new Date().toISOString()
     });
   }
 
@@ -39,7 +40,6 @@ const TimeSlot = ({
         ${!isEffectivelyBlocked && !ownerInfo && !isSelected && currentUser ? 'hover:bg-blue-50 cursor-pointer' : ''}
         ${!isEffectivelyBlocked && ownerInfo && currentUser ? 'cursor-pointer hover:opacity-80' : ''}
         ${!isEffectivelyBlocked && isRoomOwner && !ownerInfo ? 'cursor-pointer hover:bg-green-50' : ''}
-        ${!showMerged ? 'border-t border-dashed border-gray-300' : ''}
       `}
       style={!isEffectivelyBlocked && ownerInfo ? { backgroundColor: `${ownerInfo.color}20`, borderColor: ownerInfo.color } :
              isEffectivelyBlocked && roomExceptionInfo ? { backgroundColor: '#FEEBC8', borderColor: '#F6AD55' } : {}
@@ -56,10 +56,14 @@ const TimeSlot = ({
             <span
               className={`text-xs font-medium px-1 py-0.5 rounded ${
                 ownerInfo.isNegotiation ? 'animate-pulse border border-orange-300' : ''
-              }`}
+              } ${showMerged && ownerInfo.isMergedSlot ? 'border-2' : ''}`}
               style={{
                 color: ownerInfo.color,
-                backgroundColor: `${ownerInfo.color}${ownerInfo.isNegotiation ? '30' : '10'}`
+                backgroundColor: `${ownerInfo.color}${ownerInfo.isNegotiation ? '30' : '10'}`,
+                ...(showMerged && ownerInfo.isMergedSlot ? {
+                  borderColor: ownerInfo.color,
+                  borderStyle: 'solid'
+                } : {})
               }}
               title={ownerInfo.isNegotiation ?
                 `협의 참여자: ${ownerInfo.negotiationData?.conflictingMembers?.map(cm => {
@@ -71,10 +75,12 @@ const TimeSlot = ({
                     return '멤버';
                   }
                 }).join(', ') || '알 수 없음'}` :
-                ownerInfo.subject || ownerInfo.name
+                (showMerged && ownerInfo.isMergedSlot && ownerInfo.mergedDuration ?
+                  `${ownerInfo.subject || ownerInfo.name} - 병합됨 (${ownerInfo.mergedDuration}분)` :
+                  ownerInfo.subject || ownerInfo.name)
               }
             >
-              {ownerInfo.name.length > 6 ? ownerInfo.name.substring(0, 4) + '...' : ownerInfo.name}
+{ownerInfo.name.length > 6 ? ownerInfo.name.substring(0, 4) + '...' : ownerInfo.name}
             </span>
           )}
           {!ownerInfo && isSelected && !isRoomOwner && (
