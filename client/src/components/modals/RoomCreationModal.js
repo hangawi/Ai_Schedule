@@ -89,10 +89,26 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
       // scheduleExceptions을 날짜/제목별로 그룹화하여 병합 처리
       const exceptionGroups = {};
       (ownerProfileSchedule.scheduleExceptions || []).forEach(exception => {
+        console.log('🔍 처리 중인 scheduleException:', {
+          title: exception.title,
+          startTime: exception.startTime,
+          endTime: exception.endTime,
+          rawStartTime: exception.startTime,
+          rawEndTime: exception.endTime
+        });
+
         const startDate = new Date(exception.startTime);
         const dateKey = startDate.toLocaleDateString('ko-KR'); // 2025. 9. 30. 형태
         const title = exception.title || '일정';
         const groupKey = `${dateKey}-${title}`;
+
+        console.log('🔍 Date 객체로 변환 결과:', {
+          originalStartTime: exception.startTime,
+          dateObject: startDate,
+          dateKey: dateKey,
+          getHours: startDate.getHours(),
+          getMinutes: startDate.getMinutes()
+        });
 
         if (!exceptionGroups[groupKey]) {
           exceptionGroups[groupKey] = {
@@ -146,8 +162,9 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
 
         // 병합된 시간대들을 roomException으로 변환
         mergedTimeRanges.forEach(range => {
-          const startTimeStr = range.startTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-          const endTimeStr = range.endTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+          // 시간 변환 시 올바른 형식으로 변환 (HH:MM)
+          const startTimeStr = `${String(range.startTime.getHours()).padStart(2, '0')}:${String(range.startTime.getMinutes()).padStart(2, '0')}`;
+          const endTimeStr = `${String(range.endTime.getHours()).padStart(2, '0')}:${String(range.endTime.getMinutes()).padStart(2, '0')}`;
 
           syncedExceptions.push({
             type: 'date_specific',
