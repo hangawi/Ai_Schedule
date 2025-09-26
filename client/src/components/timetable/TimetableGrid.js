@@ -364,39 +364,30 @@ const TimetableGrid = ({
         });
         setShowChangeRequestModal(true);
       }
-    } else { // Empty slot
-      if (isRoomOwner) {
-        setSlotToAssign({ date: date, time }); // Pass date object
-        setShowAssignModal(true);
-      } else {
-        const daysKey = DAY_NAMES;
-        const dayIndex = getDayIndex(date);
-        if (dayIndex === -1) return; // Weekend, skip
-        const isSelected = isSlotInSelectedSlots(selectedSlots, daysKey[dayIndex], time);
-        
-        let newSelectedSlots;
-        if (isSelected) {
-          newSelectedSlots = (selectedSlots || []).filter(s => !(s.day === daysKey[dayIndex] && s.startTime === time));
-        }
-        else {
-          const [hour, minute] = time.split(':').map(Number);
-          const endHour = minute >= 50 ? hour + 1 : hour;
-          const endMinute = minute >= 50 ? 0 : minute + 10;
-          
-          const newSlot = {
-            date: date, // Pass date object
-            day: daysKey[dayIndex],
-            startTime: time,
-            endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
-            subject: '새 일정'
-          };
-          newSelectedSlots = [...(selectedSlots || []), newSlot];
-        }
-        
-        if (onSlotSelect) onSlotSelect(newSelectedSlots);
-      }
-    }
-  }, [
+          } else { // Empty slot
+            if (isRoomOwner) {
+              setSlotToAssign({ date: date, time }); // Pass date object
+              setShowAssignModal(true);
+            } else {
+              const daysKey = DAY_NAMES;
+              const dayIndex = getDayIndex(date);
+              if (dayIndex === -1) return; // Weekend, skip
+              
+              const [hour, minute] = time.split(':').map(Number);
+              const endHour = minute >= 50 ? hour + 1 : hour;
+              const endMinute = minute >= 50 ? 0 : minute + 10;
+              
+              const newSlot = {
+                date: date, // Pass date object
+                day: daysKey[dayIndex],
+                startTime: time,
+                endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
+                subject: '새 일정'
+              };
+              
+              if (onSlotSelect) onSlotSelect(newSlot);
+            }
+          }  }, [
     getBlockedTimeInfo,
     getSlotOwner,
     currentUser,

@@ -543,14 +543,14 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const handleSlotSelect = (slotData) => {
     setSelectedSlots(prev => {
       const isSelected = prev.some(slot =>
-        slot.date === slotData.date &&
+        slot.date.getTime() === slotData.date.getTime() &&
         slot.day === slotData.day &&
         slot.startTime === slotData.startTime
       );
 
       if (isSelected) {
         return prev.filter(slot =>
-          !(slot.date === slotData.date &&
+          !(slot.date.getTime() === slotData.date.getTime() &&
             slot.day === slotData.day &&
             slot.startTime === slotData.startTime)
         );
@@ -1437,19 +1437,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                     <Calendar size={16} className="mr-1 inline" />
                     월간
                   </button>
-                  {!isOwner && (
-                    <button
-                      onClick={() => setViewMode('grid')}
-                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                        viewMode === 'grid'
-                          ? 'bg-green-500 text-white'
-                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                    >
-                      <Grid size={16} className="mr-1 inline" />
-                      선택
-                    </button>
-                  )}
+
                 </div>
               </div>
 
