@@ -205,9 +205,9 @@ const WeekView = ({
         const currentBlock = blocks.find(block => block.startTime === time);
 
         if (!currentBlock) {
-          // 해당 시간에 시작하는 블록이 없음 - 빈 셀 추가
+          // 해당 시간에 시작하는 블록이 없음 - 빈 셀 추가 (높이는 행에서 통일됨)
           rowCells.push(
-            <div key={`${dateInfo.fullDate.toISOString().split('T')[0]}-${time}-empty`} className="col-span-1 border-l border-gray-200 h-10"></div>
+            <div key={`${dateInfo.fullDate.toISOString().split('T')[0]}-${time}-empty`} className="col-span-1 border-l border-gray-200 h-full"></div>
           );
           return;
         }
@@ -231,7 +231,7 @@ const WeekView = ({
                 ${currentBlock.type === 'empty' && isRoomOwner ? 'cursor-pointer hover:bg-green-50' : ''}
               `}
               style={{
-                height: `${cellHeight}px`,
+                height: '100%', // 행의 높이에 맞춤
                 ...(currentBlock.type === 'owner' && currentBlock.data ? {
                   backgroundColor: `${currentBlock.data.color}20`,
                   borderColor: currentBlock.data.color
@@ -273,7 +273,7 @@ const WeekView = ({
                   {currentBlock.startTime}~{currentBlock.actualEndTime}
                 </span>
               )}
-          </div>
+            </div>
         );
 
         // 블록의 시작 시간을 처리됨으로 표시
@@ -282,8 +282,21 @@ const WeekView = ({
 
       // 행에 시간 컬럼 + 5개 날짜 셀이 모두 있어야 함
       if (rowCells.length === 6) { // 시간 컬럼(1) + 날짜 셀들(5)
+        // 해당 행에서 가장 큰 블록의 높이 계산
+        let maxRowHeight = 40; // 최소 높이
+        weekDates.forEach((dateInfo, dayIndex) => {
+          const blocks = dayBlocks[dayIndex];
+          const currentBlock = blocks.find(block => block.startTime === time);
+          if (currentBlock) {
+            const calculatedHeight = currentBlock.duration * 4;
+            const maxHeight = filteredTimeSlotsInDay.length > 100 ? 2000 : 800;
+            const cellHeight = Math.min(Math.max(calculatedHeight, 40), maxHeight);
+            maxRowHeight = Math.max(maxRowHeight, cellHeight);
+          }
+        });
+
         rows.push(
-          <div key={time} className="grid grid-cols-6 border-b border-gray-200 last:border-b-0">
+          <div key={time} className="grid grid-cols-6 border-b border-gray-200 last:border-b-0" style={{ minHeight: `${maxRowHeight}px` }}>
             {rowCells}
           </div>
         );
