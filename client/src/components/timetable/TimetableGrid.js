@@ -126,21 +126,6 @@ const TimetableGrid = ({
   showMerged = true // New prop for merged view
 }) => {
 
-  // Debug log for TimetableGrid props
-  console.log('🔥 TimetableGrid - Props received:', {
-    showMerged,
-    roomSettings: {
-      startHour: roomSettings?.startHour,
-      endHour: roomSettings?.endHour,
-      scheduleStart: roomSettings?.scheduleStart,
-      scheduleEnd: roomSettings?.scheduleEnd
-    },
-    willCalculateHours: {
-      expectedStart: roomSettings?.startHour || roomSettings?.scheduleStart,
-      expectedEnd: roomSettings?.endHour || roomSettings?.scheduleEnd
-    },
-    timestamp: new Date().toISOString()
-  });
 
 
   // CustomAlert 상태
@@ -175,11 +160,6 @@ const TimetableGrid = ({
   useEffect(() => {
     const merged = mergeConsecutiveTimeSlots(timeSlots);
     setMergedTimeSlots(merged);
-    console.log('🔥 TimetableGrid - 병합된 슬롯 업데이트:', {
-      originalCount: timeSlots?.length || 0,
-      mergedCount: merged.length,
-      showMerged
-    });
   }, [timeSlots, showMerged]);
 
   const days = DAYS; // Display labels (not used for logic)
@@ -195,22 +175,7 @@ const TimetableGrid = ({
     DEFAULT_SCHEDULE_END_HOUR.toString()
   );
 
-  // Debug log for calculated hours
-  console.log('TimetableGrid - Calculated hours:', {
-    scheduleStartHour,
-    scheduleEndHour,
-    roomSettingsStartHour: roomSettings?.startHour,
-    roomSettingsEndHour: roomSettings?.endHour
-  });
-
   const timeSlotsInDay = generateDayTimeSlots(scheduleStartHour, scheduleEndHour);
-
-  // Debug log for generated time slots
-  console.log('TimetableGrid - Generated time slots:', {
-    totalSlots: timeSlotsInDay.length,
-    firstFewSlots: timeSlotsInDay.slice(0, 5),
-    lastFewSlots: timeSlotsInDay.slice(-5)
-  });
 
 
   // Helper function to check if a time slot is blocked and return block info

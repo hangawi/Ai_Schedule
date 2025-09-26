@@ -16,15 +16,6 @@ const TimeSlot = ({
 }) => {
   const isEffectivelyBlocked = isBlocked || !!roomExceptionInfo; // Combine existing blocked with new room exceptions
 
-  // Debug log for TimeSlot (only for first few slots to avoid spam)
-  if (time === '09:00' || time === '00:00') {
-    console.log(`🔥 TimeSlot (${time}) - Props received:`, {
-      showMerged,
-      time,
-      ownerInfo: ownerInfo?.name,
-      timestamp: new Date().toISOString()
-    });
-  }
 
   const handleClick = () => {
     if (isEffectivelyBlocked) return; // Prevent clicks on blocked/exception slots

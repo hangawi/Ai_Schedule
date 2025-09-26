@@ -17,13 +17,6 @@ const WeekView = ({
   showMerged = true // New prop for merged view
 }) => {
 
-  // Debug log for WeekView props
-  console.log('🔥 WeekView - Props received:', {
-    showMerged,
-    totalTimeSlots: filteredTimeSlotsInDay?.length,
-    timeRange: `${filteredTimeSlotsInDay?.[0]} ~ ${filteredTimeSlotsInDay?.[filteredTimeSlotsInDay.length - 1]}`,
-    timestamp: new Date().toISOString()
-  });
   // 연속된 시간대를 자동으로 병합하는 함수
   const getMergedTimeBlocks = (dateInfo, dayIndex) => {
     const date = dateInfo.fullDate;
@@ -112,7 +105,6 @@ const WeekView = ({
             isSameType = currentName === newName;
           }
 
-          // 방장 시간표 병합 로직 완료
         } else if (slotType === 'owner') {
           // owner 타입: 같은 사용자면 병합
           const currentUserId = currentBlock.data?.actualUserId || currentBlock.data?.userId;
@@ -162,159 +154,127 @@ const WeekView = ({
       block.actualEndTime = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
     });
 
-    // 병합 블록 완성
-
     return blocks;
   };
 
-  // 병합 모드 렌더링 함수 - 연속된 시간을 자동 병합
+  // 병합 모드 렌더링 함수 - 각 날짜별 독립적 컬럼 렌더링
   const renderMergedView = () => {
-    const rows = [];
-    const processedTimes = new Set();
-
     // 각 날짜별로 병합된 블록 계산
     const dayBlocks = weekDates.map((dateInfo, dayIndex) =>
       getMergedTimeBlocks(dateInfo, dayIndex)
     );
 
-    // 병합 모드에서는 각 블록의 시작 시간들만 행으로 생성
-    const blockStartTimes = new Set();
-    dayBlocks.forEach(blocks => {
-      blocks.forEach(block => {
-        blockStartTimes.add(block.startTime);
-      });
-    });
+    // 시간 슬롯별 위치 계산을 위한 헬퍼 함수
+    const getTimeSlotIndex = (time) => {
+      return filteredTimeSlotsInDay.findIndex(slot => slot === time);
+    };
 
-    for (const time of Array.from(blockStartTimes).sort()) {
-      if (processedTimes.has(time)) {
-        continue;
-      }
-
-      const rowCells = [];
-
-      // 시간 컬럼
-      rowCells.push(
-        <div key="time" className="col-span-1 p-2 text-center text-sm font-medium text-gray-600 flex items-center justify-center">
-          {time}
-        </div>
-      );
-
-      // 각 날짜별로 셀 생성
-      weekDates.forEach((dateInfo, dayIndex) => {
-        const blocks = dayBlocks[dayIndex];
-        const currentBlock = blocks.find(block => block.startTime === time);
-
-        if (!currentBlock) {
-          // 해당 시간에 시작하는 블록이 없음 - 빈 셀 추가 (높이는 행에서 통일됨)
-          rowCells.push(
-            <div key={`${dateInfo.fullDate.toISOString().split('T')[0]}-${time}-empty`} className="col-span-1 border-l border-gray-200 h-full"></div>
-          );
-          return;
-        }
-
-        // 블록 셀 생성 (이미 startTime === time인 블록만 찾았으므로)
-        const date = dateInfo.fullDate;
-        // 높이 계산: 10분 = 40px, 최소 40px
-        // 24시간 모드에서는 높이 제한을 늘려서 긴 블록도 표시 가능하게 함
-        const calculatedHeight = currentBlock.duration * 4;
-        const maxHeight = filteredTimeSlotsInDay.length > 100 ? 2000 : 800; // 24시간 모드 대응
-        const cellHeight = Math.min(Math.max(calculatedHeight, 40), maxHeight);
-
-        rowCells.push(
+    // 각 날짜별로 독립적인 렌더링 (행 기반이 아닌 컬럼 기반)
+    return (
+      <div className="flex">
+        {/* 시간 컬럼은 전체 시간대 표시 */}
+        <div className="w-12 flex-shrink-0">
+          {filteredTimeSlotsInDay.map(time => (
             <div
-              key={`${date.toISOString().split('T')[0]}-${time}`}
-              className={`col-span-1 border-l border-gray-200 flex items-center justify-center
-                ${currentBlock.type === 'blocked' ? 'bg-gray-300 cursor-not-allowed' : ''}
-                ${currentBlock.type === 'selected' ? 'bg-blue-200 border-2 border-blue-400' : ''}
-                ${currentBlock.type === 'empty' && currentUser ? 'hover:bg-blue-50 cursor-pointer' : ''}
-                ${currentBlock.type === 'owner' && currentUser ? 'cursor-pointer hover:opacity-80' : ''}
-                ${currentBlock.type === 'empty' && isRoomOwner ? 'cursor-pointer hover:bg-green-50' : ''}
-              `}
-              style={{
-                height: '100%', // 행의 높이에 맞춤
-                ...(currentBlock.type === 'owner' && currentBlock.data ? {
-                  backgroundColor: `${currentBlock.data.color}20`,
-                  borderColor: currentBlock.data.color
-                } : {}),
-                ...(currentBlock.type === 'blocked' && currentBlock.data?.isRoomException ? {
-                  backgroundColor: '#FEEBC8',
-                  borderColor: '#F6AD55'
-                } : {})
-              }}
-              onClick={() => handleSlotClick(date, time)}
+              key={time}
+              className="h-4 px-1 text-center text-xs font-medium text-gray-600 border-b border-gray-200 flex items-center justify-center"
             >
-              {currentBlock.type === 'blocked' ? (
-                <span className="text-xs text-gray-600 font-medium" title={`${currentBlock.data?.name} (${currentBlock.startTime}~${currentBlock.actualEndTime})`}>
-                  {currentBlock.data?.name.length > 8 ? currentBlock.data?.name.substring(0, 6) + '...' : currentBlock.data?.name}
-                  <br />
-                  {currentBlock.startTime}~{currentBlock.actualEndTime}
-                </span>
-              ) : currentBlock.type === 'owner' ? (
-                <span
-                  className="text-xs font-medium px-1 py-0.5 rounded"
-                  style={{
-                    color: currentBlock.data?.color,
-                    backgroundColor: `${currentBlock.data?.color}10`
-                  }}
-                  title={`${currentBlock.data?.subject || currentBlock.data?.name} (${currentBlock.startTime}~${currentBlock.actualEndTime})`}
-                >
-                  {currentBlock.data?.name.length > 6 ? currentBlock.data?.name.substring(0, 4) + '...' : currentBlock.data?.name}
-                  <br />
-                  {currentBlock.startTime}~{currentBlock.actualEndTime}
-                </span>
-              ) : currentBlock.type === 'selected' ? (
-                <span className="text-xs font-medium text-blue-700 px-1 py-0.5 rounded bg-blue-100">
-                  선택됨
-                  <br />
-                  {currentBlock.startTime}~{currentBlock.actualEndTime}
-                </span>
-              ) : (
-                <span className="text-xs text-gray-400">
-                  {currentBlock.startTime}~{currentBlock.actualEndTime}
-                </span>
-              )}
+              {time}
             </div>
-        );
+          ))}
+        </div>
 
-        // 블록의 시작 시간을 처리됨으로 표시
-        processedTimes.add(time);
-      });
-
-      // 행에 시간 컬럼 + 5개 날짜 셀이 모두 있어야 함
-      if (rowCells.length === 6) { // 시간 컬럼(1) + 날짜 셀들(5)
-        // 해당 행에서 가장 큰 블록의 높이 계산
-        let maxRowHeight = 40; // 최소 높이
-        weekDates.forEach((dateInfo, dayIndex) => {
+        {/* 각 날짜별 독립적 컬럼 */}
+        {weekDates.slice(0, 5).map((dateInfo, dayIndex) => {
           const blocks = dayBlocks[dayIndex];
-          const currentBlock = blocks.find(block => block.startTime === time);
-          if (currentBlock) {
-            const calculatedHeight = currentBlock.duration * 4;
-            const maxHeight = filteredTimeSlotsInDay.length > 100 ? 2000 : 800;
-            const cellHeight = Math.min(Math.max(calculatedHeight, 40), maxHeight);
-            maxRowHeight = Math.max(maxRowHeight, cellHeight);
-          }
-        });
+          const totalHeight = filteredTimeSlotsInDay.length * 16; // 전체 컬럼 높이 (h-4 = 16px)
 
-        rows.push(
-          <div key={time} className="grid grid-cols-6 border-b border-gray-200 last:border-b-0" style={{ minHeight: `${maxRowHeight}px` }}>
-            {rowCells}
-          </div>
-        );
-      }
-    }
-    return <>{rows}</>;
+          return (
+            <div key={dayIndex} className="flex-1 border-l border-gray-200 relative" style={{ height: `${totalHeight}px` }}>
+              {blocks.map((block, blockIndex) => {
+                const date = dateInfo.fullDate;
+                const blockHeight = block.duration * 1.6; // 10분 = 1.6px (16px/10)
+                const startIndex = getTimeSlotIndex(block.startTime);
+                const topPosition = startIndex * 16; // 각 시간 슬롯은 16px (h-4)
+
+                return (
+                  <div
+                    key={`${date.toISOString().split('T')[0]}-${block.startTime}-${blockIndex}`}
+                    className={`absolute left-0 right-0 border-b border-gray-200 flex items-center justify-center text-center px-0.5
+                      ${block.type === 'blocked' ? 'bg-gray-300 cursor-not-allowed' : ''}
+                      ${block.type === 'selected' ? 'bg-blue-200 border-2 border-blue-400' : ''}
+                      ${block.type === 'empty' && currentUser ? 'hover:bg-blue-50 cursor-pointer' : ''}
+                      ${block.type === 'owner' && currentUser ? 'cursor-pointer hover:opacity-80' : ''}
+                      ${block.type === 'empty' && isRoomOwner ? 'cursor-pointer hover:bg-green-50' : ''}
+                    `}
+                    style={{
+                      height: `${blockHeight}px`,
+                      top: `${topPosition}px`,
+                      ...(block.type === 'owner' && block.data ? {
+                        backgroundColor: `${block.data.color}20`,
+                        borderColor: block.data.color
+                      } : {}),
+                      ...(block.type === 'blocked' && block.data?.isRoomException ? {
+                        backgroundColor: '#FEEBC8',
+                        borderColor: '#F6AD55'
+                      } : {})
+                    }}
+                    onClick={() => handleSlotClick(date, block.startTime)}
+                  >
+                    {block.type === 'blocked' ? (
+                      <div className="text-xs text-gray-600 font-medium" title={`${block.data?.name} (${block.startTime}~${block.actualEndTime})`}>
+                        <div className="text-xs leading-tight">{block.data?.name.length > 6 ? block.data?.name.substring(0, 4) + '...' : block.data?.name}</div>
+                        {blockHeight > 20 && <div className="text-xs leading-tight">{block.startTime}~{block.actualEndTime}</div>}
+                      </div>
+                    ) : block.type === 'owner' ? (
+                      <div
+                        className="text-xs font-medium px-0.5 py-0.5 rounded"
+                        style={{
+                          color: block.data?.color,
+                          backgroundColor: `${block.data?.color}10`
+                        }}
+                        title={`${block.data?.subject || block.data?.name} (${block.startTime}~${block.actualEndTime})`}
+                      >
+                        <div className="text-xs leading-tight">{block.data?.name.length > 4 ? block.data?.name.substring(0, 3) + '...' : block.data?.name}</div>
+                        {blockHeight > 20 && <div className="text-xs leading-tight">{block.startTime}~{block.actualEndTime}</div>}
+                      </div>
+                    ) : block.type === 'selected' ? (
+                      <div className="text-xs font-medium text-blue-700 px-0.5 py-0.5 rounded bg-blue-100">
+                        <div className="text-xs leading-tight">선택됨</div>
+                        {blockHeight > 20 && <div className="text-xs leading-tight">{block.startTime}~{block.actualEndTime}</div>}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400">
+                        <div className="text-xs leading-tight">빈 시간</div>
+                        {blockHeight > 20 && <div className="text-xs leading-tight">{block.startTime}~{block.actualEndTime}</div>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   // 일반 모드 렌더링 함수
   const renderNormalView = () => {
+    // 평일 5개만 확실히 사용
+    const weekdays = weekDates.slice(0, 5);
+
     return (
       <>
         {filteredTimeSlotsInDay.map(time => (
           <div key={time} className="grid grid-cols-6 border-b border-gray-200 last:border-b-0">
+            {/* 시간 컬럼 */}
             <div className="col-span-1 p-2 text-center text-sm font-medium text-gray-600 flex items-center justify-center">
               {time}
             </div>
-            {weekDates.map((dateInfo, dayIndex) => {
+
+            {/* 평일 5개 컬럼만 */}
+            {weekdays.map((dateInfo, dayIndex) => {
               const date = dateInfo.fullDate;
               const ownerInfo = getSlotOwner(date, time);
               const isSelected = isSlotSelected(date, time);

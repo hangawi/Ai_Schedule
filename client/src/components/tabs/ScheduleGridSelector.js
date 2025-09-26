@@ -414,172 +414,91 @@ const ScheduleGridSelector = ({
   };
 
   const renderMergedWeekView = () => {
-    // 각 날짜별로 병합된 시간 슬롯들을 수집
-    const dayDisplaySlots = weekDates.map(date => {
-      const dayBlocks = getBlocksForDay(date.fullDate, date.dayOfWeek);
-      const mergedBlocks = mergeConsecutiveBlocks(dayBlocks);
-
-      // 빈 시간만 있는 날인지 확인
-      const hasOnlyEmptyTime = mergedBlocks.length === 1 && mergedBlocks[0].type === 'empty';
-
-      if (hasOnlyEmptyTime) {
-        // 빈 시간만 있는 날은 하나의 큰 블록으로 표시
-        const emptyBlock = mergedBlocks[0];
-        return [{
-          type: 'empty',
-          startTime: emptyBlock.startTime,
-          endTime: getEndTimeForBlock(emptyBlock),
-          duration: emptyBlock.duration,
-          data: emptyBlock,
-          isMerged: true,
-          isFullDay: true // 전체 시간대 표시 플래그
-        }];
-      }
-
-      // 일정이 있는 날은 기존 로직대로 처리
-      const displaySlots = [];
-      mergedBlocks.forEach(block => {
-        displaySlots.push({
-          type: block.type,
-          startTime: block.startTime,
-          endTime: getEndTimeForBlock(block),
-          duration: block.duration,
-          data: block,
-          isMerged: block.duration > 10,
-          isFullDay: false
-        });
-      });
-
-      displaySlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
-      return displaySlots;
+    // 각 날짜별로 병합된 블록 계산 - WeekView와 동일한 방식
+    const dayBlocks = weekDates.map(date => {
+      const blocks = getBlocksForDay(date.fullDate, date.dayOfWeek);
+      return mergeConsecutiveBlocks(blocks);
     });
+
+    const timeSlots = getCurrentTimeSlots();
+
+    // 시간 슬롯별 위치 계산을 위한 헬퍼 함수
+    const getTimeSlotIndex = (time) => {
+      return timeSlots.findIndex(slot => slot === time);
+    };
 
     return (
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
         <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 sticky top-0 z-10">
-              <tr>
-                <th className="p-3 text-left font-semibold text-gray-700 border-r border-gray-200 bg-gray-100">시간</th>
-                {weekDates.map((date, index) => (
-                  <th key={index} className="p-3 text-center font-semibold text-gray-700 border-r border-gray-200 last:border-r-0 min-w-[120px] bg-gray-100">
-                    {date.display}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {dayDisplaySlots.some(slots => slots.length > 0) ? (
-                (() => {
-                  const rows = [];
-                  const maxSlots = Math.max(...dayDisplaySlots.map(slots => slots.length), 1);
+          <div className="flex">
+            {/* 시간 컬럼은 전체 시간대 표시 */}
+            <div className="w-12 flex-shrink-0">
+              {timeSlots.map(time => (
+                <div
+                  key={time}
+                  className="h-4 px-1 text-center text-xs font-medium text-gray-600 border-b border-gray-200 flex items-center justify-center"
+                >
+                  {time}
+                </div>
+              ))}
+            </div>
 
-                  // 각 날짜별로 rowspan을 추적하기 위한 배열
-                  const dayRowSpans = weekDates.map((date, dayIndex) => {
-                    const daySlots = dayDisplaySlots[dayIndex];
-                    if (daySlots.length === 1 && daySlots[0].isFullDay) {
-                      return maxSlots; // 빈 시간만 있는 날은 전체 행에 걸쳐 표시
+            {/* 각 날짜별 독립적 컬럼 */}
+            {weekDates.slice(0, 7).map((dateInfo, dayIndex) => {
+              const blocks = dayBlocks[dayIndex];
+              const totalHeight = timeSlots.length * 16; // 전체 컬럼 높이 (h-4 = 16px)
+
+              return (
+                <div key={dayIndex} className="flex-1 border-l border-gray-200 relative" style={{ height: `${totalHeight}px` }}>
+                  {blocks.map((block, blockIndex) => {
+                    const date = dateInfo.fullDate;
+                    const blockHeight = block.duration * 1.6; // 10분 = 1.6px (16px/10)
+                    const startIndex = getTimeSlotIndex(block.startTime);
+                    const topPosition = startIndex * 16; // 각 시간 슬롯은 16px (h-4)
+
+                    let bgColor = 'bg-gray-100';
+                    let textColor = 'text-gray-500';
+                    let content = '빈 시간';
+
+                    if (block.type === 'schedule') {
+                      const priorityInfo = priorityConfig[block.priority] || priorityConfig[3];
+                      bgColor = priorityInfo.color;
+                      textColor = 'text-white';
+                      content = priorityInfo.label;
+                    } else if (block.type === 'exception') {
+                      const priorityInfo = priorityConfig[block.priority] || priorityConfig[3];
+                      bgColor = priorityInfo.color;
+                      textColor = 'text-white';
+                      content = block.title || '예외 일정';
+                    } else if (block.type === 'personal') {
+                      bgColor = 'bg-red-400';
+                      textColor = 'text-white';
+                      content = block.title || '개인 시간';
                     }
-                    return 1;
-                  });
 
-                  for (let slotIndex = 0; slotIndex < maxSlots; slotIndex++) {
-                    const row = (
-                      <tr key={slotIndex} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="p-3 text-sm font-medium text-gray-600 border-r border-gray-200 bg-gray-50 whitespace-nowrap">
-                          {(() => {
-                            // 시간 레이블을 표시할 슬롯 찾기
-                            const slotWithTime = dayDisplaySlots.find(slots => slots[slotIndex]);
-                            if (slotWithTime && slotWithTime[slotIndex]) {
-                              const slot = slotWithTime[slotIndex];
-                              return slot.isMerged ? `${slot.startTime}~${slot.endTime}` : slot.startTime;
-                            }
-                            return '';
-                          })()}
-                        </td>
-                        {weekDates.map((date, dayIndex) => {
-                          const daySlots = dayDisplaySlots[dayIndex];
+                    const actualEndTime = getEndTimeForBlock(block);
 
-                          // 빈 시간만 있는 날이고 첫 번째 행이 아니면 셀을 건너뜀 (rowspan으로 이미 처리됨)
-                          if (daySlots.length === 1 && daySlots[0].isFullDay && slotIndex > 0) {
-                            return null;
-                          }
-
-                          const slot = daySlots[slotIndex];
-                          const rowSpan = (daySlots.length === 1 && daySlots[0].isFullDay) ? maxSlots : 1;
-
-                          if (!slot) {
-                            return (
-                              <td key={dayIndex} className="p-3 border-r border-gray-200 last:border-r-0">
-                                <div className="text-sm text-gray-400 text-center">-</div>
-                              </td>
-                            );
-                          }
-
-                          let cellClass = 'p-3 border-r border-gray-200 last:border-r-0';
-                          let contentClass = 'text-sm font-medium text-center px-2 py-1 rounded';
-                          let content = '';
-                          let timeLabel = '';
-
-                          if (slot.isFullDay) {
-                            timeLabel = `${slot.startTime}~${slot.endTime}`;
-                          } else if (slot.isMerged) {
-                            timeLabel = `${slot.startTime}~${slot.endTime}`;
-                          } else {
-                            timeLabel = slot.startTime;
-                          }
-
-                          if (slot.type === 'schedule') {
-                            const priorityInfo = priorityConfig[slot.data.priority] || priorityConfig[3];
-                            contentClass += ` ${priorityInfo.color} text-white`;
-                            content = `${priorityInfo.label}`;
-                          } else if (slot.type === 'exception') {
-                            const priorityInfo = priorityConfig[slot.data.priority] || priorityConfig[3];
-                            contentClass += ` ${priorityInfo.color} text-white`;
-                            content = slot.data.title || '예외 일정';
-                          } else if (slot.type === 'personal') {
-                            contentClass += ' bg-red-400 text-white';
-                            content = slot.data.title || '개인 시간';
-                          } else {
-                            contentClass += ' bg-gray-100 text-gray-500';
-                            content = '빈 시간';
-                          }
-
-                          // 빈 시간이 전체 시간대를 차지하는 경우 더 큰 스타일 적용
-                          if (slot.isFullDay) {
-                            contentClass += ' min-h-[100px] flex items-center justify-center';
-                          }
-
-                          return (
-                            <td
-                              key={dayIndex}
-                              className={cellClass}
-                              rowSpan={rowSpan}
-                            >
-                              <div className={contentClass} title={`${content} (${timeLabel})`}>
-                                <div className="font-medium truncate">{content}</div>
-                                <div className="text-xs opacity-90 mt-1">{timeLabel}</div>
-                              </div>
-                            </td>
-                          );
-                        })}
-                      </tr>
+                    return (
+                      <div
+                        key={`${date.toISOString().split('T')[0]}-${block.startTime}-${blockIndex}`}
+                        className={`absolute left-0 right-0 border-b border-gray-200 flex items-center justify-center text-center px-0.5 ${bgColor} ${textColor}`}
+                        style={{
+                          height: `${blockHeight}px`,
+                          top: `${topPosition}px`
+                        }}
+                        title={`${content} (${block.startTime}~${actualEndTime})`}
+                      >
+                        <div className="text-xs leading-tight">
+                          <div>{content.length > 4 ? content.substring(0, 3) + '...' : content}</div>
+                          {blockHeight > 20 && <div className="text-xs leading-tight">{block.startTime}~{actualEndTime}</div>}
+                        </div>
+                      </div>
                     );
-                    rows.push(row);
-                  }
-
-                  return rows;
-                })()
-              ) : (
-                <tr>
-                  <td colSpan={8} className="p-8 text-center text-gray-500">
-                    <div className="text-lg mb-2">📅</div>
-                    <div>등록된 일정이 없습니다.</div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                  })}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
