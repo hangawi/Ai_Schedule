@@ -156,7 +156,13 @@ const RoomSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
       },
-      priority: Number
+      priority: Number,
+      response: {
+        type: String,
+        enum: ['pending', 'accept', 'reject'],
+        default: 'pending'
+      },
+      respondedAt: Date
     }],
     messages: [{
       from: {
@@ -167,6 +173,10 @@ const RoomSchema = new mongoose.Schema({
       timestamp: {
         type: Date,
         default: Date.now
+      },
+      isSystemMessage: {
+        type: Boolean,
+        default: false
       }
     }],
     status: {
