@@ -162,16 +162,42 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
   }, [newPersonalTime, personalTimes, setPersonalTimes, showAlert, editingId, onAutoSave]);
 
   const handleRemovePersonalTime = useCallback(async (id) => {
-    const updatedPersonalTimes = personalTimes.filter(pt => pt.id !== id);
+    console.log('🔍 [PersonalTimeManager] 개인시간 삭제 시도:', {
+      id,
+      currentCount: personalTimes.length,
+      personalTimesToDelete: personalTimes.find(pt => pt.id === id)
+    });
 
+    const updatedPersonalTimes = personalTimes.filter(pt => pt.id !== id);
+    console.log('🔍 [PersonalTimeManager] 삭제 후 개인시간 목록:', {
+      newCount: updatedPersonalTimes.length,
+      remainingItems: updatedPersonalTimes.map(pt => ({ id: pt.id, title: pt.title }))
+    });
+
+    // State를 즉시 업데이트
     setPersonalTimes(updatedPersonalTimes);
 
-    // 편집 모드가 아닐 때만 자동 저장 실행
-    if (onAutoSave && !isEditing) {
+    // 편집 모드가 아닐 때는 직접 저장 API 호출 (autoSave 대신)
+    if (!isEditing) {
       try {
-        await onAutoSave();
+        console.log('🔍 [PersonalTimeManager] 삭제 후 직접 저장 시작');
+
+        // 현재 ProfileTab 컴포넌트의 다른 데이터도 포함해서 저장해야 함
+        // autoSave를 호출하되, 약간의 지연을 둬서 state 업데이트가 완료되도록 함
+        setTimeout(async () => {
+          try {
+            await onAutoSave();
+            console.log('🔍 [PersonalTimeManager] 삭제 후 자동 저장 완료');
+          } catch (error) {
+            console.error('🔍 [PersonalTimeManager] 삭제 후 자동 저장 실패:', error);
+            // 저장 실패 시 상태 복원
+            setPersonalTimes(personalTimes);
+          }
+        }, 200); // 더 긴 지연시간
       } catch (error) {
-        // Personal delete autosave failed - silently handle error
+        console.error('🔍 [PersonalTimeManager] 삭제 후 저장 실패:', error);
+        // 에러 발생 시 상태 복원
+        setPersonalTimes(personalTimes);
       }
     }
 
@@ -191,7 +217,7 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
         isRecurring: true
       });
     }
-  }, [personalTimes, setPersonalTimes, editingId, onAutoSave]);
+  }, [personalTimes, setPersonalTimes, editingId, onAutoSave, isEditing]);
 
   const handleEditClick = (personalTime) => {
     setEditingId(personalTime.id);
@@ -210,12 +236,26 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
     });
   };
 
-  const formatDays = (days) => {
+  const formatDays = useCallback((personalTime) => {
+    // 특정 날짜의 개인시간인 경우
+    if (personalTime.isRecurring === false && personalTime.specificDate) {
+      const date = new Date(personalTime.specificDate);
+      const dayOfWeek = date.getDay();
+      const dayName = dayNames[dayOfWeek === 0 ? 7 : dayOfWeek];
+      const dateStr = date.toLocaleDateString('ko-KR', {
+        month: 'short',
+        day: 'numeric'
+      });
+      return `${dateStr} (${dayName})`;
+    }
+
+    // 반복되는 개인시간인 경우
+    const days = personalTime.days || [];
     if (days.length === 7) return '매일';
     if (days.length === 5 && days.every(d => d >= 1 && d <= 5)) return '평일';
     if (days.length === 2 && days.includes(6) && days.includes(7)) return '주말';
     return days.map(d => dayNames[d]).join(', ');
-  };
+  }, []);
 
   const renderPersonalTimeIcon = (type) => {
     const config = personalTimeTypes[type] || personalTimeTypes.custom;
@@ -262,7 +302,7 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
               <div className="ml-3">
                 <span className="font-medium text-gray-800">{personalTime.title}</span>
                 <div className="text-sm text-gray-600">
-                  {personalTime.startTime} - {personalTime.endTime} • {formatDays(personalTime.days)}
+                  {personalTime.startTime} - {personalTime.endTime} • {formatDays(personalTime)}
                 </div>
               </div>
             </div>

@@ -49,7 +49,11 @@ const ProfileTab = ({ onEditingChange }) => {
 
       // 내가 방장인 방 목록 가져오기
       const myRooms = await coordinationService.fetchMyRooms();
-      const ownerRooms = (myRooms || []).filter(room => room.isOwner);
+      console.log('🔍 ProfileTab - fetchMyRooms 결과:', myRooms);
+
+      // myRooms 구조: {owned: Array, joined: Array}
+      const ownedRooms = myRooms?.owned || [];
+      const ownerRooms = ownedRooms; // owned 배열이 이미 방장인 방들
 
       console.log(`🔍 방장인 방 개수: ${ownerRooms.length}`);
 
@@ -276,45 +280,102 @@ const ProfileTab = ({ onEditingChange }) => {
   // calendarUpdate 이벤트 수신하여 스케줄 새로고침
   useEffect(() => {
     const handleCalendarUpdate = async (event) => {
+      console.log('🔍 [ProfileTab] calendarUpdate 이벤트 수신:', {
+        isEditing,
+        eventType: event.detail?.type,
+        hasChatResponse: !!event.detail?.chatResponse,
+        eventDetail: event.detail
+      });
+
       if (!isEditing) {
         // 편집 모드가 아닐 때는 전체 새로고침
+        console.log('🔍 [ProfileTab] 편집 모드가 아님 - 전체 새로고침');
         fetchSchedule();
       } else {
         // 편집 모드일 때는 새로 추가된 항목만 처리
         if (event.detail && event.detail.type === 'add' && event.detail.chatResponse) {
+          console.log('🔍 [ProfileTab] 편집 모드에서 챗봇 이벤트 처리 시작');
           const { chatResponse } = event.detail;
 
-          // 챗봇에서 추가된 일정 정보를 10분 단위로 분할하여 scheduleExceptions에 추가
+          // 챗봇에서 추가된 일정 정보를 개인시간(personalTimes)에 추가
           if (chatResponse.startDateTime && chatResponse.endDateTime) {
             const startDateTime = new Date(chatResponse.startDateTime);
             const endDateTime = new Date(chatResponse.endDateTime);
-            const newExceptions = [];
 
-            // 10분 단위로 분할하여 예외 일정들 생성
-            for (let current = new Date(startDateTime); current < endDateTime; current.setMinutes(current.getMinutes() + 10)) {
-              const slotEndTime = new Date(current);
-              slotEndTime.setMinutes(slotEndTime.getMinutes() + 10);
+            // 로컬 날짜 정확히 가져오기 (UTC 시간대 문제 해결)
+            const localYear = startDateTime.getFullYear();
+            const localMonth = String(startDateTime.getMonth() + 1).padStart(2, '0');
+            const localDay = String(startDateTime.getDate()).padStart(2, '0');
+            const localDate = `${localYear}-${localMonth}-${localDay}`;
 
-              // 마지막 슬롯이 종료 시간을 넘지 않도록 조정
-              if (slotEndTime > endDateTime) {
-                slotEndTime.setTime(endDateTime.getTime());
-              }
+            // 개인시간으로 추가 (반복되지 않는 특정 날짜의 개인시간)
+            const newPersonalTime = {
+              id: `temp_${Date.now()}`, // PersonalTimeManager는 id 필드 사용
+              title: chatResponse.title || '새 개인시간',
+              type: 'custom', // 기본 타입 설정
+              startTime: startDateTime.toTimeString().slice(0, 5), // HH:MM 형식
+              endTime: endDateTime.toTimeString().slice(0, 5), // HH:MM 형식
+              days: [], // 특정 날짜이므로 빈 배열
+              specificDate: localDate, // 로컬 날짜 YYYY-MM-DD 형식
+              isRecurring: false, // 반복되지 않음
+              priority: chatResponse.priority || 3,
+              color: '#FF6B6B' // 개인시간 기본 색상
+            };
 
-              const newException = {
-                _id: `temp_${Date.now()}_${current.getTime()}`, // 임시 ID (각 슬롯마다 고유)
-                title: chatResponse.title || '새 일정',
-                startTime: current.toISOString(),
-                endTime: slotEndTime.toISOString(),
-                specificDate: startDateTime.toISOString().split('T')[0],
-                isHoliday: false,
-                isAllDay: chatResponse.isAllDay || false,
-                priority: chatResponse.priority || 3
-              };
+            console.log('🔍 [ProfileTab] 챗봇 날짜 변환 확인:', {
+              chatResponseStartDateTime: chatResponse.startDateTime,
+              startDateTime: startDateTime.toString(),
+              extractedLocalDate: localDate,
+              startTime: startDateTime.toTimeString().slice(0, 5),
+              endTime: endDateTime.toTimeString().slice(0, 5)
+            });
 
-              newExceptions.push(newException);
+            // State 업데이트 후 서버 저장을 분리하여 실행
+            const newPersonalTimes = [...personalTimes, newPersonalTime];
+            console.log('🔍 [ProfileTab] 챗봇에서 개인시간 추가:', newPersonalTime);
+            console.log('🔍 [ProfileTab] 업데이트된 개인시간 목록:', newPersonalTimes);
+
+            // State 먼저 업데이트
+            setPersonalTimes(newPersonalTimes);
+
+            // 편집 모드가 아닐 때만 서버에 즉시 저장 (State 업데이트와 분리)
+            if (!isEditing) {
+              // React가 state 업데이트를 처리할 시간을 주기 위해 약간의 지연
+              setTimeout(async () => {
+                try {
+                  const exceptionsToSave = scheduleExceptions.map(
+                    ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority }) =>
+                    ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority })
+                  );
+                  const personalTimesToSave = newPersonalTimes.map(
+                    ({ title, type, startTime, endTime, days, isRecurring, id, specificDate, color }) => {
+                      return { title, type, startTime, endTime, days, isRecurring, id, specificDate, color };
+                    }
+                  );
+
+                  console.log('🔍 [ProfileTab] 챗봇 개인시간 서버 저장 시작:', {
+                    personalTimesCount: personalTimesToSave.length,
+                    newPersonalTime,
+                    allPersonalTimes: personalTimesToSave
+                  });
+
+                  await userService.updateUserSchedule({
+                    defaultSchedule,
+                    scheduleExceptions: exceptionsToSave,
+                    personalTimes: personalTimesToSave
+                  });
+
+                  console.log('🔍 [ProfileTab] 챗봇 개인시간 서버 저장 완료');
+
+                  // 저장 완료 후 CalendarView 강제 리렌더링
+                  window.dispatchEvent(new Event('calendarUpdate'));
+                } catch (error) {
+                  console.error('🔍 [ProfileTab] 챗봇 개인시간 저장 실패:', error);
+                  // 저장 실패 시 해당 항목을 제거하여 UI와 서버 상태 일치시키기
+                  setPersonalTimes(prev => prev.filter(pt => pt.id !== newPersonalTime.id));
+                }
+              }, 200); // 200ms 후 저장 (React state 업데이트 대기)
             }
-
-            setScheduleExceptions(prev => [...prev, ...newExceptions]);
           }
         } else {
           // 이벤트 데이터가 없는 경우 기존 방식으로 폴백 (하지만 편집 모드에서는 아무것도 하지 않음)
@@ -349,12 +410,20 @@ const ProfileTab = ({ onEditingChange }) => {
       ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority })
     );
     const personalTimesToSave = personalTimes.map(
-      ({ title, type, startTime, endTime, days, isRecurring, id }) => {
-        return { title, type, startTime, endTime, days, isRecurring, id };
+      ({ title, type, startTime, endTime, days, isRecurring, id, specificDate, color }) => {
+        return { title, type, startTime, endTime, days, isRecurring, id, specificDate, color };
       }
     );
 
     try {
+        console.log('🔍 [ProfileTab] 저장하는 데이터:', {
+          defaultScheduleCount: defaultSchedule.length,
+          defaultScheduleSample: defaultSchedule.slice(0, 3),
+          exceptionsCount: exceptionsToSave.length,
+          personalTimesCount: personalTimesToSave.length,
+          personalTimesSample: personalTimesToSave.slice(0, 2)
+        });
+
         await userService.updateUserSchedule({
           defaultSchedule,
           scheduleExceptions: exceptionsToSave,
@@ -365,6 +434,13 @@ const ProfileTab = ({ onEditingChange }) => {
 
         // 저장 후 서버에서 최신 데이터 동기화
         const freshData = await userService.getUserSchedule();
+
+        console.log('🔍 [ProfileTab] 서버에서 받은 최신 데이터:', {
+          defaultScheduleCount: freshData.defaultSchedule?.length || 0,
+          exceptionsCount: freshData.scheduleExceptions?.length || 0,
+          personalTimesCount: freshData.personalTimes?.length || 0,
+          personalTimesSample: freshData.personalTimes?.slice(0, 2)
+        });
 
         // 서버 데이터로 무조건 업데이트 (길이 조건 제거)
         setDefaultSchedule(freshData.defaultSchedule || []);
@@ -397,8 +473,8 @@ const ProfileTab = ({ onEditingChange }) => {
         ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority })
       );
       const personalTimesToRestore = initialState.personalTimes.map(
-        ({ title, type, startTime, endTime, days, isRecurring, id }) => {
-          return { title, type, startTime, endTime, days, isRecurring, id };
+        ({ title, type, startTime, endTime, days, isRecurring, id, specificDate, color }) => {
+          return { title, type, startTime, endTime, days, isRecurring, id, specificDate, color };
         }
       );
 
@@ -434,6 +510,7 @@ const ProfileTab = ({ onEditingChange }) => {
   const autoSave = async () => {
     // 편집 모드이거나 방금 취소한 상태일 때는 자동 저장하지 않음
     if (isEditing || justCancelled) {
+      console.log('🔍 [ProfileTab] autoSave 건너뜀:', { isEditing, justCancelled });
       return;
     }
 
@@ -443,10 +520,17 @@ const ProfileTab = ({ onEditingChange }) => {
         ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority })
       );
       const personalTimesToSave = personalTimes.map(
-        ({ title, type, startTime, endTime, days, isRecurring, id }) => {
-          return { title, type, startTime, endTime, days, isRecurring, id };
+        ({ title, type, startTime, endTime, days, isRecurring, id, specificDate, color }) => {
+          return { title, type, startTime, endTime, days, isRecurring, id, specificDate, color };
         }
       );
+
+      console.log('🔍 [ProfileTab] autoSave 실행:', {
+        defaultScheduleCount: defaultSchedule.length,
+        exceptionsCount: exceptionsToSave.length,
+        personalTimesCount: personalTimesToSave.length,
+        personalTimesSample: personalTimesToSave.slice(0, 2)
+      });
 
       await userService.updateUserSchedule({
         defaultSchedule,
@@ -454,8 +538,10 @@ const ProfileTab = ({ onEditingChange }) => {
         personalTimes: personalTimesToSave
       });
 
+      console.log('🔍 [ProfileTab] autoSave 완료');
+
     } catch (err) {
-      // 에러 발생 시 무시 (편집 모드가 아닐 때만 호출되므로 사용자에게 알리지 않음)
+      console.error('🔍 [ProfileTab] autoSave 실패:', err);
     }
   };
 

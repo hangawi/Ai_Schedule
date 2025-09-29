@@ -92,7 +92,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   break;
                case 'local':
                   if (context.context === 'profile') {
-                     // 내 프로필 탭 - 현재 스케줄 가져와서 새 예외 추가
+                     // 내 프로필 탭 - 현재 스케줄 가져와서 새 개인시간 추가
                      const currentScheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
                         headers: { 'x-auth-token': token }
                      });
@@ -103,39 +103,31 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
 
                      const currentSchedule = await currentScheduleResponse.json();
 
-                     // 10분 단위로 분할하여 예외 일정들 생성
-                     const newExceptions = [];
+                     // 개인시간으로 추가 (특정 날짜)
                      const startDateTime = new Date(eventData.startDateTime);
                      const endDateTime = new Date(eventData.endDateTime);
 
-                     // 시작 시간부터 종료 시간까지 10분 단위로 분할
-                     for (let current = new Date(startDateTime); current < endDateTime; current.setMinutes(current.getMinutes() + 10)) {
-                        const slotEndTime = new Date(current);
-                        slotEndTime.setMinutes(slotEndTime.getMinutes() + 10);
+                     const specificDate = eventData.startDateTime.split('T')[0];
+                     const startTime = startDateTime.toTimeString().substring(0, 5); // HH:MM 형식
+                     const endTime = endDateTime.toTimeString().substring(0, 5); // HH:MM 형식
 
-                        // 마지막 슬롯이 종료 시간을 넘지 않도록 조정
-                        if (slotEndTime > endDateTime) {
-                           slotEndTime.setTime(endDateTime.getTime());
-                        }
-
-                        const newException = {
-                           title: eventData.title,
-                           startTime: current.toISOString(),
-                           endTime: slotEndTime.toISOString(),
-                           specificDate: eventData.startDateTime.split('T')[0],
-                           isHoliday: false,
-                           isAllDay: false,
-                           priority: 3
-                        };
-
-                        newExceptions.push(newException);
-                     }
+                     const newPersonalTime = {
+                        id: Date.now().toString() + Math.random(),
+                        title: eventData.title,
+                        type: 'custom',
+                        startTime: startTime,
+                        endTime: endTime,
+                        days: [], // 특정 날짜이므로 빈 배열
+                        isRecurring: false, // 특정 날짜 개인시간
+                        specificDate: specificDate,
+                        color: 'bg-gray-500'
+                     };
 
                      apiEndpoint = `${API_BASE_URL}/api/users/profile/schedule`;
                      requestBody = {
                         defaultSchedule: currentSchedule.defaultSchedule,
-                        scheduleExceptions: [...(currentSchedule.scheduleExceptions || []), ...newExceptions],
-                        personalTimes: currentSchedule.personalTimes
+                        scheduleExceptions: currentSchedule.scheduleExceptions || [],
+                        personalTimes: [...(currentSchedule.personalTimes || []), newPersonalTime]
                      };
                   } else {
                      // 나의 일정 탭 - 일반 로컬 DB 저장

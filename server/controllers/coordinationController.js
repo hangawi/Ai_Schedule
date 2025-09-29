@@ -681,8 +681,8 @@ exports.runAutoSchedule = async (req, res) => {
       console.log('자동 배정 요청 - 계산된 startDate:', startDate.toISOString());
 
       const room = await Room.findById(roomId)
-         .populate('owner', 'defaultSchedule scheduleExceptions')
-         .populate('members.user', 'defaultSchedule scheduleExceptions');
+         .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes priority')
+         .populate('members.user', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes priority');
 
       if (!room) {
          return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
@@ -712,161 +712,65 @@ exports.runAutoSchedule = async (req, res) => {
          return memberId !== ownerId;
       });
 
-      await room.populate('members.user', 'firstName lastName email defaultSchedule');
+      console.log('🔍 [개인시간표기반] 자동배정 시작 - 개인 시간표 기반 스케줄링');
+      console.log('🔍 [개인시간표기반] 방장 정보:', {
+         id: room.owner._id,
+         name: room.owner.firstName || room.owner.name,
+         defaultSchedule: room.owner.defaultSchedule?.length || 0,
+         personalTimes: room.owner.personalTimes?.length || 0
+      });
+      console.log('🔍 [개인시간표기반] 멤버 수:', membersOnly.length);
 
-      const User = require('../models/user');
-      let generatedTimeSlots = [];
-
-      for (const member of membersOnly) {
-        const userId = member.user._id ? member.user._id.toString() : member.user.toString();
-
-        const memberHasRoomSlots = room.timeSlots.some(slot => {
-          const slotUserId = slot.user._id || slot.user;
-          return slotUserId.toString() === userId;
-        });
-
-        if (!memberHasRoomSlots) {
-          const userData = await User.findById(userId).select('defaultSchedule');
-
-          if (userData && userData.defaultSchedule && userData.defaultSchedule.length > 0) {
-            const currentWeekDate = currentWeek ? new Date(currentWeek) : new Date();
-            const startOfWeek = new Date(currentWeekDate);
-            startOfWeek.setUTCDate(startOfWeek.getUTCDate() - startOfWeek.getUTCDay() + 1);
-
-            for (const schedule of userData.defaultSchedule) {
-              for (let weekOffset = 0; weekOffset < numWeeks; weekOffset++) {
-                const targetDate = new Date(startOfWeek);
-                targetDate.setUTCDate(startOfWeek.getUTCDate() + (schedule.dayOfWeek === 0 ? 6 : schedule.dayOfWeek - 1) + (weekOffset * 7));
-
-                if (schedule.dayOfWeek === 0 || schedule.dayOfWeek === 6) continue;
-
-                const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-
-                const newSlot = {
-                  user: userId,
-                  date: targetDate,
-                  startTime: schedule.startTime,
-                  endTime: schedule.endTime,
-                  day: dayNames[schedule.dayOfWeek],
-                  priority: schedule.priority || 3,
-                  subject: '선호 시간',
-                  status: 'confirmed'
-                };
-                generatedTimeSlots.push(newSlot);
-              }
-            }
-          }
-        }
-      }
-
-      const allTimeSlots = [...(room.timeSlots || []), ...generatedTimeSlots];
-
-      console.log('🔍 [자동배정] ===========================================');
-      console.log('🔍 [자동배정] room.timeSlots 수:', room.timeSlots?.length || 0);
-      console.log('🔍 [자동배정] generatedTimeSlots 수:', generatedTimeSlots.length);
-      console.log('🔍 [자동배정] 전체 allTimeSlots 수:', allTimeSlots.length);
-
-      // 사용자별 시간표 분석
-      const userSlotMap = {};
-      allTimeSlots.forEach(slot => {
-        const userId = slot.user._id || slot.user;
-        if (!userSlotMap[userId]) {
-          userSlotMap[userId] = [];
-        }
-        userSlotMap[userId].push({
-          date: slot.date.toISOString().split('T')[0],
-          startTime: slot.startTime,
-          endTime: slot.endTime
-        });
+      // 각 멤버의 개인 시간표 정보 로깅
+      membersOnly.forEach((member, index) => {
+         console.log(`🔍 [개인시간표기반] 멤버 ${index + 1}:`, {
+            id: member.user._id,
+            name: member.user.firstName || member.user.name,
+            priority: member.priority || member.user.priority || 3,
+            defaultSchedule: member.user.defaultSchedule?.length || 0,
+            personalTimes: member.user.personalTimes?.length || 0
+         });
       });
 
-      console.log('🔍 [자동배정] 사용자별 시간표:');
-      Object.keys(userSlotMap).forEach(userId => {
-        const member = room.members.find(m => (m.user._id || m.user).toString() === userId);
-        const userName = member?.user?.name || '알 수 없음';
-        console.log(`  - ${userName} (${userId}): ${userSlotMap[userId].length}개 슬롯`);
-        userSlotMap[userId].slice(0, 3).forEach(slot => {
-          console.log(`    ${slot.date} ${slot.startTime}-${slot.endTime}`);
-        });
-        if (userSlotMap[userId].length > 3) {
-          console.log(`    ... 총 ${userSlotMap[userId].length}개`);
-        }
-      });
-      console.log('🔍 [자동배정] ===========================================');
+      // 개인 시간표 기반 자동배정이므로 기존 시간표 분석 로직 제거
+      console.log('🔍 [개인시간표기반] 개인 시간표를 기반으로 자동배정 실행');
 
       const memberIds = membersOnly.map(m => {
         const memberId = m.user._id ? m.user._id.toString() : m.user.toString();
         return memberId;
       });
 
-      const membersWithTimeData = [...new Set(allTimeSlots.map(slot => {
-        const userId = slot.user._id || slot.user;
-        return userId.toString();
-      }))];
-
-      for (const memberId of memberIds) {
-        if (!membersWithTimeData.includes(memberId)) {
-          const userData = await User.findById(memberId).select('defaultSchedule');
-          if (userData && userData.defaultSchedule && userData.defaultSchedule.length > 0) {
-            membersWithTimeData.push(memberId);
-          }
+      // 개인 시간표가 있는지 확인
+      let membersWithDefaultSchedule = 0;
+      for (const member of membersOnly) {
+        if (member.user.defaultSchedule && member.user.defaultSchedule.length > 0) {
+          membersWithDefaultSchedule++;
         }
       }
 
-      const membersWithoutTimeData = memberIds.filter(id => !membersWithTimeData.includes(id));
+      console.log(`🔍 [개인시간표기반] ${membersWithDefaultSchedule}명/${membersOnly.length}명이 개인 시간표를 설정함`);
 
-      if (membersWithoutTimeData.length > 0) {
-        const membersWithoutDataInfo = [];
-        for (const missingMemberId of membersWithoutTimeData) {
-          const memberData = room.members.find(m => {
-            const memberId = m.user._id ? m.user._id.toString() : m.user.toString();
-            return memberId === missingMemberId;
-          });
-          if (memberData) {
-            const userName = memberData.user.name || `${memberData.user.firstName || ''} ${memberData.user.lastName || ''}`.trim() || '알 수 없음';
-            membersWithoutDataInfo.push(userName);
-          }
-        }
-
+      // 개인 시간표가 없는 멤버들 확인
+      if (membersWithDefaultSchedule === 0) {
         return res.status(400).json({
-          msg: `다음 멤버들이 시간표나 선호 시간을 설정하지 않았습니다: ${membersWithoutDataInfo.join(', ')}. 각 멤버는 내프로필에서 선호시간표를 설정하거나 방에서 직접 시간을 입력해야 합니다.`,
-          membersWithoutData: membersWithoutTimeData,
-          membersWithoutDataNames: membersWithoutDataInfo
+          msg: `모든 멤버가 개인 시간표를 설정하지 않았습니다. 각 멤버는 내프로필에서 선호시간표를 설정해야 합니다.`
         });
       }
 
-      const ownerBlockedTimes = [];
-
-      const ownerRoomSlots = allTimeSlots.filter(slot => {
-         const slotUserId = slot.user._id || slot.user;
-         const ownerId = room.owner._id || room.owner;
-         return slotUserId.toString() === ownerId.toString();
-      });
-
-      const ownerUser = await User.findById(room.owner._id || room.owner).select('defaultSchedule');
-
-      ownerRoomSlots.forEach(slot => {
-         ownerBlockedTimes.push({
-            day: slot.day,
-            startTime: slot.startTime,
-            endTime: slot.endTime,
-            reason: 'owner_schedule'
-         });
-      });
-
-      if (ownerUser && ownerUser.defaultSchedule && ownerUser.defaultSchedule.length > 0) {
-         const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-         ownerUser.defaultSchedule.forEach(schedule => {
-            if (schedule.dayOfWeek === 0 || schedule.dayOfWeek === 6) return;
-
-            ownerBlockedTimes.push({
-               day: dayNames[schedule.dayOfWeek],
-               startTime: schedule.startTime,
-               endTime: schedule.endTime,
-               reason: 'owner_default_schedule_blocked'
-            });
-         });
+      const membersWithoutDefaultSchedule = [];
+      for (const member of membersOnly) {
+        if (!member.user.defaultSchedule || member.user.defaultSchedule.length === 0) {
+          const userName = member.user.name || `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim() || '알 수 없음';
+          membersWithoutDefaultSchedule.push(userName);
+        }
       }
+
+      if (membersWithoutDefaultSchedule.length > 0) {
+        console.log(`⚠️ [경고] 다음 멤버들이 개인 시간표를 설정하지 않음: ${membersWithoutDefaultSchedule.join(', ')}`);
+      }
+
+      // 방장의 차단 시간은 개인 시간표에서 자동으로 처리되므로 별도 처리 불필요
+      const ownerBlockedTimes = [];
 
       const existingCarryOvers = [];
       for (const member of room.members) {
@@ -880,17 +784,18 @@ exports.runAutoSchedule = async (req, res) => {
         }
       }
 
-      console.log('자동 배정 요청 - 스케줄링 알고리즘에 전달할 옵션:', {
+      console.log('🔍 [개인시간표기반] 자동 배정 요청 - 스케줄링 알고리즘에 전달할 옵션:', {
         minHoursPerWeek,
         numWeeks,
         currentWeek,
-        allTimeSlotsCount: allTimeSlots.length
+        membersWithDefaultSchedule
       });
 
+      // 개인 시간표 기반 자동배정으로 변경
       const result = schedulingAlgorithm.runAutoSchedule(
          membersOnly,
          room.owner,
-         allTimeSlots,
+         [], // 기존 roomTimeSlots 대신 빈 배열 전달 (개인 시간표 기반으로 동작)
          {
             minHoursPerWeek,
             numWeeks,
@@ -1021,7 +926,10 @@ exports.runAutoSchedule = async (req, res) => {
         }
       }
 
+      // 이월시간 처리 개선
       if (result.carryOverAssignments && result.carryOverAssignments.length > 0) {
+         console.log(`[이월시간] ${result.carryOverAssignments.length}명의 멤버에게 이월시간 적용`);
+
          for (const carryOver of result.carryOverAssignments) {
             const memberIndex = room.members.findIndex(m =>
                m.user.toString() === carryOver.memberId
@@ -1029,19 +937,60 @@ exports.runAutoSchedule = async (req, res) => {
 
             if (memberIndex !== -1) {
                const member = room.members[memberIndex];
-               member.carryOver = carryOver.neededHours;
+               const previousCarryOver = member.carryOver || 0;
+               member.carryOver = (member.carryOver || 0) + carryOver.neededHours;
+
+               console.log(`[이월시간] 멤버 ${carryOver.memberId}: ${previousCarryOver}시간 → ${member.carryOver}시간 (추가: ${carryOver.neededHours}시간)`);
 
                if (carryOver.neededHours > 0) {
+                 // 이월 히스토리 업데이트
+                 if (!member.carryOverHistory) {
+                   member.carryOverHistory = [];
+                 }
+
                  member.carryOverHistory.push({
-                    week: carryOver.week,
+                    week: carryOver.week || startDate,
                     amount: carryOver.neededHours,
                     reason: 'unassigned_from_auto_schedule',
-                    timestamp: new Date()
+                    timestamp: new Date(),
+                    priority: carryOver.priority || 3
                  });
+
+                 // 2주 이상 연속 이월 체크
+                 const recentCarryOvers = member.carryOverHistory.filter(h => {
+                   const historyDate = new Date(h.week);
+                   const twoWeeksAgo = new Date(startDate);
+                   twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+                   return historyDate >= twoWeeksAgo && h.amount > 0;
+                 });
+
+                 if (recentCarryOvers.length >= 2) {
+                   console.log(`⚠️ [경고] 멤버 ${carryOver.memberId}의 시간이 2주 이상 연속 이월됨`);
+                   // 강제 협의 또는 관리자 개입 플래그 설정
+                   member.needsIntervention = true;
+                   member.interventionReason = 'consecutive_carryover';
+                 }
                }
             }
          }
       }
+
+      // 우선도에 따른 다음 주 우선 배정 정보 업데이트
+      Object.values(result.assignments).forEach(assignment => {
+        if (assignment.carryOver && assignment.carryOver > 0) {
+          const memberIndex = room.members.findIndex(m =>
+            m.user.toString() === assignment.memberId
+          );
+
+          if (memberIndex !== -1) {
+            const member = room.members[memberIndex];
+            // 다음 주 우선 배정을 위한 우선도 임시 상승
+            if (!member.tempPriorityBoost) {
+              member.tempPriorityBoost = assignment.carryOver; // 이월 시간만큼 우선도 부스트
+            }
+          }
+        }
+      });
 
       await room.save();
 

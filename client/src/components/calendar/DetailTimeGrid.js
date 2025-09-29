@@ -319,13 +319,27 @@ const DetailTimeGrid = ({
 
   const getPersonalTimeForSlot = (startTime) => {
     const dayOfWeek = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
+    const selectedDateStr = selectedDate.toISOString().split('T')[0];
     const [hour, minute] = startTime.split(':').map(Number);
     const slotMinutes = hour * 60 + minute;
 
-
     for (const pt of personalTimes) {
+      let shouldInclude = false;
 
-      if (!pt.days.includes(dayOfWeek)) {
+      // 반복되는 개인시간 체크
+      if (pt.isRecurring !== false && pt.days && pt.days.includes(dayOfWeek)) {
+        shouldInclude = true;
+      }
+
+      // 특정 날짜의 개인시간 체크
+      if (pt.isRecurring === false && pt.specificDate) {
+        const specificDateStr = new Date(pt.specificDate).toISOString().split('T')[0];
+        if (specificDateStr === selectedDateStr) {
+          shouldInclude = true;
+        }
+      }
+
+      if (!shouldInclude) {
         continue;
       }
 
@@ -404,67 +418,90 @@ const DetailTimeGrid = ({
   };
 
   const addQuickTimeSlot = (startHour, endHour, priority = 3) => {
-    if (readOnly) return;
+    if (readOnly || !setExceptions) return;
 
-    // 해당 시간대에 이미 예외가 있는지 확인
-    const hasExisting = hasExceptionInTimeRange(startHour, endHour);
+    // 해당 날짜 문자열 생성
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
 
-    if (hasExisting) {
-      // 이미 있으면 제거 (토글)
-      removeExceptionsInTimeRange(startHour, endHour);
-    } else {
-      // 없으면 추가
-      if (setExceptions) {
-        const exceptions_to_add = [];
+    console.log('🔍 [DetailTimeGrid] 빠른시간 추가:', { startHour, endHour, priority, dateStr });
 
-        for (let hour = startHour; hour < endHour; hour++) {
-          for (let minute = 0; minute < 60; minute += 10) {
-            const slotStartTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-            const endMinute = minute + 10;
-            const actualEndHour = endMinute >= 60 ? hour + 1 : hour;
-            const actualEndMinute = endMinute >= 60 ? 0 : endMinute;
-            const slotEndTime = `${String(actualEndHour).padStart(2, '0')}:${String(actualEndMinute).padStart(2, '0')}`;
+    // 해당 시간대에 이미 예외 일정이 있는지 확인
+    const existingExceptions = exceptions.filter(ex => {
+      if (!ex || !ex.specificDate || ex.specificDate !== dateStr) return false;
 
-            // 로컬 날짜로 정확하게 생성
-            const year = selectedDate.getFullYear();
-            const month = selectedDate.getMonth();
-            const day = selectedDate.getDate();
+      if (ex.startTime.includes('T')) {
+        const exStartTime = new Date(ex.startTime);
+        const exHour = exStartTime.getHours();
+        return exHour >= startHour && exHour < endHour;
+      } else {
+        const [exHour] = ex.startTime.split(':').map(Number);
+        return exHour >= startHour && exHour < endHour;
+      }
+    });
 
-            const startDateTime = new Date(year, month, day, hour, minute, 0);
-            const endDateTime = new Date(year, month, day, actualEndHour, actualEndMinute, 0);
+    if (existingExceptions.length > 0) {
+      // 이미 있으면 해당 시간대의 예외 일정 제거 (토글)
+      console.log('🔍 [DetailTimeGrid] 기존 예외 일정 제거:', existingExceptions.length);
+      const filteredExceptions = exceptions.filter(ex => {
+        if (!ex || !ex.specificDate || ex.specificDate !== dateStr) return true;
 
-            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-
-            const newException = {
-              _id: Date.now().toString() + Math.random(),
-              title: '일정',
-              startTime: startDateTime.toISOString(),
-              endTime: endDateTime.toISOString(),
-              priority: priority,
-              specificDate: dateStr
-            };
-
-            exceptions_to_add.push(newException);
-          }
+        let exHour;
+        if (ex.startTime.includes('T')) {
+          const exStartTime = new Date(ex.startTime);
+          exHour = exStartTime.getHours();
+        } else {
+          [exHour] = ex.startTime.split(':').map(Number);
         }
 
-        setExceptions([...exceptions, ...exceptions_to_add]);
-        setHasUnsavedChanges(true);
+        return !(exHour >= startHour && exHour < endHour);
+      });
+      setExceptions(filteredExceptions);
+    } else {
+      // 없으면 해당 날짜에만 예외 일정 추가
+      const exceptions_to_add = [];
 
-        // 복사 옵션이 선택된 경우에만 추가 날짜에 적용
-        if (copyOptions.copyType !== 'none') {
-          exceptions_to_add.forEach(exc => applyCopyOptions(exc));
+      for (let hour = startHour; hour < endHour; hour++) {
+        for (let minute = 0; minute < 60; minute += 10) {
+          const endMinute = minute + 10;
+          const actualEndHour = endMinute >= 60 ? hour + 1 : hour;
+          const actualEndMinute = endMinute >= 60 ? 0 : endMinute;
+
+          // 정확한 로컬 날짜/시간으로 Date 객체 생성
+          const startDateTime = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), hour, minute, 0);
+          const endDateTime = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), actualEndHour, actualEndMinute, 0);
+
+          const newException = {
+            _id: `quick_${Date.now()}_${hour}_${minute}`,
+            title: '일정',
+            startTime: startDateTime.toISOString(),
+            endTime: endDateTime.toISOString(),
+            priority: priority,
+            specificDate: dateStr,
+            isHoliday: false,
+            isAllDay: false
+          };
+
+          exceptions_to_add.push(newException);
         }
       }
+
+      console.log('🔍 [DetailTimeGrid] 새 예외 일정 추가:', exceptions_to_add.length);
+      setExceptions([...exceptions, ...exceptions_to_add]);
     }
 
+    setHasUnsavedChanges(true);
+
     // 편집 모드가 아닐 때만 자동 저장 실행
-    if (onSave && readOnly) {
+    if (onSave && !readOnly) {
       setTimeout(async () => {
         try {
           await onSave();
           setHasUnsavedChanges(false);
         } catch (error) {
+          console.error('🔍 [DetailTimeGrid] 빠른시간 자동저장 실패:', error);
         }
       }, 200);
     }
@@ -970,9 +1007,25 @@ const DetailTimeGrid = ({
 
     // 개인 시간도 추가 (자정 넘어가는 시간 처리)
     const dayOfWeekPersonal = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
+    const selectedDateStr = selectedDate.toISOString().split('T')[0];
 
     personalTimes.forEach(pt => {
-      if (pt.days && pt.days.includes(dayOfWeekPersonal)) {
+      let shouldInclude = false;
+
+      // 반복되는 개인시간 체크
+      if (pt.isRecurring !== false && pt.days && pt.days.includes(dayOfWeekPersonal)) {
+        shouldInclude = true;
+      }
+
+      // 특정 날짜의 개인시간 체크
+      if (pt.isRecurring === false && pt.specificDate) {
+        const specificDateStr = new Date(pt.specificDate).toISOString().split('T')[0];
+        if (specificDateStr === selectedDateStr) {
+          shouldInclude = true;
+        }
+      }
+
+      if (shouldInclude) {
         const [startHour, startMin] = pt.startTime.split(':').map(Number);
         const [endHour, endMin] = pt.endTime.split(':').map(Number);
         const startMinutes = startHour * 60 + startMin;
