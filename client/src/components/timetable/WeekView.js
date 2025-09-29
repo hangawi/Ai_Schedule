@@ -75,8 +75,9 @@ const WeekView = ({
       };
     }
 
-    // personalTimes 확인 (반복 개인시간)
+    // personalTimes 확인 (반복 개인시간 + 특정 날짜 개인시간)
     const personalSlot = ownerOriginalSchedule.personalTimes?.find(p => {
+      // 반복되는 개인시간 처리
       const personalDays = p.days || [];
       if (p.isRecurring !== false && personalDays.length > 0) {
         const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
@@ -84,7 +85,7 @@ const WeekView = ({
           const startMinutes = timeToMinutes(p.startTime);
           const endMinutes = timeToMinutes(p.endTime);
 
-          console.log('🔍 personalTime 체크:', {
+          console.log('🔍 personalTime 체크 (반복):', {
             personal: p,
             dayOfWeek,
             convertedDays,
@@ -104,6 +105,31 @@ const WeekView = ({
           }
         }
       }
+
+      // 특정 날짜 개인시간 처리 (챗봇에서 추가한 경우)
+      if (p.isRecurring === false && p.specificDate) {
+        const specificDate = new Date(p.specificDate);
+        const currentDate = new Date(dateStr);
+
+        // 날짜가 일치하는지 확인
+        if (specificDate.toDateString() === currentDate.toDateString()) {
+          const startMinutes = timeToMinutes(p.startTime);
+          const endMinutes = timeToMinutes(p.endTime);
+
+          console.log('🔍 personalTime 체크 (특정날짜):', {
+            personal: p,
+            specificDate: p.specificDate,
+            dateStr,
+            startMinutes,
+            endMinutes,
+            timeMinutes,
+            isMatch: timeMinutes >= startMinutes && timeMinutes < endMinutes
+          });
+
+          return timeMinutes >= startMinutes && timeMinutes < endMinutes;
+        }
+      }
+
       return false;
     });
 

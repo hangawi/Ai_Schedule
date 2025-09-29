@@ -123,8 +123,21 @@ const CalendarView = ({
 
   const hasPersonalTimeForDate = (date) => {
     const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay();
+    const dateStr = date.toISOString().split('T')[0];
+
     return personalTimes.some(pt => {
-      return pt.days && pt.days.includes(dayOfWeek);
+      // 반복되는 개인시간 체크
+      if (pt.isRecurring !== false && pt.days && pt.days.includes(dayOfWeek)) {
+        return true;
+      }
+
+      // 특정 날짜의 개인시간 체크
+      if (pt.isRecurring === false && pt.specificDate) {
+        const specificDateStr = new Date(pt.specificDate).toISOString().split('T')[0];
+        return specificDateStr === dateStr;
+      }
+
+      return false;
     });
   };
 

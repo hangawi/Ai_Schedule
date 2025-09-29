@@ -92,6 +92,11 @@ exports.updateUserSchedule = async (req, res) => {
 
     // Explicitly rebuild the personalTimes array
     if (personalTimes) {
+        console.log('🔍 [userController] personalTimes 저장 시작:', {
+            count: personalTimes.length,
+            sample: personalTimes.slice(0, 2)
+        });
+
         user.personalTimes = personalTimes.map(pt => ({
             id: pt.id, // ID 필드 추가
             title: pt.title,
@@ -99,8 +104,15 @@ exports.updateUserSchedule = async (req, res) => {
             startTime: pt.startTime,
             endTime: pt.endTime,
             days: pt.days,
-            isRecurring: pt.isRecurring || true
+            isRecurring: pt.isRecurring !== undefined ? pt.isRecurring : true,
+            specificDate: pt.specificDate, // 중요: specificDate 필드 추가
+            color: pt.color // 중요: color 필드 추가
         }));
+
+        console.log('🔍 [userController] personalTimes 변환 완료:', {
+            count: user.personalTimes.length,
+            sample: user.personalTimes.slice(0, 2)
+        });
     } else {
         user.personalTimes = [];
     }

@@ -100,10 +100,6 @@ class SchedulingAlgorithm {
       throw new Error('Invalid owner data provided to scheduling algorithm');
     }
 
-    if (!roomTimeSlots || !Array.isArray(roomTimeSlots)) {
-      throw new Error('Invalid timeSlots data provided to scheduling algorithm');
-    }
-
     const { minHoursPerWeek = 3, numWeeks = 2, currentWeek, ownerPreferences = {}, roomSettings = {} } = options;
 
     console.log('스케줄링 알고리즘 - 받은 options:', { minHoursPerWeek, numWeeks, currentWeek, hasOwnerPreferences: !!ownerPreferences });
@@ -135,7 +131,8 @@ class SchedulingAlgorithm {
     const ownerId = owner._id.toString();
     const nonOwnerMembers = members.filter(m => m.user._id.toString() !== ownerId);
 
-    const timetable = this._createTimetable(roomTimeSlots, startDate, numWeeks, roomSettings, nonOwnerMembers);
+    // 개인 시간표 기반으로 타임테이블 생성 (기존 roomTimeSlots 대신 개인 시간표 사용)
+    const timetable = this._createTimetableFromPersonalSchedules(members, owner, startDate, numWeeks, roomSettings);
 
     let assignments = this._initializeMemberAssignments(nonOwnerMembers);
 
@@ -301,6 +298,155 @@ class SchedulingAlgorithm {
 
     console.log(`[협의] 총 ${conflicts.length}개 실제 충돌 감지`);
     return conflicts;
+  }
+
+  _createTimetableFromPersonalSchedules(members, owner, startDate, numWeeks, roomSettings = {}) {
+    const timetable = {};
+
+    // Extract schedule start and end hours from room settings
+    const getHourFromSettings = (setting, defaultValue) => {
+      if (!setting) return parseInt(defaultValue, 10);
+      if (typeof setting === 'string') return parseInt(String(setting).split(':')[0], 10);
+      if (typeof setting === 'number') return setting;
+      return parseInt(defaultValue, 10);
+    };
+
+    const scheduleStartHour = getHourFromSettings(roomSettings.scheduleStartTime, '9');
+    const scheduleEndHour = getHourFromSettings(roomSettings.scheduleEndTime, '18');
+
+    console.log(`[개인시간표] 개인 시간표 기반 타임테이블 생성 시작 (${scheduleStartHour}:00-${scheduleEndHour}:00)`);
+
+    // Calculate the end date of the scheduling window
+    const endDate = new Date(startDate);
+    endDate.setUTCDate(startDate.getUTCDate() + (numWeeks * 7));
+
+    // 각 멤버의 개인 시간표(defaultSchedule)를 기반으로 타임테이블 생성
+    const allMembers = [...members, { user: owner, priority: 5, isOwner: true }]; // 방장도 포함
+
+    allMembers.forEach(member => {
+      const user = member.user;
+      const userId = user._id.toString();
+      const priority = this.getMemberPriority(member);
+      const isOwner = member.isOwner || false;
+
+      console.log(`[개인시간표] 처리 중: ${user.firstName || user.name || userId}, 우선순위: ${priority}, 방장: ${isOwner}`);
+
+      // 개인 시간표(defaultSchedule) 처리
+      if (user.defaultSchedule && Array.isArray(user.defaultSchedule)) {
+        console.log(`[개인시간표] ${userId}의 기본 시간표: ${user.defaultSchedule.length}개 항목`);
+
+        user.defaultSchedule.forEach(schedule => {
+          const dayOfWeek = schedule.dayOfWeek; // 0=일요일, 1=월요일, ..., 6=토요일
+          const startTime = schedule.startTime;
+          const endTime = schedule.endTime;
+
+          // 월-금만 처리 (주말 제외)
+          if (dayOfWeek === 0 || dayOfWeek === 6) {
+            return;
+          }
+
+          console.log(`[개인시간표] ${userId} - 요일: ${dayOfWeek}, 시간: ${startTime}-${endTime}`);
+
+          // 스케줄링 기간 내의 모든 해당 요일에 대해 시간대 생성
+          const currentDate = new Date(startDate);
+          while (currentDate < endDate) {
+            if (currentDate.getDay() === dayOfWeek) {
+              // 해당 요일의 시간대별로 10분 단위 슬롯 생성
+              const slots = this._generateTimeSlots(startTime, endTime);
+
+              slots.forEach(slotTime => {
+                const dateKey = currentDate.toISOString().split('T')[0];
+                const key = `${dateKey}-${slotTime}`;
+
+                // 해당 시간대 슬롯이 아직 없다면 생성
+                if (!timetable[key]) {
+                  const oneIndexedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
+
+                  timetable[key] = {
+                    assignedTo: null,
+                    available: [],
+                    date: new Date(currentDate),
+                    dayOfWeek: oneIndexedDayOfWeek,
+                  };
+                }
+
+                // 중복 추가 방지
+                const existingAvailability = timetable[key].available.find(a => a.memberId === userId);
+                if (!existingAvailability) {
+                  timetable[key].available.push({
+                    memberId: userId,
+                    priority: priority,
+                    isOwner: isOwner
+                  });
+                }
+              });
+            }
+            currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+          }
+        });
+      } else {
+        console.log(`[개인시간표] ${userId}의 기본 시간표가 없음`);
+      }
+
+      // 개인시간(personalTimes) 처리 - 이 시간대는 제외해야 함
+      if (user.personalTimes && Array.isArray(user.personalTimes)) {
+        console.log(`[개인시간표] ${userId}의 개인시간: ${user.personalTimes.length}개 항목`);
+
+        user.personalTimes.forEach(personalTime => {
+          if (personalTime.isRecurring !== false && personalTime.days && personalTime.days.length > 0) {
+            personalTime.days.forEach(dayOfWeek => {
+              const jsDay = dayOfWeek === 7 ? 0 : dayOfWeek; // 7을 0(일요일)로 변환
+
+              // 스케줄링 기간 내의 모든 해당 요일에서 개인시간 제거
+              const currentDate = new Date(startDate);
+              while (currentDate < endDate) {
+                if (currentDate.getDay() === jsDay) {
+                  const slots = this._generateTimeSlots(personalTime.startTime, personalTime.endTime);
+
+                  slots.forEach(slotTime => {
+                    const dateKey = currentDate.toISOString().split('T')[0];
+                    const key = `${dateKey}-${slotTime}`;
+
+                    // 해당 시간대에서 이 사용자를 제거
+                    if (timetable[key]) {
+                      timetable[key].available = timetable[key].available.filter(a => a.memberId !== userId);
+                      // 아무도 사용할 수 없는 시간대가 되면 삭제
+                      if (timetable[key].available.length === 0) {
+                        delete timetable[key];
+                      }
+                    }
+                  });
+                }
+                currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+              }
+            });
+          }
+        });
+      }
+    });
+
+    console.log(`[개인시간표] 총 ${Object.keys(timetable).length}개 시간대 생성 (개인 시간표 기준)`);
+
+    return timetable;
+  }
+
+  _generateTimeSlots(startTime, endTime) {
+    const slots = [];
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
+
+    let currentTime = startHour * 60 + startMin; // 분으로 변환
+    const endTimeInMinutes = endHour * 60 + endMin;
+
+    while (currentTime < endTimeInMinutes) {
+      const hour = Math.floor(currentTime / 60);
+      const minute = currentTime % 60;
+      const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+      slots.push(timeStr);
+      currentTime += 10; // 10분 단위
+    }
+
+    return slots;
   }
 
   _createTimetable(roomTimeSlots, startDate, numWeeks, roomSettings = {}, members = []) {
@@ -753,25 +899,21 @@ class SchedulingAlgorithm {
   _carryOverAssignments(timetable, assignments, minSlotsPerWeek) {
     const membersNeedingHours = Object.keys(assignments).filter(id => assignments[id].assignedHours < minSlotsPerWeek);
 
+    console.log(`[이월처리] ${membersNeedingHours.length}명의 멤버가 추가 시간 필요`);
+
     for (const memberId of membersNeedingHours) {
       let needed = minSlotsPerWeek - assignments[memberId].assignedHours;
-      
-      const availableSlotsForMember = Object.keys(timetable)
-        .filter(key => {
-          const slot = timetable[key];
-          return !slot.assignedTo && slot.available.some(a => a.memberId === memberId && !a.isOwner);
-        })
-        .sort((keyA, keyB) => {
-          const slotA = timetable[keyA];
-          const slotB = timetable[keyB];
-          return slotA.available.filter(a => !a.isOwner).length - slotB.available.filter(a => !a.isOwner).length;
-        });
+      const neededHours = needed / 6; // 시간으로 변환
 
-      for (const key of availableSlotsForMember) {
-        if (needed <= 0) break;
-        this._assignSlot(timetable, assignments, key, memberId);
-        needed -= 1;
+      console.log(`[이월처리] 멤버 ${memberId}: ${neededHours}시간 부족, 다음 주로 이월 예정`);
+
+      // 이월 정보를 assignments에 추가 (실제 할당은 하지 않고 이월 정보만 기록)
+      if (!assignments[memberId].carryOver) {
+        assignments[memberId].carryOver = 0;
       }
+      assignments[memberId].carryOver += neededHours;
+
+      console.log(`[이월처리] 멤버 ${memberId}의 총 이월시간: ${assignments[memberId].carryOver}시간`);
     }
   }
 
