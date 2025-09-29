@@ -174,38 +174,10 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
       remainingItems: updatedPersonalTimes.map(pt => ({ id: pt.id, title: pt.title }))
     });
 
-    // State를 즉시 업데이트
+    // State를 즉시 업데이트 - 이것이 핵심! 하나만 삭제되어야 함
     setPersonalTimes(updatedPersonalTimes);
 
-    // 편집 모드가 아닐 때는 직접 저장 API 호출 (autoSave 대신)
-    if (!isEditing) {
-      try {
-        console.log('🔍 [PersonalTimeManager] 삭제 후 직접 저장 시작');
-
-        // 현재 ProfileTab 컴포넌트의 다른 데이터도 포함해서 저장해야 함
-        // autoSave를 호출하되, 약간의 지연을 둬서 state 업데이트가 완료되도록 함
-        setTimeout(async () => {
-          try {
-            await onAutoSave();
-            console.log('🔍 [PersonalTimeManager] 삭제 후 자동 저장 완료');
-          } catch (error) {
-            console.error('🔍 [PersonalTimeManager] 삭제 후 자동 저장 실패:', error);
-            // 저장 실패 시 상태 복원
-            setPersonalTimes(personalTimes);
-          }
-        }, 200); // 더 긴 지연시간
-      } catch (error) {
-        console.error('🔍 [PersonalTimeManager] 삭제 후 저장 실패:', error);
-        // 에러 발생 시 상태 복원
-        setPersonalTimes(personalTimes);
-      }
-    }
-
-    // 개인시간 삭제 후 달력 업데이트
-    window.dispatchEvent(new CustomEvent('calendarUpdate', {
-      detail: { type: 'personalTime', action: 'remove', id: id }
-    }));
-
+    // 편집 중인 항목이 삭제된 경우 편집 상태 초기화
     if (id === editingId) {
       setEditingId(null);
       setNewPersonalTime({
@@ -217,7 +189,35 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
         isRecurring: true
       });
     }
-  }, [personalTimes, setPersonalTimes, editingId, onAutoSave, isEditing]);
+
+    // 편집 모드가 아닐 때만 자동 저장
+    if (!isEditing && onAutoSave) {
+      try {
+        console.log('🔍 [PersonalTimeManager] 삭제 후 자동 저장 시작');
+
+        // React state 업데이트가 완료될 때까지 대기
+        setTimeout(async () => {
+          try {
+            await onAutoSave();
+            console.log('🔍 [PersonalTimeManager] 삭제 후 자동 저장 완료');
+          } catch (error) {
+            console.error('🔍 [PersonalTimeManager] 삭제 후 자동 저장 실패:', error);
+            // 저장 실패 시 상태 복원하지 않음 (UI 일관성 유지)
+            showAlert('저장에 실패했습니다. 다시 시도해주세요.', '오류');
+          }
+        }, 100);
+      } catch (error) {
+        console.error('🔍 [PersonalTimeManager] 삭제 후 저장 실패:', error);
+      }
+    }
+
+    // 개인시간 삭제 후 달력 업데이트
+    window.dispatchEvent(new CustomEvent('calendarUpdate', {
+      detail: { type: 'personalTime', action: 'remove', id: id }
+    }));
+
+    showAlert('개인 시간이 삭제되었습니다.', '삭제 완료');
+  }, [personalTimes, setPersonalTimes, editingId, onAutoSave, isEditing, showAlert]);
 
   const handleEditClick = (personalTime) => {
     setEditingId(personalTime.id);
@@ -239,7 +239,10 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
   const formatDays = useCallback((personalTime) => {
     // 특정 날짜의 개인시간인 경우
     if (personalTime.isRecurring === false && personalTime.specificDate) {
-      const date = new Date(personalTime.specificDate);
+      // YYYY-MM-DD 형식의 날짜를 정확히 파싱 (UTC 시간대 문제 해결)
+      const [year, month, day] = personalTime.specificDate.split('-').map(Number);
+      const date = new Date(year, month - 1, day); // 로컬 시간대로 생성
+
       const dayOfWeek = date.getDay();
       const dayName = dayNames[dayOfWeek === 0 ? 7 : dayOfWeek];
       const dateStr = date.toLocaleDateString('ko-KR', {

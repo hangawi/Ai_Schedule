@@ -204,11 +204,12 @@ const UserSchema = new mongoose.Schema({
     },
     days: [{
       type: Number,
-      required: true,
       min: 1,
       max: 7
     }], // 1: 월, 2: 화, ..., 7: 일
-    isRecurring: { type: Boolean, default: true }
+    isRecurring: { type: Boolean, default: true },
+    specificDate: { type: String }, // YYYY-MM-DD 형식의 특정 날짜 (반복되지 않는 개인시간용)
+    color: { type: String } // 색상 정보
   }],
 }, {
   // 스키마 옵션

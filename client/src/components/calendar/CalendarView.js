@@ -63,6 +63,8 @@ const CalendarView = ({
       const isToday = date.toDateString() === new Date().toDateString();
       const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
 
+      const hasPersonalTime = hasPersonalTimeForDate(date);
+
       dates.push({
         date: new Date(date),
         day: date.getDate(),
@@ -71,10 +73,21 @@ const CalendarView = ({
         isSelected,
         hasSchedule: hasScheduleForDate(date),
         hasException: hasExceptionForDate(date),
-        hasPersonalTime: hasPersonalTimeForDate(date),
+        hasPersonalTime: hasPersonalTime,
         hasBlockedTime: hasBlockedTimeForDate(date),
         hasHoliday: hasHolidayForDate(date)
       });
+
+      // 2025-10-01에 개인시간이 있는지 디버깅
+      if (date.getFullYear() === 2025 && date.getMonth() === 9 && date.getDate() === 1) {
+        console.log('🔍 [CalendarView] 2025-10-01 달력 생성:', {
+          date: date.toString(),
+          dayOfWeek: date.getDay(),
+          hasPersonalTime: hasPersonalTime,
+          isCurrentMonth: isCurrentMonth,
+          arrayIndex: i
+        });
+      }
     }
 
     setCalendarDates(dates);
@@ -122,8 +135,14 @@ const CalendarView = ({
   };
 
   const hasPersonalTimeForDate = (date) => {
+    // JavaScript getDay(): 0=일요일, 1=월요일, ..., 6=토요일
+    // personalTimes.days: 1=월요일, 2=화요일, ..., 7=일요일
     const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay();
-    const dateStr = date.toISOString().split('T')[0];
+    // 로컬 날짜를 YYYY-MM-DD 형식으로 정확히 변환 (UTC 시간대 문제 방지)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
 
     return personalTimes.some(pt => {
       // 반복되는 개인시간 체크
@@ -133,8 +152,18 @@ const CalendarView = ({
 
       // 특정 날짜의 개인시간 체크
       if (pt.isRecurring === false && pt.specificDate) {
-        const specificDateStr = new Date(pt.specificDate).toISOString().split('T')[0];
-        return specificDateStr === dateStr;
+        // YYYY-MM-DD 형식의 문자열을 직접 비교 (시간대 문제 방지)
+        const isMatch = pt.specificDate === dateStr;
+        if (isMatch) {
+          console.log('🔍 [CalendarView] 개인시간 날짜 매치:', {
+            ptSpecificDate: pt.specificDate,
+            dateStr: dateStr,
+            dateObj: date.toString(),
+            dayOfWeek: dayOfWeek,
+            ptTitle: pt.title
+          });
+        }
+        return isMatch;
       }
 
       return false;

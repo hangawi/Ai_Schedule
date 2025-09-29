@@ -39,7 +39,10 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
          const response = await result.response;
          const text = response.text();
          const chatResponse = parseAIResponse(text);
-         
+
+         console.log('🔍 [useChat] AI 원본 응답:', text);
+         console.log('🔍 [useChat] 파싱된 chatResponse:', chatResponse);
+
          // 잘못된 JSON 형식 감지 및 수정
          if (!chatResponse.intent && (chatResponse.date || chatResponse.deleted)) {
             return { success: false, message: 'AI 응답 형식이 올바르지 않습니다. 다시 시도해주세요.' };
@@ -103,13 +106,29 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
 
                      const currentSchedule = await currentScheduleResponse.json();
 
-                     // 개인시간으로 추가 (특정 날짜)
+                     // 개인시간으로 추가 (특정 날짜) - 한국 시간대 기준으로 정확히 처리
                      const startDateTime = new Date(eventData.startDateTime);
                      const endDateTime = new Date(eventData.endDateTime);
 
-                     const specificDate = eventData.startDateTime.split('T')[0];
-                     const startTime = startDateTime.toTimeString().substring(0, 5); // HH:MM 형식
-                     const endTime = endDateTime.toTimeString().substring(0, 5); // HH:MM 형식
+                     // ISO 문자열에서 직접 날짜/시간 추출 (더 안전한 방법)
+                     // chatResponse.startDateTime이 이미 한국 시간대(+09:00)로 되어 있어야 함
+                     const startDateTimeStr = eventData.startDateTime; // 예: "2025-09-30T16:00:00+09:00"
+                     const endDateTimeStr = eventData.endDateTime;     // 예: "2025-09-30T17:00:00+09:00"
+
+                     // ISO 문자열에서 날짜 부분만 추출 (YYYY-MM-DD)
+                     const specificDate = startDateTimeStr.split('T')[0];
+
+                     // ISO 문자열에서 시간 부분만 추출 (HH:MM)
+                     const startTime = startDateTimeStr.split('T')[1].substring(0, 5);
+                     const endTime = endDateTimeStr.split('T')[1].substring(0, 5);
+
+                     console.log('🔍 [useChat] 날짜/시간 추출 결과:', {
+                        originalStartDateTime: eventData.startDateTime,
+                        originalEndDateTime: eventData.endDateTime,
+                        extractedDate: specificDate,
+                        extractedStartTime: startTime,
+                        extractedEndTime: endTime
+                     });
 
                      const newPersonalTime = {
                         id: Date.now().toString() + Math.random(),
