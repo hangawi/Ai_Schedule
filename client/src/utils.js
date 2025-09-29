@@ -19,9 +19,10 @@ export const translateEnglishDays = (text) => {
    return translatedText;
 };
 
-// 날짜 유틸리티 함수들
+// 날짜 유틸리티 함수들 - 이미 한국 시간으로 변환된 Date 객체 처리
 const formatDate = (date, format = 'YYYY-MM-DD') => {
-   const d = new Date(date);
+   // 이미 한국 시간대로 변환된 Date 객체를 그대로 사용
+   const d = date;
    const year = d.getFullYear();
    const month = String(d.getMonth() + 1).padStart(2, '0');
    const day = String(d.getDate()).padStart(2, '0');
@@ -93,7 +94,15 @@ export const speak = text => {
 
 // 🧠 AI 프롬프트 생성
 export const generateAIPrompt = (command, context = {}) => {
+   // 현재 로컬 시간을 그대로 사용 (이미 시스템이 한국 시간대이므로)
    const now = new Date();
+
+   console.log('🔍 [generateAIPrompt] 현재 시간 정보:', {
+      localNow: now.toString(),
+      formatToday: formatDate(now),
+      formatTomorrow: formatDate(addDays(now, 1)),
+      todayDayOfWeek: now.getDay() // 0=일요일, 1=월요일, 2=화요일...
+   });
 
    // 탭별 컨텍스트 정보 추가
    let contextInfo = '';
@@ -166,6 +175,17 @@ export const generateAIPrompt = (command, context = {}) => {
       `- 여행/나들이: 4-8시간`,
       `- 프로젝트/작업: 2-4시간`,
       `- 시간 지정 없으면 기본 1시간`,
+      ``,
+      `**매우 중요: 정확한 날짜 계산!**`,
+      `**현재 한국 시간: ${now.toString()}**`,
+      `**오늘: ${formatDate(now, 'YYYY-MM-DD dddd')} (${formatDate(now)})**`,
+      `**내일: ${formatDate(addDays(now, 1), 'YYYY-MM-DD dddd')} (${formatDate(addDays(now, 1))})**`,
+      `**모레: ${formatDate(addDays(now, 2), 'YYYY-MM-DD dddd')} (${formatDate(addDays(now, 2))})**`,
+      ``,
+      `**중요: 모든 시간은 반드시 한국 시간(+09:00)으로 표기!**`,
+      `- "내일"은 반드시 "${formatDate(addDays(now, 1))}" (절대 다른 날짜 안됨!)`,
+      `- "오늘"은 반드시 "${formatDate(now)}" (절대 다른 날짜 안됨!)`,
+      `- "모레"는 반드시 "${formatDate(addDays(now, 2))}" (절대 다른 날짜 안됨!)`,
       ``,
       `**추가 예시 (매우 중요!):**`,
       `"내일 회의 추가해줘" -> {"intent": "add_event", "title": "회의", "startDateTime": "${formatDate(addDays(now, 1))}T14:00:00+09:00", "endDateTime": "${formatDate(addDays(now, 1))}T15:00:00+09:00", "response": "회의 일정을 추가했어요!"}`,

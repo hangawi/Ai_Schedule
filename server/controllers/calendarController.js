@@ -226,16 +226,23 @@ exports.analyzeImage = async (req, res) => {
       const dates = {};
       const daysOfWeek = ['월', '화', '수', '목', '금'];
 
+      // 한국 시간대로 현재 날짜 계산
+      const koreaDate = new Date(today.toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+
       // 이번 주 월요일 찾기
-      const thisMonday = new Date(today);
-      const dayOfWeek = today.getDay(); // 0=일요일, 1=월요일, ...
+      const thisMonday = new Date(koreaDate);
+      const dayOfWeek = koreaDate.getDay(); // 0=일요일, 1=월요일, ...
       const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 일요일인 경우 지난 주 월요일로
-      thisMonday.setDate(today.getDate() - daysFromMonday);
+      thisMonday.setDate(koreaDate.getDate() - daysFromMonday);
 
       daysOfWeek.forEach((day, index) => {
         const date = new Date(thisMonday);
         date.setDate(thisMonday.getDate() + index);
-        dates[day] = date.toISOString().split('T')[0];
+        // 한국 시간대 기준으로 YYYY-MM-DD 형식 생성
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const dayStr = String(date.getDate()).padStart(2, '0');
+        dates[day] = `${year}-${month}-${dayStr}`;
       });
 
       return dates;

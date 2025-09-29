@@ -302,19 +302,31 @@ const ProfileTab = ({ onEditingChange }) => {
             const startDateTime = new Date(chatResponse.startDateTime);
             const endDateTime = new Date(chatResponse.endDateTime);
 
-            // 로컬 날짜 정확히 가져오기 (UTC 시간대 문제 해결)
-            const localYear = startDateTime.getFullYear();
-            const localMonth = String(startDateTime.getMonth() + 1).padStart(2, '0');
-            const localDay = String(startDateTime.getDate()).padStart(2, '0');
+            // 한국 시간대 기준으로 정확한 날짜 계산 (UTC 오프셋 문제 해결)
+            // 시간대 변환 없이 로컬 날짜 기준으로 YYYY-MM-DD 형식 생성
+            const koreaDateTime = new Date(startDateTime.toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+            const localYear = koreaDateTime.getFullYear();
+            const localMonth = String(koreaDateTime.getMonth() + 1).padStart(2, '0');
+            const localDay = String(koreaDateTime.getDate()).padStart(2, '0');
             const localDate = `${localYear}-${localMonth}-${localDay}`;
+
+            console.log('🔍 [ProfileTab] 날짜 변환 디버깅:', {
+              originalChatResponse: chatResponse.startDateTime,
+              startDateTimeObj: startDateTime.toString(),
+              koreaDateTimeObj: koreaDateTime.toString(),
+              localTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              extractedLocalDate: localDate,
+              originalDate: startDateTime.getDate(),
+              koreaDate: koreaDateTime.getDate()
+            });
 
             // 개인시간으로 추가 (반복되지 않는 특정 날짜의 개인시간)
             const newPersonalTime = {
               id: `temp_${Date.now()}`, // PersonalTimeManager는 id 필드 사용
               title: chatResponse.title || '새 개인시간',
               type: 'custom', // 기본 타입 설정
-              startTime: startDateTime.toTimeString().slice(0, 5), // HH:MM 형식
-              endTime: endDateTime.toTimeString().slice(0, 5), // HH:MM 형식
+              startTime: koreaDateTime.toTimeString().slice(0, 5), // HH:MM 형식
+              endTime: new Date(endDateTime.toLocaleString("en-US", {timeZone: "Asia/Seoul"})).toTimeString().slice(0, 5), // HH:MM 형식
               days: [], // 특정 날짜이므로 빈 배열
               specificDate: localDate, // 로컬 날짜 YYYY-MM-DD 형식
               isRecurring: false, // 반복되지 않음
@@ -442,10 +454,16 @@ const ProfileTab = ({ onEditingChange }) => {
           personalTimesSample: freshData.personalTimes?.slice(0, 2)
         });
 
-        // 서버 데이터로 무조건 업데이트 (길이 조건 제거)
-        setDefaultSchedule(freshData.defaultSchedule || []);
-        setScheduleExceptions(freshData.scheduleExceptions || []);
-        setPersonalTimes(freshData.personalTimes || []);
+        // UI 깜박임 방지: 데이터가 실제로 변경된 경우만 상태 업데이트
+        if (JSON.stringify(freshData.defaultSchedule || []) !== JSON.stringify(defaultSchedule)) {
+          setDefaultSchedule(freshData.defaultSchedule || []);
+        }
+        if (JSON.stringify(freshData.scheduleExceptions || []) !== JSON.stringify(scheduleExceptions)) {
+          setScheduleExceptions(freshData.scheduleExceptions || []);
+        }
+        if (JSON.stringify(freshData.personalTimes || []) !== JSON.stringify(personalTimes)) {
+          setPersonalTimes(freshData.personalTimes || []);
+        }
 
         // CalendarView 강제 리렌더링
         window.dispatchEvent(new Event('calendarUpdate'));
