@@ -3,21 +3,44 @@ import { X } from 'lucide-react';
 
 const ChangeRequestModal = ({ onClose, onRequestChange, slotToChange }) => {
   const [message, setMessage] = useState('');
+  const [requestType, setRequestType] = useState(slotToChange.action || 'request');
   const days = ['월', '화', '수', '목', '금'];
 
   const handleSubmit = () => {
-    onRequestChange(message);
+    onRequestChange(message, requestType);
   };
 
   const getTitle = () => {
-    switch (slotToChange.action) {
+    switch (requestType) {
       case 'release': return '시간 취소 요청';
-      case 'swap': return '자리 교환 요청';
-      default: return '시간 변경 요청';
+      default: return '자리 요청';
     }
   };
 
   const getFormattedDateTime = () => {
+    // 블록 요청인 경우 시간 범위 표시
+    if (slotToChange.isBlockRequest && slotToChange.targetSlot) {
+      const timeRange = `${slotToChange.targetSlot.startTime}-${slotToChange.targetSlot.endTime}`;
+
+      // slotToChange에 실제 date 정보와 dayDisplay가 있다면 사용
+      if (slotToChange.dayDisplay) {
+        return `${slotToChange.dayDisplay} ${timeRange}`;
+      }
+
+      // 실제 날짜가 있다면 포맷팅
+      if (slotToChange.date) {
+        const date = new Date(slotToChange.date);
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const dayOfMonth = String(date.getDate()).padStart(2, '0');
+        const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+        const dayName = dayNames[date.getDay()];
+        return `${dayName} (${month}.${dayOfMonth}) ${timeRange}`;
+      }
+
+      return `${days[slotToChange.dayIndex]}요일 ${timeRange}`;
+    }
+
+    // 일반 단일 슬롯 요청인 경우
     // slotToChange에 실제 date 정보와 dayDisplay가 있다면 사용
     if (slotToChange.dayDisplay) {
       return `${slotToChange.dayDisplay} ${slotToChange.time}`;
@@ -39,34 +62,30 @@ const ChangeRequestModal = ({ onClose, onRequestChange, slotToChange }) => {
 
   const getMessage = () => {
     const dayTime = getFormattedDateTime();
-    switch (slotToChange.action) {
+    switch (requestType) {
       case 'release': return `${dayTime} 시간을 취소하시겠습니까?`;
-      case 'swap': return `${slotToChange.currentOwner}님의 ${dayTime} 자리와 교환을 요청하시겠습니까?`;
-      default: return `${dayTime} 시간을 변경 요청하시겠습니까?`;
+      default: return `${slotToChange.currentOwner}님에게 ${dayTime} 자리를 요청하시겠습니까?`;
     }
   };
 
   const getPlaceholder = () => {
-    switch (slotToChange.action) {
+    switch (requestType) {
       case 'release': return '취소 사유를 입력하세요 (선택 사항)';
-      case 'swap': return '교환 요청 메시지를 입력하세요 (선택 사항)';
-      default: return '변경 요청 메시지를 입력하세요 (선택 사항)';
+      default: return '자리 요청 사유를 입력하세요 (선택 사항)';
     }
   };
 
   const getButtonText = () => {
-    switch (slotToChange.action) {
+    switch (requestType) {
       case 'release': return '취소 요청';
-      case 'swap': return '교환 요청';
-      default: return '변경 요청하기';
+      default: return '자리 요청';
     }
   };
 
   const getButtonColor = () => {
-    switch (slotToChange.action) {
+    switch (requestType) {
       case 'release': return 'bg-red-600 hover:bg-red-700';
-      case 'swap': return 'bg-blue-600 hover:bg-blue-700';
-      default: return 'bg-purple-600 hover:bg-purple-700';
+      default: return 'bg-blue-600 hover:bg-blue-700';
     }
   };
 

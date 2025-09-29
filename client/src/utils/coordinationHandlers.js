@@ -268,18 +268,36 @@ export const handleRequestWithUpdate = async (
   showAlert
 ) => {
   try {
+    console.log('🔄 Calling handleRequest...');
     await handleRequest(requestId, action);
+    console.log('✅ handleRequest completed');
+
     showAlert(`요청을 ${action === 'approved' ? '승인' : '거절'}했습니다.`);
 
     // To ensure the UI is fully updated, we'll refresh all relevant data sources.
     if (currentRoom?._id) {
+      console.log('🔄 Fetching room details for:', currentRoom._id);
       await fetchRoomDetails(currentRoom._id);
+      console.log('✅ fetchRoomDetails completed');
     }
+
+    console.log('🔄 Loading received requests...');
     await loadReceivedRequests();
+    console.log('✅ loadReceivedRequests completed');
+
+    console.log('🔄 Loading sent requests...');
     await loadSentRequests();
+    console.log('✅ loadSentRequests completed');
+
+    console.log('🔄 Loading room exchange counts...');
     await loadRoomExchangeCounts();
+    console.log('✅ loadRoomExchangeCounts completed');
+
+    console.log('🔄 Calling onRefreshExchangeCount...');
     onRefreshExchangeCount();
+    console.log('✅ onRefreshExchangeCount completed');
   } catch (error) {
+    console.error('Failed to handle request:', error);
     showAlert(`요청 처리에 실패했습니다: ${error.message || '알 수 없는 오류'}`);
   }
 };
@@ -304,35 +322,18 @@ export const createChangeRequestData = (slotToChange, currentRoom, user) => {
       },
       message: '시간을 취소합니다.',
     };
-  } else if (slotToChange.action === 'swap') {
+  } else {
+    // 모든 다른 요청은 시간 양보 요청으로 처리
     return {
       roomId: currentRoom._id,
-      type: 'slot_swap',
+      type: 'time_request',
       timeSlot: {
         day: dayKey,
         startTime: slotToChange.time,
         endTime: calculateEndTime(slotToChange.time),
       },
       targetUserId: slotToChange.targetUserId,
-      targetSlot: slotToChange.targetSlot,
-      message: '시간 교환을 요청합니다.',
-    };
-  } else {
-    return {
-      roomId: currentRoom._id,
-      type: 'time_change',
-      timeSlot: {
-        day: dayKey,
-        startTime: slotToChange.time,
-        endTime: calculateEndTime(slotToChange.time),
-      },
-      targetSlot: { // This is the slot being changed
-        day: dayKey,
-        startTime: slotToChange.time,
-        endTime: calculateEndTime(slotToChange.time),
-        user: user.id
-      },
-      message: '시간 변경 요청합니다.',
+      message: '자리를 요청합니다.',
     };
   }
 };
