@@ -392,6 +392,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     openManageRoomModal, closeManageRoomModal,
     closeAssignModal,
     closeRequestModal,
+    openChangeRequestModal,
     closeChangeRequestModal
   } = useCoordinationModals();
 
@@ -478,36 +479,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   // 모든 모드에서 24시간 토글 가능
   const effectiveShowFullDay = showFullDay;
 
-  // showMerged 상태 변화 추적
-  useEffect(() => {
-    console.log('🔥 showMerged 상태 변화 감지:', {
-      newShowMerged: showMerged,
-      timestamp: new Date().toISOString()
-    });
-  }, [showMerged]);
-
-  // showFullDay 상태 변화 추적
-  useEffect(() => {
-    console.log('🔥 showFullDay 상태 변화 감지:', {
-      newShowFullDay: showFullDay,
-      effectiveShowFullDay: effectiveShowFullDay,
-      willAffectScheduleHours: {
-        from: `${scheduleStartHour}-${scheduleEndHour}`,
-        to: showFullDay ? '0-24' : '9-18'
-      },
-      timestamp: new Date().toISOString()
-    });
-  }, [showFullDay, effectiveShowFullDay, scheduleStartHour, scheduleEndHour]);
-
-  // Debug log
-  console.log('CoordinationTab - Time settings:', {
-    showFullDay,
-    effectiveShowFullDay,
-    scheduleStartHour,
-    scheduleEndHour,
-    finalStartHour: effectiveShowFullDay ? 0 : scheduleStartHour,
-    finalEndHour: effectiveShowFullDay ? 24 : scheduleEndHour
-  });
 
   const handleMemberClick = (memberId) => {
     const member = currentRoom?.members?.find(m => (m.user._id || m.user.id) === memberId);
@@ -517,16 +488,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   };
 
   const handleMemberScheduleClick = (memberId) => {
-    console.log('handleMemberScheduleClick called with memberId:', memberId);
-    console.log('Current room members:', currentRoom?.members?.map(m => ({ id: m.user._id || m.user.id, name: m.user.name })));
     setSelectedMemberId(memberId);
     setShowMemberScheduleModal(true);
-    console.log('MemberScheduleModal state set:', { selectedMemberId: memberId, showMemberScheduleModal: true });
-
-    // 상태 업데이트 후 강제 리렌더링을 위한 작은 지연
-    setTimeout(() => {
-      console.log('After timeout - Modal states:', { selectedMemberId, showMemberScheduleModal });
-    }, 100);
   };
 
   // Calendar view handlers
@@ -644,7 +607,25 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
   const handleRequestSlot = async (requestData) => {
     if (!currentRoom) return;
-    await createRequest(requestData);
+    try {
+      const result = await createRequest(requestData);
+
+      // 요청 성공 시 새로고침하여 최신 데이터를 가져옴
+      await fetchRoomDetails(currentRoom._id);
+      await loadSentRequests();
+
+      if (requestData.type === 'slot_swap') {
+        showAlert('자리 교환 요청을 보냈습니다!');
+      } else if (requestData.type === 'time_request') {
+        showAlert('자리 요청을 보냈습니다!');
+      } else if (requestData.type === 'slot_release') {
+        showAlert('시간 취소 요청을 보냈습니다!');
+      } else {
+        showAlert('요청을 보냈습니다!');
+      }
+    } catch (error) {
+      showAlert('요청 전송에 실패했습니다.');
+    }
   };
 
 
@@ -1067,7 +1048,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                                  request.status === 'cancelled' ? '취소됨' : '거절됨'}
                                               </div>
                                               <button
-                                                onClick={() => handleCancelRequest(request._id)}
+                                                onClick={() => handleCancelRequestCallback(request._id)}
                                                 className="text-xs text-gray-400 hover:text-red-500"
                                                 title="내역 삭제"
                                               >
@@ -1138,7 +1119,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                         )}
                                         <div className="flex justify-end">
                                           <button
-                                            onClick={() => handleCancelRequest(request._id)}
+                                            onClick={() => handleCancelRequestCallback(request._id)}
                                             className="px-3 py-1 text-xs bg-gray-500 text-white rounded-md hover:bg-gray-600"
                                           >
                                             요청 취소
@@ -1207,7 +1188,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                                  request.status === 'cancelled' ? '취소됨' : '거절됨'}
                                               </div>
                                               <button
-                                                onClick={() => handleCancelRequest(request._id)}
+                                                onClick={() => handleCancelRequestCallback(request._id)}
                                                 className="text-xs text-gray-400 hover:text-red-500"
                                                 title="내역 삭제"
                                               >
@@ -1366,17 +1347,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 </h3>
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => {
-                      console.log('🔥 24시간 버튼 클릭 시작:', {
-                        currentShowFullDay: showFullDay,
-                        willBecome: !showFullDay,
-                        effectiveShowFullDay: showFullDay,
-                        viewMode: viewMode,
-                        currentScheduleHours: { scheduleStartHour, scheduleEndHour }
-                      });
-                      setShowFullDay(!showFullDay);
-                      console.log('🔥 setShowFullDay 호출 완료, 새 값:', !showFullDay);
-                    }}
+                    onClick={() => setShowFullDay(!showFullDay)}
                     className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
                       showFullDay
                         ? 'bg-purple-500 text-white'
@@ -1387,16 +1358,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                     {showFullDay ? '24시간' : '기본'}
                   </button>
                   <button
-                    onClick={() => {
-                      console.log('🔥 병합/분할 버튼 클릭 시작:', {
-                        currentShowMerged: showMerged,
-                        willBecome: !showMerged,
-                        viewMode: viewMode,
-                        isOwner: isOwner
-                      });
-                      setShowMerged(!showMerged);
-                      console.log('🔥 setShowMerged 호출 완료, 새 값:', !showMerged);
-                    }}
+                    onClick={() => setShowMerged(!showMerged)}
                     className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
                       showMerged
                         ? 'bg-green-500 text-white'
@@ -1460,6 +1422,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   initialStartDate={currentWeekStartDate}
                   calculateEndTime={calculateEndTime}
                   showMerged={showMerged}
+                  onOpenChangeRequestModal={openChangeRequestModal}
                 />
               ) : viewMode === 'week' ? (
                 <TimetableGrid
@@ -1488,6 +1451,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   readOnly={isOwner}
                   showMerged={showMerged}
                   onNegotiationUpdate={setCurrentWeekNegotiations}
+                  onOpenChangeRequestModal={openChangeRequestModal}
                 />
               ) : (
                 <CoordinationCalendarView

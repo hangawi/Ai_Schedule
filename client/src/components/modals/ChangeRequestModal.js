@@ -12,7 +12,7 @@ const ChangeRequestModal = ({ onClose, onRequestChange, slotToChange }) => {
   const getTitle = () => {
     switch (slotToChange.action) {
       case 'release': return '시간 취소 요청';
-      case 'swap': return '시간 교환 요청';
+      case 'swap': return '자리 교환 요청';
       default: return '시간 변경 요청';
     }
   };
@@ -41,7 +41,7 @@ const ChangeRequestModal = ({ onClose, onRequestChange, slotToChange }) => {
     const dayTime = getFormattedDateTime();
     switch (slotToChange.action) {
       case 'release': return `${dayTime} 시간을 취소하시겠습니까?`;
-      case 'swap': return `${slotToChange.currentOwner}님의 ${dayTime} 시간과 교환을 요청하시겠습니까?`;
+      case 'swap': return `${slotToChange.currentOwner}님의 ${dayTime} 자리와 교환을 요청하시겠습니까?`;
       default: return `${dayTime} 시간을 변경 요청하시겠습니까?`;
     }
   };

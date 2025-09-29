@@ -11,7 +11,7 @@ const PendingRequestItem = ({ request, onApprove, onReject, index }) => {
       <div className="flex justify-between items-center mb-1">
         <div className="text-xs font-medium text-orange-900">{requesterName}</div>
         <div className="text-xs text-orange-600">
-          {request.type === 'time_request' ? '시간 요청' : '시간 변경'}
+          {request.type === 'time_request' ? '자리 요청' : request.type === 'slot_swap' ? '자리 교환' : '시간 변경'}
         </div>
       </div>
       <div className="text-xs text-orange-700 mb-2">
@@ -109,7 +109,7 @@ const ExchangeRequestItem = ({ request, type, onCancel, onApprove, onReject, ind
             {type === 'sent' ? `To: ${userName}` : userName}
           </div>
           <div className={`text-xs px-2 py-1 rounded-full ${type === 'sent' ? 'bg-yellow-100 text-yellow-800' : 'text-blue-600'}`}>
-            {type === 'sent' ? '대기중' : (request.type === 'slot_swap' ? '교환 요청' : '알 수 없는 요청')}
+            {type === 'sent' ? '대기중' : (request.type === 'slot_swap' ? '자리 교환' : '알 수 없는 요청')}
           </div>
         </div>
         <div className={`text-xs mb-2 ${type === 'sent' ? 'text-gray-700' : 'text-blue-700'}`}>
@@ -165,7 +165,7 @@ const ExchangeRequestItem = ({ request, type, onCancel, onApprove, onReject, ind
           </div>
           <button
             onClick={() => onCancel(request._id)}
-            className="text-xs text-gray-400 hover:text-red-500"
+            className="text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full w-5 h-5 flex items-center justify-center transition-colors"
             title="내역 삭제"
           >
             ✕
@@ -301,7 +301,7 @@ const RequestManagement = ({
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-md font-semibold text-gray-800 flex items-center">
           <Users size={16} className="mr-2 text-blue-600" />
-          교환요청 관리
+          자리요청 관리
         </h4>
         <div className="flex bg-gray-100 rounded-lg p-1">
           <button

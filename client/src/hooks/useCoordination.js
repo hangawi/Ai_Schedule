@@ -81,11 +81,6 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
     
     try {
       const data = await coordinationService.fetchRoomDetails(roomId);
-      console.log('fetchRoomDetails: received room data:', {
-        roomId: data._id,
-        roomExceptions: data.settings?.roomExceptions,
-        blockedTimes: data.settings?.blockedTimes
-      });
       setCurrentRoom(data);
     } catch (err) {
       // fetchRoomDetails error - silently handle error

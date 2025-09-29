@@ -67,8 +67,133 @@ exports.resolveNegotiation = async (req, res) => {
 exports.respondToNegotiation = async (req, res) => {
    try {
       const { roomId, negotiationId } = req.params;
-      // Add your respond logic here
-      res.json({ success: true });
+      const { response } = req.body; // 'accept' or 'reject'
+      const userId = req.user.id;
+
+      console.log(`[respondToNegotiation] User ${userId} responding ${response} to negotiation ${negotiationId} in room ${roomId}`);
+
+      if (!['accept', 'reject'].includes(response)) {
+         return res.status(400).json({ msg: '유효하지 않은 응답입니다. accept 또는 reject만 허용됩니다.' });
+      }
+
+      const room = await Room.findById(roomId)
+         .populate('negotiations.conflictingMembers.user', 'firstName lastName email')
+         .populate('owner', 'firstName lastName email')
+         .populate('members.user', 'firstName lastName email');
+
+      if (!room) {
+         return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+      }
+
+      const negotiation = room.negotiations.id(negotiationId);
+      if (!negotiation) {
+         return res.status(404).json({ msg: '협의를 찾을 수 없습니다.' });
+      }
+
+      if (negotiation.status !== 'active') {
+         return res.status(400).json({ msg: '이미 해결된 협의입니다.' });
+      }
+
+      // 사용자가 이 협의에 참여 중인지 확인
+      const userMember = negotiation.conflictingMembers.find(cm =>
+         (cm.user._id || cm.user).toString() === userId
+      );
+
+      if (!userMember) {
+         return res.status(403).json({ msg: '이 협의에 참여할 권한이 없습니다.' });
+      }
+
+      // 이미 응답했는지 확인
+      if (userMember.response && userMember.response !== 'pending') {
+         return res.status(400).json({ msg: '이미 응답하셨습니다.' });
+      }
+
+      // 응답 저장
+      userMember.response = response;
+      userMember.respondedAt = new Date();
+
+      // 시스템 메시지 추가
+      const userName = userMember.user.firstName || userMember.user.name || '멤버';
+      const responseText = response === 'accept' ? '양보하기로 했습니다' : '거절했습니다';
+
+      negotiation.messages.push({
+         message: `${userName}님이 ${responseText}.`,
+         timestamp: new Date(),
+         isSystemMessage: true
+      });
+
+      // 모든 멤버가 응답했는지 확인
+      const allResponded = negotiation.conflictingMembers.every(cm =>
+         cm.response && cm.response !== 'pending'
+      );
+
+      if (allResponded) {
+         // 양보한 사람이 있는지 확인
+         const acceptedMembers = negotiation.conflictingMembers.filter(cm => cm.response === 'accept');
+
+         if (acceptedMembers.length > 0) {
+            // 가장 먼저 양보한 사람이 양보하고, 나머지 중 하나가 시간을 배정받음
+            const remainingMembers = negotiation.conflictingMembers.filter(cm => cm.response === 'reject');
+
+            if (remainingMembers.length > 0) {
+               // 랜덤하게 한 명 선택하여 시간 배정
+               const selectedMember = remainingMembers[Math.floor(Math.random() * remainingMembers.length)];
+
+               // 시간 슬롯 배정
+               room.timeSlots.push({
+                  user: selectedMember.user._id || selectedMember.user,
+                  date: negotiation.slotInfo.date,
+                  startTime: negotiation.slotInfo.startTime,
+                  endTime: negotiation.slotInfo.endTime,
+                  day: negotiation.slotInfo.day,
+                  subject: '협의 결과',
+                  status: 'confirmed',
+                  assignedBy: 'negotiation'
+               });
+
+               negotiation.status = 'resolved';
+               negotiation.resolution = {
+                  assignedTo: selectedMember.user._id || selectedMember.user,
+                  resolvedAt: new Date()
+               };
+
+               const selectedUserName = selectedMember.user.firstName || selectedMember.user.name || '멤버';
+               negotiation.messages.push({
+                  message: `협의가 완료되었습니다. ${selectedUserName}님이 시간을 배정받았습니다.`,
+                  timestamp: new Date(),
+                  isSystemMessage: true
+               });
+
+               console.log(`[협의완료] ${selectedUserName}님이 ${negotiation.slotInfo.startTime} 시간 배정`);
+            }
+         } else {
+            // 모두 거절한 경우 - 이월
+            negotiation.status = 'resolved';
+            negotiation.messages.push({
+               message: '모든 멤버가 거절하여 해당 시간이 이월되었습니다.',
+               timestamp: new Date(),
+               isSystemMessage: true
+            });
+
+            console.log(`[협의완료] 모두 거절 - 시간 이월: ${negotiation.slotInfo.startTime}`);
+         }
+      }
+
+      await room.save();
+
+      // 업데이트된 협의 정보 반환
+      const updatedRoom = await Room.findById(roomId)
+         .populate('negotiations.conflictingMembers.user', 'firstName lastName email')
+         .populate('negotiations.resolution.assignedTo', 'firstName lastName email');
+
+      const updatedNegotiation = updatedRoom.negotiations.id(negotiationId);
+
+      res.json({
+         success: true,
+         negotiation: updatedNegotiation,
+         room: updatedRoom
+      });
+
    } catch (error) {
       console.error('Error responding to negotiation:', error);
       res.status(500).json({ msg: 'Server error' });

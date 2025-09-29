@@ -124,13 +124,10 @@ const TimetableGrid = ({
   onOpenNegotiation, // New prop to handle negotiation modal opening
   onCurrentWeekNegotiationsChange, // New prop to pass current week negotiations to parent
   showMerged = true, // New prop for merged view
-  ownerOriginalSchedule = null // 방장의 원본 시간표 데이터
+  ownerOriginalSchedule = null, // 방장의 원본 시간표 데이터
+  onOpenChangeRequestModal // New prop to open change request modal
 }) => {
-  // 14:40 문제 디버깅용 로깅
-  console.log('🔍 TimetableGrid - timeSlots 전체 데이터:', timeSlots);
   const ownerSlots = timeSlots?.filter(slot => slot.userId === currentUser?.id || slot.user === currentUser?.id);
-  console.log('🔍 TimetableGrid - 방장 시간 슬롯들:', ownerSlots);
-  console.log('🔍 TimetableGrid - 방장 원본 시간표:', ownerOriginalSchedule);
 
   // CustomAlert 상태
   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
@@ -325,23 +322,13 @@ const TimetableGrid = ({
           showAlert('이미 이 시간대에 대한 교환 요청을 보냈습니다. 기존 요청이 처리될 때까지 기다려주세요.');
           return;
         }
-        
-        setRecentRequests(prev => new Set([...prev, requestKey]));
-        
-        setTimeout(() => {
-          setRecentRequests(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(requestKey);
-            return newSet;
-          });
-        }, REQUEST_DEBOUNCE_TIME);
 
         const existingSlot = findExistingSlot(timeSlots, date, time, ownerInfo.actualUserId || ownerInfo.userId);
 
         // 정확한 날짜 표시를 위한 dayDisplay 생성
         const dayDisplay = createDayDisplay(date);
 
-        setSlotToChange({
+        const slotData = {
           date: date, // Pass date object
           time,
           currentOwner: ownerInfo.name,
@@ -361,8 +348,14 @@ const TimetableGrid = ({
             subject: existingSlot?.subject || '교환 대상',
             user: ownerInfo.actualUserId || ownerInfo.userId
           }
-        });
-        setShowChangeRequestModal(true);
+        };
+
+        if (onOpenChangeRequestModal) {
+          onOpenChangeRequestModal(slotData);
+        } else {
+          setSlotToChange(slotData);
+          setShowChangeRequestModal(true);
+        }
       }
           } else { // Empty slot
             if (isRoomOwner) {
