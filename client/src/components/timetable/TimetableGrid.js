@@ -270,6 +270,149 @@ const TimetableGrid = ({
     return isSlotSelectedHelper(date, time, currentSelectedSlots);
   };
 
+  // Function to find merged block for a slot
+  const findMergedBlock = useCallback((date, time, targetUserId) => {
+    if (!showMerged) return null;
+
+    const dayIndex = getDayIndex(date);
+    if (dayIndex === -1) return null;
+
+    console.log('Finding merged block for:', {
+      date: date.toDateString(),
+      time,
+      targetUserId,
+      showMerged,
+      totalTimeSlots: timeSlots?.length || 0
+    });
+
+    // Debug all timeSlots
+    console.log('All timeSlots:', timeSlots?.map(slot => ({
+      date: slot.date,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      userId: slot.user?._id || slot.user?.id || slot.user,
+      user: slot.user
+    })));
+
+    // Find all slots belonging to the same user on the same day
+    const daySlots = timeSlots?.filter(slot => {
+      const slotDate = new Date(slot.date);
+      const slotUserId = slot.user?._id || slot.user?.id || slot.user;
+      const normalizedTargetUserId = targetUserId?._id || targetUserId?.id || targetUserId;
+
+      console.log('Checking slot:', {
+        slotDate: slotDate.toDateString(),
+        targetDate: date.toDateString(),
+        slotUserId,
+        normalizedTargetUserId,
+        originalTargetUserId: targetUserId,
+        dateMatch: slotDate.toDateString() === date.toDateString(),
+        userMatch: slotUserId === normalizedTargetUserId || slotUserId?.toString() === normalizedTargetUserId?.toString()
+      });
+
+      const matches = slotDate.toDateString() === date.toDateString() &&
+             (slotUserId === normalizedTargetUserId || slotUserId?.toString() === normalizedTargetUserId?.toString());
+
+      if (matches) {
+        console.log('Found matching slot:', { startTime: slot.startTime, endTime: slot.endTime, userId: slotUserId });
+      }
+      return matches;
+    }).sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    if (!daySlots?.length) {
+      console.log('No slots found for user');
+      return null;
+    }
+
+    console.log('All user slots for day:', daySlots.map(s => ({ start: s.startTime, end: s.endTime })));
+
+    // Find the block that contains the clicked time
+    const [hour, minute] = time.split(':').map(Number);
+    const clickedMinutes = hour * 60 + minute;
+
+    console.log('Clicked time in minutes:', clickedMinutes);
+
+    // Find which slot contains the clicked time
+    let currentSlotIndex = -1;
+    for (let i = 0; i < daySlots.length; i++) {
+      const slot = daySlots[i];
+      const [slotHour, slotMinute] = slot.startTime.split(':').map(Number);
+      const [endHour, endMinute] = slot.endTime.split(':').map(Number);
+
+      const slotStartMinutes = slotHour * 60 + slotMinute;
+      const slotEndMinutes = endHour * 60 + endMinute;
+
+      if (clickedMinutes >= slotStartMinutes && clickedMinutes < slotEndMinutes) {
+        currentSlotIndex = i;
+        console.log('Found clicked slot at index:', i, 'slot:', slot.startTime + '-' + slot.endTime);
+        break;
+      }
+    }
+
+    if (currentSlotIndex === -1) {
+      console.log('Clicked time not in any slot');
+      return null;
+    }
+
+    // Find the start of the consecutive block (go backwards)
+    let blockStartIndex = currentSlotIndex;
+    for (let i = currentSlotIndex - 1; i >= 0; i--) {
+      const currentSlot = daySlots[i + 1];
+      const prevSlot = daySlots[i];
+
+      const [currentStartHour, currentStartMinute] = currentSlot.startTime.split(':').map(Number);
+      const [prevEndHour, prevEndMinute] = prevSlot.endTime.split(':').map(Number);
+
+      const currentStartMinutes = currentStartHour * 60 + currentStartMinute;
+      const prevEndMinutes = prevEndHour * 60 + prevEndMinute;
+
+      if (prevEndMinutes === currentStartMinutes) {
+        blockStartIndex = i;
+        console.log('Extended block backwards to index:', i);
+      } else {
+        break;
+      }
+    }
+
+    // Find the end of the consecutive block (go forwards)
+    let blockEndIndex = currentSlotIndex;
+    for (let i = currentSlotIndex + 1; i < daySlots.length; i++) {
+      const currentSlot = daySlots[i - 1];
+      const nextSlot = daySlots[i];
+
+      const [currentEndHour, currentEndMinute] = currentSlot.endTime.split(':').map(Number);
+      const [nextStartHour, nextStartMinute] = nextSlot.startTime.split(':').map(Number);
+
+      const currentEndMinutes = currentEndHour * 60 + currentEndMinute;
+      const nextStartMinutes = nextStartHour * 60 + nextStartMinute;
+
+      if (currentEndMinutes === nextStartMinutes) {
+        blockEndIndex = i;
+        console.log('Extended block forwards to index:', i);
+      } else {
+        break;
+      }
+    }
+
+    const blockStart = daySlots[blockStartIndex].startTime;
+    const blockEnd = daySlots[blockEndIndex].endTime;
+
+    console.log('Final block:', { start: blockStart, end: blockEnd, startIndex: blockStartIndex, endIndex: blockEndIndex });
+
+    // Only return a block if it spans multiple slots
+    if (blockStartIndex === blockEndIndex) {
+      console.log('Single slot, not a block');
+      return null;
+    }
+
+    return {
+      startTime: blockStart,
+      endTime: blockEnd,
+      date: date,
+      day: dayNames[dayIndex]
+    };
+  }, [timeSlots, showMerged, getDayIndex, dayNames]);
+
   // Function to handle slot click
   const handleSlotClick = useCallback((date, time) => {
 
@@ -314,41 +457,93 @@ const TimetableGrid = ({
         const requestKey = `${date.toISOString().split('T')[0]}-${time}-${ownerInfo.actualUserId || ownerInfo.userId}`;
 
         if (isRequestTooRecent(recentRequests, requestKey)) {
-          showAlert('이미 이 시간대에 대한 교환 요청을 보냈습니다. 기존 요청이 처리될 때까지 기다려주세요.');
+          showAlert('이미 이 시간대에 대한 자리 요청을 보냈습니다. 기존 요청이 처리될 때까지 기다려주세요.');
           return;
         }
 
-        if (hasExistingSwapRequest(roomData?.requests, currentUser, date, time, ownerInfo.actualUserId || ownerInfo.userId)) {
-          showAlert('이미 이 시간대에 대한 교환 요청을 보냈습니다. 기존 요청이 처리될 때까지 기다려주세요.');
+        console.log('=== DUPLICATE CHECK START ===');
+        console.log('Checking for existing requests:', {
+          roomRequests: roomData?.requests?.length || 0,
+          currentUser: currentUser?.id,
+          date: date.toDateString(),
+          time,
+          targetUserId: ownerInfo.actualUserId || ownerInfo.userId
+        });
+
+        // Debug all room requests
+        console.log('All room requests:', roomData?.requests?.map(req => ({
+          id: req._id,
+          type: req.type,
+          status: req.status,
+          requester: req.requester?._id || req.requester?.id || req.requester,
+          targetUser: req.targetUser?._id || req.targetUser?.id || req.targetUser,
+          timeSlot: req.timeSlot
+        })));
+
+        const hasDuplicate = hasExistingSwapRequest(roomData?.requests, currentUser, date, time, ownerInfo.actualUserId || ownerInfo.userId);
+        console.log('=== DUPLICATE CHECK RESULT:', hasDuplicate, '===');
+
+        if (hasDuplicate) {
+          console.log('DUPLICATE FOUND - SHOWING ALERT');
+          showAlert('이미 이 시간대에 대한 자리 요청을 보냈습니다. 기존 요청이 처리될 때까지 기다려주세요.');
           return;
         }
+
+        console.log('NO DUPLICATE - PROCEEDING WITH REQUEST');
 
         const existingSlot = findExistingSlot(timeSlots, date, time, ownerInfo.actualUserId || ownerInfo.userId);
 
         // 정확한 날짜 표시를 위한 dayDisplay 생성
         const dayDisplay = createDayDisplay(date);
 
+        // Check if in merged mode and find the block
+        console.log('=== MERGE MODE CHECK START ===');
+        console.log('showMerged:', showMerged);
+        console.log('Attempting to find merged block for:', {
+          date: date.toDateString(),
+          time,
+          targetUserId: ownerInfo.actualUserId || ownerInfo.userId
+        });
+
+        const mergedBlock = findMergedBlock(date, time, ownerInfo.actualUserId || ownerInfo.userId);
+        console.log('=== MERGED BLOCK RESULT:', mergedBlock, '===');
+
+        // Use block time range if in merged mode, otherwise use single slot
+        const startTime = mergedBlock ? mergedBlock.startTime : time;
+        const endTime = mergedBlock ? mergedBlock.endTime : (calculateEndTime ? calculateEndTime(time) : (() => {
+          const [h, m] = time.split(':').map(Number);
+          const eh = m === 30 ? h + 1 : h;
+          const em = m === 30 ? 0 : m + 30;
+          return `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
+        })());
+
+        console.log('Final time range:', {
+          originalTime: time,
+          finalStartTime: startTime,
+          finalEndTime: endTime,
+          isBlockRequest: !!mergedBlock
+        });
+
         const slotData = {
           date: date, // Pass date object
-          time,
+          time: startTime, // Use block start time
           currentOwner: ownerInfo.name,
           targetUserId: ownerInfo.actualUserId || ownerInfo.userId,
-          action: CHANGE_ACTIONS.SWAP,
+          action: 'request',
           dayDisplay: dayDisplay, // 정확한 날짜 표시
+          isBlockRequest: !!mergedBlock, // Flag to indicate block request
           targetSlot: {
             date: date, // Pass date object
             day: dayNames[getDayIndex(date)],
-            startTime: time,
-            endTime: calculateEndTime ? calculateEndTime(time) : (() => {
-              const [h, m] = time.split(':').map(Number);
-              const eh = m === 30 ? h + 1 : h;
-              const em = m === 30 ? 0 : m + 30;
-              return `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
-            })(),
-            subject: existingSlot?.subject || '교환 대상',
+            startTime: startTime,
+            endTime: endTime,
+            subject: existingSlot?.subject || (mergedBlock ? '블록 요청' : '자리 요청'),
             user: ownerInfo.actualUserId || ownerInfo.userId
           }
         };
+
+        console.log('=== SLOT DATA CREATED ===');
+        console.log('Final slotData:', slotData);
 
         if (onOpenChangeRequestModal) {
           onOpenChangeRequestModal(slotData);

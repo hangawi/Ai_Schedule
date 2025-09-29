@@ -14,7 +14,7 @@ import { useCoordinationModals } from '../../hooks/useCoordinationModals';
 import { useAuth } from '../../hooks/useAuth';
 import { coordinationService } from '../../services/coordinationService';
 import { userService } from '../../services/userService';
-import { Calendar, Grid, PlusCircle, LogIn, Users, MessageSquare, Clock, RefreshCw, Merge, Split } from 'lucide-react';
+import { Calendar, Grid, PlusCircle, LogIn, Users, MessageSquare, Clock, RefreshCw, Merge, Split, X } from 'lucide-react';
 import { translateEnglishDays } from '../../utils';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import MemberScheduleModal from '../modals/MemberScheduleModal';
@@ -56,9 +56,19 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [sentRequests, setSentRequests] = useState([]);
   const [receivedRequests, setReceivedRequests] = useState([]);
 
-  const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
-  const showAlert = (message) => setCustomAlert({ show: true, message });
-  const closeAlert = () => setCustomAlert({ show: false, message: '' });
+  // Debug receivedRequests changes
+  useEffect(() => {
+    console.log('📋 receivedRequests state changed to:', receivedRequests.length, 'requests');
+    receivedRequests.forEach((req, i) => {
+      console.log(`📋 Request ${i + 1}: id=${req._id}, status=${req.status}`);
+    });
+  }, [receivedRequests]);
+
+  const [customAlert, setCustomAlert] = useState({ show: false, message: '', type: 'warning' });
+  const showAlert = (message, type = 'warning') => {
+    setCustomAlert({ show: true, message, type });
+  };
+  const closeAlert = () => setCustomAlert({ show: false, message: '', type: 'warning' });
 
   // 방장 개인시간 동기화 함수
   const syncOwnerPersonalTimes = async () => {
@@ -322,16 +332,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [currentWeekNegotiations, setCurrentWeekNegotiations] = useState([]);
 
 
-  const loadRoomExchangeCounts = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      const result = await coordinationService.getRoomExchangeCounts();
-      if (result.success) {
-        setRoomExchangeCounts(result.roomCounts);
-      }
-    } catch (error) {
-    }
-  }, [user?.id]);
 
   const loadSentRequests = useCallback(async () => {
     if (!user?.id) return;
@@ -347,15 +347,54 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const loadReceivedRequests = useCallback(async () => {
     if (!user?.id) return;
     try {
+      console.log('📥 Loading received requests...');
       const result = await coordinationService.getReceivedRequests();
+      console.log('📥 API result:', result);
       if (result.success) {
+        console.log('📥 Setting receivedRequests with:', result.requests.length, 'requests');
         setReceivedRequests(result.requests);
       }
     } catch (error) {
+      console.error('Failed to load received requests:', error);
     }
   }, [user?.id]);
 
   const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest, cancelRequest } = useCoordination(user?.id, onRefreshExchangeCount, loadSentRequests, showAlert);
+
+  // Debug currentRoom changes
+  useEffect(() => {
+    if (currentRoom) {
+      console.log('🏠 currentRoom updated:', {
+        id: currentRoom._id,
+        membersCount: currentRoom.members?.length,
+        timeSlotsCount: Object.keys(currentRoom.timeSlots || {}).length
+      });
+    }
+  }, [currentRoom]);
+
+  // Calculate room-specific request counts for displaying next to room names
+  const getRoomRequestCount = useCallback((roomId) => {
+    return receivedRequests.filter(req =>
+      req.status === 'pending' && req.roomId === roomId
+    ).length;
+  }, [receivedRequests]);
+
+  const loadRoomExchangeCounts = useCallback(async () => {
+    if (!user?.id || !myRooms) return;
+
+    // Calculate counts from local receivedRequests data
+    const counts = {};
+
+    // Include both owned and joined rooms
+    const allRooms = [...(myRooms.owned || []), ...(myRooms.joined || [])];
+
+    allRooms.forEach(room => {
+      counts[room._id] = getRoomRequestCount(room._id);
+    });
+
+    console.log('🏠 Room exchange counts calculated:', counts);
+    setRoomExchangeCounts(counts);
+  }, [user?.id, myRooms, getRoomRequestCount]);
 
   // Handle custom events for room navigation (from browser back/forward navigation)
   useEffect(() => {
@@ -541,35 +580,61 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     );
   };
 
+  // Alias for delete request button
+  const handleDeleteRequest = handleCancelRequestCallback;
+
   const handleRequestWithUpdateCallback = async (requestId, action) => {
-    await handleRequestWithUpdate(
-      requestId,
-      action,
-      handleRequest,
-      currentRoom,
-      fetchRoomDetails,
-      loadReceivedRequests,
-      loadSentRequests,
-      loadRoomExchangeCounts,
-      onRefreshExchangeCount,
-      showAlert
-    );
+    console.log('🔄 Starting handleRequestWithUpdateCallback:', { requestId, action });
+    console.log('🔄 Current receivedRequests before:', receivedRequests.length);
+
+    try {
+      await handleRequestWithUpdate(
+        requestId,
+        action,
+        handleRequest,
+        currentRoom,
+        fetchRoomDetails,
+        loadReceivedRequests,
+        loadSentRequests,
+        loadRoomExchangeCounts,
+        onRefreshExchangeCount,
+        showAlert
+      );
+
+      console.log('✅ handleRequestWithUpdateCallback completed');
+      console.log('🔄 Current receivedRequests after:', receivedRequests.length);
+    } catch (error) {
+      console.error('❌ Failed to handle request:', error);
+    }
   };
   
+  // Update count based on current context
   useEffect(() => {
-    if (!currentRoom || !onExchangeRequestCountChange) return;
-    
-    const exchangeRequestCount = (currentRoom.requests || []).filter(req => {
-      if (req.status !== 'pending') return false;
-      if (req.type !== 'slot_swap') return false;
-      if (!req.targetUser) return false;
-      const targetUserId = req.targetUser._id || req.targetUser;
-      const currentUserId = user?.id;
-      return targetUserId === currentUserId || targetUserId?.toString() === currentUserId?.toString();
-    }).length;
-    
-    onExchangeRequestCountChange(exchangeRequestCount);
-  }, [currentRoom, user?.id, user?.email, onExchangeRequestCountChange]);
+    if (!onExchangeRequestCountChange) return;
+
+    if (currentRoom) {
+      // Count pending requests in the current room only
+      const exchangeRequestCount = receivedRequests.filter(req => {
+        return req.status === 'pending' && req.roomId === currentRoom._id;
+      }).length;
+
+      console.log('🔢 Room-specific count update:', { roomId: currentRoom._id, count: exchangeRequestCount });
+      onExchangeRequestCountChange(exchangeRequestCount);
+    } else {
+      // Count total pending requests across all rooms (for main tab)
+      const totalPendingRequests = receivedRequests.filter(req => req.status === 'pending').length;
+
+      console.log('🔢 Global count update:', { totalPending: totalPendingRequests });
+      onExchangeRequestCountChange(totalPendingRequests);
+    }
+  }, [currentRoom, receivedRequests, onExchangeRequestCountChange]);
+
+  // Update room counts when receivedRequests changes
+  useEffect(() => {
+    if (receivedRequests.length > 0 && myRooms) {
+      loadRoomExchangeCounts();
+    }
+  }, [receivedRequests.length, myRooms?.owned?.length, myRooms?.joined?.length]);
 
   const handleCreateRoom = async (roomData) => {
     await createRoom(roomData);
@@ -606,7 +671,10 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   };
 
   const handleRequestSlot = async (requestData) => {
-    if (!currentRoom) return;
+    if (!currentRoom) {
+      return;
+    }
+
     try {
       const result = await createRequest(requestData);
 
@@ -623,8 +691,25 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       } else {
         showAlert('요청을 보냈습니다!');
       }
+
+      // Close modal after successful request
+      closeChangeRequestModal();
     } catch (error) {
-      showAlert('요청 전송에 실패했습니다.');
+      // Handle specific error types - prevent error propagation
+      if (error.isDuplicate || error.message.includes('동일한 요청이 이미 존재합니다')) {
+        showAlert('이미 이 시간대에 대한 자리 요청을 보냈습니다. 기존 요청이 처리될 때까지 기다려주세요.');
+      } else {
+        console.error('Request failed:', error);
+        showAlert(`요청 전송에 실패했습니다: ${error.message}`, 'error');
+      }
+
+      // Close any open modals on error after a short delay to ensure alert shows
+      setTimeout(() => {
+        closeChangeRequestModal();
+      }, 500);
+
+      // Prevent error from bubbling up to error boundary
+      return;
     }
   };
 
@@ -662,7 +747,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         loadReceivedRequests();
       }, 100);
     }
-  }, [user?.id, fetchMyRooms, loadRoomExchangeCounts, loadSentRequests, loadReceivedRequests]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!currentRoom && showManageRoomModal) {
@@ -874,26 +959,33 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                       const requesterName = requesterData?.name || `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
                       
                       return (
-                        <div key={request._id || index} className="p-2 bg-orange-50 border border-orange-200 rounded-lg">
-                          <div className="flex justify-between items-center mb-1">
-                            <div className="text-xs font-medium text-orange-900">{requesterName}</div>
-                            <div className="text-xs text-orange-600">{request.type === 'time_request' ? '시간 요청' : '시간 변경'}</div>
+                        <div key={request._id || index} className="p-2 bg-blue-500 border border-blue-600 rounded-lg relative">
+                          <button
+                            onClick={() => handleDeleteRequest(request._id)}
+                            className="absolute top-1 right-1 p-1 text-gray-200 hover:text-red-300 transition-colors"
+                            title="요청 삭제"
+                          >
+                            <X size={12} />
+                          </button>
+                          <div className="flex justify-between items-center mb-1 pr-6">
+                            <div className="text-xs font-semibold text-white">{requesterName}</div>
+                            <div className="text-xs font-medium text-blue-100">{request.type === 'time_request' ? '자리 요청' : '시간 변경'}</div>
                           </div>
-                          <div className="text-xs text-orange-700 mb-2">
+                          <div className="text-xs font-medium text-blue-100 mb-2">
                             {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
                           </div>
                           {request.message && (
-                            <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
+                            <p className="text-xs text-white italic mb-2 line-clamp-2">"{request.message}"</p>
                           )}
                           <div className="flex justify-end space-x-2 mt-2">
                             <button
-                              onClick={() => handleRequestWithUpdate(request._id, 'approved')}
+                              onClick={() => handleRequestWithUpdateCallback(request._id, 'approved')}
                               className="px-3 py-1 text-xs bg-green-500 text-white rounded-md hover:bg-green-600"
                             >
                               승인
                             </button>
                             <button
-                              onClick={() => handleRequestWithUpdate(request._id, 'rejected')}
+                              onClick={() => handleRequestWithUpdateCallback(request._id, 'rejected')}
                               className="px-3 py-1 text-xs bg-red-500 text-white rounded-md hover:bg-red-600"
                             >
                               거절
@@ -916,7 +1008,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-md font-semibold text-gray-800 flex items-center">
                     <Users size={16} className="mr-2 text-blue-600" />
-                    교환요청 관리
+                    자리 요청관리
                   </h4>
                   <div className="flex bg-gray-100 rounded-lg p-1">
                     <button
@@ -960,28 +1052,35 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                     const requesterData = request.requester;
                                     const requesterName = requesterData?.name || `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
                                     return (
-                                      <div key={request._id || index} className="p-2 bg-blue-50 border border-blue-200 rounded-lg">
-                                        <div className="flex justify-between items-center mb-1">
-                                          <div className="text-xs font-medium text-blue-900">{requesterName}</div>
-                                          <div className="text-xs text-blue-600">
-                                            {request.type === 'slot_swap' ? '교환 요청' : '알 수 없는 요청'}
+                                      <div key={request._id || index} className="p-2 bg-blue-500 border border-blue-600 rounded-lg relative">
+                                        <button
+                                          onClick={() => handleDeleteRequest(request._id)}
+                                          className="absolute top-1 right-1 p-1 text-gray-200 hover:text-red-300 transition-colors"
+                                          title="요청 삭제"
+                                        >
+                                          <X size={12} />
+                                        </button>
+                                        <div className="flex justify-between items-center mb-1 pr-6">
+                                          <div className="text-xs font-semibold text-white">{requesterName}</div>
+                                          <div className="text-xs font-medium text-blue-100">
+                                            {request.type === 'time_request' ? '자리 요청' : request.type === 'slot_swap' ? '교환 요청' : '알 수 없는 요청'}
                                           </div>
                                         </div>
-                                        <div className="text-xs text-blue-700 mb-2">
+                                        <div className="text-xs font-medium text-blue-100 mb-2">
                                           {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
                                         </div>
                                         {request.message && (
-                                          <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
+                                          <p className="text-xs text-white italic mb-2 line-clamp-2">"{request.message}"</p>
                                         )}
                                         <div className="flex justify-end space-x-2 mt-2">
                                           <button
-                                            onClick={() => handleRequestWithUpdate(request._id, 'approved')}
+                                            onClick={() => handleRequestWithUpdateCallback(request._id, 'approved')}
                                             className="px-3 py-1 text-xs bg-green-500 text-white rounded-md hover:bg-green-600"
                                           >
                                             승인
                                           </button>
                                           <button
-                                            onClick={() => handleRequestWithUpdate(request._id, 'rejected')}
+                                            onClick={() => handleRequestWithUpdateCallback(request._id, 'rejected')}
                                             className="px-3 py-1 text-xs bg-red-500 text-white rounded-md hover:bg-red-600"
                                           >
                                             거절
@@ -1102,20 +1201,27 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                     const targetUserData = request.targetUser;
                                     const targetUserName = targetUserData?.name || `${targetUserData?.firstName || ''} ${targetUserData?.lastName || ''}`.trim() || '방장';
                                     return (
-                                      <div key={request._id || index} className="p-2 bg-gray-50 border border-gray-200 rounded-lg">
-                                        <div className="flex justify-between items-center mb-1">
-                                          <div className="text-xs font-medium text-gray-800">
+                                      <div key={request._id || index} className="p-2 bg-gray-50 border border-gray-200 rounded-lg relative">
+                                        <button
+                                          onClick={() => handleDeleteRequest(request._id)}
+                                          className="absolute top-1 right-1 p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                          title="요청 삭제"
+                                        >
+                                          <X size={12} />
+                                        </button>
+                                        <div className="flex justify-between items-center mb-1 pr-6">
+                                          <div className="text-xs font-semibold text-gray-800 !text-gray-800">
                                             To: {targetUserName}
                                           </div>
-                                          <div className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800">
+                                          <div className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 !text-yellow-800 font-medium">
                                             대기중
                                           </div>
                                         </div>
-                                        <div className="text-xs text-gray-700 mb-2">
+                                        <div className="text-xs font-medium text-gray-700 !text-gray-700 mb-2">
                                           {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
                                         </div>
                                         {request.message && (
-                                          <p className="text-xs text-gray-600 italic mb-2 line-clamp-2">"{request.message}"</p>
+                                          <p className="text-xs text-white italic mb-2 line-clamp-2">"{request.message}"</p>
                                         )}
                                         <div className="flex justify-end">
                                           <button
@@ -1529,7 +1635,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         {showChangeRequestModal && slotToChange && (
           <ChangeRequestModal
             onClose={closeChangeRequestModal}
-            onRequestChange={(message) => {
+            onRequestChange={(message, requestType) => {
               let requestData;
 
               // Helper function to get correct day index from Date object
@@ -1546,7 +1652,9 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 ? days[getDayIndex(slotToChange.date)]
                 : days[slotToChange.dayIndex - 1];
 
-              if (slotToChange.action === 'release') {
+              const actionType = requestType || slotToChange.action || 'request';
+
+              if (actionType === 'release') {
                 requestData = {
                   roomId: currentRoom._id,
                   type: 'slot_release',
@@ -1557,39 +1665,29 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   },
                   message: message || '시간을 취소합니다.',
                 };
-              } else if (slotToChange.action === 'swap') {
+              } else {
+                // 모든 다른 요청은 시간 양보 요청으로 처리
+                // 블록 요청인 경우 targetSlot 정보 사용
+                const endTime = slotToChange.isBlockRequest && slotToChange.targetSlot
+                  ? slotToChange.targetSlot.endTime
+                  : calculateEndTime(slotToChange.time);
+
                 requestData = {
                   roomId: currentRoom._id,
-                  type: 'slot_swap',
+                  type: 'time_request',
                   timeSlot: {
                     day: dayKey,
                     startTime: slotToChange.time,
-                    endTime: calculateEndTime(slotToChange.time),
+                    endTime: endTime,
                   },
                   targetUserId: slotToChange.targetUserId,
-                  targetSlot: slotToChange.targetSlot,
-                  message: message || '시간 교환을 요청합니다.',
-                };
-              } else {
-                requestData = {
-                  roomId: currentRoom._id,
-                  type: 'time_change',
-                  timeSlot: {
-                    day: dayKey,
-                    startTime: slotToChange.time,
-                    endTime: calculateEndTime(slotToChange.time),
-                  },
-                  targetSlot: { // This is the slot being changed
-                    day: dayKey,
-                    startTime: slotToChange.time,
-                    endTime: calculateEndTime(slotToChange.time),
-                    user: user.id
-                  },
-                  message: message || '시간 변경 요청합니다.',
+                  message: message || (slotToChange.isBlockRequest ? '블록 자리를 요청합니다.' : '자리를 요청합니다.'),
+                  isBlockRequest: slotToChange.isBlockRequest, // 블록 요청 플래그 추가
                 };
               }
+
               handleRequestSlot(requestData);
-              closeChangeRequestModal();
+              // closeChangeRequestModal will be called inside handleRequestSlot
             }}
             slotToChange={slotToChange} // 전체 객체를 전달 (dayDisplay 포함)
           />
@@ -1599,7 +1697,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             onClose={closeAlert}
             title="알림"
             message={customAlert.message}
-            type="warning"
+            type={customAlert.type || "warning"}
             showCancel={false}
         />
 

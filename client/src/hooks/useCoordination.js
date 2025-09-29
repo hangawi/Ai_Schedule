@@ -55,7 +55,9 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
           const isMember = data.members && data.members.some(m => m.user._id === userId);
 
           if (isOwner || isMember) {
-            setCurrentRoomState(data);
+            // Force a deep copy to break memoization in child components
+            const newRoomState = JSON.parse(JSON.stringify(data));
+            setCurrentRoomState(newRoomState);
             localStorage.setItem('currentRoomData', JSON.stringify(data));
           } else {
             // 접근 권한이 없으면 방 상태 클리어
@@ -78,10 +80,12 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
 
   const fetchRoomDetails = useCallback(async (roomId, silent = false) => {
     if (!silent) setError(null);
-    
+
     try {
       const data = await coordinationService.fetchRoomDetails(roomId);
-      setCurrentRoom(data);
+      // Force a deep copy to break memoization in child components
+      const newRoomState = JSON.parse(JSON.stringify(data));
+      setCurrentRoom(newRoomState);
     } catch (err) {
       // fetchRoomDetails error - silently handle error
       if (!silent) {
@@ -118,7 +122,9 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
     setError(null);
     try {
       const newRoom = await coordinationService.createRoom(roomData);
-      setCurrentRoom(newRoom);
+      // Force a deep copy to break memoization in child components
+      const newRoomState = JSON.parse(JSON.stringify(newRoom));
+      setCurrentRoom(newRoomState);
       return newRoom;
     } catch (err) {
       // createRoom error - silently handle error
@@ -131,7 +137,9 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
     setError(null);
     try {
       const joinedRoom = await coordinationService.joinRoom(inviteCode);
-      setCurrentRoom(joinedRoom);
+      // Force a deep copy to break memoization in child components
+      const newRoomState = JSON.parse(JSON.stringify(joinedRoom));
+      setCurrentRoom(newRoomState);
       return joinedRoom;
     } catch (err) {
       // joinRoom error - silently handle error
@@ -144,7 +152,9 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
     setError(null);
     try {
       const updatedRoom = await coordinationService.updateRoom(roomId, updateData);
-      setCurrentRoom(updatedRoom);
+      // Force a deep copy to break memoization in child components
+      const newRoomState = JSON.parse(JSON.stringify(updatedRoom));
+      setCurrentRoom(newRoomState);
       return updatedRoom;
     } catch (err) {
       // updateRoom error - silently handle error
@@ -219,15 +229,13 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
     } catch (err) {
       // createRequest error - silently handle error
 
-      // 중복 요청 오류인 경우 더 친화적인 메시지로 표시하고 에러를 다시 throw하지 않음
-      if (err.isDuplicate) {
-        if (showAlert) {
-          showAlert('⚠️ 이미 동일한 시간표에 대한 교환요청을 보냈습니다.\n\n기존 요청이 처리된 후 다시 시도해주세요.');
-        }
-        return; // 에러를 다시 throw하지 않음
+      // 중복 요청 오류인 경우 에러를 다시 throw해서 상위 컴포넌트에서 처리하도록 함
+      if (err.isDuplicate || err.message.includes('동일한 요청이 이미 존재합니다')) {
+        // Don't set global error state for duplicate requests, but still throw for parent handling
+        throw err; // 상위 컴포넌트에서 처리하도록 에러를 전달
       } else {
         setError(err.message);
-        throw err; // 다른 에러만 throw
+        throw err; // 다른 에러는 정상적으로 처리
       }
     }
   }, [fetchRoomDetails, onRefreshExchangeCount, onRefreshSentRequests, showAlert]);

@@ -249,7 +249,7 @@ exports.createRequest = async (req, res) => {
             request.timeSlot.day === timeSlot.day &&
             request.timeSlot.startTime === timeSlot.startTime &&
             request.timeSlot.endTime === timeSlot.endTime &&
-            (type !== 'slot_swap' || request.targetUser?.toString() === targetUserId),
+            ((type === 'slot_swap' || type === 'time_request') ? request.targetUser?.toString() === targetUserId : true),
       );
 
       if (hasDuplicateRequest) {
@@ -265,7 +265,7 @@ exports.createRequest = async (req, res) => {
          createdAt: new Date(),
       };
 
-      if (type === 'slot_swap' && targetUserId) {
+      if ((type === 'slot_swap' || type === 'time_request') && targetUserId) {
          requestData.targetUser = targetUserId;
          if (targetSlot) {
             requestData.targetSlot = targetSlot;
@@ -369,29 +369,74 @@ exports.createRequest = async (req, res) => {
                   room.timeSlots[targetSlotIndex].user = requester._id;
               }
            } else if (type === 'time_request' || type === 'time_change') {
-              // Add the requested time slot
-              const calculateDateFromDay = (dayName) => {
-                 const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-                 const dayIndex = daysOfWeek.indexOf(dayName.toLowerCase());
-                 if (dayIndex === -1) return new Date();
+              // For time_request, transfer the timeslot from target user to requester
+              if (targetUser) {
+                 // First, find and remove the slot from the target user
+                 const targetSlotIndex = room.timeSlots.findIndex(slot => {
+                    const slotUserId = slot.user._id || slot.user;
+                    return (
+                       slotUserId.toString() === targetUser._id.toString() &&
+                       slot.day === timeSlot.day &&
+                       slot.startTime === timeSlot.startTime &&
+                       slot.endTime === timeSlot.endTime
+                    );
+                 });
 
-                 const currentDate = new Date();
-                 const currentDay = currentDate.getDay();
-                 const diff = dayIndex - currentDay;
-                 const targetDate = new Date(currentDate);
-                 targetDate.setDate(currentDate.getDate() + diff);
-                 return targetDate;
-              };
+                 if (targetSlotIndex !== -1) {
+                    // Transfer the slot to the requester
+                    room.timeSlots[targetSlotIndex].user = requester._id;
+                    console.log(`🔄 [REQUEST APPROVED] Transferred timeslot from ${targetUser._id} to ${requester._id} at ${timeSlot.day} ${timeSlot.startTime}-${timeSlot.endTime}`);
+                 } else {
+                    console.log(`⚠️ [REQUEST APPROVED] Could not find target slot to transfer. Creating new slot for requester.`);
+                    // If we can't find the exact slot, create a new one
+                    const calculateDateFromDay = (dayName) => {
+                       const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                       const dayIndex = daysOfWeek.indexOf(dayName.toLowerCase());
+                       if (dayIndex === -1) return new Date();
 
-              room.timeSlots.push({
-                 user: requester._id,
-                 date: calculateDateFromDay(timeSlot.day),
-                 startTime: timeSlot.startTime,
-                 endTime: timeSlot.endTime,
-                 day: timeSlot.day,
-                 subject: timeSlot.subject || '승인된 요청',
-                 status: 'confirmed'
-              });
+                       const currentDate = new Date();
+                       const currentDay = currentDate.getDay();
+                       const diff = dayIndex - currentDay;
+                       const targetDate = new Date(currentDate);
+                       targetDate.setDate(currentDate.getDate() + diff);
+                       return targetDate;
+                    };
+
+                    room.timeSlots.push({
+                       user: requester._id,
+                       date: calculateDateFromDay(timeSlot.day),
+                       startTime: timeSlot.startTime,
+                       endTime: timeSlot.endTime,
+                       day: timeSlot.day,
+                       subject: timeSlot.subject || '승인된 요청',
+                       status: 'confirmed'
+                    });
+                 }
+              } else {
+                 // If no target user (slot_release type), just add the slot to requester
+                 const calculateDateFromDay = (dayName) => {
+                    const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                    const dayIndex = daysOfWeek.indexOf(dayName.toLowerCase());
+                    if (dayIndex === -1) return new Date();
+
+                    const currentDate = new Date();
+                    const currentDay = currentDate.getDay();
+                    const diff = dayIndex - currentDay;
+                    const targetDate = new Date(currentDate);
+                    targetDate.setDate(currentDate.getDate() + diff);
+                    return targetDate;
+                 };
+
+                 room.timeSlots.push({
+                    user: requester._id,
+                    date: calculateDateFromDay(timeSlot.day),
+                    startTime: timeSlot.startTime,
+                    endTime: timeSlot.endTime,
+                    day: timeSlot.day,
+                    subject: timeSlot.subject || '승인된 요청',
+                    status: 'confirmed'
+                 });
+              }
            }
         }
 

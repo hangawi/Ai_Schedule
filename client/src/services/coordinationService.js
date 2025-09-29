@@ -210,6 +210,7 @@ export const coordinationService = {
   // 요청 생성
   async createRequest(requestData) {
     const token = getAuthToken();
+
     const response = await fetch(`${API_BASE_URL}/api/coordination/requests`, {
       method: 'POST',
       headers: {
@@ -225,8 +226,9 @@ export const coordinationService = {
       error.isDuplicate = errData.duplicateRequest || false;
       throw error;
     }
-    
-    return await response.json();
+
+    const result = await response.json();
+    return result;
   },
 
   // 요청 처리
