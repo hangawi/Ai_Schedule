@@ -120,8 +120,28 @@ exports.analyzeCallTranscript = async (req, res) => {
 
 일정과 관련 없는 내용이면: {"schedules": []}`;
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
+      let response;
+      let attempts = 0;
+      const maxAttempts = 3;
+      const delay = 2000; // 2 seconds
+
+      while (attempts < maxAttempts) {
+        try {
+          const result = await model.generateContent(prompt);
+          response = await result.response;
+          break; // Success, exit loop
+        } catch (error) {
+          attempts++;
+          console.error(`Attempt ${attempts} failed:`, error.message);
+          if (attempts >= maxAttempts) {
+            // Rethrow the error if max attempts are reached
+            throw error;
+          }
+          // Wait for the specified delay before retrying
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+      
       const text = response.text();
       
       let parsedResult;
