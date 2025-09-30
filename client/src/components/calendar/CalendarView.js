@@ -65,16 +65,24 @@ const CalendarView = ({
 
       const hasPersonalTime = hasPersonalTimeForDate(date);
 
+      const scheduleCount = getScheduleCount(date);
+      const exceptionCount = getExceptionCount(date);
+      const personalTimeCount = getPersonalTimeCount(date);
+      
       dates.push({
         date: new Date(date),
         day: date.getDate(),
         isCurrentMonth,
         isToday,
         isSelected,
-        hasSchedule: hasScheduleForDate(date),
-        hasException: hasExceptionForDate(date),
-        hasPersonalTime: hasPersonalTime,
-        hasHoliday: hasHolidayForDate(date)
+        hasSchedule: scheduleCount > 0,
+        hasException: exceptionCount > 0,
+        hasPersonalTime: personalTimeCount > 0,
+        hasHoliday: hasHolidayForDate(date),
+        scheduleCount,
+        exceptionCount,
+        personalTimeCount,
+        totalCount: scheduleCount + exceptionCount + personalTimeCount
       });
 
       // 2025-10-01에 개인시간이 있는지 디버깅
@@ -109,6 +117,104 @@ const CalendarView = ({
         return s.dayOfWeek === dayOfWeek;
       }
     });
+  };;
+  const getScheduleCount = (date) => {
+    const dayOfWeek = date.getDay();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    
+    const slots = schedule.filter(s => {
+      if (s.specificDate) {
+        return s.specificDate === dateStr;
+      } else {
+        return s.dayOfWeek === dayOfWeek;
+      }
+    });
+    
+    // 병합
+    if (slots.length === 0) return 0;
+    const sorted = [...slots].sort((a, b) => a.startTime.localeCompare(b.startTime));
+    const merged = [];
+    let current = { ...sorted[0] };
+    
+    for (let i = 1; i < sorted.length; i++) {
+      const slot = sorted[i];
+      if (current.endTime === slot.startTime && current.priority === slot.priority) {
+        current.endTime = slot.endTime;
+      } else {
+        merged.push(current);
+        current = { ...slot };
+      }
+    }
+    merged.push(current);
+    return merged.length;
+  };;
+
+  const getExceptionCount = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
+    const exs = exceptions.filter(ex => {
+      const exDateStr = ex.specificDate;
+      return exDateStr === dateStr && ex.title !== '휴무일' && !ex.isHoliday;
+    });
+    
+    // 병합
+    if (exs.length === 0) return 0;
+    const sorted = [...exs].sort((a, b) => {
+      const aTime = a.startTime.includes('T') ? new Date(a.startTime).getHours() * 60 + new Date(a.startTime).getMinutes() : 
+                    parseInt(a.startTime.split(':')[0]) * 60 + parseInt(a.startTime.split(':')[1]);
+      const bTime = b.startTime.includes('T') ? new Date(b.startTime).getHours() * 60 + new Date(b.startTime).getMinutes() : 
+                    parseInt(b.startTime.split(':')[0]) * 60 + parseInt(b.startTime.split(':')[1]);
+      return aTime - bTime;
+    });
+    
+    const merged = [];
+    let current = { ...sorted[0] };
+    
+    for (let i = 1; i < sorted.length; i++) {
+      const slot = sorted[i];
+      const currentEnd = current.endTime.includes('T') ? 
+        `${String(new Date(current.endTime).getHours()).padStart(2, '0')}:${String(new Date(current.endTime).getMinutes()).padStart(2, '0')}` : 
+        current.endTime;
+      const slotStart = slot.startTime.includes('T') ? 
+        `${String(new Date(slot.startTime).getHours()).padStart(2, '0')}:${String(new Date(slot.startTime).getMinutes()).padStart(2, '0')}` : 
+        slot.startTime;
+      
+      if (currentEnd === slotStart) {
+        current.endTime = slot.endTime;
+      } else {
+        merged.push(current);
+        current = { ...slot };
+      }
+    }
+    merged.push(current);
+    return merged.length;
+  };;
+
+  const getPersonalTimeCount = (date) => {
+    const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
+    const pts = personalTimes.filter(pt => {
+      if (pt.isRecurring !== false && pt.days && pt.days.includes(dayOfWeek)) {
+        return true;
+      }
+      if (pt.isRecurring === false && pt.specificDate) {
+        return pt.specificDate === dateStr;
+      }
+      return false;
+    });
+    
+    // personalTimes는 이미 개별 항목이므로 그대로 개수 반환
+    return pts.length;
   };;
 
   const hasExceptionForDate = (date) => {
@@ -274,12 +380,24 @@ onClick={() => navigateMonth(1)}
                   </div>
                 </div>
               ) : (
-                <div className="flex-1 flex flex-col space-y-1">
-                  {dateInfo.hasSchedule && (
-                    <div className="w-full h-1 bg-blue-500 rounded-full"></div>
+                <div className="flex-1 flex flex-col justify-center space-y-1">
+                  {dateInfo.scheduleCount > 0 && (
+                    [...Array(Math.min(dateInfo.scheduleCount, 3))].map((_, i) => (
+                      <div key={`schedule-${i}`} className="w-full h-1 bg-blue-500 rounded-full"></div>
+                    ))
                   )}
-                  {(dateInfo.hasException || dateInfo.hasPersonalTime) && (
-                    <div className="w-full h-1 bg-red-500 rounded-full"></div>
+                  {dateInfo.exceptionCount > 0 && (
+                    [...Array(Math.min(dateInfo.exceptionCount, 3))].map((_, i) => (
+                      <div key={`exception-${i}`} className="w-full h-1 bg-yellow-500 rounded-full"></div>
+                    ))
+                  )}
+                  {dateInfo.personalTimeCount > 0 && (
+                    [...Array(Math.min(dateInfo.personalTimeCount, 3))].map((_, i) => (
+                      <div key={`personal-${i}`} className="w-full h-1 bg-red-500 rounded-full"></div>
+                    ))
+                  )}
+                  {(dateInfo.scheduleCount + dateInfo.exceptionCount + dateInfo.personalTimeCount) > 9 && (
+                    <div className="text-xs text-center text-gray-500">+더보기</div>
                   )}
                 </div>
               )}
@@ -290,9 +408,8 @@ onClick={() => navigateMonth(1)}
     </div>
   );
 
-
   return (
-    <div className="space-y-4">
+    <div>
       {renderCalendarHeader()}
       {renderMonthView()}
     </div>

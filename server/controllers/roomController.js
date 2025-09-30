@@ -252,7 +252,7 @@ exports.getRoomDetails = async (req, res) => {
          .populate('timeSlots.user', 'firstName lastName email')
          .populate('requests.requester', 'firstName lastName email')
          .populate('requests.targetUser', 'firstName lastName email')
-         .populate('negotiations.conflictingMembers.user', 'firstName lastName email name');
+         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email name');
 
       if (!room) {
          return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });

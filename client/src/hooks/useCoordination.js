@@ -229,6 +229,14 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
     } catch (err) {
       // createRequest error - silently handle error
 
+      // 방장 교환요청 제한 에러인 경우 모달로 표시
+      if (err.message.includes('방장은 시간표 교환요청을 할 수 없습니다')) {
+        if (showAlert) {
+          showAlert('방장은 시간표 교환요청을 할 수 없습니다.', 'error');
+        }
+        throw err;
+      }
+
       // 중복 요청 오류인 경우 에러를 다시 throw해서 상위 컴포넌트에서 처리하도록 함
       if (err.isDuplicate || err.message.includes('동일한 요청이 이미 존재합니다')) {
         // Don't set global error state for duplicate requests, but still throw for parent handling

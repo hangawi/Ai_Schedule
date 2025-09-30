@@ -627,6 +627,74 @@ const DetailTimeGrid = ({
       }, 100);
     }
   };
+  const applyCopyOptionsToSchedule = (baseSlots) => {
+    // 선호시간에 대한 복사 옵션 적용
+    if (!setSchedule || copyOptions.copyType === 'none' || !baseSlots || baseSlots.length === 0) return;
+
+    const additionalSlots = [];
+    const baseDate = new Date(selectedDate);
+
+    if (copyOptions.copyType === 'nextWeek') {
+      // 다음주 같은 요일에 복사
+      const nextWeekDate = new Date(baseDate);
+      nextWeekDate.setDate(baseDate.getDate() + 7);
+      const nextDateStr = `${nextWeekDate.getFullYear()}-${String(nextWeekDate.getMonth() + 1).padStart(2, '0')}-${String(nextWeekDate.getDate()).padStart(2, '0')}`;
+
+      baseSlots.forEach(slot => {
+        additionalSlots.push({
+          ...slot,
+          specificDate: nextDateStr
+        });
+      });
+
+    } else if (copyOptions.copyType === 'prevWeek') {
+      // 이전주 같은 요일에 복사
+      const prevWeekDate = new Date(baseDate);
+      prevWeekDate.setDate(baseDate.getDate() - 7);
+      const prevDateStr = `${prevWeekDate.getFullYear()}-${String(prevWeekDate.getMonth() + 1).padStart(2, '0')}-${String(prevWeekDate.getDate()).padStart(2, '0')}`;
+
+      baseSlots.forEach(slot => {
+        additionalSlots.push({
+          ...slot,
+          specificDate: prevDateStr
+        });
+      });
+
+    } else if (copyOptions.copyType === 'wholeMonth') {
+      // 이번달 모든 같은 요일에 복사
+      const currentMonth = baseDate.getMonth();
+      const currentYear = baseDate.getFullYear();
+      const dayOfWeek = baseDate.getDay();
+
+      const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+      const firstDayOfWeek = firstDayOfMonth.getDay();
+
+      let firstTargetDate = 1 + (dayOfWeek - firstDayOfWeek + 7) % 7;
+
+      while (firstTargetDate <= 31) {
+        const targetDate = new Date(currentYear, currentMonth, firstTargetDate);
+
+        if (targetDate.getMonth() === currentMonth && targetDate.toDateString() !== baseDate.toDateString()) {
+          const targetDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+
+          baseSlots.forEach(slot => {
+            additionalSlots.push({
+              ...slot,
+              specificDate: targetDateStr
+            });
+          });
+        }
+
+        firstTargetDate += 7;
+      }
+    }
+
+    if (additionalSlots.length > 0) {
+      setTimeout(() => {
+        setSchedule(prev => [...prev, ...additionalSlots]);
+      }, 100);
+    }
+  };
 
   // 휴무일 설정/해제 함수
   const addHolidayForDay = () => {

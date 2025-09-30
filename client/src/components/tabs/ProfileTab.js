@@ -307,19 +307,21 @@ const ProfileTab = ({ onEditingChange }) => {
             const localDay = String(koreaDateTime.getDate()).padStart(2, '0');
             const localDate = `${localYear}-${localMonth}-${localDay}`;
             
-            const newException = {
-              _id: `temp_${Date.now()}`,
+            // 챗봇으로 추가한 일정은 personalTimes(개인시간)에 추가
+            const newPersonalTime = {
+              id: `temp_${Date.now()}`,
               title: chatResponse.title || '챗봇 일정',
-              startTime: startDateTime.toISOString(),
-              endTime: endDateTime.toISOString(),
+              type: 'event',
+              startTime: `${String(startDateTime.getHours()).padStart(2, '0')}:${String(startDateTime.getMinutes()).padStart(2, '0')}`,
+              endTime: `${String(endDateTime.getHours()).padStart(2, '0')}:${String(endDateTime.getMinutes()).padStart(2, '0')}`,
+              days: [],
+              isRecurring: false,
               specificDate: localDate,
-              isHoliday: false,
-              isAllDay: false,
-              priority: chatResponse.priority || 3
+              color: '#ef4444' // 빨간색
             };
             
-            // 기존 scheduleExceptions에 새 항목만 추가 (서버 데이터 무시)
-            setScheduleExceptions(prev => [...prev, newException]);
+            // personalTimes에 새 항목만 추가 (서버 데이터 무시)
+            setPersonalTimes(prev => [...prev, newPersonalTime]);
           }
         } else {
           // 일반적인 경우: 서버 응답 데이터로 직접 업데이트
