@@ -12,6 +12,20 @@ const ProfileTab = ({ onEditingChange }) => {
   const [scheduleExceptions, setScheduleExceptions] = useState([]);
   const [personalTimes, setPersonalTimes] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
+
+  // 편집 모드일 때 현재 상태를 window에 저장하여 챗봇이 사용할 수 있도록 함
+  useEffect(() => {
+    if (isEditing) {
+      window.__profileEditingState = {
+        defaultSchedule,
+        scheduleExceptions,
+        personalTimes
+      };
+    } else {
+      // 편집 모드 종료 시 삭제
+      delete window.__profileEditingState;
+    }
+  }, [isEditing, defaultSchedule, scheduleExceptions, personalTimes]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [showDetailGrid, setShowDetailGrid] = useState(false);
   
@@ -252,8 +266,7 @@ const ProfileTab = ({ onEditingChange }) => {
       setIsLoading(true);
       const data = await userService.getUserSchedule();
 
-      console.log('🔍 ProfileTab - 로드된 개인시간 데이터:', data.personalTimes);
-      console.log('🔍 ProfileTab - 로드된 예외일정 데이터:', data.scheduleExceptions);
+
       setDefaultSchedule(data.defaultSchedule || []);
       setScheduleExceptions(data.scheduleExceptions || []);
       setPersonalTimes(data.personalTimes || []);
@@ -280,118 +293,66 @@ const ProfileTab = ({ onEditingChange }) => {
   // calendarUpdate 이벤트 수신하여 스케줄 새로고침
   useEffect(() => {
     const handleCalendarUpdate = async (event) => {
-      console.log('🔍 [ProfileTab] calendarUpdate 이벤트 수신:', {
-        isEditing,
-        eventType: event.detail?.type,
-        hasChatResponse: !!event.detail?.chatResponse,
-        eventDetail: event.detail
-      });
 
-      if (!isEditing) {
-        // 편집 모드가 아닐 때는 전체 새로고침
-        console.log('🔍 [ProfileTab] 편집 모드가 아님 - 전체 새로고침');
-        fetchSchedule();
-      } else {
-        // 편집 모드일 때는 새로 추가된 항목만 처리
-        if (event.detail && event.detail.type === 'add' && event.detail.chatResponse) {
-          console.log('🔍 [ProfileTab] 편집 모드에서 챗봇 이벤트 처리 시작');
+
+      // 챗봇에서 추가한 일정인 경우
+      if (event.detail && event.detail.type === 'add' && event.detail.chatResponse && event.detail.data) {
+
+        
+        // 편집 모드이고 초기화 상태인 경우, 서버 응답의 기존 데이터를 무시하고
+        // 챗봇이 방금 추가한 항목만 추가
+        if (isEditing && wasCleared) {
+
           const { chatResponse } = event.detail;
-
-          // 챗봇에서 추가된 일정 정보를 개인시간(personalTimes)에 추가
+          
+          // 챗봇이 추가한 새 항목만 personalTimes에 추가
           if (chatResponse.startDateTime && chatResponse.endDateTime) {
             const startDateTime = new Date(chatResponse.startDateTime);
             const endDateTime = new Date(chatResponse.endDateTime);
-
-            // 한국 시간대 기준으로 정확한 날짜 계산 (UTC 오프셋 문제 해결)
-            // 시간대 변환 없이 로컬 날짜 기준으로 YYYY-MM-DD 형식 생성
+            
             const koreaDateTime = new Date(startDateTime.toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
             const localYear = koreaDateTime.getFullYear();
             const localMonth = String(koreaDateTime.getMonth() + 1).padStart(2, '0');
             const localDay = String(koreaDateTime.getDate()).padStart(2, '0');
             const localDate = `${localYear}-${localMonth}-${localDay}`;
-
-            console.log('🔍 [ProfileTab] 날짜 변환 디버깅:', {
-              originalChatResponse: chatResponse.startDateTime,
-              startDateTimeObj: startDateTime.toString(),
-              koreaDateTimeObj: koreaDateTime.toString(),
-              localTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-              extractedLocalDate: localDate,
-              originalDate: startDateTime.getDate(),
-              koreaDate: koreaDateTime.getDate()
-            });
-
-            // 개인시간으로 추가 (반복되지 않는 특정 날짜의 개인시간)
+            
             const newPersonalTime = {
-              id: `temp_${Date.now()}`, // PersonalTimeManager는 id 필드 사용
+              id: `temp_${Date.now()}`,
               title: chatResponse.title || '새 개인시간',
-              type: 'custom', // 기본 타입 설정
-              startTime: koreaDateTime.toTimeString().slice(0, 5), // HH:MM 형식
-              endTime: new Date(endDateTime.toLocaleString("en-US", {timeZone: "Asia/Seoul"})).toTimeString().slice(0, 5), // HH:MM 형식
-              days: [], // 특정 날짜이므로 빈 배열
-              specificDate: localDate, // 로컬 날짜 YYYY-MM-DD 형식
-              isRecurring: false, // 반복되지 않음
+              type: 'custom',
+              startTime: koreaDateTime.toTimeString().slice(0, 5),
+              endTime: new Date(endDateTime.toLocaleString("en-US", {timeZone: "Asia/Seoul"})).toTimeString().slice(0, 5),
+              days: [],
+              specificDate: localDate,
+              isRecurring: false,
               priority: chatResponse.priority || 3,
-              color: '#FF6B6B' // 개인시간 기본 색상
+              color: '#FF6B6B'
             };
+            
+            // 기존 personalTimes에 새 항목만 추가 (서버 데이터 무시)
+            setPersonalTimes(prev => [...prev, newPersonalTime]);
 
-            console.log('🔍 [ProfileTab] 챗봇 날짜 변환 확인:', {
-              chatResponseStartDateTime: chatResponse.startDateTime,
-              startDateTime: startDateTime.toString(),
-              extractedLocalDate: localDate,
-              startTime: startDateTime.toTimeString().slice(0, 5),
-              endTime: endDateTime.toTimeString().slice(0, 5)
-            });
-
-            // State 업데이트 후 서버 저장을 분리하여 실행
-            const newPersonalTimes = [...personalTimes, newPersonalTime];
-            console.log('🔍 [ProfileTab] 챗봇에서 개인시간 추가:', newPersonalTime);
-            console.log('🔍 [ProfileTab] 업데이트된 개인시간 목록:', newPersonalTimes);
-
-            // State 먼저 업데이트
-            setPersonalTimes(newPersonalTimes);
-
-            // 편집 모드가 아닐 때만 서버에 즉시 저장 (State 업데이트와 분리)
-            if (!isEditing) {
-              // React가 state 업데이트를 처리할 시간을 주기 위해 약간의 지연
-              setTimeout(async () => {
-                try {
-                  const exceptionsToSave = scheduleExceptions.map(
-                    ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority }) =>
-                    ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority })
-                  );
-                  const personalTimesToSave = newPersonalTimes.map(
-                    ({ title, type, startTime, endTime, days, isRecurring, id, specificDate, color }) => {
-                      return { title, type, startTime, endTime, days, isRecurring, id, specificDate, color };
-                    }
-                  );
-
-                  console.log('🔍 [ProfileTab] 챗봇 개인시간 서버 저장 시작:', {
-                    personalTimesCount: personalTimesToSave.length,
-                    newPersonalTime,
-                    allPersonalTimes: personalTimesToSave
-                  });
-
-                  await userService.updateUserSchedule({
-                    defaultSchedule,
-                    scheduleExceptions: exceptionsToSave,
-                    personalTimes: personalTimesToSave
-                  });
-
-                  console.log('🔍 [ProfileTab] 챗봇 개인시간 서버 저장 완료');
-
-                  // 저장 완료 후 CalendarView 강제 리렌더링
-                  window.dispatchEvent(new Event('calendarUpdate'));
-                } catch (error) {
-                  console.error('🔍 [ProfileTab] 챗봇 개인시간 저장 실패:', error);
-                  // 저장 실패 시 해당 항목을 제거하여 UI와 서버 상태 일치시키기
-                  setPersonalTimes(prev => prev.filter(pt => pt.id !== newPersonalTime.id));
-                }
-              }, 200); // 200ms 후 저장 (React state 업데이트 대기)
-            }
           }
         } else {
-          // 이벤트 데이터가 없는 경우 기존 방식으로 폴백 (하지만 편집 모드에서는 아무것도 하지 않음)
+          // 일반적인 경우: 서버 응답 데이터로 직접 업데이트
+          const { data } = event.detail;
+          
+          if (data.personalTimes) {
+            setPersonalTimes(data.personalTimes);
+          }
+          
+          if (data.scheduleExceptions) {
+            setScheduleExceptions(data.scheduleExceptions);
+          }
+          
+          if (data.defaultSchedule) {
+            setDefaultSchedule(data.defaultSchedule);
+          }
         }
+      } else if (!isEditing) {
+        // 편집 모드가 아니고 일반 이벤트인 경우 전체 새로고침
+
+        fetchSchedule();
       }
     };
 

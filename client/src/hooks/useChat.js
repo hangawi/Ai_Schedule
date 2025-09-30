@@ -95,16 +95,29 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   break;
                case 'local':
                   if (context.context === 'profile') {
-                     // 내 프로필 탭 - 현재 스케줄 가져와서 새 개인시간 추가
-                     const currentScheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-                        headers: { 'x-auth-token': token }
-                     });
+                     // 내 프로필 탭 - 현재 스케줄 가져오기
+                     let currentSchedule;
+                     
+                     // ProfileTab에서 편집 중인 상태를 window에 저장했는지 확인
+                     if (window.__profileEditingState) {
+                        // 편집 모드의 현재 상태 사용 (초기화 반영됨)
 
-                     if (!currentScheduleResponse.ok) {
-                        throw new Error('현재 스케줄을 가져올 수 없습니다.');
+                        currentSchedule = window.__profileEditingState;
+                     } else {
+                        // 편집 모드가 아니면 서버에서 가져오기
+
+                        const currentScheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+                           headers: { 'x-auth-token': token }
+                        });
+
+                        if (!currentScheduleResponse.ok) {
+                           throw new Error('현재 스케줄을 가져올 수 없습니다.');
+                        }
+
+                        currentSchedule = await currentScheduleResponse.json();
                      }
 
-                     const currentSchedule = await currentScheduleResponse.json();
+
 
                      // 개인시간으로 추가 (특정 날짜) - 한국 시간대 기준으로 정확히 처리
                      const startDateTime = new Date(eventData.startDateTime);
@@ -122,16 +135,10 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                      const startTime = startDateTimeStr.split('T')[1].substring(0, 5);
                      const endTime = endDateTimeStr.split('T')[1].substring(0, 5);
 
-                     console.log('🔍 [useChat] 날짜/시간 추출 결과:', {
-                        originalStartDateTime: eventData.startDateTime,
-                        originalEndDateTime: eventData.endDateTime,
-                        extractedDate: specificDate,
-                        extractedStartTime: startTime,
-                        extractedEndTime: endTime
-                     });
+
 
                      const newPersonalTime = {
-                        id: Date.now().toString() + Math.random(),
+                        id: Date.now().toString() + Math.random().toString().substring(2),
                         title: eventData.title,
                         type: 'custom',
                         startTime: startTime,
@@ -142,11 +149,18 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                         color: 'bg-gray-500'
                      };
 
+                     // 기존 personalTimes 배열을 안전하게 가져와서 새 항목 추가
+                     const existingPersonalTimes = Array.isArray(currentSchedule.personalTimes)
+                        ? [...currentSchedule.personalTimes]
+                        : [];
+
+
+
                      apiEndpoint = `${API_BASE_URL}/api/users/profile/schedule`;
                      requestBody = {
                         defaultSchedule: currentSchedule.defaultSchedule,
                         scheduleExceptions: currentSchedule.scheduleExceptions || [],
-                        personalTimes: [...(currentSchedule.personalTimes || []), newPersonalTime]
+                        personalTimes: [...existingPersonalTimes, newPersonalTime]
                      };
                   } else {
                      // 나의 일정 탭 - 일반 로컬 DB 저장
@@ -188,6 +202,8 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             }
 
             const responseData = await response.json();
+
+
 
             // 로컬 일정의 경우 eventActions.addEvent도 호출하여 즉시 UI에 반영 (나의 일정 탭만)
             // setEventAddedKey가 fetchEvents를 호출하므로 eventActions.addEvent는 제거

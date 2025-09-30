@@ -39,6 +39,13 @@ exports.getUserSchedule = async (req, res) => {
     if (!user) {
       return res.status(404).json({ msg: 'User not found' });
     }
+
+    console.log('🔍 [userController] 스케줄 조회:', {
+      userId: req.user.id,
+      personalTimesCount: user.personalTimes ? user.personalTimes.length : 0,
+      personalTimesSample: user.personalTimes ? user.personalTimes.slice(0, 3) : []
+    });
+
     res.json({
       defaultSchedule: user.defaultSchedule,
       scheduleExceptions: user.scheduleExceptions,
@@ -61,6 +68,13 @@ exports.updateUserSchedule = async (req, res) => {
     if (!user) {
       return res.status(404).json({ msg: 'User not found' });
     }
+
+    console.log('🔍 [userController] 업데이트 요청:', {
+      userId: req.user.id,
+      existingPersonalTimesCount: user.personalTimes ? user.personalTimes.length : 0,
+      newPersonalTimesCount: personalTimes ? personalTimes.length : 0,
+      requestPersonalTimes: personalTimes
+    });
 
     // Explicitly rebuild the defaultSchedule array to ensure all fields are correctly processed
     if (defaultSchedule) {
@@ -125,8 +139,14 @@ exports.updateUserSchedule = async (req, res) => {
         scheduleExceptions: user.scheduleExceptions,
         personalTimes: user.personalTimes
       },
-      { new: true }
+      { new: true, runValidators: true }
     );
+
+    console.log('🔍 [userController] 업데이트 완료:', {
+      userId: req.user.id,
+      finalPersonalTimesCount: updatedUser.personalTimes ? updatedUser.personalTimes.length : 0,
+      finalPersonalTimesSample: updatedUser.personalTimes ? updatedUser.personalTimes.slice(0, 3) : []
+    });
 
     res.json({
       msg: 'Schedule updated successfully',

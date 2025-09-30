@@ -676,9 +676,7 @@ exports.runAutoSchedule = async (req, res) => {
    try {
       const { roomId } = req.params;
       const { minHoursPerWeek = 3, numWeeks = 4, currentWeek, ownerFocusTime = 'none' } = req.body;
-      console.log('자동 배정 요청 - 받은 옵션:', { minHoursPerWeek, numWeeks, currentWeek, ownerFocusTime });
       const startDate = currentWeek ? new Date(currentWeek) : new Date();
-      console.log('자동 배정 요청 - 계산된 startDate:', startDate.toISOString());
 
       const room = await Room.findById(roomId)
          .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes priority')
@@ -712,28 +710,7 @@ exports.runAutoSchedule = async (req, res) => {
          return memberId !== ownerId;
       });
 
-      console.log('🔍 [개인시간표기반] 자동배정 시작 - 개인 시간표 기반 스케줄링');
-      console.log('🔍 [개인시간표기반] 방장 정보:', {
-         id: room.owner._id,
-         name: room.owner.firstName || room.owner.name,
-         defaultSchedule: room.owner.defaultSchedule?.length || 0,
-         personalTimes: room.owner.personalTimes?.length || 0
-      });
-      console.log('🔍 [개인시간표기반] 멤버 수:', membersOnly.length);
 
-      // 각 멤버의 개인 시간표 정보 로깅
-      membersOnly.forEach((member, index) => {
-         console.log(`🔍 [개인시간표기반] 멤버 ${index + 1}:`, {
-            id: member.user._id,
-            name: member.user.firstName || member.user.name,
-            priority: member.priority || member.user.priority || 3,
-            defaultSchedule: member.user.defaultSchedule?.length || 0,
-            personalTimes: member.user.personalTimes?.length || 0
-         });
-      });
-
-      // 개인 시간표 기반 자동배정이므로 기존 시간표 분석 로직 제거
-      console.log('🔍 [개인시간표기반] 개인 시간표를 기반으로 자동배정 실행');
 
       const memberIds = membersOnly.map(m => {
         const memberId = m.user._id ? m.user._id.toString() : m.user.toString();
@@ -748,25 +725,19 @@ exports.runAutoSchedule = async (req, res) => {
         }
       }
 
-      console.log(`🔍 [개인시간표기반] ${membersWithDefaultSchedule}명/${membersOnly.length}명이 개인 시간표를 설정함`);
-
-      // 개인 시간표가 없는 멤버들 확인
-      if (membersWithDefaultSchedule === 0) {
-        return res.status(400).json({
-          msg: `모든 멤버가 개인 시간표를 설정하지 않았습니다. 각 멤버는 내프로필에서 선호시간표를 설정해야 합니다.`
-        });
-      }
-
+      // 개인 시간표 확인
       const membersWithoutDefaultSchedule = [];
       for (const member of membersOnly) {
-        if (!member.user.defaultSchedule || member.user.defaultSchedule.length === 0) {
-          const userName = member.user.name || `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim() || '알 수 없음';
+        if (!member.user || !member.user.defaultSchedule || member.user.defaultSchedule.length === 0) {
+          const userName = member.user?.name || `${member.user?.firstName || ''} ${member.user?.lastName || ''}`.trim() || '알 수 없음';
           membersWithoutDefaultSchedule.push(userName);
         }
       }
 
       if (membersWithoutDefaultSchedule.length > 0) {
-        console.log(`⚠️ [경고] 다음 멤버들이 개인 시간표를 설정하지 않음: ${membersWithoutDefaultSchedule.join(', ')}`);
+        return res.status(400).json({
+          msg: `다음 멤버들이 선호시간표를 설정하지 않았습니다: ${membersWithoutDefaultSchedule.join(', ')}. 각 멤버는 내프로필에서 선호시간표를 설정해야 합니다.`
+        });
       }
 
       // 방장의 차단 시간은 개인 시간표에서 자동으로 처리되므로 별도 처리 불필요
@@ -784,12 +755,7 @@ exports.runAutoSchedule = async (req, res) => {
         }
       }
 
-      console.log('🔍 [개인시간표기반] 자동 배정 요청 - 스케줄링 알고리즘에 전달할 옵션:', {
-        minHoursPerWeek,
-        numWeeks,
-        currentWeek,
-        membersWithDefaultSchedule
-      });
+
 
       // 개인 시간표 기반 자동배정으로 변경
       const result = schedulingAlgorithm.runAutoSchedule(
@@ -840,13 +806,13 @@ exports.runAutoSchedule = async (req, res) => {
       // 중복 삭제 방지 - 이미 위에서 삭제했으므로 주석 처리
       // room.timeSlots = room.timeSlots.filter(slot => !slot.assignedBy);
 
-      console.log('🔍 [저장] 개별 시간 할당 결과:');
+
 
       // 중복 방지를 위한 Set 생성
       const addedSlots = new Set();
 
       Object.values(result.assignments).forEach(assignment => {
-         console.log(`🔍 [저장] 멤버 ${assignment.memberId}: ${assignment.slots?.length || 0}개 개별 슬롯`);
+
          if (assignment.slots && assignment.slots.length > 0) {
             assignment.slots.forEach(slot => {
                // 중복 체크를 위한 유니크 키 생성
