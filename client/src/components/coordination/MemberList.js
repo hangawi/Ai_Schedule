@@ -54,24 +54,42 @@ const MemberItem = ({
             </span>
           )}
 
-          {!memberIsOwner && (member.carryOver > 0 || (() => {
-            if (!currentRoom?.negotiations) return false;
-            const activeNegotiations = currentRoom.negotiations.filter(neg =>
+          {!memberIsOwner && member.carryOver > 0 && (
+            <span className="ml-2 px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded-full flex-shrink-0 font-semibold">
+              이월: {member.carryOver}시간
+            </span>
+          )}
+
+          {!memberIsOwner && (() => {
+            if (!currentRoom?.negotiations) return null;
+            
+            // 해당 멤버가 참여하는 활성 협의들
+            const memberNegotiations = currentRoom.negotiations.filter(neg =>
               neg.status === 'active' &&
               neg.conflictingMembers &&
               Array.isArray(neg.conflictingMembers) &&
-              neg.conflictingMembers.length > 1
+              neg.conflictingMembers.some(cm => {
+                const cmUserId = cm.user?._id || cm.user;
+                const memberUserId = memberData._id || memberData.id;
+                return cmUserId?.toString() === memberUserId?.toString();
+              })
             );
-            return activeNegotiations.length > 0;
-          })()) && (
-            <span className={`ml-2 px-2 py-0.5 text-xs rounded-full flex-shrink-0 font-semibold ${
-              member.carryOver > 0
-                ? 'bg-yellow-100 text-yellow-800'
-                : 'bg-gray-100 text-gray-600'
-            }`}>
-              이월: {member.carryOver || 0}시간
-            </span>
-          )}
+
+            if (memberNegotiations.length === 0) return null;
+
+            // 협의 시간대 병합 표시
+            const negotiationTimes = memberNegotiations.map(neg => {
+              const startTime = neg.slotInfo?.startTime || '??:??';
+              const endTime = neg.slotInfo?.endTime || '??:??';
+              return `${startTime}-${endTime}`;
+            }).join(', ');
+
+            return (
+              <span className="ml-2 px-2 py-0.5 text-xs bg-orange-100 text-orange-800 rounded-full flex-shrink-0 font-semibold">
+                협의중: {negotiationTimes}
+              </span>
+            );
+          })()}
 
           {!memberIsOwner && member.totalProgressTime > 0 && (
             <span className="ml-2 px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded-full flex-shrink-0 font-semibold">

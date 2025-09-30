@@ -24,6 +24,31 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
     return null;
   }
 
+  // 접근 권한 확인: 당사자인지, 방장인지 구분
+  const isConflictingMember = negotiation.conflictingMembers?.some(cm => {
+    let cmUserId;
+    if (typeof cm.user === 'object' && cm.user !== null) {
+      cmUserId = cm.user._id || cm.user.id;
+    } else {
+      cmUserId = cm.user;
+    }
+    
+    const userId = currentUser?.id;
+    console.log('[NegotiationModal] Checking conflictingMember:', {
+      cmUser: cm.user,
+      cmUserId,
+      currentUserId: userId,
+      match: cmUserId === userId || cmUserId?.toString() === userId?.toString()
+    });
+    return cmUserId === userId || cmUserId?.toString() === userId?.toString();
+  });
+
+  // 방장인지 확인 (participants에는 있지만 conflictingMembers에는 없음)
+  const isOwnerViewing = !isConflictingMember && negotiation.participants?.some(p => {
+    const pUserId = typeof p === 'object' ? (p._id || p.id) : p;
+    return pUserId?.toString() === currentUser?.id;
+  });
+
   const handleResponse = async (response) => {
     setIsLoading(true);
     setError(null);
@@ -89,6 +114,15 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
   const userResponse = getCurrentUserResponse();
   const conflictingMembers = negotiation.conflictingMembers || [];
   const memberNames = getConflictingMemberNames();
+  
+  // 디버깅
+  console.log('[NegotiationModal] Debug:', {
+    isConflictingMember,
+    isOwnerViewing,
+    userResponse,
+    negotiationStatus: negotiation.status,
+    showButtons: negotiation.status === 'active' && userResponse === 'pending' && isConflictingMember
+  });
 
   return (
     <div
@@ -195,7 +229,7 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
             </div>
 
             {/* Response section */}
-            {negotiation.status === 'active' && userResponse === 'pending' && (
+            {negotiation.status === 'active' && userResponse === 'pending' && isConflictingMember && (
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-orange-800 mb-3">
                   협의 참여
@@ -302,27 +336,60 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                       </button>
                     </div>
                   </>
-                ) : (
+) : (
                   <>
                     <p className="text-sm text-orange-700 mb-4">
-                      시간을 분할할 수 있습니다. 앞 시간 또는 뒤 시간을 선택하세요.
+                      시간을 분할하여 배정할 수 있습니다. 원하는 시간대를 선택하세요.
                     </p>
-                    <div className="flex space-x-3">
-                      <button
-                        onClick={() => handleResponse('split_first')}
-                        disabled={isLoading}
-                        className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:bg-blue-300"
-                      >
-                        앞 시간 선택
-                      </button>
-                      <button
-                        onClick={() => handleResponse('split_second')}
-                        disabled={isLoading}
-                        className="flex-1 bg-purple-500 text-white py-2 px-4 rounded-lg hover:bg-purple-600 disabled:bg-purple-300"
-                      >
-                        뒤 시간 선택
-                      </button>
-                    </div>
+                    {(() => {
+                      // 시간을 분할 계산
+                      const startTime = negotiation.slotInfo?.startTime || '';
+                      const endTime = negotiation.slotInfo?.endTime || '';
+                      
+                      if (!startTime || !endTime) {
+                        return <p className="text-sm text-red-600">시간 정보를 불러올 수 없습니다.</p>;
+                      }
+
+                      // 시작과 종료 시간을 분 단위로 변환
+                      const [startHour, startMin] = startTime.split(':').map(Number);
+                      const [endHour, endMin] = endTime.split(':').map(Number);
+                      const totalMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin);
+                      
+                      // 각 멤버의 필요 슬롯 수 확인
+                      const currentUserMember = negotiation.conflictingMembers?.find(
+                        cm => (cm.user?._id || cm.user) === currentUser?.id
+                      );
+                      const requiredSlots = currentUserMember?.requiredSlots || 1;
+                      const requiredMinutes = requiredSlots * 30; // 1슬롯 = 30분
+
+                      // 중간 시간 계산
+                      const midMinutes = startHour * 60 + startMin + requiredMinutes;
+                      const midHour = Math.floor(midMinutes / 60);
+                      const midMin = midMinutes % 60;
+                      const midTime = `${String(midHour).padStart(2, '0')}:${String(midMin).padStart(2, '0')}`;
+
+                      const firstHalfTime = `${startTime}-${midTime}`;
+                      const secondHalfTime = `${midTime}-${endTime}`;
+
+                      return (
+                        <div className="flex space-x-3">
+                          <button
+                            onClick={() => handleResponse('split_first')}
+                            disabled={isLoading}
+                            className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:bg-blue-300"
+                          >
+                            {firstHalfTime}
+                          </button>
+                          <button
+                            onClick={() => handleResponse('split_second')}
+                            disabled={isLoading}
+                            className="flex-1 bg-purple-500 text-white py-2 px-4 rounded-lg hover:bg-purple-600 disabled:bg-purple-300"
+                          >
+                            {secondHalfTime}
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </>
                 )}
               </div>

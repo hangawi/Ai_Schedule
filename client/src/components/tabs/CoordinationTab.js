@@ -1361,7 +1361,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                               <div className="flex items-center mb-1">
                                 <Clock size={14} className="mr-1 text-orange-500" />
                                 <span className="text-sm font-medium">
-                                  {weekNegotiation.dayDisplay} {weekNegotiation.time}-{calculateEndTime(weekNegotiation.time)}
+                                  {weekNegotiation.dayDisplay} {negotiation.slotInfo?.startTime || weekNegotiation.time}-{negotiation.slotInfo?.endTime || calculateEndTime(weekNegotiation.time)}
                                 </span>
                                 {isUserInvolved && (
                                   <span className="ml-2 px-2 py-0.5 text-xs bg-orange-100 text-orange-800 rounded-full">
@@ -1386,7 +1386,31 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                               </div>
                             </div>
                             <button
-                              onClick={() => handleOpenNegotiation(negotiation)}
+                              onClick={() => {
+                                // 당사자인지 확인
+                                const isConflictingMember = negotiation.conflictingMembers?.some(cm => {
+                                  const cmUserId = cm.user?._id || cm.user?.id || cm.user;
+                                  return cmUserId?.toString() === user?.id;
+                                });
+                                
+                                // 방장인지 확인
+                                const isOwner = negotiation.participants?.some(p => {
+                                  const pUserId = typeof p === 'object' ? (p._id || p.id) : p;
+                                  return pUserId?.toString() === user?.id;
+                                }) && !isConflictingMember;
+                                
+                                // 당사자도 아니고 방장도 아니면 모달 표시
+                                if (!isConflictingMember && !isOwner) {
+                                  if (showAlert) {
+                                    showAlert('이 협의는 당사자와 방장만 확인할 수 있습니다.', 'error');
+                                  } else {
+                                    alert('이 협의는 당사자와 방장만 확인할 수 있습니다.');
+                                  }
+                                  return;
+                                }
+                                
+                                handleOpenNegotiation(negotiation);
+                              }}
                               className={`px-3 py-1 text-xs rounded-md transition-colors ${
                                 isUserInvolved
                                   ? 'bg-orange-500 text-white hover:bg-orange-600'

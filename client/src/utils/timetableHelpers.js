@@ -418,20 +418,33 @@ export const getCurrentWeekNegotiations = (roomData, weekDates, timeSlotsInDay, 
   if (!roomData?.negotiations || !weekDates || weekDates.length === 0) return [];
 
   const currentWeekNegotiations = [];
+  const addedNegotiationIds = new Set(); // 중복 방지
 
-  weekDates.forEach((dateInfo, dayIndex) => {
-    timeSlotsInDay.forEach(time => {
-      const negotiationInfo = getNegotiationInfoFunc(dateInfo.fullDate, time);
-      if (negotiationInfo) {
-        currentWeekNegotiations.push({
-          ...negotiationInfo,
-          dayIndex,
-          time,
-          date: dateInfo.fullDate,
-          dayDisplay: dateInfo.display
-        });
-      }
+  // 각 협의를 한 번만 추가 (병합된 상태로)
+  roomData.negotiations.forEach(negotiation => {
+    if (negotiation.status !== 'active') return;
+    if (addedNegotiationIds.has(negotiation._id)) return;
+
+    // 협의의 날짜가 현재 주에 포함되는지 확인
+    const negDate = negotiation.slotInfo?.date;
+    if (!negDate) return;
+
+    const negDateStr = new Date(negDate).toISOString().split('T')[0];
+    const weekDateInfo = weekDates.find(d => {
+      const weekDateStr = new Date(d.fullDate).toISOString().split('T')[0];
+      return weekDateStr === negDateStr;
     });
+
+    if (weekDateInfo) {
+      addedNegotiationIds.add(negotiation._id);
+      currentWeekNegotiations.push({
+        ...negotiation,
+        dayIndex: weekDates.indexOf(weekDateInfo),
+        time: negotiation.slotInfo.startTime,
+        date: weekDateInfo.fullDate,
+        dayDisplay: weekDateInfo.display
+      });
+    }
   });
 
   return currentWeekNegotiations;

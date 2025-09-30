@@ -264,9 +264,9 @@ exports.getNegotiations = async (req, res) => {
       const userId = req.user.id;
 
       const room = await Room.findById(roomId)
-         .populate('negotiations.conflictingMembers.user', 'firstName lastName email name')
-         .populate('negotiations.participants', 'firstName lastName email name')
-         .populate('negotiations.resolution.assignments.user', 'firstName lastName email name')
+         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email name')
+         .populate('negotiations.participants', '_id firstName lastName email name')
+         .populate('negotiations.resolution.assignments.user', '_id firstName lastName email name')
          .populate('owner', 'firstName lastName email name');
 
       if (!room) {
@@ -279,6 +279,12 @@ exports.getNegotiations = async (req, res) => {
       });
 
       console.log(`[getNegotiations] User ${userId}: 전체 ${room.negotiations.length}개, 접근가능 ${accessibleNegotiations.length}개`);
+      
+      // 디버깅: conflictingMembers.user에 _id가 있는지 확인
+      if (accessibleNegotiations.length > 0) {
+         const sampleNeg = accessibleNegotiations[0];
+         console.log('[getNegotiations] Sample negotiation conflictingMembers:', JSON.stringify(sampleNeg.conflictingMembers, null, 2));
+      }
 
       res.json({ negotiations: accessibleNegotiations });
    } catch (error) {
@@ -326,8 +332,8 @@ exports.respondToNegotiation = async (req, res) => {
       }
 
       const room = await Room.findById(roomId)
-         .populate('negotiations.conflictingMembers.user', 'firstName lastName email')
-         .populate('owner', 'firstName lastName email')
+         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email')
+         .populate('owner', '_id firstName lastName email')
          .populate('members.user', 'firstName lastName email');
 
       if (!room) {
@@ -420,8 +426,8 @@ exports.respondToNegotiation = async (req, res) => {
 
       // 업데이트된 협의 정보 반환
       const updatedRoom = await Room.findById(roomId)
-         .populate('negotiations.conflictingMembers.user', 'firstName lastName email')
-         .populate('negotiations.resolution.assignments.user', 'firstName lastName email');
+         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email')
+         .populate('negotiations.resolution.assignments.user', '_id firstName lastName email');
 
       const updatedNegotiation = updatedRoom.negotiations.id(negotiationId);
 
@@ -477,6 +483,11 @@ exports.createRequest = async (req, res) => {
 
       if (!room) {
          return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+      }
+
+      // 방장은 시간표 교환요청을 할 수 없음
+      if (room.owner.toString() === req.user.id) {
+         return res.status(403).json({ msg: '방장은 시간표 교환요청을 할 수 없습니다.' });
       }
 
       const hasDuplicateRequest = room.requests.some(
@@ -1262,7 +1273,7 @@ exports.runAutoSchedule = async (req, res) => {
          .populate('timeSlots.user', 'firstName lastName email')
          .populate('requests.requester', 'firstName lastName email')
          .populate('requests.targetUser', 'firstName lastName email')
-         .populate('negotiations.conflictingMembers.user', 'firstName lastName email name');
+         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email name');
 
       res.json({
          room: freshRoom,
