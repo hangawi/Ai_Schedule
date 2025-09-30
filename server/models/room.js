@@ -158,6 +158,15 @@ const RoomSchema = new mongoose.Schema({
   timeSlots: [TimeSlotSchema],
   requests: [RequestSchema],
   negotiations: [{
+    type: {
+      type: String,
+      enum: ['full_conflict', 'partial_conflict', 'time_slot_choice'], // full: 둘 다 전체 시간 필요, partial: 시간대 분할 가능, time_slot_choice: 시간대 선택
+      default: 'full_conflict'
+    },
+    availableTimeSlots: [{ // time_slot_choice일 때 선택 가능한 시간대들
+      startTime: String,
+      endTime: String
+    }],
     slotInfo: {
       day: String,
       startTime: String,
@@ -170,12 +179,28 @@ const RoomSchema = new mongoose.Schema({
         ref: 'User'
       },
       priority: Number,
+      requiredSlots: Number, // 이 멤버가 필요한 슬롯 수
       response: {
         type: String,
-        enum: ['pending', 'accept', 'reject'],
+        enum: ['pending', 'yield', 'claim', 'split_first', 'split_second', 'choose_slot'], // yield: 양보, claim: 주장, split_first: 앞시간 선택, split_second: 뒷시간 선택, choose_slot: 시간대 선택
         default: 'pending'
       },
+      chosenSlot: { // choose_slot일 때 선택한 시간대
+        startTime: String,
+        endTime: String
+      },
+      yieldOption: {
+        type: String,
+        enum: ['carry_over', 'alternative_time'], // carry_over: 이월, alternative_time: 다른 선호시간
+        default: null
+      },
+      alternativeSlots: [String], // 선택한 대체 시간 슬롯들 (예: ['2025-09-30-14:00'])
       respondedAt: Date
+    }],
+    // 접근 권한: 당사자들 + 방장
+    participants: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
     }],
     messages: [{
       from: {
@@ -194,15 +219,28 @@ const RoomSchema = new mongoose.Schema({
     }],
     status: {
       type: String,
-      enum: ['active', 'resolved'],
+      enum: ['active', 'resolved', 'escalated'], // escalated: 방장 개입 필요
       default: 'active'
     },
     resolution: {
-      assignedTo: {
+      type: {
+        type: String,
+        enum: ['yielded', 'split', 'owner_decision'], // yielded: 한쪽 양보, split: 시간 분할, owner_decision: 방장 결정
+        default: null
+      },
+      assignments: [{ // 최종 배정
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User'
+        },
+        slots: [String], // 배정된 슬롯들
+        isCarryOver: Boolean // 이월 처리 여부
+      }],
+      resolvedAt: Date,
+      resolvedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
-      },
-      resolvedAt: Date
+      }
     },
     createdAt: {
       type: Date,

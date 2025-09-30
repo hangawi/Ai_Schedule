@@ -1547,7 +1547,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   calculateEndTime={calculateEndTime}
                   readOnly={isOwner}
                   showMerged={showMerged}
-                  onNegotiationUpdate={setCurrentWeekNegotiations}
+                  onCurrentWeekNegotiationsChange={setCurrentWeekNegotiations}
                   onOpenChangeRequestModal={openChangeRequestModal}
                 />
               ) : (

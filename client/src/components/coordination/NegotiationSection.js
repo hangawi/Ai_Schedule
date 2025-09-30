@@ -48,7 +48,13 @@ const NegotiationItem = ({
           </div>
         </div>
         <button
-          onClick={() => onOpenNegotiation(negotiation)}
+          onClick={() => {
+            console.log('[NegotiationSection] Clicked negotiation button');
+            console.log('[NegotiationSection] Negotiation data:', negotiation);
+            console.log('[NegotiationSection] User ID:', user?.id);
+            console.log('[NegotiationSection] Is involved:', isUserInvolved);
+            onOpenNegotiation(negotiation);
+          }}
           className={`px-3 py-1 text-xs rounded-md transition-colors ${
             isUserInvolved
               ? 'bg-orange-500 text-white hover:bg-orange-600'

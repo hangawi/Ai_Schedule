@@ -459,7 +459,7 @@ export const coordinationService = {
   },
 
   // 협의 응답
-  async respondToNegotiation(roomId, negotiationId, response) {
+  async respondToNegotiation(roomId, negotiationId, payload) {
     const token = getAuthToken();
     const res = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/negotiations/${negotiationId}/respond`, {
       method: 'POST',
@@ -467,7 +467,7 @@ export const coordinationService = {
         'Content-Type': 'application/json',
         'x-auth-token': token,
       },
-      body: JSON.stringify({ response }),
+      body: JSON.stringify(payload), // payload includes: response, yieldOption, alternativeSlots
     });
 
     if (!res.ok) {
