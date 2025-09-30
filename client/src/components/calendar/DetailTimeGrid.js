@@ -25,7 +25,12 @@ const mergeConsecutiveTimeSlots = (schedule) => {
   if (!schedule || schedule.length === 0) return [];
 
   const sortedSchedule = [...schedule].sort((a, b) => {
-    if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
+    // specificDate가 있으면 날짜로 정렬, 없으면 dayOfWeek로 정렬
+    if (a.specificDate && b.specificDate) {
+      if (a.specificDate !== b.specificDate) return a.specificDate.localeCompare(b.specificDate);
+    } else if (a.dayOfWeek !== b.dayOfWeek) {
+      return a.dayOfWeek - b.dayOfWeek;
+    }
     return a.startTime.localeCompare(b.startTime);
   });
 
@@ -33,8 +38,12 @@ const mergeConsecutiveTimeSlots = (schedule) => {
   let currentGroup = null;
 
   for (const slot of sortedSchedule) {
+    const sameDate = (currentGroup && slot.specificDate && currentGroup.specificDate) 
+      ? (currentGroup.specificDate === slot.specificDate)
+      : (currentGroup && currentGroup.dayOfWeek === slot.dayOfWeek && !slot.specificDate && !currentGroup.specificDate);
+    
     if (currentGroup &&
-        currentGroup.dayOfWeek === slot.dayOfWeek &&
+        sameDate &&
         currentGroup.priority === slot.priority &&
         currentGroup.endTime === slot.startTime) {
       // 연속된 슬롯이므로 병합
@@ -61,7 +70,7 @@ const mergeConsecutiveTimeSlots = (schedule) => {
   }
 
   return merged;
-};
+};;
 
 // 다음 시간 슬롯 계산
 const getNextTimeSlot = (timeString) => {
@@ -171,81 +180,71 @@ const DetailTimeGrid = ({
       return;
     }
 
-    // 특정 날짜에 대한 예외 처리 - 기본 스케줄 대신 해당 날짜에만 적용되는 예외 생성
-    if (!setExceptions) {
+    // 수동 클릭은 특정 날짜의 defaultSchedule에 추가
+    if (!setSchedule) {
       return;
     }
 
-    const selectedDateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
-
-    // 해당 시간과 날짜에 이미 예외가 있는지 확인
+    const dayOfWeek = selectedDate.getDay(); // 0: Sunday, ..., 6: Saturday
     const [hour, minute] = startTime.split(':').map(Number);
+    
+    // 특정 날짜 문자열 생성
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    
+    // 해당 날짜의 해당 시간대에 이미 스케줄이 있는지 확인
+    const existingSlot = schedule.find(slot => 
+      slot.specificDate === dateStr &&
+      slot.startTime === startTime &&
+      slot.endTime === getNextTimeSlot(startTime)
+    );
 
-    const existingException = exceptions.find(ex => {
-      if (ex.specificDate !== selectedDateStr || !ex.startTime) return false;
-
-      // ISO 시간을 Date 객체로 변환하여 시간 비교
-      const exceptionStartTime = new Date(ex.startTime);
-      const exceptionHour = exceptionStartTime.getHours();
-      const exceptionMinute = exceptionStartTime.getMinutes();
-
-      // 같은 시간대인지 확인 (10분 단위)
-      return exceptionHour === hour && exceptionMinute === minute;
-    });
-
-    if (existingException) {
-      // 기존 예외가 있으면 우선순위를 순환시킴: 선호(3) → 보통(2) → 조정 가능(1) → 없어짐(삭제)
-      const currentPriority = existingException.priority || 3;
+    if (existingSlot) {
+      // 기존 슬롯이 있으면 우선순위를 순환시킴: 선호(3) → 보통(2) → 조정 가능(1) → 없어짐(삭제)
+      const currentPriority = existingSlot.priority || 3;
 
       if (currentPriority === 3) {
         // 선호 → 보통
-        setExceptions(exceptions.map(ex =>
-          ex._id === existingException._id
-            ? { ...ex, priority: 2, title: '일정' }
-            : ex
+        setSchedule(schedule.map(slot =>
+          (slot.specificDate === dateStr && slot.startTime === startTime && slot.endTime === getNextTimeSlot(startTime))
+            ? { ...slot, priority: 2 }
+            : slot
         ));
       } else if (currentPriority === 2) {
         // 보통 → 조정 가능
-        setExceptions(exceptions.map(ex =>
-          ex._id === existingException._id
-            ? { ...ex, priority: 1, title: '일정' }
-            : ex
+        setSchedule(schedule.map(slot =>
+          (slot.specificDate === dateStr && slot.startTime === startTime && slot.endTime === getNextTimeSlot(startTime))
+            ? { ...slot, priority: 1 }
+            : slot
         ));
       } else if (currentPriority === 1) {
         // 조정 가능 → 없어짐 (삭제)
-        setExceptions(exceptions.filter(ex => ex._id !== existingException._id));
+        setSchedule(schedule.filter(slot =>
+          !(slot.specificDate === dateStr && slot.startTime === startTime && slot.endTime === getNextTimeSlot(startTime))
+        ));
       } else {
         // 다른 우선순위는 선호로 초기화
-        setExceptions(exceptions.map(ex =>
-          ex._id === existingException._id
-            ? { ...ex, priority: 3, title: '일정' }
-            : ex
+        setSchedule(schedule.map(slot =>
+          (slot.specificDate === dateStr && slot.startTime === startTime && slot.endTime === getNextTimeSlot(startTime))
+            ? { ...slot, priority: 3 }
+            : slot
         ));
       }
     } else {
-      // 새로운 예외 생성 (선호로 시작)
-      const [hour, minute] = startTime.split(':').map(Number);
-      const endMinute = minute + 10;
-      const endHour = endMinute >= 60 ? hour + 1 : hour;
-      const adjustedEndMinute = endMinute >= 60 ? endMinute - 60 : endMinute;
-      const endTime = `${String(endHour).padStart(2, '0')}:${String(adjustedEndMinute).padStart(2, '0')}`;
+      // 새로운 슬롯 생성 (선호로 시작, 특정 날짜)
+      const endTime = getNextTimeSlot(startTime);
 
-      // 시작 시간과 종료 시간을 해당 날짜의 정확한 Date 객체로 생성
-      const startDateTime = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), hour, minute, 0);
-      const endDateTime = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), endHour, adjustedEndMinute, 0);
-
-      const newException = {
-        _id: Date.now().toString() + Math.random(),
-        title: '일정',
-        startTime: startDateTime.toISOString(),
-        endTime: endDateTime.toISOString(),
-        specificDate: selectedDateStr,
+      const newSlot = {
+        dayOfWeek: dayOfWeek,
+        startTime: startTime,
+        endTime: endTime,
         priority: 3, // 선호로 시작
-        isHoliday: false,
-        isAllDay: false
+        specificDate: dateStr // 특정 날짜 지정
       };
 
-      setExceptions([...exceptions, newException]);
+      setSchedule([...schedule, newSlot]);
     }
 
     setHasUnsavedChanges(true);
@@ -253,12 +252,19 @@ const DetailTimeGrid = ({
 
   const getSlotInfo = (startTime) => {
     const dayOfWeek = selectedDate.getDay();
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
     const currentSchedule = showMerged ? mergedSchedule : schedule;
 
     if (showMerged) {
       // 병합 모드에서는 해당 시간이 병합된 슬롯에 포함되는지 확인
       for (const slot of currentSchedule) {
-        if (slot.dayOfWeek === dayOfWeek) {
+        // specificDate가 있으면 날짜도 비교, 없으면 dayOfWeek만 비교
+        const dateMatches = slot.specificDate ? slot.specificDate === dateStr : slot.dayOfWeek === dayOfWeek;
+        
+        if (dateMatches) {
           const slotStartMinutes = timeToMinutes(slot.startTime);
           const slotEndMinutes = timeToMinutes(slot.endTime);
           const currentTimeMinutes = timeToMinutes(startTime);
@@ -271,7 +277,10 @@ const DetailTimeGrid = ({
       return null;
     } else {
       return currentSchedule.find(
-        s => s.dayOfWeek === dayOfWeek && s.startTime === startTime
+        s => {
+          const dateMatches = s.specificDate ? s.specificDate === dateStr : s.dayOfWeek === dayOfWeek;
+          return dateMatches && s.startTime === startTime;
+        }
       );
     }
   };
@@ -418,78 +427,77 @@ const DetailTimeGrid = ({
   };
 
   const addQuickTimeSlot = (startHour, endHour, priority = 3) => {
-    if (readOnly || !setExceptions) return;
+    if (readOnly || !setSchedule) return;
 
-    // 해당 날짜 문자열 생성
+    const dayOfWeek = selectedDate.getDay(); // 0: Sunday, ..., 6: Saturday
+    
+    // 특정 날짜 문자열 생성
     const year = selectedDate.getFullYear();
     const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
     const day = String(selectedDate.getDate()).padStart(2, '0');
     const dateStr = `${year}-${month}-${day}`;
 
-    console.log('🔍 [DetailTimeGrid] 빠른시간 추가:', { startHour, endHour, priority, dateStr });
+    console.log('🔍 [DetailTimeGrid] 빠른시간 추가 (선호시간, 특정 날짜):', { startHour, endHour, priority, dayOfWeek, dateStr });
 
-    // 해당 시간대에 이미 예외 일정이 있는지 확인
-    const existingExceptions = exceptions.filter(ex => {
-      if (!ex || !ex.specificDate || ex.specificDate !== dateStr) return false;
-
-      if (ex.startTime.includes('T')) {
-        const exStartTime = new Date(ex.startTime);
-        const exHour = exStartTime.getHours();
-        return exHour >= startHour && exHour < endHour;
-      } else {
-        const [exHour] = ex.startTime.split(':').map(Number);
-        return exHour >= startHour && exHour < endHour;
-      }
+    // 해당 날짜 및 시간대에 이미 스케줄이 있는지 확인
+    const existingSlots = schedule.filter(slot => {
+      // 특정 날짜 스케줄만 확인 (specificDate가 있는 것)
+      if (!slot.specificDate || slot.specificDate !== dateStr) return false;
+      
+      const slotStart = slot.startTime.split(':').map(Number);
+      const slotEnd = slot.endTime.split(':').map(Number);
+      const slotStartMinutes = slotStart[0] * 60 + slotStart[1];
+      const slotEndMinutes = slotEnd[0] * 60 + slotEnd[1];
+      
+      const targetStartMinutes = startHour * 60;
+      const targetEndMinutes = endHour * 60;
+      
+      // 겹치는지 확인
+      return (slotStartMinutes < targetEndMinutes && slotEndMinutes > targetStartMinutes);
     });
 
-    if (existingExceptions.length > 0) {
-      // 이미 있으면 해당 시간대의 예외 일정 제거 (토글)
-      console.log('🔍 [DetailTimeGrid] 기존 예외 일정 제거:', existingExceptions.length);
-      const filteredExceptions = exceptions.filter(ex => {
-        if (!ex || !ex.specificDate || ex.specificDate !== dateStr) return true;
-
-        let exHour;
-        if (ex.startTime.includes('T')) {
-          const exStartTime = new Date(ex.startTime);
-          exHour = exStartTime.getHours();
-        } else {
-          [exHour] = ex.startTime.split(':').map(Number);
-        }
-
-        return !(exHour >= startHour && exHour < endHour);
+    if (existingSlots.length > 0) {
+      // 이미 있으면 해당 날짜 및 시간대의 모든 10분 슬롯 제거 (토글)
+      console.log('🔍 [DetailTimeGrid] 기존 선호시간 제거:', existingSlots.length);
+      const filteredSchedule = schedule.filter(slot => {
+        if (!slot.specificDate || slot.specificDate !== dateStr) return true;
+        
+        const slotStart = slot.startTime.split(':').map(Number);
+        const slotEnd = slot.endTime.split(':').map(Number);
+        const slotStartMinutes = slotStart[0] * 60 + slotStart[1];
+        const slotEndMinutes = slotEnd[0] * 60 + slotEnd[1];
+        
+        const targetStartMinutes = startHour * 60;
+        const targetEndMinutes = endHour * 60;
+        
+        // 겹치지 않는 것만 유지
+        return !(slotStartMinutes < targetEndMinutes && slotEndMinutes > targetStartMinutes);
       });
-      setExceptions(filteredExceptions);
+      setSchedule(filteredSchedule);
     } else {
-      // 없으면 해당 날짜에만 예외 일정 추가
-      const exceptions_to_add = [];
-
+      // 없으면 특정 날짜에 10분 단위로 슬롯들을 추가
+      const newSlots = [];
+      
       for (let hour = startHour; hour < endHour; hour++) {
         for (let minute = 0; minute < 60; minute += 10) {
-          const endMinute = minute + 10;
-          const actualEndHour = endMinute >= 60 ? hour + 1 : hour;
-          const actualEndMinute = endMinute >= 60 ? 0 : endMinute;
-
-          // 정확한 로컬 날짜/시간으로 Date 객체 생성
-          const startDateTime = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), hour, minute, 0);
-          const endDateTime = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), actualEndHour, actualEndMinute, 0);
-
-          const newException = {
-            _id: `quick_${Date.now()}_${hour}_${minute}`,
-            title: '일정',
-            startTime: startDateTime.toISOString(),
-            endTime: endDateTime.toISOString(),
+          const startTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+          const nextMinute = minute + 10;
+          const nextHour = nextMinute >= 60 ? hour + 1 : hour;
+          const adjustedMinute = nextMinute >= 60 ? 0 : nextMinute;
+          const endTime = `${String(nextHour).padStart(2, '0')}:${String(adjustedMinute).padStart(2, '0')}`;
+          
+          newSlots.push({
+            dayOfWeek: dayOfWeek,
+            startTime: startTime,
+            endTime: endTime,
             priority: priority,
-            specificDate: dateStr,
-            isHoliday: false,
-            isAllDay: false
-          };
-
-          exceptions_to_add.push(newException);
+            specificDate: dateStr // 특정 날짜 지정
+          });
         }
       }
 
-      console.log('🔍 [DetailTimeGrid] 새 예외 일정 추가:', exceptions_to_add.length);
-      setExceptions([...exceptions, ...exceptions_to_add]);
+      console.log('🔍 [DetailTimeGrid] 새 선호시간 추가 (특정 날짜, 10분 단위):', newSlots.length, '개 슬롯');
+      setSchedule([...schedule, ...newSlots]);
     }
 
     setHasUnsavedChanges(true);
@@ -925,7 +933,15 @@ const DetailTimeGrid = ({
     const displaySlots = [];
 
     // 병합된 기본 스케줄 추가
-    mergedSchedule.filter(slot => slot.dayOfWeek === dayOfWeek).forEach(slot => {
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    
+    mergedSchedule.filter(slot => {
+      // specificDate가 있으면 날짜 비교, 없으면 dayOfWeek 비교
+      return slot.specificDate ? slot.specificDate === dateStr : slot.dayOfWeek === dayOfWeek;
+    }).forEach(slot => {
       displaySlots.push({
         type: 'schedule',
         startTime: slot.startTime,
@@ -938,11 +954,6 @@ const DetailTimeGrid = ({
 
     // 예외 일정들도 추가 (병합 처리를 위해 10분 단위로 분할)
     const exceptionSlots = [];
-
-    const year = selectedDate.getFullYear();
-    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-    const day = String(selectedDate.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
 
     exceptions.forEach(ex => {
       // 유효하지 않은 데이터 필터링

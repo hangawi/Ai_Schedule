@@ -678,9 +678,18 @@ exports.runAutoSchedule = async (req, res) => {
       const { minHoursPerWeek = 3, numWeeks = 4, currentWeek, ownerFocusTime = 'none' } = req.body;
       const startDate = currentWeek ? new Date(currentWeek) : new Date();
 
+      console.log('===== 방 조회 시작 =====');
+      console.log('roomId:', roomId);
+      
       const room = await Room.findById(roomId)
-         .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes priority')
-         .populate('members.user', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes priority');
+        .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes priority')
+        .populate('members.user', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes priority');
+      
+      console.log('방 조회 완료:', {
+        roomId: room?._id,
+        memberCount: room?.members?.length,
+        hasOwner: !!room?.owner
+      });
 
       if (!room) {
          return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
@@ -726,13 +735,32 @@ exports.runAutoSchedule = async (req, res) => {
       }
 
       // 개인 시간표 확인
+      console.log('===== 멤버 검증 시작 =====');
+      console.log('membersOnly 개수:', membersOnly.length);
+      
       const membersWithoutDefaultSchedule = [];
       for (const member of membersOnly) {
+        console.log('멤버 체크:', {
+          hasUser: !!member.user,
+          userType: typeof member.user,
+          isObjectId: member.user?._id ? 'has _id' : 'no _id',
+          userId: member.user?._id?.toString(),
+          hasDefaultSchedule: !!member.user?.defaultSchedule,
+          defaultScheduleLength: member.user?.defaultSchedule?.length || 0,
+          defaultScheduleData: member.user?.defaultSchedule, // 전체 데이터 출력
+          firstName: member.user?.firstName,
+          lastName: member.user?.lastName
+        });
+        
         if (!member.user || !member.user.defaultSchedule || member.user.defaultSchedule.length === 0) {
           const userName = member.user?.name || `${member.user?.firstName || ''} ${member.user?.lastName || ''}`.trim() || '알 수 없음';
+          console.log('❌ 선호시간표 없음:', userName);
           membersWithoutDefaultSchedule.push(userName);
+        } else {
+          console.log('✅ 선호시간표 있음:', member.user.firstName, member.user.lastName, '- 개수:', member.user.defaultSchedule.length);
         }
       }
+      console.log('===== 멤버 검증 종료 =====');
 
       if (membersWithoutDefaultSchedule.length > 0) {
         return res.status(400).json({

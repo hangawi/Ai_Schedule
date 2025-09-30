@@ -21,6 +21,7 @@ const RoomManagementModal = ({
       startHour: room?.settings?.startHour || 9,
       endHour: room?.settings?.endHour || 18,
       blockedTimes: room?.settings?.blockedTimes || [],
+      roomExceptions: room?.settings?.roomExceptions || [],
     },
   });
 

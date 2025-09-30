@@ -83,6 +83,7 @@ exports.updateUserSchedule = async (req, res) => {
         startTime: slot.startTime,
         endTime: slot.endTime,
         priority: slot.priority || 2, // Ensure priority has a value, defaulting to 2
+        specificDate: slot.specificDate // IMPORTANT: Include specificDate field
       }));
     } else {
       user.defaultSchedule = [];

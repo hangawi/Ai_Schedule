@@ -100,20 +100,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         0: '일요일', 1: '월요일', 2: '화요일', 3: '수요일', 4: '목요일', 5: '금요일', 6: '토요일'
       };
 
-      // 새로운 방장 시간표 예외들 생성
+      // 새로운 방장 시간표 예외들 생성 (불가능한 시간만 추가)
       const syncedExceptions = [];
 
-      // defaultSchedule을 roomExceptions으로 변환
-      (ownerScheduleData.defaultSchedule || []).forEach(schedule => {
-        syncedExceptions.push({
-          type: 'daily_recurring',
-          name: `기본 시간표 (방장)`,
-          dayOfWeek: schedule.dayOfWeek,
-          startTime: schedule.startTime,
-          endTime: schedule.endTime,
-          isSynced: true
-        });
-      });
+      // defaultSchedule(가능한 시간)은 roomExceptions에 추가하지 않음
+      // roomExceptions는 금지 시간이므로
 
       // scheduleExceptions을 roomExceptions으로 변환 (시간대별 병합)
       const scheduleExceptionGroups = {};
@@ -269,7 +260,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       });
 
       // 현재 방 데이터 새로고침
-      await refreshCurrentRoom();
+      await fetchRoomDetails(currentRoom._id);
 
       showAlert(`방장 개인시간이 성공적으로 동기화되었습니다! (${syncedExceptions.length}개 항목)`);
       console.log('✅ 방장 개인시간 동기화 완료');

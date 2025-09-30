@@ -339,49 +339,82 @@ class SchedulingAlgorithm {
           const dayOfWeek = schedule.dayOfWeek; // 0=일요일, 1=월요일, ..., 6=토요일
           const startTime = schedule.startTime;
           const endTime = schedule.endTime;
+          const specificDate = schedule.specificDate; // 특정 날짜 (YYYY-MM-DD 형식)
+          const schedulePriority = schedule.priority || priority; // 슬롯별 우선순위
 
-          // 월-금만 처리 (주말 제외)
+          // 주말 제외
           if (dayOfWeek === 0 || dayOfWeek === 6) {
             return;
           }
 
-
-
-          // 스케줄링 기간 내의 모든 해당 요일에 대해 시간대 생성
-          const currentDate = new Date(startDate);
-          while (currentDate < endDate) {
-            if (currentDate.getDay() === dayOfWeek) {
-              // 해당 요일의 시간대별로 10분 단위 슬롯 생성
+          // specificDate가 있으면 해당 날짜에만 적용, 없으면 주간 반복
+          if (specificDate) {
+            // 특정 날짜 처리
+            const targetDate = new Date(specificDate);
+            
+            // 스케줄링 기간 내에 있는지 확인
+            if (targetDate >= startDate && targetDate < endDate) {
               const slots = this._generateTimeSlots(startTime, endTime);
 
               slots.forEach(slotTime => {
-                const dateKey = currentDate.toISOString().split('T')[0];
+                const dateKey = targetDate.toISOString().split('T')[0];
                 const key = `${dateKey}-${slotTime}`;
 
-                // 해당 시간대 슬롯이 아직 없다면 생성
                 if (!timetable[key]) {
-                  const oneIndexedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
+                  const oneIndexedDayOfWeek = targetDate.getDay() === 0 ? 7 : targetDate.getDay();
 
                   timetable[key] = {
                     assignedTo: null,
                     available: [],
-                    date: new Date(currentDate),
+                    date: new Date(targetDate),
                     dayOfWeek: oneIndexedDayOfWeek,
                   };
                 }
 
-                // 중복 추가 방지
                 const existingAvailability = timetable[key].available.find(a => a.memberId === userId);
                 if (!existingAvailability) {
                   timetable[key].available.push({
                     memberId: userId,
-                    priority: priority,
+                    priority: schedulePriority,
                     isOwner: isOwner
                   });
                 }
               });
             }
-            currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+          } else {
+            // 주간 반복 처리 (기존 로직 유지)
+            const currentDate = new Date(startDate);
+            while (currentDate < endDate) {
+              if (currentDate.getDay() === dayOfWeek) {
+                const slots = this._generateTimeSlots(startTime, endTime);
+
+                slots.forEach(slotTime => {
+                  const dateKey = currentDate.toISOString().split('T')[0];
+                  const key = `${dateKey}-${slotTime}`;
+
+                  if (!timetable[key]) {
+                    const oneIndexedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
+
+                    timetable[key] = {
+                      assignedTo: null,
+                      available: [],
+                      date: new Date(currentDate),
+                      dayOfWeek: oneIndexedDayOfWeek,
+                    };
+                  }
+
+                  const existingAvailability = timetable[key].available.find(a => a.memberId === userId);
+                  if (!existingAvailability) {
+                    timetable[key].available.push({
+                      memberId: userId,
+                      priority: schedulePriority,
+                      isOwner: isOwner
+                    });
+                  }
+                });
+              }
+              currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+            }
           }
         });
       } else {
