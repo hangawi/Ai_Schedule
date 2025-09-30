@@ -6,21 +6,49 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedYieldOption, setSelectedYieldOption] = useState('carry_over');
+  const [alternativeSlots, setAlternativeSlots] = useState([]);
+  const [chosenSlot, setChosenSlot] = useState(null);
 
   useEffect(() => {
     if (negotiation) {
+      console.log('[NegotiationModal] Received negotiation:', negotiation);
+      console.log('[NegotiationModal] Current user:', currentUser);
+      console.log('[NegotiationModal] Room ID:', roomId);
       setMessages(negotiation.messages || []);
     }
-  }, [negotiation]);
+  }, [negotiation, currentUser, roomId]);
 
-  if (!isOpen || !negotiation) return null;
+  if (!isOpen || !negotiation) {
+    console.log('[NegotiationModal] Not rendering - isOpen:', isOpen, 'negotiation:', negotiation);
+    return null;
+  }
 
   const handleResponse = async (response) => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const result = await coordinationService.respondToNegotiation(roomId, negotiation._id, response);
+      const payload = { response };
+
+      if (response === 'yield') {
+        payload.yieldOption = selectedYieldOption;
+        if (selectedYieldOption === 'alternative_time' && alternativeSlots.length === 0) {
+          setError('대체 시간을 선택해주세요.');
+          setIsLoading(false);
+          return;
+        }
+        payload.alternativeSlots = alternativeSlots;
+      } else if (response === 'choose_slot') {
+        if (!chosenSlot) {
+          setError('시간대를 선택해주세요.');
+          setIsLoading(false);
+          return;
+        }
+        payload.chosenSlot = chosenSlot;
+      }
+
+      const result = await coordinationService.respondToNegotiation(roomId, negotiation._id, payload);
       setMessages(result.negotiation.messages);
 
       // Refresh parent component to update room data
@@ -117,22 +145,50 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
               <div className="space-y-2">
                 {conflictingMembers.map((member, index) => (
                   <div key={index} className="flex justify-between items-center p-2 bg-white rounded border">
-                    <span className="text-sm font-medium">
-                      {member.user?.name ||
-                       (member.user?.firstName || member.user?.lastName ?
-                        `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim() :
-                        '멤버')}
-                    </span>
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      member.response === 'accept'
-                        ? 'bg-green-100 text-green-800'
-                        : member.response === 'reject'
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {member.response === 'accept' ? '양보' :
-                       member.response === 'reject' ? '거절' : '대기중'}
-                    </span>
+                    <div className="flex-1">
+                      <span className="text-sm font-medium">
+                        {member.user?.name ||
+                         (member.user?.firstName || member.user?.lastName ?
+                          `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim() :
+                          '멤버')}
+                      </span>
+                      {member.requiredSlots && (
+                        <span className="ml-2 text-xs text-gray-500">
+                          (필요: {member.requiredSlots}슬롯)
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        member.response === 'yield'
+                          ? 'bg-green-100 text-green-800'
+                          : member.response === 'claim'
+                          ? 'bg-red-100 text-red-800'
+                          : member.response === 'split_first'
+                          ? 'bg-blue-100 text-blue-800'
+                          : member.response === 'split_second'
+                          ? 'bg-purple-100 text-purple-800'
+                          : member.response === 'choose_slot'
+                          ? 'bg-indigo-100 text-indigo-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {member.response === 'yield' ? '양보' :
+                         member.response === 'claim' ? '주장' :
+                         member.response === 'split_first' ? '앞시간' :
+                         member.response === 'split_second' ? '뒷시간' :
+                         member.response === 'choose_slot' ? '시간선택' : '대기중'}
+                      </span>
+                      {member.yieldOption && (
+                        <span className="text-xs text-gray-600 mt-1">
+                          {member.yieldOption === 'carry_over' ? '이월' : '대체시간'}
+                        </span>
+                      )}
+                      {member.chosenSlot && (
+                        <span className="text-xs text-gray-600 mt-1">
+                          {member.chosenSlot.startTime}-{member.chosenSlot.endTime}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -144,38 +200,152 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                 <h4 className="text-sm font-medium text-orange-800 mb-3">
                   협의 참여
                 </h4>
-                <p className="text-sm text-orange-700 mb-4">
-                  이 시간대를 양보하시겠습니까? 한 명이 양보하면 나머지 분이 시간을 배정받습니다.
-                  모두가 거절하면 해당 시간이 이월됩니다.
-                </p>
-                <div className="flex space-x-3">
-                  <button
-                    onClick={() => handleResponse('accept')}
-                    disabled={isLoading}
-                    className="flex-1 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 disabled:bg-green-300 flex items-center justify-center"
-                  >
-                    <Check size={16} className="mr-2" />
-                    양보하기
-                  </button>
-                  <button
-                    onClick={() => handleResponse('reject')}
-                    disabled={isLoading}
-                    className="flex-1 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 disabled:bg-red-300 flex items-center justify-center"
-                  >
-                    거절하기
-                  </button>
-                </div>
+
+                {negotiation.type === 'time_slot_choice' ? (
+                  <>
+                    <p className="text-sm text-orange-700 mb-4">
+                      선호 가능한 시간대 중 하나를 선택하세요. 서로 다른 시간대를 선택하면 각자 배정됩니다.
+                    </p>
+
+                    {/* 시간대 선택 */}
+                    <div className="mb-4 bg-white p-3 rounded-lg border border-orange-200">
+                      <label className="text-sm font-medium text-gray-700 mb-2 block">
+                        시간대 선택:
+                      </label>
+                      <div className="space-y-2">
+                        {negotiation.availableTimeSlots?.map((slot, index) => (
+                          <label key={index} className="flex items-center p-2 border rounded hover:bg-gray-50 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="timeSlot"
+                              value={index}
+                              checked={chosenSlot?.startTime === slot.startTime}
+                              onChange={() => setChosenSlot(slot)}
+                              className="mr-2"
+                            />
+                            <span className="text-sm font-medium">{slot.startTime} - {slot.endTime}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleResponse('choose_slot')}
+                      disabled={isLoading || !chosenSlot}
+                      className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:bg-blue-300"
+                    >
+                      시간대 선택 완료
+                    </button>
+
+                    <div className="mt-2 text-xs text-gray-600 text-center">
+                      시간대가 겹치면 양보/주장으로 다시 선택하게 됩니다
+                    </div>
+                  </>
+                ) : negotiation.type === 'full_conflict' ? (
+                  <>
+                    <p className="text-sm text-orange-700 mb-4">
+                      전체 시간이 필요한 충돌입니다. 양보하거나 주장하세요.
+                    </p>
+
+                    {/* Yield option selection */}
+                    <div className="mb-4 bg-white p-3 rounded-lg border border-orange-200">
+                      <label className="text-sm font-medium text-gray-700 mb-2 block">
+                        양보 시 옵션 선택:
+                      </label>
+                      <div className="space-y-2">
+                        <label className="flex items-center">
+                          <input
+                            type="radio"
+                            name="yieldOption"
+                            value="carry_over"
+                            checked={selectedYieldOption === 'carry_over'}
+                            onChange={(e) => setSelectedYieldOption(e.target.value)}
+                            className="mr-2"
+                          />
+                          <span className="text-sm">이월하기 (다음 주로 넘김)</span>
+                        </label>
+                        <label className="flex items-center">
+                          <input
+                            type="radio"
+                            name="yieldOption"
+                            value="alternative_time"
+                            checked={selectedYieldOption === 'alternative_time'}
+                            onChange={(e) => setSelectedYieldOption(e.target.value)}
+                            className="mr-2"
+                          />
+                          <span className="text-sm">다른 선호 시간 선택</span>
+                        </label>
+                      </div>
+
+                      {selectedYieldOption === 'alternative_time' && (
+                        <div className="mt-2 text-xs text-gray-600 bg-blue-50 p-2 rounded">
+                          대체 시간 선택 기능은 추후 구현 예정입니다. 현재는 이월 옵션을 사용해주세요.
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={() => handleResponse('yield')}
+                        disabled={isLoading}
+                        className="flex-1 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 disabled:bg-green-300 flex items-center justify-center"
+                      >
+                        <Check size={16} className="mr-2" />
+                        양보하기
+                      </button>
+                      <button
+                        onClick={() => handleResponse('claim')}
+                        disabled={isLoading}
+                        className="flex-1 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 disabled:bg-red-300 flex items-center justify-center"
+                      >
+                        주장하기
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-orange-700 mb-4">
+                      시간을 분할할 수 있습니다. 앞 시간 또는 뒤 시간을 선택하세요.
+                    </p>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={() => handleResponse('split_first')}
+                        disabled={isLoading}
+                        className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:bg-blue-300"
+                      >
+                        앞 시간 선택
+                      </button>
+                      <button
+                        onClick={() => handleResponse('split_second')}
+                        disabled={isLoading}
+                        className="flex-1 bg-purple-500 text-white py-2 px-4 rounded-lg hover:bg-purple-600 disabled:bg-purple-300"
+                      >
+                        뒤 시간 선택
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
             {userResponse !== 'pending' && (
               <div className={`border rounded-lg p-4 ${
-                userResponse === 'accept'
+                userResponse === 'yield'
                   ? 'bg-green-50 border-green-200'
-                  : 'bg-red-50 border-red-200'
+                  : userResponse === 'claim'
+                  ? 'bg-red-50 border-red-200'
+                  : userResponse === 'choose_slot'
+                  ? 'bg-indigo-50 border-indigo-200'
+                  : 'bg-blue-50 border-blue-200'
               }`}>
                 <p className="text-sm font-medium">
-                  이미 {userResponse === 'accept' ? '양보' : '거절'}하셨습니다.
+                  이미 {
+                    userResponse === 'yield' ? '양보' :
+                    userResponse === 'claim' ? '주장' :
+                    userResponse === 'split_first' ? '앞 시간 선택' :
+                    userResponse === 'split_second' ? '뒤 시간 선택' :
+                    userResponse === 'choose_slot' ? '시간대 선택' : '응답'
+                  }하셨습니다.
                 </p>
                 <p className="text-sm text-gray-600 mt-1">
                   다른 멤버들의 응답을 기다리고 있습니다.

@@ -222,11 +222,11 @@ const TimetableGrid = ({
 
   // Notify parent component about current week's negotiations
   useEffect(() => {
-    if (onCurrentWeekNegotiationsChange) {
+    if (onCurrentWeekNegotiationsChange && roomData?.negotiations) {
       const currentWeekNegotiations = getCurrentWeekNegotiations();
       onCurrentWeekNegotiationsChange(currentWeekNegotiations);
     }
-  }, [getCurrentWeekNegotiations, onCurrentWeekNegotiationsChange]);
+  }, [roomData?.negotiations, weekDates]); // Only update when negotiations or week changes
 
   // Helper to get who booked a slot (based on Date object overlap)
   const getSlotOwner = useCallback((date, time) => {
