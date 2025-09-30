@@ -734,10 +734,29 @@ exports.runAutoSchedule = async (req, res) => {
         }
       }
 
+      // 방장도 선호시간표 체크
+      console.log('===== 방장 검증 시작 =====');
+      console.log('방장 체크:', {
+        hasOwner: !!room.owner,
+        ownerType: typeof room.owner,
+        ownerId: room.owner?._id?.toString(),
+        hasDefaultSchedule: !!room.owner?.defaultSchedule,
+        defaultScheduleLength: room.owner?.defaultSchedule?.length || 0,
+        ownerName: `${room.owner?.firstName || ''} ${room.owner?.lastName || ''}`.trim()
+      });
+
+      if (!room.owner || !room.owner.defaultSchedule || room.owner.defaultSchedule.length === 0) {
+        const ownerName = `${room.owner?.firstName || ''} ${room.owner?.lastName || ''}`.trim() || '방장';
+        return res.status(400).json({
+          msg: `방장(${ownerName})이 선호시간표를 설정하지 않았습니다. 내프로필에서 선호시간표를 설정해주세요.`
+        });
+      }
+      console.log('===== 방장 검증 완료 =====');
+
       // 개인 시간표 확인
       console.log('===== 멤버 검증 시작 =====');
       console.log('membersOnly 개수:', membersOnly.length);
-      
+
       const membersWithoutDefaultSchedule = [];
       for (const member of membersOnly) {
         console.log('멤버 체크:', {
@@ -751,7 +770,7 @@ exports.runAutoSchedule = async (req, res) => {
           firstName: member.user?.firstName,
           lastName: member.user?.lastName
         });
-        
+
         if (!member.user || !member.user.defaultSchedule || member.user.defaultSchedule.length === 0) {
           const userName = member.user?.name || `${member.user?.firstName || ''} ${member.user?.lastName || ''}`.trim() || '알 수 없음';
           console.log('❌ 선호시간표 없음:', userName);
@@ -843,12 +862,24 @@ exports.runAutoSchedule = async (req, res) => {
 
          if (assignment.slots && assignment.slots.length > 0) {
             assignment.slots.forEach(slot => {
+               // 필수 필드 검증
+               if (!slot.day || !slot.startTime || !slot.endTime || !slot.date) {
+                  console.error('❌ [저장실패] 슬롯에 필수 필드가 없습니다:', {
+                     memberId: assignment.memberId,
+                     slot: slot,
+                     hasDay: !!slot.day,
+                     hasStartTime: !!slot.startTime,
+                     hasEndTime: !!slot.endTime,
+                     hasDate: !!slot.date
+                  });
+                  return; // 이 슬롯은 건너뛰기
+               }
+
                // 중복 체크를 위한 유니크 키 생성
                const slotKey = `${assignment.memberId}-${slot.day}-${slot.startTime}-${slot.endTime}`;
 
                if (!addedSlots.has(slotKey)) {
                   console.log(`🔍 [저장] 개별 슬롯 추가: ${slot.day} ${slot.startTime}-${slot.endTime} (멤버: ${assignment.memberId})`);
-                  console.log(`🔍 [AUTH] req.user.id = "${req.user.id}" (타입: ${typeof req.user.id})`);
                   const newSlot = {
                      user: assignment.memberId,
                      date: slot.date,
@@ -1002,14 +1033,20 @@ exports.runAutoSchedule = async (req, res) => {
          conflictSuggestions: forcedNegotiationSuggestions, // Use the new suggestions
       });
    } catch (error) {
-      console.error('Error running auto-schedule:', error);
+      console.error('❌ Error running auto-schedule:', error);
+      console.error('❌ Error stack:', error.stack);
+      console.error('❌ Error name:', error.name);
 
-      if (error.message.includes('timeSlots')) {
-         res.status(400).json({ msg: '시간표 데이터에 오류가 있습니다. 멤버들이 시간을 입력했는지 확인해주세요.' });
+      if (error.message.includes('defaultSchedule')) {
+         res.status(400).json({ msg: '선호시간표 데이터에 오류가 있습니다. 모든 멤버가 내프로필에서 선호시간표를 설정했는지 확인해주세요.' });
+      } else if (error.message.includes('timeSlots')) {
+         res.status(400).json({ msg: '시간표 데이터에 오류가 있습니다. 멤버들이 선호시간표를 설정했는지 확인해주세요.' });
       } else if (error.message.includes('member')) {
          res.status(400).json({ msg: '멤버 데이터에 오류가 있습니다. 방 설정을 확인해주세요.' });
       } else if (error.message.includes('settings')) {
          res.status(400).json({ msg: '방 설정에 오류가 있습니다. 시간 설정을 확인해주세요.' });
+      } else if (error.message.includes('priority')) {
+         res.status(400).json({ msg: '우선순위 설정에 오류가 있습니다. 멤버 우선순위를 확인해주세요.' });
       } else {
          res.status(500).json({ msg: `자동 배정 실행 중 오류가 발생했습니다: ${error.message}` });
       }

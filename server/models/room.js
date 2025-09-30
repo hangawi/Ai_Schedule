@@ -31,6 +31,19 @@ const TimeSlotSchema = new mongoose.Schema({
     type: String,
     enum: ['confirmed', 'pending', 'conflict'],
     default: 'confirmed'
+  },
+  assignedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false
+  },
+  assignedAt: {
+    type: Date,
+    required: false
+  },
+  priority: {
+    type: Number,
+    default: 3
   }
 });
 

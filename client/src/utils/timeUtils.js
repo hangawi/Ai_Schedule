@@ -1,8 +1,8 @@
-// 10분 단위 시간 슬롯 생성
+// 30분 단위 시간 슬롯 생성 (1시간 = 2슬롯)
 export const generateTimeSlots = (startHour = 0, endHour = 24) => {
   const slots = [];
   for (let h = startHour; h < endHour; h++) {
-    for (let m = 0; m < 60; m += 10) {
+    for (let m = 0; m < 60; m += 30) {
       const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
       slots.push(time);
     }
@@ -23,10 +23,10 @@ export const minutesToTime = (minutes) => {
   return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
 };
 
-// 종료 시간 계산 (10분 추가)
+// 종료 시간 계산 (30분 추가)
 export const calculateEndTime = (startTime) => {
   const [h, m] = startTime.split(':').map(Number);
-  const totalMinutes = h * 60 + m + 10;
+  const totalMinutes = h * 60 + m + 30;
   const endHour = Math.floor(totalMinutes / 60);
   const endMinute = totalMinutes % 60;
   return `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;

@@ -185,7 +185,7 @@ const RoomInfoTab = ({
             {formData.settings.roomExceptions && formData.settings.roomExceptions.length > 0 && (
               <div className="mt-4">
                 <div className="flex justify-between items-center mb-2">
-                  <h4 className="text-xs font-medium text-gray-700">방장 동기화 금지시간 (불가능시간)</h4>
+                  <h4 className="text-xs font-medium text-gray-700">방장 개인시간 동기화 (조원 배정 불가)</h4>
                   <span className="text-xs text-gray-500">({formData.settings.roomExceptions.length}개)</span>
                 </div>
                 <div className="space-y-2 max-h-60 overflow-y-auto">

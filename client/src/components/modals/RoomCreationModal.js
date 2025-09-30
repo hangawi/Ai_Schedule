@@ -74,17 +74,9 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
 
       const syncedExceptions = [];
 
-      // defaultSchedule을 roomExceptions으로 변환
-      (ownerProfileSchedule.defaultSchedule || []).forEach(schedule => {
-        syncedExceptions.push({
-          type: 'daily_recurring',
-          name: `기본 시간표 (방장)`,
-          dayOfWeek: schedule.dayOfWeek,
-          startTime: schedule.startTime,
-          endTime: schedule.endTime,
-          isSynced: true // 연동된 예외임을 표시
-        });
-      });
+      // ❌ defaultSchedule (선호시간)은 금지시간으로 추가하지 않음
+      // 선호시간은 자동배정 시 조원들이 사용할 수 있는 시간이므로 제외
+      console.log('✅ defaultSchedule (선호시간)은 금지시간에서 제외됨 (자동배정에 사용 가능)');
 
       // scheduleExceptions을 날짜/제목별로 그룹화하여 병합 처리
       const exceptionGroups = {};
@@ -523,11 +515,11 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
               </div>
             </div>
             
-            {/* 방장 시간표 연동 및 roomExceptions 표시 */}
+            {/* 방장 개인시간 연동 및 roomExceptions 표시 */}
             {ownerProfileSchedule && (
               <div className="mt-4 border-t pt-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-medium text-gray-700">방장 시간표 연동</h4>
+                  <h4 className="text-xs font-medium text-gray-700">방장 개인시간 연동 (배정 금지)</h4>
                   <button
                     type="button"
                     onClick={handleSyncOwnerSchedule}
@@ -535,9 +527,12 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
                       syncOwnerSchedule ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
                     } text-white`}
                   >
-                    {syncOwnerSchedule ? '연동 해제' : '현재 내 시간표 연동하기'}
+                    {syncOwnerSchedule ? '연동 해제' : '내 개인시간 연동하기'}
                   </button>
                 </div>
+                <p className="text-xs text-gray-500 mb-2">
+                  💡 개인시간(수면, 식사 등)만 금지시간으로 연동됩니다. 선호시간은 조원 배정에 사용됩니다.
+                </p>
                 {settings.roomExceptions.length > 0 && (
                   <div className="mb-3">
                     <div className="text-sm text-gray-600 mb-2">
