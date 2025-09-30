@@ -111,7 +111,7 @@ class SchedulingAlgorithm {
     const startDate = new Date('2025-09-16');
     startDate.setHours(0, 0, 0, 0);
 
-    console.log(`[스케줄링] 처리 대상 주 월요일: ${startDate.toISOString().split('T')[0]} (현재 9월 16일-20일 주)`);
+
 
     // currentWeek 파라미터가 있으면 해당 주 사용 (UI에서 다른 주를 선택한 경우)
     if (currentWeek) {
@@ -123,7 +123,7 @@ class SchedulingAlgorithm {
       startDate.setDate(userSelectedDate.getDate() + userMondayOffset);
       startDate.setHours(0, 0, 0, 0);
 
-      console.log(`[스케줄링] 사용자 선택 주 월요일: ${startDate.toISOString().split('T')[0]}`);
+
     }
 
 
@@ -223,7 +223,7 @@ class SchedulingAlgorithm {
       negotiations.push(negotiation);
     }
 
-    console.log(`[협의] 총 ${negotiations.length}개 협의 생성 완료`);
+
 
     return {
       assignments,
@@ -314,7 +314,7 @@ class SchedulingAlgorithm {
     const scheduleStartHour = getHourFromSettings(roomSettings.scheduleStartTime, '9');
     const scheduleEndHour = getHourFromSettings(roomSettings.scheduleEndTime, '18');
 
-    console.log(`[개인시간표] 개인 시간표 기반 타임테이블 생성 시작 (${scheduleStartHour}:00-${scheduleEndHour}:00)`);
+
 
     // Calculate the end date of the scheduling window
     const endDate = new Date(startDate);
@@ -329,11 +329,11 @@ class SchedulingAlgorithm {
       const priority = this.getMemberPriority(member);
       const isOwner = member.isOwner || false;
 
-      console.log(`[개인시간표] 처리 중: ${user.firstName || user.name || userId}, 우선순위: ${priority}, 방장: ${isOwner}`);
+
 
       // 개인 시간표(defaultSchedule) 처리
       if (user.defaultSchedule && Array.isArray(user.defaultSchedule)) {
-        console.log(`[개인시간표] ${userId}의 기본 시간표: ${user.defaultSchedule.length}개 항목`);
+
 
         user.defaultSchedule.forEach(schedule => {
           const dayOfWeek = schedule.dayOfWeek; // 0=일요일, 1=월요일, ..., 6=토요일
@@ -345,7 +345,7 @@ class SchedulingAlgorithm {
             return;
           }
 
-          console.log(`[개인시간표] ${userId} - 요일: ${dayOfWeek}, 시간: ${startTime}-${endTime}`);
+
 
           // 스케줄링 기간 내의 모든 해당 요일에 대해 시간대 생성
           const currentDate = new Date(startDate);
@@ -385,12 +385,12 @@ class SchedulingAlgorithm {
           }
         });
       } else {
-        console.log(`[개인시간표] ${userId}의 기본 시간표가 없음`);
+
       }
 
       // 개인시간(personalTimes) 처리 - 이 시간대는 제외해야 함
       if (user.personalTimes && Array.isArray(user.personalTimes)) {
-        console.log(`[개인시간표] ${userId}의 개인시간: ${user.personalTimes.length}개 항목`);
+
 
         user.personalTimes.forEach(personalTime => {
           if (personalTime.isRecurring !== false && personalTime.days && personalTime.days.length > 0) {
