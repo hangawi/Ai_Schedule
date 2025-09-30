@@ -180,6 +180,41 @@ const RoomInfoTab = ({
                 </button>
               </div>
             </div>
+
+            {/* roomExceptions (방장 동기화된 시간) 표시 */}
+            {formData.settings.roomExceptions && formData.settings.roomExceptions.length > 0 && (
+              <div className="mt-4">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="text-xs font-medium text-gray-700">방장 동기화 금지시간 (불가능시간)</h4>
+                  <span className="text-xs text-gray-500">({formData.settings.roomExceptions.length}개)</span>
+                </div>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {formData.settings.roomExceptions.map((exception, index) => (
+                    <div key={index} className="p-2 bg-orange-50 rounded border border-orange-200">
+                      <div className="flex-1">
+                        <span className="text-sm font-medium text-orange-700">{exception.name}</span>
+                        {exception.type === 'daily_recurring' && (
+                          <span className="text-xs text-orange-600 ml-2">
+                            {['일', '월', '화', '수', '목', '금', '토'][exception.dayOfWeek]}요일 {exception.startTime} ~ {exception.endTime}
+                          </span>
+                        )}
+                        {exception.type === 'date_specific' && (
+                          <span className="text-xs text-orange-600 ml-2">
+                            {new Date(exception.startDate).toLocaleDateString('ko-KR')} {exception.startTime} ~ {exception.endTime}
+                          </span>
+                        )}
+                      </div>
+                      {exception.isSynced && (
+                        <span className="text-xs text-orange-500 ml-2">(자동 동기화)</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  * 이 시간들은 방장의 프로필에서 자동 동기화된 불가능한 시간입니다. 프로필 탭의 '동기화' 버튼을 누르면 업데이트됩니다.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -228,6 +263,55 @@ const RoomInfoTab = ({
           </button>
         </div>
       </div>
+
+      {/* 금지 시간대 표시 */}
+      {room.settings?.blockedTimes && room.settings.blockedTimes.length > 0 && (
+        <div className="border-t pt-4 mt-6">
+          <h4 className="font-medium text-gray-800 mb-2">금지 시간대 ({room.settings.blockedTimes.length}개)</h4>
+          <div className="space-y-2">
+            {room.settings.blockedTimes.map((blockedTime, index) => (
+              <div key={index} className="p-2 bg-red-50 rounded border border-red-200">
+                <span className="text-sm font-medium text-red-700">{blockedTime.name}</span>
+                <span className="text-xs text-red-600 ml-2">{blockedTime.startTime} ~ {blockedTime.endTime}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* roomExceptions (방장 동기화 금지시간) 표시 */}
+      {room.settings?.roomExceptions && room.settings.roomExceptions.length > 0 && (
+        <div className="border-t pt-4 mt-6">
+          <h4 className="font-medium text-gray-800 mb-2">
+            방장 동기화 금지시간 (불가능시간) ({room.settings.roomExceptions.length}개)
+          </h4>
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {room.settings.roomExceptions.map((exception, index) => (
+              <div key={index} className="p-2 bg-orange-50 rounded border border-orange-200">
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-orange-700">{exception.name}</span>
+                  {exception.type === 'daily_recurring' && (
+                    <span className="text-xs text-orange-600 ml-2">
+                      {['일', '월', '화', '수', '목', '금', '토'][exception.dayOfWeek]}요일 {exception.startTime} ~ {exception.endTime}
+                    </span>
+                  )}
+                  {exception.type === 'date_specific' && (
+                    <span className="text-xs text-orange-600 ml-2">
+                      {new Date(exception.startDate).toLocaleDateString('ko-KR')} {exception.startTime} ~ {exception.endTime}
+                    </span>
+                  )}
+                </div>
+                {exception.isSynced && (
+                  <span className="text-xs text-orange-500 ml-2">(자동 동기화)</span>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            * 이 시간들은 방장의 프로필에서 자동 동기화된 불가능한 시간입니다. 프로필 탭의 '동기화' 버튼을 누르면 업데이트됩니다.
+          </p>
+        </div>
+      )}
     </div>
   );
 };

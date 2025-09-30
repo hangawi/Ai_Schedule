@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { userService } from '../../services/userService';
 import { coordinationService } from '../../services/coordinationService';
 import CalendarView from '../calendar/CalendarView';
@@ -85,20 +85,11 @@ const ProfileTab = ({ onEditingChange }) => {
           // 기존의 방장 연동 예외들 제거 (isSynced: true인 것들)
           const nonSyncedExceptions = existingSettings.roomExceptions.filter(ex => !ex.isSynced);
 
-          // 새로운 방장 시간표 예외들 생성
+          // 새로운 방장 시간표 예외들 생성 (불가능한 시간만 포함)
           const syncedExceptions = [];
 
-          // defaultSchedule을 roomExceptions으로 변환
-          (ownerScheduleData.defaultSchedule || []).forEach(schedule => {
-            syncedExceptions.push({
-              type: 'daily_recurring',
-              name: `기본 시간표 (방장)`,
-              dayOfWeek: schedule.dayOfWeek,
-              startTime: schedule.startTime,
-              endTime: schedule.endTime,
-              isSynced: true
-            });
-          });
+          // defaultSchedule(가능한 시간)은 roomExceptions에 추가하지 않음
+          // roomExceptions는 금지 시간이므로
 
           // scheduleExceptions을 날짜/제목별로 그룹화하여 병합 처리
           const exceptionGroups = {};
@@ -305,7 +296,7 @@ const ProfileTab = ({ onEditingChange }) => {
 
           const { chatResponse } = event.detail;
           
-          // 챗봇이 추가한 새 항목만 personalTimes에 추가
+          // 챗봇이 추가한 새 항목은 scheduleExceptions에 추가 (불가능한 시간)
           if (chatResponse.startDateTime && chatResponse.endDateTime) {
             const startDateTime = new Date(chatResponse.startDateTime);
             const endDateTime = new Date(chatResponse.endDateTime);
@@ -316,22 +307,19 @@ const ProfileTab = ({ onEditingChange }) => {
             const localDay = String(koreaDateTime.getDate()).padStart(2, '0');
             const localDate = `${localYear}-${localMonth}-${localDay}`;
             
-            const newPersonalTime = {
-              id: `temp_${Date.now()}`,
-              title: chatResponse.title || '새 개인시간',
-              type: 'custom',
-              startTime: koreaDateTime.toTimeString().slice(0, 5),
-              endTime: new Date(endDateTime.toLocaleString("en-US", {timeZone: "Asia/Seoul"})).toTimeString().slice(0, 5),
-              days: [],
+            const newException = {
+              _id: `temp_${Date.now()}`,
+              title: chatResponse.title || '챗봇 일정',
+              startTime: startDateTime.toISOString(),
+              endTime: endDateTime.toISOString(),
               specificDate: localDate,
-              isRecurring: false,
-              priority: chatResponse.priority || 3,
-              color: '#FF6B6B'
+              isHoliday: false,
+              isAllDay: false,
+              priority: chatResponse.priority || 3
             };
             
-            // 기존 personalTimes에 새 항목만 추가 (서버 데이터 무시)
-            setPersonalTimes(prev => [...prev, newPersonalTime]);
-
+            // 기존 scheduleExceptions에 새 항목만 추가 (서버 데이터 무시)
+            setScheduleExceptions(prev => [...prev, newException]);
           }
         } else {
           // 일반적인 경우: 서버 응답 데이터로 직접 업데이트
@@ -392,6 +380,7 @@ const ProfileTab = ({ onEditingChange }) => {
         console.log('🔍 [ProfileTab] 저장하는 데이터:', {
           defaultScheduleCount: defaultSchedule.length,
           defaultScheduleSample: defaultSchedule.slice(0, 3),
+          defaultScheduleWithSpecificDate: defaultSchedule.filter(s => s.specificDate).slice(0, 3),
           exceptionsCount: exceptionsToSave.length,
           personalTimesCount: personalTimesToSave.length,
           personalTimesSample: personalTimesToSave.slice(0, 2)
@@ -410,6 +399,8 @@ const ProfileTab = ({ onEditingChange }) => {
 
         console.log('🔍 [ProfileTab] 서버에서 받은 최신 데이터:', {
           defaultScheduleCount: freshData.defaultSchedule?.length || 0,
+          defaultScheduleSample: freshData.defaultSchedule?.slice(0, 3),
+          defaultScheduleWithSpecificDate: freshData.defaultSchedule?.filter(s => s.specificDate).slice(0, 3),
           exceptionsCount: freshData.scheduleExceptions?.length || 0,
           personalTimesCount: freshData.personalTimes?.length || 0,
           personalTimesSample: freshData.personalTimes?.slice(0, 2)
@@ -429,10 +420,7 @@ const ProfileTab = ({ onEditingChange }) => {
         // CalendarView 강제 리렌더링
         window.dispatchEvent(new Event('calendarUpdate'));
 
-        // 방장인 방들의 설정을 자동으로 업데이트
-        console.log('🔍 ProfileTab - 저장 후 방장 방 업데이트 호출 시작');
-        await updateOwnerRoomsSettings(freshData);
-        console.log('🔍 ProfileTab - 저장 후 방장 방 업데이트 완료');
+        // 방장 방 자동 동기화는 제거 - 수동 동기화 버튼으로만 가능
     } catch (err) {
         setError(err.message);
         showAlert('저장에 실패했습니다: ' + err.message, '오류');
@@ -622,12 +610,160 @@ const ProfileTab = ({ onEditingChange }) => {
       </div>
 
 
-      <PersonalTimeManager
-        personalTimes={personalTimes}
-        setPersonalTimes={setPersonalTimes}
-        isEditing={isEditing}
-        onAutoSave={autoSave}
-      />
+      {/* 선호시간관리와 개인시간관리를 나란히 배치 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* 선호시간관리 섹션 */}
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-blue-600">선호시간 관리</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                직접 클릭하여 추가한 가능한 시간들 (자동배정 시 사용됨)
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">
+                {(() => {
+                  // 병합된 시간대 계산
+                  const mergedSlots = [];
+                  ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'].forEach((_, dayIndex) => {
+                    const daySlots = defaultSchedule
+                      .filter(slot => slot.dayOfWeek === dayIndex)
+                      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+                    
+                    let currentGroup = null;
+                    for (const slot of daySlots) {
+                      if (currentGroup && 
+                          currentGroup.priority === slot.priority &&
+                          currentGroup.endTime === slot.startTime) {
+                        currentGroup.endTime = slot.endTime;
+                      } else {
+                        if (currentGroup) mergedSlots.push(currentGroup);
+                        currentGroup = { ...slot };
+                      }
+                    }
+                    if (currentGroup) mergedSlots.push(currentGroup);
+                  });
+                  return mergedSlots.length;
+                })()}개 시간대
+              </span>
+              <div className="w-4 h-4 bg-blue-500 rounded"></div>
+            </div>
+          </div>
+
+          {defaultSchedule.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <p className="mb-2">아직 선호시간이 설정되지 않았습니다.</p>
+              <p className="text-sm">위 달력에서 날짜를 클릭하여 시간을 추가하세요.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {(() => {
+                // 날짜별로 그룹화
+                const dateGroups = {};
+                
+                defaultSchedule.forEach(slot => {
+                  if (slot.specificDate) {
+                    if (!dateGroups[slot.specificDate]) {
+                      dateGroups[slot.specificDate] = [];
+                    }
+                    dateGroups[slot.specificDate].push(slot);
+                  }
+                });
+                
+                // 날짜순 정렬
+                const sortedDates = Object.keys(dateGroups).sort();
+                
+                if (sortedDates.length === 0) {
+                  return (
+                    <div className="text-center py-8 text-gray-500">
+                      <p className="mb-2">특정 날짜에 선호시간이 설정되지 않았습니다.</p>
+                      <p className="text-sm">달력에서 날짜를 클릭하여 시간을 추가하세요.</p>
+                    </div>
+                  );
+                }
+                
+                return sortedDates.map(dateStr => {
+                  const slots = dateGroups[dateStr].sort((a, b) => a.startTime.localeCompare(b.startTime));
+                  
+                  // 연속된 시간대 병합
+                  const mergedSlots = [];
+                  let currentGroup = null;
+                  
+                  for (const slot of slots) {
+                    if (currentGroup && 
+                        currentGroup.priority === slot.priority &&
+                        currentGroup.endTime === slot.startTime) {
+                      // 연속된 슬롯이므로 병합
+                      currentGroup.endTime = slot.endTime;
+                    } else {
+                      // 새로운 그룹 시작
+                      if (currentGroup) {
+                        mergedSlots.push(currentGroup);
+                      }
+                      currentGroup = { ...slot };
+                    }
+                  }
+                  if (currentGroup) {
+                    mergedSlots.push(currentGroup);
+                  }
+                  
+                  const date = new Date(dateStr);
+                  const dayNames = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+                  const dayName = dayNames[date.getDay()];
+                  const formattedDate = `${date.getMonth() + 1}월 ${date.getDate()}일 (${dayName})`;
+                  
+                  return (
+                    <div key={dateStr} className="border-l-4 border-blue-500 bg-blue-50 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="min-w-[140px]">
+                          <span className="font-semibold text-blue-700">{formattedDate}</span>
+                        </div>
+                        <div className="flex-1 space-y-2">
+                          {mergedSlots.map((slot, idx) => {
+                            const priorityColors = {
+                              1: 'bg-blue-200 text-blue-800 border-blue-300',
+                              2: 'bg-blue-400 text-white border-blue-500',
+                              3: 'bg-blue-600 text-white border-blue-700'
+                            };
+                            const priorityLabels = {
+                              1: '조정 가능',
+                              2: '보통',
+                              3: '선호'
+                            };
+                            
+                            return (
+                              <div
+                                key={idx}
+                                className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border-2 ${priorityColors[slot.priority]} mr-2 mb-2`}
+                              >
+                                <span className="font-medium">{slot.startTime} - {slot.endTime}</span>
+                                <span className="text-xs opacity-90">
+                                  ({priorityLabels[slot.priority]})
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          )}
+        </div>
+
+        {/* 개인시간관리 섹션 */}
+        <div>
+          <PersonalTimeManager
+            personalTimes={personalTimes}
+            setPersonalTimes={setPersonalTimes}
+            isEditing={isEditing}
+            onAutoSave={autoSave}
+          />
+        </div>
+      </div>
 
       <CustomAlertModal
         isOpen={customAlert.show}

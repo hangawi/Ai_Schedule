@@ -429,6 +429,16 @@ const ScheduleGridSelector = ({
 
     return (
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+        {/* 헤더 추가 - 요일과 날짜 표시 */}
+        <div className="grid grid-cols-8 bg-gray-100 sticky top-0 z-10 border-b border-gray-300">
+          <div className="col-span-1 p-2 text-center font-semibold text-gray-700 border-r border-gray-300 text-sm">시간</div>
+          {weekDates.slice(0, 7).map((date, index) => (
+            <div key={index} className="col-span-1 p-2 text-center font-semibold text-gray-700 border-r border-gray-200 last:border-r-0 text-sm">
+              {date.display}
+            </div>
+          ))}
+        </div>
+
         <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
           <div className="flex">
             {/* 시간 컬럼은 전체 시간대 표시 */}

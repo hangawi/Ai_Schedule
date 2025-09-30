@@ -169,7 +169,8 @@ const UserSchema = new mongoose.Schema({
     dayOfWeek: { type: Number, required: true, min: 0, max: 6 }, // 0: Sunday, ..., 6: Saturday
     startTime: { type: String, required: true, match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/ }, // HH:MM
     endTime: { type: String, required: true, match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/ }, // HH:MM
-    priority: { type: Number, default: 2, enum: [1, 2, 3] } // 1: Low, 2: Medium, 3: High
+    priority: { type: Number, default: 2, enum: [1, 2, 3] }, // 1: Low, 2: Medium, 3: High
+    specificDate: { type: String } // Optional: YYYY-MM-DD format for date-specific schedules
   }],
 
   // 기본 시간표의 예외 (예: 휴가, 특별 이벤트)

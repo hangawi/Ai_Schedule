@@ -74,7 +74,6 @@ const CalendarView = ({
         hasSchedule: hasScheduleForDate(date),
         hasException: hasExceptionForDate(date),
         hasPersonalTime: hasPersonalTime,
-        hasBlockedTime: hasBlockedTimeForDate(date),
         hasHoliday: hasHolidayForDate(date)
       });
 
@@ -96,13 +95,21 @@ const CalendarView = ({
 
   const hasScheduleForDate = (date) => {
     const dayOfWeek = date.getDay();
-    return schedule.some(s => s.dayOfWeek === dayOfWeek && !s.isBlocked);
-  };
-
-  const hasBlockedTimeForDate = (date) => {
-    const dayOfWeek = date.getDay();
-    return schedule.some(s => s.dayOfWeek === dayOfWeek && s.isBlocked);
-  };
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    
+    // defaultSchedule는 모두 가능한 시간이므로 isBlocked 체크 불필요
+    return schedule.some(s => {
+      // specificDate가 있으면 날짜로 비교, 없으면 dayOfWeek로 비교
+      if (s.specificDate) {
+        return s.specificDate === dateStr;
+      } else {
+        return s.dayOfWeek === dayOfWeek;
+      }
+    });
+  };;
 
   const hasExceptionForDate = (date) => {
     const year = date.getFullYear();
@@ -271,14 +278,8 @@ onClick={() => navigateMonth(1)}
                   {dateInfo.hasSchedule && (
                     <div className="w-full h-1 bg-blue-500 rounded-full"></div>
                   )}
-                  {dateInfo.hasException && (
-                    <div className="w-full h-1 bg-green-500 rounded-full"></div>
-                  )}
-                  {dateInfo.hasPersonalTime && (
+                  {(dateInfo.hasException || dateInfo.hasPersonalTime) && (
                     <div className="w-full h-1 bg-red-500 rounded-full"></div>
-                  )}
-                  {dateInfo.hasBlockedTime && (
-                    <div className="w-full h-1 bg-gray-400 rounded-full"></div>
                   )}
                 </div>
               )}
