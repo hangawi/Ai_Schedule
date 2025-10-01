@@ -533,6 +533,7 @@ const TimetableGrid = ({
         const slotData = {
           date: date, // Pass date object
           time: startTime, // Use block start time
+          endTime: endTime, // 슬롯 종료 시간 추가
           currentOwner: ownerInfo.name,
           targetUserId: ownerInfo.actualUserId || ownerInfo.userId,
           action: 'request',

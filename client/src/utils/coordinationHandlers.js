@@ -311,14 +311,18 @@ export const createChangeRequestData = (slotToChange, currentRoom, user) => {
     ? days[getDayIndex(slotToChange.date)]
     : days[slotToChange.dayIndex - 1];
 
+  // endTime 계산: slotToChange에 있으면 사용, 없으면 계산
+  const endTime = slotToChange.endTime || calculateEndTime(slotToChange.time);
+
   if (slotToChange.action === 'release') {
     return {
       roomId: currentRoom._id,
       type: 'slot_release',
       timeSlot: {
         day: dayKey,
+        date: slotToChange.date, // 날짜 추가
         startTime: slotToChange.time,
-        endTime: calculateEndTime(slotToChange.time),
+        endTime: endTime,
       },
       message: '시간을 취소합니다.',
     };
@@ -329,8 +333,9 @@ export const createChangeRequestData = (slotToChange, currentRoom, user) => {
       type: 'time_request',
       timeSlot: {
         day: dayKey,
+        date: slotToChange.date, // 날짜 추가
         startTime: slotToChange.time,
-        endTime: calculateEndTime(slotToChange.time),
+        endTime: endTime,
       },
       targetUserId: slotToChange.targetUserId,
       message: '자리를 요청합니다.',
