@@ -192,8 +192,13 @@ const ScheduleGridSelector = ({
             if (personalSlot) {
                 assignedEvent = { ...personalSlot, type: 'personal' };
             } else {
-                // 기본 일정 확인
-                const scheduleSlot = schedule.find(s => s.dayOfWeek === dayOfWeek && s.startTime === time);
+                // 기본 일정 확인 - 시간 범위 내에 있는지 확인
+                const scheduleSlot = schedule.find(s => {
+                    if (s.dayOfWeek !== dayOfWeek) return false;
+                    const startMinutes = timeToMinutes(s.startTime);
+                    const endMinutes = timeToMinutes(s.endTime);
+                    return timeMinutes >= startMinutes && timeMinutes < endMinutes;
+                });
                 if (scheduleSlot) {
                     assignedEvent = { ...scheduleSlot, type: 'schedule' };
                 }

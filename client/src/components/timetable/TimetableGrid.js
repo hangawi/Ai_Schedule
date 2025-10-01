@@ -454,6 +454,12 @@ const TimetableGrid = ({
           });
         }
       } else {
+        // 방장은 다른 사람의 시간에 대해 교환 요청을 할 수 없음
+        if (isRoomOwner) {
+          showAlert('방장은 시간표 교환요청을 할 수 없습니다.');
+          return;
+        }
+
         const requestKey = `${date.toISOString().split('T')[0]}-${time}-${ownerInfo.actualUserId || ownerInfo.userId}`;
 
         if (isRequestTooRecent(recentRequests, requestKey)) {
