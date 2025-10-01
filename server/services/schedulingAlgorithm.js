@@ -604,7 +604,7 @@ class SchedulingAlgorithm {
           }
         });
       } else {
-
+        console.log(`⚠️ [조원] ${userId.substring(0,8)}: defaultSchedule가 없거나 비어있음 - 이 멤버는 타임테이블에서 제외됨`);
       }
 
       // 개인시간(personalTimes) 처리 - 이 시간대는 제외해야 함

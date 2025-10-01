@@ -622,11 +622,21 @@ exports.createRequest = async (req, res) => {
                  // First, find and remove the slot from the target user
                  const targetSlotIndex = room.timeSlots.findIndex(slot => {
                     const slotUserId = slot.user._id || slot.user;
+
+                    // 날짜 비교 (있는 경우에만)
+                    let dateMatch = true;
+                    if (timeSlot.date && slot.date) {
+                       const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
+                       const requestDateStr = new Date(timeSlot.date).toISOString().split('T')[0];
+                       dateMatch = slotDateStr === requestDateStr;
+                    }
+
                     return (
                        slotUserId.toString() === targetUser._id.toString() &&
                        slot.day === timeSlot.day &&
                        slot.startTime === timeSlot.startTime &&
-                       slot.endTime === timeSlot.endTime
+                       slot.endTime === timeSlot.endTime &&
+                       dateMatch
                     );
                  });
 
@@ -635,7 +645,27 @@ exports.createRequest = async (req, res) => {
                     room.timeSlots[targetSlotIndex].user = requester._id;
                     console.log(`🔄 [REQUEST APPROVED] Transferred timeslot from ${targetUser._id} to ${requester._id} at ${timeSlot.day} ${timeSlot.startTime}-${timeSlot.endTime}`);
                  } else {
-                    console.log(`⚠️ [REQUEST APPROVED] Could not find target slot to transfer. Creating new slot for requester.`);
+                    console.log(`⚠️ [REQUEST APPROVED] Could not find target slot to transfer. Searching for any matching slot...`);
+
+                    // 디버깅: 모든 타겟 유저의 슬롯 출력
+                    const targetUserSlots = room.timeSlots.filter(slot => {
+                       const slotUserId = slot.user._id || slot.user;
+                       return slotUserId.toString() === targetUser._id.toString();
+                    });
+                    console.log(`[DEBUG] Target user has ${targetUserSlots.length} slots:`, targetUserSlots.map(s => ({
+                       day: s.day,
+                       date: s.date,
+                       startTime: s.startTime,
+                       endTime: s.endTime
+                    })));
+                    console.log(`[DEBUG] Looking for slot with:`, {
+                       day: timeSlot.day,
+                       date: timeSlot.date,
+                       startTime: timeSlot.startTime,
+                       endTime: timeSlot.endTime
+                    });
+
+                    console.log(`⚠️ [REQUEST APPROVED] Creating new slot for requester.`);
                     // If we can't find the exact slot, create a new one
                     const calculateDateFromDay = (dayName) => {
                        const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
