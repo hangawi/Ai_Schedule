@@ -23,15 +23,29 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
       setIsLoading(true);
       setError(null);
       try {
-        console.log('Fetching schedule for member:', memberId);
         const data = await userService.getUserScheduleById(memberId);
-        console.log('Received raw data:', JSON.stringify(data, null, 2));
-        // Process defaultSchedule (recurring weekly schedule) - filter for weekdays only
-        // User schema uses 0-6 (Sun-Sat), we want Mon-Fri which is 1-5
-        const weekdaySchedule = (data.defaultSchedule || []).filter(slot => slot.dayOfWeek >= 1 && slot.dayOfWeek <= 5);
 
-        // Process scheduleExceptions (date-specific schedule overrides)
-        const exceptions = data.scheduleExceptions || [];
+        // defaultSchedule에서 specificDate가 있는 것과 없는 것을 분리
+        const allDefaultSchedule = data.defaultSchedule || [];
+        const scheduleWithSpecificDate = allDefaultSchedule.filter(slot => slot.specificDate);
+        const scheduleWithoutSpecificDate = allDefaultSchedule.filter(slot => !slot.specificDate);
+
+        // specificDate가 없는 것만 주간 반복 일정으로 사용 (평일만)
+        const weekdaySchedule = scheduleWithoutSpecificDate.filter(slot => slot.dayOfWeek >= 1 && slot.dayOfWeek <= 5);
+
+        // specificDate가 있는 것은 exceptions로 변환
+        const convertedExceptions = scheduleWithSpecificDate.map(s => ({
+          title: `선호 시간 (${s.priority === 3 ? '선호' : s.priority === 2 ? '보통' : '조정가능'})`,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          specificDate: s.specificDate,
+          priority: s.priority,
+          isHoliday: false,
+          isAllDay: false
+        }));
+
+        // 기존 exceptions와 병합
+        const exceptions = [...(data.scheduleExceptions || []), ...convertedExceptions];
 
         // Process personalTimes (personal blocked times)
         const personalTimes = data.personalTimes || [];
@@ -41,33 +55,6 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
         setMemberExceptions(exceptions);
         setMemberPersonalTimes(personalTimes);
 
-        const totalEvents = weekdaySchedule.length + exceptions.length + personalTimes.length;
-
-        console.log('Processed schedule data:', {
-          weekdaySchedule: weekdaySchedule.length,
-          exceptions: exceptions.length,
-          personalTimes: personalTimes.length,
-          totalScheduleSlots: totalEvents
-        });
-        console.log('weekdaySchedule details:', JSON.stringify(weekdaySchedule.slice(0, 3), null, 2));
-        console.log('exceptions details:', JSON.stringify(exceptions.slice(0, 3), null, 2));
-        console.log('personalTimes details (all personal times):', JSON.stringify(personalTimes, null, 2));
-
-        // 수면시간 특별 체크
-        const sleepTimes = personalTimes.filter(p => p.title && p.title.includes('수면'));
-        console.log('Sleep times found:', sleepTimes);
-
-        // 개인시간 요일 분석
-        personalTimes.forEach((p, index) => {
-          console.log(`Personal time ${index}:`, {
-            title: p.title,
-            days: p.days,
-            startTime: p.startTime,
-            endTime: p.endTime,
-            isRecurring: p.isRecurring,
-            type: p.type
-          });
-        });
         setMemberName(`${data.firstName || ''} ${data.lastName || ''}`.trim() || data.name || '알 수 없음');
         
         // Force re-render to ensure grid updates
