@@ -372,20 +372,20 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                       const secondHalfTime = `${midTime}-${endTime}`;
 
                       return (
-                        <div className="flex space-x-3">
+                        <div className="space-y-2">
                           <button
                             onClick={() => handleResponse('split_first')}
                             disabled={isLoading}
-                            className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:bg-blue-300"
+                            className="w-full bg-blue-500 text-white py-3 px-4 rounded-lg hover:bg-blue-600 disabled:bg-blue-300 text-sm font-medium"
                           >
-                            {firstHalfTime}
+                            앞 시간: {firstHalfTime}
                           </button>
                           <button
                             onClick={() => handleResponse('split_second')}
                             disabled={isLoading}
-                            className="flex-1 bg-purple-500 text-white py-2 px-4 rounded-lg hover:bg-purple-600 disabled:bg-purple-300"
+                            className="w-full bg-purple-500 text-white py-3 px-4 rounded-lg hover:bg-purple-600 disabled:bg-purple-300 text-sm font-medium"
                           >
-                            {secondHalfTime}
+                            뒷 시간: {secondHalfTime}
                           </button>
                         </div>
                       );
