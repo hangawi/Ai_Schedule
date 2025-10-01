@@ -227,7 +227,6 @@ class SchedulingAlgorithm {
       const dayMap = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday' };
       const dayString = dayMap[block.dayOfWeek];
 
-      console.log(`[협의] 생성: ${dayString} ${block.startTime} - 멤버: ${block.conflictingMembers.join(', ')}`);
 
       // 시간대 길이 계산 (30분 단위 슬롯 수)
       const [startH, startM] = block.startTime.split(':').map(Number);
@@ -282,7 +281,10 @@ class SchedulingAlgorithm {
         negotiationType = 'full_conflict';
       }
 
-      console.log(`[협의타입] 블록슬롯:${totalSlots}, 필요슬롯:${totalNeeded}, 타입: ${negotiationType}, 선택가능시간대:${availableTimeSlots.length}개`);
+      console.log(`🔍 [협의생성] ${block.startTime}-${block.endTime} | 블록:${totalSlots}슬롯, 필요:${totalNeeded}슬롯 | 타입:${negotiationType}`);
+      if (availableTimeSlots.length > 0) {
+        console.log(`  선택가능 시간대 ${availableTimeSlots.length}개:`, availableTimeSlots.map(s => `${s.startTime}-${s.endTime}`).join(', '));
+      }
 
       const negotiation = {
         type: negotiationType,
@@ -310,10 +312,7 @@ class SchedulingAlgorithm {
       };
 
       negotiations.push(negotiation);
-      console.log(`📝 [협의생성] ✅ 협의 ${negotiations.length} 추가됨`);
     }
-
-    console.log(`\n📝 [협의생성] 최종 협의 개수: ${negotiations.length}`);
 
     // 방장을 assignments에서 제거 (혹시라도 포함되었을 경우)
     if (assignments[ownerId]) {
@@ -321,7 +320,7 @@ class SchedulingAlgorithm {
       delete assignments[ownerId];
     }
 
-    console.log(`\n✅ [자동배정완료] 조원 ${Object.keys(assignments).length}명, 협의 ${negotiations.length}개`);
+    console.log(`✅ [자동배정 완료] 조원 ${Object.keys(assignments).length}명 | 협의 ${negotiations.length}개`);
 
     return {
       assignments,
@@ -519,7 +518,7 @@ class SchedulingAlgorithm {
           return startMin === 0 || startMin === 30;
         });
 
-        console.log(`📅 [조원] ${userId.substring(0,8)}: defaultSchedule ${user.defaultSchedule.length}개 → 30분단위 ${validSchedules.length}개 필터링됨`);
+        // 선호시간표 필터링 완료
 
         validSchedules.forEach(schedule => {
           const dayOfWeek = schedule.dayOfWeek; // 0=일요일, 1=월요일, ..., 6=토요일
