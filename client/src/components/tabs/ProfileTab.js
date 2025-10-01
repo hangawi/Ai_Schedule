@@ -371,16 +371,18 @@ const ProfileTab = ({ onEditingChange }) => {
     const scheduleWithSpecificDate = defaultSchedule.filter(s => s.specificDate);
     const scheduleWithoutSpecificDate = defaultSchedule.filter(s => !s.specificDate);
 
-    // specificDate가 있는 스케줄을 scheduleExceptions로 변환
-    const convertedExceptions = scheduleWithSpecificDate.map(s => ({
-      title: `선호 시간 (${s.priority === 3 ? '선호' : s.priority === 2 ? '보통' : '조정가능'})`,
-      startTime: s.startTime,
-      endTime: s.endTime,
-      specificDate: s.specificDate,
-      priority: s.priority,
-      isHoliday: false,
-      isAllDay: false
-    }));
+    // specificDate가 있는 스케줄을 scheduleExceptions로 변환 (유효성 검사)
+    const convertedExceptions = scheduleWithSpecificDate
+      .filter(s => s.startTime && s.endTime && s.specificDate) // 필수 필드가 있는 것만
+      .map(s => ({
+        title: `선호 시간 (${s.priority === 3 ? '선호' : s.priority === 2 ? '보통' : '조정가능'})`,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        specificDate: s.specificDate,
+        priority: s.priority,
+        isHoliday: false,
+        isAllDay: false
+      }));
 
     // 기존 scheduleExceptions와 병합 (중복 제거)
     const allExceptions = [...scheduleExceptions, ...convertedExceptions];
@@ -504,16 +506,18 @@ const ProfileTab = ({ onEditingChange }) => {
       const scheduleWithSpecificDate = defaultSchedule.filter(s => s.specificDate);
       const scheduleWithoutSpecificDate = defaultSchedule.filter(s => !s.specificDate);
 
-      // specificDate가 있는 스케줄을 scheduleExceptions로 변환
-      const convertedExceptions = scheduleWithSpecificDate.map(s => ({
-        title: `선호 시간 (${s.priority === 3 ? '선호' : s.priority === 2 ? '보통' : '조정가능'})`,
-        startTime: s.startTime,
-        endTime: s.endTime,
-        specificDate: s.specificDate,
-        priority: s.priority,
-        isHoliday: false,
-        isAllDay: false
-      }));
+      // specificDate가 있는 스케줄을 scheduleExceptions로 변환 (유효성 검사)
+      const convertedExceptions = scheduleWithSpecificDate
+        .filter(s => s.startTime && s.endTime && s.specificDate) // 필수 필드가 있는 것만
+        .map(s => ({
+          title: `선호 시간 (${s.priority === 3 ? '선호' : s.priority === 2 ? '보통' : '조정가능'})`,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          specificDate: s.specificDate,
+          priority: s.priority,
+          isHoliday: false,
+          isAllDay: false
+        }));
 
       // 기존 scheduleExceptions와 병합 (중복 제거)
       const allExceptions = [...scheduleExceptions, ...convertedExceptions];
