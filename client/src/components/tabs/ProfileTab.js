@@ -367,8 +367,32 @@ const ProfileTab = ({ onEditingChange }) => {
   }, [isEditing]);
 
   const handleSave = async () => {
-    // 서버로 보낼 데이터를 현재 최신 상태(state) 기준으로 정리합니다.
-    const exceptionsToSave = scheduleExceptions.map(
+    // defaultSchedule에서 specificDate가 있는 것은 scheduleExceptions로 이동
+    const scheduleWithSpecificDate = defaultSchedule.filter(s => s.specificDate);
+    const scheduleWithoutSpecificDate = defaultSchedule.filter(s => !s.specificDate);
+
+    // specificDate가 있는 스케줄을 scheduleExceptions로 변환
+    const convertedExceptions = scheduleWithSpecificDate.map(s => ({
+      title: `선호 시간 (${s.priority === 3 ? '선호' : s.priority === 2 ? '보통' : '조정가능'})`,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      specificDate: s.specificDate,
+      priority: s.priority,
+      isHoliday: false,
+      isAllDay: false
+    }));
+
+    // 기존 scheduleExceptions와 병합 (중복 제거)
+    const allExceptions = [...scheduleExceptions, ...convertedExceptions];
+    const uniqueExceptions = allExceptions.filter((exception, index, self) =>
+      index === self.findIndex(e =>
+        e.specificDate === exception.specificDate &&
+        e.startTime === exception.startTime &&
+        e.endTime === exception.endTime
+      )
+    );
+
+    const exceptionsToSave = uniqueExceptions.map(
       ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority }) =>
       ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority })
     );
@@ -379,17 +403,10 @@ const ProfileTab = ({ onEditingChange }) => {
     );
 
     try {
-        console.log('🔍 [ProfileTab] 저장하는 데이터:', {
-          defaultScheduleCount: defaultSchedule.length,
-          defaultScheduleSample: defaultSchedule.slice(0, 3),
-          defaultScheduleWithSpecificDate: defaultSchedule.filter(s => s.specificDate).slice(0, 3),
-          exceptionsCount: exceptionsToSave.length,
-          personalTimesCount: personalTimesToSave.length,
-          personalTimesSample: personalTimesToSave.slice(0, 2)
-        });
+        console.log('💾 [저장] defaultSchedule:', scheduleWithoutSpecificDate.length, '개 | exceptions:', exceptionsToSave.length, '개');
 
         await userService.updateUserSchedule({
-          defaultSchedule,
+          defaultSchedule: scheduleWithoutSpecificDate,
           scheduleExceptions: exceptionsToSave,
           personalTimes: personalTimesToSave
         });
@@ -479,12 +496,36 @@ const ProfileTab = ({ onEditingChange }) => {
   const autoSave = async () => {
     // 편집 모드이거나 방금 취소한 상태일 때는 자동 저장하지 않음
     if (isEditing || justCancelled) {
-      console.log('🔍 [ProfileTab] autoSave 건너뜀:', { isEditing, justCancelled });
       return;
     }
 
     try {
-      const exceptionsToSave = scheduleExceptions.map(
+      // defaultSchedule에서 specificDate가 있는 것은 scheduleExceptions로 이동
+      const scheduleWithSpecificDate = defaultSchedule.filter(s => s.specificDate);
+      const scheduleWithoutSpecificDate = defaultSchedule.filter(s => !s.specificDate);
+
+      // specificDate가 있는 스케줄을 scheduleExceptions로 변환
+      const convertedExceptions = scheduleWithSpecificDate.map(s => ({
+        title: `선호 시간 (${s.priority === 3 ? '선호' : s.priority === 2 ? '보통' : '조정가능'})`,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        specificDate: s.specificDate,
+        priority: s.priority,
+        isHoliday: false,
+        isAllDay: false
+      }));
+
+      // 기존 scheduleExceptions와 병합 (중복 제거)
+      const allExceptions = [...scheduleExceptions, ...convertedExceptions];
+      const uniqueExceptions = allExceptions.filter((exception, index, self) =>
+        index === self.findIndex(e =>
+          e.specificDate === exception.specificDate &&
+          e.startTime === exception.startTime &&
+          e.endTime === exception.endTime
+        )
+      );
+
+      const exceptionsToSave = uniqueExceptions.map(
         ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority }) =>
         ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority })
       );
@@ -494,20 +535,17 @@ const ProfileTab = ({ onEditingChange }) => {
         }
       );
 
-      console.log('🔍 [ProfileTab] autoSave 실행:', {
-        defaultScheduleCount: defaultSchedule.length,
-        exceptionsCount: exceptionsToSave.length,
-        personalTimesCount: personalTimesToSave.length,
-        personalTimesSample: personalTimesToSave.slice(0, 2)
-      });
+      console.log('💾 [저장] defaultSchedule:', scheduleWithoutSpecificDate.length, '개 | exceptions:', exceptionsToSave.length, '개');
 
       await userService.updateUserSchedule({
-        defaultSchedule,
+        defaultSchedule: scheduleWithoutSpecificDate,
         scheduleExceptions: exceptionsToSave,
         personalTimes: personalTimesToSave
       });
 
-      console.log('🔍 [ProfileTab] autoSave 완료');
+      // 저장 후 state 업데이트
+      setDefaultSchedule(scheduleWithoutSpecificDate);
+      setScheduleExceptions(uniqueExceptions);
 
     } catch (err) {
       console.error('🔍 [ProfileTab] autoSave 실패:', err);
