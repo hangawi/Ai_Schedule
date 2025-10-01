@@ -473,7 +473,13 @@ exports.createRequest = async (req, res) => {
    try {
       const { roomId, type, targetUserId, targetSlot, timeSlot, message } = req.body;
 
-      console.log('[createRequest] Received data:', { roomId, type, targetUserId, timeSlot, message });
+      console.log('[createRequest] 📥 받은 요청 데이터:', JSON.stringify({
+         roomId,
+         type,
+         targetUserId,
+         timeSlot,
+         message
+      }, null, 2));
 
       if (!roomId || !type || !timeSlot) {
          return res.status(400).json({ msg: '필수 필드가 누락되었습니다.' });
@@ -623,21 +629,25 @@ exports.createRequest = async (req, res) => {
                  const targetSlotIndex = room.timeSlots.findIndex(slot => {
                     const slotUserId = slot.user._id || slot.user;
 
-                    // 날짜 비교 (있는 경우에만)
-                    let dateMatch = true;
-                    if (timeSlot.date && slot.date) {
-                       const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
-                       const requestDateStr = new Date(timeSlot.date).toISOString().split('T')[0];
-                       dateMatch = slotDateStr === requestDateStr;
-                    }
-
-                    return (
+                    // 기본 매칭: 유저, 요일, 시간
+                    const basicMatch =
                        slotUserId.toString() === targetUser._id.toString() &&
                        slot.day === timeSlot.day &&
                        slot.startTime === timeSlot.startTime &&
-                       slot.endTime === timeSlot.endTime &&
-                       dateMatch
-                    );
+                       slot.endTime === timeSlot.endTime;
+
+                    if (!basicMatch) return false;
+
+                    // 날짜 비교 (요청에 date가 있는 경우에만)
+                    if (timeSlot.date) {
+                       if (!slot.date) return false; // 요청에 date 있는데 슬롯에 없으면 불일치
+                       const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
+                       const requestDateStr = new Date(timeSlot.date).toISOString().split('T')[0];
+                       return slotDateStr === requestDateStr;
+                    }
+
+                    // 요청에 date 없으면 기본 매칭만으로 충분
+                    return true;
                  });
 
                  if (targetSlotIndex !== -1) {
