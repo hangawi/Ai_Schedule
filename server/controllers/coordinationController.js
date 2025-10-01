@@ -643,29 +643,25 @@ exports.createRequest = async (req, res) => {
                  if (targetSlotIndex !== -1) {
                     // Transfer the slot to the requester
                     room.timeSlots[targetSlotIndex].user = requester._id;
-                    console.log(`🔄 [REQUEST APPROVED] Transferred timeslot from ${targetUser._id} to ${requester._id} at ${timeSlot.day} ${timeSlot.startTime}-${timeSlot.endTime}`);
+                    console.log(`✅ [양보요청 수락] ${targetUser._id.toString().substring(0,8)} → ${requester._id.toString().substring(0,8)} | ${timeSlot.day} ${timeSlot.startTime}-${timeSlot.endTime}`);
                  } else {
-                    console.log(`⚠️ [REQUEST APPROVED] Could not find target slot to transfer. Searching for any matching slot...`);
+                    console.log(`❌ [양보요청 오류] 타겟 슬롯을 찾을 수 없음`);
 
-                    // 디버깅: 모든 타겟 유저의 슬롯 출력
+                    // 디버깅: 타겟 유저의 모든 슬롯
                     const targetUserSlots = room.timeSlots.filter(slot => {
                        const slotUserId = slot.user._id || slot.user;
                        return slotUserId.toString() === targetUser._id.toString();
                     });
-                    console.log(`[DEBUG] Target user has ${targetUserSlots.length} slots:`, targetUserSlots.map(s => ({
+                    console.log(`  타겟 유저 슬롯 ${targetUserSlots.length}개:`, targetUserSlots.map(s => ({
                        day: s.day,
-                       date: s.date,
-                       startTime: s.startTime,
-                       endTime: s.endTime
+                       date: s.date ? new Date(s.date).toISOString().split('T')[0] : 'NO DATE',
+                       time: `${s.startTime}-${s.endTime}`
                     })));
-                    console.log(`[DEBUG] Looking for slot with:`, {
+                    console.log(`  요청 슬롯:`, {
                        day: timeSlot.day,
-                       date: timeSlot.date,
-                       startTime: timeSlot.startTime,
-                       endTime: timeSlot.endTime
+                       date: timeSlot.date ? new Date(timeSlot.date).toISOString().split('T')[0] : 'NO DATE',
+                       time: `${timeSlot.startTime}-${timeSlot.endTime}`
                     });
-
-                    console.log(`⚠️ [REQUEST APPROVED] Creating new slot for requester.`);
                     // If we can't find the exact slot, create a new one
                     const calculateDateFromDay = (dayName) => {
                        const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -1080,7 +1076,17 @@ exports.runAutoSchedule = async (req, res) => {
         }
       }
 
+      // 자동배정 실행 전: 기존 자동배정 슬롯과 active 협의 삭제
+      const beforeSlotCount = room.timeSlots.length;
+      const beforeNegotiationCount = room.negotiations ? room.negotiations.filter(n => n.status === 'active').length : 0;
 
+      room.timeSlots = room.timeSlots.filter(slot => slot.subject !== '자동 배정');
+      room.negotiations = room.negotiations ? room.negotiations.filter(n => n.status !== 'active') : [];
+
+      const removedSlots = beforeSlotCount - room.timeSlots.length;
+      const removedNegotiations = beforeNegotiationCount - (room.negotiations ? room.negotiations.filter(n => n.status === 'active').length : 0);
+
+      console.log(`🧹 [자동배정 준비] 기존 자동배정 슬롯 ${removedSlots}개 삭제, 활성 협의 ${removedNegotiations}개 삭제`);
 
       // 개인 시간표 기반 자동배정으로 변경
       const result = schedulingAlgorithm.runAutoSchedule(
