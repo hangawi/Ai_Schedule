@@ -799,7 +799,7 @@ exports.getSentRequests = async (req, res) => {
 
       const sentRequests = rooms.flatMap(room =>
          room.requests
-           .filter(req => req.requester && req.requester._id.toString() === userId)
+           .filter(req => req.requester && req.requester._id.toString() === userId && req.status !== 'approved')
            .map(req => ({
              ...req.toObject(),
              roomId: room._id.toString(),
@@ -807,6 +807,7 @@ exports.getSentRequests = async (req, res) => {
            }))
       );
 
+      console.log(`📤 보낸 요청: ${sentRequests.length}개 (approved 제외)`);
       res.json({ success: true, requests: sentRequests });
    } catch (error) {
       console.error('Error fetching sent requests:', error);
@@ -820,24 +821,20 @@ exports.getSentRequests = async (req, res) => {
 exports.getReceivedRequests = async (req, res) => {
    try {
       const userId = req.user.id;
-      console.log(`[getReceivedRequests] Fetching for user: ${userId}`);
 
       const rooms = await Room.find({
          $or: [{ owner: userId }, { 'members.user': userId }],
       }).populate('requests.requester', 'firstName lastName email name');
-      console.log(`[getReceivedRequests] Found ${rooms.length} rooms for user.`);
 
       const receivedRequests = rooms.flatMap(room => {
-         console.log(`[getReceivedRequests] Checking room: ${room.name} (${room._id})`);
-         console.log(`[getReceivedRequests] Room has ${room.requests.length} requests.`);
          return room.requests.filter(req => {
             const isTarget = req.targetUser && req.targetUser.toString() === userId;
-            console.log(`[getReceivedRequests]  - Request ${req._id}: targetUser=${req.targetUser}, isTarget=${isTarget}, status=${req.status}, type=${req.type}`);
-            return isTarget;
+            // approved 상태는 제외 (이미 처리됨)
+            return isTarget && req.status !== 'approved';
          }).map(req => ({ ...req.toObject(), roomId: room._id, roomName: room.name }));
       });
 
-      console.log(`[getReceivedRequests] Found ${receivedRequests.length} received requests in total.`);
+      console.log(`📥 받은 요청: ${receivedRequests.length}개 (approved 제외)`);
       res.json({ success: true, requests: receivedRequests });
    } catch (error) {
       console.error('[getReceivedRequests] Error:', error);
