@@ -262,30 +262,6 @@ exports.getRoomDetails = async (req, res) => {
          return res.status(403).json({ msg: '이 방에 접근할 권한이 없습니다.' });
       }
 
-      console.log('getRoomDetails: roomExceptions:', JSON.stringify(room.settings?.roomExceptions, null, 2));
-      console.log('getRoomDetails: blockedTimes:', JSON.stringify(room.settings?.blockedTimes, null, 2));
-      console.log('getRoomDetails: Requests count:', room.requests?.length || 0);
-      console.log('getRoomDetails: Sample requests:', room.requests?.slice(0, 2).map(req => ({
-         id: req._id,
-         type: req.type,
-         status: req.status,
-         requester: req.requester?._id || req.requester,
-         targetUser: req.targetUser?._id || req.targetUser
-      })));
-
-      console.log('🔍 [DEBUG] getRoomDetails: timeSlots count:', room.timeSlots?.length || 0);
-      console.log('🔍 [DEBUG] getRoomDetails: sample timeSlots:', room.timeSlots?.slice(0, 3).map(slot => ({
-         user: slot.user?._id || slot.user,
-         day: slot.day,
-         startTime: slot.startTime,
-         endTime: slot.endTime,
-         assignedBy: slot.assignedBy ? 'auto' : 'manual'
-      })));
-
-      const autoAssignedSlots = room.timeSlots?.filter(slot => slot.subject === '자동 배정') || [];
-      const manualSlots = room.timeSlots?.filter(slot => slot.subject !== '자동 배정') || [];
-      console.log(`🔍 [DEBUG] getRoomDetails: ${autoAssignedSlots.length}개 자동배정 슬롯, ${manualSlots.length}개 수동 슬롯`);
-
       res.json(room);
    } catch (error) {
       console.error('Error fetching room details:', error);

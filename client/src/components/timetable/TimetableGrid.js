@@ -629,7 +629,7 @@ const TimetableGrid = ({
         roomId: roomId,
         type: REQUEST_TYPES.TIME_REQUEST, // Or 'time_change' if applicable
         timeSlot: {
-          date: slotToRequest.date, // Pass date object
+          date: slotToRequest.date ? (slotToRequest.date instanceof Date ? slotToRequest.date.toISOString() : slotToRequest.date) : undefined,
           day: dayNames[getDayIndex(slotToRequest.date)],
           startTime: slotToRequest.time,
           endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
@@ -657,7 +657,7 @@ const TimetableGrid = ({
           roomId: roomId,
           type: REQUEST_TYPES.SLOT_RELEASE,
           timeSlot: {
-            date: slotToChange.date, // Pass date object
+            date: slotToChange.date ? (slotToChange.date instanceof Date ? slotToChange.date.toISOString() : slotToChange.date) : undefined,
             day: dayNames[getDayIndex(slotToChange.date)],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
@@ -670,7 +670,7 @@ const TimetableGrid = ({
           roomId: roomId,
           type: REQUEST_TYPES.SLOT_SWAP,
           timeSlot: {
-            date: slotToChange.date, // Pass date object
+            date: slotToChange.date ? (slotToChange.date instanceof Date ? slotToChange.date.toISOString() : slotToChange.date) : undefined,
             day: dayNames[getDayIndex(slotToChange.date)],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
@@ -696,7 +696,7 @@ const TimetableGrid = ({
           roomId: roomId,
           type: REQUEST_TYPES.TIME_CHANGE,
           timeSlot: {
-            date: slotToChange.date, // Pass date object
+            date: slotToChange.date ? (slotToChange.date instanceof Date ? slotToChange.date.toISOString() : slotToChange.date) : undefined,
             day: dayNames[getDayIndex(slotToChange.date)],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,

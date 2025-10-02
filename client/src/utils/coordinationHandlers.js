@@ -279,6 +279,9 @@ export const handleRequestWithUpdate = async (
       console.log('🔄 Fetching room details for:', currentRoom._id);
       await fetchRoomDetails(currentRoom._id);
       console.log('✅ fetchRoomDetails completed');
+
+      // 상태 업데이트가 완전히 반영되도록 작은 딜레이 추가
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     console.log('🔄 Loading received requests...');
@@ -333,7 +336,7 @@ export const createChangeRequestData = (slotToChange, currentRoom, user) => {
       type: 'time_request',
       timeSlot: {
         day: dayKey,
-        date: slotToChange.date, // 날짜 추가
+        date: slotToChange.date ? slotToChange.date.toISOString() : undefined, // 날짜를 ISO 문자열로 변환
         startTime: slotToChange.time,
         endTime: endTime,
       },

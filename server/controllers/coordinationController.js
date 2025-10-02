@@ -31,38 +31,60 @@ async function handleNegotiationResolution(room, negotiation, userId) {
       const yieldedMember = yieldedMembers[0];
       const claimedMember = claimedMembers[0];
 
-      // 주장한 사람에게 시간 배정
-      room.timeSlots.push({
-         user: claimedMember.user._id || claimedMember.user,
-         date: negotiation.slotInfo.date,
-         startTime: negotiation.slotInfo.startTime,
-         endTime: negotiation.slotInfo.endTime,
-         day: negotiation.slotInfo.day,
-         subject: '협의 결과',
-         status: 'confirmed',
-         assignedBy: userId
-      });
+      // 주장한 사람에게 시간 배정 (중복 방지를 위해 먼저 체크)
+      const existingSlot = room.timeSlots.find(slot =>
+         slot.user.toString() === (claimedMember.user._id || claimedMember.user).toString() &&
+         slot.date.toISOString() === new Date(negotiation.slotInfo.date).toISOString() &&
+         slot.startTime === negotiation.slotInfo.startTime &&
+         slot.endTime === negotiation.slotInfo.endTime
+      );
+
+      if (!existingSlot) {
+         room.timeSlots.push({
+            user: claimedMember.user._id || claimedMember.user,
+            date: negotiation.slotInfo.date,
+            startTime: negotiation.slotInfo.startTime,
+            endTime: negotiation.slotInfo.endTime,
+            day: negotiation.slotInfo.day,
+            subject: '협의 결과',
+            status: 'confirmed',
+            assignedBy: userId
+         });
+         console.log(`[협의해결] ${claimedMember.user._id || claimedMember.user} 시간 배정 완료`);
+      } else {
+         console.log(`[협의해결] ${claimedMember.user._id || claimedMember.user} 이미 시간 배정됨 - 중복 방지`);
+      }
 
       // 양보한 사람 처리
       const yieldedUserId = (yieldedMember.user._id || yieldedMember.user).toString();
       const roomMember = room.members.find(m => m.user.toString() === yieldedUserId);
 
       if (yieldedMember.yieldOption === 'carry_over') {
-         // 이월 처리
+         // 이월 처리 (중복 방지를 위해 이미 이월된 내역이 있는지 확인)
          const [startH, startM] = negotiation.slotInfo.startTime.split(':').map(Number);
          const [endH, endM] = negotiation.slotInfo.endTime.split(':').map(Number);
          const carryOverHours = ((endH * 60 + endM) - (startH * 60 + startM)) / 60;
 
          if (roomMember) {
-            roomMember.carryOver += carryOverHours;
-            roomMember.carryOverHistory.push({
-               week: new Date(),
-               amount: carryOverHours,
-               reason: 'negotiation_yield',
-               timestamp: new Date()
-            });
+            // 해당 협의에 대한 이월 내역이 이미 있는지 확인
+            const alreadyCarriedOver = roomMember.carryOverHistory.some(history =>
+               history.negotiationId && history.negotiationId.toString() === negotiation._id.toString()
+            );
+
+            if (!alreadyCarriedOver) {
+               roomMember.carryOver += carryOverHours;
+               roomMember.carryOverHistory.push({
+                  week: new Date(),
+                  amount: carryOverHours,
+                  reason: 'negotiation_yield',
+                  timestamp: new Date(),
+                  negotiationId: negotiation._id
+               });
+               console.log(`[협의해결] ${yieldedUserId} 이월 ${carryOverHours}시간 추가`);
+            } else {
+               console.log(`[협의해결] ${yieldedUserId} 이미 이월됨 - 중복 방지`);
+            }
          }
-         console.log(`[협의해결] ${yieldedUserId} 이월 ${carryOverHours}시간`);
       } else if (yieldedMember.yieldOption === 'alternative_time' && yieldedMember.alternativeSlots) {
          // 대체 시간 배정
          yieldedMember.alternativeSlots.forEach(slotKey => {
@@ -117,18 +139,30 @@ async function handleNegotiationResolution(room, negotiation, userId) {
       });
 
       if (!slotsOverlap) {
-         // 겹치지 않음 - 각자 선택한 시간대 배정
+         // 겹치지 않음 - 각자 선택한 시간대 배정 (중복 방지)
          chooseSlotMembers.forEach(member => {
-            room.timeSlots.push({
-               user: member.user._id || member.user,
-               date: negotiation.slotInfo.date,
-               startTime: member.chosenSlot.startTime,
-               endTime: member.chosenSlot.endTime,
-               day: negotiation.slotInfo.day,
-               subject: '협의 결과 (시간선택)',
-               status: 'confirmed',
-               assignedBy: userId
-            });
+            const existingSlot = room.timeSlots.find(slot =>
+               slot.user.toString() === (member.user._id || member.user).toString() &&
+               slot.date.toISOString() === new Date(negotiation.slotInfo.date).toISOString() &&
+               slot.startTime === member.chosenSlot.startTime &&
+               slot.endTime === member.chosenSlot.endTime
+            );
+
+            if (!existingSlot) {
+               room.timeSlots.push({
+                  user: member.user._id || member.user,
+                  date: negotiation.slotInfo.date,
+                  startTime: member.chosenSlot.startTime,
+                  endTime: member.chosenSlot.endTime,
+                  day: negotiation.slotInfo.day,
+                  subject: '협의 결과 (시간선택)',
+                  status: 'confirmed',
+                  assignedBy: userId
+               });
+               console.log(`[협의해결] ${member.user._id || member.user} 시간 배정 완료`);
+            } else {
+               console.log(`[협의해결] ${member.user._id || member.user} 이미 시간 배정됨 - 중복 방지`);
+            }
          });
 
          negotiation.status = 'resolved';
@@ -177,29 +211,53 @@ async function handleNegotiationResolution(room, negotiation, userId) {
       const midMinutes = startH * 60 + startM + (totalMinutes / 2);
       const midTime = `${Math.floor(midMinutes/60).toString().padStart(2,'0')}:${(midMinutes%60).toString().padStart(2,'0')}`;
 
-      // 앞 시간대
-      room.timeSlots.push({
-         user: firstMember.user._id || firstMember.user,
-         date: negotiation.slotInfo.date,
-         startTime: negotiation.slotInfo.startTime,
-         endTime: midTime,
-         day: negotiation.slotInfo.day,
-         subject: '협의 결과 (분할)',
-         status: 'confirmed',
-         assignedBy: userId
-      });
+      // 앞 시간대 (중복 방지)
+      const existingFirstSlot = room.timeSlots.find(slot =>
+         slot.user.toString() === (firstMember.user._id || firstMember.user).toString() &&
+         slot.date.toISOString() === new Date(negotiation.slotInfo.date).toISOString() &&
+         slot.startTime === negotiation.slotInfo.startTime &&
+         slot.endTime === midTime
+      );
 
-      // 뒷 시간대
-      room.timeSlots.push({
-         user: secondMember.user._id || secondMember.user,
-         date: negotiation.slotInfo.date,
-         startTime: midTime,
-         endTime: negotiation.slotInfo.endTime,
-         day: negotiation.slotInfo.day,
-         subject: '협의 결과 (분할)',
-         status: 'confirmed',
-         assignedBy: userId
-      });
+      if (!existingFirstSlot) {
+         room.timeSlots.push({
+            user: firstMember.user._id || firstMember.user,
+            date: negotiation.slotInfo.date,
+            startTime: negotiation.slotInfo.startTime,
+            endTime: midTime,
+            day: negotiation.slotInfo.day,
+            subject: '협의 결과 (분할)',
+            status: 'confirmed',
+            assignedBy: userId
+         });
+         console.log(`[협의해결] ${firstMember.user._id || firstMember.user} 앞 시간 배정 완료`);
+      } else {
+         console.log(`[협의해결] ${firstMember.user._id || firstMember.user} 앞 시간 이미 배정됨 - 중복 방지`);
+      }
+
+      // 뒷 시간대 (중복 방지)
+      const existingSecondSlot = room.timeSlots.find(slot =>
+         slot.user.toString() === (secondMember.user._id || secondMember.user).toString() &&
+         slot.date.toISOString() === new Date(negotiation.slotInfo.date).toISOString() &&
+         slot.startTime === midTime &&
+         slot.endTime === negotiation.slotInfo.endTime
+      );
+
+      if (!existingSecondSlot) {
+         room.timeSlots.push({
+            user: secondMember.user._id || secondMember.user,
+            date: negotiation.slotInfo.date,
+            startTime: midTime,
+            endTime: negotiation.slotInfo.endTime,
+            day: negotiation.slotInfo.day,
+            subject: '협의 결과 (분할)',
+            status: 'confirmed',
+            assignedBy: userId
+         });
+         console.log(`[협의해결] ${secondMember.user._id || secondMember.user} 뒷 시간 배정 완료`);
+      } else {
+         console.log(`[협의해결] ${secondMember.user._id || secondMember.user} 뒷 시간 이미 배정됨 - 중복 방지`);
+      }
 
       negotiation.status = 'resolved';
       negotiation.resolution = {
@@ -238,6 +296,9 @@ async function handleNegotiationResolution(room, negotiation, userId) {
       });
       console.log(`[협의해결] 합의 실패 - 방장 개입 필요`);
    }
+
+   // Mongoose에게 timeSlots 배열 변경 알림
+   room.markModified('timeSlots');
 }
 
 // Re-export from separated controllers
@@ -480,6 +541,7 @@ exports.createRequest = async (req, res) => {
          timeSlot,
          message
       }, null, 2));
+      console.log('[createRequest] timeSlot.date 타입:', typeof timeSlot.date, '값:', timeSlot.date);
 
       if (!roomId || !type || !timeSlot) {
          return res.status(400).json({ msg: '필수 필드가 누락되었습니다.' });
@@ -611,6 +673,7 @@ exports.createRequest = async (req, res) => {
                     slot.startTime === timeSlot.startTime
                  );
               });
+              room.markModified('timeSlots');
            } else if (type === 'slot_swap' && targetUser) {
               const targetSlotIndex = room.timeSlots.findIndex(slot =>
                   slot.user &&
@@ -621,80 +684,117 @@ exports.createRequest = async (req, res) => {
 
               if (targetSlotIndex !== -1) {
                   room.timeSlots[targetSlotIndex].user = requester._id;
+                  room.markModified('timeSlots');
               }
            } else if (type === 'time_request' || type === 'time_change') {
               // For time_request, transfer the timeslot from target user to requester
               if (targetUser) {
-                 // First, find and remove the slot from the target user
-                 const targetSlotIndex = room.timeSlots.findIndex(slot => {
+                 // 중복 방지: 요청자에게 이미 동일한 슬롯이 있는지 확인
+                 const requesterHasSlot = room.timeSlots.some(slot => {
                     const slotUserId = slot.user._id || slot.user;
 
-                    // 기본 매칭: 유저, 요일, 시간
-                    const basicMatch =
-                       slotUserId.toString() === targetUser._id.toString() &&
+                    // 유저가 다르면 false
+                    if (slotUserId.toString() !== requester._id.toString()) return false;
+
+                    // 요일, 시작시간, 종료시간이 모두 일치해야 함
+                    const timeMatch =
                        slot.day === timeSlot.day &&
                        slot.startTime === timeSlot.startTime &&
                        slot.endTime === timeSlot.endTime;
 
-                    if (!basicMatch) return false;
+                    if (!timeMatch) return false;
 
-                    // 날짜 비교 (요청에 date가 있는 경우에만)
-                    if (timeSlot.date) {
-                       if (!slot.date) return false; // 요청에 date 있는데 슬롯에 없으면 불일치
+                    // 날짜 비교 로직 개선
+                    // 둘 다 날짜가 있는 경우
+                    if (timeSlot.date && slot.date) {
                        const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
                        const requestDateStr = new Date(timeSlot.date).toISOString().split('T')[0];
                        return slotDateStr === requestDateStr;
                     }
 
-                    // 요청에 date 없으면 기본 매칭만으로 충분
+                    // 하나만 날짜가 있는 경우: 같은 요일+시간이면 중복으로 간주
+                    if (timeSlot.date || slot.date) {
+                       return true;
+                    }
+
+                    // 둘 다 날짜가 없으면 요일+시간 매치로 중복 판정
                     return true;
                  });
 
-                 if (targetSlotIndex !== -1) {
-                    // Transfer the slot to the requester
-                    room.timeSlots[targetSlotIndex].user = requester._id;
-                    console.log(`✅ [양보요청 수락] ${targetUser._id.toString().substring(0,8)} → ${requester._id.toString().substring(0,8)} | ${timeSlot.day} ${timeSlot.startTime}-${timeSlot.endTime}`);
+                 if (requesterHasSlot) {
+                    // 중복이므로 아무것도 하지 않음 (요청 상태는 approved로 변경됨)
                  } else {
-                    console.log(`❌ [양보요청 오류] 타겟 슬롯을 찾을 수 없음`);
-
-                    // 디버깅: 타겟 유저의 모든 슬롯
-                    const targetUserSlots = room.timeSlots.filter(slot => {
+                    // First, find and remove the slot from the target user
+                    const targetSlotIndex = room.timeSlots.findIndex(slot => {
                        const slotUserId = slot.user._id || slot.user;
-                       return slotUserId.toString() === targetUser._id.toString();
-                    });
-                    console.log(`  타겟 유저 슬롯 ${targetUserSlots.length}개:`, targetUserSlots.map(s => ({
-                       day: s.day,
-                       date: s.date ? new Date(s.date).toISOString().split('T')[0] : 'NO DATE',
-                       time: `${s.startTime}-${s.endTime}`
-                    })));
-                    console.log(`  요청 슬롯:`, {
-                       day: timeSlot.day,
-                       date: timeSlot.date ? new Date(timeSlot.date).toISOString().split('T')[0] : 'NO DATE',
-                       time: `${timeSlot.startTime}-${timeSlot.endTime}`
-                    });
-                    // If we can't find the exact slot, create a new one
-                    const calculateDateFromDay = (dayName) => {
-                       const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-                       const dayIndex = daysOfWeek.indexOf(dayName.toLowerCase());
-                       if (dayIndex === -1) return new Date();
 
-                       const currentDate = new Date();
-                       const currentDay = currentDate.getDay();
-                       const diff = dayIndex - currentDay;
-                       const targetDate = new Date(currentDate);
-                       targetDate.setDate(currentDate.getDate() + diff);
-                       return targetDate;
-                    };
+                       // 기본 매칭: 유저, 요일, 시간
+                       const basicMatch =
+                          slotUserId.toString() === targetUser._id.toString() &&
+                          slot.day === timeSlot.day &&
+                          slot.startTime === timeSlot.startTime &&
+                          slot.endTime === timeSlot.endTime;
 
-                    room.timeSlots.push({
-                       user: requester._id,
-                       date: calculateDateFromDay(timeSlot.day),
-                       startTime: timeSlot.startTime,
-                       endTime: timeSlot.endTime,
-                       day: timeSlot.day,
-                       subject: timeSlot.subject || '승인된 요청',
-                       status: 'confirmed'
+                       if (!basicMatch) return false;
+
+                       // 날짜 비교 (요청에 date가 있는 경우에만)
+                       if (timeSlot.date) {
+                          if (!slot.date) return false; // 요청에 date 있는데 슬롯에 없으면 불일치
+                          const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
+                          const requestDateStr = new Date(timeSlot.date).toISOString().split('T')[0];
+                          return slotDateStr === requestDateStr;
+                       }
+
+                       // 요청에 date 없으면 기본 매칭만으로 충분
+                       return true;
                     });
+
+                    if (targetSlotIndex !== -1) {
+                       // 기존 슬롯 정보를 복사
+                       const targetSlot = room.timeSlots[targetSlotIndex];
+
+                       // 타겟 유저의 슬롯 제거
+                       room.timeSlots.splice(targetSlotIndex, 1);
+                       room.markModified('timeSlots'); // Mongoose에게 배열 변경 알림
+
+                       // 요청자에게 새 슬롯 추가
+                       room.timeSlots.push({
+                          user: requester._id,
+                          date: targetSlot.date,
+                          startTime: targetSlot.startTime,
+                          endTime: targetSlot.endTime,
+                          day: targetSlot.day,
+                          subject: targetSlot.subject || '양보받은 시간',
+                          status: 'confirmed',
+                          assignedBy: req.user.id
+                       });
+
+                    } else {
+                       // 타겟 슬롯이 없는 경우 (아직 배정되지 않은 시간) 새 슬롯 생성
+                       const calculateDateFromDay = (dayName) => {
+                          const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                          const dayIndex = daysOfWeek.indexOf(dayName.toLowerCase());
+                          if (dayIndex === -1) return new Date();
+
+                          const currentDate = new Date();
+                          const currentDay = currentDate.getDay();
+                          const diff = dayIndex - currentDay;
+                          const targetDate = new Date(currentDate);
+                          targetDate.setDate(currentDate.getDate() + diff);
+                          return targetDate;
+                       };
+
+                       room.timeSlots.push({
+                          user: requester._id,
+                          date: timeSlot.date || calculateDateFromDay(timeSlot.day),
+                          startTime: timeSlot.startTime,
+                          endTime: timeSlot.endTime,
+                          day: timeSlot.day,
+                          subject: timeSlot.subject || '양보받은 시간',
+                          status: 'confirmed',
+                          assignedBy: req.user.id
+                       });
+                    }
                  }
               } else {
                  // If no target user (slot_release type), just add the slot to requester

@@ -122,10 +122,24 @@ const ScheduleGridSelector = ({
         // 예외 일정 우선 확인
         const exceptionSlot = exceptions.find(e => {
             if (e.specificDate !== dateStr) return false;
-            const startDate = new Date(e.startTime);
-            const endDate = new Date(e.endTime);
-            const startMins = startDate.getHours() * 60 + startDate.getMinutes();
-            const endMins = endDate.getHours() * 60 + endDate.getMinutes();
+
+            // startTime과 endTime이 HH:MM 형식인지 ISO 날짜 형식인지 확인
+            let startMins, endMins;
+
+            if (e.startTime && e.startTime.includes('T')) {
+                // ISO 형식 (예: 2025-01-15T09:00:00.000Z)
+                const startDate = new Date(e.startTime);
+                const endDate = new Date(e.endTime);
+                startMins = startDate.getHours() * 60 + startDate.getMinutes();
+                endMins = endDate.getHours() * 60 + endDate.getMinutes();
+            } else if (e.startTime && e.startTime.includes(':')) {
+                // HH:MM 형식 (예: 09:00)
+                startMins = timeToMinutes(e.startTime);
+                endMins = timeToMinutes(e.endTime);
+            } else {
+                return false;
+            }
+
             return timeMinutes >= startMins && timeMinutes < endMins;
         });
 
@@ -542,7 +556,30 @@ const ScheduleGridSelector = ({
                             const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
                             const recurringSlot = schedule.find(s => s.dayOfWeek === day.dayOfWeek && s.startTime === time);
-                            const exceptionSlot = exceptions.find(e => e.specificDate === dateStr && timeToMinutes(new Date(e.startTime).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'})) === timeToMinutes(time));
+
+                            const exceptionSlot = exceptions.find(e => {
+                                if (e.specificDate !== dateStr) return false;
+
+                                let startMins, endMins;
+                                const currentMinutes = timeToMinutes(time);
+
+                                if (e.startTime && e.startTime.includes('T')) {
+                                    // ISO 형식
+                                    const startDate = new Date(e.startTime);
+                                    const endDate = new Date(e.endTime);
+                                    startMins = startDate.getHours() * 60 + startDate.getMinutes();
+                                    endMins = endDate.getHours() * 60 + endDate.getMinutes();
+                                } else if (e.startTime && e.startTime.includes(':')) {
+                                    // HH:MM 형식
+                                    startMins = timeToMinutes(e.startTime);
+                                    endMins = timeToMinutes(e.endTime);
+                                } else {
+                                    return false;
+                                }
+
+                                return currentMinutes >= startMins && currentMinutes < endMins;
+                            });
+
                             const personalSlot = personalTimes.find(p => {
                                 const personalDays = p.days || [];
                                 if (p.isRecurring !== false && personalDays.length > 0) {
@@ -795,12 +832,26 @@ const ScheduleGridSelector = ({
                   const timeMinutes = timeToMinutes(time);
 
                   const recurringSlot = schedule.find(s => s.dayOfWeek === dayData.dayOfWeek && s.startTime === time);
+
                   const exceptionSlot = exceptions.find(e => {
                     if (e.specificDate !== dateStr) return false;
-                    const startDate = new Date(e.startTime);
-                    const endDate = new Date(e.endTime);
-                    const startMins = startDate.getHours() * 60 + startDate.getMinutes();
-                    const endMins = endDate.getHours() * 60 + endDate.getMinutes();
+
+                    let startMins, endMins;
+
+                    if (e.startTime && e.startTime.includes('T')) {
+                      // ISO 형식
+                      const startDate = new Date(e.startTime);
+                      const endDate = new Date(e.endTime);
+                      startMins = startDate.getHours() * 60 + startDate.getMinutes();
+                      endMins = endDate.getHours() * 60 + endDate.getMinutes();
+                    } else if (e.startTime && e.startTime.includes(':')) {
+                      // HH:MM 형식
+                      startMins = timeToMinutes(e.startTime);
+                      endMins = timeToMinutes(e.endTime);
+                    } else {
+                      return false;
+                    }
+
                     return timeMinutes >= startMins && timeMinutes < endMins;
                   });
                   const personalSlot = personalTimes.find(p => {
