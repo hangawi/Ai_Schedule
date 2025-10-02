@@ -49,19 +49,7 @@ const NegotiationItem = ({
         </div>
         <button
           onClick={() => {
-            console.log('[DEBUG] isUserInvolved:', isUserInvolved);
-            console.log('[DEBUG] user?.id:', user?.id);
-            console.log('[DEBUG] conflictingMembers:', negotiation.conflictingMembers?.map(cm => ({
-              userId: cm.user?._id || cm.user?.id || cm.user,
-              response: cm.response
-            })));
-
-            // 당사자가 아닌 사람(방장)이 클릭한 경우
-            if (!isUserInvolved) {
-              alert('방장은 협의에 참여할 수 없습니다. 당사자들만 협의에 참여할 수 있습니다.');
-              return;
-            }
-
+            // 방장이든 당사자든 모두 협의 내용을 볼 수 있도록 변경
             onOpenNegotiation(negotiation);
           }}
           className={`px-3 py-1 text-xs rounded-md transition-colors ${
@@ -80,9 +68,27 @@ const NegotiationItem = ({
 const NegotiationSection = ({
   currentWeekNegotiations,
   user,
-  onOpenNegotiation
+  onOpenNegotiation,
+  isOwner
 }) => {
-  const visibleNegotiations = currentWeekNegotiations || [];
+  // 방장이거나 당사자인 협의만 필터링
+  const visibleNegotiations = (currentWeekNegotiations || []).filter(negotiation => {
+    // 방장이면 모든 협의를 볼 수 있음
+    if (isOwner) return true;
+
+    // 당사자인지 확인
+    const isInvolved = negotiation.conflictingMembers?.some(cm => {
+      let cmUserId;
+      if (typeof cm.user === 'object' && cm.user !== null) {
+        cmUserId = cm.user._id || cm.user.id;
+      } else {
+        cmUserId = cm.user;
+      }
+      return cmUserId === user?.id || cmUserId?.toString() === user?.id?.toString();
+    });
+
+    return isInvolved;
+  });
 
   if (visibleNegotiations.length === 0) return null;
 
