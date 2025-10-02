@@ -1708,7 +1708,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
           />
         )}
       </div>
-    );
+    </div>
+  );
   }
 
   return (
@@ -1733,7 +1734,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         </div>
       </div>
 
-      {(myRooms?.owned?.length > 0 || myRooms?.joined?.length > 0) ? (
+      {(myRooms?.owned?.length > 0 || myRooms?.joined?.length > 0) && (
         <div className="mb-6">
           <div className="flex space-x-2 border-b border-gray-200 mb-4">
             <button
@@ -1782,41 +1783,41 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             ))}
           </div>
         </div>
-      ) : (
+      )}
+
+      {!(myRooms?.owned?.length > 0 || myRooms?.joined?.length > 0) && (
         <div className="text-center py-16 bg-white rounded-lg shadow-md border">
           <div className="text-gray-400 text-8xl mb-6">📅</div>
           <h3 className="text-2xl font-bold text-gray-700 mb-4">시간표 조율을 시작해보세요!</h3>
           <p className="text-gray-500 mb-8 max-w-md mx-auto">
-            팀 프로젝트나 스터디 그룹의 시간을 효율적으로 조율할 수 있습니다. 
+            팀 프로젝트나 스터디 그룹의 시간을 효율적으로 조율할 수 있습니다.
             방을 만들거나 기존 방에 참여해보세요.
           </p>
         </div>
       )}
 
-      <div>
-        {showCreateRoomModal && (
-          <RoomCreationModal
-            onClose={closeCreateRoomModal}
-            onCreateRoom={handleCreateRoom}
-            ownerProfileSchedule={user ? {
-              defaultSchedule: user.defaultSchedule,
-              scheduleExceptions: user.scheduleExceptions,
-              personalTimes: user.personalTimes
-            } : null}
-          />
-        )}
-        {showJoinRoomModal && (
-          <RoomJoinModal onClose={closeJoinRoomModal} onJoinRoom={handleJoinRoom} />
-        )}
-        <CustomAlertModal
-          isOpen={customAlert.show}
-          onClose={closeAlert}
-          title="알림"
-          message={customAlert.message}
-          type="warning"
-          showCancel={false}
+      {showCreateRoomModal && (
+        <RoomCreationModal
+          onClose={closeCreateRoomModal}
+          onCreateRoom={handleCreateRoom}
+          ownerProfileSchedule={user ? {
+            defaultSchedule: user.defaultSchedule,
+            scheduleExceptions: user.scheduleExceptions,
+            personalTimes: user.personalTimes
+          } : null}
         />
-      </div>
+      )}
+      {showJoinRoomModal && (
+        <RoomJoinModal onClose={closeJoinRoomModal} onJoinRoom={handleJoinRoom} />
+      )}
+      <CustomAlertModal
+        isOpen={customAlert.show}
+        onClose={closeAlert}
+        title="알림"
+        message={customAlert.message}
+        type="warning"
+        showCancel={false}
+      />
     </div>
   );
 };
