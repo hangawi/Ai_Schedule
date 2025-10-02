@@ -262,6 +262,13 @@ exports.getRoomDetails = async (req, res) => {
          return res.status(403).json({ msg: '이 방에 접근할 권한이 없습니다.' });
       }
 
+      // 디버깅: timeSlots.user에 _id가 있는지 확인
+      if (room.timeSlots && room.timeSlots.length > 0) {
+         console.log('[getRoomDetails] First timeSlot.user:', JSON.stringify(room.timeSlots[0].user, null, 2));
+         console.log('[getRoomDetails] First timeSlot.user._id:', room.timeSlots[0].user?._id);
+         console.log('[getRoomDetails] First timeSlot.user.id:', room.timeSlots[0].user?.id);
+      }
+
       res.json(room);
    } catch (error) {
       console.error('Error fetching room details:', error);
