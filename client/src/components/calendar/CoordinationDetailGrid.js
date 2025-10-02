@@ -203,12 +203,9 @@ const CoordinationDetailGrid = ({
 
   // 병합모드: 해당 시간을 포함하는 연속된 블록의 전체 시간 범위를 찾음
   const findMergedBlockRange = (clickedTime) => {
-    const slots = getSlotData(clickedTime);
-    if (slots.length === 0) return { startTime: clickedTime, endTime: calculateEndTime(clickedTime) };
-
-    // 같은 유저의 슬롯들만 필터링 (첫 번째 슬롯의 유저)
-    const firstSlot = slots[0];
-    const targetUserId = firstSlot.user._id || firstSlot.user;
+    // 클릭한 시간을 포함하는 슬롯 찾기 (시간 범위 체크)
+    const clickedMinutes = clickedTime.split(':').map(Number);
+    const clickedTotalMinutes = clickedMinutes[0] * 60 + clickedMinutes[1];
 
     const dateStr = selectedDate.toISOString().split('T')[0];
     const selectedDayOfWeek = selectedDate.getDay();
@@ -217,6 +214,43 @@ const CoordinationDetailGrid = ({
       4: 'thursday', 5: 'friday', 6: 'saturday'
     };
     const selectedDayName = dayNameMap[selectedDayOfWeek];
+
+    // 클릭한 시간을 포함하는 슬롯 찾기
+    const containingSlots = timeSlots.filter(slot => {
+      // 날짜/요일 매칭
+      let dateMatch = false;
+      if (slot.date) {
+        try {
+          const slotDate = new Date(slot.date).toISOString().split('T')[0];
+          dateMatch = slotDate === dateStr;
+        } catch (e) {
+          return false;
+        }
+      } else if (slot.day) {
+        dateMatch = slot.day.toLowerCase() === selectedDayName;
+      }
+
+      if (!dateMatch) return false;
+
+      // 시간 범위 체크
+      const startMinutes = slot.startTime.split(':').map(Number);
+      const startTotalMinutes = startMinutes[0] * 60 + startMinutes[1];
+      const endMinutes = slot.endTime.split(':').map(Number);
+      const endTotalMinutes = endMinutes[0] * 60 + endMinutes[1];
+
+      return startTotalMinutes <= clickedTotalMinutes && clickedTotalMinutes < endTotalMinutes;
+    });
+
+    if (containingSlots.length === 0) {
+      console.log(`⚠️ [병합모드] ${clickedTime}을 포함하는 슬롯이 없음`);
+      return { startTime: clickedTime, endTime: calculateEndTime(clickedTime) };
+    }
+
+    // 같은 유저의 슬롯들만 필터링 (첫 번째 슬롯의 유저)
+    const firstSlot = containingSlots[0];
+    const targetUserId = firstSlot.user._id || firstSlot.user;
+
+    console.log(`🔍 [병합모드] ${clickedTime} 클릭 → 타겟 유저: ${targetUserId.toString().substring(0, 8)}, 포함 슬롯: ${firstSlot.startTime}-${firstSlot.endTime}`);
 
     // 해당 유저의 모든 슬롯 찾기 (같은 날짜)
     const userSlots = timeSlots.filter(slot => {
@@ -246,49 +280,37 @@ const CoordinationDetailGrid = ({
     });
 
     // 클릭한 시간을 포함하는 연속 블록 찾기
-    const clickedMinutes = clickedTime.split(':').map(Number);
-    const clickedTotalMinutes = clickedMinutes[0] * 60 + clickedMinutes[1];
+    let blockStart = firstSlot.startTime;
+    let blockEnd = firstSlot.endTime;
 
-    let blockStart = clickedTime;
-    let blockEnd = calculateEndTime(clickedTime);
+    // firstSlot의 인덱스 찾기
+    const firstSlotIndex = userSlots.findIndex(s =>
+      s.startTime === firstSlot.startTime && s.endTime === firstSlot.endTime
+    );
 
-    for (let i = 0; i < userSlots.length; i++) {
-      const slot = userSlots[i];
-      const startMinutes = slot.startTime.split(':').map(Number);
-      const startTotalMinutes = startMinutes[0] * 60 + startMinutes[1];
-      const endMinutes = slot.endTime.split(':').map(Number);
-      const endTotalMinutes = endMinutes[0] * 60 + endMinutes[1];
-
-      // 클릭한 시간이 이 슬롯에 포함되는지 확인
-      if (startTotalMinutes <= clickedTotalMinutes && clickedTotalMinutes < endTotalMinutes) {
-        // 이 슬롯부터 시작해서 연속된 블록 찾기
-        blockStart = slot.startTime;
-        blockEnd = slot.endTime;
-
-        // 앞으로 연속된 슬롯 찾기
-        for (let j = i + 1; j < userSlots.length; j++) {
-          const nextSlot = userSlots[j];
-          if (nextSlot.startTime === blockEnd) {
-            blockEnd = nextSlot.endTime;
-          } else {
-            break;
-          }
+    if (firstSlotIndex !== -1) {
+      // 앞으로 연속된 슬롯 찾기
+      for (let j = firstSlotIndex + 1; j < userSlots.length; j++) {
+        const nextSlot = userSlots[j];
+        if (nextSlot.startTime === blockEnd) {
+          blockEnd = nextSlot.endTime;
+        } else {
+          break;
         }
+      }
 
-        // 뒤로 연속된 슬롯 찾기
-        for (let j = i - 1; j >= 0; j--) {
-          const prevSlot = userSlots[j];
-          if (prevSlot.endTime === blockStart) {
-            blockStart = prevSlot.startTime;
-          } else {
-            break;
-          }
+      // 뒤로 연속된 슬롯 찾기
+      for (let j = firstSlotIndex - 1; j >= 0; j--) {
+        const prevSlot = userSlots[j];
+        if (prevSlot.endTime === blockStart) {
+          blockStart = prevSlot.startTime;
+        } else {
+          break;
         }
-
-        break;
       }
     }
 
+    console.log(`✅ [병합모드] 블록 범위: ${blockStart}-${blockEnd}`);
     return { startTime: blockStart, endTime: blockEnd };
   };
 

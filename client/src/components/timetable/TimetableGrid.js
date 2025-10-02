@@ -399,12 +399,7 @@ const TimetableGrid = ({
 
     console.log('Final block:', { start: blockStart, end: blockEnd, startIndex: blockStartIndex, endIndex: blockEndIndex });
 
-    // Only return a block if it spans multiple slots
-    if (blockStartIndex === blockEndIndex) {
-      console.log('Single slot, not a block');
-      return null;
-    }
-
+    // 병합모드에서는 단일 슬롯도 블록 전체 시간으로 반환
     return {
       startTime: blockStart,
       endTime: blockEnd,
@@ -532,8 +527,9 @@ const TimetableGrid = ({
 
         const slotData = {
           date: date, // Pass date object
-          time: startTime, // Use block start time
-          endTime: endTime, // 슬롯 종료 시간 추가
+          startTime: startTime, // 블록 시작 시간
+          endTime: endTime, // 블록 종료 시간
+          time: startTime, // 하위 호환성을 위해 유지
           currentOwner: ownerInfo.name,
           targetUserId: ownerInfo.actualUserId || ownerInfo.userId,
           action: 'request',
