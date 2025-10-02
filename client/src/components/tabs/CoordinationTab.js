@@ -1629,11 +1629,35 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
           <RequestSlotModal
             onClose={closeRequestModal}
             onRequest={(message) => {
+              // date 계산: slotToRequest.date가 있으면 사용, 없으면 dayIndex로부터 계산
+              const calculateDateFromDayIndex = (dayIndex) => {
+                const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+                const targetDayName = daysOfWeek[dayIndex - 1];
+                const dayNameToIndex = {
+                  'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5
+                };
+                const targetDayOfWeek = dayNameToIndex[targetDayName];
+
+                const currentDate = new Date();
+                const currentDay = currentDate.getDay(); // 0=일, 1=월, 2=화, 3=수, 4=목, 5=금, 6=토
+                const diff = targetDayOfWeek - currentDay;
+                const targetDate = new Date(currentDate);
+                targetDate.setDate(currentDate.getDate() + (diff >= 0 ? diff : diff + 7));
+                return targetDate.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+              };
+
+              const requestDate = slotToRequest.date
+                ? (slotToRequest.date instanceof Date
+                    ? slotToRequest.date.toISOString().split('T')[0]
+                    : slotToRequest.date)
+                : calculateDateFromDayIndex(slotToRequest.dayIndex);
+
               handleRequestSlot({
                 roomId: currentRoom._id,
                 type: 'time_request',
                 timeSlot: {
                   day: days[slotToRequest.dayIndex - 1],
+                  date: requestDate,
                   startTime: slotToRequest.time,
                   endTime: calculateEndTime(slotToRequest.time),
                 },
@@ -1667,6 +1691,29 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 ? days[getDayIndex(slotToChange.date)]
                 : days[slotToChange.dayIndex - 1];
 
+              // date 필드 계산
+              const calculateDateFromDayIndex = (dayIndex) => {
+                const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+                const targetDayName = daysOfWeek[dayIndex - 1];
+                const dayNameToIndex = {
+                  'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5
+                };
+                const targetDayOfWeek = dayNameToIndex[targetDayName];
+
+                const currentDate = new Date();
+                const currentDay = currentDate.getDay();
+                const diff = targetDayOfWeek - currentDay;
+                const targetDate = new Date(currentDate);
+                targetDate.setDate(currentDate.getDate() + (diff >= 0 ? diff : diff + 7));
+                return targetDate.toISOString().split('T')[0];
+              };
+
+              const requestDate = slotToChange.date
+                ? (slotToChange.date instanceof Date
+                    ? slotToChange.date.toISOString().split('T')[0]
+                    : slotToChange.date)
+                : calculateDateFromDayIndex(slotToChange.dayIndex);
+
               const actionType = requestType || slotToChange.action || 'request';
 
               if (actionType === 'release') {
@@ -1675,24 +1722,27 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   type: 'slot_release',
                   timeSlot: {
                     day: dayKey,
-                    startTime: slotToChange.time,
-                    endTime: calculateEndTime(slotToChange.time),
+                    date: requestDate,
+                    startTime: slotToChange.startTime || slotToChange.time,
+                    endTime: slotToChange.endTime || calculateEndTime(slotToChange.time),
                   },
                   message: message || '시간을 취소합니다.',
                 };
               } else {
                 // 모든 다른 요청은 시간 양보 요청으로 처리
-                // 블록 요청인 경우 targetSlot 정보 사용
-                const endTime = slotToChange.isBlockRequest && slotToChange.targetSlot
+                // slotToChange에서 직접 startTime, endTime 사용
+                const startTime = slotToChange.startTime || slotToChange.time;
+                const endTime = slotToChange.endTime || (slotToChange.isBlockRequest && slotToChange.targetSlot
                   ? slotToChange.targetSlot.endTime
-                  : calculateEndTime(slotToChange.time);
+                  : calculateEndTime(slotToChange.time));
 
                 requestData = {
                   roomId: currentRoom._id,
                   type: 'time_request',
                   timeSlot: {
                     day: dayKey,
-                    startTime: slotToChange.time,
+                    date: requestDate,
+                    startTime: startTime,
                     endTime: endTime,
                   },
                   targetUserId: slotToChange.targetUserId,
@@ -1767,6 +1817,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             currentUser={user}
             isRoomOwner={isOwner}
             roomData={currentRoom}
+            showMerged={showMerged}
             onClose={handleCloseDetailGrid}
             onSlotSelect={handleSlotSelect}
             selectedSlots={selectedSlots}
