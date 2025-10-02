@@ -272,38 +272,14 @@ const TimetableGrid = ({
 
   // Function to find merged block for a slot
   const findMergedBlock = useCallback((date, time, targetUserId) => {
-    console.log('🔍 === FIND MERGED BLOCK CALLED ===');
-    console.log('🔍 showMerged value:', showMerged);
-
     if (!showMerged) {
-      console.log('🔍 RETURNING NULL - showMerged is false');
       return null;
     }
 
     const dayIndex = getDayIndex(date);
     if (dayIndex === -1) {
-      console.log('🔍 RETURNING NULL - invalid day index');
       return null;
     }
-
-    console.log('🔍 Finding merged block for:', {
-      date: date.toDateString(),
-      time,
-      targetUserId,
-      showMerged,
-      totalTimeSlots: timeSlots?.length || 0
-    });
-
-    // Debug all timeSlots
-    console.log('🔍 All timeSlots:', timeSlots?.map(slot => ({
-      date: slot.date,
-      startTime: slot.startTime,
-      endTime: slot.endTime,
-      userId: slot.user?._id || slot.user?.id || slot.user,
-      userObject: slot.user,
-      userType: typeof slot.user,
-      userStringified: JSON.stringify(slot.user)
-    })));
 
     // Find all slots belonging to the same user on the same day
     const daySlots = timeSlots?.filter(slot => {
@@ -311,42 +287,19 @@ const TimetableGrid = ({
       const slotUserId = slot.user?._id || slot.user?.id || slot.user;
       const normalizedTargetUserId = targetUserId?._id || targetUserId?.id || targetUserId;
 
-      console.log('🔍 Checking slot:', {
-        slotDate: slotDate.toDateString(),
-        targetDate: date.toDateString(),
-        slotUserId,
-        slotUserIdType: typeof slotUserId,
-        normalizedTargetUserId,
-        normalizedTargetUserIdType: typeof normalizedTargetUserId,
-        originalTargetUserId: targetUserId,
-        originalTargetUserIdType: typeof targetUserId,
-        dateMatch: slotDate.toDateString() === date.toDateString(),
-        userMatch: slotUserId === normalizedTargetUserId || slotUserId?.toString() === normalizedTargetUserId?.toString(),
-        slotUserStringified: JSON.stringify(slot.user),
-        targetUserIdStringified: JSON.stringify(targetUserId)
-      });
-
       const matches = slotDate.toDateString() === date.toDateString() &&
              (slotUserId === normalizedTargetUserId || slotUserId?.toString() === normalizedTargetUserId?.toString());
 
-      if (matches) {
-        console.log('Found matching slot:', { startTime: slot.startTime, endTime: slot.endTime, userId: slotUserId });
-      }
       return matches;
     }).sort((a, b) => a.startTime.localeCompare(b.startTime));
 
     if (!daySlots?.length) {
-      console.log('No slots found for user');
       return null;
     }
-
-    console.log('All user slots for day:', daySlots.map(s => ({ start: s.startTime, end: s.endTime })));
 
     // Find the block that contains the clicked time
     const [hour, minute] = time.split(':').map(Number);
     const clickedMinutes = hour * 60 + minute;
-
-    console.log('Clicked time in minutes:', clickedMinutes);
 
     // Find which slot contains the clicked time
     let currentSlotIndex = -1;
@@ -360,13 +313,11 @@ const TimetableGrid = ({
 
       if (clickedMinutes >= slotStartMinutes && clickedMinutes < slotEndMinutes) {
         currentSlotIndex = i;
-        console.log('Found clicked slot at index:', i, 'slot:', slot.startTime + '-' + slot.endTime);
         break;
       }
     }
 
     if (currentSlotIndex === -1) {
-      console.log('Clicked time not in any slot');
       return null;
     }
 
@@ -384,7 +335,6 @@ const TimetableGrid = ({
 
       if (prevEndMinutes === currentStartMinutes) {
         blockStartIndex = i;
-        console.log('Extended block backwards to index:', i);
       } else {
         break;
       }
@@ -404,7 +354,6 @@ const TimetableGrid = ({
 
       if (currentEndMinutes === nextStartMinutes) {
         blockEndIndex = i;
-        console.log('Extended block forwards to index:', i);
       } else {
         break;
       }
@@ -412,8 +361,6 @@ const TimetableGrid = ({
 
     const blockStart = daySlots[blockStartIndex].startTime;
     const blockEnd = daySlots[blockEndIndex].endTime;
-
-    console.log('Final block:', { start: blockStart, end: blockEnd, startIndex: blockStartIndex, endIndex: blockEndIndex });
 
     // 병합모드에서는 단일 슬롯도 블록 전체 시간으로 반환
     return {
@@ -426,10 +373,6 @@ const TimetableGrid = ({
 
   // Function to handle slot click
   const handleSlotClick = useCallback((date, time) => {
-    console.log('🎯 === HANDLE SLOT CLICK START ===');
-    console.log('🎯 showMerged prop value:', showMerged);
-    console.log('🎯 Clicked:', { date: date.toDateString(), time });
-
     const isBlocked = !!getBlockedTimeInfo(time);
     const ownerInfo = getSlotOwner(date, time);
     const isOwnedByCurrentUser = isSlotOwnedByCurrentUser(ownerInfo, currentUser);
@@ -481,35 +424,12 @@ const TimetableGrid = ({
           return;
         }
 
-        console.log('=== DUPLICATE CHECK START ===');
-        console.log('Checking for existing requests:', {
-          roomRequests: roomData?.requests?.length || 0,
-          currentUser: currentUser?.id,
-          date: date.toDateString(),
-          time,
-          targetUserId: ownerInfo.actualUserId || ownerInfo.userId
-        });
-
-        // Debug all room requests
-        console.log('All room requests:', roomData?.requests?.map(req => ({
-          id: req._id,
-          type: req.type,
-          status: req.status,
-          requester: req.requester?._id || req.requester?.id || req.requester,
-          targetUser: req.targetUser?._id || req.targetUser?.id || req.targetUser,
-          timeSlot: req.timeSlot
-        })));
-
         const hasDuplicate = hasExistingSwapRequest(roomData?.requests, currentUser, date, time, ownerInfo.actualUserId || ownerInfo.userId);
-        console.log('=== DUPLICATE CHECK RESULT:', hasDuplicate, '===');
 
         if (hasDuplicate) {
-          console.log('DUPLICATE FOUND - SHOWING ALERT');
           showAlert('이미 이 시간대에 대한 자리 요청을 보냈습니다. 기존 요청이 처리될 때까지 기다려주세요.');
           return;
         }
-
-        console.log('NO DUPLICATE - PROCEEDING WITH REQUEST');
 
         const existingSlot = findExistingSlot(timeSlots, date, time, ownerInfo.actualUserId || ownerInfo.userId);
 
@@ -517,16 +437,7 @@ const TimetableGrid = ({
         const dayDisplay = createDayDisplay(date);
 
         // Check if in merged mode and find the block
-        console.log('=== MERGE MODE CHECK START ===');
-        console.log('showMerged:', showMerged);
-        console.log('Attempting to find merged block for:', {
-          date: date.toDateString(),
-          time,
-          targetUserId: ownerInfo.actualUserId || ownerInfo.userId
-        });
-
         const mergedBlock = findMergedBlock(date, time, ownerInfo.actualUserId || ownerInfo.userId);
-        console.log('=== MERGED BLOCK RESULT:', mergedBlock, '===');
 
         // Use block time range if in merged mode, otherwise use single slot
         const startTime = mergedBlock ? mergedBlock.startTime : time;
@@ -536,13 +447,6 @@ const TimetableGrid = ({
           const em = m === 30 ? 0 : m + 30;
           return `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
         })());
-
-        console.log('Final time range:', {
-          originalTime: time,
-          finalStartTime: startTime,
-          finalEndTime: endTime,
-          isBlockRequest: !!mergedBlock
-        });
 
         const slotData = {
           date: date, // Pass date object
@@ -563,9 +467,6 @@ const TimetableGrid = ({
             user: ownerInfo.actualUserId || ownerInfo.userId
           }
         };
-
-        console.log('=== SLOT DATA CREATED ===');
-        console.log('Final slotData:', slotData);
 
         if (onOpenChangeRequestModal) {
           onOpenChangeRequestModal(slotData);

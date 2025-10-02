@@ -58,10 +58,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
   // Debug receivedRequests changes
   useEffect(() => {
-    console.log('📋 receivedRequests state changed to:', receivedRequests.length, 'requests');
-    receivedRequests.forEach((req, i) => {
-      console.log(`📋 Request ${i + 1}: id=${req._id}, status=${req.status}`);
-    });
   }, [receivedRequests]);
 
   const [customAlert, setCustomAlert] = useState({ show: false, message: '', type: 'warning' });
@@ -78,14 +74,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     }
 
     try {
-      console.log('🔍 방장 개인시간 동기화 시작');
-
       // 현재 사용자의 개인시간 데이터 가져오기
       const ownerScheduleData = await userService.getUserSchedule();
-      console.log('🔍 방장 개인시간 데이터:', {
-        personalTimesCount: ownerScheduleData.personalTimes?.length || 0,
-        personalTimes: ownerScheduleData.personalTimes
-      });
 
       // 현재 방 세부정보 가져오기
       const roomData = await coordinationService.fetchRoomDetails(currentRoom._id);
@@ -93,7 +83,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
       // 기존의 방장 연동 예외들 제거 (isSynced: true인 것들)
       const nonSyncedExceptions = existingSettings.roomExceptions.filter(ex => !ex.isSynced);
-      console.log('🔍 기존 non-synced exceptions:', nonSyncedExceptions.length);
 
       // 요일 매핑 (0: 일, 1: 월, ..., 6: 토)
       const dayOfWeekMap = {
@@ -250,11 +239,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         roomExceptions: [...nonSyncedExceptions, ...syncedExceptions]
       };
 
-      console.log('🔍 방 업데이트 시도 - syncedExceptions:', {
-        count: syncedExceptions.length,
-        exceptions: syncedExceptions.map(ex => ({ name: ex.name, type: ex.type, dayOfWeek: ex.dayOfWeek }))
-      });
-
       await coordinationService.updateRoom(currentRoom._id, {
         settings: updatedSettings
       });
@@ -263,7 +247,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       await fetchRoomDetails(currentRoom._id);
 
       showAlert(`방장 개인시간이 성공적으로 동기화되었습니다! (${syncedExceptions.length}개 항목)`);
-      console.log('✅ 방장 개인시간 동기화 완료');
 
     } catch (err) {
       console.error('방장 개인시간 동기화 실패:', err);
@@ -338,11 +321,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const loadReceivedRequests = useCallback(async () => {
     if (!user?.id) return;
     try {
-      console.log('📥 Loading received requests...');
       const result = await coordinationService.getReceivedRequests();
-      console.log('📥 API result:', result);
       if (result.success) {
-        console.log('📥 Setting receivedRequests with:', result.requests.length, 'requests');
         setReceivedRequests(result.requests);
       }
     } catch (error) {
@@ -354,13 +334,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
   // Debug currentRoom changes
   useEffect(() => {
-    if (currentRoom) {
-      console.log('🏠 currentRoom updated:', {
-        id: currentRoom._id,
-        membersCount: currentRoom.members?.length,
-        timeSlotsCount: Object.keys(currentRoom.timeSlots || {}).length
-      });
-    }
   }, [currentRoom]);
 
   // Calculate room-specific request counts for displaying next to room names
@@ -383,7 +356,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       counts[room._id] = getRoomRequestCount(room._id);
     });
 
-    console.log('🏠 Room exchange counts calculated:', counts);
     setRoomExchangeCounts(counts);
   }, [user?.id, myRooms, getRoomRequestCount]);
 
@@ -575,9 +547,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const handleDeleteRequest = handleCancelRequestCallback;
 
   const handleRequestWithUpdateCallback = async (requestId, action) => {
-    console.log('🔄 Starting handleRequestWithUpdateCallback:', { requestId, action });
-    console.log('🔄 Current receivedRequests before:', receivedRequests.length);
-
     try {
       await handleRequestWithUpdate(
         requestId,
@@ -591,9 +560,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         onRefreshExchangeCount,
         showAlert
       );
-
-      console.log('✅ handleRequestWithUpdateCallback completed');
-      console.log('🔄 Current receivedRequests after:', receivedRequests.length);
     } catch (error) {
       console.error('❌ Failed to handle request:', error);
     }
@@ -609,13 +575,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         return req.status === 'pending' && req.roomId === currentRoom._id;
       }).length;
 
-      console.log('🔢 Room-specific count update:', { roomId: currentRoom._id, count: exchangeRequestCount });
       onExchangeRequestCountChange(exchangeRequestCount);
     } else {
       // Count total pending requests across all rooms (for main tab)
       const totalPendingRequests = receivedRequests.filter(req => req.status === 'pending').length;
 
-      console.log('🔢 Global count update:', { totalPending: totalPendingRequests });
       onExchangeRequestCountChange(totalPendingRequests);
     }
   }, [currentRoom, receivedRequests, onExchangeRequestCountChange]);
@@ -938,14 +902,14 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 })}
               </div>
               
-              {isOwner && (currentRoom.requests || []).filter(req => req.status === 'pending' && ['time_request', 'time_change'].includes(req.type)).length > 0 && (
+              {!isOwner && (currentRoom.requests || []).filter(req => req.status === 'pending' && ['time_request', 'time_change'].includes(req.type) && (req.targetUser?._id === user?.id || req.targetUser?.id === user?.id || req.targetUser === user?.id)).length > 0 && (
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
                     <Calendar size={16} className="mr-2 text-orange-600" />
-                    대기 중인 요청 ({(currentRoom.requests || []).filter(req => req.status === 'pending' && ['time_request', 'time_change'].includes(req.type)).length}건)
+                    대기 중인 요청 ({(currentRoom.requests || []).filter(req => req.status === 'pending' && ['time_request', 'time_change'].includes(req.type) && (req.targetUser?._id === user?.id || req.targetUser?.id === user?.id || req.targetUser === user?.id)).length}건)
                   </h4>
                   <div className="space-y-2">
-                    {(currentRoom.requests || []).filter(req => req.status === 'pending' && ['time_request', 'time_change'].includes(req.type)).slice(0, 3).map((request, index) => {
+                    {(currentRoom.requests || []).filter(req => req.status === 'pending' && ['time_request', 'time_change'].includes(req.type) && (req.targetUser?._id === user?.id || req.targetUser?.id === user?.id || req.targetUser === user?.id)).slice(0, 3).map((request, index) => {
                       const requesterData = request.requester;
                       const requesterName = requesterData?.name || `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
                       
@@ -994,7 +958,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 </div>
               )}
 
-              
+
+              {!isOwner && (
               <div className="mt-6 pt-4 border-t border-gray-200">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-md font-semibold text-gray-800 flex items-center">
@@ -1320,113 +1285,13 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   </div>
                 )}
               </div>
-            </div>
+              )}
 
-            {/* 협의 관리 섹션 - 현재 시간표에 표시된 협의만 표시 */}
-            {(() => {
-              // Show only negotiations visible in current week's timetable
-              const visibleNegotiations = currentWeekNegotiations || [];
-
-              return visibleNegotiations.length > 0 && (
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                    <MessageSquare size={16} className="mr-2 text-orange-600" />
-                    협의 진행중 ({visibleNegotiations.length}건)
-                  </h4>
-                  <div className="space-y-3">
-                    {visibleNegotiations.map((weekNegotiation, index) => {
-                      const negotiation = weekNegotiation; // weekNegotiation is the negotiation itself, not nested under negotiationData
-                      const isUserInvolved = negotiation.conflictingMembers?.some(cm =>
-                        (cm.user._id || cm.user) === user?.id
-                      );
-                      const memberNames = negotiation.conflictingMembers?.map(cm => {
-                        // Use name field first, then firstName/lastName combination
-                        if (cm.user?.name) {
-                          return cm.user.name;
-                        } else if (cm.user?.firstName || cm.user?.lastName) {
-                          return `${cm.user.firstName || ''} ${cm.user.lastName || ''}`.trim();
-                        } else {
-                          return '멤버';
-                        }
-                      }).join(', ') || '';
-
-                      return (
-                        <div key={index} className={`p-3 rounded-lg border ${
-                          isUserInvolved
-                            ? 'bg-orange-50 border-orange-200 ring-2 ring-orange-100'
-                            : 'bg-gray-50 border-gray-200'
-                        }`}>
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <div className="flex items-center mb-1">
-                                <Clock size={14} className="mr-1 text-orange-500" />
-                                <span className="text-sm font-medium">
-                                  {weekNegotiation.dayDisplay} {negotiation.slotInfo?.startTime || weekNegotiation.time}-{negotiation.slotInfo?.endTime || calculateEndTime(weekNegotiation.time)}
-                                </span>
-                                {isUserInvolved && (
-                                  <span className="ml-2 px-2 py-0.5 text-xs bg-orange-100 text-orange-800 rounded-full">
-                                    참여 필요
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-xs text-gray-600 mb-2">
-                                충돌 멤버: {memberNames}
-                                {negotiation.priority && (
-                                  <span className="ml-2 px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded-full">
-                                    우선순위: {negotiation.priority}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                응답 현황: {negotiation.conflictingMembers?.filter(cm => cm.response !== 'pending').length || 0}
-                                /{negotiation.conflictingMembers?.length || 0}
-                                {negotiation.conflictingMembers?.some(cm => cm.response === 'accepted') &&
-                                  <span className="ml-2 text-green-600">✓ 일부 동의</span>
-                                }
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => {
-                                // 당사자인지 확인
-                                const isConflictingMember = negotiation.conflictingMembers?.some(cm => {
-                                  const cmUserId = cm.user?._id || cm.user?.id || cm.user;
-                                  return cmUserId?.toString() === user?.id;
-                                });
-                                
-                                // 방장인지 확인
-                                const isOwner = negotiation.participants?.some(p => {
-                                  const pUserId = typeof p === 'object' ? (p._id || p.id) : p;
-                                  return pUserId?.toString() === user?.id;
-                                }) && !isConflictingMember;
-                                
-                                // 당사자도 아니고 방장도 아니면 모달 표시
-                                if (!isConflictingMember && !isOwner) {
-                                  if (showAlert) {
-                                    showAlert('이 협의는 당사자와 방장만 확인할 수 있습니다.', 'error');
-                                  } else {
-                                    alert('이 협의는 당사자와 방장만 확인할 수 있습니다.');
-                                  }
-                                  return;
-                                }
-                                
-                                handleOpenNegotiation(negotiation);
-                              }}
-                              className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                                isUserInvolved
-                                  ? 'bg-orange-500 text-white hover:bg-orange-600'
-                                  : 'bg-gray-300 text-gray-600 hover:bg-gray-400'
-                              }`}
-                            >
-                              {isUserInvolved ? '참여하기' : '확인'}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
+            <NegotiationSection
+              currentWeekNegotiations={currentWeekNegotiations}
+              user={user}
+              onOpenNegotiation={handleOpenNegotiation}
+            />
           </div>
 
           <div className="lg:col-span-3">
@@ -1757,6 +1622,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             slotToChange={slotToChange} // 전체 객체를 전달 (dayDisplay 포함)
           />
         )}
+
         <CustomAlertModal
             isOpen={customAlert.show}
             onClose={closeAlert}
@@ -1836,7 +1702,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
           <MemberScheduleModal
             memberId={selectedMemberId}
             onClose={() => {
-              console.log('Closing MemberScheduleModal from room view');
               setShowMemberScheduleModal(false);
               setSelectedMemberId(null);
             }}
@@ -1928,42 +1793,30 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         </div>
       )}
 
-      {showCreateRoomModal && (
-        <RoomCreationModal
-          onClose={closeCreateRoomModal}
-          onCreateRoom={handleCreateRoom}
-          ownerProfileSchedule={user ? (() => {
-            console.log('🔍 CoordinationTab - user.personalTimes 전달:', user.personalTimes);
-            return {
+      <div>
+        {showCreateRoomModal && (
+          <RoomCreationModal
+            onClose={closeCreateRoomModal}
+            onCreateRoom={handleCreateRoom}
+            ownerProfileSchedule={user ? {
               defaultSchedule: user.defaultSchedule,
               scheduleExceptions: user.scheduleExceptions,
               personalTimes: user.personalTimes
-            };
-          })() : null}
+            } : null}
+          />
+        )}
+        {showJoinRoomModal && (
+          <RoomJoinModal onClose={closeJoinRoomModal} onJoinRoom={handleJoinRoom} />
+        )}
+        <CustomAlertModal
+          isOpen={customAlert.show}
+          onClose={closeAlert}
+          title="알림"
+          message={customAlert.message}
+          type="warning"
+          showCancel={false}
         />
-      )}
-      {showJoinRoomModal && (
-        <RoomJoinModal onClose={closeJoinRoomModal} onJoinRoom={handleJoinRoom} />
-      )}
-      <CustomAlertModal
-        isOpen={customAlert.show}
-        onClose={closeAlert}
-        title="알림"
-        message={customAlert.message}
-        type="warning"
-        showCancel={false}
-      />
-      
-      {showMemberScheduleModal && selectedMemberId && (
-        <MemberScheduleModal
-          memberId={selectedMemberId}
-          onClose={() => {
-            console.log('Closing MemberScheduleModal');
-            setShowMemberScheduleModal(false);
-            setSelectedMemberId(null);
-          }}
-        />
-      )}
+      </div>
     </div>
   );
 };

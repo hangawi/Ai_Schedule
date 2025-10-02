@@ -6,7 +6,6 @@ const User = require('../models/user');
 // @access  Private
 exports.createRoom = async (req, res) => {
    try {
-      console.log('Backend createRoom: roomData received:', JSON.stringify(req.body, null, 2));
       const { name, description, maxMembers, settings } = req.body;
 
       if (!name || name.trim().length === 0) {
@@ -33,18 +32,6 @@ exports.createRoom = async (req, res) => {
 
       // roomExceptions가 존재하면 유효성 검사 및 추가
       if (settings && settings.roomExceptions && Array.isArray(settings.roomExceptions)) {
-         console.log('🔍 서버 - 받은 roomExceptions (총 ' + settings.roomExceptions.length + '개):',
-                    JSON.stringify(settings.roomExceptions, null, 2));
-
-         // 14:40 관련 예외 확인
-         const suspicious = settings.roomExceptions.filter(ex =>
-            ex.startTime?.includes('14:4') ||
-            ex.endTime?.includes('15:0') ||
-            ex.name?.includes('14:4')
-         );
-         if (suspicious.length > 0) {
-            console.log('⚠️ 서버에서 14:40 관련 roomException 발견:', suspicious);
-         }
 
          settings.roomExceptions.forEach(ex => {
             // 기본적인 유효성 검사 (스키마에 정의된 enum, required 등)
@@ -61,11 +48,9 @@ exports.createRoom = async (req, res) => {
          room.settings.roomExceptions = settings.roomExceptions;
       }
 
-      console.log('Backend createRoom: new room created (before save):', JSON.stringify(room, null, 2));
       await room.save();
       await room.populate('owner', 'firstName lastName email');
       await room.populate('members.user', 'firstName lastName email');
-      console.log('Backend createRoom: room saved and populated (before response):', JSON.stringify(room, null, 2));
 
       res.status(201).json(room);
    } catch (error) {
@@ -113,47 +98,32 @@ exports.createRoom = async (req, res) => {
 // @access  Private (Owner only)
 exports.updateRoom = async (req, res) => {
    try {
-      console.log('updateRoom called with roomId:', req.params.roomId);
-      console.log('updateRoom body:', req.body);
-      console.log('updateRoom user:', req.user.id);
-
       const room = await Room.findById(req.params.roomId);
 
       if (!room) {
-         console.log('Room not found:', req.params.roomId);
          return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
       }
 
-      console.log('Found room:', room.name);
-      console.log('Room owner:', room.owner);
-      console.log('Is owner check:', room.isOwner(req.user.id));
-
       // Check if user is owner
       if (!room.isOwner(req.user.id)) {
-         console.log('User is not owner');
          return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
       }
 
       // Update room properties
       const { name, description, maxMembers, settings } = req.body;
-      console.log('Updating room with:', { name, description, maxMembers, settings });
 
       if (name) room.name = name;
       if (description !== undefined) room.description = description;
       if (maxMembers) room.maxMembers = maxMembers;
       if (settings) {
-         console.log('Merging settings:', room.settings, settings);
          room.settings = { ...room.settings.toObject(), ...settings };
       }
 
-      console.log('Saving room...');
       await room.save();
-      console.log('Room saved successfully');
 
       await room.populate('owner', 'firstName lastName email');
       await room.populate('members.user', 'firstName lastName email');
 
-      console.log('Room populated and ready to send');
       res.json(room);
    } catch (error) {
       console.error('Error updating room:', error);
@@ -247,11 +217,11 @@ exports.joinRoom = async (req, res) => {
 exports.getRoomDetails = async (req, res) => {
    try {
       const room = await Room.findById(req.params.roomId)
-         .populate('owner', 'firstName lastName email')
-         .populate('members.user', 'firstName lastName email')
+         .populate('owner', '_id firstName lastName email')
+         .populate('members.user', '_id firstName lastName email')
          .populate('timeSlots.user', '_id firstName lastName email')
-         .populate('requests.requester', 'firstName lastName email')
-         .populate('requests.targetUser', 'firstName lastName email')
+         .populate('requests.requester', '_id firstName lastName email')
+         .populate('requests.targetUser', '_id firstName lastName email')
          .populate('negotiations.conflictingMembers.user', '_id firstName lastName email name');
 
       if (!room) {
@@ -262,14 +232,18 @@ exports.getRoomDetails = async (req, res) => {
          return res.status(403).json({ msg: '이 방에 접근할 권한이 없습니다.' });
       }
 
-      // 디버깅: timeSlots.user에 _id가 있는지 확인
-      if (room.timeSlots && room.timeSlots.length > 0) {
-         console.log('[getRoomDetails] First timeSlot.user:', JSON.stringify(room.timeSlots[0].user, null, 2));
-         console.log('[getRoomDetails] First timeSlot.user._id:', room.timeSlots[0].user?._id);
-         console.log('[getRoomDetails] First timeSlot.user.id:', room.timeSlots[0].user?.id);
+      // timeSlots의 user._id를 user.id로 변환 (클라이언트 호환성)
+      const roomObj = room.toObject();
+
+      if (roomObj.timeSlots && roomObj.timeSlots.length > 0) {
+         roomObj.timeSlots.forEach(slot => {
+            if (slot.user && slot.user._id) {
+               slot.user.id = slot.user._id.toString();
+            }
+         });
       }
 
-      res.json(room);
+      res.json(roomObj);
    } catch (error) {
       console.error('Error fetching room details:', error);
       res.status(500).json({ msg: 'Server error' });
