@@ -295,12 +295,14 @@ const TimetableGrid = ({
     });
 
     // Debug all timeSlots
-    console.log('All timeSlots:', timeSlots?.map(slot => ({
+    console.log('🔍 All timeSlots:', timeSlots?.map(slot => ({
       date: slot.date,
       startTime: slot.startTime,
       endTime: slot.endTime,
       userId: slot.user?._id || slot.user?.id || slot.user,
-      user: slot.user
+      userObject: slot.user,
+      userType: typeof slot.user,
+      userStringified: JSON.stringify(slot.user)
     })));
 
     // Find all slots belonging to the same user on the same day
@@ -309,14 +311,19 @@ const TimetableGrid = ({
       const slotUserId = slot.user?._id || slot.user?.id || slot.user;
       const normalizedTargetUserId = targetUserId?._id || targetUserId?.id || targetUserId;
 
-      console.log('Checking slot:', {
+      console.log('🔍 Checking slot:', {
         slotDate: slotDate.toDateString(),
         targetDate: date.toDateString(),
         slotUserId,
+        slotUserIdType: typeof slotUserId,
         normalizedTargetUserId,
+        normalizedTargetUserIdType: typeof normalizedTargetUserId,
         originalTargetUserId: targetUserId,
+        originalTargetUserIdType: typeof targetUserId,
         dateMatch: slotDate.toDateString() === date.toDateString(),
-        userMatch: slotUserId === normalizedTargetUserId || slotUserId?.toString() === normalizedTargetUserId?.toString()
+        userMatch: slotUserId === normalizedTargetUserId || slotUserId?.toString() === normalizedTargetUserId?.toString(),
+        slotUserStringified: JSON.stringify(slot.user),
+        targetUserIdStringified: JSON.stringify(targetUserId)
       });
 
       const matches = slotDate.toDateString() === date.toDateString() &&
