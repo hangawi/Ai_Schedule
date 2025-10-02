@@ -249,7 +249,7 @@ exports.getRoomDetails = async (req, res) => {
       const room = await Room.findById(req.params.roomId)
          .populate('owner', 'firstName lastName email')
          .populate('members.user', 'firstName lastName email')
-         .populate('timeSlots.user', 'firstName lastName email')
+         .populate('timeSlots.user', '_id firstName lastName email')
          .populate('requests.requester', 'firstName lastName email')
          .populate('requests.targetUser', 'firstName lastName email')
          .populate('negotiations.conflictingMembers.user', '_id firstName lastName email name');

@@ -622,7 +622,7 @@ exports.createRequest = async (req, res) => {
         const room = await Room.findOne({ 'requests._id': requestId })
            .populate('requests.requester', 'firstName lastName email')
            .populate('requests.targetUser', 'firstName lastName email')
-           .populate('timeSlots.user', 'firstName lastName email')
+           .populate('timeSlots.user', '_id firstName lastName email')
            .populate('members.user', 'firstName lastName email');
 
         if (!room) {
@@ -892,7 +892,7 @@ exports.createRequest = async (req, res) => {
         const updatedRoom = await Room.findById(room._id)
            .populate('requests.requester', 'firstName lastName email')
            .populate('requests.targetUser', 'firstName lastName email')
-           .populate('timeSlots.user', 'firstName lastName email')
+           .populate('timeSlots.user', '_id firstName lastName email')
            .populate('members.user', 'firstName lastName email');
 
         res.json(updatedRoom);
@@ -1476,7 +1476,7 @@ exports.runAutoSchedule = async (req, res) => {
       const freshRoom = await Room.findById(roomId)
          .populate('owner', 'firstName lastName email')
          .populate('members.user', 'firstName lastName email')
-         .populate('timeSlots.user', 'firstName lastName email')
+         .populate('timeSlots.user', '_id firstName lastName email')
          .populate('requests.requester', 'firstName lastName email')
          .populate('requests.targetUser', 'firstName lastName email')
          .populate('negotiations.conflictingMembers.user', '_id firstName lastName email name');
@@ -1533,7 +1533,7 @@ exports.deleteAllTimeSlots = async (req, res) => {
       const updatedRoom = await Room.findById(room._id)
          .populate('owner', 'firstName lastName email')
          .populate('members.user', 'firstName lastName email')
-         .populate('timeSlots.user', 'firstName lastName email');
+         .populate('timeSlots.user', '_id firstName lastName email');
 
       res.json(updatedRoom);
 

@@ -44,7 +44,7 @@ const Room = require('../models/room');
         }
 
         await room.save();
-        await room.populate('timeSlots.user', 'firstName lastName email');
+        await room.populate('timeSlots.user', '_id firstName lastName email');
 
         res.json(room);
      } catch (error) {
@@ -76,7 +76,7 @@ exports.removeTimeSlot = async (req, res) => {
       });
 
       await room.save();
-      await room.populate('timeSlots.user', 'firstName lastName email');
+      await room.populate('timeSlots.user', '_id firstName lastName email');
 
       res.json(room);
    } catch (error) {
@@ -131,7 +131,7 @@ exports.assignTimeSlot = async (req, res) => {
       });
 
       await room.save();
-      await room.populate('timeSlots.user', 'firstName lastName email');
+      await room.populate('timeSlots.user', '_id firstName lastName email');
 
       res.json(room);
    } catch (error) {
@@ -147,7 +147,7 @@ exports.findCommonSlots = async (req, res) => {
    try {
       const room = await Room.findById(req.params.roomId)
          .populate('members.user', 'firstName lastName email')
-         .populate('timeSlots.user', 'firstName lastName email');
+         .populate('timeSlots.user', '_id firstName lastName email');
 
       if (!room) {
          return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
