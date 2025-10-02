@@ -689,87 +689,150 @@ exports.createRequest = async (req, res) => {
            } else if (type === 'time_request' || type === 'time_change') {
               // For time_request, transfer the timeslot from target user to requester
               if (targetUser) {
-                 // 중복 방지: 요청자에게 이미 동일한 슬롯이 있는지 확인
+                 // 시간 범위 겹침 체크 헬퍼 함수
+                 const timeRangesOverlap = (start1, end1, start2, end2) => {
+                    const toMinutes = (timeStr) => {
+                       const [h, m] = timeStr.split(':').map(Number);
+                       return h * 60 + m;
+                    };
+                    const s1 = toMinutes(start1);
+                    const e1 = toMinutes(end1);
+                    const s2 = toMinutes(start2);
+                    const e2 = toMinutes(end2);
+                    return s1 < e2 && s2 < e1;
+                 };
+
+                 // 중복 방지: 요청자에게 이미 겹치는 슬롯이 있는지 확인
                  const requesterHasSlot = room.timeSlots.some(slot => {
                     const slotUserId = slot.user._id || slot.user;
 
                     // 유저가 다르면 false
                     if (slotUserId.toString() !== requester._id.toString()) return false;
 
-                    // 요일, 시작시간, 종료시간이 모두 일치해야 함
-                    const timeMatch =
-                       slot.day === timeSlot.day &&
-                       slot.startTime === timeSlot.startTime &&
-                       slot.endTime === timeSlot.endTime;
+                    // 요일이 다르면 false
+                    if (slot.day !== timeSlot.day) return false;
 
-                    if (!timeMatch) return false;
-
-                    // 날짜 비교 로직 개선
-                    // 둘 다 날짜가 있는 경우
+                    // 날짜 비교 (요청에 date가 있는 경우)
                     if (timeSlot.date && slot.date) {
                        const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
                        const requestDateStr = new Date(timeSlot.date).toISOString().split('T')[0];
-                       return slotDateStr === requestDateStr;
+                       if (slotDateStr !== requestDateStr) return false;
                     }
 
-                    // 하나만 날짜가 있는 경우: 같은 요일+시간이면 중복으로 간주
-                    if (timeSlot.date || slot.date) {
-                       return true;
-                    }
-
-                    // 둘 다 날짜가 없으면 요일+시간 매치로 중복 판정
-                    return true;
+                    // 시간 범위 겹침 체크
+                    return timeRangesOverlap(
+                       slot.startTime,
+                       slot.endTime,
+                       timeSlot.startTime,
+                       timeSlot.endTime
+                    );
                  });
 
                  if (requesterHasSlot) {
                     // 중복이므로 아무것도 하지 않음 (요청 상태는 approved로 변경됨)
+                    console.log(`⚠️ [중복방지] 요청자 ${requester._id.toString().substring(0, 8)}에게 이미 겹치는 슬롯이 있어 새 슬롯을 생성하지 않음`);
                  } else {
-                    // First, find and remove the slot from the target user
-                    const targetSlotIndex = room.timeSlots.findIndex(slot => {
+                    // 시간 범위 겹침 체크 헬퍼 함수
+                    const timeRangesOverlap = (start1, end1, start2, end2) => {
+                       // "HH:MM" 형식을 분으로 변환
+                       const toMinutes = (timeStr) => {
+                          const [h, m] = timeStr.split(':').map(Number);
+                          return h * 60 + m;
+                       };
+                       const s1 = toMinutes(start1);
+                       const e1 = toMinutes(end1);
+                       const s2 = toMinutes(start2);
+                       const e2 = toMinutes(end2);
+
+                       // 겹침: s1 < e2 && s2 < e1
+                       // 포함 또는 부분 겹침도 모두 포함
+                       return s1 < e2 && s2 < e1;
+                    };
+
+                    // 요청 시간에 겹치는 모든 타겟 슬롯 찾기 (복수 개 가능)
+                    const overlappingSlots = room.timeSlots.filter(slot => {
                        const slotUserId = slot.user._id || slot.user;
 
-                       // 기본 매칭: 유저, 요일, 시간
-                       const basicMatch =
-                          slotUserId.toString() === targetUser._id.toString() &&
-                          slot.day === timeSlot.day &&
-                          slot.startTime === timeSlot.startTime &&
-                          slot.endTime === timeSlot.endTime;
+                       // 유저 매칭
+                       if (slotUserId.toString() !== targetUser._id.toString()) return false;
 
-                       if (!basicMatch) return false;
+                       // 요일 매칭
+                       if (slot.day !== timeSlot.day) return false;
 
-                       // 날짜 비교 (요청에 date가 있는 경우에만)
+                       // 날짜 비교 (요청에 date가 있는 경우)
                        if (timeSlot.date) {
-                          if (!slot.date) return false; // 요청에 date 있는데 슬롯에 없으면 불일치
+                          if (!slot.date) return false;
                           const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
                           const requestDateStr = new Date(timeSlot.date).toISOString().split('T')[0];
-                          return slotDateStr === requestDateStr;
+                          if (slotDateStr !== requestDateStr) return false;
                        }
 
-                       // 요청에 date 없으면 기본 매칭만으로 충분
-                       return true;
+                       // 시간 범위 겹침 체크
+                       return timeRangesOverlap(
+                          slot.startTime,
+                          slot.endTime,
+                          timeSlot.startTime,
+                          timeSlot.endTime
+                       );
                     });
 
-                    if (targetSlotIndex !== -1) {
-                       // 기존 슬롯 정보를 복사
-                       const targetSlot = room.timeSlots[targetSlotIndex];
+                    if (overlappingSlots.length > 0) {
+                       // 겹치는 슬롯들을 정렬
+                       overlappingSlots.sort((a, b) => {
+                          const aTime = a.startTime.split(':').map(Number);
+                          const bTime = b.startTime.split(':').map(Number);
+                          return (aTime[0] * 60 + aTime[1]) - (bTime[0] * 60 + bTime[1]);
+                       });
 
-                       // 타겟 유저의 슬롯 제거
-                       room.timeSlots.splice(targetSlotIndex, 1);
-                       room.markModified('timeSlots'); // Mongoose에게 배열 변경 알림
+                       const firstSlot = overlappingSlots[0];
+                       const lastSlot = overlappingSlots[overlappingSlots.length - 1];
 
-                       // 요청자에게 새 슬롯 추가
+                       console.log(`✅ [양보요청 성공] ${overlappingSlots.length}개 타겟 슬롯 찾음:`, {
+                          targetUser: targetUser._id.toString().substring(0, 8),
+                          slots: overlappingSlots.map(s => `${s.startTime}-${s.endTime}`).join(', ')
+                       });
+
+                       // 모든 겹치는 슬롯 제거
+                       overlappingSlots.forEach(slot => {
+                          const index = room.timeSlots.findIndex(s => s._id.equals(slot._id));
+                          if (index !== -1) {
+                             room.timeSlots.splice(index, 1);
+                          }
+                       });
+                       room.markModified('timeSlots');
+
+                       // 요청자에게 병합된 슬롯 추가 (요청한 시간 그대로)
                        room.timeSlots.push({
                           user: requester._id,
-                          date: targetSlot.date,
-                          startTime: targetSlot.startTime,
-                          endTime: targetSlot.endTime,
-                          day: targetSlot.day,
-                          subject: targetSlot.subject || '양보받은 시간',
+                          date: firstSlot.date,
+                          startTime: timeSlot.startTime,
+                          endTime: timeSlot.endTime,
+                          day: timeSlot.day,
+                          subject: firstSlot.subject || '양보받은 시간',
                           status: 'confirmed',
                           assignedBy: req.user.id
                        });
 
+                       console.log(`✅ [양보요청 완료] ${requester._id.toString().substring(0, 8)}에게 ${timeSlot.startTime}-${timeSlot.endTime} 슬롯 이전됨`);
+
                     } else {
+                       // 타겟 슬롯이 없는 경우 로그 출력
+                       console.log(`❌ [양보요청 오류] 타겟 슬롯을 찾을 수 없음`);
+                       console.log(`  타겟 유저 슬롯 ${room.timeSlots.filter(s => (s.user._id || s.user).toString() === targetUser._id.toString()).length}개:`,
+                          room.timeSlots
+                             .filter(s => (s.user._id || s.user).toString() === targetUser._id.toString())
+                             .map(s => ({
+                                day: s.day,
+                                date: s.date ? new Date(s.date).toISOString().split('T')[0] : 'NO DATE',
+                                time: `${s.startTime}-${s.endTime}`
+                             }))
+                       );
+                       console.log(`  요청 슬롯:`, {
+                          day: timeSlot.day,
+                          date: timeSlot.date ? new Date(timeSlot.date).toISOString().split('T')[0] : 'NO DATE',
+                          time: `${timeSlot.startTime}-${timeSlot.endTime}`
+                       });
+
                        // 타겟 슬롯이 없는 경우 (아직 배정되지 않은 시간) 새 슬롯 생성
                        const calculateDateFromDay = (dayName) => {
                           const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
