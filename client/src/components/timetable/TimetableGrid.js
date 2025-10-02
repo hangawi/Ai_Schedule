@@ -272,12 +272,21 @@ const TimetableGrid = ({
 
   // Function to find merged block for a slot
   const findMergedBlock = useCallback((date, time, targetUserId) => {
-    if (!showMerged) return null;
+    console.log('🔍 === FIND MERGED BLOCK CALLED ===');
+    console.log('🔍 showMerged value:', showMerged);
+
+    if (!showMerged) {
+      console.log('🔍 RETURNING NULL - showMerged is false');
+      return null;
+    }
 
     const dayIndex = getDayIndex(date);
-    if (dayIndex === -1) return null;
+    if (dayIndex === -1) {
+      console.log('🔍 RETURNING NULL - invalid day index');
+      return null;
+    }
 
-    console.log('Finding merged block for:', {
+    console.log('🔍 Finding merged block for:', {
       date: date.toDateString(),
       time,
       targetUserId,
@@ -410,6 +419,9 @@ const TimetableGrid = ({
 
   // Function to handle slot click
   const handleSlotClick = useCallback((date, time) => {
+    console.log('🎯 === HANDLE SLOT CLICK START ===');
+    console.log('🎯 showMerged prop value:', showMerged);
+    console.log('🎯 Clicked:', { date: date.toDateString(), time });
 
     const isBlocked = !!getBlockedTimeInfo(time);
     const ownerInfo = getSlotOwner(date, time);
