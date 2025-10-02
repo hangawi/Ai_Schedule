@@ -132,9 +132,10 @@ export const countActiveNegotiations = (currentRoom) => {
  * Check if user is involved in negotiation
  */
 export const isUserInvolvedInNegotiation = (negotiation, userId) => {
-  return negotiation.conflictingMembers?.some(cm =>
-    (cm.user._id || cm.user) === userId
-  );
+  return negotiation.conflictingMembers?.some(cm => {
+    const cmUserId = cm.user?._id || cm.user?.id || cm.user;
+    return cmUserId === userId || cmUserId?.toString() === userId?.toString();
+  });
 };
 
 /**

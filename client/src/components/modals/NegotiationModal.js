@@ -12,15 +12,11 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
 
   useEffect(() => {
     if (negotiation) {
-      console.log('[NegotiationModal] Received negotiation:', negotiation);
-      console.log('[NegotiationModal] Current user:', currentUser);
-      console.log('[NegotiationModal] Room ID:', roomId);
       setMessages(negotiation.messages || []);
     }
   }, [negotiation, currentUser, roomId]);
 
   if (!isOpen || !negotiation) {
-    console.log('[NegotiationModal] Not rendering - isOpen:', isOpen, 'negotiation:', negotiation);
     return null;
   }
 
@@ -32,14 +28,8 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
     } else {
       cmUserId = cm.user;
     }
-    
+
     const userId = currentUser?.id;
-    console.log('[NegotiationModal] Checking conflictingMember:', {
-      cmUser: cm.user,
-      cmUserId,
-      currentUserId: userId,
-      match: cmUserId === userId || cmUserId?.toString() === userId?.toString()
-    });
     return cmUserId === userId || cmUserId?.toString() === userId?.toString();
   });
 
@@ -114,15 +104,6 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
   const userResponse = getCurrentUserResponse();
   const conflictingMembers = negotiation.conflictingMembers || [];
   const memberNames = getConflictingMemberNames();
-  
-  // 디버깅
-  console.log('[NegotiationModal] Debug:', {
-    isConflictingMember,
-    isOwnerViewing,
-    userResponse,
-    negotiationStatus: negotiation.status,
-    showButtons: negotiation.status === 'active' && userResponse === 'pending' && isConflictingMember
-  });
 
   return (
     <div

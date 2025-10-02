@@ -11,29 +11,22 @@ const NegotiationItem = ({
 }) => {
   const isUserInvolved = isUserInvolvedInNegotiation(negotiation, user?.id);
   const memberNames = getNegotiationMemberNames(negotiation);
-  
-  // 디버깅
-  console.log('[NegotiationItem]', index, {
-    slotInfo: negotiation.slotInfo,
-    weekNegotiationTime: weekNegotiation.time,
-    dayDisplay: weekNegotiation.dayDisplay
-  });
 
   return (
     <div key={index} className={`p-3 rounded-lg border ${
       isUserInvolved
-        ? 'bg-orange-50 border-orange-200 ring-2 ring-orange-100'
+        ? 'bg-yellow-50 border-yellow-200 ring-2 ring-yellow-100'
         : 'bg-gray-50 border-gray-200'
     }`}>
       <div className="flex justify-between items-start">
         <div className="flex-1">
           <div className="flex items-center mb-1">
-            <Clock size={14} className="mr-1 text-orange-500" />
+            <Clock size={14} className="mr-1 text-yellow-600" />
             <span className="text-sm font-medium">
               {weekNegotiation.dayDisplay} {negotiation.slotInfo?.startTime || weekNegotiation.time}-{negotiation.slotInfo?.endTime || calculateEndTime(weekNegotiation.time)}
             </span>
             {isUserInvolved && (
-              <span className="ml-2 px-2 py-0.5 text-xs bg-orange-100 text-orange-800 rounded-full">
+              <span className="ml-2 px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded-full">
                 참여 필요
               </span>
             )}
@@ -56,30 +49,24 @@ const NegotiationItem = ({
         </div>
         <button
           onClick={() => {
-            // 방장인지 확인
-            const isOwner = negotiation.conflictingMembers?.every(cm => {
-              const cmUserId = cm.user?._id || cm.user;
-              return cmUserId !== user?.id;
-            }) && negotiation.participants?.some(p => {
-              const pUserId = typeof p === 'object' ? (p._id || p.id) : p;
-              return pUserId === user?.id;
-            });
+            console.log('[DEBUG] isUserInvolved:', isUserInvolved);
+            console.log('[DEBUG] user?.id:', user?.id);
+            console.log('[DEBUG] conflictingMembers:', negotiation.conflictingMembers?.map(cm => ({
+              userId: cm.user?._id || cm.user?.id || cm.user,
+              response: cm.response
+            })));
 
-            if (isOwner) {
-              // 방장이면 모달 표시
+            // 당사자가 아닌 사람(방장)이 클릭한 경우
+            if (!isUserInvolved) {
               alert('방장은 협의에 참여할 수 없습니다. 당사자들만 협의에 참여할 수 있습니다.');
               return;
             }
 
-            console.log('[NegotiationSection] Clicked negotiation button');
-            console.log('[NegotiationSection] Negotiation data:', negotiation);
-            console.log('[NegotiationSection] User ID:', user?.id);
-            console.log('[NegotiationSection] Is involved:', isUserInvolved);
             onOpenNegotiation(negotiation);
           }}
           className={`px-3 py-1 text-xs rounded-md transition-colors ${
             isUserInvolved
-              ? 'bg-orange-500 text-white hover:bg-orange-600'
+              ? 'bg-yellow-500 text-white hover:bg-yellow-600'
               : 'bg-gray-300 text-gray-600 hover:bg-gray-400'
           }`}
         >
@@ -95,31 +82,19 @@ const NegotiationSection = ({
   user,
   onOpenNegotiation
 }) => {
-  // Show only negotiations visible in current week's timetable
   const visibleNegotiations = currentWeekNegotiations || [];
-  
-  console.log('[NegotiationSection] Rendering with', visibleNegotiations.length, 'negotiations');
-  if (visibleNegotiations.length > 0) {
-    console.log('[NegotiationSection] First negotiation:', visibleNegotiations[0]);
-  }
 
   if (visibleNegotiations.length === 0) return null;
 
   return (
     <div className="mt-6 pt-4 border-t border-gray-200">
       <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-        <MessageSquare size={16} className="mr-2 text-orange-600" />
+        <MessageSquare size={16} className="mr-2 text-yellow-600" />
         협의 진행중 ({visibleNegotiations.length}건)
       </h4>
       <div className="space-y-3">
         {visibleNegotiations.map((weekNegotiation, index) => {
-          const negotiation = weekNegotiation; // weekNegotiation is the negotiation itself, not nested under negotiationData
-          
-          if (index === 0) {
-            console.log('[NegotiationSection] Sample negotiation:', negotiation);
-            console.log('[NegotiationSection] slotInfo:', negotiation.slotInfo);
-            console.log('[NegotiationSection] weekNegotiation.time:', weekNegotiation.time);
-          }
+          const negotiation = weekNegotiation;
 
           return (
             <NegotiationItem
