@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { coordinationService } from '../../services/coordinationService';
 import { Check, MessageSquare, Clock, Users } from 'lucide-react';
+import CustomAlertModal from './CustomAlertModal';
 
 const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, onRefresh }) => {
   const [messages, setMessages] = useState([]);
@@ -9,6 +10,8 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
   const [selectedYieldOption, setSelectedYieldOption] = useState('carry_over');
   const [alternativeSlots, setAlternativeSlots] = useState([]);
   const [chosenSlot, setChosenSlot] = useState(null);
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertMessage, setAlertMessage] = useState('');
 
   useEffect(() => {
     if (negotiation) {
@@ -49,14 +52,16 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
       if (response === 'yield') {
         payload.yieldOption = selectedYieldOption;
         if (selectedYieldOption === 'alternative_time' && alternativeSlots.length === 0) {
-          setError('대체 시간을 선택해주세요.');
+          setAlertMessage('대체 시간을 선택해주세요.');
+          setShowAlert(true);
           setIsLoading(false);
           return;
         }
         payload.alternativeSlots = alternativeSlots;
       } else if (response === 'choose_slot') {
         if (!chosenSlot) {
-          setError('시간대를 선택해주세요.');
+          setAlertMessage('시간대를 선택해주세요.');
+          setShowAlert(true);
           setIsLoading(false);
           return;
         }
@@ -76,7 +81,8 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
         onClose();
       }
     } catch (err) {
-      setError(err.message);
+      setAlertMessage(err.message || '오류가 발생했습니다.');
+      setShowAlert(true);
     } finally {
       setIsLoading(false);
     }
@@ -400,12 +406,6 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                 </p>
               </div>
             )}
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-sm text-red-800">{error}</p>
-              </div>
-            )}
           </div>
         </div>
 
@@ -418,6 +418,15 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
           </button>
         </div>
       </div>
+
+      <CustomAlertModal
+        isOpen={showAlert}
+        onClose={() => setShowAlert(false)}
+        title="알림"
+        message={alertMessage}
+        type="warning"
+        showCancel={false}
+      />
     </div>
   );
 };
