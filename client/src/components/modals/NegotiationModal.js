@@ -12,10 +12,14 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
   const [chosenSlot, setChosenSlot] = useState(null);
   const [showAlert, setShowAlert] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
+  const [currentNegotiation, setCurrentNegotiation] = useState(negotiation);
+  const [showYieldOptions, setShowYieldOptions] = useState(false);
+  const [showClaimConfirm, setShowClaimConfirm] = useState(false);
 
   useEffect(() => {
     if (negotiation) {
       setMessages(negotiation.messages || []);
+      setCurrentNegotiation(negotiation);
     }
   }, [negotiation, currentUser, roomId]);
 
@@ -23,8 +27,11 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
     return null;
   }
 
+  // 현재 협의 데이터 사용 (업데이트된 데이터)
+  const activeNegotiation = currentNegotiation || negotiation;
+
   // 접근 권한 확인: 당사자인지, 방장인지 구분
-  const isConflictingMember = negotiation.conflictingMembers?.some(cm => {
+  const isConflictingMember = activeNegotiation.conflictingMembers?.some(cm => {
     let cmUserId;
     if (typeof cm.user === 'object' && cm.user !== null) {
       cmUserId = cm.user._id || cm.user.id;
@@ -37,7 +44,7 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
   });
 
   // 방장인지 확인 (participants에는 있지만 conflictingMembers에는 없음)
-  const isOwnerViewing = !isConflictingMember && negotiation.participants?.some(p => {
+  const isOwnerViewing = !isConflictingMember && activeNegotiation.participants?.some(p => {
     const pUserId = typeof p === 'object' ? (p._id || p.id) : p;
     return pUserId?.toString() === currentUser?.id;
   });
@@ -69,6 +76,9 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
       }
 
       const result = await coordinationService.respondToNegotiation(roomId, negotiation._id, payload);
+
+      // 즉시 협의 데이터 업데이트
+      setCurrentNegotiation(result.negotiation);
       setMessages(result.negotiation.messages);
 
       // Refresh parent component to update room data
@@ -76,9 +86,20 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
         await onRefresh();
       }
 
-      // Close modal if negotiation is resolved
+      // 협의가 해결된 경우
       if (result.negotiation.status === 'resolved') {
-        onClose();
+        setAlertMessage('협의가 완료되었습니다!');
+        setShowAlert(true);
+        setTimeout(() => {
+          onClose();
+        }, 1500);
+      } else if (result.negotiation.type !== negotiation.type) {
+        // 타입이 변경된 경우 (time_slot_choice -> full_conflict)
+        setAlertMessage('협의 타입이 변경되었습니다. 다시 선택해주세요.');
+        setShowAlert(true);
+        // 응답 초기화
+        setChosenSlot(null);
+        setSelectedYieldOption('carry_over');
       }
     } catch (err) {
       setAlertMessage(err.message || '오류가 발생했습니다.');
@@ -89,14 +110,14 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
   };
 
   const getCurrentUserResponse = () => {
-    const currentUserMember = negotiation.conflictingMembers?.find(
+    const currentUserMember = activeNegotiation.conflictingMembers?.find(
       cm => cm.user._id === currentUser?.id || cm.user.toString() === currentUser?.id
     );
     return currentUserMember?.response || 'pending';
   };
 
   const getConflictingMemberNames = () => {
-    return negotiation.conflictingMembers?.map(cm => {
+    return activeNegotiation.conflictingMembers?.map(cm => {
       if (cm.user?.name) {
         return cm.user.name;
       } else if (cm.user?.firstName || cm.user?.lastName) {
@@ -108,7 +129,7 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
   };
 
   const userResponse = getCurrentUserResponse();
-  const conflictingMembers = negotiation.conflictingMembers || [];
+  const conflictingMembers = activeNegotiation.conflictingMembers || [];
   const memberNames = getConflictingMemberNames();
 
   return (
@@ -126,7 +147,7 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
             <div className="mt-2 text-sm text-gray-600">
               <div className="flex items-center mb-1">
                 <Clock size={16} className="mr-1" />
-                {new Date(negotiation.slotInfo.date).toLocaleDateString('ko-KR')} {negotiation.slotInfo.startTime}-{negotiation.slotInfo.endTime}
+                {new Date(activeNegotiation.slotInfo.date).toLocaleDateString('ko-KR')} {activeNegotiation.slotInfo.startTime}-{activeNegotiation.slotInfo.endTime}
               </div>
               <div className="flex items-center">
                 <Users size={16} className="mr-1" />
@@ -225,13 +246,13 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
             )}
 
             {/* Response section */}
-            {negotiation.status === 'active' && userResponse === 'pending' && isConflictingMember && (
+            {activeNegotiation.status === 'active' && userResponse === 'pending' && isConflictingMember && (
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-orange-800 mb-3">
                   협의 참여
                 </h4>
 
-                {negotiation.type === 'time_slot_choice' ? (
+                {activeNegotiation.type === 'time_slot_choice' ? (
                   <>
                     <p className="text-sm text-orange-700 mb-4">
                       선호 가능한 시간대 중 하나를 선택하세요. 서로 다른 시간대를 선택하면 각자 배정됩니다.
@@ -243,7 +264,7 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                         시간대 선택:
                       </label>
                       <div className="space-y-2">
-                        {negotiation.availableTimeSlots?.map((slot, index) => (
+                        {activeNegotiation.availableTimeSlots?.map((slot, index) => (
                           <label key={index} className="flex items-center p-2 border rounded hover:bg-gray-50 cursor-pointer">
                             <input
                               type="radio"
@@ -271,64 +292,83 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                       시간대가 겹치면 양보/주장으로 다시 선택하게 됩니다
                     </div>
                   </>
-                ) : negotiation.type === 'full_conflict' ? (
+                ) : activeNegotiation.type === 'full_conflict' ? (
                   <>
                     <p className="text-sm text-orange-700 mb-4">
                       전체 시간이 필요한 충돌입니다. 양보하거나 주장하세요.
                     </p>
 
-                    {/* Yield option selection */}
                     <div className="mb-4 bg-white p-3 rounded-lg border border-orange-200">
                       <label className="text-sm font-medium text-gray-700 mb-2 block">
-                        양보 시 옵션 선택:
+                        선택:
                       </label>
                       <div className="space-y-2">
-                        <label className="flex items-center">
+                        {/* 양보 옵션 */}
+                        <label className="flex items-center p-2 border rounded hover:bg-gray-50 cursor-pointer">
                           <input
                             type="radio"
-                            name="yieldOption"
-                            value="carry_over"
-                            checked={selectedYieldOption === 'carry_over'}
-                            onChange={(e) => setSelectedYieldOption(e.target.value)}
+                            name="conflictOption"
+                            value="yield"
+                            checked={chosenSlot?.type === 'yield'}
+                            onChange={() => setChosenSlot({ type: 'yield' })}
                             className="mr-2"
                           />
-                          <span className="text-sm">이월하기 (다음 주로 넘김)</span>
+                          <span className="text-sm font-medium">양보하기</span>
                         </label>
-                        <label className="flex items-center">
+
+                        {/* 양보 선택 시 이월 옵션 표시 */}
+                        {chosenSlot?.type === 'yield' && (
+                          <div className="ml-6 mt-2 space-y-2 bg-green-50 p-3 rounded">
+                            <label className="flex items-center">
+                              <input
+                                type="radio"
+                                name="yieldOption"
+                                value="carry_over"
+                                checked={selectedYieldOption === 'carry_over'}
+                                onChange={(e) => setSelectedYieldOption(e.target.value)}
+                                className="mr-2"
+                              />
+                              <span className="text-sm">이월하기 (다음 주로 넘김)</span>
+                            </label>
+                            <label className="flex items-center">
+                              <input
+                                type="radio"
+                                name="yieldOption"
+                                value="alternative_time"
+                                checked={selectedYieldOption === 'alternative_time'}
+                                onChange={(e) => setSelectedYieldOption(e.target.value)}
+                                className="mr-2"
+                              />
+                              <span className="text-sm">다른 선호 시간 선택</span>
+                            </label>
+                            {selectedYieldOption === 'alternative_time' && (
+                              <div className="mt-2 text-xs text-gray-600 bg-blue-50 p-2 rounded">
+                                대체 시간 선택 기능은 추후 구현 예정입니다. 현재는 이월 옵션을 사용해주세요.
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* 주장 옵션 */}
+                        <label className="flex items-center p-2 border rounded hover:bg-gray-50 cursor-pointer">
                           <input
                             type="radio"
-                            name="yieldOption"
-                            value="alternative_time"
-                            checked={selectedYieldOption === 'alternative_time'}
-                            onChange={(e) => setSelectedYieldOption(e.target.value)}
+                            name="conflictOption"
+                            value="claim"
+                            checked={chosenSlot?.type === 'claim'}
+                            onChange={() => setChosenSlot({ type: 'claim' })}
                             className="mr-2"
                           />
-                          <span className="text-sm">다른 선호 시간 선택</span>
+                          <span className="text-sm font-medium">주장하기</span>
                         </label>
                       </div>
 
-                      {selectedYieldOption === 'alternative_time' && (
-                        <div className="mt-2 text-xs text-gray-600 bg-blue-50 p-2 rounded">
-                          대체 시간 선택 기능은 추후 구현 예정입니다. 현재는 이월 옵션을 사용해주세요.
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex space-x-3">
                       <button
-                        onClick={() => handleResponse('yield')}
-                        disabled={isLoading}
-                        className="flex-1 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 disabled:bg-green-300 flex items-center justify-center"
+                        onClick={() => handleResponse(chosenSlot?.type)}
+                        disabled={isLoading || !chosenSlot}
+                        className="w-full mt-3 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:bg-blue-300"
                       >
-                        <Check size={16} className="mr-2" />
-                        양보하기
-                      </button>
-                      <button
-                        onClick={() => handleResponse('claim')}
-                        disabled={isLoading}
-                        className="flex-1 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 disabled:bg-red-300 flex items-center justify-center"
-                      >
-                        주장하기
+                        선택 완료
                       </button>
                     </div>
                   </>
@@ -339,9 +379,9 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                     </p>
                     {(() => {
                       // 시간을 분할 계산
-                      const startTime = negotiation.slotInfo?.startTime || '';
-                      const endTime = negotiation.slotInfo?.endTime || '';
-                      
+                      const startTime = activeNegotiation.slotInfo?.startTime || '';
+                      const endTime = activeNegotiation.slotInfo?.endTime || '';
+
                       if (!startTime || !endTime) {
                         return <p className="text-sm text-red-600">시간 정보를 불러올 수 없습니다.</p>;
                       }
@@ -350,15 +390,15 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                       const [startHour, startMin] = startTime.split(':').map(Number);
                       const [endHour, endMin] = endTime.split(':').map(Number);
                       const totalMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin);
-                      
+
                       // 각 멤버의 필요 슬롯 수 확인
-                      const currentUserMember = negotiation.conflictingMembers?.find(
+                      const currentUserMember = activeNegotiation.conflictingMembers?.find(
                         cm => (cm.user?._id || cm.user) === currentUser?.id
                       );
                       const requiredSlots = currentUserMember?.requiredSlots || 1;
                       const requiredMinutes = requiredSlots * 30; // 1슬롯 = 30분
 
-                      // 중간 시간 계산
+                      // 첫 번째 사람의 필요 시간만큼만 할당
                       const midMinutes = startHour * 60 + startMin + requiredMinutes;
                       const midHour = Math.floor(midMinutes / 60);
                       const midMin = midMinutes % 60;
@@ -367,21 +407,43 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                       const firstHalfTime = `${startTime}-${midTime}`;
                       const secondHalfTime = `${midTime}-${endTime}`;
 
+                      // 한시간 협의와 동일한 라디오 버튼 스타일로 변경
                       return (
-                        <div className="space-y-2">
+                        <div className="mb-4 bg-white p-3 rounded-lg border border-orange-200">
+                          <label className="text-sm font-medium text-gray-700 mb-2 block">
+                            시간대 선택:
+                          </label>
+                          <div className="space-y-2">
+                            <label className="flex items-center p-2 border rounded hover:bg-gray-50 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="splitTime"
+                                value="first"
+                                checked={chosenSlot?.type === 'split_first'}
+                                onChange={() => setChosenSlot({ type: 'split_first', time: firstHalfTime })}
+                                className="mr-2"
+                              />
+                              <span className="text-sm font-medium">앞 시간: {firstHalfTime}</span>
+                            </label>
+                            <label className="flex items-center p-2 border rounded hover:bg-gray-50 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="splitTime"
+                                value="second"
+                                checked={chosenSlot?.type === 'split_second'}
+                                onChange={() => setChosenSlot({ type: 'split_second', time: secondHalfTime })}
+                                className="mr-2"
+                              />
+                              <span className="text-sm font-medium">뒷 시간: {secondHalfTime}</span>
+                            </label>
+                          </div>
+
                           <button
-                            onClick={() => handleResponse('split_first')}
-                            disabled={isLoading}
-                            className="w-full bg-blue-500 text-white py-3 px-4 rounded-lg hover:bg-blue-600 disabled:bg-blue-300 text-sm font-medium"
+                            onClick={() => handleResponse(chosenSlot?.type)}
+                            disabled={isLoading || !chosenSlot}
+                            className="w-full mt-3 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:bg-blue-300"
                           >
-                            앞 시간: {firstHalfTime}
-                          </button>
-                          <button
-                            onClick={() => handleResponse('split_second')}
-                            disabled={isLoading}
-                            className="w-full bg-purple-500 text-white py-3 px-4 rounded-lg hover:bg-purple-600 disabled:bg-purple-300 text-sm font-medium"
-                          >
-                            뒷 시간: {secondHalfTime}
+                            시간대 선택 완료
                           </button>
                         </div>
                       );
