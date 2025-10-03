@@ -119,7 +119,7 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
 
       const result = await coordinationService.respondToNegotiation(roomId, negotiation._id, payload);
 
-      // 즉시 협의 데이터 업데이트
+      // 즉시 협의 데이터 업데이트 (UI가 바로 변경됨)
       setCurrentNegotiation(result.negotiation);
       setMessages(result.negotiation.messages);
 
@@ -136,12 +136,27 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
           onClose();
         }, 1500);
       } else if (result.negotiation.type !== negotiation.type) {
-        // 타입이 변경된 경우 (time_slot_choice -> full_conflict)
+        // 타입이 변경된 경우 (time_slot_choice -> full_conflict, partial_conflict -> full_conflict)
         setAlertMessage('협의 타입이 변경되었습니다. 다시 선택해주세요.');
         setShowAlert(true);
         // chosenSlot은 유지 (이전에 선택한 시간 정보 보존)
-        // setChosenSlot(null); // 제거: 선택한 시간 정보 유지
         setSelectedYieldOption('carry_over');
+        // conflictChoice 초기화
+        setConflictChoice(null);
+      } else {
+        // 응답했지만 아직 해결되지 않은 경우
+        const currentUserMember = result.negotiation.conflictingMembers?.find(
+          cm => {
+            const cmUserId = typeof cm.user === 'object' ? (cm.user._id || cm.user.id) : cm.user;
+            return cmUserId === currentUser?.id || cmUserId?.toString() === currentUser?.id?.toString();
+          }
+        );
+
+        if (currentUserMember && currentUserMember.response !== 'pending') {
+          // 모달을 닫지 않고 즉시 응답 완료 상태로 UI 업데이트
+          console.log('[응답 완료] UI가 즉시 응답 완료 상태로 변경됨');
+          // currentNegotiation이 이미 업데이트되어 UI가 자동으로 변경됨
+        }
       }
     } catch (err) {
       setAlertMessage(err.message || '오류가 발생했습니다.');
@@ -283,6 +298,24 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <p className="text-sm font-medium text-blue-800">
                   방장은 협의 내용을 조회만 할 수 있습니다. 시간 결정은 당사자들이 합니다.
+                </p>
+              </div>
+            )}
+
+            {/* 응답 완료 상태 표시 */}
+            {activeNegotiation.status === 'active' && userResponse !== 'pending' && isConflictingMember && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <p className="text-sm font-medium text-green-800">
+                  ✅ 응답을 완료했습니다. 상대방의 응답을 기다리는 중입니다...
+                </p>
+                <p className="text-xs text-green-600 mt-2">
+                  당신의 선택: {
+                    userResponse === 'yield' ? '양보' :
+                    userResponse === 'claim' ? '주장' :
+                    userResponse === 'split_first' ? '앞시간 선택' :
+                    userResponse === 'split_second' ? '뒷시간 선택' :
+                    userResponse === 'choose_slot' ? '시간대 선택' : userResponse
+                  }
                 </p>
               </div>
             )}
