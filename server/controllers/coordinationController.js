@@ -24,101 +24,113 @@ async function handleNegotiationResolution(room, negotiation, userId) {
    const splitSecondMembers = members.filter(m => m.response === 'split_second');
    const chooseSlotMembers = members.filter(m => m.response === 'choose_slot');
 
-   // Case 1: full_conflict + 한명이 양보
-   if (negotiation.type === 'full_conflict' && yieldedMembers.length === 1 && claimedMembers.length === 1) {
-      const yieldedMember = yieldedMembers[0];
-      const claimedMember = claimedMembers[0];
+   // Case 1: full_conflict + n-1명이 양보 (부분 양보)
+   if (negotiation.type === 'full_conflict' && yieldedMembers.length >= 1 && claimedMembers.length >= 1) {
+      // n명 중 n-1명이 양보했는지 확인
+      if (yieldedMembers.length === members.length - 1) {
+         const claimedMember = claimedMembers[0];
 
-      // 주장한 사람에게 시간 배정 (중복 방지를 위해 먼저 체크)
-      const existingSlot = room.timeSlots.find(slot =>
-         slot.user.toString() === (claimedMember.user._id || claimedMember.user).toString() &&
-         slot.date.toISOString() === new Date(negotiation.slotInfo.date).toISOString() &&
-         slot.startTime === negotiation.slotInfo.startTime &&
-         slot.endTime === negotiation.slotInfo.endTime
-      );
+         // 주장한 사람에게 선택한 시간대로 배정 (전체 시간이 아닌 선택한 시간)
+         let assignStartTime = negotiation.slotInfo.startTime;
+         let assignEndTime = negotiation.slotInfo.endTime;
 
-      if (!existingSlot) {
-         room.timeSlots.push({
-            user: claimedMember.user._id || claimedMember.user,
-            date: negotiation.slotInfo.date,
-            startTime: negotiation.slotInfo.startTime,
-            endTime: negotiation.slotInfo.endTime,
-            day: negotiation.slotInfo.day,
-            subject: '협의 결과',
-            status: 'confirmed',
-            assignedBy: userId
-         });
-      } else {
-      }
-
-      // 양보한 사람 처리
-      const yieldedUserId = (yieldedMember.user._id || yieldedMember.user).toString();
-      const roomMember = room.members.find(m => m.user.toString() === yieldedUserId);
-
-      if (yieldedMember.yieldOption === 'carry_over') {
-         // 이월 처리 (중복 방지를 위해 이미 이월된 내역이 있는지 확인)
-         const [startH, startM] = negotiation.slotInfo.startTime.split(':').map(Number);
-         const [endH, endM] = negotiation.slotInfo.endTime.split(':').map(Number);
-         const carryOverHours = ((endH * 60 + endM) - (startH * 60 + startM)) / 60;
-
-         if (roomMember) {
-            // 해당 협의에 대한 이월 내역이 이미 있는지 확인
-            const alreadyCarriedOver = roomMember.carryOverHistory.some(history =>
-               history.negotiationId && history.negotiationId.toString() === negotiation._id.toString()
-            );
-
-            if (!alreadyCarriedOver) {
-               roomMember.carryOver += carryOverHours;
-               roomMember.carryOverHistory.push({
-                  week: new Date(),
-                  amount: carryOverHours,
-                  reason: 'negotiation_yield',
-                  timestamp: new Date(),
-                  negotiationId: negotiation._id
-               });
-            } else {
-            }
+         // 주장한 사람이 time_slot_choice에서 선택한 시간이 있다면 그 시간 사용
+         if (claimedMember.chosenSlot) {
+            assignStartTime = claimedMember.chosenSlot.startTime;
+            assignEndTime = claimedMember.chosenSlot.endTime;
          }
-      } else if (yieldedMember.yieldOption === 'alternative_time' && yieldedMember.alternativeSlots) {
-         // 대체 시간 배정
-         yieldedMember.alternativeSlots.forEach(slotKey => {
-            const parts = slotKey.split('-');
-            const date = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
-            const time = parts[3];
-            const [h, m] = time.split(':').map(Number);
-            const endMinutes = h * 60 + m + 30;
-            const endTime = `${Math.floor(endMinutes/60).toString().padStart(2,'0')}:${(endMinutes%60).toString().padStart(2,'0')}`;
 
+         const existingSlot = room.timeSlots.find(slot =>
+            slot.user.toString() === (claimedMember.user._id || claimedMember.user).toString() &&
+            slot.date.toISOString() === new Date(negotiation.slotInfo.date).toISOString() &&
+            slot.startTime === assignStartTime &&
+            slot.endTime === assignEndTime
+         );
+
+         if (!existingSlot) {
             room.timeSlots.push({
-               user: yieldedMember.user._id || yieldedMember.user,
-               date: date,
-               startTime: time,
-               endTime: endTime,
+               user: claimedMember.user._id || claimedMember.user,
+               date: negotiation.slotInfo.date,
+               startTime: assignStartTime,
+               endTime: assignEndTime,
                day: negotiation.slotInfo.day,
-               subject: '협의 결과 (대체시간)',
+               subject: '협의 결과',
                status: 'confirmed',
                assignedBy: userId
             });
+         }
+
+         // 모든 양보한 사람 처리
+         yieldedMembers.forEach(yieldedMember => {
+            const yieldedUserId = (yieldedMember.user._id || yieldedMember.user).toString();
+            const roomMember = room.members.find(m => m.user.toString() === yieldedUserId);
+
+            if (yieldedMember.yieldOption === 'carry_over') {
+               // 이월 처리 (중복 방지를 위해 이미 이월된 내역이 있는지 확인)
+               const [startH, startM] = negotiation.slotInfo.startTime.split(':').map(Number);
+               const [endH, endM] = negotiation.slotInfo.endTime.split(':').map(Number);
+               const carryOverHours = ((endH * 60 + endM) - (startH * 60 + startM)) / 60;
+
+               if (roomMember) {
+                  // 해당 협의에 대한 이월 내역이 이미 있는지 확인
+                  const alreadyCarriedOver = roomMember.carryOverHistory.some(history =>
+                     history.negotiationId && history.negotiationId.toString() === negotiation._id.toString()
+                  );
+
+                  if (!alreadyCarriedOver) {
+                     roomMember.carryOver += carryOverHours;
+                     roomMember.carryOverHistory.push({
+                        week: new Date(),
+                        amount: carryOverHours,
+                        reason: 'negotiation_yield',
+                        timestamp: new Date(),
+                        negotiationId: negotiation._id
+                     });
+                  }
+               }
+            } else if (yieldedMember.yieldOption === 'alternative_time' && yieldedMember.alternativeSlots) {
+               // 대체 시간 배정
+               yieldedMember.alternativeSlots.forEach(slotKey => {
+                  const parts = slotKey.split('-');
+                  const date = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+                  const time = parts[3];
+                  const [h, m] = time.split(':').map(Number);
+                  const endMinutes = h * 60 + m + 30;
+                  const endTime = `${Math.floor(endMinutes/60).toString().padStart(2,'0')}:${(endMinutes%60).toString().padStart(2,'0')}`;
+
+                  room.timeSlots.push({
+                     user: yieldedMember.user._id || yieldedMember.user,
+                     date: date,
+                     startTime: time,
+                     endTime: endTime,
+                     day: negotiation.slotInfo.day,
+                     subject: '협의 결과 (대체시간)',
+                     status: 'confirmed',
+                     assignedBy: userId
+                  });
+               });
+            }
+         });
+
+         negotiation.status = 'resolved';
+         negotiation.resolution = {
+            type: 'yielded',
+            assignments: [{
+               user: claimedMember.user._id || claimedMember.user,
+               slots: [`${negotiation.slotInfo.date}-${assignStartTime}`],
+               isCarryOver: false
+            }],
+            resolvedAt: new Date(),
+            resolvedBy: userId
+         };
+
+         const claimedMemberName = claimedMember.user.firstName || claimedMember.user.name || '멤버';
+         negotiation.messages.push({
+            message: `협의가 완료되었습니다. ${claimedMemberName}님이 ${assignStartTime}-${assignEndTime} 시간을 배정받았습니다.`,
+            timestamp: new Date(),
+            isSystemMessage: true
          });
       }
-
-      negotiation.status = 'resolved';
-      negotiation.resolution = {
-         type: 'yielded',
-         assignments: [{
-            user: claimedMember.user._id || claimedMember.user,
-            slots: [`${negotiation.slotInfo.date}-${negotiation.slotInfo.startTime}`],
-            isCarryOver: false
-         }],
-         resolvedAt: new Date(),
-         resolvedBy: userId
-      };
-
-      negotiation.messages.push({
-         message: `협의가 완료되었습니다. ${claimedMember.user.firstName || '멤버'}님이 시간을 배정받았습니다.`,
-         timestamp: new Date(),
-         isSystemMessage: true
-      });
    }
    // Case 1-2: time_slot_choice + 각자 다른 시간대 선택
    else if (negotiation.type === 'time_slot_choice' && chooseSlotMembers.length === members.length) {
@@ -152,7 +164,6 @@ async function handleNegotiationResolution(room, negotiation, userId) {
                   status: 'confirmed',
                   assignedBy: userId
                });
-            } else {
             }
          });
 
@@ -176,10 +187,10 @@ async function handleNegotiationResolution(room, negotiation, userId) {
 
          console.log(`[협의해결] 시간대 선택 완료`);
       } else {
-         // 겹침 - full_conflict로 전환 (양보로 해결)
+         // 겹침 - full_conflict로 전환 (양보/주장 또는 랜덤)
          negotiation.type = 'full_conflict';
          negotiation.messages.push({
-            message: `선택한 시간대가 겹칩니다. 양보/주장으로 다시 선택해주세요.`,
+            message: `선택한 시간대가 겹칩니다. 양보하거나 주장하여 해결하세요. 둘 다 주장하면 랜덤으로 결정됩니다.`,
             timestamp: new Date(),
             isSystemMessage: true
          });
@@ -188,6 +199,9 @@ async function handleNegotiationResolution(room, negotiation, userId) {
             m.response = 'pending';
             m.chosenSlot = null;
          });
+
+         // 상태를 'active'로 유지하여 계속 협의 가능하도록
+         negotiation.status = 'active';
       }
    }
    // Case 2: partial_conflict + 시간 분할
@@ -195,13 +209,18 @@ async function handleNegotiationResolution(room, negotiation, userId) {
       const firstMember = splitFirstMembers[0];
       const secondMember = splitSecondMembers[0];
 
+      // 각 멤버의 필요 슬롯 수 확인
+      const firstRequiredSlots = firstMember.requiredSlots || 1;
+      const firstRequiredMinutes = firstRequiredSlots * 30; // 1슬롯 = 30분
+
       const [startH, startM] = negotiation.slotInfo.startTime.split(':').map(Number);
       const [endH, endM] = negotiation.slotInfo.endTime.split(':').map(Number);
-      const totalMinutes = (endH * 60 + endM) - (startH * 60 + startM);
-      const midMinutes = startH * 60 + startM + (totalMinutes / 2);
+
+      // 첫 번째 멤버의 필요 시간만큼만 할당
+      const midMinutes = startH * 60 + startM + firstRequiredMinutes;
       const midTime = `${Math.floor(midMinutes/60).toString().padStart(2,'0')}:${(midMinutes%60).toString().padStart(2,'0')}`;
 
-      // 앞 시간대 (중복 방지)
+      // 앞 시간대 (첫 번째 멤버에게 필요한 만큼만)
       const existingFirstSlot = room.timeSlots.find(slot =>
          slot.user.toString() === (firstMember.user._id || firstMember.user).toString() &&
          slot.date.toISOString() === new Date(negotiation.slotInfo.date).toISOString() &&
@@ -220,10 +239,9 @@ async function handleNegotiationResolution(room, negotiation, userId) {
             status: 'confirmed',
             assignedBy: userId
          });
-      } else {
       }
 
-      // 뒷 시간대 (중복 방지)
+      // 뒷 시간대 (나머지 시간 전부)
       const existingSecondSlot = room.timeSlots.find(slot =>
          slot.user.toString() === (secondMember.user._id || secondMember.user).toString() &&
          slot.date.toISOString() === new Date(negotiation.slotInfo.date).toISOString() &&
@@ -242,7 +260,6 @@ async function handleNegotiationResolution(room, negotiation, userId) {
             status: 'confirmed',
             assignedBy: userId
          });
-      } else {
       }
 
       negotiation.status = 'resolved';
@@ -271,11 +288,120 @@ async function handleNegotiationResolution(room, negotiation, userId) {
       });
 
    }
-   // Case 3: 모두 양보 or 합의 실패 -> escalate (방장 개입 필요)
-   else if (yieldedMembers.length === members.length || claimedMembers.length === members.length) {
-      negotiation.status = 'escalated';
+   // Case 3: 모두 양보 -> 모두 이월
+   else if (yieldedMembers.length === members.length) {
+      // 모든 멤버가 양보한 경우 - 모두 이월 처리
+      yieldedMembers.forEach(member => {
+         const yieldedUserId = (member.user._id || member.user).toString();
+         const roomMember = room.members.find(m => m.user.toString() === yieldedUserId);
+
+         if (member.yieldOption === 'carry_over') {
+            const [startH, startM] = negotiation.slotInfo.startTime.split(':').map(Number);
+            const [endH, endM] = negotiation.slotInfo.endTime.split(':').map(Number);
+            const carryOverHours = ((endH * 60 + endM) - (startH * 60 + startM)) / 60;
+
+            if (roomMember) {
+               const alreadyCarriedOver = roomMember.carryOverHistory.some(history =>
+                  history.negotiationId && history.negotiationId.toString() === negotiation._id.toString()
+               );
+
+               if (!alreadyCarriedOver) {
+                  roomMember.carryOver += carryOverHours;
+                  roomMember.carryOverHistory.push({
+                     week: new Date(),
+                     amount: carryOverHours,
+                     reason: 'negotiation_yield',
+                     timestamp: new Date(),
+                     negotiationId: negotiation._id
+                  });
+               }
+            }
+         }
+      });
+
+      negotiation.status = 'resolved';
       negotiation.messages.push({
-         message: `합의에 실패했습니다. 방장의 중재가 필요합니다.`,
+         message: `모든 멤버가 양보했습니다. 시간이 이월됩니다.`,
+         timestamp: new Date(),
+         isSystemMessage: true
+      });
+   }
+   // Case 4: 모두 주장 -> 랜덤 또는 다른 시간 선택
+   else if (claimedMembers.length === members.length) {
+      negotiation.messages.push({
+         message: `모두 주장했습니다. 랜덤으로 결정하거나 다른 시간을 선택하세요.`,
+         timestamp: new Date(),
+         isSystemMessage: true
+      });
+
+      // 랜덤 선택
+      const randomIndex = Math.floor(Math.random() * claimedMembers.length);
+      const winner = claimedMembers[randomIndex];
+      const losers = claimedMembers.filter((_, i) => i !== randomIndex);
+
+      // 승자에게 시간 배정
+      const existingSlot = room.timeSlots.find(slot =>
+         slot.user.toString() === (winner.user._id || winner.user).toString() &&
+         slot.date.toISOString() === new Date(negotiation.slotInfo.date).toISOString() &&
+         slot.startTime === negotiation.slotInfo.startTime &&
+         slot.endTime === negotiation.slotInfo.endTime
+      );
+
+      if (!existingSlot) {
+         room.timeSlots.push({
+            user: winner.user._id || winner.user,
+            date: negotiation.slotInfo.date,
+            startTime: negotiation.slotInfo.startTime,
+            endTime: negotiation.slotInfo.endTime,
+            day: negotiation.slotInfo.day,
+            subject: '협의 결과 (랜덤)',
+            status: 'confirmed',
+            assignedBy: userId
+         });
+      }
+
+      // 패자들은 이월 처리
+      losers.forEach(loser => {
+         const loserUserId = (loser.user._id || loser.user).toString();
+         const roomMember = room.members.find(m => m.user.toString() === loserUserId);
+
+         if (roomMember) {
+            const [startH, startM] = negotiation.slotInfo.startTime.split(':').map(Number);
+            const [endH, endM] = negotiation.slotInfo.endTime.split(':').map(Number);
+            const carryOverHours = ((endH * 60 + endM) - (startH * 60 + startM)) / 60;
+
+            const alreadyCarriedOver = roomMember.carryOverHistory.some(history =>
+               history.negotiationId && history.negotiationId.toString() === negotiation._id.toString()
+            );
+
+            if (!alreadyCarriedOver) {
+               roomMember.carryOver += carryOverHours;
+               roomMember.carryOverHistory.push({
+                  week: new Date(),
+                  amount: carryOverHours,
+                  reason: 'negotiation_random_loss',
+                  timestamp: new Date(),
+                  negotiationId: negotiation._id
+               });
+            }
+         }
+      });
+
+      negotiation.status = 'resolved';
+      negotiation.resolution = {
+         type: 'random',
+         assignments: [{
+            user: winner.user._id || winner.user,
+            slots: [`${negotiation.slotInfo.date}-${negotiation.slotInfo.startTime}`],
+            isCarryOver: false
+         }],
+         resolvedAt: new Date(),
+         resolvedBy: userId
+      };
+
+      const winnerName = winner.user.firstName || winner.user.name || '멤버';
+      negotiation.messages.push({
+         message: `랜덤으로 ${winnerName}님이 선택되었습니다. 나머지 멤버는 이월됩니다.`,
          timestamp: new Date(),
          isSystemMessage: true
       });
