@@ -991,7 +991,7 @@ exports.getSentRequests = async (req, res) => {
 
       const sentRequests = rooms.flatMap(room =>
          room.requests
-           .filter(req => req.requester && req.requester._id.toString() === userId && req.status !== 'approved')
+           .filter(req => req.requester && req.requester._id.toString() === userId)
            .map(req => ({
              ...req.toObject(),
              roomId: room._id.toString(),
@@ -999,7 +999,7 @@ exports.getSentRequests = async (req, res) => {
            }))
       );
 
-      console.log(`📤 보낸 요청: ${sentRequests.length}개 (approved 제외)`);
+      console.log(`📤 보낸 요청: ${sentRequests.length}개`);
       res.json({ success: true, requests: sentRequests });
    } catch (error) {
       console.error('Error fetching sent requests:', error);
@@ -1021,12 +1021,11 @@ exports.getReceivedRequests = async (req, res) => {
       const receivedRequests = rooms.flatMap(room => {
          return room.requests.filter(req => {
             const isTarget = req.targetUser && req.targetUser.toString() === userId;
-            // approved 상태는 제외 (이미 처리됨)
-            return isTarget && req.status !== 'approved';
+            return isTarget;
          }).map(req => ({ ...req.toObject(), roomId: room._id, roomName: room.name }));
       });
 
-      console.log(`📥 받은 요청: ${receivedRequests.length}개 (approved 제외)`);
+      console.log(`📥 받은 요청: ${receivedRequests.length}개`);
       res.json({ success: true, requests: receivedRequests });
    } catch (error) {
       console.error('[getReceivedRequests] Error:', error);
