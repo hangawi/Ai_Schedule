@@ -34,10 +34,30 @@ async function handleNegotiationResolution(room, negotiation, userId) {
          let assignStartTime = negotiation.slotInfo.startTime;
          let assignEndTime = negotiation.slotInfo.endTime;
 
+         console.log('[협의 해결] 주장한 멤버 정보:', {
+            userId: claimedMember.user._id || claimedMember.user,
+            chosenSlot: claimedMember.chosenSlot,
+            negotiationType: negotiation.type
+         });
+
          // 주장한 사람이 time_slot_choice에서 선택한 시간이 있다면 그 시간 사용
-         if (claimedMember.chosenSlot) {
+         if (claimedMember.chosenSlot && claimedMember.chosenSlot.startTime && claimedMember.chosenSlot.endTime) {
             assignStartTime = claimedMember.chosenSlot.startTime;
             assignEndTime = claimedMember.chosenSlot.endTime;
+            console.log('[협의 해결] chosenSlot 사용:', assignStartTime, '-', assignEndTime);
+         } else {
+            console.log('[협의 해결] negotiation.slotInfo 사용:', assignStartTime, '-', assignEndTime);
+         }
+
+         // startTime과 endTime이 유효한지 확인
+         if (!assignStartTime || !assignEndTime) {
+            console.error('[협의 해결 오류] startTime 또는 endTime이 없음:', {
+               assignStartTime,
+               assignEndTime,
+               slotInfo: negotiation.slotInfo,
+               chosenSlot: claimedMember.chosenSlot
+            });
+            throw new Error('시간 정보가 올바르지 않습니다.');
          }
 
          const existingSlot = room.timeSlots.find(slot =>
@@ -48,7 +68,7 @@ async function handleNegotiationResolution(room, negotiation, userId) {
          );
 
          if (!existingSlot) {
-            room.timeSlots.push({
+            const newSlot = {
                user: claimedMember.user._id || claimedMember.user,
                date: negotiation.slotInfo.date,
                startTime: assignStartTime,
@@ -57,7 +77,11 @@ async function handleNegotiationResolution(room, negotiation, userId) {
                subject: '협의 결과',
                status: 'confirmed',
                assignedBy: userId
-            });
+            };
+            console.log('[협의 해결] 새 슬롯 추가:', newSlot);
+            room.timeSlots.push(newSlot);
+         } else {
+            console.log('[협의 해결] 이미 존재하는 슬롯, 추가 안함');
          }
 
          // 모든 양보한 사람 처리
@@ -194,10 +218,10 @@ async function handleNegotiationResolution(room, negotiation, userId) {
             timestamp: new Date(),
             isSystemMessage: true
          });
-         // 모든 응답 초기화
+         // 응답만 초기화 (chosenSlot은 유지!)
          members.forEach(m => {
             m.response = 'pending';
-            m.chosenSlot = null;
+            // m.chosenSlot = null; // 제거: 선택한 시간 정보 유지
          });
 
          // 상태를 'active'로 유지하여 계속 협의 가능하도록
@@ -546,11 +570,21 @@ exports.respondToNegotiation = async (req, res) => {
             }
             userMember.alternativeSlots = alternativeSlots;
          }
+      } else if (response === 'claim') {
+         // 주장할 때도 chosenSlot 저장 (time_slot_choice에서 선택한 시간)
+         if (chosenSlot && chosenSlot.startTime && chosenSlot.endTime) {
+            userMember.chosenSlot = chosenSlot;
+            console.log('[claim 응답] chosenSlot 저장:', chosenSlot);
+         } else {
+            console.log('[claim 응답] chosenSlot 없음, negotiation.slotInfo 사용 예정');
+         }
       } else if (response === 'choose_slot') {
          if (!chosenSlot || !chosenSlot.startTime || !chosenSlot.endTime) {
             return res.status(400).json({ msg: '시간대를 선택해주세요.' });
          }
+         console.log('[choose_slot 응답] chosenSlot 저장:', chosenSlot);
          userMember.chosenSlot = chosenSlot;
+         console.log('[choose_slot 응답] userMember.chosenSlot:', userMember.chosenSlot);
       }
 
       // 시스템 메시지 추가
@@ -574,14 +608,51 @@ exports.respondToNegotiation = async (req, res) => {
          isSystemMessage: true
       });
 
-      // 모든 멤버가 응답했는지 확인
+      // 협의 해결 조건 확인
       const allResponded = negotiation.conflictingMembers.every(cm =>
          cm.response && cm.response !== 'pending'
       );
 
-      if (allResponded) {
+      // 부분 양보 확인: n명 중 n-1명이 양보했는지
+      const yieldedCount = negotiation.conflictingMembers.filter(cm => cm.response === 'yield').length;
+      const claimedCount = negotiation.conflictingMembers.filter(cm => cm.response === 'claim').length;
+      const totalMembers = negotiation.conflictingMembers.length;
+      const canResolvePartially = (yieldedCount === totalMembers - 1 && claimedCount === 1) ||
+                                   (yieldedCount === 1 && claimedCount === totalMembers - 1);
+
+      // 분할 협의 확인: 2명이 각각 앞/뒤 시간 선택
+      const splitFirstCount = negotiation.conflictingMembers.filter(cm => cm.response === 'split_first').length;
+      const splitSecondCount = negotiation.conflictingMembers.filter(cm => cm.response === 'split_second').length;
+      const canResolveSplit = (splitFirstCount === 1 && splitSecondCount === 1);
+
+      console.log('[협의 상태 확인]:', {
+         allResponded,
+         yieldedCount,
+         claimedCount,
+         totalMembers,
+         canResolvePartially,
+         splitFirstCount,
+         splitSecondCount,
+         canResolveSplit
+      });
+
+      // 1. 모든 멤버가 응답했거나
+      // 2. n-1명이 양보했거나 (부분 양보)
+      // 3. 분할 협의가 성립했으면 바로 해결
+      if (allResponded || canResolvePartially || canResolveSplit) {
+         console.log('[협의 해결 시작]');
          await handleNegotiationResolution(room, negotiation, userId);
       }
+
+      // 저장 전 협의 멤버들의 chosenSlot 확인
+      console.log('[저장 전] 협의 멤버들의 chosenSlot:');
+      negotiation.conflictingMembers.forEach((member, idx) => {
+         console.log(`  멤버 ${idx}:`, {
+            user: member.user._id || member.user,
+            response: member.response,
+            chosenSlot: member.chosenSlot
+         });
+      });
 
       await room.save();
 
@@ -591,6 +662,16 @@ exports.respondToNegotiation = async (req, res) => {
          .populate('negotiations.resolution.assignments.user', '_id firstName lastName email');
 
       const updatedNegotiation = updatedRoom.negotiations.id(negotiationId);
+
+      // 저장 후 확인
+      console.log('[저장 후] 협의 멤버들의 chosenSlot:');
+      updatedNegotiation.conflictingMembers.forEach((member, idx) => {
+         console.log(`  멤버 ${idx}:`, {
+            user: member.user._id || member.user,
+            response: member.response,
+            chosenSlot: member.chosenSlot
+         });
+      });
 
       res.json({
          success: true,
