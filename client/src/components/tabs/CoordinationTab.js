@@ -780,8 +780,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 px-2 sm:px-4 lg:px-6">
-          <div className="lg:col-span-1">
+        <div className="flex flex-col md:flex-row gap-4 w-full" style={{ display: 'flex' }}>
+          <div className="md:w-1/4 w-full flex-shrink-0" style={{ flexShrink: 0 }}>
             {isOwner && (
               <AutoSchedulerPanel
                 options={scheduleOptions}
@@ -1294,7 +1294,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             />
           </div>
 
-          <div className="lg:col-span-3">
+          <div className="md:w-3/4 w-full flex-grow min-w-0" style={{ flex: 1, minWidth: 0 }}>
             {scheduleError && 
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4" role="alert">
                 <strong className="font-bold">오류!</strong>

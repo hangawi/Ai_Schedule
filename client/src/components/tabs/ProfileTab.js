@@ -367,37 +367,21 @@ const ProfileTab = ({ onEditingChange }) => {
   }, [isEditing]);
 
   const handleSave = async () => {
-    // defaultSchedule에서 specificDate가 있는 것은 scheduleExceptions로 이동
-    const scheduleWithSpecificDate = defaultSchedule.filter(s => s.specificDate);
-    const scheduleWithoutSpecificDate = defaultSchedule.filter(s => !s.specificDate);
+    // defaultSchedule은 그대로 저장 (specificDate 포함)
+    const scheduleToSave = defaultSchedule.map(s => ({
+      dayOfWeek: s.dayOfWeek,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      priority: s.priority || 2,
+      specificDate: s.specificDate
+    }));
 
-    // specificDate가 있는 스케줄을 scheduleExceptions로 변환 (유효성 검사)
-    const convertedExceptions = scheduleWithSpecificDate
-      .filter(s => s.startTime && s.endTime && s.specificDate) // 필수 필드가 있는 것만
-      .map(s => ({
-        title: `선호 시간 (${s.priority === 3 ? '선호' : s.priority === 2 ? '보통' : '조정가능'})`,
-        startTime: s.startTime,
-        endTime: s.endTime,
-        specificDate: s.specificDate,
-        priority: s.priority,
-        isHoliday: false,
-        isAllDay: false
-      }));
-
-    // 기존 scheduleExceptions와 병합 (중복 제거)
-    const allExceptions = [...scheduleExceptions, ...convertedExceptions];
-    const uniqueExceptions = allExceptions.filter((exception, index, self) =>
-      index === self.findIndex(e =>
-        e.specificDate === exception.specificDate &&
-        e.startTime === exception.startTime &&
-        e.endTime === exception.endTime
-      )
-    );
-
-    const exceptionsToSave = uniqueExceptions.map(
+    // scheduleExceptions도 그대로 저장
+    const exceptionsToSave = scheduleExceptions.map(
       ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority }) =>
       ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority })
     );
+
     const personalTimesToSave = personalTimes.map(
       ({ title, type, startTime, endTime, days, isRecurring, id, specificDate, color }) => {
         return { title, type, startTime, endTime, days, isRecurring, id, specificDate, color };
@@ -405,10 +389,10 @@ const ProfileTab = ({ onEditingChange }) => {
     );
 
     try {
-        console.log('💾 [저장] defaultSchedule:', scheduleWithoutSpecificDate.length, '개 | exceptions:', exceptionsToSave.length, '개');
+        console.log('💾 [저장] defaultSchedule:', scheduleToSave.length, '개 | exceptions:', exceptionsToSave.length, '개');
 
         await userService.updateUserSchedule({
-          defaultSchedule: scheduleWithoutSpecificDate,
+          defaultSchedule: scheduleToSave,
           scheduleExceptions: exceptionsToSave,
           personalTimes: personalTimesToSave
         });
@@ -502,54 +486,33 @@ const ProfileTab = ({ onEditingChange }) => {
     }
 
     try {
-      // defaultSchedule에서 specificDate가 있는 것은 scheduleExceptions로 이동
-      const scheduleWithSpecificDate = defaultSchedule.filter(s => s.specificDate);
-      const scheduleWithoutSpecificDate = defaultSchedule.filter(s => !s.specificDate);
+      // defaultSchedule은 그대로 저장 (specificDate 포함)
+      const scheduleToSave = defaultSchedule.map(s => ({
+        dayOfWeek: s.dayOfWeek,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        priority: s.priority || 2,
+        specificDate: s.specificDate
+      }));
 
-      // specificDate가 있는 스케줄을 scheduleExceptions로 변환 (유효성 검사)
-      const convertedExceptions = scheduleWithSpecificDate
-        .filter(s => s.startTime && s.endTime && s.specificDate) // 필수 필드가 있는 것만
-        .map(s => ({
-          title: `선호 시간 (${s.priority === 3 ? '선호' : s.priority === 2 ? '보통' : '조정가능'})`,
-          startTime: s.startTime,
-          endTime: s.endTime,
-          specificDate: s.specificDate,
-          priority: s.priority,
-          isHoliday: false,
-          isAllDay: false
-        }));
-
-      // 기존 scheduleExceptions와 병합 (중복 제거)
-      const allExceptions = [...scheduleExceptions, ...convertedExceptions];
-      const uniqueExceptions = allExceptions.filter((exception, index, self) =>
-        index === self.findIndex(e =>
-          e.specificDate === exception.specificDate &&
-          e.startTime === exception.startTime &&
-          e.endTime === exception.endTime
-        )
-      );
-
-      const exceptionsToSave = uniqueExceptions.map(
+      const exceptionsToSave = scheduleExceptions.map(
         ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority }) =>
         ({ title, startTime, endTime, isHoliday, isAllDay, _id, specificDate, priority })
       );
+
       const personalTimesToSave = personalTimes.map(
         ({ title, type, startTime, endTime, days, isRecurring, id, specificDate, color }) => {
           return { title, type, startTime, endTime, days, isRecurring, id, specificDate, color };
         }
       );
 
-      console.log('💾 [저장] defaultSchedule:', scheduleWithoutSpecificDate.length, '개 | exceptions:', exceptionsToSave.length, '개');
+      console.log('💾 [자동저장] defaultSchedule:', scheduleToSave.length, '개 | exceptions:', exceptionsToSave.length, '개');
 
       await userService.updateUserSchedule({
-        defaultSchedule: scheduleWithoutSpecificDate,
+        defaultSchedule: scheduleToSave,
         scheduleExceptions: exceptionsToSave,
         personalTimes: personalTimesToSave
       });
-
-      // 저장 후 state 업데이트
-      setDefaultSchedule(scheduleWithoutSpecificDate);
-      setScheduleExceptions(uniqueExceptions);
 
     } catch (err) {
       console.error('🔍 [ProfileTab] autoSave 실패:', err);
