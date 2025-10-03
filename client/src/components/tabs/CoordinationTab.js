@@ -527,7 +527,10 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   
   const [requestViewMode, setRequestViewMode] = useState('received');
   const [showAllRequests, setShowAllRequests] = useState({});
-  const [expandedSections, setExpandedSections] = useState({});
+  const [expandedSections, setExpandedSections] = useState({
+    receivedProcessed: true,
+    sentProcessed: true
+  });
   
 
   const handleCancelRequestCallback = async (requestId) => {
@@ -951,14 +954,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                     const requesterName = requesterData?.name || `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
                                     return (
                                       <div key={request._id || index} className="p-2 bg-blue-500 border border-blue-600 rounded-lg relative">
-                                        <button
-                                          onClick={() => handleDeleteRequest(request._id)}
-                                          className="absolute top-1 right-1 p-1 text-gray-200 hover:text-red-300 transition-colors"
-                                          title="요청 삭제"
-                                        >
-                                          <X size={12} />
-                                        </button>
-                                        <div className="flex justify-between items-center mb-1 pr-6">
+                                        <div className="flex justify-between items-center mb-1">
                                           <div className="text-xs font-semibold text-white">{requesterName}</div>
                                           <div className="text-xs font-medium text-blue-100">
                                             {request.type === 'time_request' ? '자리 요청' : request.type === 'slot_swap' ? '교환 요청' : '알 수 없는 요청'}
@@ -1100,14 +1096,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                     const targetUserName = targetUserData?.name || `${targetUserData?.firstName || ''} ${targetUserData?.lastName || ''}`.trim() || '방장';
                                     return (
                                       <div key={request._id || index} className="p-2 bg-gray-50 border border-gray-200 rounded-lg relative">
-                                        <button
-                                          onClick={() => handleDeleteRequest(request._id)}
-                                          className="absolute top-1 right-1 p-1 text-gray-400 hover:text-red-500 transition-colors"
-                                          title="요청 삭제"
-                                        >
-                                          <X size={12} />
-                                        </button>
-                                        <div className="flex justify-between items-center mb-1 pr-6">
+                                        <div className="flex justify-between items-center mb-1">
                                           <div className="text-xs font-semibold text-gray-800 !text-gray-800">
                                             To: {targetUserName}
                                           </div>
