@@ -7,7 +7,8 @@ const NegotiationItem = ({
   weekNegotiation,
   user,
   onOpenNegotiation,
-  index
+  index,
+  isOwner
 }) => {
   const isUserInvolved = isUserInvolvedInNegotiation(negotiation, user?.id);
   const memberNames = getNegotiationMemberNames(negotiation);
@@ -49,7 +50,6 @@ const NegotiationItem = ({
         </div>
         <button
           onClick={() => {
-            // 방장이든 당사자든 모두 협의 내용을 볼 수 있도록 변경
             onOpenNegotiation(negotiation);
           }}
           className={`px-3 py-1 text-xs rounded-md transition-colors ${
@@ -58,7 +58,7 @@ const NegotiationItem = ({
               : 'bg-gray-300 text-gray-600 hover:bg-gray-400'
           }`}
         >
-          {isUserInvolved ? '참여하기' : '확인'}
+          {isUserInvolved ? '참여하기' : isOwner ? '조회' : '확인'}
         </button>
       </div>
     </div>
@@ -71,7 +71,7 @@ const NegotiationSection = ({
   onOpenNegotiation,
   isOwner
 }) => {
-  // 방장이거나 당사자인 협의만 필터링
+  // 방장이면 모든 협의를 볼 수 있음, 아니면 당사자만 볼 수 있음
   const visibleNegotiations = (currentWeekNegotiations || []).filter(negotiation => {
     // 방장이면 모든 협의를 볼 수 있음
     if (isOwner) return true;
@@ -110,6 +110,7 @@ const NegotiationSection = ({
               user={user}
               onOpenNegotiation={onOpenNegotiation}
               index={index}
+              isOwner={isOwner}
             />
           );
         })}
