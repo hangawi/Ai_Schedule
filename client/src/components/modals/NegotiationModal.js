@@ -15,11 +15,28 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
   const [currentNegotiation, setCurrentNegotiation] = useState(negotiation);
   const [showYieldOptions, setShowYieldOptions] = useState(false);
   const [showClaimConfirm, setShowClaimConfirm] = useState(false);
+  const [originalTimeSlot, setOriginalTimeSlot] = useState(null); // time_slot_choice에서 선택한 원래 시간
+  const [conflictChoice, setConflictChoice] = useState(null); // full_conflict에서 선택 (yield/claim)
 
   useEffect(() => {
     if (negotiation) {
       setMessages(negotiation.messages || []);
       setCurrentNegotiation(negotiation);
+
+      // 현재 유저의 chosenSlot 복원 (서버에서 가져옴)
+      const currentUserMember = negotiation.conflictingMembers?.find(
+        cm => {
+          const cmUserId = typeof cm.user === 'object' ? (cm.user._id || cm.user.id) : cm.user;
+          return cmUserId === currentUser?.id || cmUserId?.toString() === currentUser?.id?.toString();
+        }
+      );
+
+      if (currentUserMember && currentUserMember.chosenSlot) {
+        console.log('[useEffect] chosenSlot 복원:', currentUserMember.chosenSlot);
+        setOriginalTimeSlot(currentUserMember.chosenSlot);
+      } else {
+        console.log('[useEffect] chosenSlot 없음');
+      }
     }
   }, [negotiation, currentUser, roomId]);
 
@@ -56,6 +73,13 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
     try {
       const payload = { response };
 
+      console.log('[NegotiationModal] handleResponse 호출:', {
+        response,
+        chosenSlot,
+        originalTimeSlot,
+        negotiationType: activeNegotiation.type
+      });
+
       if (response === 'yield') {
         payload.yieldOption = selectedYieldOption;
         if (selectedYieldOption === 'alternative_time' && alternativeSlots.length === 0) {
@@ -65,6 +89,19 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
           return;
         }
         payload.alternativeSlots = alternativeSlots;
+        // originalTimeSlot이 있으면 그것을 전달 (time_slot_choice에서 선택한 원래 시간)
+        if (originalTimeSlot) {
+          payload.chosenSlot = originalTimeSlot;
+          console.log('[yield] originalTimeSlot 전달:', originalTimeSlot);
+        }
+      } else if (response === 'claim') {
+        // originalTimeSlot이 있으면 그것을 전달 (time_slot_choice에서 선택한 원래 시간)
+        if (originalTimeSlot) {
+          payload.chosenSlot = originalTimeSlot;
+          console.log('[claim] originalTimeSlot 전달:', originalTimeSlot);
+        } else {
+          console.log('[claim] originalTimeSlot 없음!');
+        }
       } else if (response === 'choose_slot') {
         if (!chosenSlot) {
           setAlertMessage('시간대를 선택해주세요.');
@@ -73,7 +110,12 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
           return;
         }
         payload.chosenSlot = chosenSlot;
+        // time_slot_choice에서 선택한 시간을 originalTimeSlot에 저장
+        setOriginalTimeSlot(chosenSlot);
+        console.log('[choose_slot] chosenSlot 전달 및 저장:', chosenSlot);
       }
+
+      console.log('[NegotiationModal] 최종 payload:', payload);
 
       const result = await coordinationService.respondToNegotiation(roomId, negotiation._id, payload);
 
@@ -97,8 +139,8 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
         // 타입이 변경된 경우 (time_slot_choice -> full_conflict)
         setAlertMessage('협의 타입이 변경되었습니다. 다시 선택해주세요.');
         setShowAlert(true);
-        // 응답 초기화
-        setChosenSlot(null);
+        // chosenSlot은 유지 (이전에 선택한 시간 정보 보존)
+        // setChosenSlot(null); // 제거: 선택한 시간 정보 유지
         setSelectedYieldOption('carry_over');
       }
     } catch (err) {
@@ -309,15 +351,15 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                             type="radio"
                             name="conflictOption"
                             value="yield"
-                            checked={chosenSlot?.type === 'yield'}
-                            onChange={() => setChosenSlot({ type: 'yield' })}
+                            checked={conflictChoice === 'yield'}
+                            onChange={() => setConflictChoice('yield')}
                             className="mr-2"
                           />
                           <span className="text-sm font-medium">양보하기</span>
                         </label>
 
                         {/* 양보 선택 시 이월 옵션 표시 */}
-                        {chosenSlot?.type === 'yield' && (
+                        {conflictChoice === 'yield' && (
                           <div className="ml-6 mt-2 space-y-2 bg-green-50 p-3 rounded">
                             <label className="flex items-center">
                               <input
@@ -355,8 +397,8 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                             type="radio"
                             name="conflictOption"
                             value="claim"
-                            checked={chosenSlot?.type === 'claim'}
-                            onChange={() => setChosenSlot({ type: 'claim' })}
+                            checked={conflictChoice === 'claim'}
+                            onChange={() => setConflictChoice('claim')}
                             className="mr-2"
                           />
                           <span className="text-sm font-medium">주장하기</span>
@@ -364,8 +406,8 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                       </div>
 
                       <button
-                        onClick={() => handleResponse(chosenSlot?.type)}
-                        disabled={isLoading || !chosenSlot}
+                        onClick={() => handleResponse(conflictChoice)}
+                        disabled={isLoading || !conflictChoice}
                         className="w-full mt-3 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:bg-blue-300"
                       >
                         선택 완료
