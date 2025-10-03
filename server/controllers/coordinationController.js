@@ -616,9 +616,11 @@ exports.respondToNegotiation = async (req, res) => {
       // 부분 양보 확인: n명 중 n-1명이 양보했는지
       const yieldedCount = negotiation.conflictingMembers.filter(cm => cm.response === 'yield').length;
       const claimedCount = negotiation.conflictingMembers.filter(cm => cm.response === 'claim').length;
+      const pendingCount = negotiation.conflictingMembers.filter(cm => cm.response === 'pending').length;
       const totalMembers = negotiation.conflictingMembers.length;
-      const canResolvePartially = (yieldedCount === totalMembers - 1 && claimedCount === 1) ||
-                                   (yieldedCount === 1 && claimedCount === totalMembers - 1);
+
+      // n-1명이 양보하고 나머지 1명이 pending이거나 claim인 경우
+      const canResolvePartially = (yieldedCount === totalMembers - 1 && (claimedCount === 1 || pendingCount === 1));
 
       // 분할 협의 확인: 2명이 각각 앞/뒤 시간 선택
       const splitFirstCount = negotiation.conflictingMembers.filter(cm => cm.response === 'split_first').length;
@@ -629,6 +631,7 @@ exports.respondToNegotiation = async (req, res) => {
          allResponded,
          yieldedCount,
          claimedCount,
+         pendingCount,
          totalMembers,
          canResolvePartially,
          splitFirstCount,
@@ -641,6 +644,16 @@ exports.respondToNegotiation = async (req, res) => {
       // 3. 분할 협의가 성립했으면 바로 해결
       if (allResponded || canResolvePartially || canResolveSplit) {
          console.log('[협의 해결 시작]');
+
+         // 부분 양보인 경우, pending인 사람을 자동으로 claim으로 설정
+         if (canResolvePartially && pendingCount === 1) {
+            const pendingMember = negotiation.conflictingMembers.find(cm => cm.response === 'pending');
+            if (pendingMember) {
+               pendingMember.response = 'claim';
+               console.log('[부분 양보] pending 멤버를 자동으로 claim으로 설정:', pendingMember.user);
+            }
+         }
+
          await handleNegotiationResolution(room, negotiation, userId);
       }
 
