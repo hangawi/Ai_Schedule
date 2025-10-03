@@ -228,7 +228,59 @@ async function handleNegotiationResolution(room, negotiation, userId) {
          negotiation.status = 'active';
       }
    }
-   // Case 2: partial_conflict + 시간 분할
+   // Case 2: partial_conflict + 모두 같은 시간 선택 -> full_conflict로 전환
+   else if (negotiation.type === 'partial_conflict' &&
+            (splitFirstMembers.length === members.length || splitSecondMembers.length === members.length)) {
+      // 모두 앞 시간 또는 모두 뒷 시간 선택
+
+      // split_first/split_second 정보를 chosenSlot으로 변환
+      const [startH, startM] = negotiation.slotInfo.startTime.split(':').map(Number);
+      const [endH, endM] = negotiation.slotInfo.endTime.split(':').map(Number);
+
+      members.forEach(m => {
+         if (m.response === 'split_first') {
+            // 앞시간 선택한 사람: 필요한 슬롯 수만큼
+            const requiredSlots = m.requiredSlots || 1;
+            const requiredMinutes = requiredSlots * 30;
+            const midMinutes = startH * 60 + startM + requiredMinutes;
+            const midTime = `${Math.floor(midMinutes/60).toString().padStart(2,'0')}:${(midMinutes%60).toString().padStart(2,'0')}`;
+
+            m.chosenSlot = {
+               startTime: negotiation.slotInfo.startTime,
+               endTime: midTime
+            };
+            console.log('[split_first -> chosenSlot]', m.chosenSlot);
+         } else if (m.response === 'split_second') {
+            // 뒷시간 선택한 사람: 필요한 슬롯 수만큼
+            const requiredSlots = m.requiredSlots || 1;
+            const requiredMinutes = requiredSlots * 30;
+            const startMinutes = endH * 60 + endM - requiredMinutes;
+            const startTime = `${Math.floor(startMinutes/60).toString().padStart(2,'0')}:${(startMinutes%60).toString().padStart(2,'0')}`;
+
+            m.chosenSlot = {
+               startTime: startTime,
+               endTime: negotiation.slotInfo.endTime
+            };
+            console.log('[split_second -> chosenSlot]', m.chosenSlot);
+         }
+
+         // 응답 초기화
+         m.response = 'pending';
+      });
+
+      negotiation.type = 'full_conflict';
+      negotiation.messages.push({
+         message: `선택한 시간대가 겹칩니다. 양보하거나 주장하여 해결하세요. 둘 다 주장하면 랜덤으로 결정됩니다.`,
+         timestamp: new Date(),
+         isSystemMessage: true
+      });
+
+      // 상태를 'active'로 유지하여 계속 협의 가능하도록
+      negotiation.status = 'active';
+
+      console.log('[partial_conflict -> full_conflict] 모두 같은 시간 선택, 양보/주장으로 전환');
+   }
+   // Case 3: partial_conflict + 시간 분할 (각자 다른 시간 선택)
    else if (negotiation.type === 'partial_conflict' && splitFirstMembers.length === 1 && splitSecondMembers.length === 1) {
       const firstMember = splitFirstMembers[0];
       const secondMember = splitSecondMembers[0];
@@ -312,7 +364,7 @@ async function handleNegotiationResolution(room, negotiation, userId) {
       });
 
    }
-   // Case 3: 모두 양보 -> 모두 이월
+   // Case 4: 모두 양보 -> 모두 이월
    else if (yieldedMembers.length === members.length) {
       // 모든 멤버가 양보한 경우 - 모두 이월 처리
       yieldedMembers.forEach(member => {
@@ -350,7 +402,7 @@ async function handleNegotiationResolution(room, negotiation, userId) {
          isSystemMessage: true
       });
    }
-   // Case 4: 모두 주장 -> 랜덤 또는 다른 시간 선택
+   // Case 5: 모두 주장 -> 랜덤 또는 다른 시간 선택
    else if (claimedMembers.length === members.length) {
       negotiation.messages.push({
          message: `모두 주장했습니다. 랜덤으로 결정하거나 다른 시간을 선택하세요.`,
