@@ -900,63 +900,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   );
                 })}
               </div>
-              
-              {!isOwner && (currentRoom.requests || []).filter(req => req.status === 'pending' && ['time_request', 'time_change'].includes(req.type) && (req.targetUser?._id === user?.id || req.targetUser?.id === user?.id || req.targetUser === user?.id)).length > 0 && (
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                    <Calendar size={16} className="mr-2 text-orange-600" />
-                    대기 중인 요청 ({(currentRoom.requests || []).filter(req => req.status === 'pending' && ['time_request', 'time_change'].includes(req.type) && (req.targetUser?._id === user?.id || req.targetUser?.id === user?.id || req.targetUser === user?.id)).length}건)
-                  </h4>
-                  <div className="space-y-2">
-                    {(currentRoom.requests || []).filter(req => req.status === 'pending' && ['time_request', 'time_change'].includes(req.type) && (req.targetUser?._id === user?.id || req.targetUser?.id === user?.id || req.targetUser === user?.id)).slice(0, 3).map((request, index) => {
-                      const requesterData = request.requester;
-                      const requesterName = requesterData?.name || `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
-                      
-                      return (
-                        <div key={request._id || index} className="p-2 bg-blue-500 border border-blue-600 rounded-lg relative">
-                          <button
-                            onClick={() => handleDeleteRequest(request._id)}
-                            className="absolute top-1 right-1 p-1 text-gray-200 hover:text-red-300 transition-colors"
-                            title="요청 삭제"
-                          >
-                            <X size={12} />
-                          </button>
-                          <div className="flex justify-between items-center mb-1 pr-6">
-                            <div className="text-xs font-semibold text-white">{requesterName}</div>
-                            <div className="text-xs font-medium text-blue-100">{request.type === 'time_request' ? '자리 요청' : '시간 변경'}</div>
-                          </div>
-                          <div className="text-xs font-medium text-blue-100 mb-2">
-                            {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
-                          </div>
-                          {request.message && (
-                            <p className="text-xs text-white italic mb-2 line-clamp-2">"{request.message}"</p>
-                          )}
-                          <div className="flex justify-end space-x-2 mt-2">
-                            <button
-                              onClick={() => handleRequestWithUpdateCallback(request._id, 'approved')}
-                              className="px-3 py-1 text-xs bg-green-500 text-white rounded-md hover:bg-green-600"
-                            >
-                              승인
-                            </button>
-                            <button
-                              onClick={() => handleRequestWithUpdateCallback(request._id, 'rejected')}
-                              className="px-3 py-1 text-xs bg-red-500 text-white rounded-md hover:bg-red-600"
-                            >
-                              거절
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {(currentRoom.requests || []).filter(req => req.status === 'pending' && ['time_request', 'time_change'].includes(req.type)).length > 3 && (
-                      <div className="text-xs text-gray-500 text-center">
-                        +{(currentRoom.requests || []).filter(req => req.status === 'pending' && ['time_request', 'time_change'].includes(req.type)).length - 3}개 더
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
 
               {!isOwner && (
               <div className="mt-6 pt-4 border-t border-gray-200">

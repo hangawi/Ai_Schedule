@@ -215,6 +215,15 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
               </div>
             </div>
 
+            {/* 방장이 조회하는 경우 안내 메시지 */}
+            {isOwnerViewing && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm font-medium text-blue-800">
+                  방장은 협의 내용을 조회만 할 수 있습니다. 시간 결정은 당사자들이 합니다.
+                </p>
+              </div>
+            )}
+
             {/* Response section */}
             {negotiation.status === 'active' && userResponse === 'pending' && isConflictingMember && (
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
