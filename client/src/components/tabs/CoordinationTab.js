@@ -720,7 +720,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
   if (currentRoom) {
     const isOwner = isRoomOwner(user, currentRoom);
-    
 
     return (
       <div className="p-1">
@@ -780,8 +779,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             </button>
           </div>
         </div>
-        <div className="flex flex-col md:flex-row gap-4 w-full" style={{ display: 'flex' }}>
-          <div className="md:w-1/4 w-full flex-shrink-0" style={{ flexShrink: 0 }}>
+        <div className="flex flex-col lg:flex-row gap-4 w-full">
+          <div className="lg:w-1/4 w-full flex-shrink-0">
             {isOwner && (
               <AutoSchedulerPanel
                 options={scheduleOptions}
@@ -1286,6 +1285,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 )}
               </div>
               )}
+            </div>
 
             <NegotiationSection
               currentWeekNegotiations={currentWeekNegotiations}
@@ -1294,7 +1294,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             />
           </div>
 
-          <div className="md:w-3/4 w-full flex-grow min-w-0" style={{ flex: 1, minWidth: 0 }}>
+          <div className="lg:w-3/4 w-full flex-grow min-w-0">
             {scheduleError && 
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4" role="alert">
                 <strong className="font-bold">오류!</strong>
@@ -1708,7 +1708,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
           />
         )}
       </div>
-    </div>
   );
   }
 
