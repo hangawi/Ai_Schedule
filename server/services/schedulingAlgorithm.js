@@ -249,34 +249,45 @@ class SchedulingAlgorithm {
       let negotiationType = 'full_conflict';
       let availableTimeSlots = [];
 
-      // Case 1: 할당시간 < 선호시간 && 모두 같은 시간 필요 → time_slot_choice (시간대 선택)
-      if (totalNeeded < totalSlots && allNeedSameAmount && block.conflictingMembers.length === 2) {
-        negotiationType = 'time_slot_choice';
-        // 선택 가능한 시간대 생성 (각 멤버가 필요한 만큼씩)
+      // Case 1: 할당시간 ≤ 선호시간 && 모두 같은 시간 필요 → time_slot_choice (시간대 선택)
+      // 각 멤버가 선택할 수 있는 시간대 옵션을 제공 (예: 13-15시, 14-16시, 15-17시 중 선택)
+      if (totalNeeded <= totalSlots && allNeedSameAmount && block.conflictingMembers.length === 2) {
         const neededSlotsPerMember = memberSlotNeeds[0].neededSlots;
-        let currentTime = startH * 60 + startM;
-        const endTimeInMinutes = endH * 60 + endM;
 
-        while (currentTime + (neededSlotsPerMember * 30) <= endTimeInMinutes) {
-          const slotStartH = Math.floor(currentTime / 60);
-          const slotStartM = currentTime % 60;
-          const slotEndMinutes = currentTime + (neededSlotsPerMember * 30);
-          const slotEndH = Math.floor(slotEndMinutes / 60);
-          const slotEndM = slotEndMinutes % 60;
+        // 각 멤버가 선택할 수 있는 시간대 옵션이 2개 이상인지 확인
+        const numberOfOptions = Math.floor(totalSlots / neededSlotsPerMember);
 
-          availableTimeSlots.push({
-            startTime: `${String(slotStartH).padStart(2,'0')}:${String(slotStartM).padStart(2,'0')}`,
-            endTime: `${String(slotEndH).padStart(2,'0')}:${String(slotEndM).padStart(2,'0')}`
-          });
+        if (numberOfOptions >= 2) {
+          // 2개 이상의 선택지가 있으면 time_slot_choice
+          negotiationType = 'time_slot_choice';
 
-          currentTime += (neededSlotsPerMember * 30); // 다음 슬롯으로
+          // 선택 가능한 시간대 생성 (각 멤버가 필요한 만큼씩)
+          let currentTime = startH * 60 + startM;
+          const endTimeInMinutes = endH * 60 + endM;
+
+          while (currentTime + (neededSlotsPerMember * 30) <= endTimeInMinutes) {
+            const slotStartH = Math.floor(currentTime / 60);
+            const slotStartM = currentTime % 60;
+            const slotEndMinutes = currentTime + (neededSlotsPerMember * 30);
+            const slotEndH = Math.floor(slotEndMinutes / 60);
+            const slotEndM = slotEndMinutes % 60;
+
+            availableTimeSlots.push({
+              startTime: `${String(slotStartH).padStart(2,'0')}:${String(slotStartM).padStart(2,'0')}`,
+              endTime: `${String(slotEndH).padStart(2,'0')}:${String(slotEndM).padStart(2,'0')}`
+            });
+
+            currentTime += (neededSlotsPerMember * 30); // 다음 슬롯으로
+          }
+        } else if (totalNeeded === totalSlots) {
+          // 딱 맞게 나눠지는 경우 → partial_conflict (시간 분할)
+          negotiationType = 'partial_conflict';
+        } else {
+          // 선택지는 없지만 여유가 있는 경우 → full_conflict
+          negotiationType = 'full_conflict';
         }
       }
-      // Case 2: 할당시간 = 선호시간 && 나눌 수 있음 → partial_conflict (시간 분할)
-      else if (totalNeeded === totalSlots && block.conflictingMembers.length === 2) {
-        negotiationType = 'partial_conflict';
-      }
-      // Case 3: 할당시간 > 선호시간 or 나눌 수 없음 → full_conflict (양보/이월)
+      // Case 2: 할당시간 > 선호시간 or 나눌 수 없음 → full_conflict (양보/이월)
       else {
         negotiationType = 'full_conflict';
       }
@@ -386,10 +397,7 @@ class SchedulingAlgorithm {
       if (nonOwnerAvailable.length > 1) {
         console.log(`\n🔍 [가용성] ${key}: ${nonOwnerAvailable.length}명 겹침`);
         console.log(`   멤버들:`, nonOwnerAvailable.map(a => `${a.memberId.substring(0,8)}(우선순위:${a.priority})`).join(', '));
-      }
 
-      // 2명 이상의 비방장 멤버가 같은 시간대를 원할 때만 충돌 분석
-      if (nonOwnerAvailable.length > 1) {
         // 우선순위별로 그룹화
         const priorityGroups = {};
         nonOwnerAvailable.forEach(member => {
@@ -404,14 +412,14 @@ class SchedulingAlgorithm {
         const highestPriority = Math.max(...priorities);
         const highestPriorityMembers = priorityGroups[highestPriority];
 
+        console.log(`   우선순위 분포: ${Object.keys(priorityGroups).map(p => `P${p}:${priorityGroups[p].length}명`).join(', ')}`);
         console.log(`   최고 우선순위: ${highestPriority}, 해당 멤버 수: ${highestPriorityMembers.length}`);
 
-        // 최고 우선순위 그룹에 2명 이상 있을 때
+        // 최고 우선순위 그룹에 2명 이상 있을 때만 협의 발생
         if (highestPriorityMembers.length > 1) {
           console.log(`   ⚠️ 같은 우선순위 ${highestPriorityMembers.length}명 → 협의 필요`);
 
           // 같은 우선순위로 겹치는 모든 멤버를 협의 대상에 포함
-          // 방장이 최종적으로 선택할 수 있도록 함
           const membersNeedingThisSlot = highestPriorityMembers.map(member => {
             const memberId = member.memberId;
             const memberIdShort = memberId.substring(0, 8);
@@ -435,8 +443,19 @@ class SchedulingAlgorithm {
             priority: highestPriority
           });
         } else {
-          console.log(`   ✅ [단독] ${key} - 우선순위 ${highestPriority} 멤버 1명만`);
+          // 최고 우선순위 멤버가 1명만 있음 → 자동 배정 (협의 불필요)
+          console.log(`   ✅ [자동배정] ${key} - 우선순위 ${highestPriority} 멤버 1명만`);
+          const winnerIdShort = highestPriorityMembers[0].memberId.substring(0,8);
+          console.log(`      승자: ${winnerIdShort} (우선순위 ${highestPriority})`);
+          if (priorities.length > 1) {
+            const lowerPriorities = priorities.filter(p => p < highestPriority);
+            console.log(`      패자: 우선순위 ${lowerPriorities.join(', ')} 멤버들은 제외`);
+          }
         }
+      } else if (nonOwnerAvailable.length === 1) {
+        // 1명만 사용 가능 → 단독 슬롯
+        const memberIdShort = nonOwnerAvailable[0].memberId.substring(0,8);
+        console.log(`\n🔍 [가용성] ${key}: 1명만 가능 (${memberIdShort})`);
       }
     }
 
