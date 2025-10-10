@@ -225,7 +225,7 @@ const RoomSchema = new mongoose.Schema({
     resolution: {
       type: {
         type: String,
-        enum: ['yielded', 'split', 'owner_decision', 'time_slot_choice'], // yielded: 한쪽 양보, split: 시간 분할, owner_decision: 방장 결정, time_slot_choice: 시간대 선택
+        enum: ['yielded', 'split', 'owner_decision', 'time_slot_choice', 'auto_resolved'], // yielded: 한쪽 양보, split: 시간 분할, owner_decision: 방장 결정, time_slot_choice: 시간대 선택, auto_resolved: 자동 해결
         default: null
       },
       assignments: [{ // 최종 배정
