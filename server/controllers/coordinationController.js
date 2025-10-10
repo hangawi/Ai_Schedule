@@ -523,81 +523,6 @@ async function handleNegotiationResolution(room, negotiation, userId) {
 
    // Mongoose에게 timeSlots 배열 변경 알림
    room.markModified('timeSlots');
-
-   // 협의가 해결되었고, status가 'resolved'인 경우, 같은 멤버들의 다른 active 협의도 해결
-   if (negotiation.status === 'resolved') {
-      const resolvedMemberIds = negotiation.conflictingMembers.map(m => 
-         (m.user._id || m.user).toString()
-      );
-      
-      console.log('[협의 해결 후] 다른 협의들 확인 중. 해결된 멤버들:', resolvedMemberIds);
-      
-      // 각 멤버가 필요한 시간을 받았는지 확인
-      const memberAssignedHours = {};
-      resolvedMemberIds.forEach(memberId => {
-         const requiredSlots = negotiation.conflictingMembers.find(m => 
-            (m.user._id || m.user).toString() === memberId
-         )?.requiredSlots || 2;
-         
-         // 이 멤버가 받은 총 시간 계산
-         const assignedSlots = room.timeSlots.filter(slot => 
-            slot.user.toString() === memberId
-         ).length;
-         
-         memberAssignedHours[memberId] = {
-            required: requiredSlots,
-            assigned: assignedSlots,
-            satisfied: assignedSlots >= requiredSlots
-         };
-         
-         console.log(`[멤버 ${memberId}] 필요: ${requiredSlots}슬롯, 할당: ${assignedSlots}슬롯, 충족: ${assignedSlots >= requiredSlots}`);
-      });
-      
-      // 모든 멤버가 필요한 시간을 받았다면, 다른 active 협의들도 해결
-      const allMembersSatisfied = resolvedMemberIds.every(memberId => 
-         memberAssignedHours[memberId].satisfied
-      );
-      
-      if (allMembersSatisfied) {
-         console.log('[협의 해결 후] 모든 멤버가 충족됨. 관련 협의들 자동 해결 시작');
-         
-         // 같은 멤버들이 참여한 다른 active 협의 찾기
-         const relatedNegotiations = room.negotiations.filter(nego => {
-            if (nego._id.toString() === negotiation._id.toString()) return false;
-            if (nego.status !== 'active') return false;
-            
-            const negoMemberIds = nego.conflictingMembers.map(m => 
-               (m.user._id || m.user).toString()
-            );
-            
-            // 같은 멤버들인지 확인 (순서 상관없이)
-            const sameMembers = resolvedMemberIds.length === negoMemberIds.length &&
-               resolvedMemberIds.every(id => negoMemberIds.includes(id));
-            
-            return sameMembers;
-         });
-         
-         console.log(`[협의 해결 후] 자동 해결할 관련 협의: ${relatedNegotiations.length}개`);
-         
-         relatedNegotiations.forEach(relatedNego => {
-            relatedNego.status = 'resolved';
-            relatedNego.resolution = {
-               type: 'auto_resolved',
-               resolvedAt: new Date(),
-               resolvedBy: userId,
-               reason: 'members_already_satisfied'
-            };
-            
-            relatedNego.messages.push({
-               message: `이 협의는 자동으로 해결되었습니다. 모든 멤버가 이미 필요한 시간을 배정받았습니다.`,
-               timestamp: new Date(),
-               isSystemMessage: true
-            });
-            
-            console.log(`[자동 해결] ${relatedNego._id} - ${relatedNego.slotInfo.day} ${relatedNego.slotInfo.startTime}-${relatedNego.slotInfo.endTime}`);
-         });
-      }
-   }
 }
 
 // Re-export from separated controllers
@@ -835,6 +760,82 @@ exports.respondToNegotiation = async (req, res) => {
       });
 
       await room.save();
+
+      // 저장 후: 각 멤버가 필요한 시간을 받았는지 확인하고, 충족된 멤버의 다른 협의 자동 해결
+      console.log('[협의 응답 후] 멤버 충족 여부 확인 시작');
+      
+      // 방의 모든 멤버 정보 가져오기
+      const allMembers = room.members.map(m => ({
+         userId: m.user._id ? m.user._id.toString() : m.user.toString(),
+         requiredSlots: m.requiredSlots || 2, // 기본값 1시간 = 2슬롯
+         carryOver: m.carryOver || 0
+      }));
+      
+      // 각 멤버가 받은 시간 계산
+      const satisfiedMembers = [];
+      for (const member of allMembers) {
+         const assignedSlots = room.timeSlots.filter(slot => {
+            const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
+            return slotUserId === member.userId;
+         }).length;
+         
+         const isSatisfied = assignedSlots >= member.requiredSlots;
+         
+         console.log(`[멤버 ${member.userId.substring(0, 8)}] 필요: ${member.requiredSlots}슬롯, 할당: ${assignedSlots}슬롯, 충족: ${isSatisfied}`);
+         
+         if (isSatisfied) {
+            satisfiedMembers.push(member.userId);
+         }
+      }
+      
+      console.log(`[협의 응답 후] 충족된 멤버: ${satisfiedMembers.length}명`);
+      
+      // 충족된 멤버가 있으면, 그 멤버들이 참여한 다른 active 협의 자동 해결
+      if (satisfiedMembers.length > 0) {
+         let autoResolvedCount = 0;
+         
+         room.negotiations.forEach(nego => {
+            // 이미 해결된 협의는 스킵
+            if (nego.status !== 'active') return;
+            
+            // 현재 협의는 스킵 (이미 처리 중)
+            if (nego._id.toString() === negotiationId) return;
+            
+            const negoMemberIds = nego.conflictingMembers.map(m => 
+               (m.user._id || m.user).toString()
+            );
+            
+            // 이 협의의 모든 멤버가 충족되었는지 확인
+            const allNegoMembersSatisfied = negoMemberIds.every(memberId => 
+               satisfiedMembers.includes(memberId)
+            );
+            
+            if (allNegoMembersSatisfied) {
+               console.log(`[자동 해결] 협의 ${nego._id} (${nego.slotInfo.day} ${nego.slotInfo.startTime}-${nego.slotInfo.endTime})`);
+               
+               nego.status = 'resolved';
+               nego.resolution = {
+                  type: 'auto_resolved',
+                  resolvedAt: new Date(),
+                  resolvedBy: userId,
+                  reason: 'all_members_satisfied'
+               };
+               
+               nego.messages.push({
+                  message: `이 협의는 자동으로 해결되었습니다. 모든 멤버가 이미 필요한 시간을 배정받았습니다.`,
+                  timestamp: new Date(),
+                  isSystemMessage: true
+               });
+               
+               autoResolvedCount++;
+            }
+         });
+         
+         if (autoResolvedCount > 0) {
+            console.log(`[자동 해결 완료] ${autoResolvedCount}개 협의 자동 해결됨`);
+            await room.save(); // 자동 해결된 협의 저장
+         }
+      }
 
       // 업데이트된 협의 정보 반환
       const updatedRoom = await Room.findById(roomId)
