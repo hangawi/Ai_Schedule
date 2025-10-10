@@ -339,19 +339,33 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                         시간대 선택:
                       </label>
                       <div className="space-y-2">
-                        {activeNegotiation.availableTimeSlots?.map((slot, index) => (
-                          <label key={index} className="flex items-center p-2 border rounded hover:bg-gray-50 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="timeSlot"
-                              value={index}
-                              checked={chosenSlot?.startTime === slot.startTime}
-                              onChange={() => setChosenSlot(slot)}
-                              className="mr-2"
-                            />
-                            <span className="text-sm font-medium">{slot.startTime} - {slot.endTime}</span>
-                          </label>
-                        ))}
+                        {(() => {
+                          // 💡 memberSpecificTimeSlots가 있으면 현재 유저의 가능한 시간대만 표시
+                          let slotsToShow = activeNegotiation.availableTimeSlots || [];
+                          
+                          if (activeNegotiation.memberSpecificTimeSlots && currentUser?.id) {
+                            const userSpecificSlots = activeNegotiation.memberSpecificTimeSlots[currentUser.id];
+                            if (userSpecificSlots && userSpecificSlots.length > 0) {
+                              console.log('[시간대 필터링] 현재 유저:', currentUser.id.substring(0,8));
+                              console.log('[시간대 필터링] 유저별 가능 시간:', userSpecificSlots);
+                              slotsToShow = userSpecificSlots;
+                            }
+                          }
+                          
+                          return slotsToShow.map((slot, index) => (
+                            <label key={index} className="flex items-center p-2 border rounded hover:bg-gray-50 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="timeSlot"
+                                value={index}
+                                checked={chosenSlot?.startTime === slot.startTime}
+                                onChange={() => setChosenSlot(slot)}
+                                className="mr-2"
+                              />
+                              <span className="text-sm font-medium">{slot.startTime} - {slot.endTime}</span>
+                            </label>
+                          ));
+                        })()}
                       </div>
                     </div>
 
