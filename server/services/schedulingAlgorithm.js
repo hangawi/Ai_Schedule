@@ -249,12 +249,14 @@ class SchedulingAlgorithm {
       let negotiationType = 'full_conflict';
       let availableTimeSlots = [];
 
-      // Case 1: 할당시간 ≤ 선호시간 && 모두 같은 시간 필요 → time_slot_choice (시간대 선택)
-      // 각 멤버가 선택할 수 있는 시간대 옵션을 제공 (예: 13-15시, 14-16시, 15-17시 중 선택)
-      if (totalNeeded <= totalSlots && allNeedSameAmount && block.conflictingMembers.length === 2) {
+      // 💡 새로운 로직: 충돌이 발생하면 항상 먼저 시간 선택(time_slot_choice)으로 시작
+      // 멤버들이 각자 시간을 선택하고, 겹치면 full_conflict로 전환됨 (협의 해결 로직에서 처리)
+
+      // 모든 멤버가 같은 시간 필요 && 충돌 시간대가 필요 시간보다 크거나 같으면
+      if (allNeedSameAmount && totalNeeded <= totalSlots) {
         const neededSlotsPerMember = memberSlotNeeds[0].neededSlots;
 
-        // 각 멤버가 선택할 수 있는 시간대 옵션이 2개 이상인지 확인
+        // 각 멤버가 선택할 수 있는 시간대 옵션 생성
         const numberOfOptions = Math.floor(totalSlots / neededSlotsPerMember);
 
         if (numberOfOptions >= 2) {
@@ -279,15 +281,15 @@ class SchedulingAlgorithm {
 
             currentTime += (neededSlotsPerMember * 30); // 다음 슬롯으로
           }
-        } else if (totalNeeded === totalSlots) {
-          // 딱 맞게 나눠지는 경우 → partial_conflict (시간 분할)
+        } else if (totalNeeded === totalSlots && block.conflictingMembers.length === 2) {
+          // 딱 맞게 나눠지는 경우 && 2명만 있으면 → partial_conflict (시간 분할)
           negotiationType = 'partial_conflict';
         } else {
-          // 선택지는 없지만 여유가 있는 경우 → full_conflict
+          // 선택지가 1개 이하 → full_conflict (바로 양보/주장)
           negotiationType = 'full_conflict';
         }
       }
-      // Case 2: 할당시간 > 선호시간 or 나눌 수 없음 → full_conflict (양보/이월)
+      // 모든 멤버가 다른 시간 필요 or 시간이 부족한 경우 → full_conflict (양보/이월)
       else {
         negotiationType = 'full_conflict';
       }
