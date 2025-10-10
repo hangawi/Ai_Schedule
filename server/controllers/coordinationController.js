@@ -30,13 +30,13 @@ async function handleNegotiationResolution(room, negotiation, userId) {
       if (yieldedMembers.length === members.length - 1) {
          const claimedMember = claimedMembers[0];
 
-         // 주장한 사람에게 선택한 시간대로 배정 (전체 시간이 아닌 선택한 시간)
-         let assignStartTime = negotiation.slotInfo.startTime;
-         let assignEndTime = negotiation.slotInfo.endTime;
+         // 주장한 사람에게 선택한 시간대로 배정 (전체 시간이 아닌 필요한 시간만)
+         let assignStartTime, assignEndTime;
 
          console.log('[협의 해결] 주장한 멤버 정보:', {
             userId: claimedMember.user._id || claimedMember.user,
             chosenSlot: claimedMember.chosenSlot,
+            requiredSlots: claimedMember.requiredSlots,
             negotiationType: negotiation.type
          });
 
@@ -46,7 +46,23 @@ async function handleNegotiationResolution(room, negotiation, userId) {
             assignEndTime = claimedMember.chosenSlot.endTime;
             console.log('[협의 해결] chosenSlot 사용:', assignStartTime, '-', assignEndTime);
          } else {
-            console.log('[협의 해결] negotiation.slotInfo 사용:', assignStartTime, '-', assignEndTime);
+            // chosenSlot이 없으면 필요한 시간만큼만 할당
+            const requiredSlots = claimedMember.requiredSlots || 2; // 기본값 1시간(2슬롯)
+            const requiredMinutes = requiredSlots * 30; // 슬롯 당 30분
+
+            const [startH, startM] = negotiation.slotInfo.startTime.split(':').map(Number);
+            const startMinutes = startH * 60 + startM;
+            const endMinutes = startMinutes + requiredMinutes;
+
+            assignStartTime = negotiation.slotInfo.startTime;
+            assignEndTime = `${Math.floor(endMinutes/60).toString().padStart(2,'0')}:${(endMinutes%60).toString().padStart(2,'0')}`;
+
+            console.log('[협의 해결] requiredSlots 기반 할당:', {
+               requiredSlots,
+               requiredMinutes,
+               assignStartTime,
+               assignEndTime
+            });
          }
 
          // startTime과 endTime이 유효한지 확인
@@ -415,20 +431,42 @@ async function handleNegotiationResolution(room, negotiation, userId) {
       const winner = claimedMembers[randomIndex];
       const losers = claimedMembers.filter((_, i) => i !== randomIndex);
 
-      // 승자에게 시간 배정
+      // 승자에게 시간 배정 (필요한 시간만큼만)
+      let assignStartTime, assignEndTime;
+
+      // chosenSlot이 있으면 그 시간 사용, 없으면 필요한 시간만큼만 할당
+      if (winner.chosenSlot && winner.chosenSlot.startTime && winner.chosenSlot.endTime) {
+         assignStartTime = winner.chosenSlot.startTime;
+         assignEndTime = winner.chosenSlot.endTime;
+         console.log('[랜덤 승리] chosenSlot 사용:', assignStartTime, '-', assignEndTime);
+      } else {
+         // chosenSlot이 없으면 필요한 시간만큼만 할당
+         const requiredSlots = winner.requiredSlots || 2; // 기본값 1시간(2슬롯)
+         const requiredMinutes = requiredSlots * 30;
+
+         const [startH, startM] = negotiation.slotInfo.startTime.split(':').map(Number);
+         const startMinutes = startH * 60 + startM;
+         const endMinutes = startMinutes + requiredMinutes;
+
+         assignStartTime = negotiation.slotInfo.startTime;
+         assignEndTime = `${Math.floor(endMinutes/60).toString().padStart(2,'0')}:${(endMinutes%60).toString().padStart(2,'0')}`;
+
+         console.log('[랜덤 승리] requiredSlots 기반 할당:', assignStartTime, '-', assignEndTime);
+      }
+
       const existingSlot = room.timeSlots.find(slot =>
          slot.user.toString() === (winner.user._id || winner.user).toString() &&
          slot.date.toISOString() === new Date(negotiation.slotInfo.date).toISOString() &&
-         slot.startTime === negotiation.slotInfo.startTime &&
-         slot.endTime === negotiation.slotInfo.endTime
+         slot.startTime === assignStartTime &&
+         slot.endTime === assignEndTime
       );
 
       if (!existingSlot) {
          room.timeSlots.push({
             user: winner.user._id || winner.user,
             date: negotiation.slotInfo.date,
-            startTime: negotiation.slotInfo.startTime,
-            endTime: negotiation.slotInfo.endTime,
+            startTime: assignStartTime,
+            endTime: assignEndTime,
             day: negotiation.slotInfo.day,
             subject: '협의 결과 (랜덤)',
             status: 'confirmed',
