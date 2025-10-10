@@ -558,9 +558,11 @@ exports.getNegotiations = async (req, res) => {
          return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
       }
 
-      // 사용자가 참여 가능한 협의만 필터링 (participants에 포함된 협의만)
+      // 사용자가 참여 가능한 협의만 필터링 (participants에 포함되고 status가 'active'인 협의만)
       const accessibleNegotiations = room.negotiations.filter(negotiation => {
-         return negotiation.participants.some(p => p._id.toString() === userId);
+         const isParticipant = negotiation.participants.some(p => p._id.toString() === userId);
+         const isActive = negotiation.status === 'active';
+         return isParticipant && isActive;
       });
 
       res.json({ negotiations: accessibleNegotiations });
