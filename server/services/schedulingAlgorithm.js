@@ -243,12 +243,11 @@ class SchedulingAlgorithm {
         const assignedSlots = (assignments[memberId]?.assignedHours || 0);
         const neededSlots = requiredSlots - assignedSlots; // 아직 할당받아야 할 슬롯
         const originallyNeededSlots = memberRequiredSlots[memberId] || 2; // 원래 필요한 슬롯 (협의 타입 판단용)
-        return { memberId, neededSlots, originallyNeededSlots };
+        return { memberId, neededSlots, originallyNeededSlots, assignedSlots, requiredSlots };
       });
 
-      // 협의 타입 판단
+      // 협의 타입 판단 (모든 충돌 멤버 대상)
       const totalNeeded = memberSlotNeeds.reduce((sum, m) => sum + m.neededSlots, 0);
-      // 💡 원래 필요한 슬롯 기준으로 비교 (이미 할당받은 슬롯은 무시)
       const allNeedSameOriginalAmount = memberSlotNeeds.every(m =>
         m.originallyNeededSlots === memberSlotNeeds[0].originallyNeededSlots
       );
@@ -271,10 +270,11 @@ class SchedulingAlgorithm {
           // 2개 이상의 선택지가 있으면 time_slot_choice
           negotiationType = 'time_slot_choice';
 
-          // 선택 가능한 시간대 생성 (원래 필요한 슬롯 기준)
+          // 선택 가능한 시간대 생성 (1시간 단위로 슬라이딩)
           let currentTime = startH * 60 + startM;
           const endTimeInMinutes = endH * 60 + endM;
 
+          // 💡 1시간(60분) 단위로 슬라이딩하면서 가능한 모든 시간대 생성
           while (currentTime + (originalNeededPerMember * 30) <= endTimeInMinutes) {
             const slotStartH = Math.floor(currentTime / 60);
             const slotStartM = currentTime % 60;
@@ -287,7 +287,7 @@ class SchedulingAlgorithm {
               endTime: `${String(slotEndH).padStart(2,'0')}:${String(slotEndM).padStart(2,'0')}`
             });
 
-            currentTime += (originalNeededPerMember * 30); // 다음 슬롯으로
+            currentTime += 60; // 💡 1시간(60분) 단위로 이동
           }
         } else if (totalNeeded === totalSlots && block.conflictingMembers.length === 2) {
           // 딱 맞게 나눠지는 경우 && 2명만 있으면 → partial_conflict (시간 분할)
@@ -679,7 +679,7 @@ class SchedulingAlgorithm {
       const minute = currentTime % 60;
       const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
       slots.push(timeStr);
-      currentTime += 30; // 30분 단위 (6슬롯 = 1시간)
+      currentTime += 60; // 💡 1시간(60분) 단위로 변경
     }
 
     return slots;
