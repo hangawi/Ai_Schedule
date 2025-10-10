@@ -246,10 +246,61 @@ class SchedulingAlgorithm {
         return { memberId, neededSlots, originallyNeededSlots, assignedSlots, requiredSlots };
       });
 
-      // 협의 타입 판단 (모든 충돌 멤버 대상)
-      const totalNeeded = memberSlotNeeds.reduce((sum, m) => sum + m.neededSlots, 0);
-      const allNeedSameOriginalAmount = memberSlotNeeds.every(m =>
-        m.originallyNeededSlots === memberSlotNeeds[0].originallyNeededSlots
+      // 💡 이미 충족된 멤버 제외 (다른 날짜에서 시간을 받았으면)
+      const unsatisfiedMembers = memberSlotNeeds.filter(m => m.neededSlots > 0);
+      
+      console.log(`🔍 [협의생성 체크 - ${dayString} ${block.startTime}] 충돌 멤버: ${block.conflictingMembers.length}명, 미충족 멤버: ${unsatisfiedMembers.length}명`);
+      memberSlotNeeds.forEach(m => {
+        console.log(`  멤버 ${m.memberId.substring(0,8)}: 필요 ${m.requiredSlots}슬롯, 할당 ${m.assignedSlots}슬롯, 남은 ${m.neededSlots}슬롯`);
+      });
+
+      // 모든 멤버가 충족되었으면 협의 스킵
+      if (unsatisfiedMembers.length === 0) {
+        console.log(`⏭️ [협의생성 스킵] 모든 멤버가 이미 충족됨`);
+        continue;
+      }
+
+      // 1명만 남았으면 자동 배정
+      if (unsatisfiedMembers.length === 1) {
+        const onlyMember = unsatisfiedMembers[0];
+        console.log(`✅ [자동배정] 멤버 ${onlyMember.memberId.substring(0,8)}에게 ${block.startTime}-${block.endTime} 자동 배정`);
+        
+        const slotsToAssign = Math.min(onlyMember.neededSlots, totalSlots);
+        const minutesToAssign = slotsToAssign * 30;
+        const startMinutes = startH * 60 + startM;
+        const endMinutes = startMinutes + minutesToAssign;
+        
+        for (let currentMin = startMinutes; currentMin < endMinutes; currentMin += 30) {
+          const slotStart = `${Math.floor(currentMin/60).toString().padStart(2,'0')}:${(currentMin%60).toString().padStart(2,'0')}`;
+          const slotEnd = `${Math.floor((currentMin+30)/60).toString().padStart(2,'0')}:${((currentMin+30)%60).toString().padStart(2,'0')}`;
+          
+          if (!assignments[onlyMember.memberId]) {
+            assignments[onlyMember.memberId] = { memberId: onlyMember.memberId, assignedHours: 0, slots: [] };
+          }
+          
+          assignments[onlyMember.memberId].assignedHours += 1;
+          assignments[onlyMember.memberId].slots.push({
+            date: block.dateObj,
+            day: dayString,
+            startTime: slotStart,
+            endTime: slotEnd,
+            subject: '자동 배정',
+            user: onlyMember.memberId,
+            status: 'confirmed'
+          });
+        }
+        
+        console.log(`⏭️ [협의생성 스킵] 자동 배정 완료`);
+        continue;
+      }
+
+      // 2명 이상 남았으면 협의 생성 (미충족 멤버들만)
+      block.conflictingMembers = unsatisfiedMembers.map(m => m.memberId);
+
+      // 협의 타입 판단 (미충족 멤버들만 대상)
+      const totalNeeded = unsatisfiedMembers.reduce((sum, m) => sum + m.neededSlots, 0);
+      const allNeedSameOriginalAmount = unsatisfiedMembers.every(m =>
+        m.originallyNeededSlots === unsatisfiedMembers[0].originallyNeededSlots
       );
 
       let negotiationType = 'full_conflict';
@@ -261,7 +312,7 @@ class SchedulingAlgorithm {
       // 모든 멤버가 원래 같은 시간 필요 && 충돌 시간대가 필요 시간보다 크거나 같으면
       if (allNeedSameOriginalAmount && totalNeeded <= totalSlots) {
         // 협의 타입 판단을 위해 원래 필요한 슬롯 사용
-        const originalNeededPerMember = memberSlotNeeds[0].originallyNeededSlots;
+        const originalNeededPerMember = unsatisfiedMembers[0].originallyNeededSlots;
 
         // 각 멤버가 선택할 수 있는 시간대 옵션 생성 (원래 필요한 슬롯 기준)
         const numberOfOptions = Math.floor(totalSlots / originalNeededPerMember);
