@@ -184,26 +184,39 @@ async function handleNegotiationResolution(room, negotiation, userId) {
       });
 
       if (!slotsOverlap) {
-         // 겹치지 않음 - 각자 선택한 시간대 배정 (중복 방지)
+         // 겹치지 않음 - 각자 선택한 시간대 배정 (30분 단위로 분할)
          chooseSlotMembers.forEach(member => {
-            const existingSlot = room.timeSlots.find(slot =>
-               slot.user.toString() === (member.user._id || member.user).toString() &&
-               slot.date.toISOString() === new Date(negotiation.slotInfo.date).toISOString() &&
-               slot.startTime === member.chosenSlot.startTime &&
-               slot.endTime === member.chosenSlot.endTime
-            );
+            // chosenSlot을 30분 단위로 분할
+            const [startH, startM] = member.chosenSlot.startTime.split(':').map(Number);
+            const [endH, endM] = member.chosenSlot.endTime.split(':').map(Number);
+            const startMinutes = startH * 60 + startM;
+            const endMinutes = endH * 60 + endM;
+            
+            // 30분 단위로 슬롯 생성
+            for (let currentMinutes = startMinutes; currentMinutes < endMinutes; currentMinutes += 30) {
+               const slotStartTime = `${Math.floor(currentMinutes/60).toString().padStart(2,'0')}:${(currentMinutes%60).toString().padStart(2,'0')}`;
+               const slotEndTime = `${Math.floor((currentMinutes+30)/60).toString().padStart(2,'0')}:${((currentMinutes+30)%60).toString().padStart(2,'0')}`;
+               
+               const existingSlot = room.timeSlots.find(slot =>
+                  slot.user.toString() === (member.user._id || member.user).toString() &&
+                  slot.date.toISOString() === new Date(negotiation.slotInfo.date).toISOString() &&
+                  slot.startTime === slotStartTime &&
+                  slot.endTime === slotEndTime
+               );
 
-            if (!existingSlot) {
-               room.timeSlots.push({
-                  user: member.user._id || member.user,
-                  date: negotiation.slotInfo.date,
-                  startTime: member.chosenSlot.startTime,
-                  endTime: member.chosenSlot.endTime,
-                  day: negotiation.slotInfo.day,
-                  subject: '협의 결과 (시간선택)',
-                  status: 'confirmed',
-                  assignedBy: userId
-               });
+               if (!existingSlot) {
+                  room.timeSlots.push({
+                     user: member.user._id || member.user,
+                     date: negotiation.slotInfo.date,
+                     startTime: slotStartTime,
+                     endTime: slotEndTime,
+                     day: negotiation.slotInfo.day,
+                     subject: '협의 결과 (시간선택)',
+                     status: 'confirmed',
+                     assignedBy: userId
+                  });
+                  console.log(`[협의 해결] 슬롯 추가: ${slotStartTime}-${slotEndTime}`);
+               }
             }
          });
 
@@ -764,27 +777,33 @@ exports.respondToNegotiation = async (req, res) => {
       // 저장 후: 각 멤버가 필요한 시간을 받았는지 확인하고, 충족된 멤버의 다른 협의 자동 해결
       console.log('[협의 응답 후] 멤버 충족 여부 확인 시작');
       
-      // 방의 모든 멤버 정보 가져오기
-      const allMembers = room.members.map(m => ({
-         userId: m.user._id ? m.user._id.toString() : m.user.toString(),
-         requiredSlots: m.requiredSlots || 2, // 기본값 1시간 = 2슬롯
-         carryOver: m.carryOver || 0
-      }));
+      // 모든 협의에서 멤버별 requiredSlots 수집
+      const memberRequirements = {};
+      room.negotiations.forEach(nego => {
+         nego.conflictingMembers.forEach(cm => {
+            const memberId = (cm.user._id || cm.user).toString();
+            if (!memberRequirements[memberId]) {
+               memberRequirements[memberId] = cm.requiredSlots || 2; // 기본값 1시간 = 2슬롯
+            }
+         });
+      });
       
       // 각 멤버가 받은 시간 계산
       const satisfiedMembers = [];
-      for (const member of allMembers) {
+      for (const memberId in memberRequirements) {
+         const requiredSlots = memberRequirements[memberId];
+         
          const assignedSlots = room.timeSlots.filter(slot => {
             const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
-            return slotUserId === member.userId;
+            return slotUserId === memberId;
          }).length;
          
-         const isSatisfied = assignedSlots >= member.requiredSlots;
+         const isSatisfied = assignedSlots >= requiredSlots;
          
-         console.log(`[멤버 ${member.userId.substring(0, 8)}] 필요: ${member.requiredSlots}슬롯, 할당: ${assignedSlots}슬롯, 충족: ${isSatisfied}`);
+         console.log(`[멤버 ${memberId.substring(0, 8)}] 필요: ${requiredSlots}슬롯, 할당: ${assignedSlots}슬롯, 충족: ${isSatisfied}`);
          
          if (isSatisfied) {
-            satisfiedMembers.push(member.userId);
+            satisfiedMembers.push(memberId);
          }
       }
       
