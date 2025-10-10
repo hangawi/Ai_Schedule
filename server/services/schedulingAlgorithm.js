@@ -235,16 +235,23 @@ class SchedulingAlgorithm {
       const totalSlots = totalMinutes / 30; // 30분 = 1슬롯
 
       // 각 멤버가 필요한 슬롯 수 계산
+      // 💡 중요: 협의 타입 판단을 위해 '아직 필요한 슬롯'이 아닌 '원래 필요한 슬롯'을 사용
+      // 예: A가 1시간(2슬롯) 필요, B도 1시간(2슬롯) 필요 → 둘 다 같은 양을 원함
       const memberSlotNeeds = block.conflictingMembers.map(memberId => {
+        const member = nonOwnerMembers.find(m => m.user._id.toString() === memberId);
         const requiredSlots = memberRequiredSlots[memberId] || 0;
         const assignedSlots = (assignments[memberId]?.assignedHours || 0);
-        const neededSlots = requiredSlots - assignedSlots;
-        return { memberId, neededSlots };
+        const neededSlots = requiredSlots - assignedSlots; // 아직 할당받아야 할 슬롯
+        const originallyNeededSlots = memberRequiredSlots[memberId] || 2; // 원래 필요한 슬롯 (협의 타입 판단용)
+        return { memberId, neededSlots, originallyNeededSlots };
       });
 
       // 협의 타입 판단
       const totalNeeded = memberSlotNeeds.reduce((sum, m) => sum + m.neededSlots, 0);
-      const allNeedSameAmount = memberSlotNeeds.every(m => m.neededSlots === memberSlotNeeds[0].neededSlots);
+      // 💡 원래 필요한 슬롯 기준으로 비교 (이미 할당받은 슬롯은 무시)
+      const allNeedSameOriginalAmount = memberSlotNeeds.every(m =>
+        m.originallyNeededSlots === memberSlotNeeds[0].originallyNeededSlots
+      );
 
       let negotiationType = 'full_conflict';
       let availableTimeSlots = [];
@@ -252,25 +259,26 @@ class SchedulingAlgorithm {
       // 💡 새로운 로직: 충돌이 발생하면 항상 먼저 시간 선택(time_slot_choice)으로 시작
       // 멤버들이 각자 시간을 선택하고, 겹치면 full_conflict로 전환됨 (협의 해결 로직에서 처리)
 
-      // 모든 멤버가 같은 시간 필요 && 충돌 시간대가 필요 시간보다 크거나 같으면
-      if (allNeedSameAmount && totalNeeded <= totalSlots) {
-        const neededSlotsPerMember = memberSlotNeeds[0].neededSlots;
+      // 모든 멤버가 원래 같은 시간 필요 && 충돌 시간대가 필요 시간보다 크거나 같으면
+      if (allNeedSameOriginalAmount && totalNeeded <= totalSlots) {
+        // 협의 타입 판단을 위해 원래 필요한 슬롯 사용
+        const originalNeededPerMember = memberSlotNeeds[0].originallyNeededSlots;
 
-        // 각 멤버가 선택할 수 있는 시간대 옵션 생성
-        const numberOfOptions = Math.floor(totalSlots / neededSlotsPerMember);
+        // 각 멤버가 선택할 수 있는 시간대 옵션 생성 (원래 필요한 슬롯 기준)
+        const numberOfOptions = Math.floor(totalSlots / originalNeededPerMember);
 
         if (numberOfOptions >= 2) {
           // 2개 이상의 선택지가 있으면 time_slot_choice
           negotiationType = 'time_slot_choice';
 
-          // 선택 가능한 시간대 생성 (각 멤버가 필요한 만큼씩)
+          // 선택 가능한 시간대 생성 (원래 필요한 슬롯 기준)
           let currentTime = startH * 60 + startM;
           const endTimeInMinutes = endH * 60 + endM;
 
-          while (currentTime + (neededSlotsPerMember * 30) <= endTimeInMinutes) {
+          while (currentTime + (originalNeededPerMember * 30) <= endTimeInMinutes) {
             const slotStartH = Math.floor(currentTime / 60);
             const slotStartM = currentTime % 60;
-            const slotEndMinutes = currentTime + (neededSlotsPerMember * 30);
+            const slotEndMinutes = currentTime + (originalNeededPerMember * 30);
             const slotEndH = Math.floor(slotEndMinutes / 60);
             const slotEndM = slotEndMinutes % 60;
 
@@ -279,7 +287,7 @@ class SchedulingAlgorithm {
               endTime: `${String(slotEndH).padStart(2,'0')}:${String(slotEndM).padStart(2,'0')}`
             });
 
-            currentTime += (neededSlotsPerMember * 30); // 다음 슬롯으로
+            currentTime += (originalNeededPerMember * 30); // 다음 슬롯으로
           }
         } else if (totalNeeded === totalSlots && block.conflictingMembers.length === 2) {
           // 딱 맞게 나눠지는 경우 && 2명만 있으면 → partial_conflict (시간 분할)
