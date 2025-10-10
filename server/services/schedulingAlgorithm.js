@@ -408,57 +408,32 @@ class SchedulingAlgorithm {
 
         // 최고 우선순위 그룹에 2명 이상 있을 때
         if (highestPriorityMembers.length > 1) {
-          console.log(`   ⚠️ 같은 우선순위 ${highestPriorityMembers.length}명 → 대체 시간 확인 시작`);
+          console.log(`   ⚠️ 같은 우선순위 ${highestPriorityMembers.length}명 → 협의 필요`);
 
-          // 각 멤버가 다른 시간대에서 필요시간을 채울 수 있는지 확인
-          const membersNeedingThisSlot = highestPriorityMembers.filter(member => {
+          // 같은 우선순위로 겹치는 모든 멤버를 협의 대상에 포함
+          // 방장이 최종적으로 선택할 수 있도록 함
+          const membersNeedingThisSlot = highestPriorityMembers.map(member => {
             const memberId = member.memberId;
             const memberIdShort = memberId.substring(0, 8);
             const requiredSlots = memberRequiredSlots[memberId] || 18;
             const totalAvailableSlots = memberAvailableSlots[memberId] || 0;
             const exclusiveSlots = memberExclusiveSlots[memberId] || 0;
 
-            // 현재 슬롯이 공유 슬롯인지 확인
-            const isSharedSlot = nonOwnerAvailable.length > 1;
+            console.log(`      멤버 ${memberIdShort}: 필요=${requiredSlots}슬롯, 총가용=${totalAvailableSlots}슬롯, 단독=${exclusiveSlots}슬롯`);
+            console.log(`      🔹 [협의포함] ${memberIdShort}는 방장의 선택을 기다림`);
 
-            // 이 슬롯 없이 필요시간을 채울 수 있는지 확인
-            // 단독 슬롯만으로 채울 수 있으면 이 공유 슬롯은 불필요
-            let canFillWithoutThisSlot;
-            if (isSharedSlot) {
-              // 공유 슬롯의 경우: 단독 슬롯만으로 채울 수 있는지 확인
-              canFillWithoutThisSlot = exclusiveSlots >= requiredSlots;
-            } else {
-              // 단독 슬롯의 경우: 전체 가용 슬롯 - 1로 확인
-              canFillWithoutThisSlot = (totalAvailableSlots - 1) >= requiredSlots;
-            }
-
-            console.log(`      멤버 ${memberIdShort}: 필요=${requiredSlots}슬롯, 총가용=${totalAvailableSlots}슬롯, 단독=${exclusiveSlots}슬롯, 이슬롯없이가능=${canFillWithoutThisSlot}`);
-
-            if (canFillWithoutThisSlot) {
-              console.log(`      ✅ [충돌회피] ${memberIdShort}는 대체 시간 있음 (단독 슬롯으로 충분)`);
-              return false; // 이 멤버는 협의 불필요
-            } else {
-              console.log(`      ⚠️ [충돌필수] ${memberIdShort}는 이 시간 필요 (단독 슬롯 부족)`);
-              return true; // 이 멤버는 협의 필요
-            }
+            return member;
           });
 
-          // 진짜 협의가 필요한 멤버가 2명 이상일 때만 충돌로 처리
-          console.log(`   결과: ${membersNeedingThisSlot.length}명이 실제로 이 슬롯 필요`);
+          // 2명 이상이 같은 우선순위로 겹치면 무조건 협의 발생
+          console.log(`   🚨 [협의발생] ${key} - ${membersNeedingThisSlot.length}명 협의 필요`);
+          console.log(`      멤버들: ${membersNeedingThisSlot.map(m => m.memberId.substring(0,8)).join(', ')}`);
 
-          if (membersNeedingThisSlot.length > 1) {
-            console.log(`   🚨 [협의발생] ${key} - ${membersNeedingThisSlot.length}명 실제 충돌`);
-
-            conflicts.push({
-              slotKey: key,
-              availableMembers: membersNeedingThisSlot.map(a => a.memberId),
-              priority: highestPriority
-            });
-          } else if (membersNeedingThisSlot.length === 1) {
-            console.log(`   ✅ [자동해결] ${key} - ${membersNeedingThisSlot[0].memberId.substring(0,8)}만 필요`);
-          } else {
-            console.log(`   ✅ [자동해결] ${key} - 모든 멤버 대체 시간 있음`);
-          }
+          conflicts.push({
+            slotKey: key,
+            availableMembers: membersNeedingThisSlot.map(a => a.memberId),
+            priority: highestPriority
+          });
         } else {
           console.log(`   ✅ [단독] ${key} - 우선순위 ${highestPriority} 멤버 1명만`);
         }
@@ -469,6 +444,8 @@ class SchedulingAlgorithm {
     console.log(`🔍 총 ${conflicts.length}개 협의 발생`);
     if (conflicts.length > 0) {
       console.log(`🔍 협의 목록:`, conflicts.map(c => c.slotKey).join(', '));
+    } else {
+      console.log(`🔍 ⚠️ 협의가 0개입니다! 문제가 있을 수 있습니다.`);
     }
     return conflicts;
   }
@@ -824,13 +801,14 @@ class SchedulingAlgorithm {
     // 충돌 슬롯 목록을 Set으로 변환하여 빠른 검색
     const conflictKeys = new Set(conflictingSlots.map(c => c.slotKey));
 
+    console.log(`\n💼 [단독할당] 시작 (충돌 제외 슬롯만 처리, 충돌 슬롯: ${conflictKeys.size}개)`);
+
     for (const key in timetable) {
       const slot = timetable[key];
       if (slot.assignedTo) continue;
 
       // 충돌 슬롯은 건너뛰기 (협의로 처리)
       if (conflictKeys.has(key)) {
-        console.log(`⚠️ [충돌건너뛰기] ${key}: 협의 대상 슬롯`);
         continue;
       }
 
@@ -843,15 +821,27 @@ class SchedulingAlgorithm {
         if (assignments[memberToAssign] && assignments[memberToAssign].assignedHours < requiredSlots) {
           this._assignSlot(timetable, assignments, key, memberToAssign);
           assignedCount++;
-          console.log(`🔍 [단독할당] ${key}: 멤버 ${memberToAssign} 할당 (우선순위: ${highPriorityAvailable[0].priority}, ${assignments[memberToAssign].assignedHours}/${requiredSlots}슬롯)`);
+          console.log(`   ✅ [단독할당] ${key}: 멤버 ${memberToAssign.substring(0,8)} 할당 (우선순위: ${highPriorityAvailable[0].priority}, ${assignments[memberToAssign].assignedHours}/${requiredSlots}슬롯)`);
+        } else {
+          console.log(`   ⏭️ [건너뛰기] ${key}: 멤버 ${memberToAssign.substring(0,8)} 이미 할당 완료 (${assignments[memberToAssign].assignedHours}/${requiredSlots}슬롯)`);
         }
       } else if (highPriorityAvailable.length > 1) {
-        // 여러 멤버가 있는 경우 - 이미 충돌로 감지되어야 하지만, 혹시 모르니 로그만 출력
-        console.log(`⚠️ [다중가용] ${key}: ${highPriorityAvailable.length}명 가능, 충돌로 처리되어야 함`);
+        // 여러 멤버가 있는 경우 - 충돌로 감지되어야 하지만, 혹시 누락된 경우 경고
+        console.log(`   ⚠️ [다중가용] ${key}: ${highPriorityAvailable.length}명 가능, 충돌로 처리되어야 함`);
+        console.log(`      멤버들: ${highPriorityAvailable.map(a => a.memberId.substring(0,8)).join(', ')}`);
       }
     }
 
-    console.log(`🔍 [단독할당완료] 총 ${assignedCount}개 슬롯 할당됨`);
+    console.log(`\n💼 [단독할당완료] 총 ${assignedCount}개 슬롯 할당됨`);
+
+    // 할당 현황 출력
+    console.log(`\n📊 [할당현황] 멤버별 현재 할당 상태:`);
+    Object.keys(assignments).forEach(memberId => {
+      const requiredSlots = memberRequiredSlots[memberId] || assignments[memberId]?.requiredSlots || 18;
+      const assignedSlots = assignments[memberId].assignedHours;
+      const percentage = ((assignedSlots / requiredSlots) * 100).toFixed(1);
+      console.log(`   ${memberId.substring(0,8)}: ${assignedSlots}/${requiredSlots}슬롯 (${percentage}%)`);
+    });
   }
 
   _iterativeAssignment(timetable, assignments, priority, memberRequiredSlots, members = [], ownerPreferences = {}, conflictingSlots = []) {
