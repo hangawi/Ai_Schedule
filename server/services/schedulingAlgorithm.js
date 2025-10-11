@@ -268,8 +268,43 @@ class SchedulingAlgorithm {
         continue;
       }
 
-      // 2명 이상 미충족 → 협의 생성 (미충족 멤버들만)
-      console.log(`   🚨 협의 생성: ${unsatisfiedMembers.length}명 미충족`);
+      // 2명 이상 미충족 → 공평성 기반 자동 배정 또는 협의 생성
+      if (unsatisfiedMembers.length >= 2) {
+        // 💡 공평성 체크: 이미 배정받은 시간이 가장 적은 멤버에게 우선권 부여
+        const sortedByAssigned = [...unsatisfiedMembers].sort((a, b) => {
+          const hoursA = assignments[a.memberId]?.assignedHours || 0;
+          const hoursB = assignments[b.memberId]?.assignedHours || 0;
+          if (hoursA !== hoursB) {
+            return hoursA - hoursB;
+          }
+          // 배정 시간이 같으면, 필요한 슬롯이 많은 멤버에게 우선권
+          return b.neededSlots - a.neededSlots;
+        });
+
+        const leastAssignedMember = sortedByAssigned[0];
+        const secondLeastAssignedMember = sortedByAssigned[1];
+        const leastHours = assignments[leastAssignedMember.memberId]?.assignedHours || 0;
+        const secondLeastHours = assignments[secondLeastAssignedMember.memberId]?.assignedHours || 0;
+
+        // 가장 적게 배정받은 멤버가 다른 멤버보다 명확히 적게 받았으면 자동 배정
+        if (leastHours < secondLeastHours) {
+          console.log(`   ✅ 자동배정 (공평성): ${leastAssignedMember.memberId.substring(0,8)}에게 할당 (배정시간: ${leastHours} < ${secondLeastHours})`);
+
+          autoAssignments.push({
+            memberId: leastAssignedMember.memberId,
+            dateObj: block.dateObj,
+            dayString: dayString,
+            startTime: block.startTime,
+            endTime: block.endTime,
+            neededSlots: leastAssignedMember.neededSlots,
+            totalSlots: totalSlots
+          });
+          continue; // 다음 블록으로
+        }
+      }
+
+      // 공평성으로 해결 안될 시 협의 생성
+      console.log(`   🚨 협의 생성: ${unsatisfiedMembers.length}명 미충족 (공평성으로 해결 불가)`);
       block.conflictingMembers = unsatisfiedMembers.map(m => m.memberId);
 
       // 협의 타입 판단 (미충족 멤버들만)
@@ -1042,7 +1077,8 @@ class SchedulingAlgorithm {
           const isCurrentSlotConflict = conflictKeys.has(key1) || conflictKeys.has(key2);
 
           if (isAlone && isConflictingMember && !isCurrentSlotConflict) {
-            // 현재 슬롯은 충돌이 아니지만, 이 멤버가 다른 슬롯에서 충돌 멤버인 경우
+            // [수정] 교착상태 방지를 위해 '다른 멤버 미충족' 조건 제거.
+            // 단, 같은 날짜에 다른 충돌이 있는 경우는 여전히 차단하여 예측 가능성을 높임.
             const memberConflicts = conflictingSlots.filter(c => c.availableMembers.includes(memberId));
             const hasConflictOnSameDate = memberConflicts.some(c => {
               const conflictParts = c.slotKey.split('-');
@@ -1052,45 +1088,7 @@ class SchedulingAlgorithm {
 
             if (hasConflictOnSameDate) {
               isAlone = false; // 같은 날짜에 충돌이 있으면 단독 조건 무효화
-              console.log(`      ⚠️ 단독 슬롯이지만 같은 날짜(${currentDate})에 충돌 있음 → 차단`);
-            }
-
-            // 💡 추가 조건: 이 슬롯을 받으면 충족되는지 확인 (모든 충돌 멤버 체크)
-            if (isAlone && memberConflicts.length > 0) {
-              const currentAssignedSlots = assignments[memberId]?.assignedHours || 0;
-              const requiredSlots = memberRequiredSlots[memberId] || 2;
-              const wouldBeSatisfied = (currentAssignedSlots + 2) >= requiredSlots;
-
-              // 💡 충족되면 다른 충돌 멤버들이 모두 충족되었는지 확인
-              if (wouldBeSatisfied) {
-                // 이 멤버와 함께 충돌하는 다른 멤버들 찾기 (모든 충돌에서)
-                const otherConflictMembers = new Set();
-                memberConflicts.forEach(c => {
-                  c.availableMembers.forEach(otherId => {
-                    if (otherId !== memberId) {
-                      otherConflictMembers.add(otherId);
-                    }
-                  });
-                });
-
-                // 다른 충돌 멤버들이 모두 충족되었는지 확인
-                let allOtherConflictMembersSatisfied = true;
-                for (const otherId of otherConflictMembers) {
-                  const otherAssigned = assignments[otherId]?.assignedHours || 0;
-                  const otherRequired = memberRequiredSlots[otherId] || 2;
-                  if (otherAssigned < otherRequired) {
-                    allOtherConflictMembersSatisfied = false;
-                    break;
-                  }
-                }
-
-                if (!allOtherConflictMembersSatisfied) {
-                  isAlone = false; // 다른 충돌 멤버들이 충족되지 않았으면 단독 조건 무효화
-                  console.log(`      ⚠️ 단독 슬롯이지만 충족 후 다른 충돌 멤버 미충족 → 차단`);
-                  console.log(`         wouldBeSatisfied=${wouldBeSatisfied} (current=${currentAssignedSlots}, required=${requiredSlots})`);
-                  console.log(`         allOtherConflictMembersSatisfied=${allOtherConflictMembersSatisfied}`);
-                }
-              }
+              console.log(`      ⚠️ 단독 슬롯이지만 같은 날짜(${currentDate})에 다른 충돌이 있어 차단`);
             }
           }
 
@@ -1102,69 +1100,42 @@ class SchedulingAlgorithm {
             const memberAvail2 = avail2.find(a => a.memberId === memberId);
 
             if (memberAvail1 && memberAvail2) {
-              const maxPriority1 = Math.max(...avail1.map(a => a.priority));
-              const maxPriority2 = Math.max(...avail2.map(a => a.priority));
+              // [5차 수정] '우선순위 우위'는 실제 경쟁(2명 이상)이 있는 슬롯에서만 판단
+              const originalContenders1 = slot1.available.filter(a => !a.isOwner).length;
+              const originalContenders2 = slot2.available.filter(a => !a.isOwner).length;
 
-              const isHighestPriority1 = memberAvail1.priority === maxPriority1;
-              const isHighestPriority2 = memberAvail2.priority === maxPriority2;
+              // 두 슬롯 중 하나라도 경쟁자가 2명 이상일 때만 '우선순위 우위'를 계산
+              if (originalContenders1 > 1 || originalContenders2 > 1) {
+                const maxPriority1 = Math.max(...avail1.map(a => a.priority));
+                const maxPriority2 = Math.max(...avail2.map(a => a.priority));
 
-              // 최고 우선순위를 가진 멤버가 1명뿐인지 확인
-              const highestCount1 = avail1.filter(a => a.priority === maxPriority1).length;
-              const highestCount2 = avail2.filter(a => a.priority === maxPriority2).length;
+                const isHighestPriority1 = memberAvail1.priority === maxPriority1;
+                const isHighestPriority2 = memberAvail2.priority === maxPriority2;
 
-              // 💡 추가 조건: 같은 날짜에 충돌이 없는지 확인
-              const parts1 = key1.split('-');
-              const currentDate = parts1.slice(0, 3).join('-'); // "2025-10-06"
+                // 최고 우선순위를 가진 멤버가 1명뿐인지 확인
+                const highestCount1 = avail1.filter(a => a.priority === maxPriority1).length;
+                const highestCount2 = avail2.filter(a => a.priority === maxPriority2).length;
 
-              // 이 멤버가 연루된 충돌들 중 같은 날짜가 있는지 확인
-              const memberConflicts = conflictingSlots.filter(c => c.availableMembers.includes(memberId));
-              const hasConflictOnSameDate = memberConflicts.some(c => {
-                const conflictParts = c.slotKey.split('-');
-                const conflictDate = conflictParts.slice(0, 3).join('-');
-                return conflictDate === currentDate;
-              });
+                // 💡 추가 조건: 같은 날짜에 충돌이 없는지 확인
+                const parts1 = key1.split('-');
+                const currentDate = parts1.slice(0, 3).join('-'); // "2025-10-06"
 
-              // 💡 추가 조건: 이 슬롯을 받으면 충족되는지 확인
-              const currentAssignedSlots = assignments[memberId]?.assignedHours || 0;
-              const requiredSlots = memberRequiredSlots[memberId] || 2;
-              const wouldBeSatisfied = (currentAssignedSlots + 2) >= requiredSlots;
-
-              // 💡 추가 조건: 충족되면 다른 충돌 멤버들이 모두 충족되었는지 확인
-              let allOtherConflictMembersSatisfied = true;
-              if (wouldBeSatisfied && memberConflicts.length > 0) {
-                // 이 멤버와 함께 충돌하는 다른 멤버들 찾기 (모든 충돌에서)
-                const otherConflictMembers = new Set();
-                memberConflicts.forEach(c => {
-                  c.availableMembers.forEach(otherId => {
-                    if (otherId !== memberId) {
-                      otherConflictMembers.add(otherId);
-                    }
-                  });
+                // 이 멤버가 연루된 충돌들 중 같은 날짜가 있는지 확인
+                const memberConflicts = conflictingSlots.filter(c => c.availableMembers.includes(memberId));
+                const hasConflictOnSameDate = memberConflicts.some(c => {
+                  const conflictParts = c.slotKey.split('-');
+                  const conflictDate = conflictParts.slice(0, 3).join('-');
+                  return conflictDate === currentDate;
                 });
 
-                // 다른 충돌 멤버들이 모두 충족되었는지 확인
-                for (const otherId of otherConflictMembers) {
-                  const otherAssigned = assignments[otherId]?.assignedHours || 0;
-                  const otherRequired = memberRequiredSlots[otherId] || 2;
-                  if (otherAssigned < otherRequired) {
-                    allOtherConflictMembersSatisfied = false;
-                    break;
-                  }
-                }
+                hasClearPriorityAdvantage = isHighestPriority1 && isHighestPriority2 &&
+                                            highestCount1 === 1 && highestCount2 === 1 &&
+                                            !hasConflictOnSameDate; // 같은 날짜에 충돌이 없는지만 확인
               }
-
-              hasClearPriorityAdvantage = isHighestPriority1 && isHighestPriority2 &&
-                                          highestCount1 === 1 && highestCount2 === 1 &&
-                                          !hasConflictOnSameDate && // 같은 날짜에 충돌이 없어야 함
-                                          (!wouldBeSatisfied || allOtherConflictMembersSatisfied); // 충족되지 않거나, 다른 멤버들도 모두 충족되어야 함
-
+              
               // 💡 디버그 로그
               console.log(`      🔍 우선순위 우위 체크: ${key1} + ${key2} → ${memberId.substring(0,8)}`);
-              console.log(`         maxP1=${maxPriority1}, maxP2=${maxPriority2}, memberP1=${memberAvail1.priority}, memberP2=${memberAvail2.priority}`);
-              console.log(`         highestCount1=${highestCount1}, highestCount2=${highestCount2}`);
-              console.log(`         hasConflictOnSameDate=${hasConflictOnSameDate} (date: ${currentDate})`);
-              console.log(`         wouldBeSatisfied=${wouldBeSatisfied} (current=${currentAssignedSlots}, required=${requiredSlots})`);
-              console.log(`         allOtherConflictMembersSatisfied=${allOtherConflictMembersSatisfied}`);
+              console.log(`         경쟁자 수: ${originalContenders1}, ${originalContenders2}`);
               console.log(`         hasClearPriorityAdvantage=${hasClearPriorityAdvantage}`);
             }
           }
@@ -1187,8 +1158,10 @@ class SchedulingAlgorithm {
               const minutes2 = h2 * 60 + m2;
 
               if (minutes2 - minutes1 === 30) {
-                console.log(`      ✅ Phase 2 할당: ${key1} + ${key2} → ${memberId.substring(0,8)} (${isAlone ? '단독' : '우선순위 우위'})`);
-                return [key1, key2];
+                // [4차 수정] reason을 'hasClearPriorityAdvantage'에 우선순위를 두어 결정
+                const finalReason = hasClearPriorityAdvantage ? 'hasClearPriorityAdvantage' : 'isAlone';
+                console.log(`      ✅ Phase 2 할당: ${key1} + ${key2} → ${memberId.substring(0,8)} (${hasClearPriorityAdvantage ? '우선순위 우위' : '단독'})`);
+                return { block: [key1, key2], reason: finalReason };
               }
             }
           }
@@ -1211,51 +1184,49 @@ class SchedulingAlgorithm {
         const requiredSlots = memberRequiredSlots[memberId] || assignments[memberId]?.requiredSlots || 18;
 
         if (assignments[memberId].assignedHours < requiredSlots) {
-          // 💡 협의에 포함된 멤버가 있는지 확인
-          const hasConflictingMembers = conflictingMembers.size > 0;
           const isConflictingMember = conflictingMembers.has(memberId);
 
-          const minAssigned = Math.min(...Object.values(assignments).map(a => a.assignedHours));
-          const currentAssigned = assignments[memberId].assignedHours;
+          // 💡 [수정] 공평성 로직 단순화: 할당이 필요한 멤버는 모두 시도
+          console.log(`      🔍 ${memberId.substring(0,8)} 블록 찾기 시작...`);
+          const result = findOneHourBlock(memberId, conflictingSlots, true); // 디버그 모드 활성화
 
-          let canAssign = false;
+          if (result) {
+            // 💡 [3차 수정] 협의 멤버에 대한 할당 보류 로직 수정
+            const isConflictingMember = conflictingMembers.has(memberId);
+            if (isConflictingMember) {
+              const currentAssignedSlots = assignments[memberId]?.assignedHours || 0;
+              const requiredSlots = memberRequiredSlots[memberId] || 2;
+              const wouldBeSatisfied = (currentAssignedSlots + 2) >= requiredSlots; // +2 for 1-hour block
 
-          if (!hasConflictingMembers) {
-            canAssign = currentAssigned <= minAssigned;
-          } else if (isConflictingMember) {
-            const otherConflictingMembersAssigned = Array.from(conflictingMembers)
-              .filter(id => id !== memberId)
-              .map(id => assignments[id]?.assignedHours || 0);
-
-            const minConflictingAssigned = otherConflictingMembersAssigned.length > 0
-              ? Math.min(...otherConflictingMembersAssigned)
-              : 0;
-
-            canAssign = currentAssigned <= minConflictingAssigned;
-            console.log(`      🔍 ${memberId.substring(0,8)}: 협의멤버, currentAssigned=${currentAssigned}, minConflictingAssigned=${minConflictingAssigned}, canAssign=${canAssign}`);
-          } else {
-            canAssign = currentAssigned <= minAssigned;
-            console.log(`      🔍 ${memberId.substring(0,8)}: 일반멤버, currentAssigned=${currentAssigned}, minAssigned=${minAssigned}, canAssign=${canAssign}`);
-          }
-
-          if (canAssign) {
-            console.log(`      🔍 ${memberId.substring(0,8)} 블록 찾기 시작...`);
-            const block = findOneHourBlock(memberId, conflictingSlots, true); // 디버그 모드 활성화
-            if (block) {
-              this._assignSlot(timetable, assignments, block[0], memberId);
-              this._assignSlot(timetable, assignments, block[1], memberId);
-              assignedCount += 2;
-              allMembersAssigned = false;
-              console.log(`      ✅ ${block[0]} + ${block[1]} → ${memberId.substring(0,8)} (1시간 블록)`);
-            } else {
-              console.log(`      ⏭️ ${memberId.substring(0,8)}: 1시간 블록 없음`);
+              // [핵심] '우선순위 우위'가 아닌, 단순 '단독' 슬롯 할당으로 협의가 해소되는 경우만 보류
+              if (wouldBeSatisfied && result.reason === 'isAlone') {
+                console.log(`      ⏭️ 할당 보류: 멤버 ${memberId.substring(0,8)}가 협의에 포함되어 있고, '단독' 슬롯 할당으로 요구 시간이 충족되므로 협의 유지를 위해 보류합니다.`);
+                continue;
+              }
             }
+
+            // '우선순위 우위'이거나, 일반 멤버의 '단독' 슬롯인 경우 할당 진행
+            this._assignSlot(timetable, assignments, result.block[0], memberId);
+            this._assignSlot(timetable, assignments, result.block[1], memberId);
+            assignedCount += 2;
+            allMembersAssigned = false; // 할당이 일어났으므로 루프 계속
+            console.log(`      ✅ ${result.block[0]} + ${result.block[1]} → ${memberId.substring(0,8)} (1시간 블록, 이유: ${result.reason})`);
+            
+            // 한 라운드에 한 명만 할당하고 다시 처음부터 가장 필요한 사람을 찾기 위해 break
+            break;
+          } else {
+            console.log(`      ⏭️ ${memberId.substring(0,8)}: 1시간 블록 없음`);
           }
         }
       }
 
       if (roundCount > 20) {
         console.log(`   ⚠️ 라운드 20회 초과, 중단`);
+        break;
+      }
+      
+      // 💡 for 루프가 break 없이 모두 돌았다면, 더 이상 할당할 블록이 없는 것
+      if (allMembersAssigned) {
         break;
       }
     }
