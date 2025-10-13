@@ -113,11 +113,11 @@ async function handleNegotiationResolution(room, negotiation, userId) {
 
             if (yieldedMember.yieldOption === 'carry_over') {
                // 이월 처리 (중복 방지를 위해 이미 이월된 내역이 있는지 확인)
-               const [startH, startM] = negotiation.slotInfo.startTime.split(':').map(Number);
-               const [endH, endM] = negotiation.slotInfo.endTime.split(':').map(Number);
-               const carryOverHours = ((endH * 60 + endM) - (startH * 60 + startM)) / 60;
+               // 💡 멤버의 requiredSlots 기준으로 이월 (실제 필요한 시간만 이월)
+               const requiredSlots = yieldedMember.requiredSlots || 2; // 기본값 1시간(2슬롯)
+               const carryOverHours = (requiredSlots * 30) / 60; // 슬롯당 30분
 
-               console.log(`[이월 계산] ${negotiation.slotInfo.startTime}-${negotiation.slotInfo.endTime} = ${carryOverHours}시간`);
+               console.log(`[이월 계산] requiredSlots: ${requiredSlots}슬롯 = ${carryOverHours}시간`);
 
                if (roomMember) {
                   // 해당 협의에 대한 이월 내역이 이미 있는지 확인
