@@ -1091,6 +1091,13 @@ exports.respondToNegotiation = async (req, res) => {
          });
       });
 
+      // 디버그: 멤버들의 carryOver 확인
+      console.log('[응답 전] 멤버들의 이월시간:');
+      updatedRoom.members.forEach(m => {
+         const userId = m.user._id || m.user;
+         console.log(`  멤버 ${userId.toString().substring(0,8)}: carryOver=${m.carryOver || 0}`);
+      });
+
       res.json({
          success: true,
          negotiation: updatedNegotiation,
