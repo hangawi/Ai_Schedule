@@ -138,10 +138,14 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
       } else if (result.negotiation.type !== negotiation.type) {
         // 타입이 변경된 경우 (time_slot_choice -> full_conflict, partial_conflict -> full_conflict)
         console.log('[협의 타입 변경]', negotiation.type, '->', result.negotiation.type);
-        // chosenSlot은 유지하되, UI를 초기화하여 새로운 타입의 옵션을 표시
-        setChosenSlot(null); // 선택 초기화
+        // 선택 초기화하여 새로운 타입의 옵션을 표시
+        setChosenSlot(null);
         setSelectedYieldOption('carry_over');
         setConflictChoice(null);
+        setAlternativeSlots([]);
+        // 알림 표시 후 UI가 즉시 변경됨
+        setAlertMessage(`협의 방식이 변경되었습니다. ${result.negotiation.type === 'full_conflict' ? '양보/주장 중 선택해주세요.' : '시간대를 선택해주세요.'}`);
+        setShowAlert(true);
         // 즉시 UI가 변경됨 (currentNegotiation이 업데이트되었으므로)
       } else {
         // 응답했지만 아직 해결되지 않은 경우

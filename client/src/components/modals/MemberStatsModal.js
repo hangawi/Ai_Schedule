@@ -1,10 +1,23 @@
 import React from 'react';
 import { X, Clock, Calendar, TrendingUp, TrendingDown } from 'lucide-react';
 
-const MemberStatsModal = ({ isOpen, onClose, member, isOwner }) => {
+const MemberStatsModal = ({ isOpen, onClose, member, isOwner, currentRoom }) => {
   if (!isOpen || !member) return null;
 
-  const memberData = member.user || member;
+  // 💡 currentRoom이 있으면 최신 멤버 데이터를 가져옴 (이월시간 업데이트 반영)
+  let latestMember = member;
+  if (currentRoom && currentRoom.members) {
+    const memberUserId = (member.user?._id || member.user?.id || member.user);
+    const foundMember = currentRoom.members.find(m => {
+      const mUserId = (m.user?._id || m.user?.id || m.user);
+      return mUserId?.toString() === memberUserId?.toString();
+    });
+    if (foundMember) {
+      latestMember = foundMember;
+    }
+  }
+
+  const memberData = latestMember.user || latestMember;
   const memberName = memberData?.name || `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || '멤버';
 
   return (
@@ -18,7 +31,7 @@ const MemberStatsModal = ({ isOpen, onClose, member, isOwner }) => {
             <h3 className="text-lg font-semibold text-gray-800 flex items-center">
               <div
                 className="w-6 h-6 rounded-full mr-3"
-                style={{ backgroundColor: member.color || '#6B7280' }}
+                style={{ backgroundColor: latestMember.color || '#6B7280' }}
               ></div>
               {memberName} 통계
             </h3>
@@ -36,15 +49,15 @@ const MemberStatsModal = ({ isOpen, onClose, member, isOwner }) => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center">
                   <div className={`text-2xl font-bold ${
-                    member.carryOver > 0 ? 'text-yellow-600' : 'text-gray-400'
+                    latestMember.carryOver > 0 ? 'text-yellow-600' : 'text-gray-400'
                   }`}>
-                    {member.carryOver || 0}
+                    {latestMember.carryOver || 0}
                   </div>
                   <div className="text-xs text-gray-500">이월 시간</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-green-600">
-                    {member.totalProgressTime || 0}
+                    {latestMember.totalProgressTime || 0}
                   </div>
                   <div className="text-xs text-gray-500">완료 시간</div>
                 </div>
@@ -52,14 +65,14 @@ const MemberStatsModal = ({ isOpen, onClose, member, isOwner }) => {
             </div>
 
             {/* 이월시간 히스토리 */}
-            {member.carryOverHistory && member.carryOverHistory.length > 0 && (
+            {latestMember.carryOverHistory && latestMember.carryOverHistory.length > 0 && (
               <div className="bg-gray-50 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
                   <Calendar size={16} className="mr-2" />
                   이월시간 히스토리
                 </h4>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {member.carryOverHistory
+                  {latestMember.carryOverHistory
                     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
                     .map((history, index) => (
                     <div key={index} className="flex justify-between items-center p-2 bg-white rounded border">
@@ -92,10 +105,10 @@ const MemberStatsModal = ({ isOpen, onClose, member, isOwner }) => {
               <h4 className="text-sm font-medium text-blue-800 mb-2">요약</h4>
               <div className="text-sm text-blue-700">
                 <div>• 총 참여 기간: {new Date().toLocaleDateString('ko-KR')} ~ 현재</div>
-                <div>• 총 완료 시간: {member.totalProgressTime || 0}시간</div>
-                <div>• 현재 이월 시간: {member.carryOver || 0}시간</div>
-                {member.carryOverHistory && (
-                  <div>• 이월 발생 횟수: {member.carryOverHistory.length}회</div>
+                <div>• 총 완료 시간: {latestMember.totalProgressTime || 0}시간</div>
+                <div>• 현재 이월 시간: {latestMember.carryOver || 0}시간</div>
+                {latestMember.carryOverHistory && (
+                  <div>• 이월 발생 횟수: {latestMember.carryOverHistory.length}회</div>
                 )}
               </div>
             </div>
