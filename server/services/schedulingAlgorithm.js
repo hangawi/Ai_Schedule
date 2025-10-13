@@ -487,6 +487,48 @@ class SchedulingAlgorithm {
       // 모든 멤버가 다른 시간 필요 or 시간이 부족한 경우 → full_conflict (양보/이월)
       else {
         negotiationType = 'full_conflict';
+
+        // 💡 full_conflict일 때도 각 멤버의 가능한 대체 시간대를 수집 (양보 시 다른 선호시간 선택 위해)
+        // 각 멤버의 해당 요일 선호 시간 가져오기
+        for (const member of unsatisfiedMembers) {
+          const memberId = member.memberId;
+          const roomMember = nonOwnerMembers.find(m => m.user._id.toString() === memberId);
+
+          if (roomMember && roomMember.preferredTimes) {
+            const dayPreferences = roomMember.preferredTimes[dayString];
+            if (dayPreferences && dayPreferences.length > 0) {
+              // 이미 배정된 시간을 제외한 선호 시간만 추출
+              const memberOptions = [];
+
+              for (const pref of dayPreferences) {
+                const prefStart = pref.startTime;
+                const prefEnd = pref.endTime;
+
+                // 이 시간대가 이미 다른 사람에게 배정되었는지 확인
+                const isAlreadyAssigned = existingSlots.some(slot => {
+                  const slotDate = new Date(slot.date);
+                  const blockDate = new Date(block.dateObj);
+
+                  // 날짜가 다르면 충돌 없음
+                  if (slotDate.toDateString() !== blockDate.toDateString()) {
+                    return false;
+                  }
+
+                  // 시간 겹침 확인
+                  return !(slot.endTime <= prefStart || prefEnd <= slot.startTime);
+                });
+
+                // 배정되지 않은 시간만 옵션에 추가
+                if (!isAlreadyAssigned) {
+                  memberOptions.push({ startTime: prefStart, endTime: prefEnd });
+                }
+              }
+
+              memberTimeSlotOptions[memberId] = memberOptions;
+              console.log(`      [full_conflict] ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션`);
+            }
+          }
+        }
       }
 
       console.log(`   협의 타입: ${negotiationType} (블록:${totalSlots}슬롯, 필요:${totalNeeded}슬롯)`);
