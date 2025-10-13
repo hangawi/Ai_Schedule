@@ -1593,6 +1593,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
           onClose={() => setMemberStatsModal({ isOpen: false, member: null })}
           member={memberStatsModal.member}
           isOwner={currentRoom && user && (currentRoom.owner._id === user.id || currentRoom.owner === user.id)}
+          currentRoom={currentRoom}
         />
 
         <CustomAlertModal
