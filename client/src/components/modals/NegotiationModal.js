@@ -444,77 +444,109 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                                 </div>
                                 <div className="space-y-2 max-h-40 overflow-y-auto">
                                   {(() => {
-                                    // 현재 유저의 사용 가능한 다른 시간대 가져오기
-                                    let availableSlots = [];
+                                    // --- Final "All-in-One" Logic ---
 
-                                    console.log('[대체시간] memberSpecificTimeSlots:', activeNegotiation.memberSpecificTimeSlots);
-                                    console.log('[대체시간] currentUser.id:', currentUser?.id);
+                                    // --- 1. Date calculation helpers ---
+                                    const conflictDate = new Date(activeNegotiation.slotInfo.date);
+                                    const dayOfWeek = conflictDate.getUTCDay();
+                                    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+                                    const mondayDate = new Date(conflictDate);
+                                    mondayDate.setUTCDate(conflictDate.getUTCDate() + diffToMonday);
+                                    const dayNameToIndex = { 'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3, 'friday': 4, 'saturday': 5, 'sunday': 6 };
 
-                                    if (activeNegotiation.memberSpecificTimeSlots && currentUser?.id) {
-                                      // 모든 키를 확인하여 현재 사용자 ID와 매칭되는지 체크
-                                      const userId = currentUser.id;
-                                      let userSlots = activeNegotiation.memberSpecificTimeSlots[userId];
-
-                                      // 직접 매칭이 안되면 모든 키를 순회하여 찾기
-                                      if (!userSlots) {
-                                        console.log('[대체시간] 직접 매칭 실패, 모든 키 확인 중...');
-                                        for (const key in activeNegotiation.memberSpecificTimeSlots) {
-                                          console.log('[대체시간] 키:', key, '값:', activeNegotiation.memberSpecificTimeSlots[key]);
-                                          if (key === userId || key === userId.toString() || key.toString() === userId.toString()) {
-                                            userSlots = activeNegotiation.memberSpecificTimeSlots[key];
-                                            console.log('[대체시간] 매칭 성공!', key);
-                                            break;
-                                          }
+                                    const getSlotDateString = (slot) => {
+                                        if (slot.date) {
+                                            let dateStr = slot.date;
+                                            if (typeof dateStr === 'string' && dateStr.length === 10 && !dateStr.includes('T')) {
+                                                return dateStr; // Already YYYY-MM-DD
+                                            }
+                                            return new Date(dateStr).toISOString().split('T')[0];
                                         }
-                                      }
+                                        if (slot.day && dayNameToIndex.hasOwnProperty(slot.day.toLowerCase())) {
+                                            const targetDate = new Date(mondayDate);
+                                            targetDate.setUTCDate(mondayDate.getUTCDate() + dayNameToIndex[slot.day.toLowerCase()]);
+                                            return targetDate.toISOString().split('T')[0];
+                                        }
+                                        return activeNegotiation.slotInfo.date.split('T')[0];
+                                    };
 
-                                      if (userSlots && userSlots.length > 0) {
-                                        availableSlots = userSlots;
-                                        console.log('[대체시간] 사용 가능한 슬롯:', availableSlots);
-                                      }
+                                    // --- 2. Slot Processing ---
+
+                                    // A. Process same-day slots (add date context)
+                                    const negotiationDateStr = activeNegotiation.slotInfo.date.split('T')[0];
+                                    const sameDaySlots = (activeNegotiation.availableTimeSlots || []).map(slot => ({
+                                        ...slot,
+                                        date: negotiationDateStr
+                                    }));
+
+                                    // B. Process and break down other slots
+                                    let otherPreferredSlots = [];
+                                    const memberSlots = (activeNegotiation.memberSpecificTimeSlots && activeNegotiation.memberSpecificTimeSlots[currentUser.id]) || [];
+                                    if (memberSlots.length > 0) {
+                                        const durationMinutes = activeNegotiation.slotInfo?.duration || 60;
+                                        memberSlots.forEach(slot => {
+                                            const slotDateStr = getSlotDateString(slot);
+                                            if (!slot.startTime || !slot.endTime) return;
+                                            try {
+                                                let current = new Date(`${slotDateStr}T${slot.startTime}Z`);
+                                                const end = new Date(`${slotDateStr}T${slot.endTime}Z`);
+                                                if (isNaN(current) || isNaN(end)) return;
+
+                                                while (current < end) {
+                                                    const next = new Date(current.getTime() + durationMinutes * 60000);
+                                                    if (next > end) break;
+                                                    otherPreferredSlots.push({
+                                                        ...slot,
+                                                        date: slotDateStr,
+                                                        startTime: current.toISOString().substring(11, 16),
+                                                        endTime: next.toISOString().substring(11, 16),
+                                                    });
+                                                    current = next;
+                                                }
+                                            } catch (e) { /* Ignore parse errors */ }
+                                        });
                                     }
 
+                                    // --- 3. Combine, De-duplicate, and Filter ---
+                                    const combinedSlots = [...sameDaySlots, ...otherPreferredSlots];
+                                    const uniqueSlots = [];
+                                    const seenSlots = new Set();
+                                    for (const slot of combinedSlots) {
+                                        const identifier = `${getSlotDateString(slot)}-${slot.startTime}-${slot.endTime}`;
+                                        if (!seenSlots.has(identifier)) {
+                                            uniqueSlots.push(slot);
+                                            seenSlots.add(identifier);
+                                        }
+                                    }
+
+                                    let availableSlots = uniqueSlots;
+                                    if (originalTimeSlot) {
+                                        const originalIdentifier = `${getSlotDateString(originalTimeSlot)}-${originalTimeSlot.startTime}-${originalTimeSlot.endTime}`;
+                                        availableSlots = availableSlots.filter(slot => {
+                                            const slotIdentifier = `${getSlotDateString(slot)}-${slot.startTime}-${slot.endTime}`;
+                                            return slotIdentifier !== originalIdentifier;
+                                        });
+                                    }
+
+                                    // --- 4. Rendering ---
                                     if (availableSlots.length === 0) {
-                                      return (
-                                        <div className="text-xs text-gray-600">
-                                          사용 가능한 다른 시간대가 없습니다.
-                                          <div className="text-xs text-red-500 mt-1">
-                                            디버그: memberSpecificTimeSlots 키 = {activeNegotiation.memberSpecificTimeSlots ? Object.keys(activeNegotiation.memberSpecificTimeSlots).join(', ') : 'null'}
-                                          </div>
-                                          <div className="text-xs text-red-500">
-                                            현재 유저 ID = {currentUser?.id}
-                                          </div>
-                                        </div>
-                                      );
+                                      return <div className="text-xs text-gray-600">사용 가능한 다른 시간대가 없습니다.</div>;
                                     }
 
                                     return availableSlots.map((slot, index) => {
-                                      // 날짜와 요일 정보 가져오기
-                                      const slotDate = slot.date ? new Date(slot.date) : new Date(activeNegotiation.slotInfo.date);
+                                      const slotDateStr = getSlotDateString(slot);
+                                      const slotDate = new Date(slotDateStr + 'T00:00:00Z');
                                       const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-                                      const dayName = dayNames[slotDate.getDay()];
-                                      const dateStr = `${slotDate.getMonth() + 1}/${slotDate.getDate()}(${dayName})`;
+                                      const dayName = dayNames[slotDate.getUTCDay()];
+                                      const dateStr = `${slotDate.getUTCMonth() + 1}/${slotDate.getUTCDate()}(${dayName})`;
 
                                       return (
                                         <label key={index} className="flex items-center p-2 bg-white border rounded hover:bg-gray-50 cursor-pointer">
                                           <input
-                                            type="checkbox"
-                                            checked={alternativeSlots.some(s =>
-                                              s.startTime === slot.startTime &&
-                                              s.endTime === slot.endTime &&
-                                              (s.date ? new Date(s.date).getTime() === slotDate.getTime() : true)
-                                            )}
-                                            onChange={(e) => {
-                                              if (e.target.checked) {
-                                                setAlternativeSlots([...alternativeSlots, slot]);
-                                              } else {
-                                                setAlternativeSlots(alternativeSlots.filter(s =>
-                                                  !(s.startTime === slot.startTime &&
-                                                    s.endTime === slot.endTime &&
-                                                    (s.date ? new Date(s.date).getTime() === slotDate.getTime() : true))
-                                                ));
-                                              }
-                                            }}
+                                            type="radio"
+                                            name="alternativeSlot"
+                                            checked={alternativeSlots.length === 1 && alternativeSlots[0].startTime === slot.startTime && alternativeSlots[0].endTime === slot.endTime && getSlotDateString(alternativeSlots[0]) === slotDateStr}
+                                            onChange={() => setAlternativeSlots([slot])}
                                             className="mr-2"
                                           />
                                           <span className="text-xs">{dateStr} {slot.startTime} - {slot.endTime}</span>
@@ -525,7 +557,7 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                                 </div>
                                 {alternativeSlots.length > 0 && (
                                   <div className="mt-2 text-xs text-green-600">
-                                    {alternativeSlots.length}개 시간대 선택됨
+                                    {`${alternativeSlots[0].startTime} - ${alternativeSlots[0].endTime} 시간표를 선택했습니다`}
                                   </div>
                                 )}
                               </div>
