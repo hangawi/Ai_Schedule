@@ -167,6 +167,10 @@ const RoomSchema = new mongoose.Schema({
       startTime: String,
       endTime: String
     }],
+    memberSpecificTimeSlots: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {}
+    },
     slotInfo: {
       day: String,
       startTime: String,
