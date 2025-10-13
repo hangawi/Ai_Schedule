@@ -104,7 +104,10 @@ async function handleNegotiationResolution(room, negotiation, userId) {
          console.log(`[양보 멤버 처리] ${yieldedMembers.length}명의 양보 멤버 처리 시작`);
          yieldedMembers.forEach(yieldedMember => {
             const yieldedUserId = (yieldedMember.user._id || yieldedMember.user).toString();
-            const roomMember = room.members.find(m => m.user.toString() === yieldedUserId);
+            const roomMember = room.members.find(m => {
+               const mUserId = m.user._id ? m.user._id.toString() : m.user.toString();
+               return mUserId === yieldedUserId;
+            });
 
             console.log(`[양보 멤버] userId: ${yieldedUserId.substring(0,8)}, yieldOption: ${yieldedMember.yieldOption}`);
 
@@ -442,7 +445,10 @@ async function handleNegotiationResolution(room, negotiation, userId) {
       // 모든 멤버가 양보한 경우 - 모두 이월 처리
       yieldedMembers.forEach(member => {
          const yieldedUserId = (member.user._id || member.user).toString();
-         const roomMember = room.members.find(m => m.user.toString() === yieldedUserId);
+         const roomMember = room.members.find(m => {
+            const mUserId = m.user._id ? m.user._id.toString() : m.user.toString();
+            return mUserId === yieldedUserId;
+         });
 
          if (member.yieldOption === 'carry_over') {
             const [startH, startM] = negotiation.slotInfo.startTime.split(':').map(Number);
@@ -534,7 +540,10 @@ async function handleNegotiationResolution(room, negotiation, userId) {
       // 패자들은 이월 처리
       losers.forEach(loser => {
          const loserUserId = (loser.user._id || loser.user).toString();
-         const roomMember = room.members.find(m => m.user.toString() === loserUserId);
+         const roomMember = room.members.find(m => {
+            const mUserId = m.user._id ? m.user._id.toString() : m.user.toString();
+            return mUserId === loserUserId;
+         });
 
          if (roomMember) {
             const [startH, startM] = negotiation.slotInfo.startTime.split(':').map(Number);
@@ -824,7 +833,10 @@ exports.respondToNegotiation = async (req, res) => {
 
                for (const cm of negotiation.conflictingMembers) {
                   const memberId = (cm.user._id || cm.user).toString();
-                  const roomMember = room.members.find(m => m.user.toString() === memberId);
+                  const roomMember = room.members.find(m => {
+                     const mUserId = m.user._id ? m.user._id.toString() : m.user.toString();
+                     return mUserId === memberId;
+                  });
 
                   if (roomMember && roomMember.preferredTimes && roomMember.preferredTimes[dayString]) {
                      const dayPreferences = roomMember.preferredTimes[dayString];
