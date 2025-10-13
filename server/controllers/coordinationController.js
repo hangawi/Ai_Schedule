@@ -101,9 +101,12 @@ async function handleNegotiationResolution(room, negotiation, userId) {
          }
 
          // 모든 양보한 사람 처리
+         console.log(`[양보 멤버 처리] ${yieldedMembers.length}명의 양보 멤버 처리 시작`);
          yieldedMembers.forEach(yieldedMember => {
             const yieldedUserId = (yieldedMember.user._id || yieldedMember.user).toString();
             const roomMember = room.members.find(m => m.user.toString() === yieldedUserId);
+
+            console.log(`[양보 멤버] userId: ${yieldedUserId.substring(0,8)}, yieldOption: ${yieldedMember.yieldOption}`);
 
             if (yieldedMember.yieldOption === 'carry_over') {
                // 이월 처리 (중복 방지를 위해 이미 이월된 내역이 있는지 확인)
@@ -111,13 +114,18 @@ async function handleNegotiationResolution(room, negotiation, userId) {
                const [endH, endM] = negotiation.slotInfo.endTime.split(':').map(Number);
                const carryOverHours = ((endH * 60 + endM) - (startH * 60 + startM)) / 60;
 
+               console.log(`[이월 계산] ${negotiation.slotInfo.startTime}-${negotiation.slotInfo.endTime} = ${carryOverHours}시간`);
+
                if (roomMember) {
                   // 해당 협의에 대한 이월 내역이 이미 있는지 확인
                   const alreadyCarriedOver = roomMember.carryOverHistory.some(history =>
                      history.negotiationId && history.negotiationId.toString() === negotiation._id.toString()
                   );
 
+                  console.log(`[이월 체크] roomMember 찾음, 기존 이월: ${roomMember.carryOver}, 이미 이월됨: ${alreadyCarriedOver}`);
+
                   if (!alreadyCarriedOver) {
+                     const beforeCarryOver = roomMember.carryOver;
                      roomMember.carryOver += carryOverHours;
                      roomMember.carryOverHistory.push({
                         week: new Date(),
@@ -126,7 +134,12 @@ async function handleNegotiationResolution(room, negotiation, userId) {
                         timestamp: new Date(),
                         negotiationId: negotiation._id
                      });
+                     console.log(`[이월 완료] ${yieldedUserId.substring(0,8)}: ${beforeCarryOver} → ${roomMember.carryOver} (추가: ${carryOverHours}시간)`);
+                  } else {
+                     console.log(`[이월 스킵] 이미 이월 처리됨`);
                   }
+               } else {
+                  console.log(`[이월 실패] roomMember를 찾을 수 없음`);
                }
             } else if (yieldedMember.yieldOption === 'alternative_time' && yieldedMember.alternativeSlots) {
                // 대체 시간 배정
@@ -801,16 +814,53 @@ exports.respondToNegotiation = async (req, res) => {
                isSystemMessage: true
             });
 
+            // 💡 full_conflict로 전환 시 memberSpecificTimeSlots가 없으면 생성
+            if (!negotiation.memberSpecificTimeSlots || Object.keys(negotiation.memberSpecificTimeSlots).length === 0) {
+               console.log('[full_conflict 전환] memberSpecificTimeSlots 생성 시작');
+               negotiation.memberSpecificTimeSlots = {};
+
+               const dayString = negotiation.slotInfo.day;
+               const conflictDate = new Date(negotiation.slotInfo.date);
+
+               for (const cm of negotiation.conflictingMembers) {
+                  const memberId = (cm.user._id || cm.user).toString();
+                  const roomMember = room.members.find(m => m.user.toString() === memberId);
+
+                  if (roomMember && roomMember.preferredTimes && roomMember.preferredTimes[dayString]) {
+                     const dayPreferences = roomMember.preferredTimes[dayString];
+                     const memberOptions = [];
+
+                     for (const pref of dayPreferences) {
+                        // 이미 배정된 시간 제외
+                        const isAlreadyAssigned = room.timeSlots.some(slot => {
+                           const slotDate = new Date(slot.date);
+                           if (slotDate.toDateString() !== conflictDate.toDateString()) return false;
+                           return !(slot.endTime <= pref.startTime || pref.endTime <= slot.startTime);
+                        });
+
+                        if (!isAlreadyAssigned) {
+                           memberOptions.push({ startTime: pref.startTime, endTime: pref.endTime });
+                        }
+                     }
+
+                     negotiation.memberSpecificTimeSlots[memberId] = memberOptions;
+                     console.log(`      ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션`);
+                  }
+               }
+            }
+
             await room.save();
             const updatedRoom = await Room.findById(roomId)
                .populate('owner', 'firstName lastName email')
                .populate('members.user', 'firstName lastName email')
                .populate('negotiations.conflictingMembers.user', 'firstName lastName email');
 
+            const updatedNegotiation = updatedRoom.negotiations.id(negotiation._id);
+
             return res.json({
                msg: '시간대가 겹쳐 양보/주장 단계로 전환되었습니다.',
                room: updatedRoom,
-               negotiation: negotiation
+               negotiation: updatedNegotiation
             });
          }
 
