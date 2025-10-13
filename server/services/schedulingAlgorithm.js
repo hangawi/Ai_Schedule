@@ -697,20 +697,64 @@ class SchedulingAlgorithm {
     const scheduleStartHour = getHourFromSettings(roomSettings.scheduleStartTime, '9');
     const scheduleEndHour = getHourFromSettings(roomSettings.scheduleEndTime, '18');
 
-
-
     // Calculate the end date of the scheduling window
     const endDate = new Date(startDate);
     endDate.setUTCDate(startDate.getUTCDate() + (numWeeks * 7));
 
-    // 방장의 선호시간표를 기반으로 기본 타임테이블 생성 (조원들이 사용 가능한 시간대)
-    // 방장은 배정받지 않고, 조원들만 배정받음
     const ownerId = owner._id.toString();
 
     console.log('📅 [타임테이블] 방장의 선호시간표를 기반으로 가용 시간대 생성');
     console.log(`📅 [타임테이블] 처리할 조원 수: ${members.length}명`);
 
-    // 조원들의 개인 시간표를 추가
+    // 💡 Step 1: 방장의 가능한 시간대를 먼저 수집
+    const ownerAvailableSlots = new Set();
+
+    if (owner.defaultSchedule && Array.isArray(owner.defaultSchedule)) {
+      const validSchedules = owner.defaultSchedule.filter(schedule => {
+        if (!schedule.startTime) return false;
+        const startMin = parseInt(schedule.startTime.split(':')[1]);
+        return startMin === 0 || startMin === 30;
+      });
+
+      validSchedules.forEach(schedule => {
+        const dayOfWeek = schedule.dayOfWeek;
+        const startTime = schedule.startTime;
+        const endTime = schedule.endTime;
+        const specificDate = schedule.specificDate;
+
+        // 주말 제외
+        if (dayOfWeek === 0 || dayOfWeek === 6) return;
+
+        if (specificDate) {
+          const targetDate = new Date(specificDate);
+          if (targetDate >= startDate && targetDate < endDate) {
+            const slots = this._generateTimeSlots(startTime, endTime);
+            slots.forEach(slotTime => {
+              const dateKey = targetDate.toISOString().split('T')[0];
+              const key = `${dateKey}-${slotTime}`;
+              ownerAvailableSlots.add(key);
+            });
+          }
+        } else {
+          const currentDate = new Date(startDate);
+          while (currentDate < endDate) {
+            if (currentDate.getDay() === dayOfWeek) {
+              const slots = this._generateTimeSlots(startTime, endTime);
+              slots.forEach(slotTime => {
+                const dateKey = currentDate.toISOString().split('T')[0];
+                const key = `${dateKey}-${slotTime}`;
+                ownerAvailableSlots.add(key);
+              });
+            }
+            currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+          }
+        }
+      });
+    }
+
+    console.log(`📅 [방장] 가능한 시간대: ${ownerAvailableSlots.size}개 슬롯`);
+
+    // 💡 Step 2: 조원들의 개인 시간표를 추가 (방장 가능 시간대와 겹치는 것만)
     members.forEach(member => {
       const user = member.user;
       const userId = user._id.toString();
@@ -755,6 +799,11 @@ class SchedulingAlgorithm {
                 const dateKey = targetDate.toISOString().split('T')[0];
                 const key = `${dateKey}-${slotTime}`;
 
+                // 💡 방장이 가능한 시간대인지 확인
+                if (!ownerAvailableSlots.has(key)) {
+                  return; // 방장이 불가능한 시간대는 건너뜀
+                }
+
                 if (!timetable[key]) {
                   const oneIndexedDayOfWeek = targetDate.getDay() === 0 ? 7 : targetDate.getDay();
 
@@ -786,6 +835,11 @@ class SchedulingAlgorithm {
                 slots.forEach(slotTime => {
                   const dateKey = currentDate.toISOString().split('T')[0];
                   const key = `${dateKey}-${slotTime}`;
+
+                  // 💡 방장이 가능한 시간대인지 확인
+                  if (!ownerAvailableSlots.has(key)) {
+                    return; // 방장이 불가능한 시간대는 건너뜀
+                  }
 
                   if (!timetable[key]) {
                     const oneIndexedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
