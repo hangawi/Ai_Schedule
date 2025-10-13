@@ -1012,6 +1012,8 @@ exports.respondToNegotiation = async (req, res) => {
 
       // 업데이트된 협의 정보 반환
       const updatedRoom = await Room.findById(roomId)
+         .populate('owner', 'firstName lastName email')
+         .populate('members.user', 'firstName lastName email')
          .populate('negotiations.conflictingMembers.user', '_id firstName lastName email')
          .populate('negotiations.resolution.assignments.user', '_id firstName lastName email');
 

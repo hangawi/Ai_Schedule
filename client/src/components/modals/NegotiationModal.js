@@ -172,7 +172,10 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
 
   const getCurrentUserResponse = () => {
     const currentUserMember = activeNegotiation.conflictingMembers?.find(
-      cm => cm.user._id === currentUser?.id || cm.user.toString() === currentUser?.id
+      cm => {
+        const cmUserId = typeof cm.user === 'object' ? (cm.user._id || cm.user.id) : cm.user;
+        return cmUserId === currentUser?.id || cmUserId?.toString() === currentUser?.id?.toString();
+      }
     );
     return currentUserMember?.response || 'pending';
   };
@@ -444,10 +447,30 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                                     // 현재 유저의 사용 가능한 다른 시간대 가져오기
                                     let availableSlots = [];
 
+                                    console.log('[대체시간] memberSpecificTimeSlots:', activeNegotiation.memberSpecificTimeSlots);
+                                    console.log('[대체시간] currentUser.id:', currentUser?.id);
+
                                     if (activeNegotiation.memberSpecificTimeSlots && currentUser?.id) {
-                                      const userSlots = activeNegotiation.memberSpecificTimeSlots[currentUser.id];
+                                      // 모든 키를 확인하여 현재 사용자 ID와 매칭되는지 체크
+                                      const userId = currentUser.id;
+                                      let userSlots = activeNegotiation.memberSpecificTimeSlots[userId];
+
+                                      // 직접 매칭이 안되면 모든 키를 순회하여 찾기
+                                      if (!userSlots) {
+                                        console.log('[대체시간] 직접 매칭 실패, 모든 키 확인 중...');
+                                        for (const key in activeNegotiation.memberSpecificTimeSlots) {
+                                          console.log('[대체시간] 키:', key, '값:', activeNegotiation.memberSpecificTimeSlots[key]);
+                                          if (key === userId || key === userId.toString() || key.toString() === userId.toString()) {
+                                            userSlots = activeNegotiation.memberSpecificTimeSlots[key];
+                                            console.log('[대체시간] 매칭 성공!', key);
+                                            break;
+                                          }
+                                        }
+                                      }
+
                                       if (userSlots && userSlots.length > 0) {
                                         availableSlots = userSlots;
+                                        console.log('[대체시간] 사용 가능한 슬롯:', availableSlots);
                                       }
                                     }
 
@@ -455,6 +478,12 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                                       return (
                                         <div className="text-xs text-gray-600">
                                           사용 가능한 다른 시간대가 없습니다.
+                                          <div className="text-xs text-red-500 mt-1">
+                                            디버그: memberSpecificTimeSlots 키 = {activeNegotiation.memberSpecificTimeSlots ? Object.keys(activeNegotiation.memberSpecificTimeSlots).join(', ') : 'null'}
+                                          </div>
+                                          <div className="text-xs text-red-500">
+                                            현재 유저 ID = {currentUser?.id}
+                                          </div>
                                         </div>
                                       );
                                     }
