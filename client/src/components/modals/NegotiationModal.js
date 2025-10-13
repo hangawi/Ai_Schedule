@@ -137,12 +137,12 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
         }, 1500);
       } else if (result.negotiation.type !== negotiation.type) {
         // 타입이 변경된 경우 (time_slot_choice -> full_conflict, partial_conflict -> full_conflict)
-        setAlertMessage('협의 타입이 변경되었습니다. 다시 선택해주세요.');
-        setShowAlert(true);
-        // chosenSlot은 유지 (이전에 선택한 시간 정보 보존)
+        console.log('[협의 타입 변경]', negotiation.type, '->', result.negotiation.type);
+        // chosenSlot은 유지하되, UI를 초기화하여 새로운 타입의 옵션을 표시
+        setChosenSlot(null); // 선택 초기화
         setSelectedYieldOption('carry_over');
-        // conflictChoice 초기화
         setConflictChoice(null);
+        // 즉시 UI가 변경됨 (currentNegotiation이 업데이트되었으므로)
       } else {
         // 응답했지만 아직 해결되지 않은 경우
         const currentUserMember = result.negotiation.conflictingMembers?.find(
@@ -431,8 +431,56 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                               <span className="text-sm">다른 선호 시간 선택</span>
                             </label>
                             {selectedYieldOption === 'alternative_time' && (
-                              <div className="mt-2 text-xs text-gray-600 bg-blue-50 p-2 rounded">
-                                대체 시간 선택 기능은 추후 구현 예정입니다. 현재는 이월 옵션을 사용해주세요.
+                              <div className="mt-2 bg-blue-50 p-3 rounded border border-blue-200">
+                                <div className="text-xs font-medium text-gray-700 mb-2">
+                                  대체 시간대를 선택하세요:
+                                </div>
+                                <div className="space-y-2 max-h-40 overflow-y-auto">
+                                  {(() => {
+                                    // 현재 유저의 사용 가능한 다른 시간대 가져오기
+                                    let availableSlots = [];
+
+                                    if (activeNegotiation.memberSpecificTimeSlots && currentUser?.id) {
+                                      const userSlots = activeNegotiation.memberSpecificTimeSlots[currentUser.id];
+                                      if (userSlots && userSlots.length > 0) {
+                                        availableSlots = userSlots;
+                                      }
+                                    }
+
+                                    if (availableSlots.length === 0) {
+                                      return (
+                                        <div className="text-xs text-gray-600">
+                                          사용 가능한 다른 시간대가 없습니다.
+                                        </div>
+                                      );
+                                    }
+
+                                    return availableSlots.map((slot, index) => (
+                                      <label key={index} className="flex items-center p-2 bg-white border rounded hover:bg-gray-50 cursor-pointer">
+                                        <input
+                                          type="checkbox"
+                                          checked={alternativeSlots.some(s => s.startTime === slot.startTime && s.endTime === slot.endTime)}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              setAlternativeSlots([...alternativeSlots, slot]);
+                                            } else {
+                                              setAlternativeSlots(alternativeSlots.filter(s =>
+                                                s.startTime !== slot.startTime || s.endTime !== slot.endTime
+                                              ));
+                                            }
+                                          }}
+                                          className="mr-2"
+                                        />
+                                        <span className="text-xs">{slot.startTime} - {slot.endTime}</span>
+                                      </label>
+                                    ));
+                                  })()}
+                                </div>
+                                {alternativeSlots.length > 0 && (
+                                  <div className="mt-2 text-xs text-green-600">
+                                    {alternativeSlots.length}개 시간대 선택됨
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
