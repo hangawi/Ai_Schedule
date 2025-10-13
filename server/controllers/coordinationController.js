@@ -848,12 +848,12 @@ exports.respondToNegotiation = async (req, res) => {
             if (!alternativeSlots || alternativeSlots.length === 0) {
                return res.status(400).json({ msg: '대체 시간을 선택해주세요.' });
             }
-            // 객체 배열을 문자열 배열로 변환: { startTime, endTime } -> '날짜-시작시간-종료시간'
-            const slotDate = negotiation.slotInfo.date;
-            const dateStr = new Date(slotDate).toISOString().split('T')[0];
-            userMember.alternativeSlots = alternativeSlots.map(slot =>
-               `${dateStr}-${slot.startTime}-${slot.endTime}`
-            );
+            // 객체 배열을 문자열 배열로 변환: { startTime, endTime, date } -> '날짜-시작시간-종료시간'
+            userMember.alternativeSlots = alternativeSlots.map(slot => {
+               const slotDate = slot.date || negotiation.slotInfo.date;
+               const dateStr = new Date(slotDate).toISOString().split('T')[0];
+               return `${dateStr}-${slot.startTime}-${slot.endTime}`;
+            });
             console.log('[alternative_time] 변환된 alternativeSlots:', userMember.alternativeSlots);
          }
       } else if (response === 'claim') {
@@ -966,49 +966,79 @@ exports.respondToNegotiation = async (req, res) => {
                });
 
                if (roomMember && roomMember.user && roomMember.user.defaultSchedule) {
-                  // dayString을 dayOfWeek 숫자로 변환
+                  // 💡 협의 발생한 요일을 제외한 다른 요일의 선호 시간 가져오기
                   const dayMap = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 0 };
-                  const targetDayOfWeek = dayMap[dayString];
+                  const conflictDayOfWeek = dayMap[dayString];
 
-                  // 해당 요일의 선호 시간 필터링
+                  // 협의 발생한 요일을 제외한 다른 요일의 선호 시간 필터링
                   const dayPreferences = roomMember.user.defaultSchedule.filter(sched =>
-                     sched.dayOfWeek === targetDayOfWeek && sched.priority >= 2
+                     sched.dayOfWeek !== conflictDayOfWeek && sched.priority >= 2
                   );
 
-                  // 연속된 시간 블록을 병합
-                  const sortedPrefs = dayPreferences.sort((a, b) => a.startTime.localeCompare(b.startTime));
-                  const mergedBlocks = [];
+                  console.log(`[대체시간 생성] ${memberId.substring(0,8)}: 충돌 요일(${dayString}) 제외, ${dayPreferences.length}개 선호 시간`);
 
-                  for (const pref of sortedPrefs) {
-                     if (mergedBlocks.length === 0) {
-                        mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
-                     } else {
-                        const lastBlock = mergedBlocks[mergedBlocks.length - 1];
-                        if (lastBlock.endTime === pref.startTime) {
-                           lastBlock.endTime = pref.endTime;
-                        } else {
+                  // 요일별로 그룹화
+                  const dayMap2 = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                  const prefsByDay = {};
+
+                  dayPreferences.forEach(pref => {
+                     const dayName = dayMap2[pref.dayOfWeek];
+                     if (!prefsByDay[dayName]) prefsByDay[dayName] = [];
+                     prefsByDay[dayName].push(pref);
+                  });
+
+                  const memberOptions = [];
+
+                  // 각 요일마다 처리
+                  for (const [dayName, prefs] of Object.entries(prefsByDay)) {
+                     // 연속된 시간 블록 병합
+                     const sortedPrefs = prefs.sort((a, b) => a.startTime.localeCompare(b.startTime));
+                     const mergedBlocks = [];
+
+                     for (const pref of sortedPrefs) {
+                        if (mergedBlocks.length === 0) {
                            mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
+                        } else {
+                           const lastBlock = mergedBlocks[mergedBlocks.length - 1];
+                           if (lastBlock.endTime === pref.startTime) {
+                              lastBlock.endTime = pref.endTime;
+                           } else {
+                              mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
+                           }
+                        }
+                     }
+
+                     // 해당 요일의 실제 날짜 계산 (이번 주)
+                     const targetDayIndex = dayMap2.indexOf(dayName);
+                     const currentDate = new Date(conflictDate);
+                     const currentDayIndex = currentDate.getDay();
+                     let daysToAdd = targetDayIndex - currentDayIndex;
+                     if (daysToAdd <= 0) daysToAdd += 7; // 다음 주
+
+                     const targetDate = new Date(currentDate);
+                     targetDate.setDate(currentDate.getDate() + daysToAdd);
+
+                     // 이미 배정된 시간 제외하고 추가
+                     for (const block of mergedBlocks) {
+                        const isAlreadyAssigned = room.timeSlots.some(slot => {
+                           const slotDate = new Date(slot.date);
+                           if (slotDate.toDateString() !== targetDate.toDateString()) return false;
+                           return !(slot.endTime <= block.startTime || block.endTime <= slot.startTime);
+                        });
+
+                        if (!isAlreadyAssigned) {
+                           memberOptions.push({
+                              startTime: block.startTime,
+                              endTime: block.endTime,
+                              date: targetDate,
+                              day: dayName
+                           });
                         }
                      }
                   }
 
-                  const memberOptions = [];
-
-                  for (const block of mergedBlocks) {
-                     // 이미 배정된 시간 제외
-                     const isAlreadyAssigned = room.timeSlots.some(slot => {
-                        const slotDate = new Date(slot.date);
-                        if (slotDate.toDateString() !== conflictDate.toDateString()) return false;
-                        return !(slot.endTime <= block.startTime || block.endTime <= slot.startTime);
-                     });
-
-                     if (!isAlreadyAssigned) {
-                        memberOptions.push({ startTime: block.startTime, endTime: block.endTime });
-                     }
-                  }
-
                   negotiation.memberSpecificTimeSlots[memberId] = memberOptions;
-                  console.log(`      ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션`);
+                  console.log(`      ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션 (다른 요일)`);
                } else {
                   console.log(`      ${memberId.substring(0,8)}: defaultSchedule 없음`);
                   negotiation.memberSpecificTimeSlots[memberId] = [];
