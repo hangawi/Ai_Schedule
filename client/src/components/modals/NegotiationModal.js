@@ -488,25 +488,33 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                                       );
                                     }
 
-                                    return availableSlots.map((slot, index) => (
-                                      <label key={index} className="flex items-center p-2 bg-white border rounded hover:bg-gray-50 cursor-pointer">
-                                        <input
-                                          type="checkbox"
-                                          checked={alternativeSlots.some(s => s.startTime === slot.startTime && s.endTime === slot.endTime)}
-                                          onChange={(e) => {
-                                            if (e.target.checked) {
-                                              setAlternativeSlots([...alternativeSlots, slot]);
-                                            } else {
-                                              setAlternativeSlots(alternativeSlots.filter(s =>
-                                                s.startTime !== slot.startTime || s.endTime !== slot.endTime
-                                              ));
-                                            }
-                                          }}
-                                          className="mr-2"
-                                        />
-                                        <span className="text-xs">{slot.startTime} - {slot.endTime}</span>
-                                      </label>
-                                    ));
+                                    return availableSlots.map((slot, index) => {
+                                      // 날짜와 요일 정보 가져오기
+                                      const slotDate = new Date(activeNegotiation.slotInfo.date);
+                                      const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+                                      const dayName = dayNames[slotDate.getDay()];
+                                      const dateStr = `${slotDate.getMonth() + 1}/${slotDate.getDate()}(${dayName})`;
+
+                                      return (
+                                        <label key={index} className="flex items-center p-2 bg-white border rounded hover:bg-gray-50 cursor-pointer">
+                                          <input
+                                            type="checkbox"
+                                            checked={alternativeSlots.some(s => s.startTime === slot.startTime && s.endTime === slot.endTime)}
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                setAlternativeSlots([...alternativeSlots, slot]);
+                                              } else {
+                                                setAlternativeSlots(alternativeSlots.filter(s =>
+                                                  s.startTime !== slot.startTime || s.endTime !== slot.endTime
+                                                ));
+                                              }
+                                            }}
+                                            className="mr-2"
+                                          />
+                                          <span className="text-xs">{dateStr} {slot.startTime} - {slot.endTime}</span>
+                                        </label>
+                                      );
+                                    });
                                   })()}
                                 </div>
                                 {alternativeSlots.length > 0 && (

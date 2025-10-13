@@ -146,18 +146,20 @@ async function handleNegotiationResolution(room, negotiation, userId) {
                }
             } else if (yieldedMember.yieldOption === 'alternative_time' && yieldedMember.alternativeSlots) {
                // 대체 시간 배정
+               console.log('[대체시간 배정] alternativeSlots:', yieldedMember.alternativeSlots);
                yieldedMember.alternativeSlots.forEach(slotKey => {
+                  // 형식: '2025-10-13-13:00-14:00'
                   const parts = slotKey.split('-');
                   const date = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
-                  const time = parts[3];
-                  const [h, m] = time.split(':').map(Number);
-                  const endMinutes = h * 60 + m + 30;
-                  const endTime = `${Math.floor(endMinutes/60).toString().padStart(2,'0')}:${(endMinutes%60).toString().padStart(2,'0')}`;
+                  const startTime = parts[3];
+                  const endTime = parts[4];
+
+                  console.log(`[대체시간 배정] 슬롯 추가: ${date.toISOString().split('T')[0]} ${startTime}-${endTime}`);
 
                   room.timeSlots.push({
                      user: yieldedMember.user._id || yieldedMember.user,
                      date: date,
-                     startTime: time,
+                     startTime: startTime,
                      endTime: endTime,
                      day: negotiation.slotInfo.day,
                      subject: '협의 결과 (대체시간)',
@@ -302,6 +304,66 @@ async function handleNegotiationResolution(room, negotiation, userId) {
 
          // 상태를 'active'로 유지하여 계속 협의 가능하도록
          negotiation.status = 'active';
+
+         // 💡 full_conflict로 전환 시 memberSpecificTimeSlots 생성
+         console.log('[full_conflict 전환 #1] memberSpecificTimeSlots 재생성 시작');
+         negotiation.memberSpecificTimeSlots = {};
+
+         const dayString = negotiation.slotInfo.day;
+         const conflictDate = new Date(negotiation.slotInfo.date);
+
+         for (const cm of negotiation.conflictingMembers) {
+            const memberId = (cm.user._id || cm.user).toString();
+            const roomMember = room.members.find(m => {
+               const mUserId = m.user._id ? m.user._id.toString() : m.user.toString();
+               return mUserId === memberId;
+            });
+
+            if (roomMember && roomMember.user && roomMember.user.defaultSchedule) {
+               const dayMap = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 0 };
+               const targetDayOfWeek = dayMap[dayString];
+
+               const dayPreferences = roomMember.user.defaultSchedule.filter(sched =>
+                  sched.dayOfWeek === targetDayOfWeek && sched.priority >= 2
+               );
+
+               // 연속된 시간 블록을 병합
+               const sortedPrefs = dayPreferences.sort((a, b) => a.startTime.localeCompare(b.startTime));
+               const mergedBlocks = [];
+
+               for (const pref of sortedPrefs) {
+                  if (mergedBlocks.length === 0) {
+                     mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
+                  } else {
+                     const lastBlock = mergedBlocks[mergedBlocks.length - 1];
+                     if (lastBlock.endTime === pref.startTime) {
+                        lastBlock.endTime = pref.endTime;
+                     } else {
+                        mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
+                     }
+                  }
+               }
+
+               const memberOptions = [];
+               for (const block of mergedBlocks) {
+                  const isAlreadyAssigned = room.timeSlots.some(slot => {
+                     const slotDate = new Date(slot.date);
+                     if (slotDate.toDateString() !== conflictDate.toDateString()) return false;
+                     return !(slot.endTime <= block.startTime || block.endTime <= slot.startTime);
+                  });
+
+                  if (!isAlreadyAssigned) {
+                     memberOptions.push({ startTime: block.startTime, endTime: block.endTime });
+                  }
+               }
+
+               negotiation.memberSpecificTimeSlots[memberId] = memberOptions;
+               console.log(`      ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션`);
+            } else {
+               console.log(`      ${memberId.substring(0,8)}: defaultSchedule 없음`);
+               negotiation.memberSpecificTimeSlots[memberId] = [];
+            }
+         }
       }
    }
    // Case 2: partial_conflict + 모두 같은 시간 선택 -> full_conflict로 전환
@@ -355,6 +417,66 @@ async function handleNegotiationResolution(room, negotiation, userId) {
       negotiation.status = 'active';
 
       console.log('[partial_conflict -> full_conflict] 모두 같은 시간 선택, 양보/주장으로 전환');
+
+      // 💡 full_conflict로 전환 시 memberSpecificTimeSlots 생성
+      console.log('[full_conflict 전환 #2] memberSpecificTimeSlots 재생성 시작');
+      negotiation.memberSpecificTimeSlots = {};
+
+      const dayString = negotiation.slotInfo.day;
+      const conflictDate = new Date(negotiation.slotInfo.date);
+
+      for (const cm of negotiation.conflictingMembers) {
+         const memberId = (cm.user._id || cm.user).toString();
+         const roomMember = room.members.find(m => {
+            const mUserId = m.user._id ? m.user._id.toString() : m.user.toString();
+            return mUserId === memberId;
+         });
+
+         if (roomMember && roomMember.user && roomMember.user.defaultSchedule) {
+            const dayMap = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 0 };
+            const targetDayOfWeek = dayMap[dayString];
+
+            const dayPreferences = roomMember.user.defaultSchedule.filter(sched =>
+               sched.dayOfWeek === targetDayOfWeek && sched.priority >= 2
+            );
+
+            // 연속된 시간 블록을 병합
+            const sortedPrefs = dayPreferences.sort((a, b) => a.startTime.localeCompare(b.startTime));
+            const mergedBlocks = [];
+
+            for (const pref of sortedPrefs) {
+               if (mergedBlocks.length === 0) {
+                  mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
+               } else {
+                  const lastBlock = mergedBlocks[mergedBlocks.length - 1];
+                  if (lastBlock.endTime === pref.startTime) {
+                     lastBlock.endTime = pref.endTime;
+                  } else {
+                     mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
+                  }
+               }
+            }
+
+            const memberOptions = [];
+            for (const block of mergedBlocks) {
+               const isAlreadyAssigned = room.timeSlots.some(slot => {
+                  const slotDate = new Date(slot.date);
+                  if (slotDate.toDateString() !== conflictDate.toDateString()) return false;
+                  return !(slot.endTime <= block.startTime || block.endTime <= slot.startTime);
+               });
+
+               if (!isAlreadyAssigned) {
+                  memberOptions.push({ startTime: block.startTime, endTime: block.endTime });
+               }
+            }
+
+            negotiation.memberSpecificTimeSlots[memberId] = memberOptions;
+            console.log(`      ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션`);
+         } else {
+            console.log(`      ${memberId.substring(0,8)}: defaultSchedule 없음`);
+            negotiation.memberSpecificTimeSlots[memberId] = [];
+         }
+      }
    }
    // Case 3: partial_conflict + 시간 분할 (각자 다른 시간 선택)
    else if (negotiation.type === 'partial_conflict' && splitFirstMembers.length === 1 && splitSecondMembers.length === 1) {
@@ -677,7 +799,7 @@ exports.respondToNegotiation = async (req, res) => {
       const room = await Room.findById(roomId)
          .populate('negotiations.conflictingMembers.user', '_id firstName lastName email')
          .populate('owner', '_id firstName lastName email')
-         .populate('members.user', 'firstName lastName email');
+         .populate('members.user', 'firstName lastName email defaultSchedule');
 
       if (!room) {
          return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
@@ -726,7 +848,13 @@ exports.respondToNegotiation = async (req, res) => {
             if (!alternativeSlots || alternativeSlots.length === 0) {
                return res.status(400).json({ msg: '대체 시간을 선택해주세요.' });
             }
-            userMember.alternativeSlots = alternativeSlots;
+            // 객체 배열을 문자열 배열로 변환: { startTime, endTime } -> '날짜-시작시간-종료시간'
+            const slotDate = negotiation.slotInfo.date;
+            const dateStr = new Date(slotDate).toISOString().split('T')[0];
+            userMember.alternativeSlots = alternativeSlots.map(slot =>
+               `${dateStr}-${slot.startTime}-${slot.endTime}`
+            );
+            console.log('[alternative_time] 변환된 alternativeSlots:', userMember.alternativeSlots);
          }
       } else if (response === 'claim') {
          // 주장할 때도 chosenSlot 저장 (time_slot_choice에서 선택한 시간)
@@ -823,41 +951,67 @@ exports.respondToNegotiation = async (req, res) => {
                isSystemMessage: true
             });
 
-            // 💡 full_conflict로 전환 시 memberSpecificTimeSlots가 없으면 생성
-            if (!negotiation.memberSpecificTimeSlots || Object.keys(negotiation.memberSpecificTimeSlots).length === 0) {
-               console.log('[full_conflict 전환] memberSpecificTimeSlots 생성 시작');
-               negotiation.memberSpecificTimeSlots = {};
+            // 💡 full_conflict로 전환 시 memberSpecificTimeSlots 재생성 (양보 시 대체 시간 선택용)
+            console.log('[full_conflict 전환 #3] memberSpecificTimeSlots 재생성 시작');
+            negotiation.memberSpecificTimeSlots = {};
 
-               const dayString = negotiation.slotInfo.day;
-               const conflictDate = new Date(negotiation.slotInfo.date);
+            const dayString = negotiation.slotInfo.day;
+            const conflictDate = new Date(negotiation.slotInfo.date);
 
-               for (const cm of negotiation.conflictingMembers) {
-                  const memberId = (cm.user._id || cm.user).toString();
-                  const roomMember = room.members.find(m => {
-                     const mUserId = m.user._id ? m.user._id.toString() : m.user.toString();
-                     return mUserId === memberId;
-                  });
+            for (const cm of negotiation.conflictingMembers) {
+               const memberId = (cm.user._id || cm.user).toString();
+               const roomMember = room.members.find(m => {
+                  const mUserId = m.user._id ? m.user._id.toString() : m.user.toString();
+                  return mUserId === memberId;
+               });
 
-                  if (roomMember && roomMember.preferredTimes && roomMember.preferredTimes[dayString]) {
-                     const dayPreferences = roomMember.preferredTimes[dayString];
-                     const memberOptions = [];
+               if (roomMember && roomMember.user && roomMember.user.defaultSchedule) {
+                  // dayString을 dayOfWeek 숫자로 변환
+                  const dayMap = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 0 };
+                  const targetDayOfWeek = dayMap[dayString];
 
-                     for (const pref of dayPreferences) {
-                        // 이미 배정된 시간 제외
-                        const isAlreadyAssigned = room.timeSlots.some(slot => {
-                           const slotDate = new Date(slot.date);
-                           if (slotDate.toDateString() !== conflictDate.toDateString()) return false;
-                           return !(slot.endTime <= pref.startTime || pref.endTime <= slot.startTime);
-                        });
+                  // 해당 요일의 선호 시간 필터링
+                  const dayPreferences = roomMember.user.defaultSchedule.filter(sched =>
+                     sched.dayOfWeek === targetDayOfWeek && sched.priority >= 2
+                  );
 
-                        if (!isAlreadyAssigned) {
-                           memberOptions.push({ startTime: pref.startTime, endTime: pref.endTime });
+                  // 연속된 시간 블록을 병합
+                  const sortedPrefs = dayPreferences.sort((a, b) => a.startTime.localeCompare(b.startTime));
+                  const mergedBlocks = [];
+
+                  for (const pref of sortedPrefs) {
+                     if (mergedBlocks.length === 0) {
+                        mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
+                     } else {
+                        const lastBlock = mergedBlocks[mergedBlocks.length - 1];
+                        if (lastBlock.endTime === pref.startTime) {
+                           lastBlock.endTime = pref.endTime;
+                        } else {
+                           mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
                         }
                      }
-
-                     negotiation.memberSpecificTimeSlots[memberId] = memberOptions;
-                     console.log(`      ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션`);
                   }
+
+                  const memberOptions = [];
+
+                  for (const block of mergedBlocks) {
+                     // 이미 배정된 시간 제외
+                     const isAlreadyAssigned = room.timeSlots.some(slot => {
+                        const slotDate = new Date(slot.date);
+                        if (slotDate.toDateString() !== conflictDate.toDateString()) return false;
+                        return !(slot.endTime <= block.startTime || block.endTime <= slot.startTime);
+                     });
+
+                     if (!isAlreadyAssigned) {
+                        memberOptions.push({ startTime: block.startTime, endTime: block.endTime });
+                     }
+                  }
+
+                  negotiation.memberSpecificTimeSlots[memberId] = memberOptions;
+                  console.log(`      ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션`);
+               } else {
+                  console.log(`      ${memberId.substring(0,8)}: defaultSchedule 없음`);
+                  negotiation.memberSpecificTimeSlots[memberId] = [];
                }
             }
 

@@ -510,8 +510,15 @@ class SchedulingAlgorithm {
           const memberId = member.memberId;
           const roomMember = nonOwnerMembers.find(m => m.user._id.toString() === memberId);
 
-          if (roomMember && roomMember.preferredTimes) {
-            const dayPreferences = roomMember.preferredTimes[dayString];
+          if (roomMember && roomMember.user && roomMember.user.defaultSchedule) {
+            // dayString을 dayOfWeek 숫자로 변환
+            const dayMap = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 0 };
+            const targetDayOfWeek = dayMap[dayString];
+
+            // 해당 요일의 선호 시간 필터링
+            const dayPreferences = roomMember.user.defaultSchedule.filter(sched =>
+              sched.dayOfWeek === targetDayOfWeek && sched.priority >= 2
+            );
             if (dayPreferences && dayPreferences.length > 0) {
               // 이미 배정된 시간을 제외한 선호 시간만 추출
               const memberOptions = [];
