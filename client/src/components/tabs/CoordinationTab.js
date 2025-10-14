@@ -55,6 +55,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [roomExchangeCounts, setRoomExchangeCounts] = useState({});
   const [sentRequests, setSentRequests] = useState([]);
   const [receivedRequests, setReceivedRequests] = useState([]);
+  const [ownerScheduleCache, setOwnerScheduleCache] = useState(null); // 방장 시간표 정보 캐시
 
   // Debug receivedRequests changes
   useEffect(() => {
@@ -332,8 +333,15 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
   const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest, cancelRequest } = useCoordination(user?.id, onRefreshExchangeCount, loadSentRequests, showAlert);
 
-  // Debug currentRoom changes
+  // 방장 시간표 정보 캐시 (currentRoom이 변경될 때마다 업데이트, 단 owner 정보가 있을 때만)
   useEffect(() => {
+    if (currentRoom?.owner?.defaultSchedule) {
+      setOwnerScheduleCache({
+        defaultSchedule: currentRoom.owner.defaultSchedule,
+        scheduleExceptions: currentRoom.owner.scheduleExceptions,
+        personalTimes: currentRoom.owner.personalTimes
+      });
+    }
   }, [currentRoom]);
 
   // Calculate room-specific request counts for displaying next to room names
@@ -1360,11 +1368,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   selectedSlots={selectedSlots}
                   onSlotSelect={isOwner ? null : handleSlotSelect}
                   onWeekChange={handleWeekChange}
-                  ownerOriginalSchedule={isOwner && user ? {
-                    defaultSchedule: user.defaultSchedule,
-                    scheduleExceptions: user.scheduleExceptions,
-                    personalTimes: user.personalTimes
-                  } : null}
+                  ownerOriginalSchedule={ownerScheduleCache}
                   initialStartDate={currentWeekStartDate}
                   calculateEndTime={calculateEndTime}
                   readOnly={isOwner}

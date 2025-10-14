@@ -1084,10 +1084,76 @@ const DetailTimeGrid = ({
       displaySlots.push(displaySlot);
     });
 
-    // 개인 시간도 추가 (자정 넘어가는 시간 처리)
+    // 선호시간이 아닌 시간을 불가능한 시간(개인시간처럼)으로 표시
     const dayOfWeekPersonal = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
     const selectedDateStr = selectedDate.toISOString().split('T')[0];
 
+    // 선호시간(priority >= 2)이 설정된 시간 범위를 수집
+    const preferredTimeRanges = [];
+    mergedDefaultSchedule.forEach(slot => {
+      if (slot.priority >= 2) {
+        const startMinutes = timeToMinutes(slot.startTime);
+        const endMinutes = timeToMinutes(slot.endTime);
+        preferredTimeRanges.push({ start: startMinutes, end: endMinutes });
+      }
+    });
+    mergedExceptions.forEach(slot => {
+      if (slot.priority >= 2) {
+        const startMinutes = timeToMinutes(slot.startTime);
+        const endMinutes = timeToMinutes(slot.endTime);
+        preferredTimeRanges.push({ start: startMinutes, end: endMinutes });
+      }
+    });
+
+    // 선호시간이 아닌 시간대를 개인시간처럼 표시 (00:00~23:50 전체 범위)
+    const allDayMinutes = [];
+    for (let minutes = 0; minutes < 24 * 60; minutes += 10) {
+      allDayMinutes.push(minutes);
+    }
+
+    // 선호시간을 제외한 시간대 찾기
+    const nonPreferredRanges = [];
+    let currentRangeStart = null;
+
+    for (const minutes of allDayMinutes) {
+      const isPreferred = preferredTimeRanges.some(range =>
+        minutes >= range.start && minutes < range.end
+      );
+
+      if (!isPreferred) {
+        if (currentRangeStart === null) {
+          currentRangeStart = minutes;
+        }
+      } else {
+        if (currentRangeStart !== null) {
+          nonPreferredRanges.push({ start: currentRangeStart, end: minutes });
+          currentRangeStart = null;
+        }
+      }
+    }
+
+    // 마지막 범위 처리
+    if (currentRangeStart !== null) {
+      nonPreferredRanges.push({ start: currentRangeStart, end: 24 * 60 });
+    }
+
+    // 선호시간이 아닌 시간대를 개인시간처럼 표시
+    nonPreferredRanges.forEach(range => {
+      const startHour = Math.floor(range.start / 60);
+      const startMin = range.start % 60;
+      const endHour = Math.floor(range.end / 60);
+      const endMin = range.end % 60;
+
+      const nonPreferredSlot = {
+        type: 'personal',
+        startTime: `${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}`,
+        endTime: `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`,
+        data: { title: '불가능한 시간' }
+      };
+      displaySlots.push(nonPreferredSlot);
+    });
+
+    // 개인 시간도 추가 (자정 넘어가는 시간 처리)
     personalTimes.forEach(pt => {
       let shouldInclude = false;
 

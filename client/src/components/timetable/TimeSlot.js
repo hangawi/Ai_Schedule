@@ -26,14 +26,23 @@ const TimeSlot = ({
     <div
       key={`${date.toISOString().split('T')[0]}-${time}`}
       className={`col-span-1 border-l border-gray-200 h-8 flex items-center justify-center
-        ${isEffectivelyBlocked ? 'bg-gray-300 cursor-not-allowed' : ''}
+        ${isEffectivelyBlocked ? 'cursor-not-allowed' : ''}
         ${!isEffectivelyBlocked && !ownerInfo && isSelected ? 'bg-blue-200 border-2 border-blue-400' : ''}
         ${!isEffectivelyBlocked && !ownerInfo && !isSelected && currentUser ? 'hover:bg-blue-50 cursor-pointer' : ''}
         ${!isEffectivelyBlocked && ownerInfo && currentUser ? 'cursor-pointer hover:opacity-80' : ''}
         ${!isEffectivelyBlocked && isRoomOwner && !ownerInfo ? 'cursor-pointer hover:bg-green-50' : ''}
       `}
       style={!isEffectivelyBlocked && ownerInfo ? { backgroundColor: `${ownerInfo.color}20`, borderColor: ownerInfo.color } :
-             isEffectivelyBlocked && roomExceptionInfo ? { backgroundColor: '#FEEBC8', borderColor: '#F6AD55' } : {}
+             // 방장의 불가능한 시간 (non_preferred) - 연한 보라/라벤더
+             isEffectivelyBlocked && blockedInfo?.ownerScheduleType === 'non_preferred' ? { backgroundColor: '#E9D5FF', borderColor: '#C084FC' } :
+             // 방장의 개인시간 (personal) - 연한 주황/피치
+             isEffectivelyBlocked && blockedInfo?.ownerScheduleType === 'personal' ? { backgroundColor: '#FED7AA', borderColor: '#FB923C' } :
+             // 방장의 예외일정 (exception) - 연한 노란색
+             isEffectivelyBlocked && blockedInfo?.ownerScheduleType === 'exception' ? { backgroundColor: '#FEF3C7', borderColor: '#FBBF24' } :
+             // 그 외 roomException - 연한 청록
+             isEffectivelyBlocked && roomExceptionInfo && !blockedInfo?.ownerScheduleType ? { backgroundColor: '#99F6E4', borderColor: '#2DD4BF' } :
+             // 기타 blocked - 연한 회색 (fallback)
+             isEffectivelyBlocked && !blockedInfo?.ownerScheduleType && !roomExceptionInfo ? { backgroundColor: '#F3F4F6', borderColor: '#D1D5DB' } : {}
             }
       onClick={handleClick}
     >
