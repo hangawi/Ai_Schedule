@@ -293,6 +293,10 @@ class SchedulingAlgorithm {
           totalSlots: totalSlots
         });
 
+        // 💡 즉시 assignments 업데이트하여 다음 블록에서 충족된 것으로 인식
+        assignments[onlyMember.memberId].assignedHours += onlyMember.neededSlots;
+        console.log(`   📝 ${onlyMember.memberId.substring(0,8)} 할당 업데이트: ${assignments[onlyMember.memberId].assignedHours}/${memberRequiredSlots[onlyMember.memberId]}슬롯`);
+
         continue;
       }
 
@@ -337,6 +341,11 @@ class SchedulingAlgorithm {
               neededSlots: leastAssignedMember.neededSlots,
               totalSlots: totalSlots
             });
+
+            // 💡 즉시 assignments 업데이트하여 다음 블록에서 충족된 것으로 인식
+            assignments[leastAssignedMember.memberId].assignedHours += leastAssignedMember.neededSlots;
+            console.log(`   📝 ${leastAssignedMember.memberId.substring(0,8)} 할당 업데이트: ${assignments[leastAssignedMember.memberId].assignedHours}/${memberRequiredSlots[leastAssignedMember.memberId]}슬롯`);
+
             continue; // 다음 블록으로
           } else {
             console.log(`   ⚠️ 공평성 차이 작음 (${leastHours} vs ${secondLeastHours}, 차이 ${secondLeastHours - leastHours}슬롯) → 협의 생성`);
@@ -1346,11 +1355,28 @@ class SchedulingAlgorithm {
           const result = findOneHourBlock(memberId, conflictingSlots, true); // 디버그 모드 활성화
 
           if (result) {
-            // 💡 [4차 수정] 협의 멤버는 Phase 2에서 아예 할당하지 않음
+            // 💡 [수정] 협의 멤버라도 다른 요일에 단독 슬롯이 있으면 배정 (협의 최소화)
             const isConflictingMember = conflictingMembers.has(memberId);
             if (isConflictingMember) {
-              console.log(`      ⏭️ 할당 보류: 멤버 ${memberId.substring(0,8)}가 협의에 포함되어 있으므로 Phase 4 협의로 해결합니다.`);
-              continue;
+              // 현재 블록의 날짜 확인
+              const blockDate = result.block[0].split('-').slice(0, 3).join('-');
+
+              // 이 멤버가 연루된 충돌이 있는 날짜들 확인
+              const memberConflicts = conflictingSlots.filter(c => c.availableMembers.includes(memberId));
+              const conflictDates = new Set();
+              memberConflicts.forEach(c => {
+                const conflictParts = c.slotKey.split('-');
+                const conflictDate = conflictParts.slice(0, 3).join('-');
+                conflictDates.add(conflictDate);
+              });
+
+              // 현재 블록이 충돌 날짜와 다른 요일이면 배정 허용
+              if (!conflictDates.has(blockDate)) {
+                console.log(`      ✅ 협의 멤버이지만 다른 요일(${blockDate})에 단독 슬롯 발견 → 배정하여 협의 최소화`);
+              } else {
+                console.log(`      ⏭️ 할당 보류: 멤버 ${memberId.substring(0,8)}가 협의에 포함되어 있고 같은 날짜에 충돌이 있으므로 Phase 4 협의로 해결합니다.`);
+                continue;
+              }
             }
 
             // 💡 [추가] 같은 날짜에 다른 미충족 멤버도 가능한지 체크
@@ -1561,9 +1587,22 @@ class SchedulingAlgorithm {
                 continue;
               }
 
-              // 💡 협의 멤버는 완전 차단 (Phase 4에서 처리)
-              if (debugMode) console.log(`            ❌ 협의 멤버는 Phase 3 완전 차단`);
-              continue;
+              // 💡 [수정] 협의 멤버라도 다른 요일이면 허용 (협의 최소화)
+              const blockDate = key1.split('-').slice(0, 3).join('-');
+              const conflictDates = new Set();
+              memberConflicts.forEach(c => {
+                const conflictParts = c.slotKey.split('-');
+                const conflictDate = conflictParts.slice(0, 3).join('-');
+                conflictDates.add(conflictDate);
+              });
+
+              // 현재 블록이 충돌 날짜가 아니면 허용
+              if (conflictDates.has(blockDate)) {
+                if (debugMode) console.log(`            ❌ 협의 멤버가 충돌 날짜(${blockDate})의 블록 → Phase 3 차단`);
+                continue;
+              } else {
+                if (debugMode) console.log(`            ✅ 협의 멤버이지만 다른 요일(${blockDate}) → Phase 3 허용`);
+              }
             }
 
             // 시간이 연속되는지 확인 (30분 차이)
