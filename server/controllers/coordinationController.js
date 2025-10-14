@@ -154,18 +154,29 @@ async function handleNegotiationResolution(room, negotiation, userId) {
                   const startTime = parts[3];
                   const endTime = parts[4];
 
-                  console.log(`[대체시간 배정] 슬롯 추가: ${date.toISOString().split('T')[0]} ${startTime}-${endTime}`);
+                  // 이미 존재하는 슬롯인지 확인 (중복 방지)
+                  const existingSlot = room.timeSlots.find(slot =>
+                     (slot.user._id ? slot.user._id.toString() : slot.user.toString()) === (yieldedMember.user._id || yieldedMember.user).toString() &&
+                     new Date(slot.date).toISOString().split('T')[0] === date.toISOString().split('T')[0] &&
+                     slot.startTime === startTime &&
+                     slot.endTime === endTime
+                  );
 
-                  room.timeSlots.push({
-                     user: yieldedMember.user._id || yieldedMember.user,
-                     date: date,
-                     startTime: startTime,
-                     endTime: endTime,
-                     day: negotiation.slotInfo.day,
-                     subject: '협의 결과 (대체시간)',
-                     status: 'confirmed',
-                     assignedBy: userId
-                  });
+                  if (!existingSlot) {
+                     console.log(`[대체시간 배정] 슬롯 추가: ${date.toISOString().split('T')[0]} ${startTime}-${endTime}`);
+                     room.timeSlots.push({
+                        user: yieldedMember.user._id || yieldedMember.user,
+                        date: date,
+                        startTime: startTime,
+                        endTime: endTime,
+                        day: negotiation.slotInfo.day,
+                        subject: '협의 결과 (대체시간)',
+                        status: 'confirmed',
+                        assignedBy: userId
+                     });
+                  } else {
+                     console.log(`[대체시간 배정] 이미 존재하는 슬롯, 스킵: ${date.toISOString().split('T')[0]} ${startTime}-${endTime}`);
+                  }
                });
             }
          });
@@ -814,6 +825,129 @@ exports.respondToNegotiation = async (req, res) => {
          return res.status(400).json({ msg: '이미 해결된 협의입니다.' });
       }
 
+      // 💡 full_conflict인 경우 memberSpecificTimeSlots를 실시간으로 재생성
+      if (negotiation.type === 'full_conflict') {
+         console.log('[실시간 대체시간 재생성] full_conflict 협의의 대체시간 옵션 업데이트');
+         negotiation.memberSpecificTimeSlots = {};
+
+         const conflictDate = new Date(negotiation.slotInfo.date);
+
+         for (const cm of negotiation.conflictingMembers) {
+            const memberId = (cm.user._id || cm.user).toString();
+            const roomMember = room.members.find(m => {
+               const mUserId = m.user._id ? m.user._id.toString() : m.user.toString();
+               return mUserId === memberId;
+            });
+
+            if (roomMember && roomMember.user && roomMember.user.defaultSchedule) {
+               const dayMap = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 0 };
+               const dayPreferences = roomMember.user.defaultSchedule.filter(sched => sched.priority >= 2);
+
+               console.log(`[실시간 대체시간] ${memberId.substring(0,8)}: ${dayPreferences.length}개 선호 시간`);
+
+               const memberExistingSlots = room.timeSlots.filter(slot => {
+                  const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
+                  return slotUserId === memberId;
+               });
+               console.log(`[실시간 대체시간] ${memberId.substring(0,8)}: 기존 배정 슬롯 ${memberExistingSlots.length}개`);
+               memberExistingSlots.forEach(s => {
+                  console.log(`  - ${new Date(s.date).toISOString().split('T')[0]} ${s.startTime}-${s.endTime} (${s.subject})`);
+               });
+
+               const memberOptions = [];
+               const dayMap2 = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+               for (let dow = 0; dow <= 6; dow++) {
+                  const dayName = dayMap2[dow];
+                  const dayScheds = dayPreferences.filter(sched => sched.dayOfWeek === dow);
+                  if (dayScheds.length === 0) continue;
+
+                  const sortedPrefs = dayScheds.sort((a, b) => a.startTime.localeCompare(b.startTime));
+                  const mergedBlocks = [];
+                  for (const pref of sortedPrefs) {
+                     if (mergedBlocks.length === 0) {
+                        mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
+                     } else {
+                        const lastBlock = mergedBlocks[mergedBlocks.length - 1];
+                        if (lastBlock.endTime === pref.startTime) {
+                           lastBlock.endTime = pref.endTime;
+                        } else {
+                           mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
+                        }
+                     }
+                  }
+
+                  const targetDayIndex = dayMap2.indexOf(dayName);
+                  const currentDate = new Date(conflictDate);
+                  const currentDayIndex = currentDate.getDay();
+                  let daysToAdd = targetDayIndex - currentDayIndex;
+                  if (daysToAdd < 0) daysToAdd += 7;
+
+                  const targetDate = new Date(currentDate);
+                  targetDate.setDate(currentDate.getDate() + daysToAdd);
+
+                  for (const block of mergedBlocks) {
+                     // 💡 모든 멤버의 슬롯을 체크 (이미 누군가에게 배정된 시간은 대체시간으로 불가)
+                     const overlappingSlots = room.timeSlots
+                        .filter(slot => {
+                           const slotDate = new Date(slot.date);
+                           if (slotDate.toDateString() !== targetDate.toDateString()) return false;
+
+                           return !(slot.endTime <= block.startTime || block.endTime <= slot.startTime);
+                        })
+                        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+                     if (overlappingSlots.length === 0) {
+                        memberOptions.push({
+                           startTime: block.startTime,
+                           endTime: block.endTime,
+                           date: targetDate,
+                           day: dayName
+                        });
+                        console.log(`      [실시간 추가] ${dayName} ${block.startTime}-${block.endTime} (전체)`);
+                     } else {
+                        console.log(`      [실시간 분할] ${dayName} ${block.startTime}-${block.endTime}, 겹치는 슬롯 ${overlappingSlots.length}개`);
+                        let currentStart = block.startTime;
+                        let addedCount = 0;
+
+                        for (const assigned of overlappingSlots) {
+                           if (currentStart < assigned.startTime) {
+                              memberOptions.push({
+                                 startTime: currentStart,
+                                 endTime: assigned.startTime,
+                                 date: targetDate,
+                                 day: dayName
+                              });
+                              console.log(`      [실시간 추가] ${dayName} ${currentStart}-${assigned.startTime} (분할-앞)`);
+                              addedCount++;
+                           }
+                           currentStart = assigned.endTime > currentStart ? assigned.endTime : currentStart;
+                        }
+
+                        if (currentStart < block.endTime) {
+                           memberOptions.push({
+                              startTime: currentStart,
+                              endTime: block.endTime,
+                              date: targetDate,
+                              day: dayName
+                           });
+                           console.log(`      [실시간 추가] ${dayName} ${currentStart}-${block.endTime} (분할-뒤)`);
+                           addedCount++;
+                        }
+
+                        if (addedCount === 0) {
+                           console.log(`      [실시간 제외] ${dayName} ${block.startTime}-${block.endTime} (완전히 배정됨)`);
+                        }
+                     }
+                  }
+               }
+
+               negotiation.memberSpecificTimeSlots[memberId] = memberOptions;
+               console.log(`      ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션 (실시간)`);
+            }
+         }
+      }
+
       // 접근 권한 확인: participants (당사자들 + 방장)
       const isParticipant = negotiation.participants.some(p => p.toString() === userId);
       if (!isParticipant) {
@@ -926,17 +1060,25 @@ exports.respondToNegotiation = async (req, res) => {
             console.log('[시간 충돌 감지] full_conflict로 전환');
             negotiation.type = 'full_conflict';
 
-            // 기존에 추가된 chosenSlot 슬롯들을 모두 제거
+            // 기존에 추가된 chosenSlot 슬롯들을 모두 제거 (현재 협의 날짜만)
             const conflictingMemberIds = negotiation.conflictingMembers.map(cm =>
                (cm.user._id || cm.user).toString()
             );
+            const negotiationDateStr = new Date(negotiation.slotInfo.date).toISOString().split('T')[0];
 
             room.timeSlots = room.timeSlots.filter(slot => {
                const isNegotiationChoice = slot.subject === '협의 응답 (시간선택)';
                if (!isNegotiationChoice) return true;
 
                const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
-               return !conflictingMemberIds.includes(slotUserId);
+               const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
+
+               // 현재 협의의 날짜이고, 협의 멤버의 슬롯인 경우만 삭제
+               if (conflictingMemberIds.includes(slotUserId) && slotDateStr === negotiationDateStr) {
+                  console.log(`[슬롯 삭제] ${slotUserId.substring(0,8)}의 ${slotDateStr} ${slot.startTime}-${slot.endTime} 슬롯 삭제 (시간 충돌)`);
+                  return false;
+               }
+               return true;
             });
 
             // 모든 멤버의 response를 pending으로 초기화
@@ -966,16 +1108,26 @@ exports.respondToNegotiation = async (req, res) => {
                });
 
                if (roomMember && roomMember.user && roomMember.user.defaultSchedule) {
-                  // 💡 협의 발생한 요일을 제외한 다른 요일의 선호 시간 가져오기
+                  // 💡 모든 요일의 선호 시간 가져오기 (협의 발생한 요일 포함)
                   const dayMap = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 0 };
                   const conflictDayOfWeek = dayMap[dayString];
 
-                  // 협의 발생한 요일을 제외한 다른 요일의 선호 시간 필터링
+                  // 모든 선호 시간 가져오기 (priority >= 2)
                   const dayPreferences = roomMember.user.defaultSchedule.filter(sched =>
-                     sched.dayOfWeek !== conflictDayOfWeek && sched.priority >= 2
+                     sched.priority >= 2
                   );
 
-                  console.log(`[대체시간 생성] ${memberId.substring(0,8)}: 충돌 요일(${dayString}) 제외, ${dayPreferences.length}개 선호 시간`);
+                  console.log(`[대체시간 생성] ${memberId.substring(0,8)}: 모든 요일, ${dayPreferences.length}개 선호 시간`);
+
+                  // 현재 멤버의 기존 배정 슬롯 확인
+                  const memberExistingSlots = room.timeSlots.filter(slot => {
+                     const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
+                     return slotUserId === memberId;
+                  });
+                  console.log(`[대체시간 생성] ${memberId.substring(0,8)}: 기존 배정 슬롯 ${memberExistingSlots.length}개`);
+                  memberExistingSlots.forEach(slot => {
+                     console.log(`  - ${new Date(slot.date).toISOString().split('T')[0]} ${slot.startTime}-${slot.endTime} (${slot.subject})`);
+                  });
 
                   // 요일별로 그룹화
                   const dayMap2 = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -1013,26 +1165,78 @@ exports.respondToNegotiation = async (req, res) => {
                      const currentDate = new Date(conflictDate);
                      const currentDayIndex = currentDate.getDay();
                      let daysToAdd = targetDayIndex - currentDayIndex;
-                     if (daysToAdd <= 0) daysToAdd += 7; // 다음 주
+                     // 이번 주 기준으로 계산 (같은 요일이면 0, 다음 요일이면 양수, 이전 요일이면 음수)
+                     // 음수일 경우 이미 지난 요일이므로 스킵하거나 다음 주로 계산
+                     if (daysToAdd < 0) daysToAdd += 7; // 이미 지난 요일 → 다음 주
 
                      const targetDate = new Date(currentDate);
                      targetDate.setDate(currentDate.getDate() + daysToAdd);
 
-                     // 이미 배정된 시간 제외하고 추가
+                     // 이미 배정받은 시간 제외하고 추가 (블록 분할 로직)
                      for (const block of mergedBlocks) {
-                        const isAlreadyAssigned = room.timeSlots.some(slot => {
-                           const slotDate = new Date(slot.date);
-                           if (slotDate.toDateString() !== targetDate.toDateString()) return false;
-                           return !(slot.endTime <= block.startTime || block.endTime <= slot.startTime);
-                        });
+                        // 💡 이 블록과 겹치는 모든 멤버의 기존 슬롯 찾기 (누구에게든 배정된 시간은 대체시간 불가)
+                        const overlappingSlots = room.timeSlots
+                           .filter(slot => {
+                              const slotDate = new Date(slot.date);
+                              if (slotDate.toDateString() !== targetDate.toDateString()) return false;
 
-                        if (!isAlreadyAssigned) {
+                              // 시간 겹침 확인
+                              return !(slot.endTime <= block.startTime || block.endTime <= slot.startTime);
+                           })
+                           .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+                        if (overlappingSlots.length === 0) {
+                           // 겹치는 슬롯이 없으면 전체 블록 추가
                            memberOptions.push({
                               startTime: block.startTime,
                               endTime: block.endTime,
                               date: targetDate,
                               day: dayName
                            });
+                           console.log(`      [대체시간 추가] ${dayName} ${block.startTime}-${block.endTime} (전체)`);
+                        } else {
+                           // 겹치는 슬롯이 있으면 블록을 분할하여 빈 부분만 추가
+                           console.log(`      [블록분할] ${dayName} ${block.startTime}-${block.endTime}, 겹치는 슬롯 ${overlappingSlots.length}개`);
+                           overlappingSlots.forEach((s, i) => {
+                              console.log(`         겹침${i+1}: ${s.startTime}-${s.endTime}`);
+                           });
+
+                           let currentStart = block.startTime;
+                           let addedCount = 0;
+
+                           for (const assigned of overlappingSlots) {
+                              // 현재 시작 지점부터 배정된 슬롯 시작 전까지의 빈 공간
+                              if (currentStart < assigned.startTime) {
+                                 memberOptions.push({
+                                    startTime: currentStart,
+                                    endTime: assigned.startTime,
+                                    date: targetDate,
+                                    day: dayName
+                                 });
+                                 console.log(`      [대체시간 추가] ${dayName} ${currentStart}-${assigned.startTime} (분할-앞)`);
+                                 addedCount++;
+                              }
+                              // 배정된 슬롯 이후로 시작 지점 이동
+                              const newStart = assigned.endTime > currentStart ? assigned.endTime : currentStart;
+                              console.log(`         currentStart: ${currentStart} → ${newStart} (assigned.endTime: ${assigned.endTime})`);
+                              currentStart = newStart;
+                           }
+
+                           // 마지막 배정 슬롯 이후 블록 끝까지의 빈 공간
+                           if (currentStart < block.endTime) {
+                              memberOptions.push({
+                                 startTime: currentStart,
+                                 endTime: block.endTime,
+                                 date: targetDate,
+                                 day: dayName
+                              });
+                              console.log(`      [대체시간 추가] ${dayName} ${currentStart}-${block.endTime} (분할-뒤)`);
+                              addedCount++;
+                           }
+
+                           if (addedCount === 0) {
+                              console.log(`      [대체시간 제외] ${dayName} ${block.startTime}-${block.endTime} (완전히 배정됨)`);
+                           }
                         }
                      }
                   }
@@ -1978,7 +2182,20 @@ exports.runAutoSchedule = async (req, res) => {
       }
 
       // Clear previous auto-generated slots before running new schedule
-      room.timeSlots = room.timeSlots.filter(slot => !slot.assignedBy);
+      // 단, 협의로 배정된 슬롯(subject에 '협의'가 포함된 것)은 보존
+      room.timeSlots = room.timeSlots.filter(slot => {
+         // assignedBy가 없으면 수동 배정 → 유지
+         if (!slot.assignedBy) return true;
+         // 협의로 배정된 슬롯 → 유지
+         if (slot.subject && (slot.subject.includes('협의') || slot.subject === '자동 배정')) {
+            // '협의 결과', '협의 결과 (대체시간)', '협의 결과 (시간선택)' 등은 유지
+            if (slot.subject.includes('협의')) return true;
+            // '자동 배정'은 삭제
+            if (slot.subject === '자동 배정') return false;
+         }
+         // 기타 assignedBy가 있는 슬롯 → 삭제
+         return false;
+      });
 
       if (minHoursPerWeek < 1 || minHoursPerWeek > 10) {
          return res.status(400).json({ msg: '주당 최소 할당 시간은 1-10시간 사이여야 합니다.' });
@@ -2080,23 +2297,26 @@ exports.runAutoSchedule = async (req, res) => {
         }
       }
 
-      // 자동배정 실행 전: 기존 자동배정 슬롯과 active 협의 삭제
+      // 자동배정 실행 전: 기존 자동배정 슬롯과 active 협의만 삭제 (resolved 협의 슬롯은 유지)
       const beforeSlotCount = room.timeSlots.length;
       const beforeNegotiationCount = room.negotiations ? room.negotiations.filter(n => n.status === 'active').length : 0;
 
+      // 💡 자동배정 슬롯만 삭제, 협의 슬롯은 유지 (이미 배정받은 멤버는 자동으로 제외됨)
       room.timeSlots = room.timeSlots.filter(slot => slot.subject !== '자동 배정');
+
+      // 💡 active 협의만 삭제, resolved는 유지
       room.negotiations = room.negotiations ? room.negotiations.filter(n => n.status !== 'active') : [];
 
       const removedSlots = beforeSlotCount - room.timeSlots.length;
       const removedNegotiations = beforeNegotiationCount - (room.negotiations ? room.negotiations.filter(n => n.status === 'active').length : 0);
 
-      console.log(`🧹 [자동배정 준비] 기존 자동배정 슬롯 ${removedSlots}개 삭제, 활성 협의 ${removedNegotiations}개 삭제`);
+      console.log(`🧹 [자동배정 준비] 기존 자동배정 슬롯 ${removedSlots}개 삭제, 활성 협의 ${removedNegotiations}개 삭제 (resolved 슬롯은 유지)`);
 
       // 개인 시간표 기반 자동배정으로 변경
       const result = schedulingAlgorithm.runAutoSchedule(
          membersOnly,
          room.owner,
-         [], // 기존 roomTimeSlots 대신 빈 배열 전달 (개인 시간표 기반으로 동작)
+         room.timeSlots, // 💡 협의로 배정된 기존 슬롯 전달 (이미 충족된 멤버 제외용)
          {
             minHoursPerWeek,
             numWeeks,

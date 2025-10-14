@@ -130,6 +130,34 @@ class SchedulingAlgorithm {
 
     let assignments = this._initializeMemberAssignments(nonOwnerMembers, memberRequiredSlots);
 
+    // 💡 기존 협의 슬롯을 assignments에 로드 (이미 배정받은 멤버는 제외하기 위해)
+    if (roomTimeSlots && roomTimeSlots.length > 0) {
+      console.log(`📥 [기존 슬롯 로드] ${roomTimeSlots.length}개 슬롯 로드 중...`);
+      roomTimeSlots.forEach(slot => {
+        const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
+        if (slotUserId === ownerId) return; // 방장 제외
+
+        if (assignments[slotUserId]) {
+          assignments[slotUserId].slots.push({
+            date: slot.date,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            subject: slot.subject
+          });
+          assignments[slotUserId].assignedHours += 1; // 30분 슬롯 2개 = 1시간
+          console.log(`   ✅ ${slotUserId.substring(0,8)}: ${slot.subject} (${new Date(slot.date).toISOString().split('T')[0]} ${slot.startTime}-${slot.endTime})`);
+        }
+      });
+
+      // 로드 후 현황 출력
+      console.log(`📊 [기존 슬롯 로드 완료] 멤버별 현황:`);
+      Object.keys(assignments).forEach(memberId => {
+        const assignedSlots = assignments[memberId].slots.length;
+        const requiredSlots = memberRequiredSlots[memberId] || 2;
+        console.log(`   ${memberId.substring(0,8)}: ${assignedSlots}/${requiredSlots}슬롯 배정됨`);
+      });
+    }
+
     // Phase 0: Assign Deferred Assignments (0-priority)
     this._assignDeferredAssignments(timetable, assignments, deferredAssignments);
 
@@ -505,35 +533,39 @@ class SchedulingAlgorithm {
         negotiationType = 'full_conflict';
 
         // 💡 full_conflict일 때도 각 멤버의 가능한 대체 시간대를 수집 (양보 시 다른 선호시간 선택 위해)
-        // 각 멤버의 해당 요일 선호 시간 가져오기
+        // 각 멤버의 이번 주 선호 시간만 가져오기
+        const weekEndDate = new Date(startDate);
+        weekEndDate.setDate(startDate.getDate() + 7);
+
         for (const member of unsatisfiedMembers) {
           const memberId = member.memberId;
           const roomMember = nonOwnerMembers.find(m => m.user._id.toString() === memberId);
 
           if (roomMember && roomMember.user && roomMember.user.defaultSchedule) {
-            // dayString을 dayOfWeek 숫자로 변환
-            const dayMap = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 0 };
-            const targetDayOfWeek = dayMap[dayString];
+            // 이번 주 범위 내의 모든 날짜에 대해 선호 시간 수집
+            const memberOptions = [];
+            const existingSlots = assignments[memberId]?.slots || [];
 
-            // 해당 요일의 선호 시간 필터링
-            const dayPreferences = roomMember.user.defaultSchedule.filter(sched =>
-              sched.dayOfWeek === targetDayOfWeek && sched.priority >= 2
-            );
-            if (dayPreferences && dayPreferences.length > 0) {
-              // 이미 배정된 시간을 제외한 선호 시간만 추출
-              const memberOptions = [];
+            // 이번 주의 각 날짜에 대해 선호시간 확인
+            for (let d = new Date(startDate); d < weekEndDate; d.setDate(d.getDate() + 1)) {
+              const currentDate = new Date(d);
+              const dayOfWeek = currentDate.getDay();
+
+              // 해당 요일의 선호 시간 필터링
+              const dayPreferences = roomMember.user.defaultSchedule.filter(sched =>
+                sched.dayOfWeek === dayOfWeek && sched.priority >= 2
+              );
 
               for (const pref of dayPreferences) {
                 const prefStart = pref.startTime;
                 const prefEnd = pref.endTime;
 
-                // 이 시간대가 이미 다른 사람에게 배정되었는지 확인
+                // 이 시간대가 이미 배정되었는지 확인
                 const isAlreadyAssigned = existingSlots.some(slot => {
                   const slotDate = new Date(slot.date);
-                  const blockDate = new Date(block.dateObj);
 
                   // 날짜가 다르면 충돌 없음
-                  if (slotDate.toDateString() !== blockDate.toDateString()) {
+                  if (slotDate.toDateString() !== currentDate.toDateString()) {
                     return false;
                   }
 
@@ -541,15 +573,19 @@ class SchedulingAlgorithm {
                   return !(slot.endTime <= prefStart || prefEnd <= slot.startTime);
                 });
 
-                // 배정되지 않은 시간만 옵션에 추가
+                // 배정되지 않은 시간만 옵션에 추가 (날짜 정보 포함)
                 if (!isAlreadyAssigned) {
-                  memberOptions.push({ startTime: prefStart, endTime: prefEnd });
+                  memberOptions.push({
+                    startTime: prefStart,
+                    endTime: prefEnd,
+                    date: currentDate.toISOString().split('T')[0] // YYYY-MM-DD 형식
+                  });
                 }
               }
-
-              memberTimeSlotOptions[memberId] = memberOptions;
-              console.log(`      [full_conflict] ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션`);
             }
+
+            memberTimeSlotOptions[memberId] = memberOptions;
+            console.log(`      [full_conflict] ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션 (이번 주)`);
           }
         }
       }

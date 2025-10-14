@@ -25,19 +25,25 @@ const WeekView = ({
 }) => {
   // 방장의 원본 시간표에서 해당 시간대의 일정을 확인하는 함수
   const getOwnerOriginalScheduleInfo = (date, time) => {
-    if (!ownerOriginalSchedule || !isRoomOwner) return null;
+    if (!ownerOriginalSchedule) return null; // 방장뿐만 아니라 모든 조원이 볼 수 있도록 isRoomOwner 체크 제거
 
     const timeMinutes = timeToMinutes(time);
     const dayOfWeek = date.getDay(); // 0=일요일, 1=월요일, ...
     const dateStr = date.toISOString().split('T')[0];
 
-    console.log('🔍 getOwnerOriginalScheduleInfo 체크:', {
-      time,
-      timeMinutes,
-      dayOfWeek,
-      dateStr,
-      ownerOriginalSchedule
-    });
+    // 디버깅용 로그 (월요일 13:00만 출력)
+    if (dayOfWeek === 1 && time === '13:00') {
+      console.log('🔍 getOwnerOriginalScheduleInfo 호출:', {
+        time,
+        dayOfWeek,
+        dateStr,
+        ownerOriginalSchedule: {
+          hasDefaultSchedule: !!ownerOriginalSchedule.defaultSchedule,
+          defaultScheduleLength: ownerOriginalSchedule.defaultSchedule?.length,
+          defaultSchedule: ownerOriginalSchedule.defaultSchedule
+        }
+      });
+    }
 
     // scheduleExceptions 확인 (특정 날짜 일정)
     const exceptionSlot = ownerOriginalSchedule.scheduleExceptions?.find(e => {
@@ -48,22 +54,7 @@ const WeekView = ({
       const startMinutes = startDate.getHours() * 60 + startDate.getMinutes();
       const endMinutes = endDate.getHours() * 60 + endDate.getMinutes();
 
-      // 디버깅용 로깅 - 시간 매치가 될 때만 출력
       const isMatch = timeMinutes >= startMinutes && timeMinutes < endMinutes;
-
-      if (isMatch || (time === '14:40' || time === '15:00')) {
-        console.log('🔍 scheduleException 체크:', {
-          time,
-          exception: e,
-          startDate: startDate.toLocaleString('ko-KR'),
-          endDate: endDate.toLocaleString('ko-KR'),
-          startMinutes,
-          endMinutes,
-          timeMinutes,
-          isMatch
-        });
-      }
-
       return isMatch;
     });
 
@@ -141,6 +132,65 @@ const WeekView = ({
       };
     }
 
+    // 개인시간과 예외일정이 없는 경우에만, 선호시간(priority >= 2) 체크
+    // defaultSchedule에서 해당 요일의 선호시간 확인
+    const hasPreferredTime = ownerOriginalSchedule.defaultSchedule?.some(sched => {
+      if (sched.dayOfWeek !== dayOfWeek || sched.priority < 2) return false;
+
+      const startMinutes = timeToMinutes(sched.startTime);
+      const endMinutes = timeToMinutes(sched.endTime);
+
+      const isInRange = timeMinutes >= startMinutes && timeMinutes < endMinutes;
+
+      // 디버깅용 로그 (월요일 13:00만 출력)
+      if (dayOfWeek === 1 && time === '13:00') {
+        console.log('🔍 선호시간 체크:', {
+          time,
+          dayOfWeek,
+          sched: { dayOfWeek: sched.dayOfWeek, priority: sched.priority, startTime: sched.startTime, endTime: sched.endTime },
+          startMinutes,
+          endMinutes,
+          timeMinutes,
+          isInRange,
+          defaultScheduleLength: ownerOriginalSchedule.defaultSchedule?.length
+        });
+      }
+
+      return isInRange;
+    });
+
+    // scheduleExceptions에서도 선호시간 확인 (priority >= 2)
+    const hasPreferredExceptionTime = ownerOriginalSchedule.scheduleExceptions?.some(e => {
+      if (e.specificDate !== dateStr || !e.priority || e.priority < 2) return false;
+
+      const startDate = new Date(e.startTime);
+      const endDate = new Date(e.endTime);
+      const startMinutes = startDate.getHours() * 60 + startDate.getMinutes();
+      const endMinutes = endDate.getHours() * 60 + endDate.getMinutes();
+
+      return timeMinutes >= startMinutes && timeMinutes < endMinutes;
+    });
+
+    // 디버깅용 로그 (월요일 13:00)
+    if (dayOfWeek === 1 && time === '13:00') {
+      console.log('🔍 최종 판단:', {
+        time,
+        hasPreferredTime,
+        hasPreferredExceptionTime,
+        willShowAsNonPreferred: !hasPreferredTime && !hasPreferredExceptionTime
+      });
+    }
+
+    // 선호시간도 없고 예외일정도 없고 개인시간도 없는 경우 → 불가능한 시간으로 표시
+    if (!hasPreferredTime && !hasPreferredExceptionTime) {
+      return {
+        type: 'non_preferred',
+        name: '불가능 (방장)',
+        title: '불가능한 시간'
+      };
+    }
+
+    // 선호시간이 있으면 null 반환 (빈 시간으로 표시)
     return null;
   };
 
@@ -164,13 +214,14 @@ const WeekView = ({
       let slotType = 'empty';
       let slotData = null;
 
-      // 0순위: 방장의 원본 시간표 정보 (최우선)
-      if (ownerOriginalInfo) {
+      // 0순위: 방장의 원본 시간표 정보 중 exception, personal만 최우선 처리
+      if (ownerOriginalInfo && (ownerOriginalInfo.type === 'exception' || ownerOriginalInfo.type === 'personal')) {
         slotType = 'blocked';
         slotData = {
           name: ownerOriginalInfo.name,
           info: ownerOriginalInfo,
-          isOwnerOriginalSchedule: true
+          isOwnerOriginalSchedule: true,
+          ownerScheduleType: ownerOriginalInfo.type
         };
       }
       // 1순위: blocked 또는 room exception
@@ -214,6 +265,16 @@ const WeekView = ({
       else if (isSelected) {
         slotType = 'selected';
         slotData = null;
+      }
+      // 4순위: 방장의 불가능한 시간 (non_preferred) - 빈 슬롯에만 적용
+      else if (ownerOriginalInfo && ownerOriginalInfo.type === 'non_preferred') {
+        slotType = 'blocked';
+        slotData = {
+          name: ownerOriginalInfo.name,
+          info: ownerOriginalInfo,
+          isOwnerOriginalSchedule: true,
+          ownerScheduleType: ownerOriginalInfo.type
+        };
       }
 
       // 슬롯 분석 완료
@@ -343,7 +404,7 @@ const WeekView = ({
                   <div
                     key={`${date.toISOString().split('T')[0]}-${block.startTime}-${blockIndex}`}
                     className={`absolute left-0 right-0 border-b border-gray-200 flex items-center justify-center text-center px-0.5
-                      ${block.type === 'blocked' ? 'bg-gray-300 cursor-not-allowed' : ''}
+                      ${block.type === 'blocked' ? 'cursor-not-allowed' : ''}
                       ${block.type === 'selected' ? 'bg-blue-200 border-2 border-blue-400' : ''}
                       ${block.type === 'empty' && currentUser ? 'hover:bg-blue-50 cursor-pointer' : ''}
                       ${block.type === 'owner' && currentUser ? 'cursor-pointer hover:opacity-80' : ''}
@@ -356,9 +417,30 @@ const WeekView = ({
                         backgroundColor: `${block.data.color}20`,
                         borderColor: block.data.color
                       } : {}),
-                      ...(block.type === 'blocked' && block.data?.isRoomException ? {
-                        backgroundColor: '#FEEBC8',
-                        borderColor: '#F6AD55'
+                      // 방장의 불가능한 시간 (non_preferred) - 연한 보라/라벤더
+                      ...(block.type === 'blocked' && block.data?.ownerScheduleType === 'non_preferred' ? {
+                        backgroundColor: '#E9D5FF',
+                        borderColor: '#C084FC'
+                      } : {}),
+                      // 방장의 개인시간 (personal) - 연한 주황/피치
+                      ...(block.type === 'blocked' && block.data?.ownerScheduleType === 'personal' ? {
+                        backgroundColor: '#FED7AA',
+                        borderColor: '#FB923C'
+                      } : {}),
+                      // 방장의 예외일정 (exception) - 연한 노란색
+                      ...(block.type === 'blocked' && block.data?.ownerScheduleType === 'exception' ? {
+                        backgroundColor: '#FEF3C7',
+                        borderColor: '#FBBF24'
+                      } : {}),
+                      // 그 외 roomException - 연한 청록
+                      ...(block.type === 'blocked' && block.data?.isRoomException && !block.data?.ownerScheduleType ? {
+                        backgroundColor: '#99F6E4',
+                        borderColor: '#2DD4BF'
+                      } : {}),
+                      // 기타 blocked - 연한 회색 (fallback)
+                      ...(block.type === 'blocked' && !block.data?.ownerScheduleType && !block.data?.isRoomException ? {
+                        backgroundColor: '#F3F4F6',
+                        borderColor: '#D1D5DB'
                       } : {})
                     }}
                     onClick={() => handleSlotClick(date, block.startTime)}
@@ -427,9 +509,22 @@ const WeekView = ({
               const blockedInfo = getBlockedTimeInfo(time);
               const roomExceptionInfo = getRoomExceptionInfo(date, time);
 
-              // 방장의 원본 시간표 정보가 있으면 그것을 사용, 없으면 기존 로직 사용
-              const finalBlockedInfo = ownerOriginalInfo || blockedInfo;
-              const finalRoomExceptionInfo = ownerOriginalInfo ? null : roomExceptionInfo;
+              // 방장의 원본 시간표 정보 처리: exception/personal만 우선, non_preferred는 나중에
+              let finalBlockedInfo = blockedInfo;
+              let finalRoomExceptionInfo = roomExceptionInfo;
+              let finalOwnerInfo = ownerInfo;
+
+              // exception이나 personal은 최우선
+              if (ownerOriginalInfo && (ownerOriginalInfo.type === 'exception' || ownerOriginalInfo.type === 'personal')) {
+                finalBlockedInfo = { ...ownerOriginalInfo, ownerScheduleType: ownerOriginalInfo.type };
+                finalRoomExceptionInfo = null;
+                finalOwnerInfo = null;
+              }
+              // non_preferred는 빈 슬롯에만 적용 (ownerInfo가 없고 blocked도 없을 때)
+              else if (ownerOriginalInfo && ownerOriginalInfo.type === 'non_preferred' && !ownerInfo && !blockedInfo && !roomExceptionInfo) {
+                finalBlockedInfo = { ...ownerOriginalInfo, ownerScheduleType: ownerOriginalInfo.type };
+              }
+
               const isBlocked = !!(finalBlockedInfo || finalRoomExceptionInfo);
 
               return (
@@ -438,7 +533,7 @@ const WeekView = ({
                   date={date}
                   day={dayNamesKorean[dayIndex]}
                   time={time}
-                  ownerInfo={ownerOriginalInfo ? null : ownerInfo}
+                  ownerInfo={finalOwnerInfo}
                   isSelected={isSelected}
                   blockedInfo={finalBlockedInfo}
                   roomExceptionInfo={finalRoomExceptionInfo}
