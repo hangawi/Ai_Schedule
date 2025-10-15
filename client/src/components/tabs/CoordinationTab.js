@@ -20,6 +20,7 @@ import CustomAlertModal from '../modals/CustomAlertModal';
 import MemberScheduleModal from '../modals/MemberScheduleModal';
 import NotificationModal from '../modals/NotificationModal';
 import NegotiationModal from '../modals/NegotiationModal';
+import NegotiationConflictModal from '../modals/NegotiationConflictModal';
 import MemberStatsModal from '../modals/MemberStatsModal';
 
 // Extracted components
@@ -282,6 +283,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   // Negotiation modal states
   const [showNegotiationModal, setShowNegotiationModal] = useState(false);
   const [selectedNegotiation, setSelectedNegotiation] = useState(null);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [conflictNegotiation, setConflictNegotiation] = useState(null);
 
   // Delete confirmation modal state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -447,9 +450,42 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
   // Handle opening negotiation modal
   const handleOpenNegotiation = useCallback((negotiationData) => {
+    // 💡 다른 협의에 이미 응답했는지 확인
+    const otherActiveNegotiations = (currentRoom?.negotiations || []).filter(nego =>
+      nego.status === 'active' &&
+      nego._id !== negotiationData._id &&
+      nego.conflictingMembers?.some(cm => {
+        const cmUserId = cm.user?._id || cm.user?.id || cm.user;
+        return cmUserId === user?.id || cmUserId?.toString() === user?.id?.toString();
+      })
+    );
+
+    const hasRespondedToOther = otherActiveNegotiations.some(nego => {
+      const memberInOtherNego = nego.conflictingMembers?.find(cm => {
+        const cmUserId = cm.user?._id || cm.user?.id || cm.user;
+        return cmUserId === user?.id || cmUserId?.toString() === user?.id?.toString();
+      });
+      return memberInOtherNego && memberInOtherNego.response && memberInOtherNego.response !== 'pending';
+    });
+
+    if (hasRespondedToOther) {
+      const respondedNego = otherActiveNegotiations.find(nego => {
+        const memberInOtherNego = nego.conflictingMembers?.find(cm => {
+          const cmUserId = cm.user?._id || cm.user?.id || cm.user;
+          return cmUserId === user?.id || cmUserId?.toString() === user?.id?.toString();
+        });
+        return memberInOtherNego && memberInOtherNego.response && memberInOtherNego.response !== 'pending';
+      });
+
+      // 💡 커스텀 모달 표시
+      setConflictNegotiation(respondedNego);
+      setShowConflictModal(true);
+      return;
+    }
+
     setSelectedNegotiation(negotiationData);
     setShowNegotiationModal(true);
-  }, []);
+  }, [currentRoom?.negotiations, user?.id]);
 
   // Handle closing negotiation modal
   const handleCloseNegotiation = useCallback(() => {
@@ -1589,6 +1625,18 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
           currentUser={user}
           roomId={currentRoom?._id}
           onRefresh={handleNegotiationRefresh}
+        />
+
+        {/* Negotiation Conflict Modal */}
+        <NegotiationConflictModal
+          isOpen={showConflictModal}
+          onClose={() => setShowConflictModal(false)}
+          onNavigate={() => {
+            setShowConflictModal(false);
+            setSelectedNegotiation(conflictNegotiation);
+            setShowNegotiationModal(true);
+          }}
+          respondedNegotiation={conflictNegotiation}
         />
 
         {/* Member Stats Modal */}

@@ -324,6 +324,33 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                     userResponse === 'choose_slot' ? '시간대 선택' : userResponse
                   }
                 </p>
+                <button
+                  onClick={async () => {
+                    if (window.confirm('응답을 취소하시겠습니까? 다른 협의를 선택할 수 있게 됩니다.')) {
+                      try {
+                        setIsLoading(true);
+                        const result = await coordinationService.cancelNegotiationResponse(roomId, activeNegotiation._id);
+                        setCurrentNegotiation(result.negotiation);
+                        setMessages(result.negotiation.messages || []);
+                        setChosenSlot(null);
+                        setConflictChoice(null);
+                        setOriginalTimeSlot(null);
+                        if (onRefresh) await onRefresh();
+                        setAlertMessage('응답이 취소되었습니다.');
+                        setShowAlert(true);
+                      } catch (err) {
+                        setAlertMessage(err.message || '응답 취소 중 오류가 발생했습니다.');
+                        setShowAlert(true);
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }
+                  }}
+                  disabled={isLoading}
+                  className="mt-3 w-full bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 disabled:bg-gray-300 text-sm"
+                >
+                  응답 취소
+                </button>
               </div>
             )}
 
@@ -474,36 +501,25 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
 
                                     // A. Process same-day slots (add date context)
                                     const negotiationDateStr = activeNegotiation.slotInfo.date.split('T')[0];
-                                    const sameDaySlots = (activeNegotiation.availableTimeSlots || []).map(slot => ({
+                                    // 💡 full_conflict 타입에서는 availableTimeSlots 사용하지 않음
+                                    const sameDaySlots = activeNegotiation.type === 'full_conflict' ? [] : (activeNegotiation.availableTimeSlots || []).map(slot => ({
                                         ...slot,
                                         date: negotiationDateStr
                                     }));
 
-                                    // B. Process and break down other slots
+                                    // B. 💡 백엔드가 이미 할당 시간 단위로 분할해서 보냈으므로 그대로 사용
                                     let otherPreferredSlots = [];
                                     const memberSlots = (activeNegotiation.memberSpecificTimeSlots && activeNegotiation.memberSpecificTimeSlots[currentUser.id]) || [];
                                     if (memberSlots.length > 0) {
-                                        const durationMinutes = activeNegotiation.slotInfo?.duration || 60;
                                         memberSlots.forEach(slot => {
                                             const slotDateStr = getSlotDateString(slot);
                                             if (!slot.startTime || !slot.endTime) return;
-                                            try {
-                                                let current = new Date(`${slotDateStr}T${slot.startTime}Z`);
-                                                const end = new Date(`${slotDateStr}T${slot.endTime}Z`);
-                                                if (isNaN(current) || isNaN(end)) return;
-
-                                                while (current < end) {
-                                                    const next = new Date(current.getTime() + durationMinutes * 60000);
-                                                    if (next > end) break;
-                                                    otherPreferredSlots.push({
-                                                        ...slot,
-                                                        date: slotDateStr,
-                                                        startTime: current.toISOString().substring(11, 16),
-                                                        endTime: next.toISOString().substring(11, 16),
-                                                    });
-                                                    current = next;
-                                                }
-                                            } catch (e) { /* Ignore parse errors */ }
+                                            otherPreferredSlots.push({
+                                                ...slot,
+                                                date: slotDateStr,
+                                                startTime: slot.startTime,
+                                                endTime: slot.endTime,
+                                            });
                                         });
                                     }
 

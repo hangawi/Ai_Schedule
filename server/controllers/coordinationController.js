@@ -924,6 +924,9 @@ exports.respondToNegotiation = async (req, res) => {
 
                   const targetDate = new Date(currentDate);
                   targetDate.setDate(currentDate.getDate() + daysToAdd);
+                  const targetDateStr = targetDate.toISOString().split('T')[0];
+                  const conflictDateStr = conflictDate.toISOString().split('T')[0];
+                  const isConflictDate = targetDateStr === conflictDateStr;
 
                   for (const block of mergedBlocks) {
                      // 💡 모든 멤버의 슬롯을 체크하여 겹치는 부분 제외
@@ -972,10 +975,29 @@ exports.respondToNegotiation = async (req, res) => {
                            continue;
                         }
 
-                        // 슬라이딩 윈도우: 30분씩 이동하면서 옵션 생성
-                        for (let slideStart = rangeStartMinutes; slideStart + requiredMinutes <= rangeEndMinutes; slideStart += 30) {
+                        // 💡 원래 협의 발생한 시간 확인
+                        const [origStartH, origStartM] = negotiation.slotInfo.startTime.split(':').map(Number);
+                        const [origEndH, origEndM] = negotiation.slotInfo.endTime.split(':').map(Number);
+                        const origStartMinutes = origStartH * 60 + origStartM;
+                        const origEndMinutes = origEndH * 60 + origEndM;
+
+                        // 💡 할당 시간 단위로 슬라이딩하여 옵션 생성
+                        // 협의 발생 날짜: 충돌 시간대와 겹치는 모든 시간대 제외
+                        // 다른 날짜: 모든 옵션 포함
+                        for (let slideStart = rangeStartMinutes; slideStart + requiredMinutes <= rangeEndMinutes; slideStart += requiredMinutes) {
                            const optionStartTime = `${Math.floor(slideStart/60).toString().padStart(2,'0')}:${(slideStart%60).toString().padStart(2,'0')}`;
                            const optionEndTime = `${Math.floor((slideStart+requiredMinutes)/60).toString().padStart(2,'0')}:${((slideStart+requiredMinutes)%60).toString().padStart(2,'0')}`;
+                           const optionStartMinutes = slideStart;
+                           const optionEndMinutes = slideStart + requiredMinutes;
+
+                           // 협의 발생 날짜에서만 충돌 시간대와 겹치는지 확인
+                           if (isConflictDate) {
+                              const overlapsConflict = !(optionEndMinutes <= origStartMinutes || optionStartMinutes >= origEndMinutes);
+                              if (overlapsConflict) {
+                                 console.log(`      [실시간 제외] ${dayName} ${optionStartTime}-${optionEndTime} (협의날짜, 충돌과 겹침)`);
+                                 continue;
+                              }
+                           }
 
                            memberOptions.push({
                               startTime: optionStartTime,
@@ -983,7 +1005,7 @@ exports.respondToNegotiation = async (req, res) => {
                               date: targetDate,
                               day: dayName
                            });
-                           console.log(`      [실시간 추가] ${dayName} ${optionStartTime}-${optionEndTime} (${requiredMinutes}분)`);
+                           console.log(`      [실시간 추가] ${dayName} ${optionStartTime}-${optionEndTime}`);
                         }
                      }
                   }
@@ -1127,11 +1149,22 @@ exports.respondToNegotiation = async (req, res) => {
             console.log('[시간 충돌 감지] full_conflict로 전환');
             negotiation.type = 'full_conflict';
 
+            // 💡 slotInfo를 실제 충돌한 시간대로 업데이트
+            negotiation.slotInfo.startTime = chosenSlot.startTime;
+            negotiation.slotInfo.endTime = chosenSlot.endTime;
+            console.log(`[slotInfo 업데이트] ${negotiation.slotInfo.startTime}-${negotiation.slotInfo.endTime}`);
+
             // 기존에 추가된 chosenSlot 슬롯들을 모두 제거 (현재 협의 날짜만)
             const conflictingMemberIds = negotiation.conflictingMembers.map(cm =>
                (cm.user._id || cm.user).toString()
             );
             const negotiationDateStr = new Date(negotiation.slotInfo.date).toISOString().split('T')[0];
+
+            // 💡 충돌한 시간대의 슬롯만 삭제 (다른 시간대의 슬롯은 유지)
+            const [conflictStartH, conflictStartM] = negotiation.slotInfo.startTime.split(':').map(Number);
+            const [conflictEndH, conflictEndM] = negotiation.slotInfo.endTime.split(':').map(Number);
+            const conflictStartMinutes = conflictStartH * 60 + conflictStartM;
+            const conflictEndMinutes = conflictEndH * 60 + conflictEndM;
 
             room.timeSlots = room.timeSlots.filter(slot => {
                const isNegotiationChoice = slot.subject === '협의 응답 (시간선택)';
@@ -1140,10 +1173,20 @@ exports.respondToNegotiation = async (req, res) => {
                const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
                const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
 
-               // 현재 협의의 날짜이고, 협의 멤버의 슬롯인 경우만 삭제
+               // 현재 협의의 날짜이고, 협의 멤버의 슬롯인 경우
                if (conflictingMemberIds.includes(slotUserId) && slotDateStr === negotiationDateStr) {
-                  console.log(`[슬롯 삭제] ${slotUserId.substring(0,8)}의 ${slotDateStr} ${slot.startTime}-${slot.endTime} 슬롯 삭제 (시간 충돌)`);
-                  return false;
+                  // 💡 충돌한 시간대와 겹치는지 확인
+                  const [slotStartH, slotStartM] = slot.startTime.split(':').map(Number);
+                  const [slotEndH, slotEndM] = slot.endTime.split(':').map(Number);
+                  const slotStartMinutes = slotStartH * 60 + slotStartM;
+                  const slotEndMinutes = slotEndH * 60 + slotEndM;
+
+                  // 슬롯이 충돌 시간대와 겹치면 삭제
+                  const overlaps = !(slotEndMinutes <= conflictStartMinutes || slotStartMinutes >= conflictEndMinutes);
+                  if (overlaps) {
+                     console.log(`[슬롯 삭제] ${slotUserId.substring(0,8)}의 ${slotDateStr} ${slot.startTime}-${slot.endTime} 슬롯 삭제 (충돌 시간대: ${negotiation.slotInfo.startTime}-${negotiation.slotInfo.endTime})`);
+                     return false;
+                  }
                }
                return true;
             });
@@ -1166,6 +1209,7 @@ exports.respondToNegotiation = async (req, res) => {
 
             const dayString = negotiation.slotInfo.day;
             const conflictDate = new Date(negotiation.slotInfo.date);
+            const conflictDateStr = conflictDate.toISOString().split('T')[0];
 
             for (const cm of negotiation.conflictingMembers) {
                const memberId = (cm.user._id || cm.user).toString();
@@ -1232,6 +1276,9 @@ exports.respondToNegotiation = async (req, res) => {
                         }
                      }
 
+                     console.log(`      [DEBUG] ${dayName}: ${mergedBlocks.length}개 병합된 블록`);
+                     mergedBlocks.forEach(b => console.log(`        - ${b.startTime}-${b.endTime}`));
+
                      // 해당 요일의 실제 날짜 계산 (이번 주)
                      const targetDayIndex = dayMap2.indexOf(dayName);
                      const currentDate = new Date(conflictDate);
@@ -1241,9 +1288,15 @@ exports.respondToNegotiation = async (req, res) => {
 
                      const targetDate = new Date(currentDate);
                      targetDate.setDate(currentDate.getDate() + daysToAdd);
+                     const targetDateStr = targetDate.toISOString().split('T')[0];
+
+                     // 💡 협의 발생 날짜인지 확인
+                     const isConflictDate = targetDateStr === conflictDateStr;
 
                      // 이미 배정받은 시간 제외하고 슬라이딩 윈도우로 옵션 생성
                      for (const block of mergedBlocks) {
+                        console.log(`      [DEBUG] 블록 처리 중: ${dayName} ${block.startTime}-${block.endTime}, 협의날짜: ${isConflictDate}`);
+
                         // 💡 이 블록과 겹치는 모든 멤버의 기존 슬롯 찾기
                         const overlappingSlots = room.timeSlots
                            .filter(slot => {
@@ -1252,6 +1305,8 @@ exports.respondToNegotiation = async (req, res) => {
                               return !(slot.endTime <= block.startTime || block.endTime <= slot.startTime);
                            })
                            .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+                        console.log(`      [DEBUG] 겹치는 슬롯: ${overlappingSlots.length}개`);
 
                         // 가용 시간대 계산 (블록 분할)
                         const availableRanges = [];
@@ -1276,6 +1331,9 @@ exports.respondToNegotiation = async (req, res) => {
                            }
                         }
 
+                        console.log(`      [DEBUG] 가용 범위: ${availableRanges.length}개`);
+                        availableRanges.forEach(r => console.log(`        - ${r.startTime}-${r.endTime}`));
+
                         // 💡 각 가용 범위에서 슬라이딩 윈도우로 필요한 시간만큼 잘라서 옵션 생성
                         for (const range of availableRanges) {
                            const [startH, startM] = range.startTime.split(':').map(Number);
@@ -1289,10 +1347,29 @@ exports.respondToNegotiation = async (req, res) => {
                               continue;
                            }
 
-                           // 슬라이딩 윈도우: 30분씩 이동하면서 옵션 생성
-                           for (let slideStart = rangeStartMinutes; slideStart + requiredMinutes <= rangeEndMinutes; slideStart += 30) {
+                           // 💡 원래 협의 발생한 시간 확인
+                           const [origStartH, origStartM] = negotiation.slotInfo.startTime.split(':').map(Number);
+                           const [origEndH, origEndM] = negotiation.slotInfo.endTime.split(':').map(Number);
+                           const origStartMinutes = origStartH * 60 + origStartM;
+                           const origEndMinutes = origEndH * 60 + origEndM;
+
+                           // 💡 할당 시간 단위로 슬라이딩하여 옵션 생성
+                           // 협의 발생 날짜: 충돌 시간대와 겹치는 것 제외
+                           // 다른 날짜: 모든 옵션 포함
+                           for (let slideStart = rangeStartMinutes; slideStart + requiredMinutes <= rangeEndMinutes; slideStart += requiredMinutes) {
                               const optionStartTime = `${Math.floor(slideStart/60).toString().padStart(2,'0')}:${(slideStart%60).toString().padStart(2,'0')}`;
                               const optionEndTime = `${Math.floor((slideStart+requiredMinutes)/60).toString().padStart(2,'0')}:${((slideStart+requiredMinutes)%60).toString().padStart(2,'0')}`;
+                              const optionStartMinutes = slideStart;
+                              const optionEndMinutes = slideStart + requiredMinutes;
+
+                              // 협의 발생 날짜에서만 충돌 시간대와 겹치는지 확인
+                              if (isConflictDate) {
+                                 const overlapsConflict = !(optionEndMinutes <= origStartMinutes || optionStartMinutes >= origEndMinutes);
+                                 if (overlapsConflict) {
+                                    console.log(`      [대체시간 제외] ${dayName} ${optionStartTime}-${optionEndTime} (협의날짜, 충돌과 겹침)`);
+                                    continue;
+                                 }
+                              }
 
                               memberOptions.push({
                                  startTime: optionStartTime,
@@ -1300,7 +1377,7 @@ exports.respondToNegotiation = async (req, res) => {
                                  date: targetDate,
                                  day: dayName
                               });
-                              console.log(`      [대체시간 추가] ${dayName} ${optionStartTime}-${optionEndTime} (${requiredMinutes}분)`);
+                              console.log(`      [대체시간 추가] ${dayName} ${optionStartTime}-${optionEndTime}`);
                            }
                         }
                      }
@@ -1556,6 +1633,97 @@ exports.respondToNegotiation = async (req, res) => {
 
    } catch (error) {
       console.error('Error responding to negotiation:', error);
+      res.status(500).json({ msg: 'Server error' });
+   }
+};
+
+// 💡 협의 응답 취소 기능
+exports.cancelNegotiationResponse = async (req, res) => {
+   try {
+      const { roomId, negotiationId } = req.params;
+      const userId = req.user.id;
+
+      const room = await Room.findById(roomId)
+         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email')
+         .populate('owner', '_id firstName lastName email')
+         .populate('members.user', 'firstName lastName email defaultSchedule');
+
+      if (!room) {
+         return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+      }
+
+      const negotiation = room.negotiations.id(negotiationId);
+      if (!negotiation) {
+         return res.status(404).json({ msg: '협의를 찾을 수 없습니다.' });
+      }
+
+      if (negotiation.status !== 'active') {
+         return res.status(400).json({ msg: '이미 해결된 협의는 취소할 수 없습니다.' });
+      }
+
+      const userMember = negotiation.conflictingMembers.find(cm =>
+         (cm.user._id || cm.user).toString() === userId
+      );
+
+      if (!userMember) {
+         return res.status(403).json({ msg: '협의 당사자만 취소할 수 있습니다.' });
+      }
+
+      if (!userMember.response || userMember.response === 'pending') {
+         return res.status(400).json({ msg: '취소할 응답이 없습니다.' });
+      }
+
+      console.log(`[협의 응답 취소] 멤버 ${userId.substring(0,8)}, 협의 ${negotiationId}, 이전 응답: ${userMember.response}`);
+
+      // 💡 choose_slot으로 추가된 슬롯 삭제
+      if (userMember.response === 'choose_slot' && userMember.chosenSlot) {
+         const negotiationDateStr = new Date(negotiation.slotInfo.date).toISOString().split('T')[0];
+         room.timeSlots = room.timeSlots.filter(slot => {
+            const isNegotiationChoice = slot.subject === '협의 응답 (시간선택)';
+            if (!isNegotiationChoice) return true;
+
+            const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
+            const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
+
+            if (slotUserId === userId && slotDateStr === negotiationDateStr) {
+               console.log(`[슬롯 삭제] ${userId.substring(0,8)}의 ${slotDateStr} ${slot.startTime}-${slot.endTime} 슬롯 삭제 (응답 취소)`);
+               return false;
+            }
+            return true;
+         });
+      }
+
+      // 응답 초기화
+      userMember.response = 'pending';
+      userMember.chosenSlot = undefined;
+      userMember.yieldOption = undefined;
+      userMember.alternativeSlots = undefined;
+      userMember.respondedAt = undefined;
+
+      negotiation.messages.push({
+         message: `${userMember.user.firstName || '멤버'}님이 응답을 취소했습니다.`,
+         timestamp: new Date(),
+         isSystemMessage: true
+      });
+
+      await room.save();
+
+      const updatedRoom = await Room.findById(roomId)
+         .populate('owner', 'firstName lastName email')
+         .populate('members.user', 'firstName lastName email')
+         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email')
+         .populate('negotiations.resolution.assignments.user', '_id firstName lastName email');
+
+      const updatedNegotiation = updatedRoom.negotiations.id(negotiationId);
+
+      res.json({
+         success: true,
+         negotiation: updatedNegotiation,
+         room: updatedRoom
+      });
+
+   } catch (error) {
+      console.error('Error canceling negotiation response:', error);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -2359,20 +2527,15 @@ exports.runAutoSchedule = async (req, res) => {
         }
       }
 
-      // 자동배정 실행 전: 기존 자동배정 슬롯과 active 협의만 삭제 (resolved 협의 슬롯은 유지)
+      // 💡 자동배정 실행 전: 기존의 모든 timeSlots와 negotiations 삭제
       const beforeSlotCount = room.timeSlots.length;
-      const beforeNegotiationCount = room.negotiations ? room.negotiations.filter(n => n.status === 'active').length : 0;
+      const beforeNegotiationCount = room.negotiations ? room.negotiations.length : 0;
 
-      // 💡 자동배정 슬롯만 삭제, 협의 슬롯은 유지 (이미 배정받은 멤버는 자동으로 제외됨)
-      room.timeSlots = room.timeSlots.filter(slot => slot.subject !== '자동 배정');
+      // 💡 모든 슬롯과 협의 삭제
+      room.timeSlots = [];
+      room.negotiations = [];
 
-      // 💡 active 협의만 삭제, resolved는 유지
-      room.negotiations = room.negotiations ? room.negotiations.filter(n => n.status !== 'active') : [];
-
-      const removedSlots = beforeSlotCount - room.timeSlots.length;
-      const removedNegotiations = beforeNegotiationCount - (room.negotiations ? room.negotiations.filter(n => n.status === 'active').length : 0);
-
-      console.log(`🧹 [자동배정 준비] 기존 자동배정 슬롯 ${removedSlots}개 삭제, 활성 협의 ${removedNegotiations}개 삭제 (resolved 슬롯은 유지)`);
+      console.log(`🧹 [자동배정 준비] 기존 슬롯 ${beforeSlotCount}개 전체 삭제, 협의 ${beforeNegotiationCount}개 전체 삭제`);
 
       // 개인 시간표 기반 자동배정으로 변경
       const result = schedulingAlgorithm.runAutoSchedule(

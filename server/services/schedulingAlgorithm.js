@@ -373,13 +373,18 @@ class SchedulingAlgorithm {
       // 💡 새로운 로직: 충돌이 발생하면 항상 먼저 시간 선택(time_slot_choice)으로 시작
       // 멤버들이 각자 시간을 선택하고, 겹치면 full_conflict로 전환됨 (협의 해결 로직에서 처리)
 
-      // 모든 멤버가 원래 같은 시간 필요 && 충돌 시간대가 필요 시간보다 크거나 같으면
-      if (allNeedSameOriginalAmount && totalNeeded <= totalSlots) {
+      // 💡 모든 멤버가 원래 같은 시간 필요하고, 충돌 블록에서 2개 이상의 옵션을 만들 수 있으면
+      // (예: 8슬롯에서 6슬롯씩 선택 → 13~16, 14~17 가능)
+      if (allNeedSameOriginalAmount) {
         // 협의 타입 판단을 위해 원래 필요한 슬롯 사용
         const originalNeededPerMember = unsatisfiedMembers[0].originallyNeededSlots;
+        console.log(`   [협의 판단] 원래 필요 슬롯: ${originalNeededPerMember}, 총 필요: ${totalNeeded}, 총 슬롯: ${totalSlots}`);
 
-        // 각 멤버가 선택할 수 있는 시간대 옵션 생성 (원래 필요한 슬롯 기준)
-        const numberOfOptions = Math.floor(totalSlots / originalNeededPerMember);
+        // 💡 슬라이딩 윈도우로 가능한 옵션 수 계산
+        // 예: 8슬롯에서 6슬롯씩 선택 → 0~5, 1~6, 2~7 = 3개 옵션
+        // 예: 8슬롯에서 3슬롯씩 선택 → 0~2, 1~3, 2~4, 3~5, 4~6, 5~7 = 6개 옵션
+        const numberOfOptions = totalSlots - originalNeededPerMember + 1;
+        console.log(`   [협의 판단] 슬라이딩 윈도우 옵션 수: ${numberOfOptions} (총 ${totalSlots}슬롯에서 ${originalNeededPerMember}슬롯씩)`);
 
         if (numberOfOptions >= 2) {
           // 2개 이상의 선택지가 있으면 time_slot_choice
@@ -459,13 +464,21 @@ class SchedulingAlgorithm {
               consecutiveRanges.push(currentRange);
             }
 
-            // 💡 각 연속 범위에서 1시간 단위로 옵션 생성
+            // 💡 각 연속 범위에서 할당 시간 단위로 슬라이딩하여 옵션 생성
             for (const range of consecutiveRanges) {
-              for (let i = 0; i < range.length; i++) {
-                const startMinutes = range[i];
+              // 범위의 시작점부터 할당 시간 단위로 슬라이딩
+              const rangeStartMinutes = range[0];
+              const rangeEndMinutes = range[range.length - 1] + 30; // 마지막 슬롯의 끝 시간
+              console.log(`         [슬라이딩] 범위: ${Math.floor(rangeStartMinutes/60)}:${rangeStartMinutes%60} ~ ${Math.floor(rangeEndMinutes/60)}:${rangeEndMinutes%60}, 필요시간: ${requiredDuration}분`);
 
-                // 💡 1시간 단위로만 시작점 허용 (분이 00인 시간만)
-                if (startMinutes % 60 !== 0) continue;
+              // 💡 1시간 단위로 슬라이딩 (더 많은 옵션 생성)
+              for (let startMinutes = rangeStartMinutes; startMinutes + requiredDuration <= rangeEndMinutes; startMinutes += 60) {
+                console.log(`         [슬라이딩 체크] 시작: ${Math.floor(startMinutes/60)}:${(startMinutes%60).toString().padStart(2,'0')}, 끝: ${Math.floor((startMinutes+requiredDuration)/60)}:${((startMinutes+requiredDuration)%60).toString().padStart(2,'0')}`);
+
+                // 💡 정시(00분)가 아니면 건너뛰기
+                if (startMinutes % 60 !== 0) {
+                  continue;
+                }
 
                 const endMinutes = startMinutes + requiredDuration;
 
@@ -474,11 +487,14 @@ class SchedulingAlgorithm {
                 for (let checkMin = startMinutes; checkMin < endMinutes; checkMin += 30) {
                   if (!range.includes(checkMin)) {
                     isValidRange = false;
+                    console.log(`         [슬라이딩 제외] ${Math.floor(checkMin/60)}:${(checkMin%60).toString().padStart(2,'0')} 슬롯이 범위에 없음`);
                     break;
                   }
                 }
 
                 if (isValidRange) {
+                  console.log(`         [슬라이딩 옵션 생성] ${Math.floor(startMinutes/60)}:${(startMinutes%60).toString().padStart(2,'0')} ~ ${Math.floor(endMinutes/60)}:${(endMinutes%60).toString().padStart(2,'0')}`);
+
                   const optionStartH = Math.floor(startMinutes / 60);
                   const optionStartM = startMinutes % 60;
                   const optionEndH = Math.floor(endMinutes / 60);
@@ -508,12 +524,16 @@ class SchedulingAlgorithm {
             memberTimeSlotOptions[member.memberId] && memberTimeSlotOptions[member.memberId].length > 0
           );
 
+          console.log(`   [옵션 확인] 모든 멤버가 옵션 보유: ${allMembersHaveOptions}`);
+
           if (!allMembersHaveOptions) {
             // 💡 어떤 멤버가 선택할 수 있는 옵션이 없으면 full_conflict (양보/주장)
             console.log(`   ⚠️ 일부 멤버 옵션 없음 → full_conflict`);
             negotiationType = 'full_conflict';
             availableTimeSlots = [];
           } else {
+            console.log(`   ✅ time_slot_choice로 진행`);
+
             // 💡 모든 멤버가 공통으로 선택 가능한 시간대를 availableTimeSlots에 저장
             // (각 멤버의 옵션을 합집합으로 생성 - 프론트엔드에서 각 멤버별로 필터링됨)
             const allOptionsSet = new Set();
