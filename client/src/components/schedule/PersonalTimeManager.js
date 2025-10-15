@@ -301,7 +301,7 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
         {personalTimes.map((personalTime) => (
           <div key={personalTime.id} className={`flex items-center justify-between p-3 rounded-lg border ${editingId === personalTime.id ? 'bg-blue-50 border-blue-300' : 'bg-gray-50'}`}>
             <div className="flex items-center flex-1">
-              {renderPersonalTimeIcon(personalTime.type)}
+              {renderPersonalTimeIcon(personalTime.type || 'event')}
               <div className="ml-3">
                 <span className="font-medium text-gray-800">{personalTime.title}</span>
                 <div className="text-sm text-gray-600">

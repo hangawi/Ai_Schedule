@@ -156,7 +156,6 @@ exports.getEventById = async (req, res) => {
 exports.createEvent = async (req, res) => {
    try {
       const {
-         title,
          date,
          time,
          description,
@@ -171,6 +170,7 @@ exports.createEvent = async (req, res) => {
          color,
          duration = 60, // 기본 1시간
       } = req.body;
+      const title = req.body.title || req.body.summary;
 
       const userId = req.user.id;
 

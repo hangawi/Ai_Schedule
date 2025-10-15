@@ -328,7 +328,7 @@ const ProfileTab = ({ onEditingChange }) => {
           const { data } = event.detail;
           
           if (data.personalTimes) {
-            setPersonalTimes(data.personalTimes);
+            setPersonalTimes([...data.personalTimes]);
           }
           
           if (data.scheduleExceptions) {
