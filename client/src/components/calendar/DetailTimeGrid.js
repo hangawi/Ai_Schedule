@@ -336,7 +336,7 @@ const DetailTimeGrid = ({
       let shouldInclude = false;
 
       // 반복되는 개인시간 체크
-      if (pt.isRecurring !== false && pt.days && pt.days.includes(dayOfWeek)) {
+      if (pt.isRecurring !== false && pt.days && pt.days.includes(dayOfWeek) || pt.type === 'event') {
         shouldInclude = true;
       }
 
@@ -996,7 +996,6 @@ const DetailTimeGrid = ({
   // 병합된 뷰 렌더링 (연속 시간대를 실제로 단일 슬롯으로 병합)
   const renderMergedView = () => {
     const dayOfWeek = selectedDate.getDay();
-
     // 병합된 슬롯들과 개별 슬롯들을 모두 수집
     const displaySlots = [];
 
@@ -1090,7 +1089,7 @@ const DetailTimeGrid = ({
 
     // 선호시간(priority >= 2)이 설정된 시간 범위를 수집
     const preferredTimeRanges = [];
-    mergedDefaultSchedule.forEach(slot => {
+    mergedSchedule.forEach(slot => {
       if (slot.priority >= 2) {
         const startMinutes = timeToMinutes(slot.startTime);
         const endMinutes = timeToMinutes(slot.endTime);
@@ -1107,7 +1106,7 @@ const DetailTimeGrid = ({
 
     // 선호시간이 아닌 시간대를 개인시간처럼 표시 (00:00~23:50 전체 범위)
     const allDayMinutes = [];
-    for (let minutes = 0; minutes < 24 * 60; minutes += 10) {
+    for (let minutes = timeRange.start * 60; minutes < timeRange.end * 60; minutes += 10) {
       allDayMinutes.push(minutes);
     }
 

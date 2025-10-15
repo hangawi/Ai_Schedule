@@ -140,7 +140,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                      const newPersonalTime = {
                         id: Date.now().toString() + Math.random().toString().substring(2),
                         title: eventData.title,
-                        type: 'custom',
+                        type: 'event',
                         startTime: startTime,
                         endTime: endTime,
                         days: [], // 특정 날짜이므로 빈 배열
