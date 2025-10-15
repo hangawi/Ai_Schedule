@@ -478,4 +478,22 @@ export const coordinationService = {
     return await res.json();
   },
 
+  async cancelNegotiationResponse(roomId, negotiationId) {
+    const token = getAuthToken();
+    const res = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/negotiations/${negotiationId}/cancel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-auth-token': token,
+      },
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to cancel negotiation response');
+    }
+
+    return await res.json();
+  },
+
 };

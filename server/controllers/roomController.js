@@ -258,78 +258,75 @@ exports.getRoomDetails = async (req, res) => {
                });
 
                if (roomMember && roomMember.user && roomMember.user.defaultSchedule) {
-                  // 협의 발생한 날짜를 제외한 다른 요일의 선호 시간 가져오기
-                  const dayPreferences = roomMember.user.defaultSchedule.filter(sched =>
-                     sched.dayOfWeek !== conflictDayOfWeek && sched.priority >= 2
-                  );
+                  // 💡 모든 요일의 선호 시간 가져오기
+                  const dayPreferences = roomMember.user.defaultSchedule.filter(sched => sched.priority >= 2);
 
-                  // 연속된 시간 블록을 병합
-                  const sortedPrefs = dayPreferences.sort((a, b) => a.startTime.localeCompare(b.startTime));
-                  const mergedBlocks = [];
-
-                  for (const pref of sortedPrefs) {
-                     if (mergedBlocks.length === 0) {
-                        mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
-                     } else {
-                        const lastBlock = mergedBlocks[mergedBlocks.length - 1];
-                        // 연속된 블록이면 병합
-                        if (lastBlock.endTime === pref.startTime) {
-                           lastBlock.endTime = pref.endTime;
-                        } else {
-                           mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
-                        }
-                     }
-                  }
+                  // 💡 요일별로 그룹화
+                  const dayMap2 = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                  const prefsByDay = {};
+                  dayPreferences.forEach(pref => {
+                     const dayName = dayMap2[pref.dayOfWeek];
+                     if (!prefsByDay[dayName]) prefsByDay[dayName] = [];
+                     prefsByDay[dayName].push(pref);
+                  });
 
                   const memberOptions = [];
-                  for (const block of mergedBlocks) {
-                     // 이 블록에서 이미 배정된 시간을 빼고 남은 시간대를 계산
-                     let availableSlots = [{ startTime: block.startTime, endTime: block.endTime }];
 
-                     for (const slot of room.timeSlots) {
-                        const slotDate = new Date(slot.date);
-                        if (slotDate.toDateString() !== conflictDate.toDateString()) continue;
+                  // 💡 각 요일마다 처리
+                  for (const [dayName, prefs] of Object.entries(prefsByDay)) {
+                     // 연속된 시간 블록 병합
+                     const sortedPrefs = prefs.sort((a, b) => a.startTime.localeCompare(b.startTime));
+                     const mergedBlocks = [];
 
-                        const newAvailableSlots = [];
-                        for (const availSlot of availableSlots) {
-                           // 겹치지 않으면 그대로 유지
-                           if (slot.endTime <= availSlot.startTime || slot.startTime >= availSlot.endTime) {
-                              newAvailableSlots.push(availSlot);
+                     for (const pref of sortedPrefs) {
+                        if (mergedBlocks.length === 0) {
+                           mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
+                        } else {
+                           const lastBlock = mergedBlocks[mergedBlocks.length - 1];
+                           if (lastBlock.endTime === pref.startTime) {
+                              lastBlock.endTime = pref.endTime;
                            } else {
-                              // 겹치면 남은 부분만 추가
-                              if (availSlot.startTime < slot.startTime) {
-                                 newAvailableSlots.push({ startTime: availSlot.startTime, endTime: slot.startTime });
-                              }
-                              if (slot.endTime < availSlot.endTime) {
-                                 newAvailableSlots.push({ startTime: slot.endTime, endTime: availSlot.endTime });
-                              }
+                              mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
                            }
                         }
-                        availableSlots = newAvailableSlots;
                      }
 
-                     memberOptions.push(...availableSlots);
-                  }
+                     // 해당 요일의 실제 날짜 계산
+                     const targetDayIndex = dayMap2.indexOf(dayName);
+                     const currentDayIndex = conflictDate.getDay();
+                     let daysToAdd = targetDayIndex - currentDayIndex;
+                     if (daysToAdd < 0) daysToAdd += 7;
 
-                  // 1시간(2슬롯) 단위로 쪼개기
-                  const oneHourSlots = [];
-                  for (const option of memberOptions) {
-                     const [startH, startM] = option.startTime.split(':').map(Number);
-                     const [endH, endM] = option.endTime.split(':').map(Number);
-                     const startMinutes = startH * 60 + startM;
-                     const endMinutes = endH * 60 + endM;
+                     const targetDate = new Date(conflictDate);
+                     targetDate.setDate(conflictDate.getDate() + daysToAdd);
+                     const targetDateStr = targetDate.toISOString().split('T')[0];
+                     const conflictDateStr = conflictDate.toISOString().split('T')[0];
+                     const isConflictDate = targetDateStr === conflictDateStr;
 
-                     // 1시간(60분) 단위로 쪼개기
-                     for (let minutes = startMinutes; minutes < endMinutes; minutes += 60) {
-                        const slotEndMinutes = Math.min(minutes + 60, endMinutes);
-                        const slotStartTime = `${Math.floor(minutes / 60).toString().padStart(2, '0')}:${(minutes % 60).toString().padStart(2, '0')}`;
-                        const slotEndTime = `${Math.floor(slotEndMinutes / 60).toString().padStart(2, '0')}:${(slotEndMinutes % 60).toString().padStart(2, '0')}`;
-                        oneHourSlots.push({ startTime: slotStartTime, endTime: slotEndTime });
+                     // 이미 배정받은 시간 제외하고 옵션 생성
+                     for (const block of mergedBlocks) {
+                        const [startH, startM] = block.startTime.split(':').map(Number);
+                        const [endH, endM] = block.endTime.split(':').map(Number);
+                        const rangeStartMinutes = startH * 60 + startM;
+                        const rangeEndMinutes = endH * 60 + endM;
+
+                        const requiredSlots = cm.requiredSlots || 2;
+                        const requiredMinutes = requiredSlots * 30;
+
+                        // 💡 협의 날짜가 아니면 그대로 옵션 생성
+                        if (!isConflictDate) {
+                           for (let minutes = rangeStartMinutes; minutes + requiredMinutes <= rangeEndMinutes; minutes += requiredMinutes) {
+                              const slotEndMinutes = minutes + requiredMinutes;
+                              const slotStartTime = `${Math.floor(minutes / 60).toString().padStart(2, '0')}:${(minutes % 60).toString().padStart(2, '0')}`;
+                              const slotEndTime = `${Math.floor(slotEndMinutes / 60).toString().padStart(2, '0')}:${(slotEndMinutes % 60).toString().padStart(2, '0')}`;
+                              memberOptions.push({ startTime: slotStartTime, endTime: slotEndTime, day: dayName });
+                           }
+                        }
                      }
                   }
 
-                  negotiation.memberSpecificTimeSlots[memberId] = oneHourSlots;
-                  console.log(`      ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션`);
+                  console.log(`      [getRoomDetails] ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션`);
+                  negotiation.memberSpecificTimeSlots[memberId] = memberOptions;
                } else {
                   negotiation.memberSpecificTimeSlots[memberId] = [];
                }
