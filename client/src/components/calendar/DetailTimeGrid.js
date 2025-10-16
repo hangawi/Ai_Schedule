@@ -245,6 +245,11 @@ const DetailTimeGrid = ({
       };
 
       setSchedule([...schedule, newSlot]);
+
+      // 복사 옵션이 선택된 경우에만 추가 날짜에 적용
+      if (copyOptions.copyType !== 'none') {
+        applyCopyOptionsToSchedule([newSlot]);
+      }
     }
 
     setHasUnsavedChanges(true);
@@ -498,6 +503,11 @@ const DetailTimeGrid = ({
 
       console.log('🔍 [DetailTimeGrid] 새 선호시간 추가 (특정 날짜, 10분 단위):', newSlots.length, '개 슬롯');
       setSchedule([...schedule, ...newSlots]);
+
+      // 복사 옵션이 선택된 경우에만 추가 날짜에 적용
+      if (copyOptions.copyType !== 'none') {
+        applyCopyOptionsToSchedule(newSlots);
+      }
     }
 
     setHasUnsavedChanges(true);
@@ -770,6 +780,11 @@ const DetailTimeGrid = ({
 
       setExceptions([...filteredExceptions, ...holidayExceptions]);
       setHasUnsavedChanges(true);
+
+      // 복사 옵션이 선택된 경우에만 추가 날짜에 적용
+      if (copyOptions.copyType !== 'none') {
+        holidayExceptions.forEach(exc => applyCopyOptions(exc));
+      }
     }
   };
 
