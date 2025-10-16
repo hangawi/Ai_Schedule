@@ -221,9 +221,24 @@ const DetailTimeGrid = ({
         ));
       } else if (currentPriority === 1) {
         // 조정 가능 → 없어짐 (삭제)
-        setSchedule(schedule.filter(slot =>
-          !(slot.specificDate === dateStr && slot.startTime === startTime && slot.endTime === getNextTimeSlot(startTime))
-        ));
+        const idToDelete = existingSlot._id;
+        const sourceIdToDelete = existingSlot.sourceId;
+
+        setSchedule(schedule.filter(slot => {
+          // 삭제할 슬롯 자체
+          if (slot.specificDate === dateStr && slot.startTime === startTime && slot.endTime === getNextTimeSlot(startTime)) {
+            return false;
+          }
+          // 원본이 삭제될 때 복사본도 삭제
+          if (idToDelete && slot.sourceId === idToDelete) {
+            return false;
+          }
+          // 복사본이 삭제될 때 원본 및 다른 복사본도 삭제
+          if (sourceIdToDelete && (slot._id === sourceIdToDelete || slot.sourceId === sourceIdToDelete)) {
+            return false;
+          }
+          return true;
+        }));
       } else {
         // 다른 우선순위는 선호로 초기화
         setSchedule(schedule.map(slot =>
@@ -464,20 +479,19 @@ const DetailTimeGrid = ({
 
     if (existingSlots.length > 0) {
       // 이미 있으면 해당 날짜 및 시간대의 모든 10분 슬롯 제거 (토글)
-      console.log('🔍 [DetailTimeGrid] 기존 선호시간 제거:', existingSlots.length);
+      // + 복사된 슬롯들도 함께 제거
+      
+      const rootIds = new Set();
+      existingSlots.forEach(slot => {
+        rootIds.add(slot.sourceId || slot._id);
+      });
+
       const filteredSchedule = schedule.filter(slot => {
-        if (!slot.specificDate || slot.specificDate !== dateStr) return true;
-        
-        const slotStart = slot.startTime.split(':').map(Number);
-        const slotEnd = slot.endTime.split(':').map(Number);
-        const slotStartMinutes = slotStart[0] * 60 + slotStart[1];
-        const slotEndMinutes = slotEnd[0] * 60 + slotEnd[1];
-        
-        const targetStartMinutes = startHour * 60;
-        const targetEndMinutes = endHour * 60;
-        
-        // 겹치지 않는 것만 유지
-        return !(slotStartMinutes < targetEndMinutes && slotEndMinutes > targetStartMinutes);
+        const rootId = slot.sourceId || slot._id;
+        if (rootIds.has(rootId)) return false;
+        // Also check if the slot itself is a root that is being deleted
+        if (rootIds.has(slot._id)) return false;
+        return true;
       });
       setSchedule(filteredSchedule);
     } else {
@@ -659,7 +673,7 @@ const DetailTimeGrid = ({
         additionalSlots.push({
           ...slot,
           _id: Date.now().toString() + Math.random(),
-          sourceId: slot._id,
+          sourceId: slot.sourceId || slot._id,
           specificDate: nextDateStr
         });
       });
@@ -674,7 +688,7 @@ const DetailTimeGrid = ({
         additionalSlots.push({
           ...slot,
           _id: Date.now().toString() + Math.random(),
-          sourceId: slot._id,
+          sourceId: slot.sourceId || slot._id,
           specificDate: prevDateStr
         });
       });
@@ -700,7 +714,7 @@ const DetailTimeGrid = ({
             additionalSlots.push({
               ...slot,
               _id: Date.now().toString() + Math.random(),
-              sourceId: slot._id,
+              sourceId: slot.sourceId || slot._id,
               specificDate: targetDateStr
             });
           });
