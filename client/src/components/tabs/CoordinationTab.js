@@ -430,6 +430,21 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   }, [currentRoom, fetchRoomDetails, setCurrentRoom, showAlert]);
 
 
+
+  const handleClearAllCarryOverHistoriesCallback = useCallback(async () => {
+    if (!currentRoom?._id) return;
+    if (window.confirm('정말로 모든 멤버의 이월시간 내역을 삭제하고 이월시간을 0으로 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+      try {
+        const result = await coordinationService.clearAllCarryOverHistories(currentRoom._id);
+        showAlert(result.msg, 'success');
+        setCurrentRoom(result.room);
+      } catch (error) {
+        showAlert(`내역 삭제에 실패했습니다: ${error.message}`, 'error');
+      }
+    }
+  }, [currentRoom, setCurrentRoom, showAlert]);
+
+
   // Auto-scheduling function
   const handleRunAutoScheduleCallback = async () => {
     await handleRunAutoSchedule(
@@ -838,6 +853,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 onAutoResolveNegotiations={handleAutoResolveNegotiationsCallback}
                 onResetCarryOverTimes={handleResetCarryOverTimesCallback}
                 onResetCompletedTimes={handleResetCompletedTimesCallback}
+                onClearAllCarryOverHistories={handleClearAllCarryOverHistoriesCallback}
                 onDeleteAllSlots={handleDeleteAllSlots}
                 currentWeekStartDate={currentWeekStartDate}
                 activeNegotiationsCount={countActiveNegotiations(currentRoom)}

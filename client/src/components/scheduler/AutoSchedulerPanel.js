@@ -1,5 +1,5 @@
 import React from 'react';
-import { Zap, WandSparkles, MessageSquare, Clock, Calendar, X } from 'lucide-react';
+import { Zap, WandSparkles, MessageSquare, Clock, Calendar, X, RefreshCw, History } from 'lucide-react';
 
 const AutoSchedulerPanel = ({
   options,
@@ -11,6 +11,7 @@ const AutoSchedulerPanel = ({
   onResetCarryOverTimes,
   onResetCompletedTimes,
   onDeleteAllSlots,
+  onClearAllCarryOverHistories,
   currentWeekStartDate,
   activeNegotiationsCount = 0
 }) => {
@@ -65,7 +66,7 @@ const AutoSchedulerPanel = ({
         <button
           onClick={onRun}
           disabled={isLoading}
-          className="w-full bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-3 rounded-lg font-medium hover:from-purple-600 hover:to-purple-700 disabled:from-purple-300 disabled:to-purple-400 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 disabled:transform-none flex items-center justify-center text-sm"
+          className="w-full bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-3 rounded-lg font-medium hover:from-purple-600 hover:to-purple-700 disabled:from-purple-300 disabled:to-purple-400 transition-all duration-200 shadow-md flex items-center justify-center text-sm"
         >
           <WandSparkles size={16} className="mr-2" />
           {isLoading ? '배정 중...' : '자동 배정 실행'}
@@ -73,32 +74,30 @@ const AutoSchedulerPanel = ({
 
         {/* 소형 버튼들 그리드 */}
         <div className="grid grid-cols-2 gap-2">
-          {activeNegotiationsCount > 0 && (
-            <button
-              onClick={onAutoResolveNegotiations}
-              className="bg-gradient-to-r from-orange-500 to-orange-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-orange-600 hover:to-orange-700 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 flex items-center justify-center text-xs"
-            >
-              <MessageSquare size={12} className="mr-1" />
-              협의해결
-            </button>
-          )}
           <button
             onClick={onResetCarryOverTimes}
-            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-blue-600 hover:to-blue-700 text-xs transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 flex items-center justify-center"
+            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-blue-600 hover:to-blue-700 text-xs transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center"
           >
             <Clock size={12} className="mr-1" />
             이월초기화
           </button>
           <button
             onClick={onResetCompletedTimes}
-            className="bg-gradient-to-r from-green-500 to-green-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-green-600 hover:to-green-700 text-xs transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 flex items-center justify-center"
+            className="bg-gradient-to-r from-green-500 to-green-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-green-600 hover:to-green-700 text-xs transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center"
           >
             <Calendar size={12} className="mr-1" />
             완료초기화
           </button>
           <button
+            onClick={onClearAllCarryOverHistories} // New button
+            className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-yellow-600 hover:to-yellow-700 text-xs transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center"
+          >
+            <History size={12} className="mr-1" />
+            내역 삭제
+          </button>
+          <button
             onClick={onDeleteAllSlots}
-            className="bg-gradient-to-r from-red-500 to-red-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-red-600 hover:to-red-700 disabled:from-red-300 disabled:to-red-400 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105 disabled:transform-none flex items-center justify-center text-xs"
+            className="bg-gradient-to-r from-red-500 to-red-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-red-600 hover:to-red-700 disabled:from-red-300 disabled:to-red-400 transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center text-xs"
           >
             <X size={12} className="mr-1" />
             비우기

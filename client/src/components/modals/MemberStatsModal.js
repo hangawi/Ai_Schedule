@@ -1,8 +1,26 @@
 import React from 'react';
 import { X, Clock, Calendar, TrendingUp, TrendingDown } from 'lucide-react';
+import { coordinationService } from '../../services/coordinationService';
 
-const MemberStatsModal = ({ isOpen, onClose, member, isOwner, currentRoom }) => {
+const MemberStatsModal = ({ isOpen, onClose, member, isOwner, currentRoom, onRefresh }) => {
   if (!isOpen || !member) return null;
+
+  const handleClearCarryOverHistory = async () => {
+    if (window.confirm('정말로 이 멤버의 이월시간 내역을 모두 삭제하고, 이월시간을 0으로 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+      try {
+        const memberId = latestMember.user?._id || latestMember.user;
+        await coordinationService.clearCarryOverHistory(currentRoom._id, memberId);
+        alert('이월시간 내역이 성공적으로 삭제되었습니다.');
+        if (onRefresh) {
+          onRefresh();
+        }
+        onClose(); // Close modal on success
+      } catch (error) {
+        console.error('Error clearing carry-over history:', error);
+        alert(`오류가 발생했습니다: ${error.message}`);
+      }
+    }
+  };
 
   // 💡 currentRoom이 있으면 최신 멤버 데이터를 가져옴 (이월시간 업데이트 반영)
   let latestMember = member;
@@ -80,27 +98,37 @@ const MemberStatsModal = ({ isOpen, onClose, member, isOwner, currentRoom }) => 
             {/* 이월시간 히스토리 */}
             {latestMember.carryOverHistory && latestMember.carryOverHistory.length > 0 && (
               <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
-                  <Calendar size={16} className="mr-2" />
-                  이월시간 히스토리
-                </h4>
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="text-sm font-medium text-gray-700 flex items-center">
+                    <Calendar size={16} className="mr-2" />
+                    이월시간 히스토리
+                  </h4>
+                  {isOwner && (
+                    <button 
+                      onClick={handleClearCarryOverHistory}
+                      className="text-xs bg-red-100 text-red-700 hover:bg-red-200 px-2 py-1 rounded"
+                    >
+                      내역 삭제
+                    </button>
+                  )}
+                </div>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {latestMember.carryOverHistory
                     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
                     .map((history, index) => (
                     <div key={index} className="flex justify-between items-center p-2 bg-white rounded border">
                       <div className="flex items-center">
-                        {history.reason === 'unassigned' ? (
+                        {history.amount > 0 ? (
                           <TrendingUp size={14} className="mr-2 text-yellow-500" />
                         ) : (
-                          <TrendingDown size={14} className="mr-2 text-red-500" />
+                          <TrendingDown size={14} className="mr-2 text-green-500" />
                         )}
                         <div>
-                          <div className="text-sm font-medium">
-                            +{history.amount}시간
+                          <div className={`text-sm font-medium ${history.amount > 0 ? 'text-yellow-600' : 'text-green-600'}`}>
+                            {history.amount > 0 ? `+${history.amount}` : history.amount}시간
                           </div>
                           <div className="text-xs text-gray-500">
-                            {history.reason === 'unassigned' ? '시간 부족' : '협의 거절'}
+                            {history.reason || '이월 조정'}
                           </div>
                         </div>
                       </div>

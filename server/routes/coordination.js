@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const coordinationController = require('../controllers/coordinationController');
+const timeSlotController = require('../controllers/timeSlotController');
 const auth = require('../middleware/auth');
 
 // Room management
@@ -46,5 +47,21 @@ router.post('/rooms/:roomId/negotiations/:negotiationId/respond', auth, coordina
 router.post('/rooms/:roomId/negotiations/:negotiationId/cancel', auth, coordinationController.cancelNegotiationResponse);
 router.post('/rooms/:roomId/negotiations/auto-resolve', auth, coordinationController.autoResolveTimeoutNegotiations);
 router.post('/rooms/:roomId/negotiations/:negotiationId/force-resolve', auth, coordinationController.forceResolveNegotiation);
+router.post('/rooms/:roomId/reset-completed-times', auth, timeSlotController.resetCompletedTimes);
+
+// @route   DELETE /api/coordination/rooms/:roomId/members/:memberId/carry-over-history
+// @desc    Clear a member's carry-over time and history
+// @access  Private (Owner)
+router.delete('/rooms/:roomId/members/:memberId/carry-over-history', auth, timeSlotController.clearCarryOverHistory);
+
+// @route   POST /api/coordination/rooms/:roomId/reset-all-stats
+// @desc    Reset all stats (completed and carry-over) for all members
+// @access  Private (Owner)
+router.post('/rooms/:roomId/reset-all-stats', auth, timeSlotController.resetAllMemberStats);
+
+// @route   DELETE /api/coordination/rooms/:roomId/all-carry-over-history
+// @desc    Clear all members' carry-over history
+// @access  Private (Owner)
+router.delete('/rooms/:roomId/all-carry-over-history', auth, timeSlotController.clearAllCarryOverHistories);
 
 module.exports = router;
