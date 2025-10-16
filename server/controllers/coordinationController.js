@@ -1523,67 +1523,71 @@ exports.respondToNegotiation = async (req, res) => {
 
       await room.save();
 
-      // 💡 자동 해결 체크: 각 멤버가 필요한 시간을 받았는지 확인 (협의별 개별 체크)
+      // 💡 [FINAL FIX] 자동 해결 체크: 방의 모든 멤버에 대해 충족 여부를 확인하고, 모든 활성 협의를 검사한다.
       console.log('[협의 응답 후] 각 멤버별 충족 여부 확인 시작');
 
-      // 현재 협의의 멤버들
-      const currentNegoMemberIds = negotiation.conflictingMembers.map(m =>
-         (m.user._id || m.user).toString()
-      );
-
-      // 각 멤버별로 전체 할당 슬롯 수를 확인하여 충족 여부 판단
       const memberSatisfactionMap = {}; // memberId -> isSatisfied
 
-      currentNegoMemberIds.forEach(memberId => {
-         const memberInNego = negotiation.conflictingMembers.find(cm =>
-            (cm.user._id || cm.user).toString() === memberId
-         );
-         const requiredSlots = memberInNego.requiredSlots || 2;
+      // 1. 방에 있는 모든 멤버에 대해 만족도 맵을 생성한다.
+      for (const member of room.members) {
+         const memberId = (member.user._id || member.user).toString();
+         // room.settings에서 주당 최소 시간을 가져오고, 없으면 2슬롯(1시간)을 기본값으로 사용
+         const requiredSlots = (room.settings.minTime / 30) || 2;
 
-         // 💡 협의 응답 + 자동 배정 모두 포함하여 카운트 (전체 배정 슬롯)
          const assignedSlots = room.timeSlots.filter(slot => {
             const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
-            const isRelevantSlot = slot.subject && (
-               slot.subject.includes('협의') ||
-               slot.subject.includes('자동 배정')
-            );
-            return slotUserId === memberId && isRelevantSlot;
+            return slotUserId === memberId;
          }).length;
 
          const isSatisfied = assignedSlots >= requiredSlots;
          memberSatisfactionMap[memberId] = isSatisfied;
 
-         console.log(`[멤버 ${memberId.substring(0, 8)}] 필요: ${requiredSlots}슬롯, 전체 할당: ${assignedSlots}슬롯, 충족: ${isSatisfied}`);
-      });
+         console.log(`[멤버 만족도 체크] ${memberId.substring(0, 8)}: 필요 ${requiredSlots}, 할당 ${assignedSlots}, 충족 ${isSatisfied}`);
+      }
 
-      // 💡 각 협의마다 개별적으로 해결 여부 확인
       let autoResolvedCount = 0;
 
+      // 2. 현재 협의를 포함한 모든 활성 협의를 순회한다.
       room.negotiations.forEach(nego => {
-         // 이미 해결된 협의는 스킵
          if (nego.status !== 'active') return;
 
          const negoMemberIds = nego.conflictingMembers.map(m =>
             (m.user._id || m.user).toString()
          );
 
-         // 💡 이 협의의 모든 멤버가 충족되었으면 자동 해결
-         const allNegoMembersSatisfied = negoMemberIds.every(id => memberSatisfactionMap[id]);
+         // 3. 해당 협의의 모든 멤버가 '처리'되었는지 확인한다.
+         const allMembersAccountedFor = negoMemberIds.every(id => {
+            // 조건 1: 멤버의 시간이 완전히 할당되어 만족한 경우
+            if (memberSatisfactionMap[id]) {
+               return true;
+            }
 
-         if (allNegoMembersSatisfied) {
+            // 조건 2: 현재 처리된 협의에서 해당 멤버가 '이월'을 선택한 경우
+            const justResolvedNego = negotiation; // 응답이 들어온 바로 그 협의
+            if (justResolvedNego.status === 'resolved') {
+                const memberInThatNego = justResolvedNego.conflictingMembers.find(m => (m.user._id || m.user).toString() === id);
+                if (memberInThatNego && memberInThatNego.yieldOption === 'carry_over') {
+                    console.log(`[자동해결 체크] 멤버 ${id.substring(0,8)}는 이월하여 처리된 것으로 간주`);
+                    return true;
+                }
+            }
+            return false;
+         });
+
+         if (allMembersAccountedFor) {
             console.log(`[자동 해결] 협의 ${nego._id.toString().substring(0,8)} (${nego.slotInfo.day} ${nego.slotInfo.startTime}-${nego.slotInfo.endTime})`);
-            console.log(`   모든 멤버 충족됨: ${negoMemberIds.map(id => id.substring(0,8)).join(', ')}`);
+            console.log(`   사유: 모든 멤버가 처리됨: ${negoMemberIds.map(id => id.substring(0,8)).join(', ')}`);
 
             nego.status = 'resolved';
             nego.resolution = {
                type: 'auto_resolved',
                resolvedAt: new Date(),
                resolvedBy: userId,
-               reason: 'all_members_satisfied'
+               reason: 'all_members_accounted_for'
             };
 
             nego.messages.push({
-               message: `이 협의는 자동으로 해결되었습니다. 모든 멤버가 이미 필요한 시간을 배정받았습니다.`,
+               message: `모든 참여 멤버의 필요 시간이 충족되거나 이월되어 협의가 자동으로 해결되었습니다.`,
                timestamp: new Date(),
                isSystemMessage: true
             });
