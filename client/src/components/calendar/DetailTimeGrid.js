@@ -574,7 +574,7 @@ const DetailTimeGrid = ({
       const newException = {
         ...baseException,
         _id: Date.now().toString() + Math.random(),
-        sourceId: baseException._id,
+        sourceId: baseException.sourceId || baseException._id,
         startTime: newStartTime.toISOString(),
         endTime: newEndTime.toISOString(),
         specificDate: nextDateStr
@@ -600,7 +600,7 @@ const DetailTimeGrid = ({
       const newException = {
         ...baseException,
         _id: Date.now().toString() + Math.random(),
-        sourceId: baseException._id,
+        sourceId: baseException.sourceId || baseException._id,
         startTime: newStartTime.toISOString(),
         endTime: newEndTime.toISOString(),
         specificDate: prevDateStr
@@ -638,7 +638,7 @@ const DetailTimeGrid = ({
           const newException = {
             ...baseException,
             _id: Date.now().toString() + Math.random(),
-            sourceId: baseException._id,
+            sourceId: baseException.sourceId || baseException._id,
             startTime: newStartTime.toISOString(),
             endTime: newEndTime.toISOString(),
             specificDate: targetDateStr
@@ -755,14 +755,17 @@ const DetailTimeGrid = ({
     });
 
     if (existingHolidayExceptions.length > 0) {
-      // 이미 휴무일로 설정된 경우 해당 날짜의 모든 예외 제거
+      // 이미 휴무일로 설정된 경우 해당 날짜의 모든 예외와 복사본 제거
+      const rootIds = new Set();
+      existingHolidayExceptions.forEach(ex => {
+        rootIds.add(ex.sourceId || ex._id);
+      });
+
       const filteredExceptions = exceptions.filter(ex => {
-        const exStartTime = new Date(ex.startTime);
-        const exYear = exStartTime.getFullYear();
-        const exMonth = String(exStartTime.getMonth() + 1).padStart(2, '0');
-        const exDay = String(exStartTime.getDate()).padStart(2, '0');
-        const exDateStr = `${exYear}-${exMonth}-${exDay}`;
-        return exDateStr !== dateStr;
+        const rootId = ex.sourceId || ex._id;
+        if (rootIds.has(rootId)) return false;
+        if (rootIds.has(ex._id)) return false;
+        return true;
       });
       setExceptions(filteredExceptions);
       setHasUnsavedChanges(true);
