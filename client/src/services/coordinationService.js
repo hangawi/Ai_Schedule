@@ -496,4 +496,54 @@ export const coordinationService = {
     return await res.json();
   },
 
+  async resetAllMemberStats(roomId) {
+    const token = getAuthToken();
+    const res = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/reset-all-stats`, {
+      method: 'POST',
+      headers: {
+        'x-auth-token': token,
+      },
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to reset all stats');
+    }
+
+    return await res.json();
+  },
+
+  async clearCarryOverHistory(roomId, memberId) {
+    const token = getAuthToken();
+    const res = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/members/${memberId}/carry-over-history`, {
+      method: 'DELETE',
+      headers: {
+        'x-auth-token': token,
+      },
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to clear carry-over history');
+    }
+
+    return await res.json();
+  },
+
+  async clearAllCarryOverHistories(roomId) {
+    const token = getAuthToken();
+    const res = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/all-carry-over-history`, {
+      method: 'DELETE',
+      headers: {
+        'x-auth-token': token,
+      },
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to clear all carry-over histories');
+    }
+
+    return await res.json();
+  },
 };

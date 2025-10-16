@@ -382,3 +382,141 @@ exports.resetCarryOverTimes = async (req, res) => {
       res.status(500).json({ msg: 'Server error' });
    }
 };
+
+// @desc    Clear a specific member's carry-over history and reset carry-over time
+// @route   DELETE /api/coordination/rooms/:roomId/members/:memberId/carry-over-history
+// @access  Private (Owner only)
+exports.clearCarryOverHistory = async (req, res) => {
+   try {
+      const { roomId, memberId } = req.params;
+
+      const room = await Room.findById(roomId);
+
+      if (!room) {
+         return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+      }
+
+      if (!room.isOwner(req.user.id)) {
+         return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
+      }
+
+      const memberIndex = room.members.findIndex(m => (m.user._id || m.user).toString() === memberId);
+
+      if (memberIndex === -1) {
+         return res.status(404).json({ msg: '해당 멤버를 찾을 수 없습니다.' });
+      }
+
+      room.members[memberIndex].carryOver = 0;
+      room.members[memberIndex].carryOverHistory = [];
+
+      await room.save();
+
+      const updatedRoom = await Room.findById(roomId)
+         .populate('owner', 'firstName lastName email')
+         .populate('members.user', 'firstName lastName email');
+
+      res.json(updatedRoom);
+
+   } catch (error) {
+      res.status(500).json({ msg: 'Server error' });
+   }
+};
+
+// @desc    Reset both completed and carryover times for all members
+// @route   POST /api/coordination/rooms/:roomId/reset-all-stats
+// @access  Private (Owner only)
+exports.resetAllMemberStats = async (req, res) => {
+   try {
+      const { roomId } = req.params;
+      const room = await Room.findById(roomId);
+
+      if (!room) {
+         return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+      }
+
+      if (!room.isOwner(req.user.id)) {
+         return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
+      }
+
+      let resetCount = 0;
+
+      room.members.forEach(member => {
+         let updated = false;
+         // Reset totalProgressTime
+         if (member.totalProgressTime > 0) {
+            member.totalProgressTime = 0;
+            if (!member.progressHistory) member.progressHistory = [];
+            member.progressHistory.push({ date: new Date(), action: 'reset' });
+            updated = true;
+         }
+
+         // Reset carryOver
+         if (member.carryOver > 0) {
+            const prevCarry = member.carryOver;
+            member.carryOver = 0;
+            if (!member.carryOverHistory) member.carryOverHistory = [];
+            member.carryOverHistory.push({ week: new Date(), amount: -prevCarry, reason: 'admin_reset', timestamp: new Date() });
+            updated = true;
+         }
+
+         if (updated) {
+            resetCount++;
+         }
+      });
+
+      await room.save();
+
+      const updatedRoom = await Room.findById(roomId)
+         .populate('owner', 'firstName lastName email')
+         .populate('members.user', 'firstName lastName email');
+
+      res.json({
+         resetCount,
+         message: `${resetCount}명의 멤버의 완료시간과 이월시간이 초기화되었습니다.`,
+         room: updatedRoom,
+      });
+
+   } catch (error) {
+      console.error('Error resetting all member stats:', error);
+      res.status(500).json({ msg: 'Server error' });
+   }
+};
+
+// @desc    Clear all members' carry-over history and reset carry-over time
+// @route   DELETE /api/coordination/rooms/:roomId/all-carry-over-history
+// @access  Private (Owner only)
+exports.clearAllCarryOverHistories = async (req, res) => {
+   try {
+      const { roomId } = req.params;
+
+      const room = await Room.findById(roomId);
+
+      if (!room) {
+         return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+      }
+
+      if (!room.isOwner(req.user.id)) {
+         return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
+      }
+
+      room.members.forEach(member => {
+         member.carryOver = 0;
+         member.carryOverHistory = [];
+      });
+
+      await room.save();
+
+      const updatedRoom = await Room.findById(roomId)
+         .populate('owner', 'firstName lastName email')
+         .populate('members.user', 'firstName lastName email');
+
+      res.json({
+         msg: '모든 멤버의 이월시간 내역이 성공적으로 삭제되었습니다.',
+         room: updatedRoom
+      });
+
+   } catch (error) {
+      console.error('Error clearing all carry-over histories:', error);
+      res.status(500).json({ msg: 'Server error' });
+   }
+};
