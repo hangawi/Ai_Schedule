@@ -237,6 +237,7 @@ const DetailTimeGrid = ({
       const endTime = getNextTimeSlot(startTime);
 
       const newSlot = {
+        _id: Date.now().toString() + Math.random(), // Add unique ID
         dayOfWeek: dayOfWeek,
         startTime: startTime,
         endTime: endTime,
@@ -492,6 +493,7 @@ const DetailTimeGrid = ({
           const endTime = `${String(nextHour).padStart(2, '0')}:${String(adjustedMinute).padStart(2, '0')}`;
           
           newSlots.push({
+            _id: Date.now().toString() + Math.random(), // Add unique ID
             dayOfWeek: dayOfWeek,
             startTime: startTime,
             endTime: endTime,
@@ -558,6 +560,7 @@ const DetailTimeGrid = ({
       const newException = {
         ...baseException,
         _id: Date.now().toString() + Math.random(),
+        sourceId: baseException._id,
         startTime: newStartTime.toISOString(),
         endTime: newEndTime.toISOString(),
         specificDate: nextDateStr
@@ -583,6 +586,7 @@ const DetailTimeGrid = ({
       const newException = {
         ...baseException,
         _id: Date.now().toString() + Math.random(),
+        sourceId: baseException._id,
         startTime: newStartTime.toISOString(),
         endTime: newEndTime.toISOString(),
         specificDate: prevDateStr
@@ -620,6 +624,7 @@ const DetailTimeGrid = ({
           const newException = {
             ...baseException,
             _id: Date.now().toString() + Math.random(),
+            sourceId: baseException._id,
             startTime: newStartTime.toISOString(),
             endTime: newEndTime.toISOString(),
             specificDate: targetDateStr
@@ -653,6 +658,8 @@ const DetailTimeGrid = ({
       baseSlots.forEach(slot => {
         additionalSlots.push({
           ...slot,
+          _id: Date.now().toString() + Math.random(),
+          sourceId: slot._id,
           specificDate: nextDateStr
         });
       });
@@ -666,6 +673,8 @@ const DetailTimeGrid = ({
       baseSlots.forEach(slot => {
         additionalSlots.push({
           ...slot,
+          _id: Date.now().toString() + Math.random(),
+          sourceId: slot._id,
           specificDate: prevDateStr
         });
       });
@@ -690,6 +699,8 @@ const DetailTimeGrid = ({
           baseSlots.forEach(slot => {
             additionalSlots.push({
               ...slot,
+              _id: Date.now().toString() + Math.random(),
+              sourceId: slot._id,
               specificDate: targetDateStr
             });
           });
@@ -873,34 +884,101 @@ const DetailTimeGrid = ({
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const dayOfWeek = selectedDate.getDay();
 
+    const idsToDelete = new Set();
 
-    let totalDeleted = 0;
+    // Collect IDs of exceptions on the selected date
+    exceptions.forEach(ex => {
+      let exDateStr;
+      if (ex.specificDate) {
+        exDateStr = ex.specificDate;
+      } else if (ex.startTime) {
+        const exStartTime = new Date(ex.startTime);
+        const exYear = exStartTime.getFullYear();
+        const exMonth = String(exStartTime.getMonth() + 1).padStart(2, '0');
+        const exDay = String(exStartTime.getDate()).padStart(2, '0');
+        exDateStr = `${exYear}-${exMonth}-${exDay}`;
+      }
 
-    // 해당 날짜의 모든 예외 일정 삭제
-    const filteredExceptions = exceptions.filter(ex => {
-      const exStartTime = new Date(ex.startTime);
-      const exYear = exStartTime.getFullYear();
-      const exMonth = String(exStartTime.getMonth() + 1).padStart(2, '0');
-      const exDay = String(exStartTime.getDate()).padStart(2, '0');
-      const exDateStr = `${exYear}-${exMonth}-${exDay}`;
-      return exDateStr !== dateStr;
+      if (exDateStr === dateStr) {
+        if (ex._id) idsToDelete.add(String(ex._id));
+        if (ex.sourceId) idsToDelete.add(String(ex.sourceId));
+      }
     });
 
-    const deletedExceptions = exceptions.length - filteredExceptions.length;
-    totalDeleted += deletedExceptions;
+    // Collect IDs of schedule entries on the selected date
+    schedule.forEach(s => {
+      let sDateStr;
+      if (s.specificDate) {
+        sDateStr = s.specificDate;
+      } else if (s.dayOfWeek !== undefined) {
+        // For schedule entries that might only have dayOfWeek, we need to check if it matches selectedDate's dayOfWeek
+        // This assumes dayOfWeek is 0-6 (Sunday-Saturday)
+        if (s.dayOfWeek === dayOfWeek) {
+          // If it's a recurring schedule, we might not want to delete all instances unless explicitly requested.
+          // For now, we'll treat dayOfWeek matches as candidates for deletion if no specificDate is present.
+          // This part might need further refinement based on exact schedule data structure and user expectation for recurring schedules.
+          // For the purpose of deleting copied items, specificDate is more reliable.
+          // Let's prioritize specificDate for now.
+          return; // Skip if only dayOfWeek and no specificDate for rootId determination
+        }
+      }
 
-    // 해당 요일의 기본 스케줄 삭제
-    const filteredSchedule = schedule.filter(s => s.dayOfWeek !== dayOfWeek);
-    const deletedSchedule = schedule.length - filteredSchedule.length;
-    totalDeleted += deletedSchedule;
+      if (sDateStr === dateStr) {
+        if (s._id) idsToDelete.add(String(s._id));
+        if (s.sourceId) idsToDelete.add(String(s.sourceId));
+      }
+    });
 
+    let newExceptions = [...exceptions];
+    let newSchedule = [...schedule];
+
+    if (idsToDelete.size > 0) {
+      // If we have IDs to delete (meaning an item on selectedDate was found with _id or sourceId)
+      newExceptions = exceptions.filter(ex => {
+        const exId = ex._id ? String(ex._id) : undefined;
+        const exSourceId = ex.sourceId ? String(ex.sourceId) : undefined;
+        return !(idsToDelete.has(exId) || idsToDelete.has(exSourceId));
+      });
+
+      newSchedule = schedule.filter(s => {
+        const sId = s._id ? String(s._id) : undefined;
+        const sSourceId = s.sourceId ? String(s.sourceId) : undefined;
+        return !(idsToDelete.has(sId) || idsToDelete.has(sSourceId));
+      });
+
+    } else {
+      // If no specific items with _id/sourceId were found on the selected date,
+      // revert to original behavior: delete all exceptions and schedule entries directly on the selectedDate.
+      newExceptions = exceptions.filter(ex => {
+        let exDateStr;
+        if (ex.specificDate) {
+          exDateStr = ex.specificDate;
+        } else if (ex.startTime) {
+          const exStartTime = new Date(ex.startTime);
+          const exYear = exStartTime.getFullYear();
+          const exMonth = String(exStartTime.getMonth() + 1).padStart(2, '0');
+          const exDay = String(exStartTime.getDate()).padStart(2, '0');
+          exDateStr = `${exYear}-${exMonth}-${exDay}`;
+        }
+        return exDateStr !== dateStr; // Keep exceptions NOT on the selected date
+      });
+
+      newSchedule = schedule.filter(s => {
+        // Original logic for schedule was to delete by dayOfWeek. Let's keep that for the fallback.
+        // However, if a schedule item has specificDate, it should be deleted if it matches dateStr.
+        const sDateMatches = s.specificDate === dateStr;
+        const sDayOfWeekMatches = s.dayOfWeek === dayOfWeek && !s.specificDate; // Only if no specificDate
+
+        return !(sDateMatches || sDayOfWeekMatches);
+      });
+    }
 
     // 상태 업데이트
     if (setExceptions) {
-      setExceptions(filteredExceptions);
+      setExceptions(newExceptions);
     }
     if (setSchedule) {
-      setSchedule(filteredSchedule);
+      setSchedule(newSchedule);
     }
     setHasUnsavedChanges(true);
 
@@ -911,6 +989,7 @@ const DetailTimeGrid = ({
           await onSave();
           setHasUnsavedChanges(false);
         } catch (error) {
+          console.error('Error during auto-save after delete:', error);
         }
       }, 200);
     }
