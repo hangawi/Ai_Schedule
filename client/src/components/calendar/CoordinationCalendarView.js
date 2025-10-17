@@ -6,6 +6,17 @@ import {
   generateDayTimeSlots
 } from '../../utils/timetableHelpers';
 
+const toYYYYMMDD = (date) => {
+  const d = new Date(date);
+  if (isNaN(d.getTime())) {
+    return null;
+  }
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 const CoordinationCalendarView = ({
   roomData,
   timeSlots = [],
@@ -22,6 +33,54 @@ const CoordinationCalendarView = ({
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [calendarDates, setCalendarDates] = useState([]);
+
+  const hasPersonalTimeForDate = (date) => {
+    if (!roomData?.settings?.roomExceptions) return false;
+
+    const dayOfWeek = date.getDay();
+    const dateStr = toYYYYMMDD(date);
+
+    return roomData.settings.roomExceptions.some(ex => {
+      if (!ex.isPersonalTime) return false;
+
+      if (ex.type === 'daily_recurring') {
+        return ex.dayOfWeek === dayOfWeek;
+      } else if (ex.type === 'date_specific') {
+        if (!ex.startDate) return false;
+        const exDateStr = toYYYYMMDD(ex.startDate);
+        return exDateStr === dateStr;
+      }
+      return false;
+    });
+  };
+
+  const getUsersForDate = (date) => {
+    const dateStr = toYYYYMMDD(date);
+    const userIds = new Set();
+    timeSlots.forEach(slot => {
+      if (slot.date) {
+        const slotDate = toYYYYMMDD(slot.date);
+        if (slotDate === dateStr) {
+          const userId = slot.userId || slot.user;
+          if(userId) userIds.add(typeof userId === 'object' ? (userId._id || userId.id) : userId);
+        }
+      }
+    });
+
+    const users = [];
+    userIds.forEach(userId => {
+      const member = members.find(m => {
+        const memberId = m.user?._id || m.user?.id;
+        return memberId?.toString() === userId?.toString();
+      });
+      if (member) {
+        const userName = member.user.name || `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim();
+        if(userName) users.push(userName);
+      }
+    });
+    return users;
+  };
+
 
   const monthNames = [
     '1월', '2월', '3월', '4월', '5월', '6월',
@@ -66,8 +125,8 @@ const CoordinationCalendarView = ({
       const date = new Date(startDate);
       date.setDate(startDate.getDate() + i);
       const isCurrentMonth = date.getMonth() === month;
-      const isToday = date.toDateString() === new Date().toDateString();
-      const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
+      const isToday = toYYYYMMDD(date) === toYYYYMMDD(new Date());
+      const isSelected = selectedDate && toYYYYMMDD(date) === toYYYYMMDD(selectedDate);
 
       dates.push({
         date: new Date(date),
@@ -79,7 +138,9 @@ const CoordinationCalendarView = ({
         hasAutoAssigned: hasAutoAssignedForDate(date),
         hasNegotiation: hasNegotiationForDate(date),
         hasBlockedTime: hasBlockedTimeForDate(date),
-        blockedTimeCount: getBlockedTimeCountForDate(date)
+        blockedTimeCount: getBlockedTimeCountForDate(date),
+        hasPersonalTime: hasPersonalTimeForDate(date),
+        users: getUsersForDate(date)
       });
     }
 
@@ -93,8 +154,8 @@ const CoordinationCalendarView = ({
     for (let i = 0; i < 7; i++) {
       const date = new Date(startOfWeek);
       date.setDate(startOfWeek.getDate() + i);
-      const isToday = date.toDateString() === new Date().toDateString();
-      const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
+      const isToday = toYYYYMMDD(date) === toYYYYMMDD(new Date());
+      const isSelected = selectedDate && toYYYYMMDD(date) === toYYYYMMDD(selectedDate);
 
       dates.push({
         date: new Date(date),
@@ -106,7 +167,9 @@ const CoordinationCalendarView = ({
         hasAutoAssigned: hasAutoAssignedForDate(date),
         hasNegotiation: hasNegotiationForDate(date),
         hasBlockedTime: hasBlockedTimeForDate(date),
-        blockedTimeCount: getBlockedTimeCountForDate(date)
+        blockedTimeCount: getBlockedTimeCountForDate(date),
+        hasPersonalTime: hasPersonalTimeForDate(date),
+        users: getUsersForDate(date)
       });
     }
 
@@ -121,7 +184,7 @@ const CoordinationCalendarView = ({
   };
 
   const getSlotCountForDate = (date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = toYYYYMMDD(date);
     const dayOfWeek = date.getDay();
     const dayNameMap = {
       0: 'sunday',
@@ -138,7 +201,7 @@ const CoordinationCalendarView = ({
       // Check for slots with specific dates first
       if (slot.date) {
         try {
-          const slotDate = new Date(slot.date).toISOString().split('T')[0];
+          const slotDate = toYYYYMMDD(slot.date);
           return slotDate === dateStr;
         } catch (e) {
           // Invalid date format, skip
@@ -156,7 +219,7 @@ const CoordinationCalendarView = ({
   };
 
   const hasAutoAssignedForDate = (date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = toYYYYMMDD(date);
     const dayOfWeek = date.getDay();
     const dayNameMap = {
       0: 'sunday',
@@ -176,7 +239,7 @@ const CoordinationCalendarView = ({
       // Check for slots with specific dates first
       if (slot.date) {
         try {
-          const slotDate = new Date(slot.date).toISOString().split('T')[0];
+          const slotDate = toYYYYMMDD(slot.date);
           return slotDate === dateStr;
         } catch (e) {
           return false;
@@ -194,10 +257,10 @@ const CoordinationCalendarView = ({
 
   const hasNegotiationForDate = (date) => {
     // 협의 중인 슬롯이 있는지 확인
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = toYYYYMMDD(date);
     return roomData?.negotiations?.some(neg => {
       if (!neg.slotInfo?.date) return false;
-      const negDate = new Date(neg.slotInfo.date).toISOString().split('T')[0];
+      const negDate = toYYYYMMDD(neg.slotInfo.date);
       return negDate === dateStr && neg.status === 'active';
     });
   };
@@ -246,7 +309,7 @@ const CoordinationCalendarView = ({
     newDate.setMonth(currentDate.getMonth() + direction);
     setCurrentDate(newDate);
     if (onWeekChange) {
-      onWeekChange(newDate.toISOString().split('T')[0]);
+      onWeekChange(toYYYYMMDD(newDate));
     }
   };
 
@@ -256,7 +319,7 @@ const CoordinationCalendarView = ({
     setCurrentDate(newDate);
     if (onWeekChange) {
       const mondayOfNewWeek = getStartOfWeek(newDate);
-      onWeekChange(mondayOfNewWeek.toISOString().split('T')[0]);
+      onWeekChange(toYYYYMMDD(mondayOfNewWeek));
     }
   };
 
@@ -265,7 +328,7 @@ const CoordinationCalendarView = ({
     setCurrentDate(today);
     if (onWeekChange) {
       const mondayOfThisWeek = getStartOfWeek(today);
-      onWeekChange(mondayOfThisWeek.toISOString().split('T')[0]);
+      onWeekChange(toYYYYMMDD(mondayOfThisWeek));
     }
   };
 
@@ -368,20 +431,26 @@ const CoordinationCalendarView = ({
                 {dateInfo.day}
               </div>
 
-              <div className="flex-1 flex flex-col space-y-1">
-                {dateInfo.slotsCount > 0 && (
-                  <div className="text-xs bg-blue-100 text-blue-800 px-1 rounded">
-                    {dateInfo.slotsCount}개 슬롯
+              <div className="flex-1 flex flex-col space-y-1 overflow-y-auto">
+                {dateInfo.users.map((name, i) => (
+                  <div key={i} className="text-xs bg-blue-100 text-blue-800 px-1 rounded truncate" title={name}>
+                    {name}
+                  </div>
+                ))}
+                {dateInfo.hasPersonalTime && (
+                  <div className="text-xs bg-yellow-100 text-yellow-800 px-1 rounded truncate">
+                    개인 시간
                   </div>
                 )}
-                {dateInfo.hasBlockedTime && (
-                  <div className="w-full h-1 bg-purple-500 rounded-full"></div>
-                )}
-                {dateInfo.hasAutoAssigned && (
-                  <div className="w-full h-1 bg-green-500 rounded-full"></div>
+                {dateInfo.hasBlockedTime && !dateInfo.hasPersonalTime && (
+                  <div className="text-xs bg-red-100 text-red-800 px-1 rounded truncate">
+                    금지 시간
+                  </div>
                 )}
                 {dateInfo.hasNegotiation && (
-                  <div className="w-full h-1 bg-orange-500 rounded-full"></div>
+                  <div className="text-xs bg-orange-100 text-orange-800 px-1 rounded truncate">
+                    협의 중
+                  </div>
                 )}
               </div>
             </div>
