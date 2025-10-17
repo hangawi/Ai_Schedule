@@ -1322,7 +1322,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-bold text-gray-800 flex items-center">
                   <Calendar size={20} className="mr-2 text-green-600" />
-                  시간표 ({scheduleStartHour}:00 - {scheduleEndHour}:00)
+                  시간표 ({showFullDay ? '00' : String(scheduleStartHour).padStart(2, '0')}:00 - {showFullDay ? '24' : String(scheduleEndHour).padStart(2, '0')}:00)
                 </h3>
                 <div className="flex items-center space-x-2">
                   <button
