@@ -432,7 +432,7 @@ const CoordinationCalendarView = ({
               </div>
 
               <div className="flex-1 flex flex-col space-y-1 overflow-y-auto">
-                {dateInfo.users.map((name, i) => (
+                {dateInfo.users && dateInfo.users.map((name, i) => (
                   <div key={i} className="text-xs bg-blue-100 text-blue-800 px-1 rounded truncate" title={name}>
                     {name}
                   </div>
