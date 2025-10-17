@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Users, Zap, Clock, MessageSquare, Ban } from 'lucide-react';
+import { X, Users, MessageSquare, Ban } from 'lucide-react';
 import {
   getBlockedTimeInfo,
   getRoomExceptionInfo
@@ -7,14 +7,18 @@ import {
 
 const toYYYYMMDD = (date) => {
   const d = new Date(date);
-  if (isNaN(d.getTime())) {
-    return null;
-  }
+  if (isNaN(d.getTime())) return null;
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
+
+const timeToMinutes = (timeStr) => {
+  if (!timeStr || !timeStr.includes(':')) return 0;
+  const [hour, minute] = timeStr.split(':').map(Number);
+  return hour * 60 + minute;
+};
 
 const generateTimeSlots = (startHour = 0, endHour = 24) => {
   const slots = [];
@@ -33,13 +37,50 @@ const CoordinationDetailGrid = ({
   members = [],
   roomData,
   onClose,
+  ownerOriginalSchedule,
 }) => {
   const [timeRange, setTimeRange] = useState({ start: 0, end: 24 });
 
+  const getOwnerScheduleInfoForTime = (date, time) => {
+    if (!ownerOriginalSchedule) return null;
+
+    const timeMinutes = timeToMinutes(time);
+    const dayOfWeek = date.getDay();
+    const dateStr = toYYYYMMDD(date);
+
+    const exception = ownerOriginalSchedule.scheduleExceptions?.find(e => {
+      if (e.specificDate !== dateStr) return false;
+      const startMins = timeToMinutes(e.startTime);
+      const endMins = timeToMinutes(e.endTime);
+      return timeMinutes >= startMins && timeMinutes < endMins;
+    });
+    if (exception) return { type: 'exception', ...exception };
+
+    const personal = ownerOriginalSchedule.personalTimes?.find(p => {
+      if (p.isRecurring !== false && p.days?.includes(dayOfWeek)) {
+        const startMins = timeToMinutes(p.startTime);
+        const endMins = timeToMinutes(p.endTime);
+        if (endMins <= startMins) return timeMinutes >= startMins || timeMinutes < endMins;
+        return timeMinutes >= startMins && timeMinutes < endMins;
+      }
+      return false;
+    });
+    if (personal) return { type: 'personal', ...personal };
+
+    const preferred = ownerOriginalSchedule.defaultSchedule?.some(s => 
+      s.dayOfWeek === dayOfWeek &&
+      timeMinutes >= timeToMinutes(s.startTime) &&
+      timeMinutes < timeToMinutes(s.endTime)
+    );
+
+    if (preferred) return { type: 'preferred' };
+
+    return { type: 'non_preferred' };
+  };
+
   const getBlocksForDay = () => {
     const allPossibleSlots = generateTimeSlots(timeRange.start, timeRange.end);
-    const blocks = [];
-    let currentBlock = null;
+    const slotMap = new Map();
 
     allPossibleSlots.forEach(time => {
       const negotiation = roomData.negotiations?.find(neg => 
@@ -51,12 +92,13 @@ const CoordinationDetailGrid = ({
         toYYYYMMDD(slot.date) === toYYYYMMDD(selectedDate) && 
         time >= slot.startTime && time < slot.endTime
       );
+      const ownerInfo = getOwnerScheduleInfoForTime(selectedDate, time);
 
       let event = null;
       if (blockingInfo) {
-        event = { type: 'blocked', name: blockingInfo.name, data: blockingInfo };
+        event = { type: 'blocked', name: blockingInfo.name };
       } else if (negotiation) {
-        event = { type: 'negotiation', name: `협의: ${negotiation._id}`, data: negotiation };
+        event = { type: 'negotiation', name: `협의: ${negotiation._id}` };
       } else if (assignedSlots.length > 0) {
         const userNames = assignedSlots.map(slot => {
             const member = members.find(m => (m.user._id || m.user) === (slot.user._id || slot.user));
@@ -64,44 +106,35 @@ const CoordinationDetailGrid = ({
         }).filter(Boolean).sort();
         const uniqueUserNames = [...new Set(userNames)];
         event = { type: 'assigned', name: uniqueUserNames.join(', '), users: uniqueUserNames };
+      } else if (ownerInfo?.type === 'non_preferred') {
+        event = { type: 'blocked', name: '방장 불가능' };
       }
+      slotMap.set(time, event);
+    });
 
+    const blocks = [];
+    let currentBlock = null;
+
+    allPossibleSlots.forEach(time => {
+      const event = slotMap.get(time);
       const currentEventType = event ? event.type : 'empty';
       const currentEventName = event ? event.name : 'empty';
 
       if (currentBlock && currentBlock.type === currentEventType && currentBlock.name === currentEventName) {
         currentBlock.duration += 10;
       } else {
-        if (currentBlock) {
-          blocks.push(currentBlock);
-        }
-        currentBlock = {
-          type: currentEventType,
-          name: currentEventName,
-          startTime: time,
-          duration: 10,
-          data: event?.data,
-          users: event?.users,
-        };
+        if (currentBlock) blocks.push(currentBlock);
+        currentBlock = { type: currentEventType, name: currentEventName, startTime: time, duration: 10, users: event?.users };
       }
     });
 
-    if (currentBlock) {
-      blocks.push(currentBlock);
-    }
-
+    if (currentBlock) blocks.push(currentBlock);
     return blocks;
   };
 
   const formatDate = (date) => {
     const days = ['일', '월', '화', '수', '목', '금', '토'];
     return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일 (${days[date.getDay()]})`;
-  };
-
-  const timeToMinutes = (timeStr) => {
-    if (!timeStr) return 0;
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    return hours * 60 + minutes;
   };
 
   const getEndTimeForBlock = (block) => {

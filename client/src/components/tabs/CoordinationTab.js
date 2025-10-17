@@ -1381,6 +1381,24 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
                 </div>
               </div>
+              <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500 pl-1">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 rounded-sm bg-white border mr-1"></div>
+                  <span>가능 시간</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-3 h-3 rounded-sm bg-blue-500 mr-1"></div>
+                  <span>배정 시간</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-3 h-3 rounded-sm bg-red-500 mr-1"></div>
+                  <span>금지 시간</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-3 h-3 rounded-sm bg-yellow-500 mr-1"></div>
+                  <span>협의 중</span>
+                </div>
+              </div>
 
               {viewMode === 'grid' && !isOwner ? (
                 <TimetableGrid
@@ -1697,6 +1715,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
               await fetchRoomDetails(currentRoom._id);
             }}
             onOpenNegotiation={handleOpenNegotiation}
+            ownerOriginalSchedule={ownerScheduleCache}
           />
         )}
 

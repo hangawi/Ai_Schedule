@@ -46,9 +46,7 @@ const DaySummaryBar = ({ blocks }) => {
           case 'negotiation':
             bgColor = 'bg-yellow-500';
             break;
-          case 'owner_non_preferred':
-            bgColor = 'bg-purple-300';
-            break;
+
           case 'empty':
             bgColor = 'bg-white';
             tooltip = `${block.startTime} - ${getEndTimeForBlock(block)}: 빈 시간`;
@@ -157,7 +155,7 @@ const CoordinationCalendarView = ({
         const uniqueUserNames = [...new Set(userNames)];
         event = { type: 'assigned', name: uniqueUserNames.join(', '), users: uniqueUserNames };
       } else if (ownerInfo?.type === 'non_preferred') {
-        event = { type: 'owner_non_preferred', name: '방장 불가능' };
+        event = { type: 'blocked', name: '방장 불가능' };
       }
       slotMap.set(time, event);
     });
