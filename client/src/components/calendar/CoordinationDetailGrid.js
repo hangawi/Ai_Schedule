@@ -161,7 +161,7 @@ const CoordinationDetailGrid = ({
                 <div key={index} className={`p-3 rounded-lg ${bgColor}`}>
                   <div className="flex justify-between items-center">
                     <span className={`text-sm font-medium ${textColor}`}>
-                      {block.startTime}
+                      {block.startTime} - {getEndTimeForBlock(block)}
                     </span>
                     <span className={`text-xs font-semibold ${textColor}`}>
                       {Math.floor(block.duration / 60) > 0 && `${Math.floor(block.duration / 60)}시간 `}
