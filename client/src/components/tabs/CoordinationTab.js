@@ -1380,24 +1380,28 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   </button>
 
                 </div>
-              </div>
-              <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500 pl-1">
-                <div className="flex items-center">
-                  <div className="w-3 h-3 rounded-sm bg-white border mr-1"></div>
-                  <span>가능 시간</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-3 h-3 rounded-sm bg-blue-500 mr-1"></div>
-                  <span>배정 시간</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-3 h-3 rounded-sm bg-red-500 mr-1"></div>
-                  <span>금지 시간</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-3 h-3 rounded-sm bg-yellow-500 mr-1"></div>
-                  <span>협의 중</span>
-                </div>
+
+                {/* 월간 모드일 때만 범례 표시 (오른쪽에 배치) */}
+                {viewMode === 'month' && (
+                  <div className="flex items-center space-x-4 text-xs text-gray-500">
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 rounded-sm bg-white border mr-1"></div>
+                      <span>가능 시간</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 rounded-sm bg-blue-500 mr-1"></div>
+                      <span>배정 시간</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 rounded-sm bg-red-500 mr-1"></div>
+                      <span>금지 시간</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 rounded-sm bg-yellow-500 mr-1"></div>
+                      <span>협의 중</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {viewMode === 'grid' && !isOwner ? (
