@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MessageSquare, Clock } from 'lucide-react';
 import { calculateEndTime, isUserInvolvedInNegotiation, getNegotiationMemberNames } from '../../utils/coordinationUtils';
 
@@ -13,6 +13,19 @@ const NegotiationItem = ({
   const isUserInvolved = isUserInvolvedInNegotiation(negotiation, user?.id);
   const memberNames = getNegotiationMemberNames(negotiation);
 
+  // 날짜 표시
+  const displayDate = weekNegotiation.dayDisplay || (() => {
+    if (negotiation.slotInfo?.date) {
+      const date = new Date(negotiation.slotInfo.date);
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+      const dayName = dayNames[date.getDay()];
+      return `${month}/${day} (${dayName})`;
+    }
+    return '';
+  })();
+
   return (
     <div key={index} className={`p-3 rounded-lg border ${
       isUserInvolved
@@ -24,7 +37,7 @@ const NegotiationItem = ({
           <div className="flex items-center mb-1">
             <Clock size={14} className="mr-1 text-yellow-600" />
             <span className="text-sm font-medium">
-              {weekNegotiation.dayDisplay} {negotiation.slotInfo?.startTime || weekNegotiation.time}-{negotiation.slotInfo?.endTime || calculateEndTime(weekNegotiation.time)}
+              {displayDate} {negotiation.slotInfo?.startTime || weekNegotiation.time}-{negotiation.slotInfo?.endTime || calculateEndTime(weekNegotiation.time)}
             </span>
             {isUserInvolved && (
               <span className="ml-2 px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded-full">
@@ -67,54 +80,112 @@ const NegotiationItem = ({
 
 const NegotiationSection = ({
   currentWeekNegotiations,
+  allNegotiations,
   user,
   onOpenNegotiation,
-  isOwner
+  isOwner,
+  currentWeekStartDate
 }) => {
-  // 방장이면 모든 협의를 볼 수 있음, 아니면 당사자만 볼 수 있음
-  const visibleNegotiations = (currentWeekNegotiations || []).filter(negotiation => {
-    // 방장이면 모든 협의를 볼 수 있음
-    if (isOwner) return true;
+  const [negotiationViewMode, setNegotiationViewMode] = useState('week'); // 'week' or 'month'
 
-    // 당사자인지 확인
-    const isInvolved = negotiation.conflictingMembers?.some(cm => {
-      let cmUserId;
-      if (typeof cm.user === 'object' && cm.user !== null) {
-        cmUserId = cm.user._id || cm.user.id;
-      } else {
-        cmUserId = cm.user;
-      }
-      return cmUserId === user?.id || cmUserId?.toString() === user?.id?.toString();
+  // 필터링 함수
+  const filterVisibleNegotiations = (negotiations) => {
+    return (negotiations || []).filter(negotiation => {
+      // 방장이면 모든 협의를 볼 수 있음
+      if (isOwner) return true;
+
+      // 당사자인지 확인
+      const isInvolved = negotiation.conflictingMembers?.some(cm => {
+        let cmUserId;
+        if (typeof cm.user === 'object' && cm.user !== null) {
+          cmUserId = cm.user._id || cm.user.id;
+        } else {
+          cmUserId = cm.user;
+        }
+        return cmUserId === user?.id || cmUserId?.toString() === user?.id?.toString();
+      });
+
+      return isInvolved;
     });
+  };
 
-    return isInvolved;
+  // 주간 협의
+  const visibleWeekNegotiations = filterVisibleNegotiations(currentWeekNegotiations);
+
+  // 월간 협의: 현재 월의 모든 협의
+  const currentDate = currentWeekStartDate ? new Date(currentWeekStartDate) : new Date();
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth();
+
+  const monthNegotiations = (allNegotiations || []).filter(neg => {
+    if (!neg.slotInfo?.date) return false;
+    const negDate = new Date(neg.slotInfo.date);
+    return negDate.getFullYear() === currentYear && negDate.getMonth() === currentMonth;
   });
 
-  if (visibleNegotiations.length === 0) return null;
+  const visibleMonthNegotiations = filterVisibleNegotiations(monthNegotiations);
+
+  // 현재 선택된 모드에 따라 표시할 협의 결정
+  const displayNegotiations = negotiationViewMode === 'week' ? visibleWeekNegotiations : visibleMonthNegotiations;
+
+  if (visibleWeekNegotiations.length === 0 && visibleMonthNegotiations.length === 0) return null;
 
   return (
     <div className="mt-6 pt-4 border-t border-gray-200">
-      <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-        <MessageSquare size={16} className="mr-2 text-yellow-600" />
-        협의 진행중 ({visibleNegotiations.length}건)
-      </h4>
-      <div className="space-y-3">
-        {visibleNegotiations.map((weekNegotiation, index) => {
-          const negotiation = weekNegotiation;
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-md font-semibold text-gray-800 flex items-center">
+          <MessageSquare size={16} className="mr-2 text-yellow-600" />
+          협의 진행중 (주간 {visibleWeekNegotiations.length}건 / 월간 {visibleMonthNegotiations.length}건)
+        </h4>
 
-          return (
-            <NegotiationItem
-              key={index}
-              negotiation={negotiation}
-              weekNegotiation={weekNegotiation}
-              user={user}
-              onOpenNegotiation={onOpenNegotiation}
-              index={index}
-              isOwner={isOwner}
-            />
-          );
-        })}
+        {/* 주간/월간 토글 버튼 */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setNegotiationViewMode('week')}
+            className={`px-3 py-1 text-xs rounded-md transition-colors ${
+              negotiationViewMode === 'week'
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+            }`}
+          >
+            주간
+          </button>
+          <button
+            onClick={() => setNegotiationViewMode('month')}
+            className={`px-3 py-1 text-xs rounded-md transition-colors ${
+              negotiationViewMode === 'month'
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+            }`}
+          >
+            월간
+          </button>
+        </div>
       </div>
+
+      {displayNegotiations.length === 0 ? (
+        <div className="text-sm text-gray-500 text-center py-4">
+          {negotiationViewMode === 'week' ? '이번 주' : '이번 달'} 협의가 없습니다.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {displayNegotiations.map((weekNegotiation, index) => {
+            const negotiation = weekNegotiation;
+
+            return (
+              <NegotiationItem
+                key={index}
+                negotiation={negotiation}
+                weekNegotiation={weekNegotiation}
+                user={user}
+                onOpenNegotiation={onOpenNegotiation}
+                index={index}
+                isOwner={isOwner}
+              />
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
