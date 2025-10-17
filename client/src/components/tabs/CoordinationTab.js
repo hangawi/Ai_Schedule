@@ -1319,26 +1319,46 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
               </div>
             )}
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mt-4">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold text-gray-800 flex items-center">
-                  <Calendar size={20} className="mr-2 text-green-600" />
+              <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                  <Calendar size={20} class="mr-2 text-green-600" />
                   시간표 ({showFullDay ? '00' : String(scheduleStartHour).padStart(2, '0')}:00 - {showFullDay ? '24' : String(scheduleEndHour).padStart(2, '0')}:00)
                 </h3>
-                <div className="flex items-center space-x-2">
+                <div class="flex items-center space-x-2">
+                  {viewMode === 'month' && (
+                    <div class="flex items-center space-x-4 text-xs text-gray-600 mr-4">
+                      <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-sm bg-white border mr-1"></div>
+                        <span>가능 시간</span>
+                      </div>
+                      <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-sm bg-blue-500 mr-1"></div>
+                        <span>배정 시간</span>
+                      </div>
+                      <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-sm bg-red-500 mr-1"></div>
+                        <span>금지 시간</span>
+                      </div>
+                      <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-sm bg-yellow-500 mr-1"></div>
+                        <span>협의 중</span>
+                      </div>
+                    </div>
+                  )}
                   <button
                     onClick={() => setShowFullDay(!showFullDay)}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    class={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
                       showFullDay
                         ? 'bg-purple-500 text-white'
                         : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                     }`}
                   >
-                    <Clock size={16} className="mr-1 inline" />
+                    <Clock size={16} class="mr-1 inline" />
                     {showFullDay ? '24시간' : '기본'}
                   </button>
                   <button
                     onClick={() => setShowMerged(!showMerged)}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    class={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
                       showMerged
                         ? 'bg-green-500 text-white'
                         : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
@@ -1346,62 +1366,40 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   >
                     {showMerged ? (
                       <>
-                        <Split size={16} className="mr-1 inline" />
+                        <Split size={16} class="mr-1 inline" />
                         분할
                       </>
                     ) : (
                       <>
-                        <Merge size={16} className="mr-1 inline" />
+                        <Merge size={16} class="mr-1 inline" />
                         병합
                       </>
                     )}
                   </button>
                   <button
                     onClick={() => setViewMode('week')}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    class={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
                       viewMode === 'week'
                         ? 'bg-blue-500 text-white'
                         : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                     }`}
                   >
-                    <Grid size={16} className="mr-1 inline" />
+                    <Grid size={16} class="mr-1 inline" />
                     주간
                   </button>
                   <button
                     onClick={() => setViewMode('month')}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    class={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
                       viewMode === 'month'
                         ? 'bg-blue-500 text-white'
                         : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                     }`}
                   >
-                    <Calendar size={16} className="mr-1 inline" />
+                    <Calendar size={16} class="mr-1 inline" />
                     월간
                   </button>
 
                 </div>
-
-                {/* 월간 모드일 때만 범례 표시 (오른쪽에 배치) */}
-                {viewMode === 'month' && (
-                  <div className="flex items-center space-x-4 text-xs text-gray-500">
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 rounded-sm bg-white border mr-1"></div>
-                      <span>가능 시간</span>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 rounded-sm bg-blue-500 mr-1"></div>
-                      <span>배정 시간</span>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 rounded-sm bg-red-500 mr-1"></div>
-                      <span>금지 시간</span>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 rounded-sm bg-yellow-500 mr-1"></div>
-                      <span>협의 중</span>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {viewMode === 'grid' && !isOwner ? (
