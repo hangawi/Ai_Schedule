@@ -147,8 +147,8 @@ const CoordinationDetailGrid = ({
                   content = block.name.includes('방장') ? block.name : `금지: ${block.name}`;
                   break;
                 case 'negotiation':
-                  bgColor = 'bg-orange-100';
-                  textColor = 'text-orange-800';
+                  bgColor = 'bg-yellow-100';
+                  textColor = 'text-yellow-800';
                   Icon = MessageSquare;
                   content = '협의 중';
                   break;

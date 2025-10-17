@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Grid, Clock, Users, Zap, Ban } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   getBlockedTimeInfo,
   getRoomExceptionInfo,
@@ -8,86 +8,82 @@ import {
 
 const toYYYYMMDD = (date) => {
   const d = new Date(date);
-  if (isNaN(d.getTime())) {
-    return null;
-  }
+  if (isNaN(d.getTime())) return null;
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
+const timeToMinutes = (timeStr) => {
+  if (!timeStr || !timeStr.includes(':')) return 0;
+  const [hour, minute] = timeStr.split(':').map(Number);
+  return hour * 60 + minute;
+};
+
+const DaySummaryBar = ({ blocks }) => {
+  if (!blocks || blocks.length === 0) {
+    return <div className="w-full h-2 bg-gray-200 rounded-full"></div>;
+  }
+
+  const totalMinutes = 24 * 60;
+
+  return (
+    <div className="w-full h-3 flex rounded-full overflow-hidden border border-gray-300">
+      {blocks.map((block, index) => {
+        const width = (block.duration / totalMinutes) * 100;
+        let bgColor = 'bg-gray-200';
+        let tooltip = `${block.startTime} - ${getEndTimeForBlock(block)}: ${block.name}`;
+
+        switch (block.type) {
+          case 'assigned':
+            bgColor = 'bg-blue-500';
+            tooltip = `${block.startTime} - ${getEndTimeForBlock(block)}: ${block.users.join(', ')}`;
+            break;
+          case 'blocked':
+            bgColor = 'bg-red-500';
+            break;
+          case 'negotiation':
+            bgColor = 'bg-yellow-500';
+            break;
+          case 'owner_non_preferred':
+            bgColor = 'bg-purple-300';
+            break;
+          case 'empty':
+            bgColor = 'bg-white';
+            tooltip = `${block.startTime} - ${getEndTimeForBlock(block)}: 빈 시간`;
+            break;
+          default:
+            break;
+        }
+
+        return (
+          <div key={index} className={`h-full ${bgColor}`} style={{ width: `${width}%` }} title={tooltip}></div>
+        );
+      })}
+    </div>
+  );
+};
+
+const getEndTimeForBlock = (block) => {
+  const startMinutes = timeToMinutes(block.startTime);
+  const endMinutes = startMinutes + block.duration;
+  const hour = Math.floor(endMinutes / 60) % 24;
+  const min = endMinutes % 60;
+  return `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+};
+
 const CoordinationCalendarView = ({
   roomData,
   timeSlots = [],
   members = [],
-  currentUser,
-  isRoomOwner,
   onDateClick,
   selectedDate,
-  viewMode = 'month',
-  onSlotSelect,
-  selectedSlots = [],
+  ownerOriginalSchedule, // New prop
   currentWeekStartDate,
   onWeekChange
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [calendarDates, setCalendarDates] = useState([]);
-
-  const hasPersonalTimeForDate = (date) => {
-    if (!roomData?.settings?.roomExceptions) return false;
-
-    const dayOfWeek = date.getDay();
-    const dateStr = toYYYYMMDD(date);
-
-    return roomData.settings.roomExceptions.some(ex => {
-      if (!ex.isPersonalTime) return false;
-
-      if (ex.type === 'daily_recurring') {
-        return ex.dayOfWeek === dayOfWeek;
-      } else if (ex.type === 'date_specific') {
-        if (!ex.startDate) return false;
-        const exDateStr = toYYYYMMDD(ex.startDate);
-        return exDateStr === dateStr;
-      }
-      return false;
-    });
-  };
-
-  const getUsersForDate = (date) => {
-    const dateStr = toYYYYMMDD(date);
-    const userIds = new Set();
-    timeSlots.forEach(slot => {
-      if (slot.date) {
-        const slotDate = toYYYYMMDD(slot.date);
-        if (slotDate === dateStr) {
-          const userId = slot.userId || slot.user;
-          if(userId) userIds.add(typeof userId === 'object' ? (userId._id || userId.id) : userId);
-        }
-      }
-    });
-
-    const users = [];
-    userIds.forEach(userId => {
-      const member = members.find(m => {
-        const memberId = m.user?._id || m.user?.id;
-        return memberId?.toString() === userId?.toString();
-      });
-      if (member) {
-        const userName = member.user.name || `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim();
-        if(userName) users.push(userName);
-      }
-    });
-    return users;
-  };
-
-
-  const monthNames = [
-    '1월', '2월', '3월', '4월', '5월', '6월',
-    '7월', '8월', '9월', '10월', '11월', '12월'
-  ];
-
-  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
 
   useEffect(() => {
     if (currentWeekStartDate) {
@@ -95,439 +91,185 @@ const CoordinationCalendarView = ({
     }
   }, [currentWeekStartDate]);
 
-  useEffect(() => {
-    generateCalendarDates();
-  }, [currentDate, viewMode]);
+  const getOwnerScheduleInfoForTime = (date, time) => {
+    if (!ownerOriginalSchedule) return null;
 
-  const generateCalendarDates = () => {
-    if (viewMode === 'month') {
-      generateMonthDates();
-    } else {
-      generateWeekDates();
-    }
+    const timeMinutes = timeToMinutes(time);
+    const dayOfWeek = date.getDay();
+    const dateStr = toYYYYMMDD(date);
+
+    const exception = ownerOriginalSchedule.scheduleExceptions?.find(e => {
+      if (e.specificDate !== dateStr) return false;
+      const startMins = timeToMinutes(e.startTime);
+      const endMins = timeToMinutes(e.endTime);
+      return timeMinutes >= startMins && timeMinutes < endMins;
+    });
+    if (exception) return { type: 'exception', ...exception };
+
+    const personal = ownerOriginalSchedule.personalTimes?.find(p => {
+      if (p.isRecurring !== false && p.days?.includes(dayOfWeek)) {
+        const startMins = timeToMinutes(p.startTime);
+        const endMins = timeToMinutes(p.endTime);
+        if (endMins <= startMins) return timeMinutes >= startMins || timeMinutes < endMins;
+        return timeMinutes >= startMins && timeMinutes < endMins;
+      }
+      return false;
+    });
+    if (personal) return { type: 'personal', ...personal };
+
+    const preferred = ownerOriginalSchedule.defaultSchedule?.some(s => 
+      s.dayOfWeek === dayOfWeek &&
+      timeMinutes >= timeToMinutes(s.startTime) &&
+      timeMinutes < timeToMinutes(s.endTime)
+    );
+
+    if (preferred) return { type: 'preferred' };
+
+    return { type: 'non_preferred' };
   };
 
-  const generateMonthDates = () => {
+  const getBlocksForDay = (date) => {
+    const allPossibleSlots = generateDayTimeSlots(0, 24);
+    const slotMap = new Map();
+
+    allPossibleSlots.forEach(time => {
+      const negotiation = roomData.negotiations?.find(neg => 
+        toYYYYMMDD(neg.slotInfo.date) === toYYYYMMDD(date) &&
+        time >= neg.slotInfo.startTime && time < neg.slotInfo.endTime
+      );
+      const blockingInfo = getBlockedTimeInfo(time, roomData.settings) || getRoomExceptionInfo(date, time, roomData.settings);
+      const assignedSlots = timeSlots.filter(slot => 
+        toYYYYMMDD(slot.date) === toYYYYMMDD(date) && 
+        time >= slot.startTime && time < slot.endTime
+      );
+      const ownerInfo = getOwnerScheduleInfoForTime(date, time);
+
+      let event = null;
+      if (blockingInfo) {
+        event = { type: 'blocked', name: blockingInfo.name };
+      } else if (negotiation) {
+        event = { type: 'negotiation', name: `협의: ${negotiation._id}` };
+      } else if (assignedSlots.length > 0) {
+        const userNames = assignedSlots.map(slot => {
+            const member = members.find(m => (m.user._id || m.user) === (slot.user._id || slot.user));
+            return member ? (member.user.name || `${member.user.firstName} ${member.user.lastName}`) : null;
+        }).filter(Boolean).sort();
+        const uniqueUserNames = [...new Set(userNames)];
+        event = { type: 'assigned', name: uniqueUserNames.join(', '), users: uniqueUserNames };
+      } else if (ownerInfo?.type === 'non_preferred') {
+        event = { type: 'owner_non_preferred', name: '방장 불가능' };
+      }
+      slotMap.set(time, event);
+    });
+
+    const blocks = [];
+    let currentBlock = null;
+
+    allPossibleSlots.forEach(time => {
+      const event = slotMap.get(time);
+      const currentEventType = event ? event.type : 'empty';
+      const currentEventName = event ? event.name : 'empty';
+
+      if (currentBlock && currentBlock.type === currentEventType && currentBlock.name === currentEventName) {
+        currentBlock.duration += 10;
+      } else {
+        if (currentBlock) blocks.push(currentBlock);
+        currentBlock = { type: currentEventType, name: currentEventName, startTime: time, duration: 10, users: event?.users };
+      }
+    });
+
+    if (currentBlock) blocks.push(currentBlock);
+    return blocks;
+  };
+
+  const calendarDates = useMemo(() => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
     const startDate = new Date(firstDay);
-
-    // 일요일부터 시작하도록 조정
-    const firstDayOfWeek = firstDay.getDay();
-    startDate.setDate(firstDay.getDate() - firstDayOfWeek);
+    startDate.setDate(firstDay.getDate() - firstDay.getDay());
 
     const dates = [];
-    const totalDays = 42; // 6주 * 7일
-
-    for (let i = 0; i < totalDays; i++) {
+    for (let i = 0; i < 42; i++) {
       const date = new Date(startDate);
       date.setDate(startDate.getDate() + i);
-      const isCurrentMonth = date.getMonth() === month;
-      const isToday = toYYYYMMDD(date) === toYYYYMMDD(new Date());
-      const isSelected = selectedDate && toYYYYMMDD(date) === toYYYYMMDD(selectedDate);
-
       dates.push({
         date: new Date(date),
         day: date.getDate(),
-        isCurrentMonth,
-        isToday,
-        isSelected,
-        slotsCount: getSlotCountForDate(date),
-        hasAutoAssigned: hasAutoAssignedForDate(date),
-        hasNegotiation: hasNegotiationForDate(date),
-        hasBlockedTime: hasBlockedTimeForDate(date),
-        blockedTimeCount: getBlockedTimeCountForDate(date),
-        hasPersonalTime: hasPersonalTimeForDate(date),
-        users: getUsersForDate(date)
+        isCurrentMonth: date.getMonth() === month,
+        isToday: toYYYYMMDD(date) === toYYYYMMDD(new Date()),
+        isSelected: selectedDate && toYYYYMMDD(date) === toYYYYMMDD(selectedDate),
+        blocks: getBlocksForDay(date),
       });
     }
+    return dates;
+  }, [currentDate, selectedDate, timeSlots, members, roomData, ownerOriginalSchedule]);
 
-    setCalendarDates(dates);
-  };
 
-  const generateWeekDates = () => {
-    const startOfWeek = getStartOfWeek(currentDate);
-    const dates = [];
-
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(startOfWeek);
-      date.setDate(startOfWeek.getDate() + i);
-      const isToday = toYYYYMMDD(date) === toYYYYMMDD(new Date());
-      const isSelected = selectedDate && toYYYYMMDD(date) === toYYYYMMDD(selectedDate);
-
-      dates.push({
-        date: new Date(date),
-        day: date.getDate(),
-        isCurrentMonth: true,
-        isToday,
-        isSelected,
-        slotsCount: getSlotCountForDate(date),
-        hasAutoAssigned: hasAutoAssignedForDate(date),
-        hasNegotiation: hasNegotiationForDate(date),
-        hasBlockedTime: hasBlockedTimeForDate(date),
-        blockedTimeCount: getBlockedTimeCountForDate(date),
-        hasPersonalTime: hasPersonalTimeForDate(date),
-        users: getUsersForDate(date)
-      });
-    }
-
-    setCalendarDates(dates);
-  };
-
-  const getStartOfWeek = (date) => {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day; // 일요일부터 시작
-    return new Date(d.setDate(diff));
-  };
-
-  const getSlotCountForDate = (date) => {
-    const dateStr = toYYYYMMDD(date);
-    const dayOfWeek = date.getDay();
-    const dayNameMap = {
-      0: 'sunday',
-      1: 'monday',
-      2: 'tuesday',
-      3: 'wednesday',
-      4: 'thursday',
-      5: 'friday',
-      6: 'saturday'
-    };
-    const dayName = dayNameMap[dayOfWeek];
-
-    return timeSlots.filter(slot => {
-      // Check for slots with specific dates first
-      if (slot.date) {
-        try {
-          const slotDate = toYYYYMMDD(slot.date);
-          return slotDate === dateStr;
-        } catch (e) {
-          // Invalid date format, skip
-          return false;
-        }
-      }
-
-      // Check for recurring weekly slots by day name
-      if (slot.day && slot.day.toLowerCase() === dayName) {
-        return true;
-      }
-
-      return false;
-    }).length;
-  };
-
-  const hasAutoAssignedForDate = (date) => {
-    const dateStr = toYYYYMMDD(date);
-    const dayOfWeek = date.getDay();
-    const dayNameMap = {
-      0: 'sunday',
-      1: 'monday',
-      2: 'tuesday',
-      3: 'wednesday',
-      4: 'thursday',
-      5: 'friday',
-      6: 'saturday'
-    };
-    const dayName = dayNameMap[dayOfWeek];
-
-    return timeSlots.some(slot => {
-      const isAutoAssigned = slot.assignedBy || slot.subject === '자동 배정';
-      if (!isAutoAssigned) return false;
-
-      // Check for slots with specific dates first
-      if (slot.date) {
-        try {
-          const slotDate = toYYYYMMDD(slot.date);
-          return slotDate === dateStr;
-        } catch (e) {
-          return false;
-        }
-      }
-
-      // Check for recurring weekly slots by day name
-      if (slot.day && slot.day.toLowerCase() === dayName) {
-        return true;
-      }
-
-      return false;
-    });
-  };
-
-  const hasNegotiationForDate = (date) => {
-    // 협의 중인 슬롯이 있는지 확인
-    const dateStr = toYYYYMMDD(date);
-    return roomData?.negotiations?.some(neg => {
-      if (!neg.slotInfo?.date) return false;
-      const negDate = toYYYYMMDD(neg.slotInfo.date);
-      return negDate === dateStr && neg.status === 'active';
-    });
-  };
-
-  // 차단된 시간이 있는 날짜인지 확인하는 함수
-  const hasBlockedTimeForDate = (date) => {
-    if (!roomData?.settings) return false;
-
-    // 24시간 전체에서 차단된 시간 확인 (0-24시)
-    const timeSlots = generateDayTimeSlots(0, 24);
-
-    return timeSlots.some(time => {
-      const blockedInfo = getBlockedTimeInfo(time, roomData.settings);
-      const roomException = getRoomExceptionInfo(date, time, roomData.settings);
-      return !!(blockedInfo || roomException);
-    });
-  };
-
-  // 차단된 시간의 개수를 반환하는 함수 (시간 단위로 계산)
-  const getBlockedTimeCountForDate = (date) => {
-    if (!roomData?.settings) return 0;
-
-    // 시간 단위로 확인 (0-23시)
-    const blockedHours = new Set();
-
-    for (let hour = 0; hour < 24; hour++) {
-      // 해당 시간의 30분 단위 슬롯들을 확인
-      const timeSlots = [`${hour.toString().padStart(2, '0')}:00`, `${hour.toString().padStart(2, '0')}:30`];
-
-      for (const time of timeSlots) {
-        const blockedInfo = getBlockedTimeInfo(time, roomData.settings);
-        const roomException = getRoomExceptionInfo(date, time, roomData.settings);
-
-        if (blockedInfo || roomException) {
-          blockedHours.add(hour);
-          break; // 해당 시간대에서 차단이 발견되면 다음 시간으로
-        }
-      }
-    }
-
-    return blockedHours.size;
-  };
+  const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
 
   const navigateMonth = (direction) => {
     const newDate = new Date(currentDate);
     newDate.setMonth(currentDate.getMonth() + direction);
     setCurrentDate(newDate);
-    if (onWeekChange) {
-      onWeekChange(toYYYYMMDD(newDate));
-    }
-  };
-
-  const navigateWeek = (direction) => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(currentDate.getDate() + (direction * 7));
-    setCurrentDate(newDate);
-    if (onWeekChange) {
-      const mondayOfNewWeek = getStartOfWeek(newDate);
-      onWeekChange(toYYYYMMDD(mondayOfNewWeek));
-    }
+    if (onWeekChange) onWeekChange(toYYYYMMDD(newDate));
   };
 
   const goToToday = () => {
     const today = new Date();
     setCurrentDate(today);
-    if (onWeekChange) {
-      const mondayOfThisWeek = getStartOfWeek(today);
-      onWeekChange(toYYYYMMDD(mondayOfThisWeek));
-    }
+    if (onWeekChange) onWeekChange(toYYYYMMDD(today));
   };
 
-  const handleDateClick = (date) => {
-    if (onDateClick) {
-      onDateClick(date);
-    }
-  };
-
-  const renderCalendarHeader = () => (
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center space-x-4">
-        <h2 className="text-xl font-semibold">
-          {viewMode === 'month'
-            ? `${currentDate.getFullYear()}년 ${monthNames[currentDate.getMonth()]}`
-            : `${currentDate.getFullYear()}년 ${currentDate.getMonth() + 1}월 ${Math.ceil(currentDate.getDate() / 7)}주차`
-          }
-        </h2>
-
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => viewMode === 'month' ? navigateMonth(-1) : navigateWeek(-1)}
-            className="p-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition-colors"
-          >
-            <ChevronLeft size={16} />
-          </button>
-
-          <button
-            onClick={goToToday}
-            className="px-3 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors text-sm"
-          >
-            오늘
-          </button>
-
-          <button
-            onClick={() => viewMode === 'month' ? navigateMonth(1) : navigateWeek(1)}
-            className="p-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition-colors"
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      </div>
-
-      <div className="flex items-center space-x-4">
-        <div className="flex items-center space-x-2 text-sm text-gray-600">
-          <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-blue-500 mr-1"></div>
-            <span>수동 입력</span>
-          </div>
-          <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-green-500 mr-1"></div>
-            <span>자동 배정</span>
-          </div>
-          <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-orange-500 mr-1"></div>
-            <span>협의 중</span>
-          </div>
-          <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-purple-500 mr-1"></div>
-            <span>방장 개인시간</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderMonthView = () => (
+  return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      {/* 요일 헤더 */}
-      <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-200">
+       <div className="flex items-center justify-between p-4">
+        <h2 className="text-xl font-semibold">
+          {`${currentDate.getFullYear()}년 ${monthNames[currentDate.getMonth()]}`}
+        </h2>
+        <div className="flex items-center space-x-2">
+          <button onClick={() => navigateMonth(-1)} className="p-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition-colors"><ChevronLeft size={16} /></button>
+          <button onClick={goToToday} className="px-3 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors text-sm">오늘</button>
+          <button onClick={() => navigateMonth(1)} className="p-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition-colors"><ChevronRight size={16} /></button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 bg-gray-50 border-y border-gray-200">
         {dayNames.map((dayName, index) => (
-          <div
-            key={index}
-            className={`p-3 text-center text-sm font-medium ${
-              index === 0 ? 'text-red-500' : index === 6 ? 'text-blue-500' : 'text-gray-700'
-            }`}
-          >
+          <div key={index} className={`p-3 text-center text-sm font-medium ${index === 0 ? 'text-red-500' : index === 6 ? 'text-blue-500' : 'text-gray-700'}`}>
             {dayName}
           </div>
         ))}
       </div>
 
-      {/* 캘린더 그리드 */}
       <div className="grid grid-cols-7">
         {calendarDates.map((dateInfo, index) => (
           <div
             key={index}
-            className={`
-              h-24 border-r border-b border-gray-100 p-2 cursor-pointer transition-colors
-              ${dateInfo.isCurrentMonth ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 text-gray-400'}
-              ${dateInfo.isToday ? 'bg-blue-100' : ''}
-              ${dateInfo.isSelected ? 'bg-blue-200 ring-2 ring-blue-500' : ''}
-            `}
-            onClick={() => handleDateClick(dateInfo.date)}
+            className={`h-32 border-r border-b border-gray-100 p-2 cursor-pointer transition-colors ${dateInfo.isCurrentMonth ? 'bg-white hover:bg-blue-50' : 'bg-gray-50 text-gray-400'} ${dateInfo.isToday ? 'bg-blue-100' : ''} ${dateInfo.isSelected ? 'bg-blue-200 ring-2 ring-blue-500' : ''}`}
+            onClick={() => onDateClick(dateInfo.date)}
           >
-            <div className="flex flex-col h-full">
-              <div className={`text-sm font-medium mb-1 ${
-                dateInfo.isToday ? 'text-blue-600' : ''
-              }`}>
-                {dateInfo.day}
-              </div>
-
-              <div className="flex-1 flex flex-col space-y-1 overflow-y-auto">
-                {dateInfo.users && dateInfo.users.map((name, i) => (
-                  <div key={i} className="text-xs bg-blue-100 text-blue-800 px-1 rounded truncate" title={name}>
-                    {name}
-                  </div>
-                ))}
-                {dateInfo.hasPersonalTime && (
-                  <div className="text-xs bg-yellow-100 text-yellow-800 px-1 rounded truncate">
-                    개인 시간
-                  </div>
-                )}
-                {dateInfo.hasBlockedTime && !dateInfo.hasPersonalTime && (
-                  <div className="text-xs bg-red-100 text-red-800 px-1 rounded truncate">
-                    금지 시간
-                  </div>
-                )}
-                {dateInfo.hasNegotiation && (
-                  <div className="text-xs bg-orange-100 text-orange-800 px-1 rounded truncate">
-                    협의 중
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const renderWeekView = () => (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      {/* 요일 헤더 */}
-      <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-200">
-        {calendarDates.map((dateInfo, index) => (
-          <div
-            key={index}
-            className={`p-4 text-center border-r border-gray-200 last:border-r-0 ${
-              index === 0 ? 'text-red-500' : index === 6 ? 'text-blue-500' : 'text-gray-700'
-            }`}
-          >
-            <div className="text-sm text-gray-500">
-              {dayNames[index]}
-            </div>
-            <div className={`text-lg font-semibold mt-1 ${
-              dateInfo.isToday ? 'text-blue-600' : ''
-            }`}>
+            <div className={`text-sm font-medium mb-2 ${dateInfo.isToday ? 'text-blue-600' : ''}`}>
               {dateInfo.day}
             </div>
-          </div>
-        ))}
-      </div>
-
-      {/* 주간 뷰 콘텐츠 */}
-      <div className="grid grid-cols-7 min-h-96">
-        {calendarDates.map((dateInfo, index) => (
-          <div
-            key={index}
-            className={`
-              border-r border-gray-100 last:border-r-0 p-3 cursor-pointer transition-colors
-              ${dateInfo.isToday ? 'bg-blue-50' : 'hover:bg-gray-50'}
-              ${dateInfo.isSelected ? 'bg-blue-200 ring-2 ring-blue-500' : ''}
-            `}
-            onClick={() => handleDateClick(dateInfo.date)}
-          >
-            <div className="space-y-2">
-              {dateInfo.slotsCount > 0 && (
-                <div className="p-2 bg-blue-100 text-blue-800 rounded text-xs flex items-center">
-                  <Users size={12} className="mr-1" />
-                  {dateInfo.slotsCount}개 슬롯
-                </div>
-              )}
-              {dateInfo.hasBlockedTime && (
-                <div className="w-full h-2 bg-purple-500 rounded-full"></div>
-              )}
-              {dateInfo.hasAutoAssigned && (
-                <div className="p-2 bg-green-100 text-green-800 rounded text-xs flex items-center">
-                  <Zap size={12} className="mr-1" />
-                  자동 배정
-                </div>
-              )}
-              {dateInfo.hasNegotiation && (
-                <div className="p-2 bg-orange-100 text-orange-800 rounded text-xs flex items-center">
-                  <Clock size={12} className="mr-1" />
-                  협의 중
-                </div>
-              )}
+            <div className="space-y-1">
+              <DaySummaryBar blocks={dateInfo.blocks} />
+              <div className="flex flex-wrap gap-1 mt-1 overflow-y-auto" style={{maxHeight: '4.5rem'}}>
+                {Array.from(new Set(dateInfo.blocks.filter(b => b.type === 'assigned').flatMap(b => b.users || []))).map((name, i) => (
+                  <span key={`user-${i}`} className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">{name}</span>
+                ))}
+                {Array.from(new Set(dateInfo.blocks.filter(b => b.type === 'blocked').map(b => b.name))).map((name, i) => (
+                  <span key={`block-${i}`} className="text-xs bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full">{name}</span>
+                ))}
+                {dateInfo.blocks.some(b => b.type === 'negotiation') && (
+                  <span className="text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full">협의 중</span>
+                )}
+              </div>
             </div>
           </div>
         ))}
       </div>
-    </div>
-  );
-
-  return (
-    <div className="space-y-4">
-      {renderCalendarHeader()}
-      {viewMode === 'month' ? renderMonthView() : renderWeekView()}
     </div>
   );
 };
