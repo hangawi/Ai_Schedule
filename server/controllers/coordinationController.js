@@ -2540,6 +2540,7 @@ exports.runAutoSchedule = async (req, res) => {
       room.negotiations = [];
 
       console.log(`🧹 [자동배정 준비] 기존 슬롯 ${beforeSlotCount}개 전체 삭제, 협의 ${beforeNegotiationCount}개 전체 삭제`);
+      console.log(`📅 [컨트롤러] 받은 값: minHoursPerWeek=${minHoursPerWeek}, numWeeks=${numWeeks}, currentWeek=${currentWeek}`);
 
       // 개인 시간표 기반 자동배정으로 변경
       const result = schedulingAlgorithm.runAutoSchedule(
