@@ -1442,6 +1442,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   onWeekChange={handleWeekChange}
                   showFullDay={effectiveShowFullDay}
                   showMerged={showMerged}
+                  ownerOriginalSchedule={ownerScheduleCache}
                 />
               )}
             </div>
