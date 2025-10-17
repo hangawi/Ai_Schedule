@@ -459,7 +459,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       setCurrentRoom,
       setNegotiationAlertData,
       setShowNegotiationAlert,
-      showAlert
+      showAlert,
+      viewMode
     );
   };
 
