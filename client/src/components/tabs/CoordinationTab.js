@@ -1282,9 +1282,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
             <NegotiationSection
               currentWeekNegotiations={currentWeekNegotiations}
+              allNegotiations={currentRoom?.negotiations || []}
               user={user}
               onOpenNegotiation={handleOpenNegotiation}
               isOwner={isOwner}
+              currentWeekStartDate={currentWeekStartDate}
             />
           </div>
 
