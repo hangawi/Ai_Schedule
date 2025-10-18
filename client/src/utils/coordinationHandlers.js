@@ -162,53 +162,43 @@ export const handleRunAutoSchedule = async (
   setConflictSuggestions([]); // Reset unassigned members info
 
   try {
-    let uiCurrentWeek;
-    let numWeeks;
-
     // currentWeekStartDate를 Date 객체로 변환 (이미 Date일 수도 있음)
     const currentDateObj = currentWeekStartDate instanceof Date
       ? currentWeekStartDate
       : new Date(currentWeekStartDate);
 
-    if (viewMode === 'month') {
-      // 월간 모드: 현재 보고 있는 주가 속한 월의 1일부터 시작
-      const year = currentDateObj.getFullYear();
-      const month = currentDateObj.getMonth();
+    // 💡 주간/월간 모두 월 전체 기간으로 배정 (뷰만 다름)
+    const year = currentDateObj.getFullYear();
+    const month = currentDateObj.getMonth();
 
-      // 해당 월의 1일 (월요일 기준으로 조정)
-      const firstDayOfMonth = new Date(Date.UTC(year, month, 1));
-      const dayOfWeek = firstDayOfMonth.getUTCDay(); // 0=일요일, 1=월요일, ...
-      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      firstDayOfMonth.setUTCDate(firstDayOfMonth.getUTCDate() + mondayOffset);
+    // 해당 월의 1일 (월요일 기준으로 조정)
+    const firstDayOfMonth = new Date(Date.UTC(year, month, 1));
+    const dayOfWeek = firstDayOfMonth.getUTCDay(); // 0=일요일, 1=월요일, ...
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    firstDayOfMonth.setUTCDate(firstDayOfMonth.getUTCDate() + mondayOffset);
 
-      uiCurrentWeek = firstDayOfMonth;
+    // 해당 월의 마지막 날
+    const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0));
 
-      // 해당 월의 마지막 날
-      const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0));
+    // 월 전체를 커버하는 주 수 계산
+    const daysDiff = Math.ceil((lastDayOfMonth - firstDayOfMonth) / (1000 * 60 * 60 * 24));
+    const numWeeks = Math.ceil(daysDiff / 7) + 1; // 여유있게 +1주
 
-      // 월 전체를 커버하는 주 수 계산
-      const daysDiff = Math.ceil((lastDayOfMonth - firstDayOfMonth) / (1000 * 60 * 60 * 24));
-      numWeeks = Math.ceil(daysDiff / 7) + 1; // 여유있게 +1주
-
-      console.log(`월간 모드: ${year}년 ${month + 1}월 전체 (${numWeeks}주) 배정`);
-    } else {
-      // 주간 모드: 현재 주 1주만 배정
-      uiCurrentWeek = currentDateObj;
-      numWeeks = 1; // 주간 모드에서는 1주만
-    }
+    console.log(`${viewMode === 'month' ? '월간' : '주간'} 모드: ${year}년 ${month + 1}월 전체 (${numWeeks}주) 배정 (뷰만 ${viewMode === 'month' ? '월 전체' : '현재 주'}로 표시)`);
 
     const finalOptions = {
       ...scheduleOptions,
-      currentWeek: uiCurrentWeek,
-      numWeeks
+      currentWeek: firstDayOfMonth, // 항상 월 초부터
+      numWeeks, // 월 전체 주 수
+      viewMode // 뷰 모드 전달
     };
 
     console.log('🚀 Starting auto-schedule with options:', {
       ...finalOptions,
       viewMode,
-      currentWeekStartDateType: typeof currentWeekStartDate,
       currentWeekStartDate: currentDateObj.toISOString(),
-      calculatedCurrentWeek: uiCurrentWeek.toISOString(),
+      firstDayOfMonth: firstDayOfMonth.toISOString(),
+      numWeeks,
     });
 
     const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = await coordinationService.runAutoSchedule(currentRoom._id, finalOptions);

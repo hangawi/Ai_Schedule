@@ -97,14 +97,19 @@ class SchedulingAlgorithm {
 
     // 각 멤버별 할당 시간 계산 (carryOver 포함)
     const memberRequiredSlots = {};
+    const memberRequiredSlotsPerWeek = {}; // 💡 주당 필요 슬롯 (제한용)
     members.forEach(m => {
       const memberId = m.user._id.toString();
       const carryOverHours = m.carryOver || 0;
       // 💡 타임테이블 범위 내 각 주마다 minHoursPerWeek씩 배정
       const totalRequiredHours = (minHoursPerWeek * actualWeeksInRange) + carryOverHours;
       memberRequiredSlots[memberId] = totalRequiredHours * 2; // 시간을 슬롯으로 변환 (1시간 = 2슬롯)
+      memberRequiredSlotsPerWeek[memberId] = minHoursPerWeek * 2; // 💡 주당 최대 슬롯
       console.log(`📌 멤버 ${memberId.substring(0,8)}: ${totalRequiredHours}시간 (${memberRequiredSlots[memberId]}슬롯) 필요 [주당 ${minHoursPerWeek}시간 × ${actualWeeksInRange}주${carryOverHours > 0 ? ` + 이월 ${carryOverHours}시간` : ''}]`);
     });
+
+    // 💡 this에 저장하여 _assignSlot에서 접근 가능하도록
+    this.memberRequiredSlotsPerWeek = memberRequiredSlotsPerWeek;
 
     // 현재 UI가 보고 있는 주 (2025년 9월 16일 월요일)
     const startDate = new Date('2025-09-16');
@@ -174,7 +179,7 @@ class SchedulingAlgorithm {
 
     // Phase 2: Assign undisputed high-priority slots (충돌 제외)
     // console.log('\n📍 [PHASE 2] 단독 슬롯 배정');
-    this._assignUndisputedSlots(timetable, assignments, 3, memberRequiredSlots, conflictingSlots);
+    this._assignUndisputedSlots(timetable, assignments, 3, memberRequiredSlots, conflictingSlots, memberRequiredSlotsPerWeek);
 
     // Phase 3: Iteratively fill remaining hours (skip slots that are under negotiation)
     // console.log('\n📍 [PHASE 3] 반복 배정');
@@ -840,9 +845,19 @@ class SchedulingAlgorithm {
 
     console.log('📅 [타임테이블] 방장의 선호시간표를 기반으로 가용 시간대 생성');
     console.log(`📅 [타임테이블] 처리할 조원 수: ${members.length}명`);
+    console.log(`📅 [타임테이블 기간] ${startDate.toISOString().split('T')[0]} ~ ${endDate.toISOString().split('T')[0]} (${numWeeks}주)`);
 
     // 💡 Step 1: 방장의 가능한 시간대를 먼저 수집
     const ownerAvailableSlots = new Set();
+
+    console.log(`📅 [방장 시간표 체크] defaultSchedule 존재: ${!!owner.defaultSchedule}, 길이: ${owner.defaultSchedule?.length || 0}`);
+    if (owner.defaultSchedule && owner.defaultSchedule.length > 0) {
+      console.log(`📅 [방장 시간표 샘플]:`, owner.defaultSchedule.slice(0, 2).map(s => ({
+        dayOfWeek: s.dayOfWeek,
+        startTime: s.startTime,
+        endTime: s.endTime
+      })));
+    }
 
     if (owner.defaultSchedule && Array.isArray(owner.defaultSchedule)) {
       const validSchedules = owner.defaultSchedule.filter(schedule => {
@@ -850,6 +865,8 @@ class SchedulingAlgorithm {
         const startMin = parseInt(schedule.startTime.split(':')[1]);
         return startMin === 0 || startMin === 30;
       });
+
+      console.log(`📅 [방장 시간표 필터링] 전체: ${owner.defaultSchedule.length}개 → 유효: ${validSchedules.length}개`);
 
       validSchedules.forEach(schedule => {
         const dayOfWeek = schedule.dayOfWeek;
@@ -888,15 +905,27 @@ class SchedulingAlgorithm {
     }
 
     console.log(`📅 [방장] 가능한 시간대: ${ownerAvailableSlots.size}개 슬롯`);
+    if (ownerAvailableSlots.size > 0) {
+      const sampleSlots = Array.from(ownerAvailableSlots).slice(0, 5);
+      console.log(`📅 [방장 슬롯 샘플]:`, sampleSlots);
+    }
+
+    if (ownerAvailableSlots.size === 0) {
+      console.warn(`⚠️ [경고] 방장의 가능한 시간대가 0개입니다!`);
+      console.warn(`   - 기간: ${startDate.toISOString().split('T')[0]} ~ ${endDate.toISOString().split('T')[0]}`);
+      console.warn(`   - 방장 ID: ${ownerId}`);
+      console.warn(`   - defaultSchedule 길이: ${owner.defaultSchedule?.length || 0}`);
+    }
 
     // 💡 Step 2: 조원들의 개인 시간표를 추가 (방장 가능 시간대와 겹치는 것만)
-    members.forEach(member => {
+    let memberSlotsAdded = 0;
+    members.forEach((member, idx) => {
       const user = member.user;
       const userId = user._id.toString();
       const priority = this.getMemberPriority(member);
       const isOwner = false; // 조원은 방장이 아님
 
-
+      console.log(`📅 [조원 ${idx + 1}/${members.length}] ID: ${userId.substring(0, 8)}, defaultSchedule 길이: ${user.defaultSchedule?.length || 0}`);
 
       // 개인 시간표(defaultSchedule) 처리
       if (user.defaultSchedule && Array.isArray(user.defaultSchedule)) {
@@ -907,7 +936,23 @@ class SchedulingAlgorithm {
           return startMin === 0 || startMin === 30;
         });
 
+        console.log(`📅 [조원 ${idx + 1}] 유효한 시간표: ${validSchedules.length}/${user.defaultSchedule.length}개`);
+        if (validSchedules.length > 0) {
+          const sample = validSchedules[0];
+          console.log(`📅 [조원 ${idx + 1} 샘플]:`, {
+            dayOfWeek: sample.dayOfWeek,
+            startTime: sample.startTime,
+            endTime: sample.endTime
+          });
+        }
+
+        let memberSlotCount = 0;
         // 선호시간표 필터링 완료
+
+        let processedSchedules = 0;
+        let skippedWeekends = 0;
+        let addedToTimetable = 0;
+        let rejectedByOwner = 0;
 
         validSchedules.forEach(schedule => {
           const dayOfWeek = schedule.dayOfWeek; // 0=일요일, 1=월요일, ..., 6=토요일
@@ -916,8 +961,11 @@ class SchedulingAlgorithm {
           const specificDate = schedule.specificDate; // 특정 날짜 (YYYY-MM-DD 형식)
           const schedulePriority = schedule.priority || priority; // 슬롯별 우선순위
 
+          processedSchedules++;
+
           // 주말 제외
           if (dayOfWeek === 0 || dayOfWeek === 6) {
+            skippedWeekends++;
             return;
           }
 
@@ -936,17 +984,25 @@ class SchedulingAlgorithm {
 
                 // 💡 방장이 가능한 시간대인지 확인
                 if (!ownerAvailableSlots.has(key)) {
+                  rejectedByOwner++;
                   return; // 방장이 불가능한 시간대는 건너뜀
                 }
 
+                addedToTimetable++;
+
                 if (!timetable[key]) {
                   const oneIndexedDayOfWeek = targetDate.getDay() === 0 ? 7 : targetDate.getDay();
+
+                  // 💡 주 번호 계산 (startDate 기준)
+                  const daysSinceStart = Math.floor((targetDate - startDate) / (1000 * 60 * 60 * 24));
+                  const weekNumber = Math.floor(daysSinceStart / 7);
 
                   timetable[key] = {
                     assignedTo: null,
                     available: [],
                     date: new Date(targetDate),
                     dayOfWeek: oneIndexedDayOfWeek,
+                    weekNumber, // 💡 주 번호 추가 (0부터 시작)
                   };
                 }
 
@@ -957,6 +1013,8 @@ class SchedulingAlgorithm {
                     priority: schedulePriority,
                     isOwner: isOwner
                   });
+                  memberSlotCount++;
+                  memberSlotsAdded++;
                 }
               });
             }
@@ -973,17 +1031,25 @@ class SchedulingAlgorithm {
 
                   // 💡 방장이 가능한 시간대인지 확인
                   if (!ownerAvailableSlots.has(key)) {
+                    rejectedByOwner++;
                     return; // 방장이 불가능한 시간대는 건너뜀
                   }
 
+                  addedToTimetable++;
+
                   if (!timetable[key]) {
                     const oneIndexedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
+
+                    // 💡 주 번호 계산 (startDate 기준)
+                    const daysSinceStart = Math.floor((currentDate - startDate) / (1000 * 60 * 60 * 24));
+                    const weekNumber = Math.floor(daysSinceStart / 7);
 
                     timetable[key] = {
                       assignedTo: null,
                       available: [],
                       date: new Date(currentDate),
                       dayOfWeek: oneIndexedDayOfWeek,
+                      weekNumber, // 💡 주 번호 추가 (0부터 시작)
                     };
                   }
 
@@ -994,6 +1060,8 @@ class SchedulingAlgorithm {
                       priority: schedulePriority,
                       isOwner: isOwner
                     });
+                    memberSlotCount++;
+                    memberSlotsAdded++;
                   }
                 });
               }
@@ -1001,8 +1069,11 @@ class SchedulingAlgorithm {
             }
           }
         });
+        console.log(`📅 [조원 ${idx + 1}] 타임테이블에 추가한 슬롯: ${memberSlotCount}개`);
+        console.log(`   - 처리한 스케줄: ${processedSchedules}개, 주말 제외: ${skippedWeekends}개`);
+        console.log(`   - 타임테이블 시도: ${addedToTimetable}개, 방장과 불일치로 거부: ${rejectedByOwner}개`);
       } else {
-        console.log(`⚠️ [조원] ${userId.substring(0,8)}: defaultSchedule가 없거나 비어있음 - 이 멤버는 타임테이블에서 제외됨`);
+        console.log(`⚠️ [조원 ${idx + 1}] ${userId.substring(0,8)}: defaultSchedule가 없거나 비어있음 - 이 멤버는 타임테이블에서 제외됨`);
       }
 
       // 개인시간(personalTimes) 처리 - 이 시간대는 제외해야 함
@@ -1043,7 +1114,7 @@ class SchedulingAlgorithm {
     });
 
     const totalSlots = Object.keys(timetable).length;
-    console.log(`[개인시간표] 총 ${totalSlots}개 시간대 생성 (개인 시간표 기준)`);
+    console.log(`📅 [타임테이블 최종] 총 ${totalSlots}개 시간대 생성, 조원들이 추가한 슬롯: ${memberSlotsAdded}개`);
 
     // 타임테이블 샘플 출력
     if (totalSlots > 0) {
@@ -1185,7 +1256,8 @@ class SchedulingAlgorithm {
         memberId: memberId,
         assignedHours: 0,
         requiredSlots: memberRequiredSlots[memberId] || 18, // 기본값 3시간 = 18슬롯
-        slots: []
+        slots: [],
+        weeklySlots: {} // 💡 주별 슬롯 카운트 { 0: 2, 1: 4, ... }
       };
     });
     return assignments;
@@ -1217,7 +1289,8 @@ class SchedulingAlgorithm {
     }
   }
 
-  _assignUndisputedSlots(timetable, assignments, priority, memberRequiredSlots, conflictingSlots = []) {
+  _assignUndisputedSlots(timetable, assignments, priority, memberRequiredSlots, conflictingSlots = [], memberRequiredSlotsPerWeek = {}) {
+    // 💡 주별 슬롯 제한 추가 (TODO: 체크 로직 추가 필요)
     let assignedCount = 0;
 
     // 충돌 슬롯 목록을 Set으로 변환하여 빠른 검색
@@ -1846,6 +1919,31 @@ class SchedulingAlgorithm {
       return;
     }
 
+    // 💡 주별 제한 체크 (임시 비활성화 - 무한루프 문제로 인해)
+    // TODO: 타임테이블 생성 단계에서 주별 제한을 적용하도록 재설계 필요
+    /*
+    if (this.memberRequiredSlotsPerWeek && timetable[key].weekNumber !== undefined) {
+      const weekNumber = timetable[key].weekNumber;
+      const maxSlotsPerWeek = this.memberRequiredSlotsPerWeek[memberId] || Infinity;
+
+      if (!assignments[memberId]) {
+        assignments[memberId] = {
+          memberId: memberId,
+          assignedHours: 0,
+          slots: [],
+          weeklySlots: {}
+        };
+      }
+
+      const currentWeeklySlots = assignments[memberId].weeklySlots[weekNumber] || 0;
+
+      if (currentWeeklySlots >= maxSlotsPerWeek) {
+        // 이미 이번 주에 최대치를 받음 (로그 제거 - 무한루프 방지)
+        return false; // 배정 실패
+      }
+    }
+    */
+
     const [h, m] = startTimeRaw.split(':').map(Number);
 
     // 30분 추가하여 endTime 계산
@@ -1878,11 +1976,23 @@ class SchedulingAlgorithm {
       assignments[memberId] = {
         memberId: memberId,
         assignedHours: 0,
-        slots: []
+        slots: [],
+        weeklySlots: {}
       };
     }
 
     assignments[memberId].assignedHours += 1;
+
+    // 💡 주별 카운터 증가 (임시 비활성화)
+    /*
+    if (timetable[key].weekNumber !== undefined) {
+      const weekNumber = timetable[key].weekNumber;
+      if (!assignments[memberId].weeklySlots[weekNumber]) {
+        assignments[memberId].weeklySlots[weekNumber] = 0;
+      }
+      assignments[memberId].weeklySlots[weekNumber] += 1;
+    }
+    */
 
     const slotData = {
         date: slotDate,
