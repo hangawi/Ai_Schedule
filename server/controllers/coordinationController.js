@@ -1038,11 +1038,21 @@ exports.respondToNegotiation = async (req, res) => {
       }
 
       // 💡 다른 협의에 이미 응답했는지 확인 (중복 선택 방지)
-      const otherActiveNegotiations = room.negotiations.filter(nego =>
-         nego.status === 'active' &&
-         nego._id.toString() !== negotiationId &&
-         nego.conflictingMembers.some(cm => (cm.user._id || cm.user).toString() === userId)
-      );
+      // 💡 같은 주의 협의만 체크 (weekStartDate가 같은 경우)
+      const otherActiveNegotiations = room.negotiations.filter(nego => {
+         if (nego.status !== 'active') return false;
+         if (nego._id.toString() === negotiationId) return false;
+
+         // 💡 weekStartDate가 있는 경우: 같은 주의 협의만 필터링
+         if (negotiation.weekStartDate && nego.weekStartDate) {
+            // weekStartDate가 다르면 다른 주차이므로 제외
+            if (nego.weekStartDate !== negotiation.weekStartDate) {
+               return false;
+            }
+         }
+
+         return nego.conflictingMembers.some(cm => (cm.user._id || cm.user).toString() === userId);
+      });
 
       const hasRespondedToOtherNego = otherActiveNegotiations.some(nego => {
          const memberInOtherNego = nego.conflictingMembers.find(cm =>
