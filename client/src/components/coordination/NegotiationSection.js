@@ -115,6 +115,9 @@ const NegotiationSection = ({
   const currentWeekDateString = currentDate.toISOString().split('T')[0];
 
   const weekNegotiations = (allNegotiations || []).filter(neg => {
+    // ✅ resolved 상태인 협의는 제외
+    if (neg.status === 'resolved') return false;
+
     // weekStartDate가 있으면 주별로 분리된 협의임
     if (neg.weekStartDate) {
       return neg.weekStartDate === currentWeekDateString;
@@ -149,6 +152,9 @@ const NegotiationSection = ({
   lastSunday.setDate(lastDayOfMonth.getDate() + daysToSunday);
 
   const monthNegotiations = (allNegotiations || []).filter(neg => {
+    // ✅ resolved 상태인 협의는 제외
+    if (neg.status === 'resolved') return false;
+
     // weekStartDate가 있으면 해당 주차가 이번 달 범위에 포함되는지 확인
     if (neg.weekStartDate) {
       const negWeekStart = new Date(neg.weekStartDate);

@@ -131,7 +131,8 @@ const CoordinationCalendarView = ({
     const slotMap = new Map();
 
     allPossibleSlots.forEach(time => {
-      const negotiation = roomData.negotiations?.find(neg => 
+      const negotiation = roomData.negotiations?.find(neg =>
+        neg.status === 'active' && // ✅ active 상태인 협의만
         toYYYYMMDD(neg.slotInfo.date) === toYYYYMMDD(date) &&
         time >= neg.slotInfo.startTime && time < neg.slotInfo.endTime
       );

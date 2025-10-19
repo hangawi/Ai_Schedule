@@ -1561,6 +1561,13 @@ exports.respondToNegotiation = async (req, res) => {
       room.negotiations.forEach(nego => {
          if (nego.status !== 'active') return;
 
+         // 💡 같은 주의 협의만 자동 해결 (weekStartDate가 다르면 스킵)
+         if (negotiation.weekStartDate && nego.weekStartDate) {
+            if (nego.weekStartDate !== negotiation.weekStartDate) {
+               return; // 다른 주의 협의는 건드리지 않음
+            }
+         }
+
          const negoMemberIds = nego.conflictingMembers.map(m =>
             (m.user._id || m.user).toString()
          );
@@ -1583,6 +1590,27 @@ exports.respondToNegotiation = async (req, res) => {
             }
             return false;
          });
+
+         // 💡 현재 응답이 들어온 협의인 경우:
+         // 시간이 충족되지 않은 멤버는 모두 응답해야 함
+         if (nego._id.toString() === negotiation._id.toString()) {
+            const allRequiredMembersResponded = nego.conflictingMembers.every(m => {
+               const memberId = (m.user._id || m.user).toString();
+
+               // 이미 시간이 충족된 멤버는 응답 안 해도 됨
+               if (memberSatisfactionMap[memberId]) {
+                  return true;
+               }
+
+               // 시간이 충족되지 않은 멤버는 응답해야 함
+               return m.response && m.response !== 'pending';
+            });
+
+            if (!allRequiredMembersResponded) {
+               // 아직 응답하지 않은 멤버가 있으면 자동 해결 불가
+               return;
+            }
+         }
 
          if (allMembersAccountedFor) {
             console.log(`[자동 해결] 협의 ${nego._id.toString().substring(0,8)} (${nego.slotInfo.day} ${nego.slotInfo.startTime}-${nego.slotInfo.endTime})`);
@@ -1617,6 +1645,7 @@ exports.respondToNegotiation = async (req, res) => {
       const updatedRoom = await Room.findById(roomId)
          .populate('owner', 'firstName lastName email')
          .populate('members.user', 'firstName lastName email')
+         .populate('timeSlots.user', '_id firstName lastName email')
          .populate('negotiations.conflictingMembers.user', '_id firstName lastName email')
          .populate('negotiations.resolution.assignments.user', '_id firstName lastName email');
 
