@@ -174,21 +174,33 @@ export const handleRunAutoSchedule = async (
     const year = currentDateObj.getFullYear();
     const month = currentDateObj.getMonth();
 
-    // 해당 월의 1일 (월요일로 조정하지 않음!)
+    // 해당 월의 1일
     const firstDayOfMonth = new Date(Date.UTC(year, month, 1));
 
     // 해당 월의 마지막 날
     const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0));
 
-    // 1일부터 마지막 날까지의 일수를 주 단위로 계산
-    const totalDays = lastDayOfMonth.getUTCDate(); // 1일부터 마지막 날까지
+    // 💡 첫째 주 월요일 찾기: 1일이 속한 주의 월요일 (이전 달일 수도 있음)
+    const firstDayOfWeek = firstDayOfMonth.getUTCDay(); // 0=일요일, 1=월요일, ...
+    const daysToMonday = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1; // 일요일이면 6일 전, 아니면 (요일-1)일 전
+    const firstMonday = new Date(firstDayOfMonth);
+    firstMonday.setUTCDate(firstDayOfMonth.getUTCDate() - daysToMonday);
+
+    // 💡 마지막 주 일요일 찾기: 마지막 날이 속한 주의 일요일 (다음 달일 수도 있음)
+    const lastDayOfWeek = lastDayOfMonth.getUTCDay();
+    const daysToSunday = lastDayOfWeek === 0 ? 0 : 7 - lastDayOfWeek;
+    const lastSunday = new Date(lastDayOfMonth);
+    lastSunday.setUTCDate(lastDayOfMonth.getUTCDate() + daysToSunday);
+
+    // 전체 기간 계산 (월요일~일요일 기준)
+    const totalDays = Math.ceil((lastSunday - firstMonday) / (1000 * 60 * 60 * 24)) + 1;
     numWeeks = Math.ceil(totalDays / 7);
 
-    // 시작일은 해당 월의 1일
-    uiCurrentWeek = firstDayOfMonth;
+    // 시작일은 첫째 주 월요일
+    uiCurrentWeek = firstMonday;
 
     console.log(`${year}년 ${month + 1}월 전체 (${numWeeks}주) 배정`);
-    console.log(`  시작일: ${firstDayOfMonth.toISOString().split('T')[0]}, 종료일: ${lastDayOfMonth.toISOString().split('T')[0]} (총 ${totalDays}일)`);
+    console.log(`  시작일: ${firstMonday.toISOString().split('T')[0]} (첫째주 월요일), 종료일: ${lastSunday.toISOString().split('T')[0]} (마지막주 일요일) (총 ${totalDays}일)`);
 
     const finalOptions = {
       ...scheduleOptions,
