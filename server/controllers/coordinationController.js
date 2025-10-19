@@ -2539,8 +2539,16 @@ exports.runAutoSchedule = async (req, res) => {
       room.timeSlots = [];
       room.negotiations = [];
 
+      console.log('\n========================================');
+      console.log('🎯 [서버] 자동배정 시작');
+      console.log('========================================');
       console.log(`🧹 [자동배정 준비] 기존 슬롯 ${beforeSlotCount}개 전체 삭제, 협의 ${beforeNegotiationCount}개 전체 삭제`);
-      console.log(`📅 [컨트롤러] 받은 값: minHoursPerWeek=${minHoursPerWeek}, numWeeks=${numWeeks}, currentWeek=${currentWeek}`);
+      console.log(`📅 [컨트롤러] 받은 값:`, {
+        minHoursPerWeek,
+        numWeeks,
+        currentWeek: currentWeek ? new Date(currentWeek).toISOString() : 'undefined',
+        멤버수: membersOnly.length
+      });
 
       // 개인 시간표 기반 자동배정으로 변경
       const result = schedulingAlgorithm.runAutoSchedule(
@@ -2596,13 +2604,18 @@ exports.runAutoSchedule = async (req, res) => {
       // 중복 방지를 위한 Set 생성
       const addedSlots = new Set();
 
+      console.log('\n📦 [슬롯 저장 시작]');
+      console.log(`  알고리즘 결과: ${Object.keys(result.assignments).length}명의 멤버 배정 정보`);
+
       Object.values(result.assignments).forEach(assignment => {
 
          if (assignment.slots && assignment.slots.length > 0) {
-            assignment.slots.forEach(slot => {
+            console.log(`\n  👤 멤버 ${assignment.memberId.substring(0, 8)}: ${assignment.slots.length}개 슬롯`);
+
+            assignment.slots.forEach((slot, idx) => {
                // 필수 필드 검증
                if (!slot.day || !slot.startTime || !slot.endTime || !slot.date) {
-                  console.error('❌ [저장실패] 슬롯에 필수 필드가 없습니다:', {
+                  console.error('    ❌ [저장실패] 슬롯에 필수 필드가 없습니다:', {
                      memberId: assignment.memberId,
                      slot: slot,
                      hasDay: !!slot.day,
@@ -2614,10 +2627,12 @@ exports.runAutoSchedule = async (req, res) => {
                }
 
                // 중복 체크를 위한 유니크 키 생성
-               const slotKey = `${assignment.memberId}-${slot.day}-${slot.startTime}-${slot.endTime}`;
+               const slotKey = `${assignment.memberId}-${slot.day}-${slot.startTime}-${slot.endTime}-${new Date(slot.date).toISOString().split('T')[0]}`;
 
                if (!addedSlots.has(slotKey)) {
-                  console.log(`🔍 [저장] 개별 슬롯 추가: ${slot.day} ${slot.startTime}-${slot.endTime} (멤버: ${assignment.memberId})`);
+                  const dateStr = new Date(slot.date).toLocaleDateString('ko-KR');
+                  console.log(`    ✅ [${idx + 1}] ${slot.day} ${dateStr} ${slot.startTime}-${slot.endTime}`);
+
                   const newSlot = {
                      user: assignment.memberId,
                      date: slot.date,
@@ -2630,16 +2645,17 @@ exports.runAutoSchedule = async (req, res) => {
                      assignedAt: new Date(),
                      status: 'confirmed',
                   };
-                  console.log(`🔍 [슬롯생성] newSlot.assignedBy = "${newSlot.assignedBy}" (타입: ${typeof newSlot.assignedBy})`);
+
                   room.timeSlots.push(newSlot);
                   addedSlots.add(slotKey);
-                  console.log(`🔍 [PUSH성공] 슬롯이 room.timeSlots에 추가됨. 현재 총 개수: ${room.timeSlots.length}`);
                } else {
-                  console.log(`🔍 [중복제거] 중복 슬롯 제거: ${slot.day} ${slot.startTime}-${slot.endTime} (멤버: ${assignment.memberId})`);
+                  console.log(`    ⚠️ 중복 슬롯 제거: ${slot.day} ${slot.startTime}-${slot.endTime}`);
                }
             });
          }
       });
+
+      console.log(`\n✅ [슬롯 저장 완료] 총 ${room.timeSlots.length}개 슬롯 저장됨`);
       // 디버깅: 모든 슬롯의 assignedBy 필드 확인
       console.log(`🔍 [필드확인] 모든 슬롯의 assignedBy 필드:`, room.timeSlots.map((slot, index) => ({
         index,
@@ -2757,13 +2773,40 @@ exports.runAutoSchedule = async (req, res) => {
 
       await room.save();
 
+      console.log('\n🔄 [DB 저장 완료 및 재조회 시작]');
+
       const freshRoom = await Room.findById(roomId)
-         .populate('owner', 'firstName lastName email')
+         .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes')
          .populate('members.user', 'firstName lastName email')
          .populate('timeSlots.user', '_id firstName lastName email')
          .populate('requests.requester', 'firstName lastName email')
          .populate('requests.targetUser', 'firstName lastName email')
-         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email name');
+         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email')
+         .lean();
+
+      console.log('\n📤 [클라이언트로 반환할 데이터]');
+      console.log(`  방 ID: ${freshRoom._id}`);
+      console.log(`  timeSlots 개수: ${freshRoom.timeSlots.length}`);
+      console.log(`  멤버 수: ${freshRoom.members.length}`);
+
+      if (freshRoom.timeSlots.length > 0) {
+         console.log('\n  📋 반환되는 슬롯 상세 (처음 5개):');
+         freshRoom.timeSlots.slice(0, 5).forEach((slot, idx) => {
+            const userName = slot.user?.name || slot.user?.firstName || '이름없음';
+            const userId = slot.user?._id || slot.user;
+            const dateStr = new Date(slot.date).toLocaleDateString('ko-KR');
+            console.log(`    [${idx + 1}] ${slot.day} ${dateStr} ${slot.startTime}-${slot.endTime}`);
+            console.log(`        사용자: ${userName} (ID: ${userId?.toString().substring(0, 8)})`);
+            console.log(`        user 객체:`, {
+               hasUser: !!slot.user,
+               hasName: !!slot.user?.name,
+               hasFirstName: !!slot.user?.firstName,
+               hasId: !!slot.user?._id
+            });
+         });
+      }
+
+      console.log('========================================\n');
 
       res.json({
          room: freshRoom,

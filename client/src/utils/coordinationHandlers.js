@@ -171,26 +171,25 @@ export const handleRunAutoSchedule = async (
       : new Date(currentWeekStartDate);
 
     if (viewMode === 'month') {
-      // 월간 모드: 현재 보고 있는 주가 속한 월의 1일부터 시작
+      // 월간 모드: 현재 보고 있는 주가 속한 월의 1일부터 마지막 날까지만 배정
       const year = currentDateObj.getFullYear();
       const month = currentDateObj.getMonth();
 
-      // 해당 월의 1일 (월요일 기준으로 조정)
+      // 해당 월의 1일 (월요일로 조정하지 않음!)
       const firstDayOfMonth = new Date(Date.UTC(year, month, 1));
-      const dayOfWeek = firstDayOfMonth.getUTCDay(); // 0=일요일, 1=월요일, ...
-      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      firstDayOfMonth.setUTCDate(firstDayOfMonth.getUTCDate() + mondayOffset);
-
-      uiCurrentWeek = firstDayOfMonth;
 
       // 해당 월의 마지막 날
       const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0));
 
-      // 월 전체를 커버하는 주 수 계산
-      const daysDiff = Math.ceil((lastDayOfMonth - firstDayOfMonth) / (1000 * 60 * 60 * 24));
-      numWeeks = Math.ceil(daysDiff / 7) + 1; // 여유있게 +1주
+      // 1일부터 마지막 날까지의 일수를 주 단위로 계산
+      const totalDays = lastDayOfMonth.getUTCDate(); // 1일부터 마지막 날까지
+      numWeeks = Math.ceil(totalDays / 7);
+
+      // 시작일은 해당 월의 1일
+      uiCurrentWeek = firstDayOfMonth;
 
       console.log(`월간 모드: ${year}년 ${month + 1}월 전체 (${numWeeks}주) 배정`);
+      console.log(`  시작일: ${firstDayOfMonth.toISOString().split('T')[0]}, 종료일: ${lastDayOfMonth.toISOString().split('T')[0]} (총 ${totalDays}일)`);
     } else {
       // 주간 모드: 현재 주 1주만 배정
       uiCurrentWeek = currentDateObj;
@@ -203,17 +202,44 @@ export const handleRunAutoSchedule = async (
       numWeeks
     };
 
-    console.log('🚀 Starting auto-schedule with options:', {
-      ...finalOptions,
-      viewMode,
-      currentWeekStartDateType: typeof currentWeekStartDate,
+    console.log('\n====================================');
+    console.log(`🎯 [${viewMode.toUpperCase()} 모드] 자동배정 시작`);
+    console.log('====================================');
+    console.log('📊 배정 설정:', {
+      viewMode: viewMode,
+      minHoursPerWeek: scheduleOptions.minHoursPerWeek,
+      numWeeks: numWeeks,
       currentWeekStartDate: currentDateObj.toISOString(),
       calculatedCurrentWeek: uiCurrentWeek.toISOString(),
+      ownerFocusTime: scheduleOptions.ownerFocusTime
     });
 
     const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = await coordinationService.runAutoSchedule(currentRoom._id, finalOptions);
 
-    console.log('Auto-schedule completed:', { updatedRoom, newUnassignedMembersInfo, newConflictSuggestions });
+    console.log('✅ 자동배정 완료');
+    console.log('📋 반환된 방 정보:', {
+      timeSlots개수: updatedRoom.timeSlots?.length || 0,
+      members개수: updatedRoom.members?.length || 0,
+      negotiations개수: updatedRoom.negotiations?.length || 0
+    });
+
+    // 배정된 슬롯들의 상세 정보 출력
+    if (updatedRoom.timeSlots && updatedRoom.timeSlots.length > 0) {
+      console.log('\n🔍 배정된 슬롯 상세 정보:');
+      updatedRoom.timeSlots.forEach((slot, index) => {
+        const user = slot.user;
+        const userName = user && typeof user === 'object'
+          ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.firstName || '이름없음'
+          : '미populate';
+        const userId = user?._id || user;
+        console.log(`  [${index + 1}] ${slot.day} ${new Date(slot.date).toLocaleDateString()} ${slot.startTime}-${slot.endTime}`);
+        console.log(`      사용자: ${userName} (ID: ${userId})`);
+        console.log(`      user 타입: ${typeof user}, user._id: ${user?._id}, firstName: ${user?.firstName}, lastName: ${user?.lastName}`);
+        console.log(`      subject: ${slot.subject}`);
+      });
+    }
+
+    console.log('====================================\n');
 
     if (newUnassignedMembersInfo) {
       setUnassignedMembersInfo(newUnassignedMembersInfo);

@@ -343,15 +343,9 @@ export const getSlotOwner = (date, time, timeSlots, members, currentUser, isRoom
 
     if (userId) {
       member = (members || []).find(m => {
-        const memberDirectId = m.id || m._id;
-        const memberUserId = m.user?.id || m.user?._id;
-        const memberUserIdString = m.user?._id?.toString() || m.user?.id?.toString();
-
-        return (
-          memberDirectId?.toString() === userId.toString() ||
-          memberUserId?.toString() === userId.toString() ||
-          memberUserIdString === userId.toString()
-        );
+        const memberId = m.user?._id?.toString() || m.user?.id?.toString();
+        const slotUserId = userId.toString();
+        return memberId && slotUserId && memberId === slotUserId;
       });
     } else if (bookedSlot.user && bookedSlot.user.email) {
       member = (members || []).find(m => {
