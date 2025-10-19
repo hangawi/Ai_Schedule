@@ -84,20 +84,17 @@ class SchedulingAlgorithm {
       throw new Error('Invalid owner data provided to scheduling algorithm');
     }
 
-    const { minHoursPerWeek = 3, numWeeks = 2, currentWeek, ownerPreferences = {}, roomSettings = {} } = options;
+    const { minHoursPerWeek = 3, numWeeks = 2, currentWeek, ownerPreferences = {}, roomSettings = {}, fullRangeStart, fullRangeEnd } = options;
 
-    console.log(`\n🚀 [자동배정 시작] 주당 ${minHoursPerWeek}시간 × ${numWeeks}주`);
+    console.log(`\n🚀 [자동배정] 주당 ${minHoursPerWeek}시간 × ${numWeeks}주`);
 
     // 💡 numWeeks > 1이면 주별로 나눠서 실행
     if (numWeeks > 1) {
-      console.log(`📅 [다중 주 모드] ${numWeeks}주를 각각 배정합니다...`);
       return this._runMultiWeekSchedule(members, owner, roomTimeSlots, options, deferredAssignments);
     }
 
     // 단일 주 배정 (기존 로직)
     const actualWeeksInRange = 1;
-
-    console.log(`📅 [단일 주 모드] 1주만 배정합니다...`);
 
     // Convert hours to 30-minute slots (1 hour = 2 slots)
     const minSlotsPerWeek = minHoursPerWeek * 2;
@@ -110,7 +107,6 @@ class SchedulingAlgorithm {
       // 💡 타임테이블 범위 내 각 주마다 minHoursPerWeek씩 배정
       const totalRequiredHours = (minHoursPerWeek * actualWeeksInRange) + carryOverHours;
       memberRequiredSlots[memberId] = totalRequiredHours * 2; // 시간을 슬롯으로 변환 (1시간 = 2슬롯)
-      console.log(`📌 멤버 ${memberId.substring(0,8)}: ${totalRequiredHours}시간 (${memberRequiredSlots[memberId]}슬롯) 필요 [주당 ${minHoursPerWeek}시간 × ${actualWeeksInRange}주${carryOverHours > 0 ? ` + 이월 ${carryOverHours}시간` : ''}]`);
     });
 
     // 현재 UI가 보고 있는 주의 시작일 (월요일)
@@ -132,7 +128,8 @@ class SchedulingAlgorithm {
     const nonOwnerMembers = members.filter(m => m.user._id.toString() !== ownerId);
 
     // 개인 시간표 기반으로 타임테이블 생성 (기존 roomTimeSlots 대신 개인 시간표 사용)
-    const timetable = this._createTimetableFromPersonalSchedules(members, owner, startDate, numWeeks, roomSettings);
+    // 💡 fullRangeStart/End가 있으면 전체 범위 기준으로 방장 가용 시간 생성
+    const timetable = this._createTimetableFromPersonalSchedules(members, owner, startDate, numWeeks, roomSettings, fullRangeStart, fullRangeEnd);
 
     let assignments = this._initializeMemberAssignments(nonOwnerMembers, memberRequiredSlots);
 
@@ -151,7 +148,6 @@ class SchedulingAlgorithm {
             subject: slot.subject
           });
           assignments[slotUserId].assignedHours += 1; // 30분 슬롯 2개 = 1시간
-          console.log(`   ✅ ${slotUserId.substring(0,8)}: ${slot.subject} (${new Date(slot.date).toISOString().split('T')[0]} ${slot.startTime}-${slot.endTime})`);
         }
       });
 
@@ -160,7 +156,6 @@ class SchedulingAlgorithm {
       Object.keys(assignments).forEach(memberId => {
         const assignedSlots = assignments[memberId].slots.length;
         const requiredSlots = memberRequiredSlots[memberId] || 2;
-        console.log(`   ${memberId.substring(0,8)}: ${assignedSlots}/${requiredSlots}슬롯 배정됨`);
       });
     }
 
@@ -268,7 +263,6 @@ class SchedulingAlgorithm {
       const unsatisfiedMembers = memberSlotNeeds.filter(m => {
         const stillNeeds = m.neededSlots > 0;
         if (!stillNeeds) {
-          // console.log(`   ✅ 멤버 ${m.memberId.substring(0,8)}: 충족됨 (${m.assignedSlots}/${m.requiredSlots}) → 제외`);
         }
         return stillNeeds;
       });
@@ -287,7 +281,6 @@ class SchedulingAlgorithm {
       // 1명만 미충족 → 자동 배정
       if (unsatisfiedMembers.length === 1) {
         const onlyMember = unsatisfiedMembers[0];
-        // console.log(`   ✅ 자동배정: ${onlyMember.memberId.substring(0,8)}`);
 
         autoAssignments.push({
           memberId: onlyMember.memberId,
@@ -336,7 +329,6 @@ class SchedulingAlgorithm {
           // 💡 가장 적게 배정받은 멤버가 다른 멤버보다 **2슬롯(1시간) 초과** 차이나야 자동 배정
           // 그렇지 않으면 협의로 해결 (공평성 유지)
           if (leastHours + 2 < secondLeastHours) {
-            // console.log(`   ✅ 자동배정 (공평성): ${leastAssignedMember.memberId.substring(0,8)}에게 할당 (배정시간: ${leastHours} << ${secondLeastHours}, 차이 ${secondLeastHours - leastHours}슬롯)`);
 
             autoAssignments.push({
               memberId: leastAssignedMember.memberId,
@@ -819,7 +811,7 @@ class SchedulingAlgorithm {
     return conflicts;
   }
 
-  _createTimetableFromPersonalSchedules(members, owner, startDate, numWeeks, roomSettings = {}) {
+  _createTimetableFromPersonalSchedules(members, owner, startDate, numWeeks, roomSettings = {}, fullRangeStart, fullRangeEnd) {
     const timetable = {};
 
     // Extract schedule start and end hours from room settings
@@ -837,7 +829,14 @@ class SchedulingAlgorithm {
     const endDate = new Date(startDate);
     endDate.setDate(startDate.getDate() + (numWeeks * 7));
 
+    // 💡 방장 가용 시간 계산은 전체 범위를 사용 (다중 주 배정 시)
+    const ownerRangeStart = fullRangeStart ? new Date(fullRangeStart) : startDate;
+    const ownerRangeEnd = fullRangeEnd ? new Date(fullRangeEnd) : endDate;
+
     console.log(`📅 [타임테이블 범위] ${startDate.toISOString().split('T')[0]} ~ ${endDate.toISOString().split('T')[0]} (${numWeeks}주, ${numWeeks * 7}일)`);
+    if (fullRangeStart && fullRangeEnd) {
+      console.log(`   💡 [방장 가용시간 범위] ${ownerRangeStart.toISOString().split('T')[0]} ~ ${ownerRangeEnd.toISOString().split('T')[0]} (전체 범위)`);
+    }
 
     const ownerId = owner._id.toString();
 
@@ -849,7 +848,6 @@ class SchedulingAlgorithm {
       console.log(`📅 [방장 선호시간] ${owner.defaultSchedule.length}개 시간대:`);
       owner.defaultSchedule.forEach(sched => {
         const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-        console.log(`   - ${dayNames[sched.dayOfWeek]}요일 ${sched.startTime}-${sched.endTime} (우선순위: ${sched.priority || 'N/A'})`);
       });
     }
 
@@ -873,28 +871,50 @@ class SchedulingAlgorithm {
         if (dayOfWeek === 0 || dayOfWeek === 6) return;
 
         if (specificDate) {
-          const targetDate = new Date(specificDate);
-          if (targetDate >= startDate && targetDate < endDate) {
-            const slots = this._generateTimeSlots(startTime, endTime);
-            slots.forEach(slotTime => {
-              const dateKey = targetDate.toISOString().split('T')[0];
-              const key = `${dateKey}-${slotTime}`;
-              ownerAvailableSlots.add(key);
-            });
-          }
-        } else {
-          const currentDate = new Date(startDate);
-          while (currentDate < endDate) {
+          // 특정 날짜가 설정된 경우, 해당 요일에 맞는 모든 날짜를 배정 범위에 포함
+          // 💡 전체 범위(ownerRangeStart ~ ownerRangeEnd)에서 찾기
+          const currentDate = new Date(ownerRangeStart);
+          const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+          console.log(`   🔍 [방장 특정날짜→요일변환] ${specificDate}의 ${dayNames[dayOfWeek]}요일 ${startTime}-${endTime} 처리 중...`);
+          let matchedDates = [];
+
+          while (currentDate < ownerRangeEnd) {
             if (currentDate.getUTCDay() === dayOfWeek) {
               const slots = this._generateTimeSlots(startTime, endTime);
+              const dateKey = currentDate.toISOString().split('T')[0];
+              matchedDates.push(dateKey);
+
               slots.forEach(slotTime => {
-                const dateKey = currentDate.toISOString().split('T')[0];
                 const key = `${dateKey}-${slotTime}`;
                 ownerAvailableSlots.add(key);
               });
             }
             currentDate.setUTCDate(currentDate.getUTCDate() + 1);
           }
+
+          console.log(`      ✅ ${dayNames[dayOfWeek]}요일 ${matchedDates.length}일 찾음: ${matchedDates.join(', ')}`);
+        } else {
+          // 반복 요일인 경우에도 전체 범위 사용
+          const currentDate = new Date(ownerRangeStart);
+          const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+          console.log(`   🔍 [방장 반복시간] ${dayNames[dayOfWeek]}요일 ${startTime}-${endTime} 처리 중...`);
+          let matchedDates = [];
+
+          while (currentDate < ownerRangeEnd) {
+            if (currentDate.getUTCDay() === dayOfWeek) {
+              const slots = this._generateTimeSlots(startTime, endTime);
+              const dateKey = currentDate.toISOString().split('T')[0];
+              matchedDates.push(dateKey);
+
+              slots.forEach(slotTime => {
+                const key = `${dateKey}-${slotTime}`;
+                ownerAvailableSlots.add(key);
+              });
+            }
+            currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+          }
+
+          console.log(`      ✅ ${dayNames[dayOfWeek]}요일 ${matchedDates.length}일 찾음: ${matchedDates.join(', ')}`);
         }
       });
     }
@@ -2079,6 +2099,9 @@ class SchedulingAlgorithm {
     const { minHoursPerWeek, numWeeks, currentWeek, ownerPreferences, roomSettings } = options;
 
     const startDate = currentWeek ? new Date(currentWeek) : new Date();
+    const endDate = new Date(startDate);
+    endDate.setUTCDate(startDate.getUTCDate() + (numWeeks * 7));
+
     const allAssignments = {};
     const allNegotiations = [];
     const allSlots = [];
@@ -2097,19 +2120,23 @@ class SchedulingAlgorithm {
     });
 
     console.log(`\n📅 [다중 주 배정] ${numWeeks}주에 걸쳐 각 주마다 ${minHoursPerWeek}시간씩 배정`);
+    console.log(`   📍 전체 범위: ${startDate.toISOString().split('T')[0]} ~ ${endDate.toISOString().split('T')[0]}`);
 
     // 각 주마다 반복
     for (let weekIndex = 0; weekIndex < numWeeks; weekIndex++) {
       const weekStartDate = new Date(startDate);
-      weekStartDate.setDate(startDate.getDate() + (weekIndex * 7));
+      weekStartDate.setUTCDate(startDate.getUTCDate() + (weekIndex * 7));
 
       console.log(`\n✅ [${weekIndex + 1}주차] ${weekStartDate.toISOString().split('T')[0]} 시작`);
 
       // 이번 주만 배정 (numWeeks = 1)
+      // 💡 전체 범위(fullRangeStart, fullRangeEnd)를 전달하여 방장 가용 시간 계산 시 사용
       const weekOptions = {
         ...options,
         numWeeks: 1,
-        currentWeek: weekStartDate
+        currentWeek: weekStartDate,
+        fullRangeStart: startDate,  // 전체 범위 시작일
+        fullRangeEnd: endDate        // 전체 범위 종료일
       };
 
       // 기존 슬롯 제외하고 배정
@@ -2124,9 +2151,15 @@ class SchedulingAlgorithm {
         }
       });
 
-      // 협의 병합
+      // 협의 병합 (💡 주별로 분리)
       if (result.negotiations && result.negotiations.length > 0) {
-        allNegotiations.push(...result.negotiations);
+        // 각 협의에 주차 정보 추가
+        const weekNegotiations = result.negotiations.map(neg => ({
+          ...neg,
+          weekIndex: weekIndex + 1,  // 몇 주차 협의인지
+          weekStartDate: weekStartDate.toISOString().split('T')[0]
+        }));
+        allNegotiations.push(...weekNegotiations);
       }
 
       console.log(`   ✅ ${weekIndex + 1}주차 완료: ${Object.values(result.assignments).reduce((sum, a) => sum + a.slots.length, 0)}개 슬롯 배정`);
@@ -2193,7 +2226,7 @@ class SchedulingAlgorithm {
     // 각 주마다 반복
     for (let weekIndex = 0; weekIndex < numWeeks; weekIndex++) {
       const weekStartDate = new Date(startDate);
-      weekStartDate.setDate(startDate.getDate() + (weekIndex * 7));
+      weekStartDate.setUTCDate(startDate.getUTCDate() + (weekIndex * 7));
 
       console.log(`\n✅ [${weekIndex + 1}주차] ${weekStartDate.toISOString().split('T')[0]} 시작`);
 

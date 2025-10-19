@@ -109,18 +109,56 @@ const NegotiationSection = ({
     });
   };
 
-  // 주간 협의
-  const visibleWeekNegotiations = filterVisibleNegotiations(currentWeekNegotiations);
-
-  // 월간 협의: 현재 월의 모든 협의
+  // 💡 주간 협의: weekStartDate가 있는 협의만 사용 (주별로 분리된 협의)
+  // currentWeekStartDate와 정확히 일치하는 주의 협의만 표시
   const currentDate = currentWeekStartDate ? new Date(currentWeekStartDate) : new Date();
+  const currentWeekDateString = currentDate.toISOString().split('T')[0];
+
+  const weekNegotiations = (allNegotiations || []).filter(neg => {
+    // weekStartDate가 있으면 주별로 분리된 협의임
+    if (neg.weekStartDate) {
+      return neg.weekStartDate === currentWeekDateString;
+    }
+
+    // weekStartDate가 없으면 기존 방식: 날짜로 주 판단
+    if (!neg.slotInfo?.date) return false;
+    const negDate = new Date(neg.slotInfo.date);
+    const weekEnd = new Date(currentDate);
+    weekEnd.setDate(currentDate.getDate() + 7);
+    return negDate >= currentDate && negDate < weekEnd;
+  });
+
+  const visibleWeekNegotiations = filterVisibleNegotiations(weekNegotiations);
+
+  // 월간 협의: 현재 월의 모든 협의 (주별로 그룹화)
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth();
 
+  // 월의 첫째 주 월요일 찾기
+  const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+  const firstDayOfWeek = firstDayOfMonth.getDay();
+  const daysToMonday = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
+  const firstMonday = new Date(firstDayOfMonth);
+  firstMonday.setDate(firstDayOfMonth.getDate() - daysToMonday);
+
+  // 월의 마지막 주 일요일 찾기
+  const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0);
+  const lastDayOfWeek = lastDayOfMonth.getDay();
+  const daysToSunday = lastDayOfWeek === 0 ? 0 : 7 - lastDayOfWeek;
+  const lastSunday = new Date(lastDayOfMonth);
+  lastSunday.setDate(lastDayOfMonth.getDate() + daysToSunday);
+
   const monthNegotiations = (allNegotiations || []).filter(neg => {
+    // weekStartDate가 있으면 해당 주차가 이번 달 범위에 포함되는지 확인
+    if (neg.weekStartDate) {
+      const negWeekStart = new Date(neg.weekStartDate);
+      return negWeekStart >= firstMonday && negWeekStart <= lastSunday;
+    }
+
+    // weekStartDate가 없으면 기존 방식: 날짜로 월 판단
     if (!neg.slotInfo?.date) return false;
     const negDate = new Date(neg.slotInfo.date);
-    return negDate.getFullYear() === currentYear && negDate.getMonth() === currentMonth;
+    return negDate >= firstMonday && negDate <= lastSunday;
   });
 
   const visibleMonthNegotiations = filterVisibleNegotiations(monthNegotiations);
