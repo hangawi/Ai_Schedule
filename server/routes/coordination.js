@@ -47,6 +47,7 @@ router.post('/rooms/:roomId/negotiations/:negotiationId/respond', auth, coordina
 router.post('/rooms/:roomId/negotiations/:negotiationId/cancel', auth, coordinationController.cancelNegotiationResponse);
 router.post('/rooms/:roomId/negotiations/auto-resolve', auth, coordinationController.autoResolveTimeoutNegotiations);
 router.post('/rooms/:roomId/negotiations/:negotiationId/force-resolve', auth, coordinationController.forceResolveNegotiation);
+router.delete('/rooms/:roomId/negotiations', auth, coordinationController.clearAllNegotiations);
 router.post('/rooms/:roomId/reset-completed-times', auth, timeSlotController.resetCompletedTimes);
 
 // @route   DELETE /api/coordination/rooms/:roomId/members/:memberId/carry-over-history

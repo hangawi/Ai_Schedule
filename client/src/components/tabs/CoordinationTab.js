@@ -44,6 +44,7 @@ import {
   handleForceResolveNegotiation,
   handleResetCarryOverTimes,
   handleResetCompletedTimes,
+  handleClearAllNegotiations,
   handleRunAutoSchedule,
   handleCancelRequest,
   handleRequestWithUpdate,
@@ -429,6 +430,11 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     await handleResetCompletedTimes(currentRoom, fetchRoomDetails, setCurrentRoom, showAlert);
   }, [currentRoom, fetchRoomDetails, setCurrentRoom, showAlert]);
 
+  // Clear all negotiations function
+  const handleClearAllNegotiationsCallback = useCallback(async () => {
+    await handleClearAllNegotiations(currentRoom, fetchRoomDetails, setCurrentRoom, showAlert);
+  }, [currentRoom, fetchRoomDetails, setCurrentRoom, showAlert]);
+
 
 
   const handleClearAllCarryOverHistoriesCallback = useCallback(async () => {
@@ -466,15 +472,39 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
   // Handle opening negotiation modal
   const handleOpenNegotiation = useCallback((negotiationData) => {
+    console.log('[협의 열기] 선택한 협의:', {
+      _id: negotiationData._id,
+      weekStartDate: negotiationData.weekStartDate,
+      weekIndex: negotiationData.weekIndex,
+      date: negotiationData.slotInfo?.date
+    });
+
     // 💡 다른 협의에 이미 응답했는지 확인
-    const otherActiveNegotiations = (currentRoom?.negotiations || []).filter(nego =>
-      nego.status === 'active' &&
-      nego._id !== negotiationData._id &&
-      nego.conflictingMembers?.some(cm => {
+    // 💡 같은 주의 협의만 필터링 (weekStartDate가 같은 협의끼리만 상호 배타적)
+    const otherActiveNegotiations = (currentRoom?.negotiations || []).filter(nego => {
+      if (nego.status !== 'active') return false;
+      if (nego._id === negotiationData._id) return false;
+
+      // 💡 weekStartDate가 있는 경우: 같은 주차의 협의만 필터링
+      if (negotiationData.weekStartDate && nego.weekStartDate) {
+        // weekStartDate가 다르면 다른 주차이므로 제외
+        if (nego.weekStartDate !== negotiationData.weekStartDate) {
+          console.log('[협의 필터링] 다른 주차 협의 제외:', {
+            current: negotiationData.weekStartDate,
+            other: nego.weekStartDate
+          });
+          return false;
+        }
+      }
+
+      // 내가 당사자인 협의만 필터링
+      return nego.conflictingMembers?.some(cm => {
         const cmUserId = cm.user?._id || cm.user?.id || cm.user;
         return cmUserId === user?.id || cmUserId?.toString() === user?.id?.toString();
-      })
-    );
+      });
+    });
+
+    console.log('[협의 체크] 같은 주의 다른 협의:', otherActiveNegotiations.length, '개');
 
     const hasRespondedToOther = otherActiveNegotiations.some(nego => {
       const memberInOtherNego = nego.conflictingMembers?.find(cm => {
@@ -493,7 +523,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         return memberInOtherNego && memberInOtherNego.response && memberInOtherNego.response !== 'pending';
       });
 
-      // 💡 커스텀 모달 표시
+      // 💡 커스텀 모달 표시 (같은 주의 다른 협의에 응답한 경우)
       setConflictNegotiation(respondedNego);
       setShowConflictModal(true);
       return;
@@ -854,6 +884,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 onAutoResolveNegotiations={handleAutoResolveNegotiationsCallback}
                 onResetCarryOverTimes={handleResetCarryOverTimesCallback}
                 onResetCompletedTimes={handleResetCompletedTimesCallback}
+                onClearAllNegotiations={handleClearAllNegotiationsCallback}
                 onClearAllCarryOverHistories={handleClearAllCarryOverHistoriesCallback}
                 onDeleteAllSlots={handleDeleteAllSlots}
                 currentWeekStartDate={currentWeekStartDate}

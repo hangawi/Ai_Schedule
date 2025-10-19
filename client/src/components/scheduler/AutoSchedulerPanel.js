@@ -10,6 +10,7 @@ const AutoSchedulerPanel = ({
   onAutoResolveNegotiations,
   onResetCarryOverTimes,
   onResetCompletedTimes,
+  onClearAllNegotiations,
   onDeleteAllSlots,
   onClearAllCarryOverHistories,
   currentWeekStartDate,
@@ -89,18 +90,25 @@ const AutoSchedulerPanel = ({
             완료초기화
           </button>
           <button
-            onClick={onClearAllCarryOverHistories} // New button
+            onClick={onClearAllCarryOverHistories}
             className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-yellow-600 hover:to-yellow-700 text-xs transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center"
           >
             <History size={12} className="mr-1" />
             내역 삭제
           </button>
           <button
+            onClick={onClearAllNegotiations}
+            className="bg-gradient-to-r from-orange-500 to-orange-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-orange-600 hover:to-orange-700 text-xs transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center"
+          >
+            <MessageSquare size={12} className="mr-1" />
+            협의삭제
+          </button>
+          <button
             onClick={onDeleteAllSlots}
-            className="bg-gradient-to-r from-red-500 to-red-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-red-600 hover:to-red-700 disabled:from-red-300 disabled:to-red-400 transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center text-xs"
+            className="bg-gradient-to-r from-red-500 to-red-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-red-600 hover:to-red-700 disabled:from-red-300 disabled:to-red-400 transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center text-xs col-span-2"
           >
             <X size={12} className="mr-1" />
-            비우기
+            전체 비우기
           </button>
         </div>
       </div>

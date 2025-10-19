@@ -124,6 +124,45 @@ export const handleResetCompletedTimes = async (currentRoom, fetchRoomDetails, s
 };
 
 /**
+ * Handle clear all negotiations
+ */
+export const handleClearAllNegotiations = async (currentRoom, fetchRoomDetails, setCurrentRoom, showAlert) => {
+  if (!currentRoom?._id) return;
+
+  console.log('Clearing all negotiations for room:', currentRoom._id);
+
+  try {
+    const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${apiUrl}/api/coordination/rooms/${currentRoom._id}/negotiations`, {
+      method: 'DELETE',
+      headers: {
+        'x-auth-token': token,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to clear negotiations');
+    }
+
+    const result = await response.json();
+    showAlert(result.msg || `${result.clearedCount}개의 협의가 삭제되었습니다.`);
+
+    // Immediately update room data without refresh
+    if (result.room) {
+      setCurrentRoom(result.room);
+    } else {
+      // Fallback to refresh if room data not returned
+      await fetchRoomDetails(currentRoom._id);
+    }
+  } catch (error) {
+    console.error('Clear negotiations failed:', error);
+    showAlert(`협의 삭제 실패: ${error.message}`);
+  }
+};
+
+/**
  * Handle auto-scheduling
  */
 export const handleRunAutoSchedule = async (

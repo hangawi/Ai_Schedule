@@ -246,6 +246,14 @@ const RoomSchema = new mongoose.Schema({
         ref: 'User'
       }
     },
+    weekIndex: {
+      type: Number,
+      required: false
+    },
+    weekStartDate: {
+      type: String,
+      required: false
+    },
     createdAt: {
       type: Date,
       default: Date.now
