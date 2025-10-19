@@ -101,8 +101,25 @@ const CoordinationDetailGrid = ({
         event = { type: 'negotiation', name: `협의: ${negotiation._id}` };
       } else if (assignedSlots.length > 0) {
         const userNames = assignedSlots.map(slot => {
-            const member = members.find(m => (m.user._id || m.user) === (slot.user._id || slot.user));
-            return member ? (member.user.name || `${member.user.firstName} ${member.user.lastName}`) : null;
+            const member = members.find(m => {
+              const memberUserId = m.user?._id?.toString() || m.user?.toString();
+              const slotUserId = slot.user?._id?.toString() || slot.user?.toString();
+              return memberUserId && slotUserId && memberUserId === slotUserId;
+            });
+
+            // slot.user가 populate되어 있으면 직접 사용 (우선순위 1)
+            if (slot.user && typeof slot.user === 'object' && slot.user._id) {
+              const user = slot.user;
+              return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.firstName || '알 수 없음';
+            }
+
+            // slot.user가 ObjectId만 있으면 members에서 찾기 (우선순위 2)
+            if (member && member.user && typeof member.user === 'object') {
+              const user = member.user;
+              return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.firstName || '알 수 없음';
+            }
+
+            return '알 수 없음';
         }).filter(Boolean).sort();
         const uniqueUserNames = [...new Set(userNames)];
         event = { type: 'assigned', name: uniqueUserNames.join(', '), users: uniqueUserNames };
@@ -172,6 +189,7 @@ const CoordinationDetailGrid = ({
                   bgColor = 'bg-blue-100';
                   textColor = 'text-blue-800';
                   Icon = Users;
+                  content = `배정: ${block.users.join(', ')}`;
                   break;
                 case 'blocked':
                   bgColor = 'bg-red-100';
