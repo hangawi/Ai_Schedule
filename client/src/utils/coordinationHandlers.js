@@ -170,31 +170,25 @@ export const handleRunAutoSchedule = async (
       ? currentWeekStartDate
       : new Date(currentWeekStartDate);
 
-    if (viewMode === 'month') {
-      // 월간 모드: 현재 보고 있는 주가 속한 월의 1일부터 마지막 날까지만 배정
-      const year = currentDateObj.getFullYear();
-      const month = currentDateObj.getMonth();
+    // 주간/월간 모드 관계없이 현재 보고 있는 주가 속한 월의 전체를 배정
+    const year = currentDateObj.getFullYear();
+    const month = currentDateObj.getMonth();
 
-      // 해당 월의 1일 (월요일로 조정하지 않음!)
-      const firstDayOfMonth = new Date(Date.UTC(year, month, 1));
+    // 해당 월의 1일 (월요일로 조정하지 않음!)
+    const firstDayOfMonth = new Date(Date.UTC(year, month, 1));
 
-      // 해당 월의 마지막 날
-      const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0));
+    // 해당 월의 마지막 날
+    const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0));
 
-      // 1일부터 마지막 날까지의 일수를 주 단위로 계산
-      const totalDays = lastDayOfMonth.getUTCDate(); // 1일부터 마지막 날까지
-      numWeeks = Math.ceil(totalDays / 7);
+    // 1일부터 마지막 날까지의 일수를 주 단위로 계산
+    const totalDays = lastDayOfMonth.getUTCDate(); // 1일부터 마지막 날까지
+    numWeeks = Math.ceil(totalDays / 7);
 
-      // 시작일은 해당 월의 1일
-      uiCurrentWeek = firstDayOfMonth;
+    // 시작일은 해당 월의 1일
+    uiCurrentWeek = firstDayOfMonth;
 
-      console.log(`월간 모드: ${year}년 ${month + 1}월 전체 (${numWeeks}주) 배정`);
-      console.log(`  시작일: ${firstDayOfMonth.toISOString().split('T')[0]}, 종료일: ${lastDayOfMonth.toISOString().split('T')[0]} (총 ${totalDays}일)`);
-    } else {
-      // 주간 모드: 현재 주 1주만 배정
-      uiCurrentWeek = currentDateObj;
-      numWeeks = 1; // 주간 모드에서는 1주만
-    }
+    console.log(`${year}년 ${month + 1}월 전체 (${numWeeks}주) 배정`);
+    console.log(`  시작일: ${firstDayOfMonth.toISOString().split('T')[0]}, 종료일: ${lastDayOfMonth.toISOString().split('T')[0]} (총 ${totalDays}일)`);
 
     const finalOptions = {
       ...scheduleOptions,
