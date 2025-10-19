@@ -2869,3 +2869,41 @@ exports.deleteAllTimeSlots = async (req, res) => {
       res.status(500).json({ msg: 'Server error' });
    }
 };
+
+// Clear all negotiations
+exports.clearAllNegotiations = async (req, res) => {
+   try {
+      const { roomId } = req.params;
+      const room = await Room.findById(roomId);
+
+      if (!room) {
+         return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+      }
+
+      if (!room.isOwner(req.user.id)) {
+         return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
+      }
+
+      const clearedCount = room.negotiations.length;
+
+      // Clear all negotiations
+      room.negotiations = [];
+      await room.save();
+
+      const updatedRoom = await Room.findById(room._id)
+         .populate('owner', 'firstName lastName email')
+         .populate('members.user', 'firstName lastName email')
+         .populate('timeSlots.user', '_id firstName lastName email')
+         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email');
+
+      res.json({
+         msg: `${clearedCount}개의 협의가 삭제되었습니다.`,
+         clearedCount,
+         room: updatedRoom
+      });
+
+   } catch (error) {
+      console.error('Error clearing negotiations:', error);
+      res.status(500).json({ msg: 'Server error' });
+   }
+};
