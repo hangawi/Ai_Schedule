@@ -73,8 +73,9 @@ const AutoSchedulerPanel = ({
           {isLoading ? '배정 중...' : '자동 배정 실행'}
         </button>
 
-        {/* 소형 버튼들 그리드 */}
+        {/* 소형 버튼들 그리드 - 2열 2행 */}
         <div className="grid grid-cols-2 gap-2">
+          {/* 1열 */}
           <button
             onClick={onResetCarryOverTimes}
             className="bg-gradient-to-r from-blue-500 to-blue-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-blue-600 hover:to-blue-700 text-xs transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center"
@@ -89,6 +90,7 @@ const AutoSchedulerPanel = ({
             <Calendar size={12} className="mr-1" />
             완료초기화
           </button>
+          {/* 2열 */}
           <button
             onClick={onClearAllCarryOverHistories}
             className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-yellow-600 hover:to-yellow-700 text-xs transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center"
@@ -97,15 +99,8 @@ const AutoSchedulerPanel = ({
             내역 삭제
           </button>
           <button
-            onClick={onClearAllNegotiations}
-            className="bg-gradient-to-r from-orange-500 to-orange-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-orange-600 hover:to-orange-700 text-xs transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center"
-          >
-            <MessageSquare size={12} className="mr-1" />
-            협의삭제
-          </button>
-          <button
             onClick={onDeleteAllSlots}
-            className="bg-gradient-to-r from-red-500 to-red-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-red-600 hover:to-red-700 disabled:from-red-300 disabled:to-red-400 transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center text-xs col-span-2"
+            className="bg-gradient-to-r from-red-500 to-red-600 text-white py-1.5 px-2 rounded-md font-medium hover:from-red-600 hover:to-red-700 disabled:from-red-300 disabled:to-red-400 transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center text-xs"
           >
             <X size={12} className="mr-1" />
             전체 비우기
