@@ -284,12 +284,19 @@ const ProfileTab = ({ onEditingChange }) => {
   // calendarUpdate 이벤트 수신하여 스케줄 새로고침
   useEffect(() => {
     const handleCalendarUpdate = async (event) => {
+      console.log('📅 [ProfileTab] calendarUpdate 이벤트 수신:', event.detail);
 
+      // 반복 일정 추가인 경우
+      if (event.detail && event.detail.isRecurring && event.detail.context === 'profile') {
+        console.log('🔁 [ProfileTab] 반복 일정 추가 감지, 전체 새로고침');
+        fetchSchedule();
+        return;
+      }
 
       // 챗봇에서 추가한 일정인 경우
       if (event.detail && event.detail.type === 'add' && event.detail.chatResponse && event.detail.data) {
 
-        
+
         // 편집 모드이고 초기화 상태인 경우, 서버 응답의 기존 데이터를 무시하고
         // 챗봇이 방금 추가한 항목만 추가
         if (isEditing && wasCleared) {
