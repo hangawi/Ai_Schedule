@@ -438,19 +438,35 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
          switch (activeTab) {
             case 'profile':
                // 내 프로필 탭 - 로컬 일정 관리
-               return await handleChatMessage(message, { context: 'profile', tabType: 'local' });
+               return await handleChatMessage(message, {
+                  context: 'profile',
+                  tabType: 'local',
+                  currentEvents: globalEvents
+               });
 
             case 'events':
                // 나의 일정 탭 - 로컬 일정 관리
-               return await handleChatMessage(message, { context: 'events', tabType: 'local' });
+               return await handleChatMessage(message, {
+                  context: 'events',
+                  tabType: 'local',
+                  currentEvents: globalEvents
+               });
 
             case 'googleCalendar':
                // Google 캘린더 탭 - Google 캘린더 연동
-               return await handleChatMessage(message, { context: 'googleCalendar', tabType: 'google' });
+               return await handleChatMessage(message, {
+                  context: 'googleCalendar',
+                  tabType: 'google',
+                  currentEvents: globalEvents
+               });
 
             default:
                // 기본값 - 일반 처리
-               return await handleChatMessage(message, { context: activeTab, tabType: 'default' });
+               return await handleChatMessage(message, {
+                  context: activeTab,
+                  tabType: 'default',
+                  currentEvents: globalEvents
+               });
          }
       } catch (error) {
          return {
