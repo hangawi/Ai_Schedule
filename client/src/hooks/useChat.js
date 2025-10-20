@@ -104,6 +104,18 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
 
                   if (response.ok) {
                      successCount = chatResponse.dates.length;
+
+                     // 프로필 탭 캘린더 업데이트 이벤트 발생
+                     const responseData = await response.json();
+                     window.dispatchEvent(new CustomEvent('calendarUpdate', {
+                        detail: {
+                           type: 'add',
+                           data: responseData,
+                           context: 'profile',
+                           isRecurring: true,
+                           datesCount: chatResponse.dates.length
+                        }
+                     }));
                   } else {
                      const errorData = await response.json().catch(() => ({}));
                      failCount = chatResponse.dates.length;
@@ -112,21 +124,64 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   }
                } else {
                   // Google 캘린더와 나의 일정 탭은 각 날짜별로 개별 추가
+                  const conflictDates = []; // 충돌 발생한 날짜들
+
                   for (const date of chatResponse.dates) {
                      try {
+                        // 1️⃣ 기존 일정 가져오기 (context에서 전달받음)
+                        const events = context.currentEvents || [];
+                        console.log('🔍 [충돌체크] 날짜:', date, '전체 이벤트 수:', events.length);
+
+                        // 2️⃣ 충돌 체크
                         const startDateTime = `${date}T${chatResponse.startTime}:00+09:00`;
                         const endDateTime = `${date}T${chatResponse.endTime}:00+09:00`;
 
-                        const eventData = {
-                           title: chatResponse.title || '일정',
-                           description: chatResponse.description || '',
-                           startDateTime,
-                           endDateTime
-                        };
+                        console.log('🔍 [충돌체크] 새 일정:', { startDateTime, endDateTime });
+                        if (events.length > 0) {
+                           console.log('🔍 [충돌체크] 첫 번째 이벤트 샘플:', events[0]);
+                        }
 
-                        const apiEndpoint = context.tabType === 'google'
-                           ? `${API_BASE_URL}/api/calendar/events/google`
-                           : `${API_BASE_URL}/api/events`;
+                        const { hasConflict, conflicts } = checkScheduleConflict(startDateTime, endDateTime, events);
+                        console.log('🔍 [충돌체크] 결과:', { hasConflict, conflictCount: conflicts.length });
+
+                        if (hasConflict) {
+                           // 충돌 발생 - 이 날짜는 건너뛰고 기록
+                           conflictDates.push({
+                              date,
+                              conflictWith: conflicts[0]?.summary || conflicts[0]?.title || '기존 일정'
+                           });
+                           failCount++;
+                           continue; // 이 날짜는 추가하지 않음
+                        }
+
+                        // 3️⃣ 충돌 없으면 추가
+                        let eventData;
+                        let apiEndpoint;
+
+                        if (context.tabType === 'google') {
+                           // Google 캘린더는 startTime/endTime 형식 사용
+                           eventData = {
+                              title: chatResponse.title || '일정',
+                              description: chatResponse.description || '',
+                              startTime: startDateTime,
+                              endTime: endDateTime
+                           };
+                           apiEndpoint = `${API_BASE_URL}/api/calendar/events/google`;
+                        } else {
+                           // 나의 일정은 date/time/duration 형식 사용
+                           const [startHour, startMin] = chatResponse.startTime.split(':');
+                           const [endHour, endMin] = chatResponse.endTime.split(':');
+                           const durationMinutes = (parseInt(endHour) * 60 + parseInt(endMin)) - (parseInt(startHour) * 60 + parseInt(startMin));
+
+                           eventData = {
+                              title: chatResponse.title || '일정',
+                              description: chatResponse.description || '',
+                              date: date,
+                              time: chatResponse.startTime,
+                              duration: durationMinutes
+                           };
+                           apiEndpoint = `${API_BASE_URL}/api/events`;
+                        }
 
                         const response = await fetch(apiEndpoint, {
                            method: 'POST',
@@ -148,10 +203,77 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                         errors.push(`${date}: ${dateError.message}`);
                      }
                   }
+
+                  // 4️⃣ 충돌 발생한 날짜에 대해 대안 시간 찾기
+                  if (conflictDates.length > 0) {
+                     const [startHour, startMin] = chatResponse.startTime.split(':');
+                     const [endHour, endMin] = chatResponse.endTime.split(':');
+                     const durationMinutes = (parseInt(endHour) * 60 + parseInt(endMin)) - (parseInt(startHour) * 60 + parseInt(startMin));
+                     const requestedTimeHour = parseInt(startHour) + parseInt(startMin) / 60;
+
+                     const allAlternatives = [];
+
+                     for (const conflictInfo of conflictDates) {
+                        const events = context.currentEvents || [];
+                        const availableSlots = findAvailableTimeSlots(conflictInfo.date, events, durationMinutes, requestedTimeHour);
+
+                        if (availableSlots.length > 0) {
+                           allAlternatives.push({
+                              date: conflictInfo.date,
+                              conflictWith: conflictInfo.conflictWith,
+                              alternatives: availableSlots.slice(0, 2) // 상위 2개만
+                           });
+                        }
+                     }
+
+                     // 5️⃣ 충돌 정보와 대안 시간을 메시지에 포함
+                     if (conflictDates.length > 0) {
+                        let conflictMessage = `\n\n⚠️ ${conflictDates.length}일은 ${chatResponse.startTime}에 이미 일정이 있어서 건너뛰었어요:\n`;
+
+                        if (allAlternatives.length > 0) {
+                           allAlternatives.forEach(alt => {
+                              conflictMessage += `\n📅 ${alt.date} - "${alt.conflictWith}"과(와) 겹침\n`;
+                              conflictMessage += `   추천 시간: `;
+                              alt.alternatives.forEach((slot, idx) => {
+                                 conflictMessage += `${slot.start}-${slot.end}`;
+                                 if (idx < alt.alternatives.length - 1) conflictMessage += ', ';
+                              });
+                           });
+                        } else {
+                           // 대안 시간이 없는 경우
+                           conflictDates.forEach(conflict => {
+                              conflictMessage += `\n📅 ${conflict.date} - "${conflict.conflictWith}"과(와) 겹침`;
+                           });
+                           conflictMessage += `\n빈 시간을 찾을 수 없습니다.`;
+                        }
+
+                        // 충돌 정보를 응답에 추가
+                        return {
+                           success: successCount > 0,
+                           message: successCount > 0
+                              ? `${chatResponse.title || '일정'}을 ${successCount}일간 추가했어요!${conflictMessage}`
+                              : `모든 날짜에서 충돌이 발생했습니다.${conflictMessage}`,
+                           data: chatResponse,
+                           suggestedTimes: allAlternatives.length > 0 ? allAlternatives.flatMap(alt =>
+                              alt.alternatives.map(slot => ({
+                                 date: alt.date,
+                                 start: slot.start,
+                                 end: slot.end
+                              }))
+                           ) : undefined
+                        };
+                     }
+                  }
                }
 
-               setEventAddedKey(prevKey => prevKey + 1);
-               window.dispatchEvent(new Event('calendarUpdate'));
+               // 프로필 탭이 아닌 경우에만 추가 이벤트 발생
+               if (!(context.context === 'profile' && context.tabType === 'local')) {
+                  setEventAddedKey(prevKey => prevKey + 1);
+                  window.dispatchEvent(new Event('calendarUpdate'));
+               } else {
+                  // 프로필 탭은 이미 위에서 이벤트 발생
+                  setEventAddedKey(prevKey => prevKey + 1);
+               }
 
                if (successCount > 0 && failCount === 0) {
                   return {
@@ -177,6 +299,108 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                return {
                   success: false,
                   message: `반복 일정 추가 중 오류가 발생했습니다: ${error.message}`,
+                  data: chatResponse
+               };
+            }
+         }
+
+         // 🗑️ 범위 삭제 처리
+         if (chatResponse.intent === 'delete_range' && chatResponse.startDate && chatResponse.endDate) {
+            try {
+               const token = localStorage.getItem('token');
+               const startDate = new Date(chatResponse.startDate + 'T00:00:00+09:00');
+               const endDate = new Date(chatResponse.endDate + 'T23:59:59+09:00');
+
+               console.log('🗑️ [범위삭제] 시작:', { startDate, endDate, context });
+
+               let deleteCount = 0;
+               let failCount = 0;
+
+               if (context.context === 'profile' && context.tabType === 'local') {
+                  // 프로필 탭 - scheduleExceptions에서 해당 범위 삭제
+                  const currentScheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+                     headers: { 'x-auth-token': token }
+                  });
+                  const currentSchedule = await currentScheduleResponse.json();
+
+                  // 범위 내 일정만 필터링해서 제거
+                  const filteredExceptions = (currentSchedule.scheduleExceptions || []).filter(exception => {
+                     const exceptionDate = new Date(exception.startTime);
+                     return exceptionDate < startDate || exceptionDate > endDate;
+                  });
+
+                  deleteCount = (currentSchedule.scheduleExceptions || []).length - filteredExceptions.length;
+
+                  const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+                     method: 'PUT',
+                     headers: {
+                        'Content-Type': 'application/json',
+                        'x-auth-token': token
+                     },
+                     body: JSON.stringify({
+                        scheduleExceptions: filteredExceptions,
+                        personalTimes: currentSchedule.personalTimes || []
+                     })
+                  });
+
+                  if (response.ok) {
+                     window.dispatchEvent(new CustomEvent('calendarUpdate', {
+                        detail: { type: 'delete_range', startDate, endDate }
+                     }));
+                  }
+               } else {
+                  // Google 캘린더 또는 나의 일정 - 개별 이벤트 조회 후 삭제
+                  const apiEndpoint = context.tabType === 'google'
+                     ? `${API_BASE_URL}/api/calendar/events/google`
+                     : `${API_BASE_URL}/api/events`;
+
+                  // 해당 기간 이벤트 조회
+                  const eventsResponse = await fetch(`${apiEndpoint}?startDate=${chatResponse.startDate}&endDate=${chatResponse.endDate}`, {
+                     headers: { 'x-auth-token': token }
+                  });
+
+                  if (eventsResponse.ok) {
+                     const eventsData = await eventsResponse.json();
+                     const events = eventsData.events || eventsData;
+
+                     // 각 이벤트 삭제
+                     for (const event of events) {
+                        try {
+                           const deleteResponse = await fetch(`${apiEndpoint}/${event._id || event.id}`, {
+                              method: 'DELETE',
+                              headers: { 'x-auth-token': token }
+                           });
+
+                           if (deleteResponse.ok) {
+                              deleteCount++;
+                           } else {
+                              failCount++;
+                           }
+                        } catch (err) {
+                           failCount++;
+                           console.error('삭제 실패:', err);
+                        }
+                     }
+
+                     if (deleteCount > 0) {
+                        setEventAddedKey(prevKey => prevKey + 1);
+                        window.dispatchEvent(new Event('calendarUpdate'));
+                     }
+                  }
+               }
+
+               return {
+                  success: deleteCount > 0,
+                  message: deleteCount > 0
+                     ? `${deleteCount}개의 일정을 삭제했어요!`
+                     : '삭제할 일정이 없습니다.',
+                  data: chatResponse
+               };
+            } catch (error) {
+               console.error('🗑️ [범위삭제] 오류:', error);
+               return {
+                  success: false,
+                  message: `일정 삭제 중 오류가 발생했습니다: ${error.message}`,
                   data: chatResponse
                };
             }

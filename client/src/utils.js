@@ -71,6 +71,21 @@ const endOfWeek = date => {
    return result;
 };
 
+const startOfMonth = date => {
+   const result = new Date(date);
+   result.setDate(1);
+   result.setHours(0, 0, 0, 0);
+   return result;
+};
+
+const endOfMonth = date => {
+   const result = new Date(date);
+   result.setMonth(result.getMonth() + 1);
+   result.setDate(0);
+   result.setHours(23, 59, 59, 999);
+   return result;
+};
+
 // ✅ 주차 오프셋을 지원하는 요일 계산
 // dayOfWeek: 월=1 ... 일=7
 // weekOffset: 0=이번주, 1=다음주, -1=저번주, 2=다다음주 ...
@@ -297,10 +312,15 @@ export const generateAIPrompt = (command, context = {}) => {
       `**범위 패턴:**`,
       `1️⃣ "이번주 전부" = 오늘부터 이번주 일요일까지 매일`,
       `2️⃣ "다음주 전부" = 다음주 월요일부터 일요일까지 매일`,
-      `3️⃣ "이번달 전부" = 오늘부터 이번달 마지막날까지 매일`,
+      `3️⃣ "이번달 전부" = 이번달 1일부터 마지막날까지 매일 (지난 날짜 포함)`,
       `4️⃣ "이번주 월요일 전부" = 이번주의 월요일만`,
-      `5️⃣ "이번달 월요일 전부" = 이번달의 모든 월요일`,
-      `6️⃣ "다음달 금요일 전부" = 다음달의 모든 금요일`,
+      `5️⃣ "이번달 월요일 전부" = 이번달의 모든 월요일 (1일부터 계산, 지난 날짜 포함)`,
+      `6️⃣ "다음달 금요일 전부" = 다음달의 모든 금요일 (1일부터 마지막날까지)`,
+      ``,
+      `**중요: 이번달/다음달 특정 요일 계산 방법:**`,
+      `- "이번달 월요일 전부" → 10월 1일부터 10월 31일까지의 모든 월요일`,
+      `- "이번달 목요일 전부" → 10월 1일부터 10월 31일까지의 모든 목요일`,
+      `- 지난 날짜도 반드시 포함! (예: 오늘이 10월 20일이어도 10월 7일, 14일 월요일도 포함)`,
       ``,
       `**반복 일정 JSON 형식:**`,
       `{`,
@@ -323,9 +343,47 @@ export const generateAIPrompt = (command, context = {}) => {
       `- dates 배열에는 YYYY-MM-DD 형식으로 모든 적용 날짜 포함`,
       `- startTime, endTime은 시간만 (HH:MM 형식)`,
       ``,
-      `**삭제 예시:**`,
-      `"다음주 목요일 약속 삭제" -> {"intent": "delete_event", "title": "약속", "startDateTime": "${formatDate(getWeekday(now, 4, 1))}T00:00:00+09:00", "endDateTime": "${formatDate(getWeekday(now, 4, 1))}T23:59:59+09:00", "response": "삭제!"}`,
-      `"이번주 일정 전부 삭제" -> {"intent": "delete_range", "title": "일정", "startDateTime": "${formatDate(startOfWeek(now))}T00:00:00+09:00", "endDateTime": "${formatDate(endOfWeek(now))}T23:59:59+09:00", "response": "삭제!"}`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `🗑️ **일정 삭제 (매우 중요!)**`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      ``,
+      `**1️⃣ 범위 삭제 (전체 삭제):**`,
+      `"전체 삭제", "전부 삭제" 키워드가 있으면 범위 내 모든 일정 삭제!`,
+      ``,
+      `**범위 삭제 JSON 형식:**`,
+      `{`,
+      `  "intent": "delete_range",`,
+      `  "startDate": "2025-10-01",  // 시작 날짜 (YYYY-MM-DD)`,
+      `  "endDate": "2025-10-31",    // 종료 날짜 (YYYY-MM-DD)`,
+      `  "response": "응답메시지"`,
+      `}`,
+      ``,
+      `**범위 삭제 예시:**`,
+      `"이번주 전체 삭제" → {"intent": "delete_range", "startDate": "${formatDate(startOfWeek(now))}", "endDate": "${formatDate(endOfWeek(now))}", "response": "이번주 모든 일정을 삭제했어요!"}`,
+      `"이번달 전체 삭제" → {"intent": "delete_range", "startDate": "${formatDate(startOfMonth(now))}", "endDate": "${formatDate(endOfMonth(now))}", "response": "이번달 모든 일정을 삭제했어요!"}`,
+      `"다음주 전부 삭제" → {"intent": "delete_range", "startDate": "${formatDate(startOfWeek(addWeeks(now, 1)))}", "endDate": "${formatDate(endOfWeek(addWeeks(now, 1)))}", "response": "다음주 모든 일정을 삭제했어요!"}`,
+      `"10월 전체 삭제" → {"intent": "delete_range", "startDate": "2025-10-01", "endDate": "2025-10-31", "response": "10월 모든 일정을 삭제했어요!"}`,
+      ``,
+      `**2️⃣ 단일/특정 일정 삭제:**`,
+      `특정 제목이나 날짜의 일정만 삭제`,
+      ``,
+      `**단일 삭제 JSON 형식:**`,
+      `{`,
+      `  "intent": "delete_event",`,
+      `  "title": "일정제목",  // 삭제할 일정 제목`,
+      `  "date": "2025-10-23",  // 날짜 (YYYY-MM-DD)`,
+      `  "time": "16:00",      // 선택적 - 시간 (HH:MM)`,
+      `  "response": "응답메시지"`,
+      `}`,
+      ``,
+      `**단일 삭제 예시:**`,
+      `"금요일 약속 삭제" → {"intent": "delete_event", "title": "약속", "date": "${formatDate(getWeekday(now, 5, 0))}", "response": "약속을 삭제했어요!"}`,
+      `"내일 회의 삭제" → {"intent": "delete_event", "title": "회의", "date": "${formatDate(addDays(now, 1))}", "response": "회의를 삭제했어요!"}`,
+      `"오후 4시 일정 삭제" → {"intent": "delete_event", "date": "${formatDate(now)}", "time": "16:00", "response": "오후 4시 일정을 삭제했어요!"}`,
+      ``,
+      `**중요:**`,
+      `- "전체", "전부", "모든" 등의 키워드 → intent: "delete_range"`,
+      `- 특정 제목/시간 지정 → intent: "delete_event"`,
       ``,
       `**일정 충돌 시나리오:**`,
       `만약 시스템이 일정 충돌을 감지하면, 자동으로 대안 시간을 제시합니다.`,
@@ -374,9 +432,14 @@ export const checkScheduleConflict = (newStartDateTime, newEndDateTime, existing
          eventStart = new Date(event.start.dateTime || event.start.date);
          eventEnd = new Date(event.end.dateTime || event.end.date);
       } else if (event.startTime && event.endTime) {
-         // Local event 형식
+         // Local event 형식 (ISO 형식)
          eventStart = new Date(event.startTime);
          eventEnd = new Date(event.endTime);
+      } else if (event.date && event.time) {
+         // 나의 일정 형식 (date + time + duration)
+         const duration = event.duration || 60; // 기본 1시간
+         eventStart = new Date(`${event.date}T${event.time}:00+09:00`);
+         eventEnd = new Date(eventStart.getTime() + duration * 60 * 1000);
       } else {
          return false;
       }
@@ -405,6 +468,9 @@ export const findAvailableTimeSlots = (targetDate, events, duration = 60, reques
          eventStart = new Date(event.start.dateTime || event.start.date);
       } else if (event.startTime) {
          eventStart = new Date(event.startTime);
+      } else if (event.date && event.time) {
+         // 나의 일정 형식
+         eventStart = new Date(`${event.date}T${event.time}:00+09:00`);
       } else {
          return false;
       }
@@ -415,15 +481,40 @@ export const findAvailableTimeSlots = (targetDate, events, duration = 60, reques
 
    // 이벤트를 시간순으로 정렬
    dayEvents.sort((a, b) => {
-      const aStart = new Date(a.start?.dateTime || a.start?.date || a.startTime);
-      const bStart = new Date(b.start?.dateTime || b.start?.date || b.startTime);
+      let aStart, bStart;
+      if (a.start) {
+         aStart = new Date(a.start.dateTime || a.start.date);
+      } else if (a.startTime) {
+         aStart = new Date(a.startTime);
+      } else if (a.date && a.time) {
+         aStart = new Date(`${a.date}T${a.time}:00+09:00`);
+      }
+
+      if (b.start) {
+         bStart = new Date(b.start.dateTime || b.start.date);
+      } else if (b.startTime) {
+         bStart = new Date(b.startTime);
+      } else if (b.date && b.time) {
+         bStart = new Date(`${b.date}T${b.time}:00+09:00`);
+      }
+
       return aStart - bStart;
    });
 
    // 이벤트 목록 출력
    dayEvents.forEach((event, idx) => {
-      const start = new Date(event.start?.dateTime || event.start?.date || event.startTime);
-      const end = new Date(event.end?.dateTime || event.end?.date || event.endTime);
+      let start, end;
+      if (event.start) {
+         start = new Date(event.start.dateTime || event.start.date);
+         end = new Date(event.end.dateTime || event.end.date);
+      } else if (event.startTime) {
+         start = new Date(event.startTime);
+         end = new Date(event.endTime);
+      } else if (event.date && event.time) {
+         const duration = event.duration || 60;
+         start = new Date(`${event.date}T${event.time}:00+09:00`);
+         end = new Date(start.getTime() + duration * 60 * 1000);
+      }
       console.log(`   ${idx+1}. "${event.summary || event.title || '제목없음'}" ${start.getHours()}:${start.getMinutes().toString().padStart(2,'0')} - ${end.getHours()}:${end.getMinutes().toString().padStart(2,'0')}`);
    });
 
@@ -435,8 +526,18 @@ export const findAvailableTimeSlots = (targetDate, events, duration = 60, reques
    let currentHour = workStart;
 
    for (const event of dayEvents) {
-      const eventStart = new Date(event.start?.dateTime || event.start?.date || event.startTime);
-      const eventEnd = new Date(event.end?.dateTime || event.end?.date || event.endTime);
+      let eventStart, eventEnd;
+      if (event.start) {
+         eventStart = new Date(event.start.dateTime || event.start.date);
+         eventEnd = new Date(event.end.dateTime || event.end.date);
+      } else if (event.startTime) {
+         eventStart = new Date(event.startTime);
+         eventEnd = new Date(event.endTime);
+      } else if (event.date && event.time) {
+         const duration = event.duration || 60;
+         eventStart = new Date(`${event.date}T${event.time}:00+09:00`);
+         eventEnd = new Date(eventStart.getTime() + duration * 60 * 1000);
+      }
       const eventStartHour = eventStart.getHours() + eventStart.getMinutes() / 60;
       const eventEndHour = eventEnd.getHours() + eventEnd.getMinutes() / 60;
 
