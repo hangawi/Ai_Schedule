@@ -94,6 +94,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/events', require('./routes/events'));
+app.use('/api/users/profile', require('./routes/profile'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/calendar', require('./routes/calendar'));
 app.use('/api/call-analysis', require('./routes/callAnalysis'));

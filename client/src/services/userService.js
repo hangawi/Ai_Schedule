@@ -35,4 +35,15 @@ export const userService = {
   getUserScheduleById: (userId) => {
     return request(`${API_BASE_URL}/api/users/${userId}/schedule`, { method: 'GET' });
   },
+
+  getUserProfile: () => {
+    return request(`${API_BASE_URL}/api/users/profile`, { method: 'GET' });
+  },
+
+  updateUserProfile: (profileData) => {
+    return request(`${API_BASE_URL}/api/users/profile`, {
+      method: 'PUT',
+      body: JSON.stringify(profileData),
+    });
+  },
 };

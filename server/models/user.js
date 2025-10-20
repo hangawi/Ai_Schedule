@@ -34,6 +34,38 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  name: {
+    type: String,
+    default: ''
+  },
+  phone: {
+    type: String,
+    default: ''
+  },
+  address: {
+    type: String,
+    default: ''
+  },
+  addressLat: {
+    type: Number,
+    default: null
+  },
+  addressLng: {
+    type: Number,
+    default: null
+  },
+  addressPlaceId: {
+    type: String,
+    default: null
+  },
+  occupation: {
+    type: String,
+    default: ''
+  },
+  birthdate: {
+    type: String,
+    default: ''
+  },
   preferences: {
     workHours: {
       start: {
