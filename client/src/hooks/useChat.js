@@ -73,24 +73,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   });
                   const currentSchedule = await currentScheduleResponse.json();
 
-                  // 충돌 체크를 위한 기존 일정 리스트 생성 (scheduleExceptions + personalTimes)
-                  const existingEvents = [
-                     ...(currentSchedule.scheduleExceptions || []).map(exc => ({
-                        startTime: exc.startTime,
-                        endTime: exc.endTime,
-                        title: exc.title
-                     })),
-                     ...(currentSchedule.personalTimes || []).filter(pt => pt.specificDate).map(pt => {
-                        const startDateTime = new Date(`${pt.specificDate}T${pt.startTime}:00+09:00`);
-                        const endDateTime = new Date(`${pt.specificDate}T${pt.endTime}:00+09:00`);
-                        return {
-                           startTime: startDateTime.toISOString(),
-                           endTime: endDateTime.toISOString(),
-                           title: pt.title
-                        };
-                     })
-                  ];
-
                   const conflictDates = [];
                   const newPersonalTimes = [];
                   const [startHour, startMin] = chatResponse.startTime.split(':');
@@ -102,6 +84,33 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   for (const date of chatResponse.dates) {
                      const startDateTime = new Date(`${date}T${chatResponse.startTime}:00+09:00`);
                      const endDateTime = new Date(`${date}T${chatResponse.endTime}:00+09:00`);
+
+                     // 해당 날짜의 기존 일정만 수집 (scheduleExceptions + personalTimes)
+                     const existingEvents = [
+                        ...(currentSchedule.scheduleExceptions || [])
+                           .filter(exc => exc.specificDate === date)
+                           .map(exc => ({
+                              startTime: exc.startTime,
+                              endTime: exc.endTime,
+                              title: exc.title
+                           })),
+                        ...(currentSchedule.personalTimes || [])
+                           .filter(pt => pt.specificDate === date)
+                           .map(pt => {
+                              const ptStartDateTime = new Date(`${pt.specificDate}T${pt.startTime}:00+09:00`);
+                              const ptEndDateTime = new Date(`${pt.specificDate}T${pt.endTime}:00+09:00`);
+                              return {
+                                 startTime: ptStartDateTime.toISOString(),
+                                 endTime: ptEndDateTime.toISOString(),
+                                 title: pt.title
+                              };
+                           })
+                     ];
+
+                     console.log(`🔍 [충돌체크] ${date} 날짜의 기존 일정:`, existingEvents.length, '개');
+                     if (existingEvents.length > 0) {
+                        console.log('   상세:', existingEvents.map(e => `${e.title} ${new Date(e.startTime).toLocaleString('ko-KR')}`));
+                     }
 
                      // 1단계: 정확히 동일한 일정이 이미 있는지 체크 (중복 방지)
                      const exactDuplicate = existingEvents.find(evt => {
@@ -598,13 +607,19 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   let events = [];
 
                   if (context.context === 'profile' && context.tabType === 'local') {
-                     const exceptions = eventsData.scheduleExceptions || [];
-                     const personalTimes = eventsData.personalTimes || [];
-                     events = [...exceptions, ...personalTimes.map(pt => ({
-                        ...pt,
-                        startTime: `${targetDate}T${pt.startTime}:00+09:00`,
-                        endTime: `${targetDate}T${pt.endTime}:00+09:00`
-                     }))];
+                     // targetDate와 일치하는 일정만 포함
+                     const exceptions = (eventsData.scheduleExceptions || [])
+                        .filter(exc => exc.specificDate === targetDate);
+
+                     const personalTimes = (eventsData.personalTimes || [])
+                        .filter(pt => pt.specificDate === targetDate)
+                        .map(pt => ({
+                           ...pt,
+                           startTime: `${targetDate}T${pt.startTime}:00+09:00`,
+                           endTime: `${targetDate}T${pt.endTime}:00+09:00`
+                        }));
+
+                     events = [...exceptions, ...personalTimes];
                   } else if (context.tabType === 'local') {
                      events = eventsData.events || eventsData;
                   } else {
