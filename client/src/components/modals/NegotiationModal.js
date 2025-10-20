@@ -23,6 +23,26 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
       setMessages(negotiation.messages || []);
       setCurrentNegotiation(negotiation);
 
+      // 💡 협의 정보 상세 로그
+      console.log('[협의 모달] 협의 정보:', {
+        _id: negotiation._id,
+        weekStartDate: negotiation.weekStartDate,
+        status: negotiation.status,
+        type: negotiation.type,
+        멤버수: negotiation.conflictingMembers?.length
+      });
+
+      // 💡 모든 멤버의 응답 상태 로그
+      console.log('[협의 모달] 모든 멤버 응답 상태:');
+      negotiation.conflictingMembers?.forEach((cm, idx) => {
+        const cmUserId = typeof cm.user === 'object' ? (cm.user._id || cm.user.id) : cm.user;
+        const cmName = cm.user?.firstName || cm.user?.name || '이름없음';
+        console.log(`  멤버 ${idx + 1}: ${cmName} (${cmUserId?.toString().substring(0, 8)})`, {
+          response: cm.response,
+          chosenSlot: cm.chosenSlot
+        });
+      });
+
       // 현재 유저의 chosenSlot 복원 (서버에서 가져옴)
       const currentUserMember = negotiation.conflictingMembers?.find(
         cm => {

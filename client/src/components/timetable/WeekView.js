@@ -76,17 +76,17 @@ const WeekView = ({
           const startMinutes = timeToMinutes(p.startTime);
           const endMinutes = timeToMinutes(p.endTime);
 
-          console.log('🔍 personalTime 체크 (반복):', {
-            personal: p,
-            dayOfWeek,
-            convertedDays,
-            startMinutes,
-            endMinutes,
-            timeMinutes,
-            isMatch: (endMinutes <= startMinutes) ?
-              (timeMinutes >= startMinutes || timeMinutes < endMinutes) :
-              (timeMinutes >= startMinutes && timeMinutes < endMinutes)
-          });
+          // console.log('🔍 personalTime 체크 (반복):', {
+          //   personal: p,
+          //   dayOfWeek,
+          //   convertedDays,
+          //   startMinutes,
+          //   endMinutes,
+          //   timeMinutes,
+          //   isMatch: (endMinutes <= startMinutes) ?
+          //     (timeMinutes >= startMinutes || timeMinutes < endMinutes) :
+          //     (timeMinutes >= startMinutes && timeMinutes < endMinutes)
+          // });
 
           // 자정을 넘나드는 시간 처리
           if (endMinutes <= startMinutes) {
@@ -107,15 +107,15 @@ const WeekView = ({
           const startMinutes = timeToMinutes(p.startTime);
           const endMinutes = timeToMinutes(p.endTime);
 
-          console.log('🔍 personalTime 체크 (특정날짜):', {
-            personal: p,
-            specificDate: p.specificDate,
-            dateStr,
-            startMinutes,
-            endMinutes,
-            timeMinutes,
-            isMatch: timeMinutes >= startMinutes && timeMinutes < endMinutes
-          });
+          // console.log('🔍 personalTime 체크 (특정날짜):', {
+          //   personal: p,
+          //   specificDate: p.specificDate,
+          //   dateStr,
+          //   startMinutes,
+          //   endMinutes,
+          //   timeMinutes,
+          //   isMatch: timeMinutes >= startMinutes && timeMinutes < endMinutes
+          // });
 
           return timeMinutes >= startMinutes && timeMinutes < endMinutes;
         }
