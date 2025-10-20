@@ -642,6 +642,7 @@ class SchedulingAlgorithm {
         participants: [...block.conflictingMembers, ownerId], // 당사자들 + 방장
         messages: [],
         status: 'active',
+        weekStartDate: startDate.toISOString().split('T')[0], // 💡 주간별 협의 분리를 위한 주차 정보
         createdAt: new Date()
       };
 

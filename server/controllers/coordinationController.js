@@ -1063,7 +1063,7 @@ exports.respondToNegotiation = async (req, res) => {
 
       if (hasRespondedToOtherNego) {
          return res.status(400).json({
-            msg: '다른 협의에 이미 응답하셨습니다. 먼저 응답한 협의를 취소하거나 해결한 후 다시 시도해주세요.'
+            msg: '이번 주 다른 협의에 이미 응답하셨습니다. 먼저 응답한 협의를 취소하거나 해결한 후 다시 시도해주세요.'
          });
       }
 
@@ -1538,21 +1538,38 @@ exports.respondToNegotiation = async (req, res) => {
 
       const memberSatisfactionMap = {}; // memberId -> isSatisfied
 
+      // 💡 현재 주의 시작일과 종료일 계산 (weekStartDate 기준)
+      const currentWeekStart = negotiation.weekStartDate ? new Date(negotiation.weekStartDate) : null;
+      let currentWeekEnd = null;
+      if (currentWeekStart) {
+         currentWeekEnd = new Date(currentWeekStart);
+         currentWeekEnd.setDate(currentWeekStart.getDate() + 7); // 7일 후
+      }
+
       // 1. 방에 있는 모든 멤버에 대해 만족도 맵을 생성한다.
       for (const member of room.members) {
          const memberId = (member.user._id || member.user).toString();
          // room.settings에서 주당 최소 시간을 가져오고, 없으면 2슬롯(1시간)을 기본값으로 사용
          const requiredSlots = (room.settings.minTime / 30) || 2;
 
+         // 💡 현재 주의 슬롯만 카운트
          const assignedSlots = room.timeSlots.filter(slot => {
             const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
-            return slotUserId === memberId;
+            if (slotUserId !== memberId) return false;
+
+            // 💡 weekStartDate가 있으면 현재 주의 슬롯만 계산
+            if (currentWeekStart && currentWeekEnd) {
+               const slotDate = new Date(slot.date);
+               return slotDate >= currentWeekStart && slotDate < currentWeekEnd;
+            }
+
+            return true;
          }).length;
 
          const isSatisfied = assignedSlots >= requiredSlots;
          memberSatisfactionMap[memberId] = isSatisfied;
 
-         console.log(`[멤버 만족도 체크] ${memberId.substring(0, 8)}: 필요 ${requiredSlots}, 할당 ${assignedSlots}, 충족 ${isSatisfied}`);
+         console.log(`[멤버 만족도 체크] ${memberId.substring(0, 8)}: 필요 ${requiredSlots}, 할당 ${assignedSlots}, 충족 ${isSatisfied} (주: ${negotiation.weekStartDate || '미지정'})`);
       }
 
       let autoResolvedCount = 0;
