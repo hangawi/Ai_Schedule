@@ -103,7 +103,27 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                      const startDateTime = new Date(`${date}T${chatResponse.startTime}:00+09:00`);
                      const endDateTime = new Date(`${date}T${chatResponse.endTime}:00+09:00`);
 
-                     // 충돌 체크
+                     // 1단계: 정확히 동일한 일정이 이미 있는지 체크 (중복 방지)
+                     const exactDuplicate = existingEvents.find(evt => {
+                        const evtStart = new Date(evt.startTime);
+                        const evtEnd = new Date(evt.endTime);
+                        return evtStart.getTime() === startDateTime.getTime() &&
+                               evtEnd.getTime() === endDateTime.getTime() &&
+                               evt.title === (chatResponse.title || '일정');
+                     });
+
+                     if (exactDuplicate) {
+                        console.log(`⚠️ [중복 방지] ${date}에 동일한 일정이 이미 존재함:`, exactDuplicate.title);
+                        conflictDates.push({
+                           date,
+                           conflictWith: '동일한 일정이 이미 존재합니다',
+                           alternatives: []
+                        });
+                        failCount++;
+                        continue;
+                     }
+
+                     // 2단계: 시간 충돌 체크
                      const { hasConflict, conflicts } = checkScheduleConflict(
                         startDateTime.toISOString(),
                         endDateTime.toISOString(),
@@ -122,8 +142,8 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                         failCount++;
                      } else {
                         // 충돌 없으면 personalTimes에 추가 (빨간색)
-                        newPersonalTimes.push({
-                           id: Date.now() + successCount, // Number 타입
+                        const newEvent = {
+                           id: Date.now() + successCount * 1000, // 충돌 방지를 위해 간격을 크게
                            title: chatResponse.title || '일정',
                            type: 'event',
                            startTime: chatResponse.startTime,
@@ -132,7 +152,16 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                            isRecurring: false,
                            specificDate: date,
                            color: '#ef4444' // 빨간색
+                        };
+                        newPersonalTimes.push(newEvent);
+
+                        // existingEvents에도 추가하여 같은 요청 내에서 중복 방지
+                        existingEvents.push({
+                           startTime: startDateTime.toISOString(),
+                           endTime: endDateTime.toISOString(),
+                           title: newEvent.title
                         });
+
                         successCount++;
                      }
                   }
@@ -409,19 +438,31 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                let failCount = 0;
 
                if (context.context === 'profile' && context.tabType === 'local') {
-                  // 프로필 탭 - scheduleExceptions에서 해당 범위 삭제
+                  // 프로필 탭 - scheduleExceptions와 personalTimes에서 해당 범위 삭제
                   const currentScheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
                      headers: { 'x-auth-token': token }
                   });
                   const currentSchedule = await currentScheduleResponse.json();
 
-                  // 범위 내 일정만 필터링해서 제거
+                  // scheduleExceptions: 범위 내 일정만 필터링해서 제거
                   const filteredExceptions = (currentSchedule.scheduleExceptions || []).filter(exception => {
                      const exceptionDate = new Date(exception.startTime);
                      return exceptionDate < startDate || exceptionDate > endDate;
                   });
 
-                  deleteCount = (currentSchedule.scheduleExceptions || []).length - filteredExceptions.length;
+                  // personalTimes: 범위 내 specificDate를 가진 일정 제거
+                  const filteredPersonalTimes = (currentSchedule.personalTimes || []).filter(pt => {
+                     if (!pt.specificDate) return true; // 반복 일정은 유지
+
+                     const ptDate = new Date(pt.specificDate + 'T00:00:00+09:00');
+                     return ptDate < startDate || ptDate > endDate;
+                  });
+
+                  const exceptionsDeleteCount = (currentSchedule.scheduleExceptions || []).length - filteredExceptions.length;
+                  const personalTimesDeleteCount = (currentSchedule.personalTimes || []).length - filteredPersonalTimes.length;
+                  deleteCount = exceptionsDeleteCount + personalTimesDeleteCount;
+
+                  console.log('🗑️ [범위삭제] scheduleExceptions:', exceptionsDeleteCount, 'personalTimes:', personalTimesDeleteCount);
 
                   const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
                      method: 'PUT',
@@ -430,8 +471,9 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                         'x-auth-token': token
                      },
                      body: JSON.stringify({
+                        defaultSchedule: currentSchedule.defaultSchedule || [],
                         scheduleExceptions: filteredExceptions,
-                        personalTimes: currentSchedule.personalTimes || []
+                        personalTimes: filteredPersonalTimes
                      })
                   });
 
