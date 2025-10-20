@@ -771,6 +771,206 @@ exports.findCommonSlots = timeSlotController.findCommonSlots;
 exports.resetCarryOverTimes = timeSlotController.resetCarryOverTimes;
 exports.resetCompletedTimes = timeSlotController.resetCompletedTimes;
 
+// 💡 Helper function: full_conflict 협의의 memberSpecificTimeSlots 실시간 재생성
+async function regenerateMemberSpecificTimeSlots(negotiation, room) {
+   console.log('[실시간 대체시간 재생성] full_conflict 협의의 대체시간 옵션 업데이트');
+   negotiation.memberSpecificTimeSlots = {};
+
+   const conflictDate = new Date(negotiation.slotInfo.date);
+
+   // 💡 현재 주의 범위 계산 (weekStartDate 기준)
+   let weekStartDate, weekEndDate;
+   if (negotiation.weekStartDate) {
+      weekStartDate = new Date(negotiation.weekStartDate);
+      weekEndDate = new Date(weekStartDate);
+      weekEndDate.setDate(weekStartDate.getDate() + 7);
+      console.log(`[실시간 대체시간] 주간 범위: ${weekStartDate.toISOString().split('T')[0]} ~ ${weekEndDate.toISOString().split('T')[0]}`);
+   }
+
+   for (const cm of negotiation.conflictingMembers) {
+      const memberId = (cm.user._id || cm.user).toString();
+      const roomMember = room.members.find(m => {
+         const mUserId = m.user._id ? m.user._id.toString() : m.user.toString();
+         return mUserId === memberId;
+      });
+
+      if (roomMember && roomMember.user && roomMember.user.defaultSchedule) {
+         const dayMap = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 0 };
+         const dayPreferences = roomMember.user.defaultSchedule.filter(sched => sched.priority >= 2);
+
+         console.log(`[실시간 대체시간] ${memberId.substring(0,8)}: ${dayPreferences.length}개 선호 시간`);
+         console.log('[실시간 대체시간] 선호시간 원본:', dayPreferences.map(p => `${p.dayOfWeek}요일 ${p.startTime}-${p.endTime} (우선순위:${p.priority})`));
+
+         // 💡 현재 주의 슬롯만 체크 (weekStartDate가 있으면)
+         const memberExistingSlots = room.timeSlots.filter(slot => {
+            const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
+            if (slotUserId !== memberId) return false;
+
+            // 주간 범위 체크
+            if (weekStartDate && weekEndDate) {
+               const slotDate = new Date(slot.date);
+               if (slotDate < weekStartDate || slotDate >= weekEndDate) return false;
+            }
+
+            return true;
+         });
+         console.log(`[실시간 대체시간] ${memberId.substring(0,8)}: 기존 배정 슬롯 ${memberExistingSlots.length}개 (이번 주)`);
+         memberExistingSlots.forEach(s => {
+            console.log(`  - ${new Date(s.date).toISOString().split('T')[0]} ${s.startTime}-${s.endTime} (${s.subject})`);
+         });
+
+         // 💡 멤버가 필요한 시간 계산
+         const memberInNego = negotiation.conflictingMembers.find(c =>
+            (c.user._id || c.user).toString() === memberId
+         );
+         const requiredSlots = memberInNego?.requiredSlots || 2;
+         const requiredMinutes = requiredSlots * 30;
+
+         console.log(`[실시간 대체시간] ${memberId.substring(0,8)}: 필요한 시간 ${requiredMinutes}분 (${requiredSlots}슬롯)`);
+
+         const memberOptions = [];
+         const dayMap2 = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+         for (let dow = 0; dow <= 6; dow++) {
+            const dayName = dayMap2[dow];
+            const dayScheds = dayPreferences.filter(sched => sched.dayOfWeek === dow);
+            if (dayScheds.length === 0) continue;
+
+            const sortedPrefs = dayScheds.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+            // 💡 연속된 시간 블록 병합 (10분 이내 간격은 허용)
+            const mergedBlocks = [];
+            for (const pref of sortedPrefs) {
+               if (mergedBlocks.length === 0) {
+                  mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
+               } else {
+                  const lastBlock = mergedBlocks[mergedBlocks.length - 1];
+                  // 💡 10분 이내 간격이면 병합 (선호시간 사이의 작은 간격 무시)
+                  const [lastEndH, lastEndM] = lastBlock.endTime.split(':').map(Number);
+                  const [prefStartH, prefStartM] = pref.startTime.split(':').map(Number);
+                  const lastEndMinutes = lastEndH * 60 + lastEndM;
+                  const prefStartMinutes = prefStartH * 60 + prefStartM;
+                  const gap = prefStartMinutes - lastEndMinutes;
+
+                  if (gap <= 10) {
+                     // 10분 이내 간격이면 병합
+                     lastBlock.endTime = pref.endTime;
+                  } else {
+                     mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
+                  }
+               }
+            }
+            console.log(`   [${dayName}] ${mergedBlocks.length}개 병합된 블록:`, mergedBlocks.map(b => `${b.startTime}-${b.endTime}`));
+
+            const targetDayIndex = dayMap2.indexOf(dayName);
+            const currentDate = new Date(conflictDate);
+            const currentDayIndex = currentDate.getDay();
+            let daysToAdd = targetDayIndex - currentDayIndex;
+            if (daysToAdd < 0) daysToAdd += 7;
+
+            const targetDate = new Date(currentDate);
+            targetDate.setDate(currentDate.getDate() + daysToAdd);
+            const targetDateStr = targetDate.toISOString().split('T')[0];
+            const conflictDateStr = conflictDate.toISOString().split('T')[0];
+            const isConflictDate = targetDateStr === conflictDateStr;
+
+            for (const block of mergedBlocks) {
+               // 💡 모든 멤버의 슬롯을 체크하여 겹치는 부분 제외 (현재 주의 슬롯만)
+               const overlappingSlots = room.timeSlots
+                  .filter(slot => {
+                     const slotDate = new Date(slot.date);
+                     if (slotDate.toDateString() !== targetDate.toDateString()) return false;
+
+                     // 주간 범위 체크
+                     if (weekStartDate && weekEndDate) {
+                        if (slotDate < weekStartDate || slotDate >= weekEndDate) return false;
+                     }
+
+                     return !(slot.endTime <= block.startTime || block.endTime <= slot.startTime);
+                  })
+                  .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+               // 가용 시간대 계산 (블록 분할)
+               const availableRanges = [];
+               if (overlappingSlots.length === 0) {
+                  availableRanges.push({ startTime: block.startTime, endTime: block.endTime });
+               } else {
+                  let currentStart = block.startTime;
+                  for (const assigned of overlappingSlots) {
+                     if (currentStart < assigned.startTime) {
+                        availableRanges.push({
+                           startTime: currentStart,
+                           endTime: assigned.startTime
+                        });
+                     }
+                     currentStart = assigned.endTime > currentStart ? assigned.endTime : currentStart;
+                  }
+                  if (currentStart < block.endTime) {
+                     availableRanges.push({
+                        startTime: currentStart,
+                        endTime: block.endTime
+                     });
+                  }
+               }
+
+               // 💡 각 가용 범위에서 필요한 시간 단위로 슬라이딩하여 옵션 생성
+               for (const range of availableRanges) {
+                  const [startH, startM] = range.startTime.split(':').map(Number);
+                  const [endH, endM] = range.endTime.split(':').map(Number);
+                  const rangeStartMinutes = startH * 60 + startM;
+                  const rangeEndMinutes = endH * 60 + endM;
+                  const rangeDuration = rangeEndMinutes - rangeStartMinutes;
+
+                  // 필요한 시간보다 짧으면 스킵
+                  if (rangeDuration < requiredMinutes) {
+                     continue;
+                  }
+
+                  // 💡 원래 협의 발생한 시간 확인
+                  const [origStartH, origStartM] = negotiation.slotInfo.startTime.split(':').map(Number);
+                  const [origEndH, origEndM] = negotiation.slotInfo.endTime.split(':').map(Number);
+                  const origStartMinutes = origStartH * 60 + origStartM;
+                  const origEndMinutes = origEndH * 60 + origEndM;
+
+                  // 필요한 시간 단위로 슬라이딩
+                  for (let slideStart = rangeStartMinutes; slideStart + requiredMinutes <= rangeEndMinutes; slideStart += requiredMinutes) {
+                     const optionStartTime = `${Math.floor(slideStart/60).toString().padStart(2,'0')}:${(slideStart%60).toString().padStart(2,'0')}`;
+                     const optionEndTime = `${Math.floor((slideStart+requiredMinutes)/60).toString().padStart(2,'0')}:${((slideStart+requiredMinutes)%60).toString().padStart(2,'0')}`;
+                     const optionStartMinutes = slideStart;
+                     const optionEndMinutes = slideStart + requiredMinutes;
+
+                     // 협의 발생 날짜에서만 충돌 시간대와 겹치는지 확인
+                     if (isConflictDate) {
+                        const overlapsConflict = !(optionEndMinutes <= origStartMinutes || optionStartMinutes >= origEndMinutes);
+                        if (overlapsConflict) {
+                           continue;
+                        }
+                     }
+
+                     // 💡 주간 범위 체크: weekStartDate가 설정되어 있으면 해당 주의 옵션만 포함
+                     if (weekStartDate && weekEndDate) {
+                        if (targetDate < weekStartDate || targetDate >= weekEndDate) {
+                           continue;
+                        }
+                     }
+
+                     memberOptions.push({
+                        startTime: optionStartTime,
+                        endTime: optionEndTime,
+                        date: targetDate,
+                        day: dayName
+                     });
+                  }
+               }
+            }
+         }
+
+         negotiation.memberSpecificTimeSlots[memberId] = memberOptions;
+         console.log(`      ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션 (실시간)`);
+      }
+   }
+}
+
 // Negotiation management functions
 exports.getNegotiations = async (req, res) => {
    try {
@@ -781,7 +981,8 @@ exports.getNegotiations = async (req, res) => {
          .populate('negotiations.conflictingMembers.user', '_id firstName lastName email name')
          .populate('negotiations.participants', '_id firstName lastName email name')
          .populate('negotiations.resolution.assignments.user', '_id firstName lastName email name')
-         .populate('owner', 'firstName lastName email name');
+         .populate('owner', 'firstName lastName email name')
+         .populate('members.user', 'firstName lastName email defaultSchedule');
 
       if (!room) {
          return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
@@ -793,6 +994,13 @@ exports.getNegotiations = async (req, res) => {
          const isActive = negotiation.status === 'active';
          return isParticipant && isActive;
       });
+
+      // 💡 각 full_conflict 협의에 대해 memberSpecificTimeSlots를 실시간으로 재생성
+      for (const negotiation of accessibleNegotiations) {
+         if (negotiation.type === 'full_conflict') {
+            await regenerateMemberSpecificTimeSlots(negotiation, room);
+         }
+      }
 
       res.json({ negotiations: accessibleNegotiations });
    } catch (error) {
@@ -857,164 +1065,7 @@ exports.respondToNegotiation = async (req, res) => {
 
       // 💡 full_conflict인 경우 memberSpecificTimeSlots를 실시간으로 재생성
       if (negotiation.type === 'full_conflict') {
-         console.log('[실시간 대체시간 재생성] full_conflict 협의의 대체시간 옵션 업데이트');
-         negotiation.memberSpecificTimeSlots = {};
-
-         const conflictDate = new Date(negotiation.slotInfo.date);
-
-         for (const cm of negotiation.conflictingMembers) {
-            const memberId = (cm.user._id || cm.user).toString();
-            const roomMember = room.members.find(m => {
-               const mUserId = m.user._id ? m.user._id.toString() : m.user.toString();
-               return mUserId === memberId;
-            });
-
-            if (roomMember && roomMember.user && roomMember.user.defaultSchedule) {
-               const dayMap = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 0 };
-               const dayPreferences = roomMember.user.defaultSchedule.filter(sched => sched.priority >= 2);
-
-               console.log(`[실시간 대체시간] ${memberId.substring(0,8)}: ${dayPreferences.length}개 선호 시간`);
-
-               const memberExistingSlots = room.timeSlots.filter(slot => {
-                  const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
-                  return slotUserId === memberId;
-               });
-               console.log(`[실시간 대체시간] ${memberId.substring(0,8)}: 기존 배정 슬롯 ${memberExistingSlots.length}개`);
-               memberExistingSlots.forEach(s => {
-                  console.log(`  - ${new Date(s.date).toISOString().split('T')[0]} ${s.startTime}-${s.endTime} (${s.subject})`);
-               });
-
-               // 💡 멤버가 필요한 시간 계산
-               const memberInNego = negotiation.conflictingMembers.find(c =>
-                  (c.user._id || c.user).toString() === memberId
-               );
-               const requiredSlots = memberInNego?.requiredSlots || 2;
-               const requiredMinutes = requiredSlots * 30;
-
-               console.log(`[실시간 대체시간] ${memberId.substring(0,8)}: 필요한 시간 ${requiredMinutes}분 (${requiredSlots}슬롯)`);
-
-               const memberOptions = [];
-               const dayMap2 = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-
-               for (let dow = 0; dow <= 6; dow++) {
-                  const dayName = dayMap2[dow];
-                  const dayScheds = dayPreferences.filter(sched => sched.dayOfWeek === dow);
-                  if (dayScheds.length === 0) continue;
-
-                  const sortedPrefs = dayScheds.sort((a, b) => a.startTime.localeCompare(b.startTime));
-                  const mergedBlocks = [];
-                  for (const pref of sortedPrefs) {
-                     if (mergedBlocks.length === 0) {
-                        mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
-                     } else {
-                        const lastBlock = mergedBlocks[mergedBlocks.length - 1];
-                        if (lastBlock.endTime === pref.startTime) {
-                           lastBlock.endTime = pref.endTime;
-                        } else {
-                           mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
-                        }
-                     }
-                  }
-
-                  const targetDayIndex = dayMap2.indexOf(dayName);
-                  const currentDate = new Date(conflictDate);
-                  const currentDayIndex = currentDate.getDay();
-                  let daysToAdd = targetDayIndex - currentDayIndex;
-                  if (daysToAdd < 0) daysToAdd += 7;
-
-                  const targetDate = new Date(currentDate);
-                  targetDate.setDate(currentDate.getDate() + daysToAdd);
-                  const targetDateStr = targetDate.toISOString().split('T')[0];
-                  const conflictDateStr = conflictDate.toISOString().split('T')[0];
-                  const isConflictDate = targetDateStr === conflictDateStr;
-
-                  for (const block of mergedBlocks) {
-                     // 💡 모든 멤버의 슬롯을 체크하여 겹치는 부분 제외
-                     const overlappingSlots = room.timeSlots
-                        .filter(slot => {
-                           const slotDate = new Date(slot.date);
-                           if (slotDate.toDateString() !== targetDate.toDateString()) return false;
-
-                           return !(slot.endTime <= block.startTime || block.endTime <= slot.startTime);
-                        })
-                        .sort((a, b) => a.startTime.localeCompare(b.startTime));
-
-                     // 가용 시간대 계산 (블록 분할)
-                     const availableRanges = [];
-                     if (overlappingSlots.length === 0) {
-                        availableRanges.push({ startTime: block.startTime, endTime: block.endTime });
-                     } else {
-                        let currentStart = block.startTime;
-                        for (const assigned of overlappingSlots) {
-                           if (currentStart < assigned.startTime) {
-                              availableRanges.push({
-                                 startTime: currentStart,
-                                 endTime: assigned.startTime
-                              });
-                           }
-                           currentStart = assigned.endTime > currentStart ? assigned.endTime : currentStart;
-                        }
-                        if (currentStart < block.endTime) {
-                           availableRanges.push({
-                              startTime: currentStart,
-                              endTime: block.endTime
-                           });
-                        }
-                     }
-
-                     // 💡 각 가용 범위에서 슬라이딩 윈도우로 필요한 시간만큼 잘라서 옵션 생성
-                     for (const range of availableRanges) {
-                        const [startH, startM] = range.startTime.split(':').map(Number);
-                        const [endH, endM] = range.endTime.split(':').map(Number);
-                        const rangeStartMinutes = startH * 60 + startM;
-                        const rangeEndMinutes = endH * 60 + endM;
-                        const rangeDuration = rangeEndMinutes - rangeStartMinutes;
-
-                        if (rangeDuration < requiredMinutes) {
-                           console.log(`      [실시간 제외] ${dayName} ${range.startTime}-${range.endTime} (${rangeDuration}분 < 필요 ${requiredMinutes}분)`);
-                           continue;
-                        }
-
-                        // 💡 원래 협의 발생한 시간 확인
-                        const [origStartH, origStartM] = negotiation.slotInfo.startTime.split(':').map(Number);
-                        const [origEndH, origEndM] = negotiation.slotInfo.endTime.split(':').map(Number);
-                        const origStartMinutes = origStartH * 60 + origStartM;
-                        const origEndMinutes = origEndH * 60 + origEndM;
-
-                        // 💡 할당 시간 단위로 슬라이딩하여 옵션 생성
-                        // 협의 발생 날짜: 충돌 시간대와 겹치는 모든 시간대 제외
-                        // 다른 날짜: 모든 옵션 포함
-                        for (let slideStart = rangeStartMinutes; slideStart + requiredMinutes <= rangeEndMinutes; slideStart += requiredMinutes) {
-                           const optionStartTime = `${Math.floor(slideStart/60).toString().padStart(2,'0')}:${(slideStart%60).toString().padStart(2,'0')}`;
-                           const optionEndTime = `${Math.floor((slideStart+requiredMinutes)/60).toString().padStart(2,'0')}:${((slideStart+requiredMinutes)%60).toString().padStart(2,'0')}`;
-                           const optionStartMinutes = slideStart;
-                           const optionEndMinutes = slideStart + requiredMinutes;
-
-                           // 협의 발생 날짜에서만 충돌 시간대와 겹치는지 확인
-                           if (isConflictDate) {
-                              const overlapsConflict = !(optionEndMinutes <= origStartMinutes || optionStartMinutes >= origEndMinutes);
-                              if (overlapsConflict) {
-                                 console.log(`      [실시간 제외] ${dayName} ${optionStartTime}-${optionEndTime} (협의날짜, 충돌과 겹침)`);
-                                 continue;
-                              }
-                           }
-
-                           memberOptions.push({
-                              startTime: optionStartTime,
-                              endTime: optionEndTime,
-                              date: targetDate,
-                              day: dayName
-                           });
-                           console.log(`      [실시간 추가] ${dayName} ${optionStartTime}-${optionEndTime}`);
-                        }
-                     }
-                  }
-               }
-
-               negotiation.memberSpecificTimeSlots[memberId] = memberOptions;
-               console.log(`      ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션 (실시간)`);
-            }
-         }
+         await regenerateMemberSpecificTimeSlots(negotiation, room);
       }
 
       // 접근 권한 확인: participants (당사자들 + 방장)
@@ -1269,7 +1320,7 @@ exports.respondToNegotiation = async (req, res) => {
 
                   // 각 요일마다 처리
                   for (const [dayName, prefs] of Object.entries(prefsByDay)) {
-                     // 연속된 시간 블록 병합
+                     // 연속된 시간 블록 병합 (10분 이내 간격은 허용)
                      const sortedPrefs = prefs.sort((a, b) => a.startTime.localeCompare(b.startTime));
                      const mergedBlocks = [];
 
@@ -1278,7 +1329,15 @@ exports.respondToNegotiation = async (req, res) => {
                            mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
                         } else {
                            const lastBlock = mergedBlocks[mergedBlocks.length - 1];
-                           if (lastBlock.endTime === pref.startTime) {
+                           // 💡 10분 이내 간격이면 병합 (선호시간 사이의 작은 간격 무시)
+                           const [lastEndH, lastEndM] = lastBlock.endTime.split(':').map(Number);
+                           const [prefStartH, prefStartM] = pref.startTime.split(':').map(Number);
+                           const lastEndMinutes = lastEndH * 60 + lastEndM;
+                           const prefStartMinutes = prefStartH * 60 + prefStartM;
+                           const gap = prefStartMinutes - lastEndMinutes;
+
+                           if (gap <= 10) {
+                              // 10분 이내 간격이면 병합
                               lastBlock.endTime = pref.endTime;
                            } else {
                               mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
@@ -1286,7 +1345,7 @@ exports.respondToNegotiation = async (req, res) => {
                         }
                      }
 
-                     console.log(`      [DEBUG] ${dayName}: ${mergedBlocks.length}개 병합된 블록`);
+                     console.log(`      [${dayName}] ${mergedBlocks.length}개 병합된 블록:`);
                      mergedBlocks.forEach(b => console.log(`        - ${b.startTime}-${b.endTime}`));
 
                      // 해당 요일의 실제 날짜 계산 (이번 주)
@@ -1305,7 +1364,7 @@ exports.respondToNegotiation = async (req, res) => {
 
                      // 이미 배정받은 시간 제외하고 슬라이딩 윈도우로 옵션 생성
                      for (const block of mergedBlocks) {
-                        console.log(`      [DEBUG] 블록 처리 중: ${dayName} ${block.startTime}-${block.endTime}, 협의날짜: ${isConflictDate}`);
+                        // console.log(`      [DEBUG] 블록 처리 중: ${dayName} ${block.startTime}-${block.endTime}, 협의날짜: ${isConflictDate}`);
 
                         // 💡 이 블록과 겹치는 모든 멤버의 기존 슬롯 찾기
                         const overlappingSlots = room.timeSlots
@@ -1316,7 +1375,7 @@ exports.respondToNegotiation = async (req, res) => {
                            })
                            .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-                        console.log(`      [DEBUG] 겹치는 슬롯: ${overlappingSlots.length}개`);
+                        // console.log(`      [DEBUG] 겹치는 슬롯: ${overlappingSlots.length}개`);
 
                         // 가용 시간대 계산 (블록 분할)
                         const availableRanges = [];
@@ -1341,10 +1400,10 @@ exports.respondToNegotiation = async (req, res) => {
                            }
                         }
 
-                        console.log(`      [DEBUG] 가용 범위: ${availableRanges.length}개`);
-                        availableRanges.forEach(r => console.log(`        - ${r.startTime}-${r.endTime}`));
+                        // console.log(`      [DEBUG] 가용 범위: ${availableRanges.length}개`);
+                        // availableRanges.forEach(r => console.log(`        - ${r.startTime}-${r.endTime}`));
 
-                        // 💡 각 가용 범위에서 슬라이딩 윈도우로 필요한 시간만큼 잘라서 옵션 생성
+                        // 💡 각 가용 범위에서 필요한 시간 단위로 슬라이딩하여 옵션 생성
                         for (const range of availableRanges) {
                            const [startH, startM] = range.startTime.split(':').map(Number);
                            const [endH, endM] = range.endTime.split(':').map(Number);
@@ -1352,8 +1411,8 @@ exports.respondToNegotiation = async (req, res) => {
                            const rangeEndMinutes = endH * 60 + endM;
                            const rangeDuration = rangeEndMinutes - rangeStartMinutes;
 
+                           // 필요한 시간보다 짧으면 스킵
                            if (rangeDuration < requiredMinutes) {
-                              console.log(`      [대체시간 제외] ${dayName} ${range.startTime}-${range.endTime} (${rangeDuration}분 < 필요 ${requiredMinutes}분)`);
                               continue;
                            }
 
@@ -1363,9 +1422,7 @@ exports.respondToNegotiation = async (req, res) => {
                            const origStartMinutes = origStartH * 60 + origStartM;
                            const origEndMinutes = origEndH * 60 + origEndM;
 
-                           // 💡 할당 시간 단위로 슬라이딩하여 옵션 생성
-                           // 협의 발생 날짜: 충돌 시간대와 겹치는 것 제외
-                           // 다른 날짜: 모든 옵션 포함
+                           // 필요한 시간 단위로 슬라이딩
                            for (let slideStart = rangeStartMinutes; slideStart + requiredMinutes <= rangeEndMinutes; slideStart += requiredMinutes) {
                               const optionStartTime = `${Math.floor(slideStart/60).toString().padStart(2,'0')}:${(slideStart%60).toString().padStart(2,'0')}`;
                               const optionEndTime = `${Math.floor((slideStart+requiredMinutes)/60).toString().padStart(2,'0')}:${((slideStart+requiredMinutes)%60).toString().padStart(2,'0')}`;
@@ -1376,7 +1433,6 @@ exports.respondToNegotiation = async (req, res) => {
                               if (isConflictDate) {
                                  const overlapsConflict = !(optionEndMinutes <= origStartMinutes || optionStartMinutes >= origEndMinutes);
                                  if (overlapsConflict) {
-                                    console.log(`      [대체시간 제외] ${dayName} ${optionStartTime}-${optionEndTime} (협의날짜, 충돌과 겹침)`);
                                     continue;
                                  }
                               }
@@ -1387,7 +1443,6 @@ exports.respondToNegotiation = async (req, res) => {
                                  date: targetDate,
                                  day: dayName
                               });
-                              console.log(`      [대체시간 추가] ${dayName} ${optionStartTime}-${optionEndTime}`);
                            }
                         }
                      }

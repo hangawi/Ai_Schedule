@@ -529,7 +529,10 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
 
                                     // B. 💡 백엔드가 이미 할당 시간 단위로 분할해서 보냈으므로 그대로 사용
                                     let otherPreferredSlots = [];
+                                    console.log('[대체시간] memberSpecificTimeSlots:', activeNegotiation.memberSpecificTimeSlots);
+                                    console.log('[대체시간] currentUser.id:', currentUser.id);
                                     const memberSlots = (activeNegotiation.memberSpecificTimeSlots && activeNegotiation.memberSpecificTimeSlots[currentUser.id]) || [];
+                                    console.log('[대체시간] memberSlots:', memberSlots);
                                     if (memberSlots.length > 0) {
                                         memberSlots.forEach(slot => {
                                             const slotDateStr = getSlotDateString(slot);
