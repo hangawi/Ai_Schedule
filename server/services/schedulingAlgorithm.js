@@ -612,12 +612,13 @@ class SchedulingAlgorithm {
             }
 
             memberTimeSlotOptions[memberId] = memberOptions;
-            // console.log(`      [full_conflict] ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션 (이번 주)`);
+            console.log(`      [full_conflict] ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션 (이번 주)`, memberOptions);
           }
         }
       }
 
       // console.log(`   협의 타입: ${negotiationType} (블록:${totalSlots}슬롯, 필요:${totalNeeded}슬롯)`);
+      console.log(`   [협의 생성] memberTimeSlotOptions 키:`, Object.keys(memberTimeSlotOptions || {}));
 
       const negotiation = {
         type: negotiationType,
