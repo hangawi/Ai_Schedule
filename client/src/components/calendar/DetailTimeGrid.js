@@ -356,17 +356,30 @@ const DetailTimeGrid = ({
     for (const pt of personalTimes) {
       let shouldInclude = false;
 
-      // 반복되는 개인시간 체크
-      if (pt.isRecurring !== false && pt.days && pt.days.includes(dayOfWeek) || pt.type === 'event') {
-        shouldInclude = true;
-      }
+      // specificDate가 있으면 날짜가 일치하는지만 체크
+      if (pt.specificDate) {
+        // specificDate는 이미 "YYYY-MM-DD" 형식이므로 직접 비교
+        // new Date()로 변환하면 UTC 시간대 문제가 발생할 수 있음
+        const year = selectedDate.getFullYear();
+        const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+        const day = String(selectedDate.getDate()).padStart(2, '0');
+        const localDateStr = `${year}-${month}-${day}`;
 
-      // 특정 날짜의 개인시간 체크
-      if (pt.isRecurring === false && pt.specificDate) {
-        const specificDateStr = new Date(pt.specificDate).toISOString().split('T')[0];
-        if (specificDateStr === selectedDateStr) {
+        console.log('🔍 [DetailTimeGrid] personalTime 날짜 비교:', {
+          ptSpecificDate: pt.specificDate,
+          selectedDateStr,
+          localDateStr,
+          ptTitle: pt.title,
+          ptTime: `${pt.startTime}-${pt.endTime}`
+        });
+
+        if (pt.specificDate === localDateStr) {
           shouldInclude = true;
         }
+      }
+      // specificDate가 없으면 반복되는 개인시간 체크
+      else if (pt.isRecurring !== false && pt.days && pt.days.includes(dayOfWeek)) {
+        shouldInclude = true;
       }
 
       if (!shouldInclude) {
@@ -1194,11 +1207,10 @@ const DetailTimeGrid = ({
       displaySlots.push(displaySlot);
     });
 
-    // 선호시간이 아닌 시간을 불가능한 시간(개인시간처럼)으로 표시
+    // 개인 시간을 먼저 수집 (자정 넘어가는 시간 처리)
     const dayOfWeekPersonal = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
-    const selectedDateStr = selectedDate.toISOString().split('T')[0];
 
-    // 선호시간(priority >= 2)이 설정된 시간 범위를 수집
+    // 선호시간(priority >= 2) + 개인시간이 설정된 시간 범위를 수집
     const preferredTimeRanges = [];
     mergedSchedule.forEach(slot => {
       if (slot.priority >= 2) {
@@ -1212,6 +1224,37 @@ const DetailTimeGrid = ({
         const startMinutes = timeToMinutes(slot.startTime);
         const endMinutes = timeToMinutes(slot.endTime);
         preferredTimeRanges.push({ start: startMinutes, end: endMinutes });
+      }
+    });
+
+    // personalTimes도 선호시간으로 간주 (불가능한 시간으로 덮어씌워지지 않도록)
+    personalTimes.forEach(pt => {
+      let shouldInclude = false;
+
+      if (pt.specificDate) {
+        if (pt.specificDate === dateStr) {
+          shouldInclude = true;
+        }
+      } else if (pt.isRecurring !== false && pt.days && pt.days.includes(dayOfWeekPersonal)) {
+        shouldInclude = true;
+      }
+
+      if (shouldInclude) {
+        const [startHour, startMin] = pt.startTime.split(':').map(Number);
+        const [endHour, endMin] = pt.endTime.split(':').map(Number);
+        const startMinutes = startHour * 60 + startMin;
+        let endMinutes = endHour * 60 + endMin;
+
+        // 자정 넘어가는 시간 처리
+        if (endMinutes <= startMinutes) {
+          endMinutes += 24 * 60;
+          // 밤 부분
+          preferredTimeRanges.push({ start: startMinutes, end: 24 * 60 });
+          // 아침 부분
+          preferredTimeRanges.push({ start: 0, end: endMinutes - 24 * 60 });
+        } else {
+          preferredTimeRanges.push({ start: startMinutes, end: endMinutes });
+        }
       }
     });
 
@@ -1267,17 +1310,21 @@ const DetailTimeGrid = ({
     personalTimes.forEach(pt => {
       let shouldInclude = false;
 
-      // 반복되는 개인시간 체크
-      if (pt.isRecurring !== false && pt.days && pt.days.includes(dayOfWeekPersonal)) {
-        shouldInclude = true;
-      }
+      // specificDate가 있으면 날짜가 일치하는지만 체크
+      if (pt.specificDate) {
+        // specificDate는 이미 "YYYY-MM-DD" 형식이므로 직접 비교
+        const year = selectedDate.getFullYear();
+        const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+        const day = String(selectedDate.getDate()).padStart(2, '0');
+        const localDateStr = `${year}-${month}-${day}`;
 
-      // 특정 날짜의 개인시간 체크
-      if (pt.isRecurring === false && pt.specificDate) {
-        const specificDateStr = new Date(pt.specificDate).toISOString().split('T')[0];
-        if (specificDateStr === selectedDateStr) {
+        if (pt.specificDate === localDateStr) {
           shouldInclude = true;
         }
+      }
+      // specificDate가 없으면 반복되는 개인시간 체크
+      else if (pt.isRecurring !== false && pt.days && pt.days.includes(dayOfWeekPersonal)) {
+        shouldInclude = true;
       }
 
       if (shouldInclude) {

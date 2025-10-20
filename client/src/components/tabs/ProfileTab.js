@@ -286,6 +286,13 @@ const ProfileTab = ({ onEditingChange }) => {
     const handleCalendarUpdate = async (event) => {
       console.log('📅 [ProfileTab] calendarUpdate 이벤트 수신:', event.detail);
 
+      // 범위 삭제인 경우
+      if (event.detail && event.detail.type === 'delete_range') {
+        console.log('🗑️ [ProfileTab] 범위 삭제 감지, 전체 새로고침');
+        fetchSchedule();
+        return;
+      }
+
       // 반복 일정 추가인 경우
       if (event.detail && event.detail.isRecurring && event.detail.context === 'profile') {
         console.log('🔁 [ProfileTab] 반복 일정 추가 감지, 전체 새로고침');
