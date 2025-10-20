@@ -185,7 +185,8 @@ const ChatBox = ({ onSendMessage, speak, currentTab }) => {
         sender: 'bot',
         timestamp: new Date(),
         success: result.success,
-        extractedSchedules: result.extractedSchedules // 추출된 스케줄 정보
+        extractedSchedules: result.extractedSchedules, // 추출된 스케줄 정보
+        suggestedTimes: result.suggestedTimes // 추천 시간대
       };
 
       setMessages(prev => [...prev, botMessage]);
@@ -233,12 +234,12 @@ const ChatBox = ({ onSendMessage, speak, currentTab }) => {
           className="fixed inset-0 bg-black bg-opacity-30 z-40" 
           onClick={() => setIsOpen(false)}
         >
-          <div 
-            className={`fixed ${isMobile ? 'bottom-20 right-2 left-2' : 'bottom-20 right-4 w-96'} ${isMobile ? 'max-h-[60vh] h-[400px]' : 'h-[500px]'} bg-white rounded-lg shadow-xl border z-50 flex flex-col`}
+          <div
+            className={`fixed ${isMobile ? 'bottom-20 right-2 left-2' : 'bottom-20 right-4 w-[600px]'} ${isMobile ? 'max-h-[70vh] h-[500px]' : 'h-[750px]'} bg-white rounded-lg shadow-xl border z-50 flex flex-col`}
             onClick={(e) => e.stopPropagation()}
             style={isMobile ? {
-              maxHeight: Math.min(400, window.innerHeight * 0.6),
-              minHeight: '300px'
+              maxHeight: Math.min(500, window.innerHeight * 0.7),
+              minHeight: '400px'
             } : {}}
           >
             {/* 헤더 */}
@@ -313,6 +314,27 @@ const ChatBox = ({ onSendMessage, speak, currentTab }) => {
                       )}
                       {message.text}
                     </p>
+
+                    {/* 추천 시간대 선택 버튼 */}
+                    {message.suggestedTimes && message.suggestedTimes.length > 0 && (
+                      <div className="mt-3 p-2 bg-white bg-opacity-20 rounded border">
+                        <p className="text-xs font-semibold mb-2">추천 시간:</p>
+                        <div className="space-y-1">
+                          {message.suggestedTimes.map((slot, index) => (
+                            <button
+                              key={index}
+                              onClick={() => {
+                                const timeMessage = `${slot.date} ${slot.start}부터 ${slot.end}까지 일정 추가해줘`;
+                                setInputText(timeMessage);
+                              }}
+                              className="w-full px-3 py-2 bg-white bg-opacity-40 hover:bg-opacity-60 rounded text-xs text-left transition-all"
+                            >
+                              📅 {slot.date} {slot.start} - {slot.end}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* 추출된 스케줄 정보 표시 */}
                     {message.extractedSchedules && message.extractedSchedules.length > 0 && (

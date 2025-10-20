@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { generateAIPrompt, parseAIResponse } from '../utils';
+import { generateAIPrompt, parseAIResponse, checkScheduleConflict, findAvailableTimeSlots } from '../utils';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
@@ -47,7 +47,141 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
          if (!chatResponse.intent && (chatResponse.date || chatResponse.deleted)) {
             return { success: false, message: 'AI 응답 형식이 올바르지 않습니다. 다시 시도해주세요.' };
          }
-         
+
+         // 🔁 반복 일정 처리
+         if (chatResponse.intent === 'add_recurring_event' && chatResponse.dates && chatResponse.dates.length > 0) {
+            if (!eventActions || !eventActions.addEvent) {
+               return { success: false, message: '일정 추가 기능이 아직 준비되지 않았습니다.' };
+            }
+
+            const token = localStorage.getItem('token');
+            if (!token) {
+               return { success: false, message: 'Google 계정 인증이 필요합니다.' };
+            }
+
+            try {
+               console.log('🔁 [반복일정] 처리 시작:', chatResponse);
+
+               let successCount = 0;
+               let failCount = 0;
+               const errors = [];
+
+               // 프로필 탭의 경우 한 번에 모든 날짜 추가
+               if (context.context === 'profile' && context.tabType === 'local') {
+                  const currentScheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+                     headers: { 'x-auth-token': token }
+                  });
+                  const currentSchedule = await currentScheduleResponse.json();
+
+                  const newExceptions = chatResponse.dates.map(date => {
+                     // Date 객체로 변환 (서버가 요구하는 형식)
+                     const startDateTime = new Date(`${date}T${chatResponse.startTime}:00+09:00`);
+                     const endDateTime = new Date(`${date}T${chatResponse.endTime}:00+09:00`);
+
+                     return {
+                        title: chatResponse.title || '일정',
+                        startTime: startDateTime.toISOString(),
+                        endTime: endDateTime.toISOString(),
+                        specificDate: date, // YYYY-MM-DD 형식
+                        priority: 2 // 보통 우선순위
+                     };
+                  });
+
+                  const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+                     method: 'PUT',
+                     headers: {
+                        'Content-Type': 'application/json',
+                        'x-auth-token': token
+                     },
+                     body: JSON.stringify({
+                        scheduleExceptions: [
+                           ...(currentSchedule.scheduleExceptions || []),
+                           ...newExceptions
+                        ],
+                        personalTimes: currentSchedule.personalTimes || []
+                     })
+                  });
+
+                  if (response.ok) {
+                     successCount = chatResponse.dates.length;
+                  } else {
+                     const errorData = await response.json().catch(() => ({}));
+                     failCount = chatResponse.dates.length;
+                     errors.push(`프로필 스케줄 업데이트 실패: ${errorData.msg || response.statusText}`);
+                     console.error('❌ 반복일정 추가 실패:', errorData);
+                  }
+               } else {
+                  // Google 캘린더와 나의 일정 탭은 각 날짜별로 개별 추가
+                  for (const date of chatResponse.dates) {
+                     try {
+                        const startDateTime = `${date}T${chatResponse.startTime}:00+09:00`;
+                        const endDateTime = `${date}T${chatResponse.endTime}:00+09:00`;
+
+                        const eventData = {
+                           title: chatResponse.title || '일정',
+                           description: chatResponse.description || '',
+                           startDateTime,
+                           endDateTime
+                        };
+
+                        const apiEndpoint = context.tabType === 'google'
+                           ? `${API_BASE_URL}/api/calendar/events/google`
+                           : `${API_BASE_URL}/api/events`;
+
+                        const response = await fetch(apiEndpoint, {
+                           method: 'POST',
+                           headers: {
+                              'Content-Type': 'application/json',
+                              'x-auth-token': token
+                           },
+                           body: JSON.stringify(eventData)
+                        });
+
+                        if (response.ok) {
+                           successCount++;
+                        } else {
+                           failCount++;
+                           errors.push(`${date}: ${response.statusText}`);
+                        }
+                     } catch (dateError) {
+                        failCount++;
+                        errors.push(`${date}: ${dateError.message}`);
+                     }
+                  }
+               }
+
+               setEventAddedKey(prevKey => prevKey + 1);
+               window.dispatchEvent(new Event('calendarUpdate'));
+
+               if (successCount > 0 && failCount === 0) {
+                  return {
+                     success: true,
+                     message: `${chatResponse.title || '일정'}을 ${successCount}일간 추가했어요!`,
+                     data: chatResponse
+                  };
+               } else if (successCount > 0 && failCount > 0) {
+                  return {
+                     success: true,
+                     message: `${successCount}일 추가 성공, ${failCount}일 실패했습니다.`,
+                     data: chatResponse
+                  };
+               } else {
+                  return {
+                     success: false,
+                     message: `일정 추가에 실패했습니다. ${errors[0] || ''}`,
+                     data: chatResponse
+                  };
+               }
+            } catch (error) {
+               console.error('🔁 [반복일정] 오류:', error);
+               return {
+                  success: false,
+                  message: `반복 일정 추가 중 오류가 발생했습니다: ${error.message}`,
+                  data: chatResponse
+               };
+            }
+         }
+
          // 실제 일정 처리 로직 추가
          if (chatResponse.intent === 'add_event' && chatResponse.startDateTime) {
             // Check if eventActions are available
@@ -75,6 +209,100 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             const token = localStorage.getItem('token');
             if (!token) {
               return { success: false, message: 'Google 계정 인증이 필요합니다.' };
+            }
+
+            // 🔍 일정 충돌 확인
+            try {
+               // 기존 일정 목록 가져오기
+               const targetDate = chatResponse.startDateTime.split('T')[0];
+               const threeMonthsAgo = new Date();
+               threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+               const oneYearLater = new Date();
+               oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+
+               let eventsResponse;
+               if (context.context === 'profile' && context.tabType === 'local') {
+                  eventsResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+                     headers: { 'x-auth-token': token }
+                  });
+               } else if (context.tabType === 'local') {
+                  eventsResponse = await fetch(`${API_BASE_URL}/api/events`, {
+                     headers: { 'x-auth-token': token }
+                  });
+               } else {
+                  eventsResponse = await fetch(`${API_BASE_URL}/api/calendar/events?timeMin=${threeMonthsAgo.toISOString()}&timeMax=${oneYearLater.toISOString()}`, {
+                     headers: { 'x-auth-token': token }
+                  });
+               }
+
+               if (eventsResponse.ok) {
+                  const eventsData = await eventsResponse.json();
+                  let events = [];
+
+                  if (context.context === 'profile' && context.tabType === 'local') {
+                     const exceptions = eventsData.scheduleExceptions || [];
+                     const personalTimes = eventsData.personalTimes || [];
+                     events = [...exceptions, ...personalTimes.map(pt => ({
+                        ...pt,
+                        startTime: `${targetDate}T${pt.startTime}:00+09:00`,
+                        endTime: `${targetDate}T${pt.endTime}:00+09:00`
+                     }))];
+                  } else if (context.tabType === 'local') {
+                     events = eventsData.events || eventsData;
+                  } else {
+                     events = eventsData;
+                  }
+
+                  // 충돌 확인
+                  const conflictCheck = checkScheduleConflict(chatResponse.startDateTime, chatResponse.endDateTime, events);
+
+                  if (conflictCheck.hasConflict) {
+                     // LLM이 결정한 시간 사용
+                     const estimatedDuration = (new Date(chatResponse.endDateTime) - new Date(chatResponse.startDateTime)) / (1000 * 60);
+
+                     // 사용자가 요청한 시간 추출 (근접 시간 추천용)
+                     const requestedStart = new Date(chatResponse.startDateTime);
+                     const requestedTimeHour = requestedStart.getHours() + requestedStart.getMinutes() / 60;
+
+                     // 해당 날짜에서 먼저 빈 시간 찾기 (요청 시간 근처부터 우선 추천)
+                     let availableSlots = findAvailableTimeSlots(targetDate, events, estimatedDuration, requestedTimeHour);
+
+                     // 해당 날짜에 빈 시간이 없으면 향후 7일간 검색
+                     if (availableSlots.length === 0) {
+                        for (let i = 1; i <= 7; i++) {
+                           const nextDate = new Date(targetDate);
+                           nextDate.setDate(nextDate.getDate() + i);
+                           const nextDateStr = nextDate.toISOString().split('T')[0];
+
+                           const futureSlots = findAvailableTimeSlots(nextDateStr, events, estimatedDuration, requestedTimeHour);
+                           if (futureSlots.length > 0) {
+                              availableSlots = futureSlots;
+                              break;
+                           }
+                        }
+                     }
+
+                     if (availableSlots.length > 0) {
+                        const firstSlot = availableSlots[0];
+                        const conflictTitle = conflictCheck.conflicts[0].summary || conflictCheck.conflicts[0].title || '다른 일정';
+                        const durationText = estimatedDuration >= 60 ? `${Math.round(estimatedDuration/60)}시간` : `${estimatedDuration}분`;
+
+                        return {
+                           success: false,
+                           message: `주인님, 그 시간에는 이미 "${conflictTitle}"이(가) 있습니다. ${firstSlot.date} ${firstSlot.start}부터 ${firstSlot.end}까지 ${durationText} 어떠세요?`,
+                           suggestedTimes: availableSlots.slice(0, 5)
+                        };
+                     } else {
+                        return {
+                           success: false,
+                           message: `주인님, 그 시간에는 이미 다른 일정이 있고, 향후 일주일간 적절한 빈 시간을 찾을 수 없습니다. 일정을 조정해보시겠어요?`
+                        };
+                     }
+                  }
+               }
+            } catch (conflictError) {
+               console.error('충돌 확인 중 오류:', conflictError);
+               // 충돌 확인 실패 시에도 일정 추가는 계속 진행
             }
 
             const eventData = {
