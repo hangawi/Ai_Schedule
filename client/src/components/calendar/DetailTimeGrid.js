@@ -1129,10 +1129,26 @@ const DetailTimeGrid = ({
     const day = String(selectedDate.getDate()).padStart(2, '0');
     const dateStr = `${year}-${month}-${day}`;
     
-    mergedSchedule.filter(slot => {
-      // specificDate가 있으면 날짜 비교, 없으면 dayOfWeek 비교
-      return slot.specificDate ? slot.specificDate === dateStr : slot.dayOfWeek === dayOfWeek;
-    }).forEach(slot => {
+    console.log('🔍 [병합모드] 선택된 날짜:', dateStr, 'dayOfWeek:', dayOfWeek);
+    console.log('🔍 [병합모드] mergedSchedule 샘플:', mergedSchedule.slice(0, 3).map(s => ({
+      specificDate: s.specificDate,
+      dayOfWeek: s.dayOfWeek,
+      startTime: s.startTime
+    })));
+
+    const filteredSchedule = mergedSchedule.filter(slot => {
+      // specificDate가 있으면 날짜 비교
+      if (slot.specificDate) {
+        return slot.specificDate === dateStr;
+      }
+      // specificDate가 없으면 dayOfWeek 비교
+      return slot.dayOfWeek === dayOfWeek;
+    });
+
+    console.log('🔍 [병합모드] mergedSchedule 총:', mergedSchedule.length, '개, 필터링 후:', filteredSchedule.length, '개');
+    console.log('🔍 [병합모드] filteredSchedule 샘플:', filteredSchedule.slice(0, 3));
+
+    filteredSchedule.forEach(slot => {
       displaySlots.push({
         type: 'schedule',
         startTime: slot.startTime,
@@ -1196,6 +1212,8 @@ const DetailTimeGrid = ({
     // 예외 일정도 병합 처리
     const mergedExceptions = mergeConsecutiveTimeSlots(exceptionSlots);
 
+    console.log('🔍 [병합모드] exceptions 총:', exceptions.length, '개, 병합 후:', mergedExceptions.length, '개');
+
     mergedExceptions.forEach(slot => {
       const displaySlot = {
         type: 'exception',
@@ -1212,7 +1230,7 @@ const DetailTimeGrid = ({
 
     // 선호시간(priority >= 2) + 개인시간이 설정된 시간 범위를 수집
     const preferredTimeRanges = [];
-    mergedSchedule.forEach(slot => {
+    filteredSchedule.forEach(slot => {
       if (slot.priority >= 2) {
         const startMinutes = timeToMinutes(slot.startTime);
         const endMinutes = timeToMinutes(slot.endTime);
@@ -1257,6 +1275,21 @@ const DetailTimeGrid = ({
         }
       }
     });
+
+    console.log('🔍 [병합모드] preferredTimeRanges 개수:', preferredTimeRanges.length);
+    console.log('🔍 [병합모드] displaySlots 개수 (불가능한 시간 추가 전):', displaySlots.length);
+
+    // 선호시간이 없으면(preferredTimeRanges가 비어있으면) 전체를 불가능한 시간으로 표시
+    if (preferredTimeRanges.length === 0) {
+      console.log('⚠️ [병합모드] 선호시간이 없어서 전체를 불가능한 시간으로 표시');
+      const fullDaySlot = {
+        type: 'personal',
+        startTime: `${String(timeRange.start).padStart(2, '0')}:00`,
+        endTime: `${String(timeRange.end).padStart(2, '0')}:00`,
+        data: { title: '불가능한 시간' }
+      };
+      displaySlots.push(fullDaySlot);
+    }
 
     // 선호시간이 아닌 시간대를 개인시간처럼 표시 (00:00~23:50 전체 범위)
     const allDayMinutes = [];
@@ -1307,6 +1340,16 @@ const DetailTimeGrid = ({
     });
 
     // 개인 시간도 추가 (자정 넘어가는 시간 처리)
+    let personalTimesAdded = 0;
+    console.log('🔍 [병합모드] personalTimes 전체:', personalTimes.map(pt => ({
+      title: pt.title,
+      specificDate: pt.specificDate,
+      days: pt.days,
+      isRecurring: pt.isRecurring,
+      startTime: pt.startTime
+    })));
+    console.log('🔍 [병합모드] 현재 날짜 (로컬):', dateStr, 'dayOfWeekPersonal:', dayOfWeekPersonal);
+
     personalTimes.forEach(pt => {
       let shouldInclude = false;
 
@@ -1318,16 +1361,20 @@ const DetailTimeGrid = ({
         const day = String(selectedDate.getDate()).padStart(2, '0');
         const localDateStr = `${year}-${month}-${day}`;
 
+        console.log(`   personalTime "${pt.title}" 체크:`, pt.specificDate, '===', localDateStr, '?', pt.specificDate === localDateStr);
+
         if (pt.specificDate === localDateStr) {
           shouldInclude = true;
         }
       }
       // specificDate가 없으면 반복되는 개인시간 체크
       else if (pt.isRecurring !== false && pt.days && pt.days.includes(dayOfWeekPersonal)) {
+        console.log(`   personalTime "${pt.title}" 반복 체크:`, pt.days, 'includes', dayOfWeekPersonal, '?', true);
         shouldInclude = true;
       }
 
       if (shouldInclude) {
+        personalTimesAdded++;
         const [startHour, startMin] = pt.startTime.split(':').map(Number);
         const [endHour, endMin] = pt.endTime.split(':').map(Number);
         const startMinutes = startHour * 60 + startMin;
@@ -1367,6 +1414,9 @@ const DetailTimeGrid = ({
         }
       }
     });
+
+    console.log('🔍 [병합모드] personalTimes 총:', personalTimes.length, '개, 추가된:', personalTimesAdded, '개');
+    console.log('🔍 [병합모드] displaySlots 최종 개수:', displaySlots.length);
 
     // 시간순 정렬
     displaySlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
