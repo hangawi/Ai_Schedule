@@ -235,12 +235,14 @@ const ChatBox = ({ onSendMessage, speak, currentTab }) => {
           onClick={() => setIsOpen(false)}
         >
           <div
-            className={`fixed ${isMobile ? 'bottom-20 right-2 left-2' : 'bottom-20 right-4 w-[600px]'} ${isMobile ? 'max-h-[70vh] h-[500px]' : 'h-[750px]'} bg-white rounded-lg shadow-xl border z-50 flex flex-col`}
+            className={`fixed ${isMobile ? 'bottom-20 right-2 left-2' : 'bottom-20 right-4'} ${isMobile ? 'max-h-[70vh] h-[750px]' : 'h-[1125px]'} bg-white rounded-lg shadow-xl border z-50 flex flex-col`}
             onClick={(e) => e.stopPropagation()}
             style={isMobile ? {
-              maxHeight: Math.min(500, window.innerHeight * 0.7),
-              minHeight: '400px'
-            } : {}}
+              maxHeight: Math.min(750, window.innerHeight * 0.7),
+              minHeight: '600px'
+            } : {
+              width: '750px'
+            }}
           >
             {/* 헤더 */}
             <div className="bg-blue-500 text-white p-3 rounded-t-lg">
@@ -254,11 +256,11 @@ const ChatBox = ({ onSendMessage, speak, currentTab }) => {
             </div>
 
             {/* 메시지 영역 */}
-            <div 
+            <div
               className="overflow-y-auto p-3 space-y-3 flex-1"
-              style={{ 
-                minHeight: isMobile ? '200px' : '350px',
-                maxHeight: isMobile ? 'calc(60vh - 140px)' : '350px'
+              style={{
+                minHeight: isMobile ? '300px' : '525px',
+                maxHeight: isMobile ? 'calc(60vh - 140px)' : '525px'
               }}
             >
               {messages.length === 0 && (
