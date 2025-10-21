@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Users, MapPin, X } from 'lucide-react';
 import { getMemberDisplayName, isCurrentUser, isMemberOwner } from '../../utils/coordinationUtils';
-import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
+import { GoogleMap, Marker, DirectionsRenderer, Polyline } from '@react-google-maps/api';
 
 const MemberItem = ({
   member,
@@ -10,7 +10,8 @@ const MemberItem = ({
   isOwner,
   onMemberClick,
   onMemberScheduleClick,
-  index
+  index,
+  showAlert
 }) => {
   const memberData = member.user || member;
   const memberName = getMemberDisplayName(memberData);
@@ -23,6 +24,7 @@ const MemberItem = ({
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [expandedRoute, setExpandedRoute] = useState(null);
   const [directionsResponse, setDirectionsResponse] = useState(null);
+  const [polylinePath, setPolylinePath] = useState(null); // 직선 경로를 위한 상태
   const [selectedMapMode, setSelectedMapMode] = useState('TRANSIT');
   const [selectedRouteFilter, setSelectedRouteFilter] = useState('대중교통');
 
@@ -57,7 +59,7 @@ const MemberItem = ({
       }
     } catch (error) {
       console.error('주소 가져오기 오류:', error);
-      alert('주소를 가져오는데 실패했습니다.');
+      showAlert('주소를 가져오는데 실패했습니다.', 'error');
     }
   };
 
@@ -70,40 +72,107 @@ const MemberItem = ({
     return `${minutes}분`;
   };
 
+  const [mapKey, setMapKey] = useState(0);
+
   const calculateMapDirections = async (owner, member, mode = 'TRANSIT') => {
+    const KAKAO_API_KEY = '6fb94acce40079c0c08ad7b6e2be2875';
+    const origin = { lat: parseFloat(owner.addressLat), lng: parseFloat(owner.addressLng) };
+    const destination = { lat: parseFloat(member.addressLat), lng: parseFloat(member.addressLng) };
+
+    // Reset states
+    setDirectionsResponse(null);
+    setPolylinePath(null);
+
     try {
-      const directionsService = new window.google.maps.DirectionsService();
-      const origin = { lat: parseFloat(owner.addressLat), lng: parseFloat(owner.addressLng) };
-      const destination = { lat: parseFloat(member.addressLat), lng: parseFloat(member.addressLng) };
-
-      console.log(`지도 경로 계산 시작: ${mode}`);
-
-      directionsService.route(
-        {
-          origin: origin,
-          destination: destination,
-          travelMode: window.google.maps.TravelMode[mode],
-          provideRouteAlternatives: false
-        },
-        (result, status) => {
-          console.log(`경로 계산 결과 (${mode}):`, status);
-          if (status === window.google.maps.DirectionsStatus.OK) {
-            setDirectionsResponse(result);
-            console.log('경로 표시 성공:', result);
-          } else {
-            console.error(`경로 표시 실패 (${mode}):`, status);
-            // 경로를 찾을 수 없을 때 마커만 표시
-            setDirectionsResponse(null);
+      if (mode === 'TRANSIT') {
+        // Use Google Maps for Transit
+        const directionsService = new window.google.maps.DirectionsService();
+        directionsService.route(
+          {
+            origin: origin,
+            destination: destination,
+            travelMode: window.google.maps.TravelMode.TRANSIT,
+          },
+          (result, status) => {
+            if (status === window.google.maps.DirectionsStatus.OK) {
+              setDirectionsResponse(result);
+            } else {
+              console.error(`Google Transit Directions failed: ${status}`);
+              setPolylinePath([origin, destination]); // Fallback to straight line
+            }
           }
+        );
+      } else {
+        // Use Kakao Navi API for Driving, Walking, Bicycling
+        let url;
+        const params = new URLSearchParams({
+          origin: `${origin.lng},${origin.lat}`,
+          destination: `${destination.lng},${destination.lat}`
+        }).toString();
+
+        if (mode === 'DRIVING') {
+          url = `https://apis-navi.kakaomobility.com/v1/directions?${params}`;
+        } else if (mode === 'WALKING') {
+          url = `https://apis-navi.kakaomobility.com/v1/directions/walk?${params}`;
+        } else if (mode === 'BICYCLING') {
+          url = `https://apis-navi.kakaomobility.com/v1/directions/bicycle?${params}`;
         }
-      );
+
+        if (!url) return;
+
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `KakaoAK ${KAKAO_API_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          console.error('Kakao API error:', data);
+          if (data.code === -404) {
+            showAlert(`${mode === 'WALKING' ? '도보' : '자전거'} 경로를 찾을 수 없습니다. 거리가 너무 멀거나, 경로가 존재하지 않을 수 있습니다.`, 'error');
+            setPolylinePath(null); // Ensure no line is drawn
+          } else {
+            setPolylinePath([origin, destination]); // Fallback for other errors
+          }
+          return;
+        }
+
+        if (data.routes && data.routes.length > 0) {
+          const path = data.routes[0].sections.flatMap(section => {
+            if (!section.roads) return [];
+            return section.roads.flatMap(road => {
+              if (!road.vertexes) return [];
+              const vertexes = road.vertexes;
+              const pathSegment = [];
+              for (let i = 0; i < vertexes.length; i += 2) {
+                pathSegment.push({ lng: vertexes[i], lat: vertexes[i + 1] });
+              }
+              return pathSegment;
+            });
+          });
+
+          if (path.length > 0) {
+            setPolylinePath(path);
+          } else {
+            console.error('Kakao API returned a route with no path.');
+            setPolylinePath([origin, destination]);
+          }
+        } else {
+          console.error('Kakao API did not return any routes. Result:', data);
+          setPolylinePath([origin, destination]); // Fallback to straight line
+        }
+      }
     } catch (error) {
       console.error('지도 경로 계산 오류:', error);
-      setDirectionsResponse(null);
+      setPolylinePath([origin, destination]); // Fallback to straight line
     }
   };
 
   const handleMapModeChange = (mode) => {
+    setMapKey(prevKey => prevKey + 1); // 지도 강제 리렌더링을 위한 키 업데이트
     setSelectedMapMode(mode);
     if (ownerAddress && memberAddress) {
       calculateMapDirections(ownerAddress, memberAddress, mode);
@@ -396,6 +465,7 @@ const MemberItem = ({
 
                   <div className="rounded-lg overflow-hidden border border-gray-200">
                     <GoogleMap
+                      key={mapKey}
                       mapContainerStyle={{ width: '100%', height: '400px' }}
                       center={{
                         lat: parseFloat(memberAddress.addressLat),
@@ -432,6 +502,16 @@ const MemberItem = ({
                             }}
                             label="조원"
                           />
+                          {polylinePath && (
+                            <Polyline
+                              path={polylinePath}
+                              options={{
+                                strokeColor: '#4F46E5', // 경로 색상과 통일
+                                strokeWeight: 2,
+                                strokeOpacity: 0.8,
+                              }}
+                            />
+                          )}
                         </>
                       )}
                     </GoogleMap>
@@ -553,7 +633,8 @@ const MemberList = ({
   user,
   isOwner,
   onMemberClick,
-  onMemberScheduleClick
+  onMemberScheduleClick,
+  showAlert
 }) => {
   return (
     <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4">
@@ -573,6 +654,7 @@ const MemberList = ({
             onMemberClick={onMemberClick}
             onMemberScheduleClick={onMemberScheduleClick}
             index={index}
+            showAlert={showAlert}
           />
         ))}
       </div>
