@@ -5,6 +5,11 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
   const inputRef = useRef(null);
   const autocompleteRef = useRef(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [inputValue, setInputValue] = useState(value || '');
+
+  useEffect(() => {
+    setInputValue(value || '');
+  }, [value]);
 
   useEffect(() => {
     // Google Maps API가 로드될 때까지 대기
@@ -28,7 +33,7 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
         {
           componentRestrictions: { country: 'kr' }, // 한국으로 제한
           fields: ['formatted_address', 'geometry', 'name', 'place_id'],
-          types: ['address', 'establishment'] // 주소와 장소
+          types: ['geocode'] // 주소만 (address는 다른 타입과 혼합 불가)
         }
       );
 
@@ -57,7 +62,8 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
   }, [isLoaded, onChange]);
 
   const handleInputChange = (e) => {
-    // 수동 입력도 허용
+    setInputValue(e.target.value);
+    // 사용자가 직접 입력할 때, 위도/경도 정보는 아직 없으므로 주소 텍스트만 전달
     onChange({
       address: e.target.value,
       lat: null,
@@ -74,7 +80,7 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
       <input
         ref={inputRef}
         type="text"
-        value={value}
+        value={inputValue}
         onChange={handleInputChange}
         placeholder={placeholder}
         className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"

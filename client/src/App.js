@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { LoadScript } from '@react-google-maps/api';
 import SchedulingSystem from './SchedulingSystem';
 import AuthScreen from './components/auth/AuthScreen';
 import ChatBox from './components/chat/ChatBox';
@@ -14,6 +15,8 @@ import { useAuth } from './hooks/useAuth';
 import { useIntegratedVoiceSystem } from './hooks/useIntegratedVoiceSystem';
 import { useChat } from './hooks/useChat';
 import { speak } from './utils';
+
+const libraries = ['places'];
 
 function App() {
    const { isLoggedIn, user, loginMethod, handleLoginSuccess, handleLogout } = useAuth();
@@ -175,19 +178,25 @@ function App() {
    };
 
    return (
-      <Router>
-         <Routes>
-            <Route path="/auth" element={isLoggedIn ? <Navigate to="/" /> : <AuthScreen onLoginSuccess={handleLoginSuccess} />} />
-            <Route path="/" element={isLoggedIn ? <SchedulingSystem {...schedulingSystemProps} speak={speak} /> : <Navigate to="/auth" />} />
-         </Routes>
-         {isLoggedIn && sharedText && (
-            <SharedTextModal text={sharedText} onClose={() => setSharedText(null)} onConfirm={handleConfirmSharedText} />
-         )}
-         {isLoggedIn && copiedText && !sharedText && (
-            <CopiedTextModal text={copiedText} isAnalyzing={isAnalyzing} onClose={() => handleCloseCopiedText(copiedText)} onConfirm={handleConfirmCopiedText} />
-         )}
-         {isLoggedIn && showBackgroundGuide && <BackgroundGuide onClose={handleCloseBackgroundGuide} />}
-      </Router>
+      <LoadScript
+         googleMapsApiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY}
+         libraries={libraries}
+         language="ko"
+      >
+         <Router>
+            <Routes>
+               <Route path="/auth" element={isLoggedIn ? <Navigate to="/" /> : <AuthScreen onLoginSuccess={handleLoginSuccess} />} />
+               <Route path="/" element={isLoggedIn ? <SchedulingSystem {...schedulingSystemProps} speak={speak} /> : <Navigate to="/auth" />} />
+            </Routes>
+            {isLoggedIn && sharedText && (
+               <SharedTextModal text={sharedText} onClose={() => setSharedText(null)} onConfirm={handleConfirmSharedText} />
+            )}
+            {isLoggedIn && copiedText && !sharedText && (
+               <CopiedTextModal text={copiedText} isAnalyzing={isAnalyzing} onClose={() => handleCloseCopiedText(copiedText)} onConfirm={handleConfirmCopiedText} />
+            )}
+            {isLoggedIn && showBackgroundGuide && <BackgroundGuide onClose={handleCloseBackgroundGuide} />}
+         </Router>
+      </LoadScript>
    );
 }
 

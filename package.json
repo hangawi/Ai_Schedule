@@ -13,6 +13,7 @@
     "heroku-postbuild": "npm run install:all && npm run build"
   },
   "dependencies": {
+    "@react-google-maps/api": "^2.20.7",
     "concurrently": "^7.6.0"
   },
   "devDependencies": {
