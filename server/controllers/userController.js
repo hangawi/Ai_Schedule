@@ -184,3 +184,39 @@ exports.getUserScheduleById = async (req, res) => {
     res.status(500).send('Server Error');
   }
 };
+
+// @desc    Get user profile by ID (주소 포함)
+// @route   GET /api/users/profile/:userId
+// @access  Private
+exports.getUserProfileById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log('프로필 조회 요청:', userId);
+
+    const user = await User.findById(userId).select('name firstName lastName email phone address addressDetail addressLat addressLng occupation birthdate');
+
+    if (!user) {
+      console.log('사용자 없음:', userId);
+      return res.status(404).json({ msg: 'User not found' });
+    }
+
+    console.log('프로필 조회 성공:', user.name);
+
+    res.json({
+      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      phone: user.phone,
+      address: user.address,
+      addressDetail: user.addressDetail,
+      addressLat: user.addressLat,
+      addressLng: user.addressLng,
+      occupation: user.occupation,
+      birthdate: user.birthdate
+    });
+  } catch (err) {
+    console.error('프로필 조회 오류:', err.message);
+    res.status(500).send('Server Error');
+  }
+};
