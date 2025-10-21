@@ -23,6 +23,7 @@ const MemberItem = ({
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [expandedRoute, setExpandedRoute] = useState(null);
   const [directionsResponse, setDirectionsResponse] = useState(null);
+  const [selectedMapMode, setSelectedMapMode] = useState('TRANSIT');
 
   const fetchMemberAddress = async () => {
     try {
@@ -68,105 +69,106 @@ const MemberItem = ({
     return `${minutes}분`;
   };
 
-  const calculateMapDirections = async (owner, member) => {
+  const calculateMapDirections = async (owner, member, mode = 'TRANSIT') => {
     try {
       const directionsService = new window.google.maps.DirectionsService();
       const origin = { lat: parseFloat(owner.addressLat), lng: parseFloat(owner.addressLng) };
       const destination = { lat: parseFloat(member.addressLat), lng: parseFloat(member.addressLng) };
 
+      console.log(`지도 경로 계산 시작: ${mode}`);
+
       directionsService.route(
         {
           origin: origin,
           destination: destination,
-          travelMode: window.google.maps.TravelMode.TRANSIT
+          travelMode: window.google.maps.TravelMode[mode],
+          provideRouteAlternatives: false
         },
         (result, status) => {
+          console.log(`경로 계산 결과 (${mode}):`, status);
           if (status === window.google.maps.DirectionsStatus.OK) {
             setDirectionsResponse(result);
+            console.log('경로 표시 성공:', result);
           } else {
-            console.error('경로 표시 실패:', status);
+            console.error(`경로 표시 실패 (${mode}):`, status);
+            // 경로를 찾을 수 없을 때 마커만 표시
+            setDirectionsResponse(null);
           }
         }
       );
     } catch (error) {
       console.error('지도 경로 계산 오류:', error);
+      setDirectionsResponse(null);
+    }
+  };
+
+  const handleMapModeChange = (mode) => {
+    setSelectedMapMode(mode);
+    if (ownerAddress && memberAddress) {
+      calculateMapDirections(ownerAddress, memberAddress, mode);
     }
   };
 
   const calculateRoutes = async (owner, member) => {
     setLoadingRoute(true);
     try {
+      const directionsService = new window.google.maps.DirectionsService();
       const origin = { lat: parseFloat(owner.addressLat), lng: parseFloat(owner.addressLng) };
       const destination = { lat: parseFloat(member.addressLat), lng: parseFloat(member.addressLng) };
 
+      console.log('경로 계산 좌표:', {
+        origin,
+        destination,
+        ownerAddress: owner.address,
+        memberAddress: member.address
+      });
+
       const modes = [
         { key: 'TRANSIT', label: '대중교통', icon: '🚇' },
-        { key: 'DRIVE', label: '자동차', icon: '🚗' },
-        { key: 'WALK', label: '도보', icon: '🚶' }
+        { key: 'DRIVING', label: '자동차', icon: '🚗' },
+        { key: 'WALKING', label: '도보', icon: '🚶' },
+        { key: 'BICYCLING', label: '자전거', icon: '🚴' }
       ];
 
       const results = [];
 
       for (const mode of modes) {
         try {
-          const fieldMask = mode.key === 'TRANSIT'
-            ? 'routes.duration,routes.distanceMeters,routes.legs.steps'
-            : 'routes.duration,routes.distanceMeters';
-
-          const response = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Goog-Api-Key': process.env.REACT_APP_GOOGLE_MAPS_API_KEY,
-              'X-Goog-FieldMask': fieldMask
-            },
-            body: JSON.stringify({
-              origin: {
-                location: {
-                  latLng: {
-                    latitude: origin.lat,
-                    longitude: origin.lng
-                  }
-                }
+          const result = await new Promise((resolve, reject) => {
+            directionsService.route(
+              {
+                origin: origin,
+                destination: destination,
+                travelMode: window.google.maps.TravelMode[mode.key]
               },
-              destination: {
-                location: {
-                  latLng: {
-                    latitude: destination.lat,
-                    longitude: destination.lng
-                  }
+              (response, status) => {
+                if (status === 'OK') {
+                  resolve(response);
+                } else {
+                  reject(status);
                 }
-              },
-              travelMode: mode.key,
-              languageCode: 'ko'
-            })
+              }
+            );
           });
 
-          if (response.ok) {
-            const data = await response.json();
-            if (data.routes && data.routes.length > 0) {
-              const route = data.routes[0];
-              const durationSeconds = parseInt(route.duration.replace('s', ''));
-              const distanceKm = (route.distanceMeters / 1000).toFixed(1);
+          const route = result.routes[0].legs[0];
+          const routeData = {
+            mode: mode.label,
+            icon: mode.icon,
+            duration: route.duration.text,
+            distance: route.distance.text,
+            steps: mode.key === 'TRANSIT' ? route.steps : null
+          };
 
-              const routeData = {
-                mode: mode.label,
-                icon: mode.icon,
-                duration: formatDuration(durationSeconds),
-                distance: `${distanceKm}km`,
-                steps: mode.key === 'TRANSIT' && route.legs && route.legs[0] ? route.legs[0].steps : null
-              };
-
-              results.push(routeData);
-            }
-          } else {
-            console.log(`${mode.label} 경로 없음:`, await response.text());
-          }
+          console.log(`${mode.label} 경로 추가:`, routeData);
+          console.log(`${mode.label} steps:`, route.steps);
+          results.push(routeData);
         } catch (err) {
-          console.log(`${mode.label} 경로 오류:`, err);
+          console.log(`${mode.label} 경로 없음:`, err);
         }
       }
 
+      console.log('최종 경로 정보:', results);
       setRouteInfo(results);
     } catch (error) {
       console.error('경로 계산 오류:', error);
@@ -292,47 +294,95 @@ const MemberItem = ({
               </div>
 
               {memberAddress.addressLat && memberAddress.addressLng && (
-                <div className="rounded-lg overflow-hidden border border-gray-200">
-                  <GoogleMap
-                    mapContainerStyle={{ width: '100%', height: '400px' }}
-                    center={{
-                      lat: parseFloat(memberAddress.addressLat),
-                      lng: parseFloat(memberAddress.addressLng)
-                    }}
-                    zoom={13}
-                  >
-                    {directionsResponse ? (
-                      <DirectionsRenderer
-                        directions={directionsResponse}
-                        options={{
-                          suppressMarkers: false,
-                          polylineOptions: {
-                            strokeColor: '#4F46E5',
-                            strokeWeight: 5
-                          }
-                        }}
-                      />
-                    ) : (
-                      <>
-                        {ownerAddress && (
+                <div>
+                  {/* 교통수단 선택 버튼 */}
+                  {ownerAddress && (
+                    <div className="flex gap-2 mb-2">
+                      <button
+                        onClick={() => handleMapModeChange('TRANSIT')}
+                        className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          selectedMapMode === 'TRANSIT'
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        🚇 대중교통
+                      </button>
+                      <button
+                        onClick={() => handleMapModeChange('DRIVING')}
+                        className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          selectedMapMode === 'DRIVING'
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        🚗 자동차
+                      </button>
+                      <button
+                        onClick={() => handleMapModeChange('WALKING')}
+                        className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          selectedMapMode === 'WALKING'
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        🚶 도보
+                      </button>
+                      <button
+                        onClick={() => handleMapModeChange('BICYCLING')}
+                        className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          selectedMapMode === 'BICYCLING'
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        🚴 자전거
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="rounded-lg overflow-hidden border border-gray-200">
+                    <GoogleMap
+                      mapContainerStyle={{ width: '100%', height: '400px' }}
+                      center={{
+                        lat: parseFloat(memberAddress.addressLat),
+                        lng: parseFloat(memberAddress.addressLng)
+                      }}
+                      zoom={13}
+                    >
+                      {directionsResponse ? (
+                        <DirectionsRenderer
+                          directions={directionsResponse}
+                          options={{
+                            suppressMarkers: false,
+                            polylineOptions: {
+                              strokeColor: '#4F46E5',
+                              strokeWeight: 5
+                            }
+                          }}
+                        />
+                      ) : (
+                        <>
+                          {ownerAddress && (
+                            <Marker
+                              position={{
+                                lat: parseFloat(ownerAddress.addressLat),
+                                lng: parseFloat(ownerAddress.addressLng)
+                              }}
+                              label="방장"
+                            />
+                          )}
                           <Marker
                             position={{
-                              lat: parseFloat(ownerAddress.addressLat),
-                              lng: parseFloat(ownerAddress.addressLng)
+                              lat: parseFloat(memberAddress.addressLat),
+                              lng: parseFloat(memberAddress.addressLng)
                             }}
-                            label="방장"
+                            label="조원"
                           />
-                        )}
-                        <Marker
-                          position={{
-                            lat: parseFloat(memberAddress.addressLat),
-                            lng: parseFloat(memberAddress.addressLng)
-                          }}
-                          label="조원"
-                        />
-                      </>
-                    )}
-                  </GoogleMap>
+                        </>
+                      )}
+                    </GoogleMap>
+                  </div>
                 </div>
               )}
 
@@ -383,17 +433,18 @@ const MemberItem = ({
                               <h5 className="text-sm font-bold text-gray-700 mb-2">상세 경로</h5>
                               <div className="space-y-2">
                                 {route.steps.map((step, stepIdx) => {
-                                  const transitDetails = step.transitDetails;
-                                  if (transitDetails) {
-                                    const line = transitDetails.transitLine;
+                                  // Directions API의 transit 정보
+                                  const transit = step.transit;
+                                  if (transit) {
+                                    const line = transit.line;
                                     const vehicleType = line?.vehicle?.type || 'BUS';
-                                    const vehicleIcon = vehicleType.includes('SUBWAY') ? '🚇' :
+                                    const vehicleIcon = vehicleType.includes('SUBWAY') || vehicleType.includes('RAIL') ? '🚇' :
                                                        vehicleType.includes('BUS') ? '🚌' :
                                                        vehicleType.includes('TRAIN') ? '🚆' : '🚌';
-                                    const lineName = line?.name || line?.nameShort || '노선 정보 없음';
-                                    const departureStop = transitDetails.stopDetails?.departureStop?.name || '출발지';
-                                    const arrivalStop = transitDetails.stopDetails?.arrivalStop?.name || '도착지';
-                                    const stopCount = transitDetails.stopCount || 0;
+                                    const lineName = line?.name || line?.short_name || '노선 정보 없음';
+                                    const departureStop = transit.departure_stop?.name || '출발지';
+                                    const arrivalStop = transit.arrival_stop?.name || '도착지';
+                                    const stopCount = transit.num_stops || 0;
 
                                     return (
                                       <div key={stepIdx} className="bg-gray-50 p-2 rounded text-xs">
@@ -408,8 +459,8 @@ const MemberItem = ({
                                         </div>
                                       </div>
                                     );
-                                  } else if (step.travelMode === 'WALK') {
-                                    const distance = step.distanceMeters ? `${Math.round(step.distanceMeters)}m` : '';
+                                  } else if (step.travel_mode === 'WALKING') {
+                                    const distance = step.distance?.value ? `${Math.round(step.distance.value)}m` : '';
                                     return (
                                       <div key={stepIdx} className="bg-gray-50 p-2 rounded text-xs">
                                         <div className="flex items-center">

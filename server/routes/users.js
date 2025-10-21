@@ -10,6 +10,9 @@ router.put('/me', auth, userController.updateMe);
 router.get('/profile/schedule', auth, userController.getUserSchedule);
 router.put('/profile/schedule', auth, userController.updateUserSchedule);
 
+// Routes for user profile (주소 조회)
+router.get('/profile/:userId', auth, userController.getUserProfileById);
+
 router.get('/:userId/schedule', auth, userController.getUserScheduleById);
 
 router.post('/connect-calendar', auth, userController.connectCalendar);
