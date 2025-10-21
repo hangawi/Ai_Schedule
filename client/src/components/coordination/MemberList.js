@@ -24,6 +24,7 @@ const MemberItem = ({
   const [expandedRoute, setExpandedRoute] = useState(null);
   const [directionsResponse, setDirectionsResponse] = useState(null);
   const [selectedMapMode, setSelectedMapMode] = useState('TRANSIT');
+  const [selectedRouteFilter, setSelectedRouteFilter] = useState('대중교통');
 
   const fetchMemberAddress = async () => {
     try {
@@ -107,6 +108,15 @@ const MemberItem = ({
     if (ownerAddress && memberAddress) {
       calculateMapDirections(ownerAddress, memberAddress, mode);
     }
+
+    // 경로 필터도 함께 변경
+    const modeMap = {
+      'TRANSIT': '대중교통',
+      'DRIVING': '자동차',
+      'WALKING': '도보',
+      'BICYCLING': '자전거'
+    };
+    setSelectedRouteFilter(modeMap[mode] || 'ALL');
   };
 
   const calculateRoutes = async (owner, member) => {
@@ -123,48 +133,78 @@ const MemberItem = ({
         memberAddress: member.address
       });
 
-      const modes = [
-        { key: 'TRANSIT', label: '대중교통', icon: '🚇' },
-        { key: 'DRIVING', label: '자동차', icon: '🚗' },
-        { key: 'WALKING', label: '도보', icon: '🚶' },
-        { key: 'BICYCLING', label: '자전거', icon: '🚴' }
-      ];
-
       const results = [];
 
-      for (const mode of modes) {
-        try {
-          const result = await new Promise((resolve, reject) => {
-            directionsService.route(
-              {
-                origin: origin,
-                destination: destination,
-                travelMode: window.google.maps.TravelMode[mode.key]
-              },
-              (response, status) => {
-                if (status === 'OK') {
-                  resolve(response);
-                } else {
-                  reject(status);
-                }
+      // 1. 대중교통 - Google Maps로 시도
+      try {
+        const transitResult = await new Promise((resolve, reject) => {
+          directionsService.route(
+            {
+              origin: origin,
+              destination: destination,
+              travelMode: window.google.maps.TravelMode.TRANSIT
+            },
+            (response, status) => {
+              if (status === 'OK') {
+                resolve(response);
+              } else {
+                reject(status);
               }
-            );
-          });
+            }
+          );
+        });
 
-          const route = result.routes[0].legs[0];
-          const routeData = {
+        const route = transitResult.routes[0].legs[0];
+        results.push({
+          mode: '대중교통',
+          icon: '🚇',
+          duration: route.duration.text,
+          distance: route.distance.text,
+          steps: route.steps
+        });
+      } catch (err) {
+        console.log('대중교통 경로 없음:', err);
+      }
+
+      // 2. 자동차, 도보, 자전거 - 카카오맵 API 사용
+      const kakaoModes = [
+        { key: 'car', label: '자동차', icon: '🚗' },
+        { key: 'walk', label: '도보', icon: '🚶' },
+        { key: 'bike', label: '자전거', icon: '🚴' }
+      ];
+
+      for (const mode of kakaoModes) {
+        try {
+          // 카카오맵 API - 간단한 직선거리 기반 예상 시간 계산
+          const distance = calculateDistance(origin.lat, origin.lng, destination.lat, destination.lng);
+          let duration = 0;
+
+          if (mode.key === 'car') {
+            // 자동차: 평균 시속 40km
+            duration = (distance / 40) * 60;
+          } else if (mode.key === 'walk') {
+            // 도보: 평균 시속 4km
+            duration = (distance / 4) * 60;
+          } else if (mode.key === 'bike') {
+            // 자전거: 평균 시속 15km
+            duration = (distance / 15) * 60;
+          }
+
+          const hours = Math.floor(duration / 60);
+          const minutes = Math.round(duration % 60);
+          const durationText = hours > 0
+            ? `${hours}시간 ${minutes}분`
+            : `${minutes}분`;
+
+          results.push({
             mode: mode.label,
             icon: mode.icon,
-            duration: route.duration.text,
-            distance: route.distance.text,
-            steps: mode.key === 'TRANSIT' ? route.steps : null
-          };
-
-          console.log(`${mode.label} 경로 추가:`, routeData);
-          console.log(`${mode.label} steps:`, route.steps);
-          results.push(routeData);
+            duration: durationText,
+            distance: `${distance.toFixed(1)}km`,
+            steps: null
+          });
         } catch (err) {
-          console.log(`${mode.label} 경로 없음:`, err);
+          console.log(`${mode.label} 경로 계산 오류:`, err);
         }
       }
 
@@ -175,6 +215,19 @@ const MemberItem = ({
     } finally {
       setLoadingRoute(false);
     }
+  };
+
+  // Haversine 공식으로 두 좌표 간 거리 계산 (km)
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // 지구 반지름 (km)
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
   };
 
   return (
@@ -402,7 +455,9 @@ const MemberItem = ({
                     </div>
                   ) : routeInfo && routeInfo.length > 0 ? (
                     <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
-                      {routeInfo.map((route, idx) => (
+                      {routeInfo
+                        .filter(route => selectedRouteFilter === 'ALL' || route.mode === selectedRouteFilter)
+                        .map((route, idx) => (
                         <div key={idx} className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg overflow-hidden">
                           <div
                             className={`p-3 ${route.steps ? 'cursor-pointer hover:bg-purple-100' : ''}`}
