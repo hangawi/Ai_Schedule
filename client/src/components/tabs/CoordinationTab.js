@@ -897,6 +897,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
               isOwner={isOwner}
               onMemberClick={handleMemberClick}
               onMemberScheduleClick={handleMemberScheduleClick}
+              showAlert={showAlert}
             />
 
               {!isOwner && (
