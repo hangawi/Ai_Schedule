@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { GoogleMap, Marker } from '@react-google-maps/api';
 import { userService } from '../../services/userService';
 import AddressAutocomplete from '../common/AddressAutocomplete';
 import { User, Mail, Phone, MapPin, Briefcase, Calendar } from 'lucide-react';
@@ -9,6 +10,7 @@ const PersonalInfoEdit = () => {
     email: '',
     phone: '',
     address: '',
+    addressDetail: '',
     addressLat: null,
     addressLng: null,
     addressPlaceId: null,
@@ -32,6 +34,7 @@ const PersonalInfoEdit = () => {
         email: data.email || '',
         phone: data.phone || '',
         address: data.address || '',
+        addressDetail: data.addressDetail || '',
         addressLat: data.addressLat || null,
         addressLng: data.addressLng || null,
         addressPlaceId: data.addressPlaceId || null,
@@ -86,21 +89,23 @@ const PersonalInfoEdit = () => {
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">개인정보 수정</h2>
+    <div className="max-w-7xl mx-auto p-6">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">개인정보 수정</h2>
 
-        {message.text && (
-          <div className={`mb-4 p-4 rounded-lg ${
-            message.type === 'success'
-              ? 'bg-green-100 text-green-800 border border-green-200'
-              : 'bg-red-100 text-red-800 border border-red-200'
-          }`}>
-            {message.text}
-          </div>
-        )}
+      {message.text && (
+        <div className={`mb-4 p-4 rounded-lg ${
+          message.type === 'success'
+            ? 'bg-green-100 text-green-800 border border-green-200'
+            : 'bg-red-100 text-red-800 border border-red-200'
+        }`}>
+          {message.text}
+        </div>
+      )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 왼쪽: 개인정보 입력 폼 */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
           {/* 이름 */}
           <div>
             <label className="flex items-center text-sm font-medium text-gray-700 mb-2">
@@ -177,6 +182,22 @@ const PersonalInfoEdit = () => {
             )}
           </div>
 
+          {/* 세부 주소 */}
+          <div>
+            <label className="flex items-center text-sm font-medium text-gray-700 mb-2">
+              <MapPin size={16} className="mr-2" />
+              세부 주소
+            </label>
+            <input
+              type="text"
+              name="addressDetail"
+              value={userInfo.addressDetail}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="상세 주소를 입력하세요 (예: 101동 1004호)"
+            />
+          </div>
+
           {/* 직업 */}
           <div>
             <label className="flex items-center text-sm font-medium text-gray-700 mb-2">
@@ -222,7 +243,38 @@ const PersonalInfoEdit = () => {
               {isSaving ? '저장 중...' : '저장하기'}
             </button>
           </div>
-        </form>
+          </form>
+        </div>
+
+        {/* 오른쪽: 지도 */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-xl font-semibold text-gray-800 mb-4">위치 지도</h3>
+          {userInfo.addressLat && userInfo.addressLng ? (
+            <div style={{ height: '600px', width: '100%' }} className="rounded-lg overflow-hidden shadow-lg">
+              <GoogleMap
+                mapContainerStyle={{ width: '100%', height: '600px' }}
+                center={{ lat: parseFloat(userInfo.addressLat), lng: parseFloat(userInfo.addressLng) }}
+                zoom={15}
+                options={{
+                  zoomControl: true,
+                  streetViewControl: true,
+                  mapTypeControl: true,
+                  fullscreenControl: true,
+                }}
+              >
+                <Marker position={{ lat: parseFloat(userInfo.addressLat), lng: parseFloat(userInfo.addressLng) }} />
+              </GoogleMap>
+            </div>
+          ) : (
+            <div className="h-[600px] w-full rounded-lg bg-gray-100 flex items-center justify-center">
+              <div className="text-center text-gray-500">
+                <MapPin size={48} className="mx-auto mb-3 text-gray-400" />
+                <p>주소를 입력하면 지도가 표시됩니다</p>
+                <p className="text-xs mt-2">현재 주소: {userInfo.address || '없음'}</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
