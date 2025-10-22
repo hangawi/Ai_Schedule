@@ -5,7 +5,9 @@ const AutoSchedulerPanel = ({
   options,
   setOptions,
   onRun,
+  onRunSimulation, // Add this new prop
   isLoading,
+  isSimulating, // Add this new prop
   currentRoom,
   onAutoResolveNegotiations,
   onResetCarryOverTimes,
@@ -66,11 +68,21 @@ const AutoSchedulerPanel = ({
         {/* 메인 버튼 */}
         <button
           onClick={onRun}
-          disabled={isLoading}
+          disabled={isLoading || isSimulating}
           className="w-full bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-3 rounded-lg font-medium hover:from-purple-600 hover:to-purple-700 disabled:from-purple-300 disabled:to-purple-400 transition-all duration-200 shadow-md flex items-center justify-center text-sm"
         >
           <WandSparkles size={16} className="mr-2" />
           {isLoading ? '배정 중...' : '자동 배정 실행'}
+        </button>
+
+        {/* 시뮬레이션 자동배정 버튼 추가 */}
+        <button
+          onClick={onRunSimulation}
+          disabled={isLoading || isSimulating}
+          className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-2 px-3 rounded-lg font-medium hover:from-blue-600 hover:to-blue-700 disabled:from-blue-300 disabled:to-blue-400 transition-all duration-200 shadow-md flex items-center justify-center text-sm"
+        >
+          <WandSparkles size={16} className="mr-2" />
+          {isSimulating ? '시뮬레이션 중...' : '시뮬레이션 자동배정'}
         </button>
 
         {/* 소형 버튼들 그리드 - 2열 2행 */}
