@@ -30,6 +30,7 @@ router.delete('/rooms/:roomId/time-slots', auth, coordinationController.deleteAl
 // AI-based scheduling
 router.post('/rooms/:roomId/find-common-slots', auth, coordinationController.findCommonSlots);
 router.post('/rooms/:roomId/run-schedule', auth, coordinationController.runAutoSchedule);
+router.post('/rooms/:roomId/run-simulation', auth, coordinationController.runScheduleSimulation);
 
 // Request management
 router.post('/requests', auth, coordinationController.createRequest);
