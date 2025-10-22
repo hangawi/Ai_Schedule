@@ -270,6 +270,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     ownerFocusTime: 'none'
   });
   const [isScheduling, setIsScheduling] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
   const [scheduleError, setScheduleError] = useState(null);
   const [unassignedMembersInfo, setUnassignedMembersInfo] = useState(null);
   const [conflictSuggestions, setConflictSuggestions] = useState([]); // New state for unassigned members
@@ -468,6 +469,28 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       showAlert,
       viewMode
     );
+  };
+
+  // Simulation Auto-scheduling function (New)
+  const handleRunSimulationCallback = async () => {
+    if (!currentRoom?._id) {
+      showAlert('시뮬레이션을 실행할 방을 선택해주세요.', 'error');
+      return;
+    }
+    setIsSimulating(true);
+    setScheduleError(null);
+    try {
+      const result = await coordinationService.runScheduleSimulation(currentRoom._id, scheduleOptions);
+      console.log('Simulation Result:', result);
+      showAlert('시뮬레이션이 성공적으로 실행되었습니다. 결과를 콘솔에서 확인하세요.', 'success');
+      // Optionally, you can display the simulation result in a modal or another UI element
+    } catch (error) {
+      console.error('Simulation Error:', error);
+      setScheduleError(`시뮬레이션 실행 중 오류 발생: ${error.message}`);
+      showAlert(`시뮬레이션 실행 중 오류 발생: ${error.message}`, 'error');
+    } finally {
+      setIsSimulating(false);
+    }
   };
 
   // Handle opening negotiation modal
@@ -1660,19 +1683,37 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
           />
         )}
 
-        {/* Member Schedule Modal - 방 안에서도 보여야 하므로 여기에 위치 */}
-        {showMemberScheduleModal && selectedMemberId && (
-          <MemberScheduleModal
-            memberId={selectedMemberId}
-            onClose={() => {
-              setShowMemberScheduleModal(false);
-              setSelectedMemberId(null);
-            }}
-          />
-        )}
-      </div>
-  );
-  }
+                {/* Member Schedule Modal - 방 안에서도 보여야 하므로 여기에 위치 */}
+
+                {showMemberScheduleModal && selectedMemberId && (
+
+                  <MemberScheduleModal
+
+                    memberId={selectedMemberId}
+
+                    onClose={() => {
+
+                      setShowMemberScheduleModal(false);
+
+                      setSelectedMemberId(null);
+
+                    }}
+
+                  />
+
+                )}
+
+        
+
+                      </div>
+
+        
+
+                  );
+
+        
+
+                  }
 
   return (
     <div className="bg-slate-50 p-4 sm:p-6 rounded-lg min-h-full">
