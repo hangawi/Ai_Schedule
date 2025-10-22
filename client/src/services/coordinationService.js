@@ -363,6 +363,26 @@ export const coordinationService = {
     return await response.json();
   },
 
+  // 자동 시간 배정 시뮬레이션 실행
+  async runScheduleSimulation(roomId, options) {
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/run-simulation`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-auth-token': token,
+      },
+      body: JSON.stringify(options),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || `Failed to run schedule simulation (${response.status})`);
+    }
+
+    return await response.json();
+  },
+
   // 협의 목록 가져오기
   async getNegotiations(roomId) {
     const token = getAuthToken();
