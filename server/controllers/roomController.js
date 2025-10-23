@@ -217,8 +217,8 @@ exports.joinRoom = async (req, res) => {
 exports.getRoomDetails = async (req, res) => {
    try {
       const room = await Room.findById(req.params.roomId)
-         .populate('owner', '_id firstName lastName email name defaultSchedule scheduleExceptions personalTimes')
-         .populate('members.user', '_id firstName lastName email name defaultSchedule')
+         .populate('owner', '_id firstName lastName email name defaultSchedule scheduleExceptions personalTimes address addressDetail addressLat addressLng')
+         .populate('members.user', '_id firstName lastName email name defaultSchedule address addressDetail addressLat addressLng')
          .populate('timeSlots.user', '_id firstName lastName email name')
          .populate('requests.requester', '_id firstName lastName email name')
          .populate('requests.targetUser', '_id firstName lastName email name')

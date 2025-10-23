@@ -31,7 +31,8 @@ import {
   getNegotiationInfo as getNegotiationInfoHelper,
   getSlotOwner as getSlotOwnerHelper,
   isSlotSelected as isSlotSelectedHelper,
-  getCurrentWeekNegotiations as getCurrentWeekNegotiationsHelper
+  getCurrentWeekNegotiations as getCurrentWeekNegotiationsHelper,
+  mergeConsecutiveTimeSlots
 } from '../../utils/timetableHelpers';
 import {
   hasExistingSwapRequest,
@@ -45,60 +46,7 @@ import {
 const dayNames = DAY_NAMES;
 const dayNamesKorean = DAY_NAMES_KOREAN;
 
-// 연속된 시간대 병합 함수 (DetailTimeGrid와 동일)
-const mergeConsecutiveTimeSlots = (slots) => {
-  if (!slots || slots.length === 0) return [];
 
-  // 날짜와 사용자별로 그룹화
-  const groupedSlots = {};
-
-  slots.forEach(slot => {
-    const userId = slot.user?._id || slot.user;
-    const dateKey = slot.date ? new Date(slot.date).toISOString().split('T')[0] : 'no-date';
-    const key = `${userId}-${dateKey}`;
-
-    if (!groupedSlots[key]) {
-      groupedSlots[key] = [];
-    }
-    groupedSlots[key].push(slot);
-  });
-
-  const mergedSlots = [];
-
-  Object.values(groupedSlots).forEach(userSlots => {
-    const sortedSlots = userSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
-
-    let currentGroup = null;
-
-    for (const slot of sortedSlots) {
-      if (currentGroup &&
-          currentGroup.endTime === slot.startTime &&
-          currentGroup.user === slot.user) {
-        // 연속된 슬롯이므로 병합
-        currentGroup.endTime = slot.endTime;
-        currentGroup.isMerged = true;
-        if (!currentGroup.originalSlots) {
-          currentGroup.originalSlots = [{ ...currentGroup }];
-        }
-        currentGroup.originalSlots.push(slot);
-      } else {
-        // 새로운 그룹 시작
-        if (currentGroup) {
-          mergedSlots.push(currentGroup);
-        }
-        currentGroup = { ...slot };
-        delete currentGroup.isMerged;
-        delete currentGroup.originalSlots;
-      }
-    }
-
-    if (currentGroup) {
-      mergedSlots.push(currentGroup);
-    }
-  });
-
-  return mergedSlots;
-};
 
 // Helper functions are now imported from utility files
 
@@ -106,6 +54,8 @@ const TimetableGrid = ({
   roomId,
   roomSettings,
   timeSlots,
+  travelSlots = [],
+  travelMode, // Add travelMode to props
   members = [],
   roomData,
   onSlotSelect,
@@ -159,9 +109,13 @@ const TimetableGrid = ({
 
   // timeSlots가 변경될 때마다 병합된 슬롯 업데이트
   useEffect(() => {
+    if (travelMode !== 'normal') {
+      setMergedTimeSlots(timeSlots);
+      return;
+    }
     const merged = mergeConsecutiveTimeSlots(timeSlots);
     setMergedTimeSlots(merged);
-  }, [timeSlots, showMerged]);
+  }, [timeSlots, showMerged, travelMode]);
 
   const days = DAYS; // Display labels (not used for logic)
 
@@ -663,6 +617,7 @@ const TimetableGrid = ({
 
       {/* Time Rows */}
       <WeekView
+        travelSlots={travelSlots}
         filteredTimeSlotsInDay={filteredTimeSlotsInDay}
         weekDates={weekDates} // Pass weekDates to WeekView
         days={days}
@@ -675,6 +630,7 @@ const TimetableGrid = ({
         handleSlotClick={handleSlotClick}
         showMerged={showMerged}
         ownerOriginalSchedule={ownerOriginalSchedule}
+        travelMode={travelMode} // Pass travelMode down
       />
 
       {/* Assignment Modal Placeholder */}

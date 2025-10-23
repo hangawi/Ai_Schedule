@@ -21,11 +21,15 @@ const WeekView = ({
   currentUser,
   handleSlotClick,
   showMerged = true, // New prop for merged view
-  ownerOriginalSchedule // 방장의 원본 시간표 데이터
+  ownerOriginalSchedule, // 방장의 원본 시간표 데이터
+  travelMode = 'normal', // Add travelMode to props
+  travelSlots = [] // 이동 시간 슬롯
 }) => {
   // 방장의 원본 시간표에서 해당 시간대의 일정을 확인하는 함수
   const getOwnerOriginalScheduleInfo = (date, time) => {
     if (!ownerOriginalSchedule) return null; // 방장뿐만 아니라 모든 조원이 볼 수 있도록 isRoomOwner 체크 제거
+
+
 
     const timeMinutes = timeToMinutes(time);
     const dayOfWeek = date.getDay(); // 0=일요일, 1=월요일, ...
@@ -214,8 +218,13 @@ const WeekView = ({
       let slotType = 'empty';
       let slotData = null;
 
+      // In travel mode, owner info (split travel/activity slots) takes precedence
+      if (travelMode !== 'normal' && ownerInfo) {
+        slotType = 'owner';
+        slotData = ownerInfo;
+      }
       // 0순위: 방장의 원본 시간표 정보 중 exception, personal만 최우선 처리
-      if (ownerOriginalInfo && (ownerOriginalInfo.type === 'exception' || ownerOriginalInfo.type === 'personal')) {
+      else if (ownerOriginalInfo && (ownerOriginalInfo.type === 'exception' || ownerOriginalInfo.type === 'personal')) {
         slotType = 'blocked';
         slotData = {
           name: ownerOriginalInfo.name,
@@ -309,14 +318,20 @@ const WeekView = ({
           }
 
         } else if (slotType === 'owner') {
-          // owner 타입: 같은 사용자면 병합
-          const currentUserId = currentBlock.data?.actualUserId || currentBlock.data?.userId;
-          const newUserId = slotData?.actualUserId || slotData?.userId;
-          const currentUserName = currentBlock.data?.name;
-          const newUserName = slotData?.name;
+          // owner 타입: 사용자 ID, isTravel, subject가 모두 같아야 병합
+          const getUserId = (s) => s?.actualUserId || s?.userId;
+          const currentUserId = getUserId(currentBlock.data);
+          const newUserId = getUserId(slotData);
 
-          isSameType = (currentUserId && newUserId && currentUserId === newUserId) ||
-                       (currentUserName && newUserName && currentUserName === newUserName);
+          const currentIsTravel = currentBlock.data?.isTravel || false;
+          const newIsTravel = slotData?.isTravel || false;
+
+          const currentSubject = currentBlock.data?.subject;
+          const newSubject = slotData?.subject;
+
+          isSameType = currentUserId && newUserId && currentUserId === newUserId &&
+                       currentIsTravel === newIsTravel &&
+                       currentSubject === newSubject;
 
         } else if (slotType === 'selected') {
           isSameType = true;
@@ -362,6 +377,16 @@ const WeekView = ({
 
   // 병합 모드 렌더링 함수 - 각 날짜별 독립적 컬럼 렌더링
   const renderMergedView = () => {
+    // 이동 슬롯을 날짜별로 그룹화
+    const travelSlotsByDate = {};
+    (travelSlots || []).forEach(slot => {
+        const dateKey = new Date(slot.date).toISOString().split('T')[0];
+        if (!travelSlotsByDate[dateKey]) {
+            travelSlotsByDate[dateKey] = [];
+        }
+        travelSlotsByDate[dateKey].push(slot);
+    });
+
     // 각 날짜별로 병합된 블록 계산
     const dayBlocks = weekDates.map((dateInfo, dayIndex) =>
       getMergedTimeBlocks(dateInfo, dayIndex)
@@ -374,7 +399,7 @@ const WeekView = ({
 
     // 그리드 기반으로 렌더링 (헤더와 일치)
     return (
-      <div className="grid grid-cols-6">
+      <div className="grid grid-cols-6 bg-white">
         {/* 시간 컬럼 - 첫 번째 행만 렌더링 */}
         <div className="col-span-1 relative">
           {filteredTimeSlotsInDay.map(time => (
@@ -454,7 +479,7 @@ const WeekView = ({
                       <div
                         className="text-xs font-medium px-0.5 py-0.5 rounded"
                         style={{
-                          color: block.data?.color,
+                          color: block.data?.textColor || block.data?.color,
                           backgroundColor: `${block.data?.color}10`
                         }}
                         title={`${block.data?.subject || block.data?.name} (${block.startTime}~${block.actualEndTime})`}
@@ -475,6 +500,41 @@ const WeekView = ({
                     )}
                   </div>
                 );
+              })}
+              {(travelSlotsByDate[dateInfo.fullDate.toISOString().split('T')[0]] || []).map((travelSlot, travelIndex) => {
+                  const travelStartMinutes = timeToMinutes(travelSlot.startTime);
+                  const travelEndMinutes = timeToMinutes(travelSlot.endTime);
+                  const scheduleStartMinutes = timeToMinutes(filteredTimeSlotsInDay[0] || '00:00');
+
+                  const topOffsetMinutes = travelStartMinutes - scheduleStartMinutes;
+                  const durationMinutes = travelEndMinutes - travelStartMinutes;
+
+                  const topPosition = (topOffsetMinutes / 10) * 32;
+                  const slotHeight = (durationMinutes / 10) * 32;
+
+                  if (slotHeight <= 0) return null;
+
+                  return (
+                      <div
+                          key={`travel-${dayIndex}-${travelIndex}`}
+                          className="absolute left-0 right-0 border-y border-dashed border-gray-400 z-10 p-1 flex flex-col justify-center opacity-90"
+                          style={{
+                              top: `${topPosition}px`,
+                              height: `${slotHeight}px`,
+                              backgroundColor: 'rgba(135, 206, 235, 0.9)' // Sky blue
+                          }}
+                          title={`이동: ${travelSlot.from} → ${travelSlot.to}`}
+                      >
+                          <div className="text-xs text-gray-700 font-bold truncate text-center block">
+                            {travelSlot.from} → {travelSlot.to}
+                          </div>
+                          {slotHeight > 20 && (
+                            <div className="text-xs text-gray-600 text-center mt-1 block">
+                                {travelSlot.travelInfo.durationText} ({travelSlot.travelInfo.distanceText})
+                            </div>
+                          )}
+                      </div>
+                  );
               })}
             </div>
           );

@@ -49,19 +49,26 @@ class TravelModeService {
       const result = await new Promise((resolve, reject) => {
         service.route(
           {
-            origin: new window.google.maps.LatLng(origin.lat, origin.lng),
-            destination: new window.google.maps.LatLng(destination.lat, destination.lng),
+            origin: new window.google.maps.LatLng(parseFloat(origin.lat), parseFloat(origin.lng)),
+            destination: new window.google.maps.LatLng(parseFloat(destination.lat), parseFloat(destination.lng)),
             travelMode: travelModeMap[mode] || travelModeMap['transit']
           },
           (result, status) => {
             if (status === 'OK') {
               resolve(result);
             } else {
-              reject(new Error(`경로 계산 실패: ${status}`));
+              // ZERO_RESULTS는 에러가 아니라 경로가 없는 경우이므로, fallback 처리
+              console.warn(`Google Directions API returned status: ${status}. Falling back to estimation.`);
+              resolve({ fallback: true, status: status });
             }
           }
         );
       });
+
+      // API 호출 실패 시 fallback 실행
+      if (result.fallback) {
+        return this.estimateTravelTime(origin, destination, mode);
+      }
 
       const route = result.routes[0].legs[0];
       return {
@@ -69,11 +76,12 @@ class TravelModeService {
         distance: route.distance.value,          // 미터 단위
         durationText: route.duration.text,       // "30분", "1시간 20분"
         distanceText: route.distance.text,       // "5.2km"
-        steps: route.steps                       // 상세 경로 정보
+        steps: route.steps,                      // 상세 경로 정보
+        fallback: false                          // 성공적으로 API 사용
       };
     } catch (error) {
-      console.error('이동 시간 계산 오류:', error);
-      // API 실패 시 대략적인 계산 (Haversine)
+      console.error('이동 시간 계산 중 예외 발생:', error);
+      // 예외 발생 시에도 대략적인 계산으로 fallback
       return this.estimateTravelTime(origin, destination, mode);
     }
   }
