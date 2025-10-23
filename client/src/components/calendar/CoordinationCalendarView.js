@@ -46,6 +46,10 @@ const DaySummaryBar = ({ blocks }) => {
           case 'negotiation':
             bgColor = 'bg-yellow-500';
             break;
+          case 'travel':
+            bgColor = 'bg-green-500';
+            tooltip = `${block.startTime} - ${getEndTimeForBlock(block)}: 이동시간`;
+            break;
 
           case 'empty':
             bgColor = 'bg-white';
@@ -141,6 +145,9 @@ const CoordinationCalendarView = ({
         toYYYYMMDD(slot.date) === toYYYYMMDD(date) && 
         time >= slot.startTime && time < slot.endTime
       );
+      const travelSlot = assignedSlots.find(slot => slot.isTravel);
+      const activitySlots = assignedSlots.filter(slot => !slot.isTravel);
+
       const ownerInfo = getOwnerScheduleInfoForTime(date, time);
 
       let event = null;
@@ -148,7 +155,9 @@ const CoordinationCalendarView = ({
         event = { type: 'blocked', name: blockingInfo.name };
       } else if (negotiation) {
         event = { type: 'negotiation', name: `협의: ${negotiation._id}` };
-      } else if (assignedSlots.length > 0) {
+      } else if (travelSlot) {
+        event = { type: 'travel', name: '이동시간' };
+      } else if (activitySlots.length > 0) {
         const userNames = assignedSlots.map(slot => {
             // slot.user가 populate되어 있으면 직접 사용 (우선순위 1)
             if (slot.user && typeof slot.user === 'object' && slot.user._id) {
@@ -280,6 +289,9 @@ const CoordinationCalendarView = ({
                 ))}
                 {dateInfo.blocks.some(b => b.type === 'negotiation') && (
                   <span className="text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full">협의 중</span>
+                )}
+                {dateInfo.blocks.some(b => b.type === 'travel') && (
+                  <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">이동시간</span>
                 )}
               </div>
             </div>

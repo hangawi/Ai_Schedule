@@ -93,6 +93,9 @@ const CoordinationDetailGrid = ({
         toYYYYMMDD(slot.date) === toYYYYMMDD(selectedDate) && 
         time >= slot.startTime && time < slot.endTime
       );
+      const travelSlot = assignedSlots.find(slot => slot.isTravel);
+      const activitySlots = assignedSlots.filter(slot => !slot.isTravel);
+
       const ownerInfo = getOwnerScheduleInfoForTime(selectedDate, time);
 
       let event = null;
@@ -100,7 +103,9 @@ const CoordinationDetailGrid = ({
         event = { type: 'blocked', name: blockingInfo.name };
       } else if (negotiation) {
         event = { type: 'negotiation', name: `협의: ${negotiation._id}` };
-      } else if (assignedSlots.length > 0) {
+      } else if (travelSlot) {
+        event = { type: 'travel', name: '이동시간' };
+      } else if (activitySlots.length > 0) {
         const userNames = assignedSlots.map(slot => {
             const member = members.find(m => {
               const memberUserId = m.user?._id?.toString() || m.user?.toString();
@@ -203,6 +208,12 @@ const CoordinationDetailGrid = ({
                   textColor = 'text-yellow-800';
                   Icon = MessageSquare;
                   content = '협의 중';
+                  break;
+                case 'travel':
+                  bgColor = 'bg-green-100';
+                  textColor = 'text-green-800';
+                  Icon = Users; // Or another icon, maybe a car?
+                  content = '이동시간';
                   break;
                 default:
                   content = '빈 시간';
