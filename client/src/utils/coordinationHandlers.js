@@ -178,7 +178,8 @@ export const handleRunAutoSchedule = async (
   setNegotiationAlertData,
   setShowNegotiationAlert,
   showAlert,
-  viewMode = 'week'
+  viewMode = 'week',
+  travelMode = 'normal' // Add travelMode parameter
 ) => {
   if (!currentRoom || !currentWeekStartDate) {
     showAlert('현재 방 정보나 주차 정보가 없습니다.');
@@ -244,7 +245,8 @@ export const handleRunAutoSchedule = async (
     const finalOptions = {
       ...scheduleOptions,
       currentWeek: uiCurrentWeek,
-      numWeeks
+      numWeeks,
+      travelMode // Add travelMode to options
     };
 
     console.log('\n====================================');

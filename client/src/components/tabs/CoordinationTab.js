@@ -502,7 +502,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       setNegotiationAlertData,
       setShowNegotiationAlert,
       showAlert,
-      viewMode
+      viewMode,
+      travelMode // Pass travelMode
     );
   };
 
@@ -840,6 +841,17 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       closeManageRoomModal();
     }
   }, [currentRoom, showManageRoomModal, closeManageRoomModal]);
+
+  // Effect to re-apply travel mode calculations after auto-scheduling
+  useEffect(() => {
+    if (travelMode !== 'normal' && currentRoom?.timeSlots?.length > 0) {
+      // A small delay to ensure state propagation before recalculating
+      setTimeout(() => {
+        handleTravelModeChange(travelMode);
+      }, 100);
+    }
+  }, [currentRoom?.timeSlots]); // Dependency on the timeslots array itself
+
 
   if (isLoading) {
     return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div></div>;
