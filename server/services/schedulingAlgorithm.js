@@ -164,17 +164,19 @@ class SchedulingAlgorithm {
 
     // Phase 1: Identify conflicts BEFORE assignment (대체 시간 고려)
     // console.log('\n📍 [PHASE 1] 충돌 감지 시작');
-    const conflictingSlots = this._identifyConflictsBeforeAssignment(timetable, ownerId, memberRequiredSlots);
+    const { conflicts, memberAvailableSlots } = this._identifyConflictsBeforeAssignment(timetable, ownerId, memberRequiredSlots);
+    const conflictingSlots = conflicts;
     const negotiationBlocks = this._mergeConsecutiveConflicts(conflictingSlots, timetable);
     // console.log(`✅ ${negotiationBlocks.length}개 협의 블록 생성됨`);
 
-    // Phase 2: Assign undisputed high-priority slots (충돌 제외)
-    // console.log('\n📍 [PHASE 2] 단독 슬롯 배정');
+    // Phase 2: Assign undisputed slots in two passes to minimize negotiations.
+    // First pass for high-priority slots to secure the best times.
+    // console.log('\n📍 [PHASE 2.1] High-Priority Undisputed Assignment (Priority >= 3)');
     this._assignUndisputedSlots(timetable, assignments, 3, memberRequiredSlots, conflictingSlots);
 
-    // Phase 3: Iteratively fill remaining hours (skip slots that are under negotiation)
-    // console.log('\n📍 [PHASE 3] 반복 배정');
-    this._iterativeAssignment(timetable, assignments, 3, memberRequiredSlots, nonOwnerMembers, ownerPreferences, conflictingSlots, ownerId);
+    // Second pass for low-priority slots to fill remaining needs and avoid conflicts.
+    // console.log('\n📍 [PHASE 2.2] Low-Priority Undisputed Assignment (Priority >= 1)');
+    this._assignUndisputedSlots(timetable, assignments, 1, memberRequiredSlots, conflictingSlots);
 
     // Phase 4: Explicit Conflict Resolution by Owner Taking Slot (with preferences)
     this._resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, memberRequiredSlots, ownerPreferences);
@@ -297,7 +299,8 @@ class SchedulingAlgorithm {
         });
 
         // 💡 즉시 assignments 업데이트하여 다음 블록에서 충족된 것으로 인식
-        assignments[onlyMember.memberId].assignedHours += onlyMember.neededSlots;
+        const slotsToAssign = Math.min(onlyMember.neededSlots, totalSlots);
+        assignments[onlyMember.memberId].assignedHours += slotsToAssign;
 
         continue;
       }
@@ -305,6 +308,42 @@ class SchedulingAlgorithm {
       // 2명 이상 미충족 → 공평성 기반 자동 배정 또는 협의 생성
       let totalNeeded = 0; // 협의 타입 판단에도 사용되므로 블록 밖에서 선언
       if (unsatisfiedMembers.length >= 2) {
+        // 💡 유연성(대체 가능한 시간)이 가장 적은 멤버에게 우선적으로 할당
+        const flexibilityScores = unsatisfiedMembers.map(member => ({
+            memberId: member.memberId,
+            // 전체 타임테이블에서 해당 멤버가 가능한 총 슬롯 수로 유연성 점수 계산
+            score: memberAvailableSlots[member.memberId] || 0
+        }));
+
+        flexibilityScores.sort((a, b) => a.score - b.score); // 점수가 낮은 순 (유연성이 적은 순)으로 정렬
+
+        const leastFlexibleMember = flexibilityScores[0];
+        const secondLeastFlexibleMember = flexibilityScores[1];
+
+        // 💡 가장 유연성이 적은 멤버가 유일한 경우 (점수가 명확히 낮은 경우)
+        if (leastFlexibleMember && secondLeastFlexibleMember && leastFlexibleMember.score < secondLeastFlexibleMember.score) {
+            const winnerId = leastFlexibleMember.memberId;
+            const winnerMember = unsatisfiedMembers.find(m => m.memberId === winnerId);
+
+            if (winnerMember) {
+                autoAssignments.push({
+                  memberId: winnerId,
+                  dateObj: block.dateObj,
+                  dayString: dayString,
+                  startTime: block.startTime,
+                  endTime: block.endTime,
+                  neededSlots: winnerMember.neededSlots,
+                  totalSlots: totalSlots
+                });
+
+                const slotsToAssign = Math.min(winnerMember.neededSlots, totalSlots);
+                assignments[winnerId].assignedHours += slotsToAssign;
+                
+                // 이 블록은 해결되었으므로 다음 블록으로 넘어감
+                continue;
+            }
+        }
+
         // 💡 블록이 모든 멤버의 필요량을 수용할 수 있는지 확인
         totalNeeded = unsatisfiedMembers.reduce((sum, m) => sum + m.neededSlots, 0);
         const canAccommodateAll = totalNeeded <= totalSlots;
@@ -344,8 +383,8 @@ class SchedulingAlgorithm {
             });
 
             // 💡 즉시 assignments 업데이트하여 다음 블록에서 충족된 것으로 인식
-            assignments[leastAssignedMember.memberId].assignedHours += leastAssignedMember.neededSlots;
-            // console.log(`   📝 ${leastAssignedMember.memberId.substring(0,8)} 할당 업데이트: ${assignments[leastAssignedMember.memberId].assignedHours}/${memberRequiredSlots[leastAssignedMember.memberId]}슬롯`);
+            const slotsToAssign = Math.min(leastAssignedMember.neededSlots, totalSlots);
+            assignments[leastAssignedMember.memberId].assignedHours += slotsToAssign;
 
             continue; // 다음 블록으로
           } else {
@@ -684,7 +723,6 @@ class SchedulingAlgorithm {
           assignments[memberId] = { memberId: memberId, assignedHours: 0, slots: [] };
         }
 
-        assignments[memberId].assignedHours += 1;
         assignments[memberId].slots.push({
           date: dateObj,
           day: dayString,
@@ -814,7 +852,7 @@ class SchedulingAlgorithm {
     conflicts.forEach(c => {
       console.log(`      ${c.slotKey}: ${c.availableMembers.map(m => m.substring(0,8)).join(', ')} (우선순위: ${c.priority})`);
     });
-    return conflicts;
+    return { conflicts, memberAvailableSlots };
   }
 
   _createTimetableFromPersonalSchedules(members, owner, startDate, numWeeks, roomSettings = {}, fullRangeStart, fullRangeEnd) {
@@ -1111,7 +1149,7 @@ class SchedulingAlgorithm {
       const minute = currentTime % 60;
       const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
       slots.push(timeStr);
-      currentTime += 60; // 💡 1시간(60분) 단위로 변경
+      currentTime += 30; // 💡 30분 단위로 변경
     }
 
     return slots;
