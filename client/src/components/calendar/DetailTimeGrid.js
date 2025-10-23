@@ -620,6 +620,38 @@ const DetailTimeGrid = ({
       };
       additionalExceptions.push(newException);
 
+    } else if (copyOptions.copyType === 'thisWholeWeek' || copyOptions.copyType === 'nextWholeWeek') {
+      const dayOffset = copyOptions.copyType === 'thisWholeWeek' ? 0 : 7;
+      const monday = new Date(baseDate);
+      monday.setDate(baseDate.getDate() - (baseDate.getDay() === 0 ? 6 : baseDate.getDay() - 1) + dayOffset);
+
+      for (let i = 0; i < 5; i++) { // Loop for Monday to Friday
+        const targetDate = new Date(monday);
+        targetDate.setDate(monday.getDate() + i);
+        
+        if (targetDate.toDateString() === baseDate.toDateString()) continue;
+
+        const targetYear = targetDate.getFullYear();
+        const targetMonth = targetDate.getMonth();
+        const targetDay = targetDate.getDate();
+        const targetDateStr = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
+
+        const baseStartTime = new Date(baseException.startTime);
+        const baseEndTime = new Date(baseException.endTime);
+
+        const newStartTime = new Date(targetYear, targetMonth, targetDay, baseStartTime.getHours(), baseStartTime.getMinutes(), 0);
+        const newEndTime = new Date(targetYear, targetMonth, targetDay, baseEndTime.getHours(), baseEndTime.getMinutes(), 0);
+
+        const newException = {
+            ...baseException,
+            _id: Date.now().toString() + Math.random(),
+            sourceId: baseException.sourceId || baseException._id,
+            startTime: newStartTime.toISOString(),
+            endTime: newEndTime.toISOString(),
+            specificDate: targetDateStr
+        };
+        additionalExceptions.push(newException);
+      }
     } else if (copyOptions.copyType === 'wholeMonth') {
       // 이번달 모든 같은 요일에 복사
       const currentMonth = baseDate.getMonth();
@@ -706,6 +738,29 @@ const DetailTimeGrid = ({
         });
       });
 
+    } else if (copyOptions.copyType === 'thisWholeWeek' || copyOptions.copyType === 'nextWholeWeek') {
+      const dayOffset = copyOptions.copyType === 'thisWholeWeek' ? 0 : 7;
+      const monday = new Date(baseDate);
+      monday.setDate(baseDate.getDate() - (baseDate.getDay() === 0 ? 6 : baseDate.getDay() - 1) + dayOffset);
+
+      for (let i = 0; i < 5; i++) { // Loop for Monday to Friday
+        const targetDate = new Date(monday);
+        targetDate.setDate(monday.getDate() + i);
+        const targetDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+        
+        // Don't copy to the source date itself
+        if (targetDate.toDateString() === baseDate.toDateString()) continue;
+
+        baseSlots.forEach(slot => {
+          additionalSlots.push({
+            ...slot,
+            _id: Date.now().toString() + Math.random(),
+            sourceId: slot.sourceId || slot._id,
+            specificDate: targetDateStr,
+            dayOfWeek: targetDate.getDay()
+          });
+        });
+      }
     } else if (copyOptions.copyType === 'wholeMonth') {
       // 이번달 모든 같은 요일에 복사
       const currentMonth = baseDate.getMonth();
@@ -1822,6 +1877,28 @@ const DetailTimeGrid = ({
                                   className="mr-2"
                                 />
                                 <span className="text-sm">이번달 모든 같은 요일에 복사</span>
+                              </label>
+                              <label className="flex items-center">
+                                <input
+                                  type="radio"
+                                  name="copyType"
+                                  value="thisWholeWeek"
+                                  checked={copyOptions.copyType === 'thisWholeWeek'}
+                                  onChange={(e) => setCopyOptions({...copyOptions, copyType: e.target.value})}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm">이번 주 내내 적용</span>
+                              </label>
+                              <label className="flex items-center">
+                                <input
+                                  type="radio"
+                                  name="copyType"
+                                  value="nextWholeWeek"
+                                  checked={copyOptions.copyType === 'nextWholeWeek'}
+                                  onChange={(e) => setCopyOptions({...copyOptions, copyType: e.target.value})}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm">다음 주 내내 적용</span>
                               </label>
                             </div>
                             <p className="text-xs text-gray-600 mt-2">
