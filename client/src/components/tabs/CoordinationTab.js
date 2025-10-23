@@ -22,7 +22,6 @@ import NotificationModal from '../modals/NotificationModal';
 import NegotiationModal from '../modals/NegotiationModal';
 import NegotiationConflictModal from '../modals/NegotiationConflictModal';
 import MemberStatsModal from '../modals/MemberStatsModal';
-import SimulationResultModal from '../modals/SimulationResultModal';
 
 // Extracted components
 import RoomList from '../coordination/RoomList';
@@ -271,12 +270,9 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     ownerFocusTime: 'none'
   });
   const [isScheduling, setIsScheduling] = useState(false);
-  const [isSimulating, setIsSimulating] = useState(false);
   const [scheduleError, setScheduleError] = useState(null);
   const [unassignedMembersInfo, setUnassignedMembersInfo] = useState(null);
   const [conflictSuggestions, setConflictSuggestions] = useState([]); // New state for unassigned members
-  const [showSimulationModal, setShowSimulationModal] = useState(false);
-  const [simulationResult, setSimulationResult] = useState(null);
 
   // Negotiation notification states
   const [showNegotiationAlert, setShowNegotiationAlert] = useState(false);
@@ -472,28 +468,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       showAlert,
       viewMode
     );
-  };
-
-  // Simulation Auto-scheduling function (New)
-  const handleRunSimulationCallback = async () => {
-    if (!currentRoom?._id) {
-      showAlert('시뮬레이션을 실행할 방을 선택해주세요.', 'error');
-      return;
-    }
-    setIsSimulating(true);
-    setScheduleError(null);
-    try {
-      const result = await coordinationService.runScheduleSimulation(currentRoom._id, scheduleOptions);
-      setSimulationResult(result);
-      setShowSimulationModal(true);
-      showAlert('시뮬레이션이 성공적으로 실행되었습니다.', 'success');
-    } catch (error) {
-      console.error('Simulation Error:', error);
-      setScheduleError(`시뮬레이션 실행 중 오류 발생: ${error.message}`);
-      showAlert(`시뮬레이션 실행 중 오류 발생: ${error.message}`, 'error');
-    } finally {
-      setIsSimulating(false);
-    }
   };
 
   // Handle opening negotiation modal
@@ -905,9 +879,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 options={scheduleOptions}
                 setOptions={setScheduleOptions}
                 onRun={handleRunAutoScheduleCallback}
-                onRunSimulation={handleRunSimulationCallback}
                 isLoading={isScheduling}
-                isSimulating={isSimulating}
                 currentRoom={currentRoom}
                 onAutoResolveNegotiations={handleAutoResolveNegotiationsCallback}
                 onResetCarryOverTimes={handleResetCarryOverTimesCallback}
@@ -1686,16 +1658,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             onOpenNegotiation={handleOpenNegotiation}
             ownerOriginalSchedule={ownerScheduleCache}
           />
-        )}
-
-        {showSimulationModal && (
-            <SimulationResultModal
-                isOpen={showSimulationModal}
-                onClose={() => setShowSimulationModal(false)}
-                simulationResult={simulationResult}
-                roomData={currentRoom}
-                currentUser={user}
-            />
         )}
 
                 {/* Member Schedule Modal - 방 안에서도 보여야 하므로 여기에 위치 */}
