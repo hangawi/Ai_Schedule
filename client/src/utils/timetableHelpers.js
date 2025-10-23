@@ -261,7 +261,7 @@ export const getSlotOwner = (date, time, timeSlots, members, currentUser, isRoom
     if (bookedSlot.isTravel) {
         return {
             name: bookedSlot.subject,
-            color: '#FFA500', // Orange (background)
+            color: '#20B2AA', // LightSeaGreen (background)
             textColor: '#000000', // Black (text)
             isTravel: true,
             userId: 'travel',
