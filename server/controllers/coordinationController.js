@@ -2887,8 +2887,8 @@ exports.runAutoSchedule = async (req, res) => {
       console.log('\n🔄 [DB 저장 완료 및 재조회 시작]');
 
       const freshRoom = await Room.findById(roomId)
-         .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes')
-         .populate('members.user', 'firstName lastName email')
+         .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes address addressDetail addressLat addressLng')
+         .populate('members.user', 'firstName lastName email name defaultSchedule address addressDetail addressLat addressLng')
          .populate('timeSlots.user', '_id firstName lastName email')
          .populate('requests.requester', 'firstName lastName email')
          .populate('requests.targetUser', 'firstName lastName email')
@@ -2969,8 +2969,8 @@ exports.deleteAllTimeSlots = async (req, res) => {
       await room.save();
 
       const updatedRoom = await Room.findById(room._id)
-         .populate('owner', 'firstName lastName email')
-         .populate('members.user', 'firstName lastName email')
+         .populate('owner', 'firstName lastName email address addressLat addressLng')
+         .populate('members.user', 'firstName lastName email address addressLat addressLng')
          .populate('timeSlots.user', '_id firstName lastName email');
 
       res.json(updatedRoom);

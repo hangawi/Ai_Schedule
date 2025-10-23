@@ -6,6 +6,63 @@ import { timeToMinutes, minutesToTime } from './timeUtils';
 import { safeDateToISOString, getDayIndex } from './dateUtils';
 import { DAY_NAMES, DEFAULT_COLORS, NEGOTIATION_STATUS } from './timetableConstants';
 
+// 연속된 시간대 병합 함수
+export const mergeConsecutiveTimeSlots = (slots) => {
+  if (!slots || slots.length === 0) return [];
+
+  // 날짜와 사용자별로 그룹화
+  const groupedSlots = {};
+
+  slots.forEach(slot => {
+    const userId = slot.user?._id || slot.user;
+    const dateKey = slot.date ? new Date(slot.date).toISOString().split('T')[0] : 'no-date';
+    const key = `${userId}-${dateKey}`;
+
+    if (!groupedSlots[key]) {
+      groupedSlots[key] = [];
+    }
+    groupedSlots[key].push(slot);
+  });
+
+  const mergedSlots = [];
+
+  Object.values(groupedSlots).forEach(userSlots => {
+    const sortedSlots = userSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    let currentGroup = null;
+
+    for (const slot of sortedSlots) {
+      const getUserId = (s) => s.user?._id || s.user;
+      if (currentGroup &&
+          currentGroup.endTime === slot.startTime &&
+          getUserId(currentGroup) === getUserId(slot) &&
+          currentGroup.isTravel === slot.isTravel) {
+        // 연속된 슬롯이므로 병합
+        currentGroup.endTime = slot.endTime;
+        currentGroup.isMerged = true;
+        if (!currentGroup.originalSlots) {
+          currentGroup.originalSlots = [{ ...currentGroup }];
+        }
+        currentGroup.originalSlots.push(slot);
+      } else {
+        // 새로운 그룹 시작
+        if (currentGroup) {
+          mergedSlots.push(currentGroup);
+        }
+        currentGroup = { ...slot };
+        delete currentGroup.isMerged;
+        delete currentGroup.originalSlots;
+      }
+    }
+
+    if (currentGroup) {
+      mergedSlots.push(currentGroup);
+    }
+  });
+
+  return mergedSlots;
+};
+
 /**
  * Get hour value from room settings (handles both old and new structures)
  * @param {string|number} setting - The setting value
@@ -161,41 +218,19 @@ export const getNegotiationInfo = (date, time, roomData) => {
  * @returns {Object|null} - Slot owner info or null
  */
 export const getSlotOwner = (date, time, timeSlots, members, currentUser, isRoomOwner, getNegotiationInfoFunc) => {
-  if (!timeSlots || !members || !time || !date) return null;
+  if (!timeSlots || !time || !date) return null;
 
   const currentTime = time.trim();
   const currentMinutes = timeToMinutes(currentTime);
   const currentDateStr = date.toISOString().split('T')[0];
 
-  // First, check for a travel slot at this specific time
-  const travelSlot = (timeSlots || []).find(slot => {
-    if (!slot || !slot.date || !slot.isTravel) return false;
-    const slotDate = new Date(slot.date).toISOString().split('T')[0];
-    if (slotDate !== currentDateStr) return false;
-    
-    const startMinutes = timeToMinutes(slot.startTime);
-    const endMinutes = timeToMinutes(slot.endTime);
-    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
-  });
-
-  if (travelSlot) {
-    return {
-        name: travelSlot.subject, // e.g., "이동 (5km)"
-        color: '#A0AEC0', // Gray color for travel
-        isTravel: true,
-        userId: 'travel',
-    };
-  }
-
-  // Check if this slot is under negotiation first
+  // 1. Check for negotiations first
   const negotiationInfo = getNegotiationInfoFunc(date, time);
   if (negotiationInfo) {
-    // 협의 멤버 수와 우선순위 정보
     const memberCount = negotiationInfo.conflictingMembers?.length || 0;
     const isUserInvolved = negotiationInfo.conflictingMembers?.some(cm =>
       (cm.user._id || cm.user) === currentUser?.id
     );
-
     return {
       name: isUserInvolved ? `협의 참여 (${memberCount}명)` : `협의중 (${memberCount}명)`,
       color: isUserInvolved ? DEFAULT_COLORS.NEGOTIATION_USER_INVOLVED : DEFAULT_COLORS.NEGOTIATION_OTHER,
@@ -208,189 +243,61 @@ export const getSlotOwner = (date, time, timeSlots, members, currentUser, isRoom
     };
   }
 
-  // Find all slots for this date and user, then check if current time falls in any continuous block
-  const sameDaySlots = (timeSlots || []).filter(slot => {
-    if (!slot || !slot.date) return false;
+  // 2. Find the specific slot for the given time
+  const bookedSlot = (timeSlots || []).find(slot => {
+    if (!slot || !slot.date || !slot.startTime || !slot.endTime) return false;
+    
+    const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
+    if (slotDateStr !== currentDateStr) return false;
 
-    // Handle both startTime field and time field formats
-    const hasStartTime = slot.startTime;
-    const hasTimeField = slot.time && slot.time.includes('-');
-
-    if (!hasStartTime && !hasTimeField) return false;
-
-    const slotDate = new Date(slot.date);
-    return slotDate.toISOString().split('T')[0] === currentDateStr;
+    const startMinutes = timeToMinutes(slot.startTime);
+    const endMinutes = timeToMinutes(slot.endTime);
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
   });
 
-  // Group slots by user and find continuous blocks
-  const userSlotGroups = {};
-  sameDaySlots.forEach(slot => {
-    const userId = slot.userId || slot.user;
-    const userKey = typeof userId === 'object' ? userId?._id || userId?.id : userId;
-    if (userKey) {
-      if (!userSlotGroups[userKey]) {
-        userSlotGroups[userKey] = [];
-      }
-      userSlotGroups[userKey].push(slot);
-    }
-  });
-
-  // Check each user's continuous blocks
-  let bookedSlot = null;
-  for (const [userId, userSlots] of Object.entries(userSlotGroups)) {
-    // Sort slots by start time - handle both startTime and time field formats
-    const sortedSlots = userSlots.sort((a, b) => {
-      const getSlotStartTime = (slot) => {
-        if (slot.startTime) return slot.startTime;
-        if (slot.time && slot.time.includes('-')) {
-          return slot.time.split('-')[0];
-        }
-        return '00:00';
-      };
-      return timeToMinutes(getSlotStartTime(a)) - timeToMinutes(getSlotStartTime(b));
-    });
-
-    // Find continuous blocks and check if current time falls within any block
-    let blockStart = null;
-    let blockEnd = null;
-
-    for (let i = 0; i < sortedSlots.length; i++) {
-      const slot = sortedSlots[i];
-
-      // Extract start and end times from both formats
-      let slotStartTime, slotEndTime;
-      if (slot.startTime) {
-        slotStartTime = slot.startTime;
-        slotEndTime = slot.endTime || slot.startTime;
-      } else if (slot.time && slot.time.includes('-')) {
-        const [start, end] = slot.time.split('-');
-        slotStartTime = start;
-        slotEndTime = end;
-      } else {
-        continue;
-      }
-
-      const slotStart = timeToMinutes(slotStartTime);
-      const slotEnd = timeToMinutes(slotEndTime);
-
-      if (blockStart === null) {
-        blockStart = slotStart;
-        blockEnd = slotEnd;
-      } else if (slotStart === blockEnd) {
-        // Continuous slot, extend the block
-        blockEnd = slotEnd;
-      } else {
-        // Gap found, check if current time was in the previous block
-        if (currentMinutes >= blockStart && currentMinutes < blockEnd) {
-          bookedSlot = {
-            ...sortedSlots[0], // Use first slot as base
-            startTime: minutesToTime(blockStart),
-            endTime: minutesToTime(blockEnd)
-          };
-          break;
-        }
-        // Start new block
-        blockStart = slotStart;
-        blockEnd = slotEnd;
-      }
-    }
-
-    // Check the last block
-    if (!bookedSlot && blockStart !== null && currentMinutes >= blockStart && currentMinutes < blockEnd) {
-      bookedSlot = {
-        ...sortedSlots[0], // Use first slot as base
-        startTime: minutesToTime(blockStart),
-        endTime: minutesToTime(blockEnd)
-      };
-      break;
-    }
-  }
-
-  // Fallback to original logic if no continuous block found
-  if (!bookedSlot) {
-    bookedSlot = sameDaySlots.find(booked => {
-      // Handle both startTime/endTime and time field formats
-      let startTime, endTime;
-
-      if (booked.startTime) {
-        startTime = booked.startTime.trim();
-        endTime = booked.endTime ? booked.endTime.trim() : startTime;
-      } else if (booked.time && booked.time.includes('-')) {
-        const [start, end] = booked.time.split('-');
-        startTime = start.trim();
-        endTime = end.trim();
-      } else {
-        return false;
-      }
-
-      if (startTime && endTime) {
-        const startMinutes = timeToMinutes(startTime);
-        const endMinutes = timeToMinutes(endTime);
-        return currentMinutes >= startMinutes && currentMinutes < endMinutes;
-      } else {
-        return currentTime === startTime;
-      }
-    });
-  }
-
-  // 방장의 개인 시간은 시간표에서 제외 (협의에 참여하지 않음)
-  if (bookedSlot && isRoomOwner && currentUser) {
-    let slotUserId = bookedSlot.userId || bookedSlot.user;
-    if (typeof slotUserId === 'object' && slotUserId !== null) {
-      slotUserId = slotUserId._id || slotUserId.id;
-    }
-
-    const currentUserId = currentUser.id || currentUser._id;
-
-    // 방장의 슬롯이면 null 반환 (시간표에서 제외)
-    if (slotUserId && currentUserId && slotUserId.toString() === currentUserId.toString()) {
-      return null;
-    }
-  }
-
+  // 3. If a slot is found, determine its type and return info
   if (bookedSlot) {
-    let userId = bookedSlot.userId || bookedSlot.user;
+    // Handle travel slots
+    if (bookedSlot.isTravel) {
+        return {
+            name: bookedSlot.subject,
+            color: '#FFA500', // Orange (background)
+            textColor: '#000000', // Black (text)
+            isTravel: true,
+            userId: 'travel',
+            subject: bookedSlot.subject,
+            travelInfo: bookedSlot.travelInfo
+        };
+    }
 
+    // Handle activity slots
+    let userId = bookedSlot.userId || bookedSlot.user;
     if (typeof userId === 'object' && userId !== null) {
       userId = userId._id || userId.id;
     }
 
-    if (!userId && bookedSlot.user) {
-      userId = bookedSlot.user._id || bookedSlot.user.id;
-    }
-
-    let member = null;
-
-    if (userId) {
-      member = (members || []).find(m => {
-        const memberId = m.user?._id?.toString() || m.user?.id?.toString();
-        const slotUserId = userId.toString();
-        return memberId && slotUserId && memberId === slotUserId;
-      });
-    } else if (bookedSlot.user && bookedSlot.user.email) {
-      member = (members || []).find(m => {
-        return m.user?.email === bookedSlot.user.email;
-      });
-    }
+    const member = (members || []).find(m => {
+      const memberId = m.user?._id?.toString() || m.user?.id?.toString();
+      return memberId && userId && memberId === userId.toString();
+    });
 
     if (member) {
       const memberData = member.user || member;
-      const memberName = memberData.name ||
-                       `${memberData.firstName || ''} ${memberData.lastName || ''}`.trim() ||
-                       `${bookedSlot.user?.firstName || ''} ${bookedSlot.user?.lastName || ''}`.trim() ||
-                       '알 수 없음';
-
+      const memberName = memberData.name || `${memberData.firstName || ''} ${memberData.lastName || ''}`.trim() || '알 수 없음';
       const actualUserId = member.user?._id || member.user?.id || member._id || member.id;
 
       return {
         name: memberName,
         color: member.color || DEFAULT_COLORS.UNKNOWN_USER,
-        userId: userId || bookedSlot.user?.email, // Use email as fallback identifier
+        userId: userId,
         actualUserId: actualUserId,
-        subject: bookedSlot.subject // Pass subject from bookedSlot
+        subject: bookedSlot.subject,
+        isTravel: false, // Explicitly set
+        travelInfo: bookedSlot.travelInfo
       };
     }
 
+    // Fallback for unknown slots
     return {
       name: '알 수 없음',
       color: DEFAULT_COLORS.UNKNOWN_USER,
@@ -399,6 +306,7 @@ export const getSlotOwner = (date, time, timeSlots, members, currentUser, isRoom
     };
   }
 
+  // 4. If no slot is found, return null
   return null;
 };
 

@@ -58,14 +58,15 @@ const TimeSlot = ({
                 ownerInfo.isNegotiation ? 'animate-pulse border border-orange-300' : ''
               } ${showMerged && ownerInfo.isMergedSlot ? 'border-2' : ''}`}
               style={{
-                color: ownerInfo.color,
+                color: ownerInfo.textColor || ownerInfo.color,
                 backgroundColor: `${ownerInfo.color}${ownerInfo.isNegotiation ? '30' : '10'}`,
                 ...(showMerged && ownerInfo.isMergedSlot ? {
                   borderColor: ownerInfo.color,
                   borderStyle: 'solid'
                 } : {})
               }}
-              title={ownerInfo.isNegotiation ?
+              title={ownerInfo.isTravel && ownerInfo.travelInfo ? `${ownerInfo.subject} (${ownerInfo.travelInfo.durationText})` :
+                (ownerInfo.isNegotiation ?
                 `협의 참여자: ${ownerInfo.negotiationData?.conflictingMembers?.map(cm => {
                   if (cm.user?.name) {
                     return cm.user.name;
@@ -77,10 +78,15 @@ const TimeSlot = ({
                 }).join(', ') || '알 수 없음'}` :
                 (showMerged && ownerInfo.isMergedSlot && ownerInfo.mergedDuration ?
                   `${ownerInfo.subject || ownerInfo.name} - 병합됨 (${ownerInfo.mergedDuration}분)` :
-                  ownerInfo.subject || ownerInfo.name)
+                  ownerInfo.subject || ownerInfo.name))
               }
             >
-{ownerInfo.name.length > 6 ? ownerInfo.name.substring(0, 4) + '...' : ownerInfo.name}
+              {ownerInfo.isTravel ? ownerInfo.subject : (ownerInfo.name.length > 6 ? ownerInfo.name.substring(0, 4) + '...' : ownerInfo.name)}
+              {ownerInfo.isTravel && ownerInfo.travelInfo && (
+                <div className="text-xs text-gray-600">
+                  {ownerInfo.travelInfo.durationText}
+                </div>
+              )}
             </span>
           )}
           {!ownerInfo && isSelected && !isRoomOwner && (
