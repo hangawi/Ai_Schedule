@@ -13,12 +13,18 @@ class TravelScheduleCalculator {
    * @returns {Promise<Object>} - 재계산된 시간표 데이터
    */
   async recalculateScheduleWithTravel(currentRoom, travelMode = 'normal') {
+    console.log('[TravelCalculator] recalculateScheduleWithTravel 시작');
+    console.log('[TravelCalculator] currentRoom:', currentRoom ? 'OK' : 'NULL');
+    console.log('[TravelCalculator] timeSlots:', currentRoom?.timeSlots?.length);
+    console.log('[TravelCalculator] travelMode:', travelMode);
+
     if (!currentRoom || !currentRoom.timeSlots || currentRoom.timeSlots.length === 0) {
       throw new Error('시간표 데이터가 없습니다.');
     }
 
     // 일반 모드는 기존 시간표 그대로 반환
     if (travelMode === 'normal') {
+      console.log('[TravelCalculator] 일반 모드 - 원본 반환');
       return {
         timeSlots: currentRoom.timeSlots,
         travelSlots: [],
@@ -30,8 +36,34 @@ class TravelScheduleCalculator {
     const members = currentRoom.members;
     const timeSlots = currentRoom.timeSlots;
 
+    console.log('[TravelCalculator] owner:', owner);
+    console.log('[TravelCalculator] members:', members?.length);
+
+    // 주소 정보 유효성 검사
+    const missingAddresses = [];
+
+    // 방장 주소 확인
+    if (!owner.addressLat || !owner.addressLng || isNaN(owner.addressLat) || isNaN(owner.addressLng)) {
+      missingAddresses.push(`방장 (${owner.firstName} ${owner.lastName})`);
+    }
+
+    // 조원 주소 확인
+    members.forEach(member => {
+      const user = member.user;
+      if (!user.addressLat || !user.addressLng || isNaN(user.addressLat) || isNaN(user.addressLng)) {
+        missingAddresses.push(`${user.firstName} ${user.lastName}`);
+      }
+    });
+
+    if (missingAddresses.length > 0) {
+      const errorMsg = `이동 시간 계산을 위해서는 모든 사용자의 주소 정보가 필요합니다.\n\n주소가 없는 사용자:\n${missingAddresses.join('\n')}\n\n프로필 탭에서 주소를 입력해주세요.`;
+      console.error('[TravelCalculator]', errorMsg);
+      throw new Error(errorMsg);
+    }
+
     // 1. 날짜별로 시간표 그룹화
     const slotsByDate = this.groupSlotsByDate(timeSlots);
+    console.log('[TravelCalculator] 날짜별 그룹화 완료:', Object.keys(slotsByDate).length, '일');
 
     // 2. 각 날짜별로 이동 순서 계산 및 이동 시간 추가
     const enhancedSchedule = await this.calculateDailyTravelTimes(
@@ -41,6 +73,7 @@ class TravelScheduleCalculator {
       travelMode
     );
 
+    console.log('[TravelCalculator] recalculateScheduleWithTravel 완료');
     return enhancedSchedule;
   }
 
@@ -102,36 +135,52 @@ class TravelScheduleCalculator {
 
       console.log('[TravelCalculator] 시작 위치 (방장):', currentLocation);
 
-      let previousEndTime = null;
-
       // 각 멤버별로 이동 시간 계산
       for (let i = 0; i < sortedMembers.length; i++) {
         const { memberId, memberInfo, slots: memberDaySlots } = sortedMembers[i];
         console.log(`[TravelCalculator] 멤버 ${i+1}/${sortedMembers.length} 처리:`, memberInfo?.user?.firstName);
+        console.log('[TravelCalculator] memberInfo.user:', memberInfo?.user);
 
         // 첫 번째 슬롯의 시작 시간
         const firstSlot = memberDaySlots[0];
         const memberStartTime = this.parseTime(firstSlot.startTime);
 
-        // 이동 시간 계산
-        if (previousEndTime) {
-          try {
-            const destination = {
-              lat: memberInfo.user.addressLat,
-              lng: memberInfo.user.addressLng
-            };
+        // 이동 시간 계산 (첫 번째 멤버도 방장에서 출발하므로 계산)
+        try {
+          const destination = {
+            lat: memberInfo.user.addressLat,
+            lng: memberInfo.user.addressLng
+          };
 
-            console.log('[TravelCalculator] 이동 계산:', currentLocation, '->', destination);
+          console.log('[TravelCalculator] 이동 계산 from:', currentLocation);
+          console.log('[TravelCalculator] 이동 계산 to:', destination);
 
-            const travelInfo = await travelModeService.calculateTravelTime(
-              currentLocation,
-              destination,
-              travelMode
-            );
+          // 좌표 유효성 검사
+          if (!currentLocation.lat || !currentLocation.lng || isNaN(currentLocation.lat) || isNaN(currentLocation.lng)) {
+            console.error('[TravelCalculator] 출발지 좌표가 유효하지 않음:', currentLocation);
+            throw new Error('출발지 좌표가 유효하지 않습니다.');
+          }
 
-            console.log('[TravelCalculator] 이동 정보:', travelInfo);
+          if (!destination.lat || !destination.lng || isNaN(destination.lat) || isNaN(destination.lng)) {
+            console.error('[TravelCalculator] 목적지 좌표가 유효하지 않음:', destination);
+            throw new Error('목적지 좌표가 유효하지 않습니다.');
+          }
 
-            // 이동 슬롯 생성
+          const travelInfo = await travelModeService.calculateTravelTime(
+            currentLocation,
+            destination,
+            travelMode
+          );
+
+          console.log('[TravelCalculator] 이동 정보:', travelInfo);
+
+          // 이동 시간이 있으면 이동 슬롯 생성
+          if (travelInfo.duration > 0) {
+            // 이전 멤버의 종료 시간이 있으면 그것을 사용, 없으면 첫 번째 멤버의 시작 시간 직전
+            const travelStartTime = i === 0
+              ? this.formatTime(memberStartTime - travelModeService.convertToSlots(travelInfo.duration) * 30)
+              : (allTravelSlots.length > 0 ? allTimeSlots[allTimeSlots.length - 1].endTime : firstSlot.startTime);
+
             const travelSlot = {
               type: 'travel',
               date: dateObj,
@@ -139,25 +188,22 @@ class TravelScheduleCalculator {
               to: `${memberInfo.user.firstName} ${memberInfo.user.lastName}`,
               travelInfo: travelInfo,
               travelMode: travelMode,
-              startTime: previousEndTime,
+              startTime: travelStartTime,
+              endTime: firstSlot.startTime,
               duration: travelModeService.convertToSlots(travelInfo.duration)
             };
 
             console.log('[TravelCalculator] 이동 슬롯 생성:', travelSlot);
             allTravelSlots.push(travelSlot);
-          } catch (error) {
-            console.error('[TravelCalculator] 이동 시간 계산 실패:', error);
           }
+        } catch (error) {
+          console.error('[TravelCalculator] 이동 시간 계산 실패:', error);
         }
 
         // 멤버의 실제 슬롯 추가
         allTimeSlots.push(...memberDaySlots);
 
-        // 마지막 슬롯의 종료 시간 업데이트
-        const lastSlot = memberDaySlots[memberDaySlots.length - 1];
-        previousEndTime = lastSlot.endTime;
-
-        // 현재 위치 업데이트
+        // 현재 위치 업데이트 (다음 멤버를 위해)
         currentLocation = {
           lat: memberInfo.user.addressLat,
           lng: memberInfo.user.addressLng,
