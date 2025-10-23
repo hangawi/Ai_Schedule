@@ -371,3 +371,45 @@ export const getCurrentWeekNegotiations = (roomData, weekDates, timeSlotsInDay, 
 
   return currentWeekNegotiations;
 };
+
+export const mergeDefaultSchedule = (schedule) => {
+  if (!schedule || schedule.length === 0) return [];
+
+  const recurringGroups = {};
+  const dateGroups = {};
+
+  // 1. Group slots
+  schedule.forEach(slot => {
+    if (slot.specificDate) {
+      if (!dateGroups[slot.specificDate]) dateGroups[slot.specificDate] = [];
+      dateGroups[slot.specificDate].push(slot);
+    } else {
+      if (!recurringGroups[slot.dayOfWeek]) recurringGroups[slot.dayOfWeek] = [];
+      recurringGroups[slot.dayOfWeek].push(slot);
+    }
+  });
+
+  const finalMergedSlots = [];
+
+  // 2. Merge each group
+  const mergeGroup = (group) => {
+    const sortedSlots = group.sort((a, b) => a.startTime.localeCompare(b.startTime));
+    let currentBlock = null;
+    for (const slot of sortedSlots) {
+      if (currentBlock &&
+          currentBlock.priority === slot.priority &&
+          currentBlock.endTime === slot.startTime) {
+        currentBlock.endTime = slot.endTime;
+      } else {
+        if (currentBlock) finalMergedSlots.push(currentBlock);
+        currentBlock = { ...slot };
+      }
+    }
+    if (currentBlock) finalMergedSlots.push(currentBlock);
+  };
+
+  Object.values(recurringGroups).forEach(mergeGroup);
+  Object.values(dateGroups).forEach(mergeGroup);
+
+  return finalMergedSlots;
+};

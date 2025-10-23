@@ -8,7 +8,7 @@ import PersonalInfoEdit from '../profile/PersonalInfoEdit';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import { Edit, Save, XCircle, Trash2, User, CalendarDays } from 'lucide-react';
 
-import { mergeConsecutiveTimeSlots } from '../../utils/timetableHelpers';
+import { mergeConsecutiveTimeSlots, mergeDefaultSchedule } from '../../utils/timetableHelpers';
 
 const ProfileTab = ({ onEditingChange }) => {
   const [showPersonalInfo, setShowPersonalInfo] = useState(false);
@@ -384,8 +384,8 @@ const ProfileTab = ({ onEditingChange }) => {
 
     return defaultSchedule.filter(slot => {
       if (!slot.specificDate) return true; // Always include recurring weekly schedules
-      const slotDate = new Date(slot.specificDate);
-      return slotDate.getFullYear() === year && slotDate.getMonth() === month;
+      const [slotYear, slotMonth] = slot.specificDate.split('-').map(Number);
+      return slotYear === year && (slotMonth - 1) === month;
     });
   }, [defaultSchedule, viewingMonth]);
 
@@ -397,8 +397,8 @@ const ProfileTab = ({ onEditingChange }) => {
     return personalTimes.filter(pt => {
       if (pt.isRecurring !== false) return true; // Always include recurring personal times
       if (!pt.specificDate) return true; // Include if no date is specified (should be recurring)
-      const slotDate = new Date(pt.specificDate);
-      return slotDate.getFullYear() === year && slotDate.getMonth() === month;
+      const [slotYear, slotMonth] = pt.specificDate.split('-').map(Number);
+      return slotYear === year && (slotMonth - 1) === month;
     });
   }, [personalTimes, viewingMonth]);
 
@@ -700,7 +700,7 @@ const ProfileTab = ({ onEditingChange }) => {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-700">
-                {mergeConsecutiveTimeSlots(filteredDefaultSchedule).length}개 시간대
+                {mergeDefaultSchedule(filteredDefaultSchedule).length}개 시간대
               </span>
               <div className="w-4 h-4 bg-blue-500 rounded"></div>
             </div>
