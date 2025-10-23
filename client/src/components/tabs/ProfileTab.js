@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { userService } from '../../services/userService';
 import { coordinationService } from '../../services/coordinationService';
 import CalendarView from '../calendar/CalendarView';
@@ -8,12 +8,15 @@ import PersonalInfoEdit from '../profile/PersonalInfoEdit';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import { Edit, Save, XCircle, Trash2, User, CalendarDays } from 'lucide-react';
 
+import { mergeConsecutiveTimeSlots } from '../../utils/timetableHelpers';
+
 const ProfileTab = ({ onEditingChange }) => {
   const [showPersonalInfo, setShowPersonalInfo] = useState(false);
   const [defaultSchedule, setDefaultSchedule] = useState([]);
   const [scheduleExceptions, setScheduleExceptions] = useState([]);
   const [personalTimes, setPersonalTimes] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [viewingMonth, setViewingMonth] = useState(new Date()); // State to track current calendar month
 
   // 편집 모드일 때 현재 상태를 window에 저장하여 챗봇이 사용할 수 있도록 함
   useEffect(() => {
@@ -374,6 +377,31 @@ const ProfileTab = ({ onEditingChange }) => {
   const [justCancelled, setJustCancelled] = useState(false);
   const [wasCleared, setWasCleared] = useState(false);
 
+  const filteredDefaultSchedule = useMemo(() => {
+    if (!viewingMonth) return defaultSchedule;
+    const year = viewingMonth.getFullYear();
+    const month = viewingMonth.getMonth();
+
+    return defaultSchedule.filter(slot => {
+      if (!slot.specificDate) return true; // Always include recurring weekly schedules
+      const slotDate = new Date(slot.specificDate);
+      return slotDate.getFullYear() === year && slotDate.getMonth() === month;
+    });
+  }, [defaultSchedule, viewingMonth]);
+
+  const filteredPersonalTimes = useMemo(() => {
+    if (!viewingMonth) return personalTimes;
+    const year = viewingMonth.getFullYear();
+    const month = viewingMonth.getMonth();
+
+    return personalTimes.filter(pt => {
+      if (pt.isRecurring !== false) return true; // Always include recurring personal times
+      if (!pt.specificDate) return true; // Include if no date is specified (should be recurring)
+      const slotDate = new Date(pt.specificDate);
+      return slotDate.getFullYear() === year && slotDate.getMonth() === month;
+    });
+  }, [personalTimes, viewingMonth]);
+
   useEffect(() => {
     if (isEditing && !editingStarted) {
       setEditingStarted(true);
@@ -654,6 +682,7 @@ const ProfileTab = ({ onEditingChange }) => {
           selectedDate={selectedDate}
           onShowAlert={showAlert}
           onAutoSave={autoSave}
+          onMonthChange={setViewingMonth}
         />
       </div>
 
@@ -671,29 +700,7 @@ const ProfileTab = ({ onEditingChange }) => {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-700">
-                {(() => {
-                  // 병합된 시간대 계산
-                  const mergedSlots = [];
-                  ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'].forEach((_, dayIndex) => {
-                    const daySlots = defaultSchedule
-                      .filter(slot => slot.dayOfWeek === dayIndex)
-                      .sort((a, b) => a.startTime.localeCompare(b.startTime));
-                    
-                    let currentGroup = null;
-                    for (const slot of daySlots) {
-                      if (currentGroup && 
-                          currentGroup.priority === slot.priority &&
-                          currentGroup.endTime === slot.startTime) {
-                        currentGroup.endTime = slot.endTime;
-                      } else {
-                        if (currentGroup) mergedSlots.push(currentGroup);
-                        currentGroup = { ...slot };
-                      }
-                    }
-                    if (currentGroup) mergedSlots.push(currentGroup);
-                  });
-                  return mergedSlots.length;
-                })()}개 시간대
+                {mergeConsecutiveTimeSlots(filteredDefaultSchedule).length}개 시간대
               </span>
               <div className="w-4 h-4 bg-blue-500 rounded"></div>
             </div>
@@ -710,7 +717,7 @@ const ProfileTab = ({ onEditingChange }) => {
                 // 날짜별로 그룹화
                 const dateGroups = {};
                 
-                defaultSchedule.forEach(slot => {
+                filteredDefaultSchedule.forEach(slot => {
                   if (slot.specificDate) {
                     if (!dateGroups[slot.specificDate]) {
                       dateGroups[slot.specificDate] = [];
@@ -805,7 +812,7 @@ const ProfileTab = ({ onEditingChange }) => {
         {/* 개인시간관리 섹션 */}
         <div>
           <PersonalTimeManager
-            personalTimes={personalTimes}
+            personalTimes={filteredPersonalTimes}
             setPersonalTimes={setPersonalTimes}
             isEditing={isEditing}
             onAutoSave={autoSave}

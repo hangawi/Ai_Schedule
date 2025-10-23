@@ -11,7 +11,8 @@ const CalendarView = ({
   onDateClick,
   selectedDate,
   onShowAlert,
-  onAutoSave
+  onAutoSave,
+  onMonthChange
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [calendarDates, setCalendarDates] = useState([]);
@@ -25,6 +26,9 @@ const CalendarView = ({
 
   useEffect(() => {
     generateCalendarDates();
+    if (onMonthChange) {
+      onMonthChange(currentDate);
+    }
   }, [currentDate, schedule, exceptions, personalTimes]);
 
   useEffect(() => {
@@ -287,11 +291,18 @@ const CalendarView = ({
     const newDate = new Date(currentDate);
     newDate.setMonth(currentDate.getMonth() + direction);
     setCurrentDate(newDate);
+    if (onMonthChange) {
+      onMonthChange(newDate);
+    }
   };
 
 
   const goToToday = () => {
-    setCurrentDate(new Date());
+    const today = new Date();
+    setCurrentDate(today);
+    if (onMonthChange) {
+      onMonthChange(today);
+    }
   };
 
   const handleDateClick = (date) => {
