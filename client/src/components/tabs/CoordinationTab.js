@@ -12,6 +12,7 @@ import AutoSchedulerPanel from '../scheduler/AutoSchedulerPanel';
 import { useCoordination } from '../../hooks/useCoordination';
 import { useCoordinationModals } from '../../hooks/useCoordinationModals';
 import { useAuth } from '../../hooks/useAuth';
+import { useTravelMode } from '../../hooks/useTravelMode';
 import { coordinationService } from '../../services/coordinationService';
 import { userService } from '../../services/userService';
 import { Calendar, Grid, PlusCircle, LogIn, Users, MessageSquare, Clock, RefreshCw, Merge, Split, X } from 'lucide-react';
@@ -28,6 +29,7 @@ import RoomList from '../coordination/RoomList';
 import MemberList from '../coordination/MemberList';
 import { RequestManagement, OwnerRequestsSection } from '../coordination/RequestManagement';
 import NegotiationSection from '../coordination/NegotiationSection';
+import TravelModeButtons from '../coordination/TravelModeButtons';
 
 // Utilities
 import {
@@ -59,15 +61,64 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [receivedRequests, setReceivedRequests] = useState([]);
   const [ownerScheduleCache, setOwnerScheduleCache] = useState(null); // 방장 시간표 정보 캐시
 
+  // Alert 관련 state와 함수를 먼저 선언
+  const [customAlert, setCustomAlert] = useState({ show: false, message: '', type: 'warning' });
+  const showAlert = useCallback((message, type = 'warning') => {
+    setCustomAlert({ show: true, message, type });
+  }, []);
+  const closeAlert = useCallback(() => {
+    setCustomAlert({ show: false, message: '', type: 'warning' });
+  }, []);
+
+  // loadSentRequests를 useCoordination 전에 선언
+  const loadSentRequests = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const result = await coordinationService.getSentRequests();
+      if (result.success) {
+        setSentRequests(result.requests);
+      }
+    } catch (error) {
+      console.error('Failed to load sent requests:', error);
+    }
+  }, [user?.id]);
+
+  // useCoordination 훅 - 모든 필요한 함수 가져오기
+  const {
+    rooms,
+    currentRoom,
+    setCurrentRoom,
+    loading,
+    error,
+    refetch,
+    fetchRoomDetails,
+    createRoom,
+    joinRoom,
+    isLoading,
+    submitTimeSlots,
+    removeTimeSlot,
+    myRooms,
+    fetchMyRooms,
+    updateRoom,
+    deleteRoom,
+    assignTimeSlot,
+    createRequest,
+    handleRequest,
+    cancelRequest
+  } = useCoordination(user?.id, onRefreshExchangeCount, loadSentRequests, showAlert);
+
+  // 이동 모드 훅 (currentRoom이 있어야 함)
+  const {
+    travelMode,
+    handleModeChange: handleTravelModeChange,
+    isCalculating: isTravelCalculating,
+    error: travelError,
+    getCurrentScheduleData
+  } = useTravelMode(currentRoom);
+
   // Debug receivedRequests changes
   useEffect(() => {
   }, [receivedRequests]);
-
-  const [customAlert, setCustomAlert] = useState({ show: false, message: '', type: 'warning' });
-  const showAlert = (message, type = 'warning') => {
-    setCustomAlert({ show: true, message, type });
-  };
-  const closeAlert = () => setCustomAlert({ show: false, message: '', type: 'warning' });
 
   // 방장 개인시간 동기화 함수
   const syncOwnerPersonalTimes = async () => {
@@ -310,19 +361,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   // Current week negotiations from timetable
   const [currentWeekNegotiations, setCurrentWeekNegotiations] = useState([]);
 
-
-
-  const loadSentRequests = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      const result = await coordinationService.getSentRequests();
-      if (result.success) {
-        setSentRequests(result.requests);
-      }
-    } catch (error) {
-    }
-  }, [user?.id]);
-
   const loadReceivedRequests = useCallback(async () => {
     if (!user?.id) return;
     try {
@@ -334,8 +372,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       console.error('Failed to load received requests:', error);
     }
   }, [user?.id]);
-
-  const { currentRoom, createRoom, joinRoom, isLoading, error, submitTimeSlots, removeTimeSlot, myRooms, fetchMyRooms, fetchRoomDetails, setCurrentRoom, updateRoom, deleteRoom, assignTimeSlot, createRequest, handleRequest, cancelRequest } = useCoordination(user?.id, onRefreshExchangeCount, loadSentRequests, showAlert);
 
   // 방장 시간표 정보 캐시 (currentRoom이 변경될 때마다 업데이트, 단 owner 정보가 있을 때만)
   useEffect(() => {
@@ -557,6 +593,8 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [showDetailGrid, setShowDetailGrid] = useState(false);
   const [showMerged, setShowMerged] = useState(true); // 병합/분할 모드
   const [showFullDay, setShowFullDay] = useState(false); // true: 24시간(0~24시), false: 기본(9~18시)
+
+  // Travel mode state는 useTravelMode 훅에서 관리됨
 
   // Schedule time settings
   const scheduleStartHour = getHourFromSettings(
@@ -1259,10 +1297,23 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             )}
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mt-4">
               <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold text-gray-800 flex items-center">
-                  <Calendar size={20} class="mr-2 text-green-600" />
-                  시간표 ({showFullDay ? '00' : String(scheduleStartHour).padStart(2, '0')}:00 - {showFullDay ? '24' : String(scheduleEndHour).padStart(2, '0')}:00)
-                </h3>
+                <div class="flex items-center">
+                  <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                    <Calendar size={20} class="mr-2 text-green-600" />
+                    시간표 ({showFullDay ? '00' : String(scheduleStartHour).padStart(2, '0')}:00 - {showFullDay ? '24' : String(scheduleEndHour).padStart(2, '0')}:00)
+                  </h3>
+                  <TravelModeButtons
+                    selectedMode={travelMode}
+                    onModeChange={handleTravelModeChange}
+                    disabled={!currentRoom || !currentRoom.timeSlots || currentRoom.timeSlots.length === 0}
+                  />
+                  {isTravelCalculating && (
+                    <span className="ml-2 text-sm text-gray-500">계산 중...</span>
+                  )}
+                  {travelError && (
+                    <span className="ml-2 text-sm text-red-500" title={travelError}>⚠️</span>
+                  )}
+                </div>
                 <div class="flex items-center space-x-2">
                   {viewMode === 'month' && (
                     <div class="flex items-center space-x-4 text-xs text-gray-600 mr-4">
@@ -1341,69 +1392,88 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                 </div>
               </div>
 
-              {viewMode === 'grid' && !isOwner ? (
-                <TimetableGrid
-                  roomId={currentRoom._id}
-                  roomSettings={{
-                    ...currentRoom.settings, // Include all room settings (roomExceptions, blockedTimes, etc.)
-                    startHour: effectiveShowFullDay ? 0 : scheduleStartHour,
-                    endHour: effectiveShowFullDay ? 24 : scheduleEndHour
-                  }}
-                  timeSlots={currentRoom.timeSlots || []}
-                  members={currentRoom.members || []}
-                  roomData={currentRoom}
-                  currentUser={user}
-                  isRoomOwner={false}
-                  selectedSlots={selectedSlots}
-                  onSlotSelect={handleSlotSelect}
-                  onWeekChange={handleWeekChange}
-                  initialStartDate={currentWeekStartDate}
-                  calculateEndTime={calculateEndTime}
-                  showMerged={showMerged}
-                  onOpenChangeRequestModal={openChangeRequestModal}
-                />
-              ) : viewMode === 'week' ? (
-                <TimetableGrid
-                  key={`week-${effectiveShowFullDay ? 'full' : 'basic'}-${showMerged ? 'merged' : 'split'}`} // Force re-render on state change
-                  roomId={currentRoom._id}
-                  roomSettings={{
-                    ...currentRoom.settings,
-                    startHour: effectiveShowFullDay ? 0 : scheduleStartHour,
-                    endHour: effectiveShowFullDay ? 24 : scheduleEndHour
-                  }}
-                  timeSlots={currentRoom.timeSlots || []}
-                  members={currentRoom.members || []}
-                  roomData={currentRoom}
-                  currentUser={user}
-                  isRoomOwner={isOwner}
-                  selectedSlots={selectedSlots}
-                  onSlotSelect={isOwner ? null : handleSlotSelect}
-                  onWeekChange={handleWeekChange}
-                  ownerOriginalSchedule={ownerScheduleCache}
-                  initialStartDate={currentWeekStartDate}
-                  calculateEndTime={calculateEndTime}
-                  readOnly={isOwner}
-                  showMerged={showMerged}
-                  onCurrentWeekNegotiationsChange={setCurrentWeekNegotiations}
-                  onOpenChangeRequestModal={openChangeRequestModal}
-                />
-              ) : (
-                <CoordinationCalendarView
-                  roomData={currentRoom}
-                  timeSlots={currentRoom.timeSlots || []}
-                  members={currentRoom.members || []}
-                  currentUser={user}
-                  isRoomOwner={isOwner}
-                  onDateClick={handleDateClick}
-                  selectedDate={selectedDate}
-                  viewMode={viewMode}
-                  currentWeekStartDate={currentWeekStartDate}
-                  onWeekChange={handleWeekChange}
-                  showFullDay={effectiveShowFullDay}
-                  showMerged={showMerged}
-                  ownerOriginalSchedule={ownerScheduleCache}
-                />
-              )}
+              {(() => {
+                // 이동 모드에 따른 시간표 데이터 가져오기
+                const scheduleData = getCurrentScheduleData();
+                const displayTimeSlots = scheduleData.timeSlots;
+                const travelSlots = scheduleData.travelSlots || [];
+
+                if (viewMode === 'grid' && !isOwner) {
+                  return (
+                    <TimetableGrid
+                      roomId={currentRoom._id}
+                      roomSettings={{
+                        ...currentRoom.settings,
+                        startHour: effectiveShowFullDay ? 0 : scheduleStartHour,
+                        endHour: effectiveShowFullDay ? 24 : scheduleEndHour
+                      }}
+                      timeSlots={displayTimeSlots}
+                      travelSlots={travelSlots}
+                      travelMode={travelMode}
+                      members={currentRoom.members || []}
+                      roomData={currentRoom}
+                      currentUser={user}
+                      isRoomOwner={false}
+                      selectedSlots={selectedSlots}
+                      onSlotSelect={handleSlotSelect}
+                      onWeekChange={handleWeekChange}
+                      initialStartDate={currentWeekStartDate}
+                      calculateEndTime={calculateEndTime}
+                      showMerged={showMerged}
+                      onOpenChangeRequestModal={openChangeRequestModal}
+                    />
+                  );
+                } else if (viewMode === 'week') {
+                  return (
+                    <TimetableGrid
+                      key={`week-${effectiveShowFullDay ? 'full' : 'basic'}-${showMerged ? 'merged' : 'split'}-${travelMode}`}
+                      roomId={currentRoom._id}
+                      roomSettings={{
+                        ...currentRoom.settings,
+                        startHour: effectiveShowFullDay ? 0 : scheduleStartHour,
+                        endHour: effectiveShowFullDay ? 24 : scheduleEndHour
+                      }}
+                      timeSlots={displayTimeSlots}
+                      travelSlots={travelSlots}
+                      travelMode={travelMode}
+                      members={currentRoom.members || []}
+                      roomData={currentRoom}
+                      currentUser={user}
+                      isRoomOwner={isOwner}
+                      selectedSlots={selectedSlots}
+                      onSlotSelect={isOwner ? null : handleSlotSelect}
+                      onWeekChange={handleWeekChange}
+                      ownerOriginalSchedule={ownerScheduleCache}
+                      initialStartDate={currentWeekStartDate}
+                      calculateEndTime={calculateEndTime}
+                      readOnly={isOwner}
+                      showMerged={showMerged}
+                      onCurrentWeekNegotiationsChange={setCurrentWeekNegotiations}
+                      onOpenChangeRequestModal={openChangeRequestModal}
+                    />
+                  );
+                } else {
+                  return (
+                    <CoordinationCalendarView
+                      roomData={currentRoom}
+                      timeSlots={displayTimeSlots}
+                      travelSlots={travelSlots}
+                      travelMode={travelMode}
+                      members={currentRoom.members || []}
+                      currentUser={user}
+                      isRoomOwner={isOwner}
+                      onDateClick={handleDateClick}
+                      selectedDate={selectedDate}
+                      viewMode={viewMode}
+                      currentWeekStartDate={currentWeekStartDate}
+                      onWeekChange={handleWeekChange}
+                      showFullDay={effectiveShowFullDay}
+                      showMerged={showMerged}
+                      ownerOriginalSchedule={ownerScheduleCache}
+                    />
+                  );
+                }
+              })()}
             </div>
           </div>
         </div>
@@ -1637,28 +1707,33 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         />
 
         {/* Detail Grid Modal */}
-        {showDetailGrid && selectedDate && (
-          <CoordinationDetailGrid
-            selectedDate={selectedDate}
-            timeSlots={currentRoom.timeSlots || []}
-            members={currentRoom.members || []}
-            currentUser={user}
-            isRoomOwner={isOwner}
-            roomData={currentRoom}
-            showMerged={showMerged}
-            onClose={handleCloseDetailGrid}
-            onSlotSelect={handleSlotSelect}
-            selectedSlots={selectedSlots}
-            onAssignSlot={handleAssignSlot}
-            onRequestSlot={handleRequestSlot}
-            onRemoveSlot={async (slotData) => {
-              await removeTimeSlot(currentRoom._id, slotData.day, slotData.startTime, slotData.endTime);
-              await fetchRoomDetails(currentRoom._id);
-            }}
-            onOpenNegotiation={handleOpenNegotiation}
-            ownerOriginalSchedule={ownerScheduleCache}
-          />
-        )}
+        {showDetailGrid && selectedDate && (() => {
+          const scheduleData = getCurrentScheduleData();
+          return (
+            <CoordinationDetailGrid
+              selectedDate={selectedDate}
+              timeSlots={scheduleData.timeSlots}
+              travelSlots={scheduleData.travelSlots || []}
+              travelMode={travelMode}
+              members={currentRoom.members || []}
+              currentUser={user}
+              isRoomOwner={isOwner}
+              roomData={currentRoom}
+              showMerged={showMerged}
+              onClose={handleCloseDetailGrid}
+              onSlotSelect={handleSlotSelect}
+              selectedSlots={selectedSlots}
+              onAssignSlot={handleAssignSlot}
+              onRequestSlot={handleRequestSlot}
+              onRemoveSlot={async (slotData) => {
+                await removeTimeSlot(currentRoom._id, slotData.day, slotData.startTime, slotData.endTime);
+                await fetchRoomDetails(currentRoom._id);
+              }}
+              onOpenNegotiation={handleOpenNegotiation}
+              ownerOriginalSchedule={ownerScheduleCache}
+            />
+          );
+        })()}
 
                 {/* Member Schedule Modal - 방 안에서도 보여야 하므로 여기에 위치 */}
 
