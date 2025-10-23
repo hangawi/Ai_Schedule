@@ -45,10 +45,21 @@ export const useTravelMode = (currentRoom) => {
       console.log('[useTravelMode] 계산 결과:', result);
       console.log('[useTravelMode] travelSlots 개수:', result.travelSlots?.length);
       setEnhancedSchedule(result);
+
+      // 성공 시 에러 초기화
+      setError(null);
     } catch (err) {
       console.error('[useTravelMode] 이동 시간 계산 실패:', err);
-      setError(err.message || '이동 시간 계산 중 오류가 발생했습니다.');
+
+      // 주소 없음 에러는 사용자에게 친절하게 표시
+      if (err.message.includes('주소 정보가 필요합니다')) {
+        setError(err.message);
+      } else {
+        setError('이동 시간 계산 중 오류가 발생했습니다. 모든 사용자가 프로필에서 주소를 입력했는지 확인해주세요.');
+      }
+
       setTravelMode('normal'); // 에러 시 일반 모드로 복귀
+      setEnhancedSchedule(null);
     } finally {
       setIsCalculating(false);
     }
