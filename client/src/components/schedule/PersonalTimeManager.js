@@ -297,7 +297,7 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
       )}
 
       {/* Personal Times List */}
-      <div className="space-y-2 mb-4">
+      <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
         {personalTimes.map((personalTime) => (
           <div key={personalTime.id} className={`flex items-center justify-between p-3 rounded-lg border ${editingId === personalTime.id ? 'bg-blue-50 border-blue-300' : 'bg-gray-50'}`}>
             <div className="flex items-center flex-1">

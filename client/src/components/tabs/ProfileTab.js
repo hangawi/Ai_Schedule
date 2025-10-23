@@ -712,7 +712,7 @@ const ProfileTab = ({ onEditingChange }) => {
               <p className="text-sm">위 달력에서 날짜를 클릭하여 시간을 추가하세요.</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-3 max-h-96 overflow-y-auto">
               {(() => {
                 // 날짜별로 그룹화
                 const dateGroups = {};
