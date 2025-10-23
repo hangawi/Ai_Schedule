@@ -163,6 +163,30 @@ export const getNegotiationInfo = (date, time, roomData) => {
 export const getSlotOwner = (date, time, timeSlots, members, currentUser, isRoomOwner, getNegotiationInfoFunc) => {
   if (!timeSlots || !members || !time || !date) return null;
 
+  const currentTime = time.trim();
+  const currentMinutes = timeToMinutes(currentTime);
+  const currentDateStr = date.toISOString().split('T')[0];
+
+  // First, check for a travel slot at this specific time
+  const travelSlot = (timeSlots || []).find(slot => {
+    if (!slot || !slot.date || !slot.isTravel) return false;
+    const slotDate = new Date(slot.date).toISOString().split('T')[0];
+    if (slotDate !== currentDateStr) return false;
+    
+    const startMinutes = timeToMinutes(slot.startTime);
+    const endMinutes = timeToMinutes(slot.endTime);
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  });
+
+  if (travelSlot) {
+    return {
+        name: travelSlot.subject, // e.g., "이동 (5km)"
+        color: '#A0AEC0', // Gray color for travel
+        isTravel: true,
+        userId: 'travel',
+    };
+  }
+
   // Check if this slot is under negotiation first
   const negotiationInfo = getNegotiationInfoFunc(date, time);
   if (negotiationInfo) {
@@ -183,10 +207,6 @@ export const getSlotOwner = (date, time, timeSlots, members, currentUser, isRoom
       isUserInvolved: isUserInvolved
     };
   }
-
-  const currentTime = time.trim();
-  const currentMinutes = timeToMinutes(currentTime);
-  const currentDateStr = date.toISOString().split('T')[0];
 
   // Find all slots for this date and user, then check if current time falls in any continuous block
   const sameDaySlots = (timeSlots || []).filter(slot => {
