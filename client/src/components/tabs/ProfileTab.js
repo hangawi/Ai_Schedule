@@ -298,9 +298,23 @@ const ProfileTab = ({ onEditingChange }) => {
         return;
       }
 
+      // 단일 일정 삭제인 경우
+      if (event.detail && event.detail.type === 'delete' && event.detail.context === 'profile') {
+        console.log('🗑️ [ProfileTab] 일정 삭제 감지, 전체 새로고침');
+        fetchSchedule();
+        return;
+      }
+
       // 반복 일정 추가인 경우
       if (event.detail && event.detail.isRecurring && event.detail.context === 'profile') {
         console.log('🔁 [ProfileTab] 반복 일정 추가 감지, 전체 새로고침');
+        fetchSchedule();
+        return;
+      }
+
+      // 충돌 해결 후 일정 추가인 경우 (간단한 새로고침)
+      if (event.detail && event.detail.type === 'add' && event.detail.context === 'profile' && !event.detail.chatResponse) {
+        console.log('➕ [ProfileTab] 일정 추가 감지, 전체 새로고침');
         fetchSchedule();
         return;
       }
