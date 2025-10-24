@@ -671,13 +671,43 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                         }));
 
                      events = [...exceptions, ...personalTimes];
+
+                     console.log('🔍 [충돌체크] 프로필 탭 - 해당 날짜 일정:', {
+                        targetDate,
+                        eventsCount: events.length,
+                        events: events.map(e => ({ title: e.title, startTime: e.startTime, endTime: e.endTime }))
+                     });
                   } else if (context.tabType === 'local') {
                      events = eventsData.events || eventsData;
                   } else {
                      events = eventsData;
                   }
 
+                  // 충돌 체크 전 상세 로깅
+                  console.log('🔍 [충돌체크] 입력값:', {
+                     newStart: chatResponse.startDateTime,
+                     newEnd: chatResponse.endDateTime,
+                     newStartParsed: new Date(chatResponse.startDateTime).toString(),
+                     newEndParsed: new Date(chatResponse.endDateTime).toString()
+                  });
+
+                  console.log('🔍 [충돌체크] 비교할 이벤트들:', events.map((e, idx) => ({
+                     index: idx,
+                     title: e.title,
+                     startTime: e.startTime,
+                     endTime: e.endTime,
+                     startTimeParsed: e.startTime ? new Date(e.startTime).toString() : 'N/A',
+                     endTimeParsed: e.endTime ? new Date(e.endTime).toString() : 'N/A'
+                  })));
+
                   const conflictCheck = checkScheduleConflict(chatResponse.startDateTime, chatResponse.endDateTime, events);
+
+                  console.log('🔍 [충돌체크] 결과:', {
+                     pendingEvent: chatResponse.title,
+                     pendingTime: `${chatResponse.startDateTime} ~ ${chatResponse.endDateTime}`,
+                     hasConflict: conflictCheck.hasConflict,
+                     conflictsWith: conflictCheck.conflicts?.map(c => ({ title: c.title || c.summary, start: c.startTime || c.start?.dateTime }))
+                  });
 
                   if (conflictCheck.hasConflict) {
                      const conflictTitle = conflictCheck.conflicts[0]?.summary || conflictCheck.conflicts[0]?.title || '일정';
@@ -1124,14 +1154,314 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             };
          }
          
+         else if (chatResponse.intent === 'edit_event') {
+            // 일정 수정 처리
+            const token = localStorage.getItem('token');
+
+            console.log('🔍 [EDIT] 수정 요청:', chatResponse);
+
+            if (!chatResponse.originalTitle || !chatResponse.originalDate) {
+               return { success: false, message: '수정할 일정의 제목과 날짜가 필요합니다.' };
+            }
+
+            try {
+               // 1. 기존 일정 찾기
+               let eventsResponse;
+               if (context.context === 'profile' && context.tabType === 'local') {
+                  eventsResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+                     headers: { 'x-auth-token': token }
+                  });
+               } else if (context.tabType === 'local') {
+                  eventsResponse = await fetch(`${API_BASE_URL}/api/events`, {
+                     headers: { 'x-auth-token': token }
+                  });
+               } else {
+                  const threeMonthsAgo = new Date();
+                  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+                  const oneYearLater = new Date();
+                  oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+                  eventsResponse = await fetch(`${API_BASE_URL}/api/calendar/events?timeMin=${threeMonthsAgo.toISOString()}&timeMax=${oneYearLater.toISOString()}`, {
+                     headers: { 'x-auth-token': token }
+                  });
+               }
+
+               if (!eventsResponse.ok) {
+                  throw new Error('일정 목록을 가져올 수 없습니다.');
+               }
+
+               const eventsData = await eventsResponse.json();
+               let events;
+
+               if (context.context === 'profile' && context.tabType === 'local') {
+                  const exceptions = (eventsData.scheduleExceptions || []).filter(exc => exc.specificDate === chatResponse.originalDate);
+                  const personalTimes = (eventsData.personalTimes || []).filter(pt => pt.specificDate === chatResponse.originalDate);
+                  events = [...exceptions, ...personalTimes.map(pt => ({ ...pt, isPersonalTime: true }))];
+
+                  console.log('🔍 [EDIT] 프로필 탭 일정 조회:', {
+                     originalDate: chatResponse.originalDate,
+                     exceptionsCount: exceptions.length,
+                     personalTimesCount: personalTimes.length,
+                     personalTimes: personalTimes.map(pt => ({ id: pt.id, title: pt.title, specificDate: pt.specificDate }))
+                  });
+               } else if (context.tabType === 'local') {
+                  events = eventsData.events || eventsData;
+               } else {
+                  events = eventsData;
+               }
+
+               // 제목으로 일정 찾기
+               const targetDate = new Date(chatResponse.originalDate);
+               const eventToEdit = events.find(event => {
+                  let eventDate, eventTitle;
+
+                  if (context.context === 'profile' && context.tabType === 'local') {
+                     if (event.isPersonalTime) {
+                        eventTitle = event.title;
+                        eventDate = event.specificDate ? new Date(event.specificDate) : null;
+                     } else {
+                        eventTitle = event.title;
+                        eventDate = event.startTime ? new Date(event.startTime) : null;
+                     }
+                  } else if (context.tabType === 'local') {
+                     eventTitle = event.title;
+                     eventDate = event.startTime ? new Date(event.startTime) : null;
+                  } else {
+                     eventTitle = event.summary;
+                     eventDate = event.start ? new Date(event.start.dateTime || event.start.date) : null;
+                  }
+
+                  if (!eventDate) return false;
+
+                  const isSameDay = eventDate.toDateString() === targetDate.toDateString();
+                  const titleMatch = eventTitle && eventTitle.toLowerCase().includes(chatResponse.originalTitle.toLowerCase());
+
+                  return isSameDay && titleMatch;
+               });
+
+               if (!eventToEdit) {
+                  console.log('❌ [EDIT] 일정을 찾을 수 없음:', {
+                     originalTitle: chatResponse.originalTitle,
+                     originalDate: chatResponse.originalDate,
+                     eventsChecked: events.map(e => ({ title: e.title, specificDate: e.specificDate, isPersonalTime: e.isPersonalTime }))
+                  });
+                  return { success: false, message: `"${chatResponse.originalTitle}" 일정을 찾을 수 없어요.` };
+               }
+
+               console.log('✅ [EDIT] 수정할 일정 찾음:', eventToEdit);
+
+               // 2. 일정 수정 수행 (각 탭별로 다르게)
+               if (context.context === 'profile' && context.tabType === 'local') {
+                  // 프로필 탭 - 로컬 일정 수정
+                  let updatedPersonalTimes = [...(eventsData.personalTimes || [])];
+                  let updatedExceptions = [...(eventsData.scheduleExceptions || [])];
+
+                  if (eventToEdit.isPersonalTime) {
+                     const index = updatedPersonalTimes.findIndex(pt =>
+                        String(pt.id) === String(eventToEdit.id || eventToEdit._id)
+                     );
+
+                     if (index !== -1) {
+                        updatedPersonalTimes[index] = {
+                           ...updatedPersonalTimes[index],
+                           title: chatResponse.newTitle || updatedPersonalTimes[index].title,
+                           specificDate: chatResponse.newDate || updatedPersonalTimes[index].specificDate,
+                           startTime: chatResponse.newStartTime || updatedPersonalTimes[index].startTime,
+                           endTime: chatResponse.newEndTime || updatedPersonalTimes[index].endTime
+                        };
+                     }
+                  } else {
+                     const index = updatedExceptions.findIndex(ex =>
+                        ex._id === eventToEdit._id
+                     );
+
+                     if (index !== -1) {
+                        const oldStart = new Date(updatedExceptions[index].startTime);
+                        const oldEnd = new Date(updatedExceptions[index].endTime);
+
+                        let newStartTime, newEndTime;
+
+                        if (chatResponse.newDate) {
+                           newStartTime = new Date(`${chatResponse.newDate}T${oldStart.toTimeString().substring(0,5)}:00+09:00`);
+                           newEndTime = new Date(`${chatResponse.newDate}T${oldEnd.toTimeString().substring(0,5)}:00+09:00`);
+                        } else {
+                           newStartTime = new Date(oldStart);
+                           newEndTime = new Date(oldEnd);
+                        }
+
+                        if (chatResponse.newStartTime) {
+                           const [hour, min] = chatResponse.newStartTime.split(':');
+                           newStartTime.setHours(parseInt(hour), parseInt(min));
+                        }
+
+                        if (chatResponse.newEndTime) {
+                           const [hour, min] = chatResponse.newEndTime.split(':');
+                           newEndTime.setHours(parseInt(hour), parseInt(min));
+                        }
+
+                        updatedExceptions[index] = {
+                           ...updatedExceptions[index],
+                           title: chatResponse.newTitle || updatedExceptions[index].title,
+                           specificDate: chatResponse.newDate || updatedExceptions[index].specificDate,
+                           startTime: newStartTime.toISOString(),
+                           endTime: newEndTime.toISOString()
+                        };
+                     }
+                  }
+
+                  const updateResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+                     method: 'PUT',
+                     headers: {
+                        'Content-Type': 'application/json',
+                        'x-auth-token': token
+                     },
+                     body: JSON.stringify({
+                        defaultSchedule: eventsData.defaultSchedule || [],
+                        scheduleExceptions: updatedExceptions,
+                        personalTimes: updatedPersonalTimes
+                     })
+                  });
+
+                  if (!updateResponse.ok) {
+                     throw new Error('일정 수정에 실패했습니다.');
+                  }
+
+                  const responseData = await updateResponse.json();
+                  console.log('✅ [EDIT] 서버 응답:', responseData);
+                  console.log('✅ [EDIT] 서버 응답 personalTimes:', responseData.personalTimes);
+
+                  window.dispatchEvent(new CustomEvent('calendarUpdate', {
+                     detail: {
+                        type: 'edit',
+                        data: responseData,
+                        context: 'profile'
+                     }
+                  }));
+                  setEventAddedKey(prevKey => prevKey + 1);
+
+                  return {
+                     success: true,
+                     message: chatResponse.response || `"${chatResponse.originalTitle}" 일정을 수정했어요!`,
+                     data: chatResponse
+                  };
+
+               } else if (context.tabType === 'local') {
+                  // 나의 일정 탭 - 로컬 일정 수정
+                  const oldEvent = eventToEdit;
+                  const oldStartTime = new Date(oldEvent.startTime);
+                  const oldEndTime = new Date(oldEvent.endTime);
+
+                  let newStartTime = new Date(oldStartTime);
+                  let newEndTime = new Date(oldEndTime);
+
+                  if (chatResponse.newDate) {
+                     const [year, month, day] = chatResponse.newDate.split('-');
+                     newStartTime = new Date(`${chatResponse.newDate}T${oldStartTime.toTimeString().substring(0,5)}:00+09:00`);
+                     newEndTime = new Date(`${chatResponse.newDate}T${oldEndTime.toTimeString().substring(0,5)}:00+09:00`);
+                  }
+
+                  if (chatResponse.newStartTime) {
+                     const [hour, min] = chatResponse.newStartTime.split(':');
+                     newStartTime.setHours(parseInt(hour), parseInt(min));
+                  }
+
+                  if (chatResponse.newEndTime) {
+                     const [hour, min] = chatResponse.newEndTime.split(':');
+                     newEndTime.setHours(parseInt(hour), parseInt(min));
+                  }
+
+                  const updateResponse = await fetch(`${API_BASE_URL}/api/events/${oldEvent._id || oldEvent.id}`, {
+                     method: 'PUT',
+                     headers: {
+                        'Content-Type': 'application/json',
+                        'x-auth-token': token
+                     },
+                     body: JSON.stringify({
+                        title: chatResponse.newTitle || oldEvent.title,
+                        date: newStartTime.toISOString().split('T')[0],
+                        time: newStartTime.toTimeString().substring(0,5),
+                        duration: (newEndTime - newStartTime) / (60 * 1000),
+                        description: oldEvent.description
+                     })
+                  });
+
+                  if (!updateResponse.ok) {
+                     throw new Error('일정 수정에 실패했습니다.');
+                  }
+
+                  setEventAddedKey(prevKey => prevKey + 1);
+
+                  return {
+                     success: true,
+                     message: chatResponse.response || `"${chatResponse.originalTitle}" 일정을 수정했어요!`,
+                     data: chatResponse
+                  };
+
+               } else {
+                  // Google 캘린더 탭 - Google 일정 수정
+                  const oldEvent = eventToEdit;
+                  const oldStart = new Date(oldEvent.start.dateTime || oldEvent.start.date);
+                  const oldEnd = new Date(oldEvent.end.dateTime || oldEvent.end.date);
+
+                  let newStart = new Date(oldStart);
+                  let newEnd = new Date(oldEnd);
+
+                  if (chatResponse.newDate) {
+                     newStart = new Date(`${chatResponse.newDate}T${oldStart.toTimeString().substring(0,5)}:00+09:00`);
+                     newEnd = new Date(`${chatResponse.newDate}T${oldEnd.toTimeString().substring(0,5)}:00+09:00`);
+                  }
+
+                  if (chatResponse.newStartTime) {
+                     const [hour, min] = chatResponse.newStartTime.split(':');
+                     newStart.setHours(parseInt(hour), parseInt(min));
+                  }
+
+                  if (chatResponse.newEndTime) {
+                     const [hour, min] = chatResponse.newEndTime.split(':');
+                     newEnd.setHours(parseInt(hour), parseInt(min));
+                  }
+
+                  const updateResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${oldEvent.id}`, {
+                     method: 'PUT',
+                     headers: {
+                        'Content-Type': 'application/json',
+                        'x-auth-token': token
+                     },
+                     body: JSON.stringify({
+                        title: chatResponse.newTitle || oldEvent.summary,
+                        description: oldEvent.description,
+                        startDateTime: newStart.toISOString(),
+                        endDateTime: newEnd.toISOString(),
+                        etag: oldEvent.etag
+                     })
+                  });
+
+                  if (!updateResponse.ok) {
+                     throw new Error('일정 수정에 실패했습니다.');
+                  }
+
+                  setEventAddedKey(prevKey => prevKey + 1);
+
+                  return {
+                     success: true,
+                     message: chatResponse.response || `"${chatResponse.originalTitle}" 일정을 수정했어요!`,
+                     data: chatResponse
+                  };
+               }
+
+            } catch (error) {
+               console.error('일정 수정 오류:', error);
+               return { success: false, message: `일정 수정 중 오류가 발생했습니다: ${error.message}` };
+            }
+         }
+
          else if (chatResponse.intent === 'clarification') {
             return { success: true, message: chatResponse.response };
          }
-         
-         return { 
-            success: true, 
+
+         return {
+            success: true,
             message: chatResponse.response || '처리했어요!',
-            data: chatResponse 
+            data: chatResponse
          };
       } catch (error) {
          if (error.message.includes('API key not valid') || 

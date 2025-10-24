@@ -146,6 +146,7 @@ export const generateAIPrompt = (command, context = {}) => {
       `**매우 중요: intent 판단 규칙**`,
       `- "추가", "만들어", "생성", "넣어", "등록", "일정", "약속", "회의" = add_event`,
       `- "삭제", "제거", "없애", "지워" = delete_event`,
+      `- "수정", "변경", "바꿔", "옮겨", "미뤄", "당겨" = edit_event`,
       `- 삭제 키워드가 없으면 무조건 add_event!`,
       ``,
       `**정확한 날짜 계산 (오늘 기준):**`,
@@ -178,6 +179,7 @@ export const generateAIPrompt = (command, context = {}) => {
       ``,
       `**중요: "추가", "만들어", "생성", "넣어", "등록" = add_event**`,
       `**중요: "삭제", "제거", "없애", "지워" = delete_event**`,
+      `**중요: "수정", "변경", "바꿔", "옮겨", "미뤄", "당겨" = edit_event**`,
       ``,
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
       `🧠 **스마트 일정 생성 - 사람처럼 생각하세요! (매우 중요!)**`,
@@ -393,6 +395,35 @@ export const generateAIPrompt = (command, context = {}) => {
       `- "전체", "전부", "모든" 등의 키워드 → intent: "delete_range"`,
       `- 특정 제목/시간 지정 → intent: "delete_event"`,
       ``,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `✏️ **일정 수정 (매우 중요!)**`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      ``,
+      `기존 일정의 시간, 제목, 날짜를 변경할 수 있습니다.`,
+      ``,
+      `**수정 JSON 형식:**`,
+      `{`,
+      `  "intent": "edit_event",`,
+      `  "originalTitle": "원래 일정 제목",  // 찾을 일정 (필수!)`,
+      `  "originalDate": "2025-10-23",  // 원래 날짜 (YYYY-MM-DD)`,
+      `  "newTitle": "새 제목",  // 변경할 제목 (선택)`,
+      `  "newDate": "2025-10-24",  // 변경할 날짜 (선택)`,
+      `  "newStartTime": "18:00",  // 변경할 시작 시간 (HH:MM, 선택)`,
+      `  "newEndTime": "20:00",  // 변경할 종료 시간 (HH:MM, 선택)`,
+      `  "response": "응답메시지"`,
+      `}`,
+      ``,
+      `**수정 예시:**`,
+      `"금요일 회의 시간을 4시로 바꿔줘" → {"intent": "edit_event", "originalTitle": "회의", "originalDate": "${formatDate(getWeekday(now, 5, 0))}", "newStartTime": "16:00", "newEndTime": "17:00", "response": "회의 시간을 4시로 변경했어요!"}`,
+      `"내일 밥약속을 저녁약속으로 수정해줘" → {"intent": "edit_event", "originalTitle": "밥약속", "originalDate": "${formatDate(addDays(now, 1))}", "newTitle": "저녁약속", "response": "밥약속을 저녁약속으로 변경했어요!"}`,
+      `"목요일 운동을 금요일로 옮겨줘" → {"intent": "edit_event", "originalTitle": "운동", "originalDate": "${formatDate(getWeekday(now, 4, 0))}", "newDate": "${formatDate(getWeekday(now, 5, 0))}", "response": "운동을 금요일로 옮겼어요!"}`,
+      `"오늘 회의 30분 미뤄줘" → {"intent": "edit_event", "originalTitle": "회의", "originalDate": "${formatDate(now)}", "newStartTime": "계산필요", "response": "회의를 30분 미뤘어요!"}`,
+      ``,
+      `**중요:**`,
+      `- originalTitle과 originalDate로 기존 일정을 찾습니다`,
+      `- 변경하고 싶은 필드만 포함하면 됩니다`,
+      `- "미뤄", "당겨"는 시간 계산 후 newStartTime/newEndTime 설정`,
+      ``,
       `**일정 충돌 시나리오:**`,
       `만약 시스템이 일정 충돌을 감지하면, 자동으로 대안 시간을 제시합니다.`,
       `당신은 JSON만 반환하면 됩니다. 충돌 감지는 시스템이 처리합니다.`,
@@ -431,7 +462,13 @@ export const checkScheduleConflict = (newStartDateTime, newEndDateTime, existing
    const newStart = new Date(newStartDateTime);
    const newEnd = new Date(newEndDateTime);
 
-   const conflicts = existingEvents.filter(event => {
+   console.log('🔍 [checkScheduleConflict] 시작:', {
+      newStart: newStart.toString(),
+      newEnd: newEnd.toString(),
+      existingEventsCount: existingEvents.length
+   });
+
+   const conflicts = existingEvents.filter((event, idx) => {
       let eventStart, eventEnd;
 
       // 이벤트 형식에 따라 시작/종료 시간 추출
@@ -453,7 +490,24 @@ export const checkScheduleConflict = (newStartDateTime, newEndDateTime, existing
       }
 
       // 충돌 확인: 새 일정의 시작이 기존 일정 종료 전이고, 새 일정의 종료가 기존 일정 시작 후
-      return newStart < eventEnd && newEnd > eventStart;
+      const hasConflict = newStart < eventEnd && newEnd > eventStart;
+
+      console.log(`🔍 [checkScheduleConflict] Event ${idx}: "${event.title || event.summary}"`, {
+         eventStart: eventStart.toString(),
+         eventEnd: eventEnd.toString(),
+         comparison: {
+            'newStart < eventEnd': `${newStart.getTime()} < ${eventEnd.getTime()} = ${newStart < eventEnd}`,
+            'newEnd > eventStart': `${newEnd.getTime()} > ${eventStart.getTime()} = ${newEnd > eventStart}`,
+            hasConflict
+         }
+      });
+
+      return hasConflict;
+   });
+
+   console.log('🔍 [checkScheduleConflict] 결과:', {
+      conflictsFound: conflicts.length,
+      conflictTitles: conflicts.map(c => c.title || c.summary)
    });
 
    return {

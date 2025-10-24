@@ -298,7 +298,24 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
 
       {/* Personal Times List */}
       <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
-        {personalTimes.map((personalTime) => (
+        {personalTimes
+          .slice()
+          .sort((a, b) => {
+            // specificDate가 있는 항목 (일회성 일정)
+            if (a.specificDate && b.specificDate) {
+              // 날짜 먼저 비교
+              const dateCompare = a.specificDate.localeCompare(b.specificDate);
+              if (dateCompare !== 0) return dateCompare;
+              // 같은 날짜면 시작 시간 비교
+              return a.startTime.localeCompare(b.startTime);
+            }
+            // 일회성 일정을 먼저 표시
+            if (a.specificDate && !b.specificDate) return -1;
+            if (!a.specificDate && b.specificDate) return 1;
+            // 둘 다 반복 일정이면 시작 시간으로 정렬
+            return a.startTime.localeCompare(b.startTime);
+          })
+          .map((personalTime) => (
           <div key={personalTime.id} className={`flex items-center justify-between p-3 rounded-lg border ${editingId === personalTime.id ? 'bg-blue-50 border-blue-300' : 'bg-gray-50'}`}>
             <div className="flex items-center flex-1">
               {renderPersonalTimeIcon(personalTime.type || 'event')}
