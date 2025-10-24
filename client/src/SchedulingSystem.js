@@ -609,6 +609,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                onSendMessage={handleTabSpecificChatMessage}
                speak={speak}
                currentTab={activeTab}
+               onEventUpdate={() => setEventAddedKey(prev => prev + 1)}
             />
          )}
 
