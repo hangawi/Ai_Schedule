@@ -578,7 +578,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
               return { success: false, message: 'Google 계정 인증이 필요합니다.' };
             }
 
-            // 🔍 일정 충돌 확인
+            // 🔍 일정 충돌 확인 (모든 탭에서 동작)
             try {
                // 기존 일정 목록 가져오기
                const targetDate = chatResponse.startDateTime.split('T')[0];
@@ -626,21 +626,52 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                      events = eventsData;
                   }
 
-                  // 충돌 확인
+                  // ✨ 새로운 충돌 해결 플로우 - /api/conflict 사용 (모든 탭에서 동작)
                   const conflictCheck = checkScheduleConflict(chatResponse.startDateTime, chatResponse.endDateTime, events);
 
                   if (conflictCheck.hasConflict) {
-                     // LLM이 결정한 시간 사용
-                     const estimatedDuration = (new Date(chatResponse.endDateTime) - new Date(chatResponse.startDateTime)) / (1000 * 60);
+                     // 1단계: 충돌 감지 및 옵션 제공
+                     const conflictResponse = await fetch(`${API_BASE_URL}/api/conflict/detect`, {
+                        method: 'POST',
+                        headers: {
+                           'Content-Type': 'application/json',
+                           'x-auth-token': token
+                        },
+                        body: JSON.stringify({
+                           date: targetDate,
+                           time: chatResponse.startDateTime.split('T')[1].substring(0, 5),
+                           duration: (new Date(chatResponse.endDateTime) - new Date(chatResponse.startDateTime)) / (60 * 1000),
+                           title: chatResponse.title,
+                           description: chatResponse.description,
+                           priority: 3,
+                           category: 'general'
+                        })
+                     });
 
-                     // 사용자가 요청한 시간 추출 (근접 시간 추천용)
+                     if (conflictResponse.ok) {
+                        const conflictData = await conflictResponse.json();
+
+                        if (conflictData.hasConflict) {
+                           // 충돌 발생 - 사용자에게 선택 요청
+                           return {
+                              success: false,
+                              hasConflict: true,
+                              message: conflictData.message,
+                              conflictingEvents: conflictData.conflictingEvents,
+                              pendingEvent: conflictData.pendingEvent,
+                              actions: conflictData.actions,
+                              // 다음 단계를 위한 정보 저장
+                              _nextStep: 'await_user_choice'
+                           };
+                        }
+                     }
+
+                     // API 호출 실패 시 기존 로직 사용 (fallback)
+                     const estimatedDuration = (new Date(chatResponse.endDateTime) - new Date(chatResponse.startDateTime)) / (1000 * 60);
                      const requestedStart = new Date(chatResponse.startDateTime);
                      const requestedTimeHour = requestedStart.getHours() + requestedStart.getMinutes() / 60;
-
-                     // 해당 날짜에서 먼저 빈 시간 찾기 (요청 시간 근처부터 우선 추천)
                      let availableSlots = findAvailableTimeSlots(targetDate, events, estimatedDuration, requestedTimeHour);
 
-                     // 해당 날짜에 빈 시간이 없으면 향후 7일간 검색
                      if (availableSlots.length === 0) {
                         for (let i = 1; i <= 7; i++) {
                            const nextDate = new Date(targetDate);

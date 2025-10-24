@@ -178,6 +178,21 @@ router.post('/:id/duplicate', auth, [
   checkValidation
 ], eventController.duplicateEvent);
 
+// @route   POST /api/events/recommend-alternative
+// @desc    새 일정을 위한 대체 시간 추천 (충돌 해결)
+// @access  Private
+router.post('/recommend-alternative', auth, eventController.recommendAlternativeTime);
+
+// @route   POST /api/events/recommend-reschedule
+// @desc    기존 일정 재조정 시간 추천 (충돌 해결)
+// @access  Private
+router.post('/recommend-reschedule', auth, eventController.recommendRescheduleTime);
+
+// @route   POST /api/events/confirm-reschedule
+// @desc    기존 일정 재조정 및 새 일정 생성 확정
+// @access  Private
+router.post('/confirm-reschedule', auth, eventController.confirmReschedule);
+
 // 에러 처리 미들웨어
 router.use((err, req, res, next) => {
   console.error('❌ Events 라우터 에러:', err);
