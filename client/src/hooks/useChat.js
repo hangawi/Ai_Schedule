@@ -12,93 +12,118 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
          if (!token) return { success: false, message: '인증 토큰이 없습니다.' };
 
          try {
-            const scheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-               headers: { 'x-auth-token': token }
-            });
+            // '나의 일정' 탭의 경우 /api/events 엔드포인트를 사용하여 직접 삭제
+            if (context.context === 'events') {
+                const eventIdToDelete = message.eventId;
+                const response = await fetch(`${API_BASE_URL}/api/events/${eventIdToDelete}`, {
+                    method: 'DELETE',
+                    headers: { 'x-auth-token': token },
+                });
 
-            if (!scheduleResponse.ok) {
-               throw new Error('스케줄 정보를 가져오지 못했습니다.');
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.msg || '일정 삭제에 실패했습니다.');
+                }
+
+                // 성공적으로 삭제되었음을 UI에 알림
+                window.dispatchEvent(new CustomEvent('calendarUpdate', {
+                    detail: { type: 'delete', eventId: eventIdToDelete, context: 'events' }
+                }));
+                setEventAddedKey(prevKey => prevKey + 1);
+
+                return {
+                    success: true,
+                    message: `일정을 삭제했어요!`,
+                };
+            } else { // 기존 '내 프로필' 탭 로직
+                const scheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+                   headers: { 'x-auth-token': token }
+                });
+
+                if (!scheduleResponse.ok) {
+                   throw new Error('스케줄 정보를 가져오지 못했습니다.');
+                }
+
+                const scheduleData = await scheduleResponse.json();
+                const eventIdToDelete = message.eventId;
+                let eventTitle = '일정';
+                let foundAndSpliced = false;
+
+                console.log('[DELETE] Looking for event ID:', eventIdToDelete);
+                console.log('[DELETE] personalTimes:', scheduleData.personalTimes?.map(p => ({id: p.id, _id: p._id, title: p.title})));
+                console.log('[DELETE] scheduleExceptions:', scheduleData.scheduleExceptions?.map(s => ({id: s.id, _id: s._id, title: s.title})));
+
+                // personalTimes에서 찾기
+                if (scheduleData.personalTimes && scheduleData.personalTimes.length > 0) {
+                   const findIndex = scheduleData.personalTimes.findIndex(pt =>
+                       String(pt.id) === String(eventIdToDelete) || String(pt._id) === String(eventIdToDelete)
+                   );
+
+                   if (findIndex !== -1) {
+                       eventTitle = scheduleData.personalTimes[findIndex].title;
+                       console.log('[DELETE] Found in personalTimes at index', findIndex);
+                       scheduleData.personalTimes.splice(findIndex, 1);
+                       foundAndSpliced = true;
+                   }
+                }
+
+                // scheduleExceptions에서 찾기
+                if (!foundAndSpliced && scheduleData.scheduleExceptions && scheduleData.scheduleExceptions.length > 0) {
+                   const findIndex = scheduleData.scheduleExceptions.findIndex(ex =>
+                       String(ex.id) === String(eventIdToDelete) || String(ex._id) === String(eventIdToDelete)
+                   );
+
+                   if (findIndex !== -1) {
+                       eventTitle = scheduleData.scheduleExceptions[findIndex].title;
+                       console.log('[DELETE] Found in scheduleExceptions at index', findIndex);
+                       scheduleData.scheduleExceptions.splice(findIndex, 1);
+                       foundAndSpliced = true;
+                   }
+                }
+
+                if (!foundAndSpliced) {
+                   console.error('[DELETE] Event not found!');
+                   return { success: false, message: '삭제할 일정을 찾지 못했습니다.' };
+                }
+
+                // 유효한 scheduleExceptions만 필터링
+                const cleanedExceptions = (scheduleData.scheduleExceptions || [])
+                   .filter(exc => exc.startTime && exc.endTime && exc.specificDate)
+                   .map(exc => ({
+                      specificDate: exc.specificDate,
+                      startTime: exc.startTime,
+                      endTime: exc.endTime,
+                      title: exc.title || '',
+                      description: exc.description || ''
+                   }));
+
+                const updateResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+                   method: 'PUT',
+                   headers: {
+                      'Content-Type': 'application/json',
+                      'x-auth-token': token,
+                   },
+                   body: JSON.stringify({
+                      scheduleExceptions: cleanedExceptions,
+                      personalTimes: scheduleData.personalTimes || []
+                   }),
+                });
+
+                if (!updateResponse.ok) {
+                   const errorData = await updateResponse.json();
+                   throw new Error(errorData.msg || '일정 삭제에 실패했습니다.');
+                }
+
+                window.dispatchEvent(new CustomEvent('calendarUpdate', {
+                   detail: { type: 'delete', eventId: eventIdToDelete, context: 'profile' }
+                }));
+                setEventAddedKey(prevKey => prevKey + 1);
+
+                return {
+                   success: true,
+                   message: `${eventTitle} 일정을 삭제했어요!`,
+                };
             }
-
-            const scheduleData = await scheduleResponse.json();
-            const eventIdToDelete = message.eventId;
-            let eventTitle = '일정';
-            let foundAndSpliced = false;
-
-            console.log('[DELETE] Looking for event ID:', eventIdToDelete);
-            console.log('[DELETE] personalTimes:', scheduleData.personalTimes?.map(p => ({id: p.id, _id: p._id, title: p.title})));
-            console.log('[DELETE] scheduleExceptions:', scheduleData.scheduleExceptions?.map(s => ({id: s.id, _id: s._id, title: s.title})));
-
-            // personalTimes에서 찾기
-            if (scheduleData.personalTimes && scheduleData.personalTimes.length > 0) {
-               const findIndex = scheduleData.personalTimes.findIndex(pt =>
-                   String(pt.id) === String(eventIdToDelete) || String(pt._id) === String(eventIdToDelete)
-               );
-
-               if (findIndex !== -1) {
-                   eventTitle = scheduleData.personalTimes[findIndex].title;
-                   console.log('[DELETE] Found in personalTimes at index', findIndex);
-                   scheduleData.personalTimes.splice(findIndex, 1);
-                   foundAndSpliced = true;
-               }
-            }
-
-            // scheduleExceptions에서 찾기
-            if (!foundAndSpliced && scheduleData.scheduleExceptions && scheduleData.scheduleExceptions.length > 0) {
-               const findIndex = scheduleData.scheduleExceptions.findIndex(ex =>
-                   String(ex.id) === String(eventIdToDelete) || String(ex._id) === String(eventIdToDelete)
-               );
-
-               if (findIndex !== -1) {
-                   eventTitle = scheduleData.scheduleExceptions[findIndex].title;
-                   console.log('[DELETE] Found in scheduleExceptions at index', findIndex);
-                   scheduleData.scheduleExceptions.splice(findIndex, 1);
-                   foundAndSpliced = true;
-               }
-            }
-
-            if (!foundAndSpliced) {
-               console.error('[DELETE] Event not found!');
-               return { success: false, message: '삭제할 일정을 찾지 못했습니다.' };
-            }
-
-            // 유효한 scheduleExceptions만 필터링
-            const cleanedExceptions = (scheduleData.scheduleExceptions || [])
-               .filter(exc => exc.startTime && exc.endTime && exc.specificDate)
-               .map(exc => ({
-                  specificDate: exc.specificDate,
-                  startTime: exc.startTime,
-                  endTime: exc.endTime,
-                  title: exc.title || '',
-                  description: exc.description || ''
-               }));
-
-            const updateResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-               method: 'PUT',
-               headers: {
-                  'Content-Type': 'application/json',
-                  'x-auth-token': token,
-               },
-               body: JSON.stringify({
-                  scheduleExceptions: cleanedExceptions,
-                  personalTimes: scheduleData.personalTimes || []
-               }),
-            });
-
-            if (!updateResponse.ok) {
-               const errorData = await updateResponse.json();
-               throw new Error(errorData.msg || '일정 삭제에 실패했습니다.');
-            }
-
-            window.dispatchEvent(new CustomEvent('calendarUpdate', {
-               detail: { type: 'delete', eventId: eventIdToDelete, context: 'profile' }
-            }));
-            setEventAddedKey(prevKey => prevKey + 1);
-
-            return {
-               success: true,
-               message: `${eventTitle} 일정을 삭제했어요!`,
-            };
          } catch (error) {
             console.error('[Direct Delete] Error:', error);
             return { success: false, message: `삭제 중 오류 발생: ${error.message}` };
