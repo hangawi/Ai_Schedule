@@ -529,7 +529,7 @@ export const findAvailableTimeSlots = (targetDate, events, duration = 60, reques
    const availableSlots = [];
    const workStart = 9; // 오전 9시
    const workEnd = 22; // 오후 10시
-   const bufferMinutes = 60; // 이벤트 직후 버퍼 시간 (1시간) - 현실적인 간격
+   const bufferMinutes = 0; // 이벤트 직후 버퍼 시간 (1시간) - 현실적인 간격
 
    let currentHour = workStart;
 

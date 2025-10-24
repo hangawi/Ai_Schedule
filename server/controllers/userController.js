@@ -76,23 +76,22 @@ exports.updateUserSchedule = async (req, res) => {
       requestPersonalTimes: personalTimes
     });
 
-    // Explicitly rebuild the defaultSchedule array to ensure all fields are correctly processed
     if (defaultSchedule) {
       user.defaultSchedule = defaultSchedule.map(slot => ({
         dayOfWeek: slot.dayOfWeek,
         startTime: slot.startTime,
         endTime: slot.endTime,
-        priority: slot.priority || 2, // Ensure priority has a value, defaulting to 2
-        specificDate: slot.specificDate // IMPORTANT: Include specificDate field
+        priority: slot.priority || 2,
+        specificDate: slot.specificDate
       }));
     } else {
       user.defaultSchedule = [];
     }
+    user.markModified('defaultSchedule');
 
-    // Explicitly rebuild the scheduleExceptions array
     if (scheduleExceptions) {
         user.scheduleExceptions = scheduleExceptions.map(ex => ({
-            _id: ex._id, // ID 필드 추가
+            _id: ex._id,
             title: ex.title,
             startTime: ex.startTime,
             endTime: ex.endTime,
@@ -104,44 +103,28 @@ exports.updateUserSchedule = async (req, res) => {
     } else {
         user.scheduleExceptions = [];
     }
+    user.markModified('scheduleExceptions');
 
-    // Explicitly rebuild the personalTimes array
     if (personalTimes) {
-        console.log('🔍 [userController] personalTimes 저장 시작:', {
-            count: personalTimes.length,
-            sample: personalTimes.slice(0, 2)
-        });
-
         user.personalTimes = personalTimes.map(pt => ({
-            id: pt.id, // ID 필드 추가
+            id: pt.id,
             title: pt.title,
             type: pt.type,
             startTime: pt.startTime,
             endTime: pt.endTime,
             days: pt.days,
             isRecurring: pt.isRecurring !== undefined ? pt.isRecurring : true,
-            specificDate: pt.specificDate, // 중요: specificDate 필드 추가
-            color: pt.color // 중요: color 필드 추가
+            specificDate: pt.specificDate,
+            color: pt.color
         }));
-
-        console.log('🔍 [userController] personalTimes 변환 완료:', {
-            count: user.personalTimes.length,
-            sample: user.personalTimes.slice(0, 2)
-        });
     } else {
         user.personalTimes = [];
     }
+    user.markModified('personalTimes');
 
-    // 버전 충돌을 방지하기 위해 findOneAndUpdate 사용
-    const updatedUser = await User.findByIdAndUpdate(
-      req.user.id,
-      {
-        defaultSchedule: user.defaultSchedule,
-        scheduleExceptions: user.scheduleExceptions,
-        personalTimes: user.personalTimes
-      },
-      { new: true, runValidators: true }
-    );
+    await user.save({ validateModifiedOnly: true });
+
+    const updatedUser = user;
 
     console.log('🔍 [userController] 업데이트 완료:', {
       userId: req.user.id,
