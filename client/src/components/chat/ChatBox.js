@@ -115,6 +115,43 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
         if (currentTab === 'profile') {
           setMessages(prev => prev.filter(msg => !msg.isLoading));
 
+          // Step 1: 기존 일정 삭제
+          const deleteLoadingMessage = { id: Date.now(), text: '기존 일정을 삭제하고 있습니다...', sender: 'bot', timestamp: new Date(), isLoading: true };
+          setMessages(prev => [...prev, deleteLoadingMessage]);
+
+          const deleteResult = await onSendMessage({
+            intent: 'delete_specific_event',
+            eventId: conflictingEvent.id || conflictingEvent._id
+          });
+
+          setMessages(prev => prev.filter(msg => !msg.isLoading));
+          const deleteResultMessage = { id: Date.now() + 1, text: deleteResult.message || '기존 일정을 삭제했습니다.', sender: 'bot', timestamp: new Date(), success: deleteResult.success !== false };
+          setMessages(prev => [...prev, deleteResultMessage]);
+
+          if(deleteResult.success === false) {
+            console.error("Deletion failed, aborting reschedule.");
+            return;
+          }
+
+          // Step 2: 새 일정을 원래 자리에 추가
+          await new Promise(resolve => setTimeout(resolve, 800));
+          const newEventLoadingMessage = { id: Date.now() + 2, text: '새 일정을 추가하고 있습니다...', sender: 'bot', timestamp: new Date(), isLoading: true };
+          setMessages(prev => [...prev, newEventLoadingMessage]);
+
+          const newPendingStart = new Date(pendingEvent.startTime);
+          const newPendingEnd = new Date(pendingEvent.endTime);
+          const newDateStr = `${newPendingStart.getMonth() + 1}월 ${newPendingStart.getDate()}일`;
+          const newTimeStr = newPendingStart.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: true });
+          const newEventMessage = `${newDateStr} ${newTimeStr}에 "${pendingEvent.title}" 일정을 추가해줘`;
+          const newEventResult = await onSendMessage(newEventMessage);
+
+          setMessages(prev => prev.filter(msg => !msg.isLoading));
+          const newEventResultMessage = { id: Date.now() + 3, text: newEventResult.message || '새 일정을 추가했습니다.', sender: 'bot', timestamp: new Date(), success: newEventResult.success !== false };
+          setMessages(prev => [...prev, newEventResultMessage]);
+
+          // Step 3: 기존 일정 옮길 시간 추천
+          await new Promise(resolve => setTimeout(resolve, 500));
+
           const originalStart = new Date(conflictingEvent.startTime);
           const duration = (new Date(conflictingEvent.endTime) - originalStart) / (60 * 1000);
 
@@ -157,7 +194,7 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
             : '죄송합니다. 해당 날짜에 옮길 만한 시간이 없습니다.';
 
           const botMessage = {
-            id: Date.now() + 1,
+            id: Date.now() + 4,
             text: message,
             sender: 'bot',
             timestamp: new Date(),
@@ -192,115 +229,27 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
       if (currentTab === 'profile') {
         console.log('[ChatBox] Profile tab condition check:', { action, nextStep });
         if (action === 'reschedule' || nextStep === 'select_reschedule_time_profile') {
+          // 기존 일정을 선택한 시간에 추가
           const conflictingEventTitle = conflictingEvent?.title || '기존 일정';
 
-          // Step 1: Delete existing event (Directly, bypassing AI)
-          console.log('[ChatBox] Attempting to delete event:', conflictingEvent);
-          const deleteResult = await onSendMessage({
-            intent: 'delete_specific_event',
-            eventId: conflictingEvent.id || conflictingEvent._id
-          });
           setMessages(prev => prev.filter(msg => !msg.isLoading));
-          const deleteResultMessage = { id: Date.now() + 1, text: deleteResult.message || '기존 일정을 삭제했습니다.', sender: 'bot', timestamp: new Date(), success: deleteResult.success !== false };
-          setMessages(prev => [...prev, deleteResultMessage]);
-
-          if(deleteResult.success === false) {
-            console.error("Deletion failed, aborting reschedule.");
-            return; // Stop if deletion fails
-          }
-
-          // Step 2: Add rescheduled event
-          await new Promise(resolve => setTimeout(resolve, 800));
-          const rescheduleLoadingMessage = { id: Date.now() + 2, text: '기존 일정을 옮기고 있습니다...', sender: 'bot', timestamp: new Date(), isLoading: true };
+          const rescheduleLoadingMessage = { id: Date.now(), text: '기존 일정을 옮기고 있습니다...', sender: 'bot', timestamp: new Date(), isLoading: true };
           setMessages(prev => [...prev, rescheduleLoadingMessage]);
+
           const selectedDate = new Date(selectedTime.startTime);
           const dateStr = `${selectedDate.getMonth() + 1}월 ${selectedDate.getDate()}일`;
           const timeStr = selectedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: true });
           const rescheduleMessage = `${dateStr} ${timeStr}에 "${conflictingEventTitle}" 일정을 추가해줘`;
           const rescheduleResult = await onSendMessage(rescheduleMessage);
+
           setMessages(prev => prev.filter(msg => !msg.isLoading));
-          const rescheduleResultMessage = { id: Date.now() + 3, text: rescheduleResult.message || '기존 일정을 옮겼습니다.', sender: 'bot', timestamp: new Date(), success: rescheduleResult.success !== false };
+          const rescheduleResultMessage = { id: Date.now() + 1, text: rescheduleResult.message || '기존 일정을 옮겼습니다.', sender: 'bot', timestamp: new Date(), success: rescheduleResult.success !== false };
           setMessages(prev => [...prev, rescheduleResultMessage]);
 
-          // Step 3: Add new event
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          const newEventLoadingMessage = { id: Date.now() + 4, text: '새 일정을 추가하고 있습니다...', sender: 'bot', timestamp: new Date(), isLoading: true };
-          setMessages(prev => [...prev, newEventLoadingMessage]);
-          try {
-            console.log('[ChatBox] Step 3 - pendingEvent:', pendingEvent);
-            const currentScheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, { headers: { 'x-auth-token': token } });
-            if (currentScheduleResponse.ok) {
-              const currentSchedule = await currentScheduleResponse.json();
-              console.log('[ChatBox] Step 3 - currentSchedule personalTimes:', currentSchedule.personalTimes);
-              const newPendingStart = new Date(pendingEvent.startTime);
-              const newPendingEnd = new Date(pendingEvent.endTime);
-              const targetDate = newPendingStart.toISOString().split('T')[0];
-              const startTimeStr = `${String(newPendingStart.getHours()).padStart(2, '0')}:${String(newPendingStart.getMinutes()).padStart(2, '0')}`;
-              const endTimeStr = `${String(newPendingEnd.getHours()).padStart(2, '0')}:${String(newPendingEnd.getMinutes()).padStart(2, '0')}`;
-
-              // personalTimes에 추가
-              const newPersonalTime = {
-                id: Date.now(),
-                title: pendingEvent.title,
-                type: 'event',
-                startTime: startTimeStr,
-                endTime: endTimeStr,
-                days: [],
-                isRecurring: false,
-                specificDate: targetDate,
-                color: 'bg-gray-500'
-              };
-
-              const existingPersonalTimes = Array.isArray(currentSchedule.personalTimes)
-                ? [...currentSchedule.personalTimes]
-                : [];
-              existingPersonalTimes.push(newPersonalTime);
-
-              // scheduleExceptions 정리
-              const cleanedExceptions = (currentSchedule.scheduleExceptions || [])
-                .filter(exc => exc.startTime && exc.endTime && exc.specificDate)
-                .map(exc => ({
-                  specificDate: exc.specificDate,
-                  startTime: exc.startTime,
-                  endTime: exc.endTime,
-                  title: exc.title || '',
-                  description: exc.description || ''
-                }));
-
-              const updateResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-auth-token': token
-                },
-                body: JSON.stringify({
-                  defaultSchedule: currentSchedule.defaultSchedule || [],
-                  scheduleExceptions: cleanedExceptions,
-                  personalTimes: existingPersonalTimes
-                })
-              });
-              setMessages(prev => prev.filter(msg => !msg.isLoading));
-              if (updateResponse.ok) {
-                const responseData = await updateResponse.json();
-                console.log('[ChatBox] Step 3 response:', responseData);
-                console.log('[ChatBox] Added personalTime:', newPersonalTime);
-                const finalMessage = { id: Date.now() + 5, text: `✓ "${pendingEvent.title}" 일정이 추가되었습니다.`, sender: 'bot', timestamp: new Date(), success: true };
-                setMessages(prev => [...prev, finalMessage]);
-                if (onEventUpdate) { onEventUpdate(); }
-                window.dispatchEvent(new CustomEvent('calendarUpdate', {
-                  detail: { type: 'add', context: 'profile' }
-                }));
-              } else {
-                const errorData = await updateResponse.json();
-                console.error('[ChatBox] Step 3 failed:', errorData);
-                throw new Error('일정 추가 실패');
-              }
-            }
-          } catch (err) {
-            setMessages(prev => prev.filter(msg => !msg.isLoading));
-            const errorMessage = { id: Date.now() + 5, text: '새 일정 추가 중 오류가 발생했습니다.', sender: 'bot', timestamp: new Date(), success: false };
-            setMessages(prev => [...prev, errorMessage]);
-          }
+          if (onEventUpdate) { onEventUpdate(); }
+          window.dispatchEvent(new CustomEvent('calendarUpdate', {
+            detail: { type: 'add', context: 'profile' }
+          }));
           return;
         }
 
