@@ -630,78 +630,42 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   const conflictCheck = checkScheduleConflict(chatResponse.startDateTime, chatResponse.endDateTime, events);
 
                   if (conflictCheck.hasConflict) {
-                     // 1단계: 충돌 감지 및 옵션 제공
-                     const conflictResponse = await fetch(`${API_BASE_URL}/api/conflict/detect`, {
-                        method: 'POST',
-                        headers: {
-                           'Content-Type': 'application/json',
-                           'x-auth-token': token
-                        },
-                        body: JSON.stringify({
-                           date: targetDate,
-                           time: chatResponse.startDateTime.split('T')[1].substring(0, 5),
-                           duration: (new Date(chatResponse.endDateTime) - new Date(chatResponse.startDateTime)) / (60 * 1000),
-                           title: chatResponse.title,
-                           description: chatResponse.description,
-                           priority: 3,
-                           category: 'general'
-                        })
+                     // ✅ 충돌 발생 - 무조건 1단계 선택지 먼저 보여주기
+                     const conflictTitle = conflictCheck.conflicts[0]?.summary || conflictCheck.conflicts[0]?.title || '일정';
+                     const startTime = new Date(chatResponse.startDateTime);
+                     const timeStr = startTime.toLocaleString('ko-KR', {
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
                      });
 
-                     if (conflictResponse.ok) {
-                        const conflictData = await conflictResponse.json();
-
-                        if (conflictData.hasConflict) {
-                           // 충돌 발생 - 사용자에게 선택 요청
-                           return {
-                              success: false,
-                              hasConflict: true,
-                              message: conflictData.message,
-                              conflictingEvents: conflictData.conflictingEvents,
-                              pendingEvent: conflictData.pendingEvent,
-                              actions: conflictData.actions,
-                              // 다음 단계를 위한 정보 저장
-                              _nextStep: 'await_user_choice'
-                           };
-                        }
-                     }
-
-                     // API 호출 실패 시 기존 로직 사용 (fallback)
-                     const estimatedDuration = (new Date(chatResponse.endDateTime) - new Date(chatResponse.startDateTime)) / (1000 * 60);
-                     const requestedStart = new Date(chatResponse.startDateTime);
-                     const requestedTimeHour = requestedStart.getHours() + requestedStart.getMinutes() / 60;
-                     let availableSlots = findAvailableTimeSlots(targetDate, events, estimatedDuration, requestedTimeHour);
-
-                     if (availableSlots.length === 0) {
-                        for (let i = 1; i <= 7; i++) {
-                           const nextDate = new Date(targetDate);
-                           nextDate.setDate(nextDate.getDate() + i);
-                           const nextDateStr = nextDate.toISOString().split('T')[0];
-
-                           const futureSlots = findAvailableTimeSlots(nextDateStr, events, estimatedDuration, requestedTimeHour);
-                           if (futureSlots.length > 0) {
-                              availableSlots = futureSlots;
-                              break;
-                           }
-                        }
-                     }
-
-                     if (availableSlots.length > 0) {
-                        const firstSlot = availableSlots[0];
-                        const conflictTitle = conflictCheck.conflicts[0].summary || conflictCheck.conflicts[0].title || '다른 일정';
-                        const durationText = estimatedDuration >= 60 ? `${Math.round(estimatedDuration/60)}시간` : `${estimatedDuration}분`;
-
-                        return {
-                           success: false,
-                           message: `주인님, 그 시간에는 이미 "${conflictTitle}"이(가) 있습니다. ${firstSlot.date} ${firstSlot.start}부터 ${firstSlot.end}까지 ${durationText} 어떠세요?`,
-                           suggestedTimes: availableSlots.slice(0, 5)
-                        };
-                     } else {
-                        return {
-                           success: false,
-                           message: `주인님, 그 시간에는 이미 다른 일정이 있고, 향후 일주일간 적절한 빈 시간을 찾을 수 없습니다. 일정을 조정해보시겠어요?`
-                        };
-                     }
+                     return {
+                        success: false,
+                        hasConflict: true,
+                        message: `${timeStr}에 이미 "${conflictTitle}" 일정이 있습니다.\n\n어떻게 하시겠어요?`,
+                        conflictingEvents: conflictCheck.conflicts.map(e => ({
+                           id: e._id || e.id,
+                           title: e.title || e.summary,
+                           startTime: e.startTime || e.start?.dateTime,
+                           endTime: e.endTime || e.end?.dateTime,
+                        })),
+                        pendingEvent: {
+                           title: chatResponse.title,
+                           description: chatResponse.description,
+                           startTime: chatResponse.startDateTime,
+                           endTime: chatResponse.endDateTime,
+                           duration: (new Date(chatResponse.endDateTime) - new Date(chatResponse.startDateTime)) / (60 * 1000),
+                           priority: 3,
+                           category: 'general',
+                           allExistingEvents: events // 모든 기존 일정 (충돌 체크용)
+                        },
+                        actions: [
+                           { id: 1, label: '다른 시간 추천받기', action: 'recommend_alternative' },
+                           { id: 2, label: '기존 약속 변경하기', action: 'reschedule_existing' }
+                        ],
+                        _nextStep: 'await_user_choice'
+                     };
                   }
                }
             } catch (conflictError) {
