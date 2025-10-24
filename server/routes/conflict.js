@@ -26,6 +26,11 @@ router.post('/detect', auth, [
    checkValidation
 ], conflictController.detectConflict);
 
+// @route   POST /api/conflict/delete
+// @desc    기존 일정 삭제
+// @access  Private
+router.post('/delete', auth, conflictController.deleteConflictingEvent);
+
 // @route   POST /api/conflict/recommend-alternative
 // @desc    새 일정을 위한 대체 시간 추천
 // @access  Private

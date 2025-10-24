@@ -207,7 +207,82 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
           setMessages(prev => [...prev, botMessage]);
           return;
         }
-        // Fallback for other tabs (not implemented in detail)
+
+        // 다른 탭 (내 일정, 구글 캘린더)은 백엔드 API 사용
+        try {
+          setMessages(prev => prev.filter(msg => !msg.isLoading));
+
+          // Step 1: 기존 일정 삭제
+          const deleteLoadingMessage = { id: Date.now(), text: '기존 일정을 삭제하고 있습니다...', sender: 'bot', timestamp: new Date(), isLoading: true };
+          setMessages(prev => [...prev, deleteLoadingMessage]);
+
+          const deleteResponse = await fetch(`${API_BASE_URL}/api/conflict/delete`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-auth-token': token
+            },
+            body: JSON.stringify({ conflictingEventId: conflictingEvent.id })
+          });
+
+          const deleteData = await deleteResponse.json();
+          setMessages(prev => prev.filter(msg => !msg.isLoading));
+          const deleteResultMessage = { id: Date.now() + 1, text: deleteData.message || '기존 일정을 삭제했습니다.', sender: 'bot', timestamp: new Date(), success: deleteResponse.ok };
+          setMessages(prev => [...prev, deleteResultMessage]);
+
+          if (!deleteResponse.ok) {
+            return;
+          }
+
+          // Step 2: 새 일정을 원래 자리에 추가
+          await new Promise(resolve => setTimeout(resolve, 800));
+          const newEventLoadingMessage = { id: Date.now() + 2, text: '새 일정을 추가하고 있습니다...', sender: 'bot', timestamp: new Date(), isLoading: true };
+          setMessages(prev => [...prev, newEventLoadingMessage]);
+
+          const addResponse = await fetch(`${API_BASE_URL}/api/conflict/confirm-alternative`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-auth-token': token
+            },
+            body: JSON.stringify({ pendingEvent })
+          });
+
+          const addData = await addResponse.json();
+          setMessages(prev => prev.filter(msg => !msg.isLoading));
+          const addResultMessage = { id: Date.now() + 3, text: addData.message || '새 일정을 추가했습니다.', sender: 'bot', timestamp: new Date(), success: addResponse.ok };
+          setMessages(prev => [...prev, addResultMessage]);
+
+          // Step 3: 기존 일정 옮길 시간 추천
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          const recommendResponse = await fetch(`${API_BASE_URL}/api/conflict/recommend-reschedule`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-auth-token': token
+            },
+            body: JSON.stringify({ conflictingEventId: conflictingEvent.id })
+          });
+
+          const recommendData = await recommendResponse.json();
+          const botMessage = {
+            id: Date.now() + 4,
+            text: recommendData.message,
+            sender: 'bot',
+            timestamp: new Date(),
+            success: recommendResponse.ok,
+            recommendations: recommendData.recommendations || [],
+            conflictingEvent: conflictingEvent,
+            pendingEvent: pendingEvent,
+            _nextStep: 'select_reschedule_time'
+          };
+          setMessages(prev => [...prev, botMessage]);
+        } catch (err) {
+          setMessages(prev => prev.filter(msg => !msg.isLoading));
+          const errorMessage = { id: Date.now() + 1, text: '처리 중 오류가 발생했습니다.', sender: 'bot', timestamp: new Date(), success: false };
+          setMessages(prev => [...prev, errorMessage]);
+        }
       }
     } catch (error) {
       setMessages(prev => prev.filter(msg => !msg.isLoading));
