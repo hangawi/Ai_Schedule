@@ -246,6 +246,32 @@ exports.recommendRescheduleTime = async (req, res) => {
    }
 };
 
+// @desc    기존 일정 삭제 (옵션 2 - Step 1)
+// @route   POST /api/conflict/delete
+// @access  Private
+exports.deleteConflictingEvent = async (req, res) => {
+   try {
+      const userId = req.user.id;
+      const { conflictingEventId } = req.body;
+
+      const event = await Event.findOne({ _id: conflictingEventId, userId });
+      if (!event) {
+         return res.status(404).json({ msg: '삭제할 일정을 찾을 수 없습니다.' });
+      }
+
+      const eventTitle = event.title;
+      await Event.deleteOne({ _id: conflictingEventId, userId });
+
+      res.json({
+         status: 'success',
+         message: `${eventTitle} 일정을 삭제했어요!`
+      });
+   } catch (err) {
+      console.error('❌ 일정 삭제 실패:', err.message);
+      res.status(500).json({ msg: 'Server error', error: err.message });
+   }
+};
+
 // @desc    대체 시간 선택 및 새 일정 생성 (옵션 1 확정)
 // @route   POST /api/conflict/confirm-alternative
 // @access  Private
