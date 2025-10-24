@@ -112,7 +112,8 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
         return;
 
       } else if (choice === 2) { // Logic for "reschedule_existing"
-        if (currentTab === 'profile') {
+        if (currentTab === 'profile' || currentTab === 'events') {
+          // 프로필 탭과 나의 일정 탭은 동일한 로직 사용
           setMessages(prev => prev.filter(msg => !msg.isLoading));
 
           // Step 1: 기존 일정 삭제
@@ -152,12 +153,45 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
           // Step 3: 기존 일정 옮길 시간 추천
           await new Promise(resolve => setTimeout(resolve, 500));
 
+          // 최신 일정 목록 가져오기
+          const token = localStorage.getItem('token');
+          const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+
+          let updatedEvents = [];
+          try {
+            const scheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+              headers: { 'x-auth-token': token }
+            });
+
+            if (scheduleResponse.ok) {
+              const scheduleData = await scheduleResponse.json();
+              const targetDate = new Date(conflictingEvent.startTime).toISOString().split('T')[0];
+
+              // scheduleExceptions와 personalTimes를 합침
+              const exceptions = (scheduleData.scheduleExceptions || [])
+                .filter(exc => exc.specificDate === targetDate);
+              const personalTimes = (scheduleData.personalTimes || [])
+                .filter(pt => pt.specificDate === targetDate)
+                .map(pt => ({
+                  ...pt,
+                  startTime: `${targetDate}T${pt.startTime}:00+09:00`,
+                  endTime: `${targetDate}T${pt.endTime}:00+09:00`
+                }));
+
+              updatedEvents = [...exceptions, ...personalTimes];
+              console.log('🔍 [ChatBox] 최신 일정 목록:', updatedEvents.length, '개');
+            }
+          } catch (error) {
+            console.error('최신 일정 가져오기 실패:', error);
+            updatedEvents = pendingEvent.allExistingEvents || [];
+          }
+
           const originalStart = new Date(conflictingEvent.startTime);
           const duration = (new Date(conflictingEvent.endTime) - originalStart) / (60 * 1000);
 
           const searchOffsets = [-180, -120, -60, 60, 120, 180];
           const recommendations = [];
-          const existingEvents = pendingEvent.allExistingEvents || [];
+          const existingEvents = updatedEvents;
 
           for (const offset of searchOffsets) {
             const candidateStart = new Date(originalStart.getTime() + offset * 60 * 1000);
@@ -202,7 +236,7 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
             recommendations: recommendations,
             conflictingEvent: conflictingEvent,
             pendingEvent: pendingEvent,
-            _nextStep: 'select_reschedule_time_profile'
+            _nextStep: currentTab === 'profile' ? 'select_reschedule_time_profile' : 'select_reschedule_time_events'
           };
           setMessages(prev => [...prev, botMessage]);
           return;
@@ -301,9 +335,9 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
       const loadingMessage = { id: Date.now(), text: '일정을 확정하고 있습니다...', sender: 'bot', timestamp: new Date(), isLoading: true };
       setMessages(prev => [...prev, loadingMessage]);
 
-      if (currentTab === 'profile') {
-        console.log('[ChatBox] Profile tab condition check:', { action, nextStep });
-        if (action === 'reschedule' || nextStep === 'select_reschedule_time_profile') {
+      if (currentTab === 'profile' || currentTab === 'events') {
+        console.log('[ChatBox] Profile/Events tab condition check:', { action, nextStep, currentTab });
+        if (action === 'reschedule' || nextStep === 'select_reschedule_time_profile' || nextStep === 'select_reschedule_time_events') {
           // 기존 일정을 선택한 시간에 추가
           const conflictingEventTitle = conflictingEvent?.title || '기존 일정';
 
@@ -323,7 +357,7 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
 
           if (onEventUpdate) { onEventUpdate(); }
           window.dispatchEvent(new CustomEvent('calendarUpdate', {
-            detail: { type: 'add', context: 'profile' }
+            detail: { type: 'add', context: currentTab }
           }));
           return;
         }

@@ -319,6 +319,13 @@ const ProfileTab = ({ onEditingChange }) => {
         return;
       }
 
+      // 일정 수정인 경우
+      if (event.detail && event.detail.type === 'edit' && event.detail.context === 'profile') {
+        console.log('✏️ [ProfileTab] 일정 수정 감지, 전체 새로고침');
+        fetchSchedule();
+        return;
+      }
+
       // 챗봇에서 추가한 일정인 경우
       if (event.detail && event.detail.type === 'add' && event.detail.chatResponse && event.detail.data) {
 
