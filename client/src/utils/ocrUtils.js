@@ -377,11 +377,8 @@ export const detectConflicts = (schedules) => {
 export const generateOptimalCombinations = (schedules, maxCombinations = 5) => {
   if (!schedules || schedules.length === 0) return [];
 
-  // 스케줄이 너무 많으면 제한 (성능 이슈 방지)
-  const limitedSchedules = schedules.slice(0, 30);
-  if (schedules.length > 30) {
-    console.warn('⚠️ 시간표가 30개를 초과하여 일부만 처리합니다.');
-  }
+  // 스케줄 제한 제거 - 모든 스케줄 처리
+  const limitedSchedules = schedules;
 
   // 모든 가능한 조합 생성
   const allCombinations = [];
@@ -425,9 +422,7 @@ export const generateOptimalCombinations = (schedules, maxCombinations = 5) => {
     }
   };
 
-  console.log('🔄 최적 조합 생성 중...');
   generateCombos([], limitedSchedules, 0);
-  console.log(`✅ ${allCombinations.length}개의 조합 생성 완료 (${iterationCount}회 반복)`);
 
   // 중복 제거: 같은 스케줄 ID 조합인지 확인
   const uniqueCombinations = [];
@@ -698,8 +693,6 @@ export const extractSchedulesFromImages = async (imageFiles, birthdate) => {
     const endMinutes = endHour * 60 + endMin;
     const totalMinutes = endMinutes - startMinutes;
 
-    console.log(`🔍 시간대 분리 체크: ${schedule.title} ${schedule.startTime}-${schedule.endTime} (${totalMinutes}분)`);
-
     // 70분 이상이면 여러 시간대로 분리
     if (totalMinutes >= 70) {
       const slots = [];
@@ -732,17 +725,13 @@ export const extractSchedulesFromImages = async (imageFiles, birthdate) => {
           duration: slotEnd - currentStart
         };
 
-        console.log(`  ✂️ 분리: ${newSlot.startTime}-${newSlot.endTime}`);
         slots.push(newSlot);
-
         currentStart = slotEnd;
       }
 
-      console.log(`  ✅ 총 ${slots.length}개로 분리됨`);
       return slots;
     }
 
-    console.log(`  ⏭️ 분리 안 함 (70분 미만)`);
     return [schedule];
   };
 
@@ -810,22 +799,21 @@ export const extractSchedulesFromImages = async (imageFiles, birthdate) => {
     inferClassDuration(schedule, schedule.gradeLevel, index)
   );
 
-  // 사용자 나이에 맞는 시간표만 필터링
-  const filteredSchedules = filterByGradeLevel(schedulesWithDuration, gradeLevel);
+  // 나이 필터링 제거 - 모든 스케줄 사용
 
   // 충돌 감지
-  const conflicts = detectConflicts(filteredSchedules);
+  const conflicts = detectConflicts(schedulesWithDuration);
 
   // 최적 조합 생성
   const optimalCombinations = conflicts.length > 0
-    ? generateOptimalCombinations(filteredSchedules, 5)
-    : [filteredSchedules];
+    ? generateOptimalCombinations(schedulesWithDuration, 5)
+    : [schedulesWithDuration];
 
   return {
     age,
     gradeLevel,
-    schedules: filteredSchedules,
-    allSchedulesBeforeFilter: schedulesWithDuration, // 필터링 전 전체 스케줄
+    schedules: schedulesWithDuration, // 필터링 제거
+    allSchedulesBeforeFilter: schedulesWithDuration,
     conflicts,
     optimalCombinations,
     ocrResults: [],

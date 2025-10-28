@@ -26,6 +26,12 @@ const ScheduleOptimizationModal = ({
     return null;
   }
 
+  // 디버그: 조합 확인
+  if (currentIndex === 0) {
+    console.log('📦 Total combinations:', combinations.length);
+    console.log('📦 Combination 0 has', combinations[0]?.length, 'schedules');
+  }
+
   const currentCombination = modifiedCombinations[currentIndex];
   const weeklySchedule = formatWeeklySchedule(currentCombination);
 
@@ -53,21 +59,24 @@ const ScheduleOptimizationModal = ({
     };
   }).filter(item => item !== null);
 
-  console.log('📅 Modal personalTimes:', personalTimes);
-
   // 시간표 데이터에서 최소/최대 시간 추출
   const getTimeRange = () => {
     let minHour = 24;
     let maxHour = 0;
 
-    currentCombination.forEach(schedule => {
+    // currentCombination과 personalTimes 모두 확인
+    const allSchedules = [...currentCombination, ...personalTimes];
+
+    allSchedules.forEach(schedule => {
       if (schedule.startTime) {
         const startHour = parseInt(schedule.startTime.split(':')[0]);
         minHour = Math.min(minHour, startHour);
       }
       if (schedule.endTime) {
         const endHour = parseInt(schedule.endTime.split(':')[0]);
-        maxHour = Math.max(maxHour, endHour + 1); // 끝 시간 +1
+        const endMinute = parseInt(schedule.endTime.split(':')[1]);
+        // 분이 있으면 다음 시간까지 표시
+        maxHour = Math.max(maxHour, endMinute > 0 ? endHour + 1 : endHour);
       }
     });
 
@@ -215,11 +224,6 @@ const ScheduleOptimizationModal = ({
       const updatedCombinations = [...modifiedCombinations];
       const currentSchedules = [...updatedCombinations[currentIndex]];
 
-      // 디버깅 로그
-      console.log('🔍 삭제 조건:', { dayToDelete, timeToDelete, gradeToDelete });
-      console.log('📋 현재 스케줄 첫 번째 days:', currentSchedules[0]?.days);
-      console.log('📋 MON 포함 여부:', currentSchedules[0]?.days?.includes('MON'));
-
       // 필터링 및 요일 제거 처리
       const filteredSchedules = currentSchedules.map((schedule, idx) => {
         let shouldModify = false;
@@ -253,29 +257,16 @@ const ScheduleOptimizationModal = ({
           }
         }
 
-        // 첫 번째 스케줄만 디버깅
-        if (idx === 0) {
-          console.log('🔍 첫 번째 스케줄 체크:', {
-            matchesAllConditions,
-            shouldModify,
-            dayToDelete,
-            hasDays: schedule.days?.length,
-            willModify: matchesAllConditions && shouldModify && dayToDelete
-          });
-        }
-
         // 조건에 맞으면
         if (matchesAllConditions && shouldModify && dayToDelete) {
           // 요일만 삭제 조건이고, days가 여러 개면 해당 요일만 제거
           if (!timeToDelete && !gradeToDelete && schedule.days && schedule.days.length > 1) {
             const updatedDays = schedule.days.filter(day => day !== dayToDelete);
             if (updatedDays.length > 0) {
-              console.log(`✂️ 스케줄 ${idx}: 요일만 제거 ${schedule.days} → ${updatedDays}`);
               return { ...schedule, days: updatedDays };
             }
           }
           // days가 1개거나 다른 조건도 있으면 전체 삭제
-          console.log(`🗑️ 스케줄 ${idx}: 전체 삭제`);
           return null;
         }
 
@@ -311,6 +302,90 @@ const ScheduleOptimizationModal = ({
         const botMessage = {
           id: Date.now() + 1,
           text: '❌ 해당 조건에 맞는 시간표를 찾을 수 없습니다.',
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, botMessage]);
+      }
+      return;
+    }
+
+    // 선택 명령 (겹치는 시간에서 하나만 선택)
+    const selectPattern = /선택|남겨|유지/;
+    if (selectPattern.test(input)) {
+      let dayToSelect = null;
+      let timeToSelect = null;
+      let titleToSelect = null;
+
+      // 요일 추출
+      for (const [key, value] of Object.entries(dayMap)) {
+        if (input.includes(key)) {
+          dayToSelect = value;
+          break;
+        }
+      }
+
+      // 시간 추출
+      const parsedTime = parseTime(input);
+      if (parsedTime) {
+        timeToSelect = parsedTime;
+      }
+
+      // 제목 추출 (예: "목요일 4시는 피아노 선택", "목요일 16시 태권도만 남겨")
+      const titleMatch = input.match(/(피아노|태권도|영어|수학|국어|과학|축구|농구|수영|미술|음악|댄스|발레|체육|독서)/);
+      if (titleMatch) {
+        titleToSelect = titleMatch[1];
+      }
+
+      if (dayToSelect && timeToSelect && titleToSelect) {
+        const updatedCombinations = [...modifiedCombinations];
+        const currentSchedules = [...updatedCombinations[currentIndex]];
+
+        // 해당 요일/시간에 있는 스케줄들 찾기
+        const matchingSchedules = currentSchedules.filter(schedule => {
+          return schedule.days?.includes(dayToSelect) &&
+                 schedule.startTime === timeToSelect;
+        });
+
+        if (matchingSchedules.length > 1) {
+          // 선택된 제목만 남기고 나머지 삭제
+          const filteredSchedules = currentSchedules.filter(schedule => {
+            const isTargetSchedule = schedule.days?.includes(dayToSelect) &&
+                                     schedule.startTime === timeToSelect;
+
+            if (isTargetSchedule) {
+              // 선택된 제목이면 유지, 아니면 삭제
+              return schedule.title?.includes(titleToSelect);
+            }
+
+            // 다른 스케줄은 유지
+            return true;
+          });
+
+          updatedCombinations[currentIndex] = filteredSchedules;
+          setModifiedCombinations(updatedCombinations);
+
+          const deletedCount = currentSchedules.length - filteredSchedules.length;
+          const botMessage = {
+            id: Date.now() + 1,
+            text: `✅ ${dayToSelect} ${timeToSelect} 시간대에서 "${titleToSelect}"만 남기고 ${deletedCount}개를 제거했습니다.`,
+            sender: 'bot',
+            timestamp: new Date()
+          };
+          setChatMessages(prev => [...prev, botMessage]);
+        } else {
+          const botMessage = {
+            id: Date.now() + 1,
+            text: '❌ 해당 시간대에 겹치는 스케줄이 없거나 이미 하나만 있습니다.',
+            sender: 'bot',
+            timestamp: new Date()
+          };
+          setChatMessages(prev => [...prev, botMessage]);
+        }
+      } else {
+        const botMessage = {
+          id: Date.now() + 1,
+          text: '❌ 요일, 시간, 과목명을 모두 입력해주세요. 예: "목요일 4시는 피아노 선택"',
           sender: 'bot',
           timestamp: new Date()
         };
