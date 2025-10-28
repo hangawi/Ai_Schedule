@@ -246,19 +246,6 @@ const ScheduleOptimizationModal = ({
           </div>
         </div>
 
-        {/* 시간표 요약 */}
-        <div className="px-5 py-3 bg-blue-50 border-t border-blue-100 flex-shrink-0">
-          <div className="flex items-start">
-            <AlertTriangle size={18} className="text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <h4 className="font-semibold text-blue-900 mb-1 text-sm">시간표 요약</h4>
-              <div className="text-xs text-blue-800 whitespace-pre-line">
-                {summarizeSchedule(currentCombination)}
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* 적용 범위 선택 */}
         <div className="px-5 py-3 bg-blue-50 border-t border-blue-100 flex-shrink-0">
           <div className="flex items-center justify-center gap-3">

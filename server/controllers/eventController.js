@@ -179,8 +179,14 @@ exports.createEvent = async (req, res) => {
       const startTime = new Date(`${date}T${time}:00`);
       const endTime = new Date(startTime.getTime() + duration * 60 * 1000);
 
-      // 충돌 검사
-      const conflicts = await Event.findConflicting(userId, startTime, endTime);
+      // 충돌 검사 - 최소 30분 이상 겹칠 때만 충돌로 판정
+      const allConflicts = await Event.findConflicting(userId, startTime, endTime);
+      const conflicts = allConflicts.filter(event => {
+         const overlapStart = new Date(Math.max(startTime.getTime(), new Date(event.startTime).getTime()));
+         const overlapEnd = new Date(Math.min(endTime.getTime(), new Date(event.endTime).getTime()));
+         const overlapMinutes = (overlapEnd - overlapStart) / (1000 * 60);
+         return overlapMinutes >= 30; // 30분 이상 겹칠 때만 충돌
+      });
 
       if (conflicts.length > 0 && !forceCreate) {
          // 충돌 발견 - 1단계: 사용자에게 선택 요청
@@ -192,9 +198,12 @@ exports.createEvent = async (req, res) => {
             minute: '2-digit'
          });
 
+         // 원본 입력 정보 추출
+         const userInput = `${date} ${time}에 ${title || '일정'} 추가`;
+
          return res.status(409).json({
             status: 'conflict',
-            message: `${timeStr}에 이미 "${conflictTitles}" 일정이 있습니다.\n\n어떻게 하시겠어요?\n1️⃣ 다른 시간 추천받기\n2️⃣ 기존 약속 변경하기`,
+            message: `입력: "${userInput}"\n\n${timeStr}에 이미 "${conflictTitles}" 일정이 있습니다.\n\n어떻게 하시겠어요?`,
             conflictingEvents: conflicts.map(e => ({
                id: e._id,
                title: e.title,
