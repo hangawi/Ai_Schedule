@@ -687,58 +687,122 @@ export const extractSchedulesFromImages = async (imageFiles, birthdate) => {
   // 백엔드 API를 사용하여 구조화된 시간표 데이터 가져오기
   const rawSchedules = await analyzeScheduleImages(imageFiles, birthdate);
 
-  // 요일을 영문 코드로 변환
-  const processedSchedules = rawSchedules.map(schedule => {
-    let days = null;
+  // 병합된 시간대를 분리하는 함수
+  const splitMergedTimeSlots = (schedule) => {
+    if (!schedule.startTime || !schedule.endTime) return [schedule];
 
-    // 1. schedule.days가 있으면 그것을 사용 (null이 아니고 배열이며 길이가 0보다 큼)
-    if (schedule.days && Array.isArray(schedule.days) && schedule.days.length > 0) {
-      days = schedule.days.map(day => {
-        const dayMap = {
-          '월': 'MON', '화': 'TUE', '수': 'WED', '목': 'THU',
-          '금': 'FRI', '토': 'SAT', '일': 'SUN'
-        };
-        return dayMap[day] || day;
-      });
-    } else {
-      // 2. days가 null이거나 비어있으면 description이나 title에서 요일 정보 추출 시도
-      const textToSearch = (schedule.description || '') + ' ' + (schedule.title || '');
-      const extractedDays = extractDaysFromText(textToSearch);
+    const [startHour, startMin] = schedule.startTime.split(':').map(Number);
+    const [endHour, endMin] = schedule.endTime.split(':').map(Number);
 
-      if (extractedDays && extractedDays.length > 0) {
-        days = extractedDays;
-      } else {
-        // 3. 그래도 없으면 "주 5회"처럼 횟수만 있는 경우 기본값 설정
-        if (textToSearch.includes('주 5회') || textToSearch.includes('주5회')) {
-          days = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
-        } else if (textToSearch.includes('주 3회') || textToSearch.includes('주3회')) {
-          days = ['MON', 'WED', 'FRI'];
-        } else if (textToSearch.includes('주 2회') || textToSearch.includes('주2회')) {
-          days = ['TUE', 'THU'];
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    const totalMinutes = endMinutes - startMinutes;
+
+    console.log(`🔍 시간대 분리 체크: ${schedule.title} ${schedule.startTime}-${schedule.endTime} (${totalMinutes}분)`);
+
+    // 70분 이상이면 여러 시간대로 분리
+    if (totalMinutes >= 70) {
+      const slots = [];
+      let currentStart = startMinutes;
+
+      // 일반적인 시간표 패턴을 고려한 분리
+      // 50분 수업 또는 60분 수업 기준
+      while (currentStart < endMinutes) {
+        let slotDuration = 50; // 기본 50분
+
+        // 남은 시간이 70분 이상이면 50분 또는 60분 단위로
+        const remainingMinutes = endMinutes - currentStart;
+        if (remainingMinutes >= 70) {
+          slotDuration = 50;
         } else {
-          // 요일 정보가 전혀 없으면 일단 null로 유지
-          days = null;
+          // 남은 시간을 그대로 사용
+          slotDuration = remainingMinutes;
+        }
+
+        const slotEnd = Math.min(currentStart + slotDuration, endMinutes);
+        const slotStartHour = Math.floor(currentStart / 60);
+        const slotStartMin = currentStart % 60;
+        const slotEndHour = Math.floor(slotEnd / 60);
+        const slotEndMin = slotEnd % 60;
+
+        const newSlot = {
+          ...schedule,
+          startTime: `${String(slotStartHour).padStart(2, '0')}:${String(slotStartMin).padStart(2, '0')}`,
+          endTime: `${String(slotEndHour).padStart(2, '0')}:${String(slotEndMin).padStart(2, '0')}`,
+          duration: slotEnd - currentStart
+        };
+
+        console.log(`  ✂️ 분리: ${newSlot.startTime}-${newSlot.endTime}`);
+        slots.push(newSlot);
+
+        currentStart = slotEnd;
+      }
+
+      console.log(`  ✅ 총 ${slots.length}개로 분리됨`);
+      return slots;
+    }
+
+    console.log(`  ⏭️ 분리 안 함 (70분 미만)`);
+    return [schedule];
+  };
+
+  // 요일을 영문 코드로 변환
+  let processedSchedules = rawSchedules.flatMap(schedule => {
+    // 먼저 시간대 분리
+    const splitSchedules = splitMergedTimeSlots(schedule);
+
+    return splitSchedules.map(splitSchedule => {
+      let days = null;
+
+      // 1. splitSchedule.days가 있으면 그것을 사용 (null이 아니고 배열이며 길이가 0보다 큼)
+      if (splitSchedule.days && Array.isArray(splitSchedule.days) && splitSchedule.days.length > 0) {
+        days = splitSchedule.days.map(day => {
+          const dayMap = {
+            '월': 'MON', '화': 'TUE', '수': 'WED', '목': 'THU',
+            '금': 'FRI', '토': 'SAT', '일': 'SUN'
+          };
+          return dayMap[day] || day;
+        });
+      } else {
+        // 2. days가 null이거나 비어있으면 description이나 title에서 요일 정보 추출 시도
+        const textToSearch = (splitSchedule.description || '') + ' ' + (splitSchedule.title || '');
+        const extractedDays = extractDaysFromText(textToSearch);
+
+        if (extractedDays && extractedDays.length > 0) {
+          days = extractedDays;
+        } else {
+          // 3. 그래도 없으면 "주 5회"처럼 횟수만 있는 경우 기본값 설정
+          if (textToSearch.includes('주 5회') || textToSearch.includes('주5회')) {
+            days = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
+          } else if (textToSearch.includes('주 3회') || textToSearch.includes('주3회')) {
+            days = ['MON', 'WED', 'FRI'];
+          } else if (textToSearch.includes('주 2회') || textToSearch.includes('주2회')) {
+            days = ['TUE', 'THU'];
+          } else {
+            // 요일 정보가 전혀 없으면 일단 null로 유지
+            days = null;
+          }
         }
       }
-    }
 
-    // 학년부 정보 변환
-    let detectedGradeLevel = gradeLevel;
-    if (schedule.gradeLevel) {
-      const gradeLevelMap = {
-        '초등부': GRADE_LEVELS.ELEMENTARY,
-        '중등부': GRADE_LEVELS.MIDDLE,
-        '고등부': GRADE_LEVELS.HIGH
+      // 학년부 정보 변환
+      let detectedGradeLevel = gradeLevel;
+      if (splitSchedule.gradeLevel) {
+        const gradeLevelMap = {
+          '초등부': GRADE_LEVELS.ELEMENTARY,
+          '중등부': GRADE_LEVELS.MIDDLE,
+          '고등부': GRADE_LEVELS.HIGH
+        };
+        detectedGradeLevel = gradeLevelMap[splitSchedule.gradeLevel] || gradeLevel;
+      }
+
+      return {
+        ...splitSchedule,
+        days: days,
+        gradeLevel: detectedGradeLevel,
+        source: 'ocr'
       };
-      detectedGradeLevel = gradeLevelMap[schedule.gradeLevel] || gradeLevel;
-    }
-
-    return {
-      ...schedule,
-      days: days,
-      gradeLevel: detectedGradeLevel,
-      source: 'ocr'
-    };
+    });
   });
 
   // 수업 시간이 없는 경우 추론

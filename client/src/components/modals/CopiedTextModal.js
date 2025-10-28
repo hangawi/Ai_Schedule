@@ -6,6 +6,18 @@ const CopiedTextModal = ({ text, isAnalyzing, onClose, onConfirm }) => {
   const translatedText = translateEnglishDays(text);
   const hasTranslation = translatedText !== text;
 
+  // 텍스트가 너무 길면 요약
+  const MAX_DISPLAY_LENGTH = 200;
+  const getDisplayText = (fullText) => {
+    if (fullText.length <= MAX_DISPLAY_LENGTH) {
+      return fullText;
+    }
+    return fullText.substring(0, MAX_DISPLAY_LENGTH) + '...';
+  };
+
+  const displayText = getDisplayText(text);
+  const displayTranslatedText = getDisplayText(translatedText);
+
   return (
     <div className="fixed inset-0 flex items-end sm:items-center justify-center z-50 bg-black bg-opacity-50 p-4">
       <div className="bg-white w-full max-w-md rounded-t-lg sm:rounded-lg shadow-xl p-4 sm:p-6 max-h-[80vh] sm:max-h-[90vh] overflow-y-auto transform transition-transform duration-300 ease-out">
@@ -21,22 +33,32 @@ const CopiedTextModal = ({ text, isAnalyzing, onClose, onConfirm }) => {
           <p className="text-sm text-gray-600 mb-3">
             {isAnalyzing ? '일정 관련 텍스트인지 분석 중...' : '클립보드에 복사된 내용으로 일정을 추가할까요?'}
           </p>
-          
+
           {hasTranslation && (
             <div className="mb-3">
               <p className="text-xs text-blue-600 mb-1">원본 텍스트:</p>
-              <blockquote className="bg-blue-50 p-2 rounded-md border-l-2 border-blue-300 text-gray-700 text-sm max-h-24 overflow-y-auto">
-                {text}
+              <blockquote className="bg-blue-50 p-2 rounded-md border-l-2 border-blue-300 text-gray-700 text-sm">
+                {displayText}
+                {text.length > MAX_DISPLAY_LENGTH && (
+                  <span className="text-xs text-gray-500 block mt-1">
+                    ({text.length}자 중 {MAX_DISPLAY_LENGTH}자 표시)
+                  </span>
+                )}
               </blockquote>
             </div>
           )}
-          
+
           <div>
             {hasTranslation && <p className="text-xs text-green-600 mb-1">변환된 텍스트:</p>}
-            <blockquote className={`p-3 rounded-md border-l-4 text-gray-800 text-sm max-h-32 overflow-y-auto ${
+            <blockquote className={`p-3 rounded-md border-l-4 text-gray-800 text-sm ${
               hasTranslation ? 'bg-green-50 border-green-500' : 'bg-gray-50 border-blue-500'
             }`}>
-              {translatedText}
+              {displayTranslatedText}
+              {translatedText.length > MAX_DISPLAY_LENGTH && (
+                <span className="text-xs text-gray-500 block mt-1">
+                  ({translatedText.length}자 중 {MAX_DISPLAY_LENGTH}자 표시)
+                </span>
+              )}
             </blockquote>
           </div>
         </div>

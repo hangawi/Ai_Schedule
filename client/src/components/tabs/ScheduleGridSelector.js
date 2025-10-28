@@ -57,14 +57,15 @@ const ScheduleGridSelector = ({
   readOnly = true,
   enableMonthView = false,
   showViewControls = true,
-  initialTimeRange = null
+  initialTimeRange = null,
+  defaultShowMerged = true
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [weekDates, setWeekDates] = useState([]);
   const [viewMode, setViewMode] = useState('week'); // 'week', 'month'
   const [timeRange, setTimeRange] = useState(initialTimeRange || { start: 9, end: 18 });
   const [showFullDay, setShowFullDay] = useState(false);
-  const [showMerged, setShowMerged] = useState(true); // 기본값을 병합 모드로 설정
+  const [showMerged, setShowMerged] = useState(defaultShowMerged); // props로 받은 기본값 사용
 
   // 월간 모드에서 선택된 날짜에 대한 세부 시간표 모달
   const [selectedDateForDetail, setSelectedDateForDetail] = useState(null);
@@ -386,8 +387,12 @@ const ScheduleGridSelector = ({
         const lastBlock = currentMergeGroup[currentMergeGroup.length - 1];
         const lastEndTime = getEndTimeForBlock(lastBlock);
 
-        // 연속된 시간이면 같은 그룹에 추가
-        if (lastEndTime === block.startTime && lastBlock.type === block.type) {
+        // 연속된 시간이고, 타입과 제목이 같으면 같은 그룹에 추가
+        const isSameBlock = lastEndTime === block.startTime &&
+                           lastBlock.type === block.type &&
+                           lastBlock.title === block.title;
+
+        if (isSameBlock) {
           currentMergeGroup.push(block);
         } else {
           // 연속되지 않거나 타입이 다르면 기존 그룹을 병합하여 추가

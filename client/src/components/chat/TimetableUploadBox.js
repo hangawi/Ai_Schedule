@@ -85,26 +85,37 @@ const TimetableUploadBox = ({ onSchedulesExtracted, onClose }) => {
 
       // OCR 처리 (타임아웃 추가)
       console.log('🤖 OCR 처리 중... (최대 5분 소요될 수 있습니다)');
-      setProgress({ current: 0, total: selectedImages.length, message: `이미지 분석 중... (0/${selectedImages.length})` });
+      setProgress({ current: 0, total: 100, message: `AI가 이미지를 분석하고 있습니다...` });
 
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('처리 시간이 너무 오래 걸립니다. 이미지 개수를 줄여주세요.')), 300000) // 5분
       );
 
-      // 진행률 시뮬레이션 (실제 백엔드는 한 번에 처리하지만, 사용자에게 진행 표시)
+      // 진행률 시뮬레이션 (부드럽게 증가)
+      let progressValue = 0;
       const progressInterval = setInterval(() => {
         setProgress(prev => {
-          if (prev.current < prev.total) {
-            const newCurrent = prev.current + 1;
+          // 90%까지만 시뮬레이션, 완료되면 100%로
+          if (progressValue < 90) {
+            progressValue += Math.random() * 15; // 0-15% 랜덤 증가
+            progressValue = Math.min(progressValue, 90);
+
+            let message = 'AI가 이미지를 분석하고 있습니다...';
+            if (progressValue > 30 && progressValue <= 60) {
+              message = '시간표 데이터를 추출하고 있습니다...';
+            } else if (progressValue > 60) {
+              message = '일정을 정리하고 있습니다...';
+            }
+
             return {
-              ...prev,
-              current: newCurrent,
-              message: `이미지 분석 중... (${newCurrent}/${prev.total})`
+              current: Math.floor(progressValue),
+              total: 100,
+              message
             };
           }
           return prev;
         });
-      }, 2000); // 2초마다 진행률 증가
+      }, 800); // 0.8초마다 증가
 
       const result = await Promise.race([
         extractSchedulesFromImages(selectedImages, birthdate),
@@ -112,7 +123,7 @@ const TimetableUploadBox = ({ onSchedulesExtracted, onClose }) => {
       ]);
 
       clearInterval(progressInterval);
-      setProgress({ current: selectedImages.length, total: selectedImages.length, message: '처리 완료!' });
+      setProgress({ current: 100, total: 100, message: '✅ 분석 완료!' });
 
       console.log('✅ OCR 처리 완료!', result);
       setExtractedData(result);
