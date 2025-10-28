@@ -56,12 +56,13 @@ const ScheduleGridSelector = ({
   personalTimes,
   readOnly = true,
   enableMonthView = false,
-  showViewControls = true
+  showViewControls = true,
+  initialTimeRange = null
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [weekDates, setWeekDates] = useState([]);
   const [viewMode, setViewMode] = useState('week'); // 'week', 'month'
-  const [timeRange, setTimeRange] = useState({ start: 9, end: 18 });
+  const [timeRange, setTimeRange] = useState(initialTimeRange || { start: 9, end: 18 });
   const [showFullDay, setShowFullDay] = useState(false);
   const [showMerged, setShowMerged] = useState(true); // 기본값을 병합 모드로 설정
 

@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, MessageCircle, Image, X } from 'lucide-react';
+import { Send, MessageCircle, Image } from 'lucide-react';
+import TimetableUploadBox from './TimetableUploadBox';
+import ScheduleOptimizationModal from '../modals/ScheduleOptimizationModal';
+import { userService } from '../../services/userService';
 
 const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
   const [messages, setMessages] = useState([]);
@@ -8,6 +11,9 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
   const [isMobile, setIsMobile] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [showTimetableUpload, setShowTimetableUpload] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [extractedScheduleData, setExtractedScheduleData] = useState(null);
   const messagesEndRef = useRef(null);
   const imageInputRef = useRef(null);
 
@@ -27,23 +33,128 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  const handleImageSelect = (event) => {
-    const file = event.target.files[0];
-    if (file && file.type.startsWith('image/')) {
-      setSelectedImage(file);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const removeImage = () => {
     setSelectedImage(null);
     setImagePreview(null);
     if (imageInputRef.current) {
       imageInputRef.current.value = '';
+    }
+  };
+
+  // 시간표를 캘린더에 추가하는 함수
+  const addSchedulesToCalendar = async (schedules, applyScope = 'month') => {
+    try {
+      // 기존 스케줄 가져오기
+      const userSchedule = await userService.getUserSchedule();
+      const existingSchedule = userSchedule.defaultSchedule || [];
+
+      // 시간표를 defaultSchedule 형식으로 변환
+      console.log('📝 변환할 스케줄:', schedules, '범위:', applyScope);
+
+      const newSchedules = [];
+
+      schedules.forEach(schedule => {
+        if (!schedule.days || schedule.days.length === 0) {
+          console.warn('⚠️ 요일 정보 없음:', schedule);
+          return; // 요일 정보가 없으면 스킵
+        }
+
+        const dayMap = {
+          'MON': 1, 'TUE': 2, 'WED': 3, 'THU': 4,
+          'FRI': 5, 'SAT': 6, 'SUN': 7
+        };
+
+        const mappedDays = schedule.days.map(day => dayMap[day] || day).filter(d => d);
+
+        // 각 요일마다 별도의 스케줄 항목으로 생성
+        mappedDays.forEach(dayOfWeek => {
+          const converted = {
+            dayOfWeek: dayOfWeek,
+            startTime: schedule.startTime,
+            endTime: schedule.endTime,
+            priority: 2,
+            specificDate: applyScope === 'week' ? null : undefined // 이번 주만일 경우 나중에 처리
+          };
+
+          console.log('✅ 변환된 schedule:', converted);
+          newSchedules.push(converted);
+        });
+      });
+
+      console.log('📦 전체 newSchedules:', newSchedules);
+
+      // 기존 일정과 합치기
+      const updatedSchedule = [...existingSchedule, ...newSchedules];
+
+      // 서버에 저장
+      console.log('💾 서버에 저장 중... 전체 defaultSchedule 개수:', updatedSchedule.length);
+      const result = await userService.updateUserSchedule({
+        ...userSchedule,
+        defaultSchedule: updatedSchedule
+      });
+      console.log('💾 저장 완료:', result);
+
+      console.log(`✅ ${newSchedules.length}개의 시간표를 캘린더에 추가했습니다!`);
+
+      // 캘린더 새로고침
+      console.log('🔄 캘린더 새로고침 호출:', onEventUpdate ? 'OK' : 'onEventUpdate 없음');
+      if (onEventUpdate) {
+        onEventUpdate();
+      }
+
+      // ProfileTab의 calendarUpdate 이벤트 발생
+      window.dispatchEvent(new Event('calendarUpdate'));
+      console.log('📅 calendarUpdate 이벤트 발생!');
+
+      return { success: true, count: newSchedules.length };
+    } catch (error) {
+      console.error('시간표 추가 에러:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // 시간표 추출 완료 핸들러
+  const handleSchedulesExtracted = async (result) => {
+    // 충돌 여부와 관계없이 항상 모달을 보여줌
+    const botMessage = {
+      id: Date.now(),
+      text: `총 ${result.data.schedules.length}개의 시간표를 찾았습니다.${result.data.conflicts.length > 0 ? ` (${result.data.conflicts.length}개의 충돌 발견)` : ''}\n시간표 예시를 보시겠습니까?`,
+      sender: 'bot',
+      timestamp: new Date(),
+      _nextStep: 'show_schedule_examples',
+      _scheduleData: result.data,
+      _showButtons: true,
+      _buttons: [
+        { text: '예', value: '예' },
+        { text: '아니오', value: '아니오' }
+      ],
+      _isScheduleMessage: true
+    };
+    setMessages(prev => [...prev, botMessage]);
+    setExtractedScheduleData(result.data);
+    setShowTimetableUpload(false);
+
+    if (result.type === 'schedules_extracted') {
+      // 더 이상 사용하지 않음 - 항상 모달 보여줌
+
+    } else if (result.type === 'schedule_selected') {
+      // 사용자가 최적 조합 중 하나를 선택함
+      const schedules = result.schedules;
+      const applyScope = result.applyScope || 'month';
+
+      // 실제로 일정 추가
+      const result_add = await addSchedulesToCalendar(schedules, applyScope);
+
+      const botMessage = {
+        id: Date.now(),
+        text: result_add.success
+          ? `선택하신 시간표 ${result_add.count}개를 일정에 추가했습니다! ✅ 프로필 탭에서 확인하세요!`
+          : `시간표 추가 중 오류가 발생했습니다: ${result_add.error}`,
+        sender: 'bot',
+        timestamp: new Date(),
+        success: result_add.success
+      };
+      setMessages(prev => [...prev, botMessage]);
     }
   };
 
@@ -140,7 +251,6 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
           setMessages(prev => [...prev, newEventLoadingMessage]);
 
           const newPendingStart = new Date(pendingEvent.startTime);
-          const newPendingEnd = new Date(pendingEvent.endTime);
           const newDateStr = `${newPendingStart.getMonth() + 1}월 ${newPendingStart.getDate()}일`;
           const newTimeStr = newPendingStart.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: true });
           const newEventMessage = `${newDateStr} ${newTimeStr}에 "${pendingEvent.title}" 일정을 추가해줘`;
@@ -328,8 +438,6 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
   // Corrected handleTimeSelection
   const handleTimeSelection = async (selectedTime, pendingEvent, conflictingEvent, action, nextStep) => {
     console.log('[ChatBox] handleTimeSelection called:', { action, nextStep, currentTab, conflictingEvent });
-    const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-    const token = localStorage.getItem('token');
 
     try {
       const loadingMessage = { id: Date.now(), text: '일정을 확정하고 있습니다...', sender: 'bot', timestamp: new Date(), isLoading: true };
@@ -460,6 +568,90 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
 
   const handleSend = async () => {
     if (!inputText.trim() && !selectedImage) return;
+
+    // 마지막 봇 메시지 확인 (시간표 예시 보기 처리)
+    const lastBotMessage = messages.filter(m => m.sender === 'bot').pop();
+
+    if (lastBotMessage?._nextStep === 'show_schedule_examples') {
+      const userResponse = inputText.trim().toLowerCase();
+
+      const userMessage = {
+        id: Date.now(),
+        text: inputText,
+        sender: 'user',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMessage]);
+      setInputText('');
+
+      if (userResponse.includes('예') || userResponse.includes('네') ||
+          userResponse.includes('yes') || userResponse.includes('보여') || userResponse.includes('응')) {
+        // 모달 표시
+        setShowScheduleModal(true);
+        const botMessage = {
+          id: Date.now() + 1,
+          text: '최적 시간표 예시를 보여드립니다. 원하시는 조합을 선택해주세요! 📅',
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, botMessage]);
+        return;
+      } else {
+        // 사용자가 거절한 경우
+        const botMessage = {
+          id: Date.now() + 1,
+          text: '알겠습니다. 원본 시간표를 그대로 적용하시겠습니까? (예/아니오)',
+          sender: 'bot',
+          timestamp: new Date(),
+          _nextStep: 'confirm_add_schedules',
+          _schedules: lastBotMessage._scheduleData?.schedules
+        };
+        setMessages(prev => [...prev, botMessage]);
+        return;
+      }
+    }
+
+    // 시간표 추가 확인 처리
+    if (lastBotMessage?._nextStep === 'confirm_add_schedules') {
+      const userResponse = inputText.trim().toLowerCase();
+
+      const userMessage = {
+        id: Date.now(),
+        text: inputText,
+        sender: 'user',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMessage]);
+      setInputText('');
+
+      if (userResponse.includes('예') || userResponse.includes('네') ||
+          userResponse.includes('yes') || userResponse.includes('응')) {
+
+        // 실제로 일정 추가
+        const result = await addSchedulesToCalendar(lastBotMessage._schedules);
+
+        const botMessage = {
+          id: Date.now() + 1,
+          text: result.success
+            ? `시간표 ${result.count}개를 일정에 추가했습니다! ✅ 프로필 탭에서 확인하세요!`
+            : `시간표 추가 중 오류가 발생했습니다: ${result.error}`,
+          sender: 'bot',
+          timestamp: new Date(),
+          success: result.success
+        };
+        setMessages(prev => [...prev, botMessage]);
+        return;
+      } else {
+        const botMessage = {
+          id: Date.now() + 1,
+          text: '알겠습니다. 시간표 추가를 취소했습니다.',
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, botMessage]);
+        return;
+      }
+    }
 
     const userMessage = {
       id: Date.now(),
@@ -621,7 +813,7 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
                   className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-sm p-3 rounded-lg text-sm ${ 
+                    className={`max-w-sm p-3 rounded-lg text-sm ${
                       message.sender === 'user'
                         ? 'bg-blue-500 text-white rounded-br-none'
                         : message.isLoading
@@ -630,6 +822,8 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
                         ? 'bg-red-100 text-red-800 rounded-bl-none'
                         : message.success === true
                         ? 'bg-green-100 text-green-800 rounded-bl-none'
+                        : message._isScheduleMessage
+                        ? 'bg-blue-100 text-blue-900 rounded-bl-none'
                         : 'bg-gray-100 text-gray-800 rounded-bl-none'
                     }`}
                   >
@@ -725,6 +919,44 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
                       </div>
                     )}
 
+                    {/* 예/아니오 버튼 */}
+                    {message._showButtons && message._buttons && (
+                      <div className="mt-3 flex gap-2">
+                        {message._buttons.map((button, index) => (
+                          <button
+                            key={index}
+                            onClick={() => {
+                              // "예" 버튼이면 바로 모달 열기
+                              if (button.value === '예' && message._nextStep === 'show_schedule_examples') {
+                                setShowScheduleModal(true);
+                              } else if (button.value === '예' && message._nextStep === 'confirm_add_schedules') {
+                                // 시간표 추가
+                                addSchedulesToCalendar(message._schedules).then(result => {
+                                  const botMessage = {
+                                    id: Date.now() + 1,
+                                    text: result.success
+                                      ? `시간표 ${result.count}개를 일정에 추가했습니다! ✅ 프로필 탭에서 확인하세요!`
+                                      : `시간표 추가 중 오류가 발생했습니다: ${result.error}`,
+                                    sender: 'bot',
+                                    timestamp: new Date(),
+                                    success: result.success
+                                  };
+                                  setMessages(prev => [...prev, botMessage]);
+                                });
+                              } else {
+                                // "아니오"는 기본 처리
+                                setInputText(button.value);
+                                setTimeout(() => handleSend(), 100);
+                              }
+                            }}
+                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium shadow-md"
+                          >
+                            {button.text}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     {/* 추출된 스케줄 정보 표시 */}
                     {message.extractedSchedules && message.extractedSchedules.length > 0 && (
                       <div className="mt-3 p-2 bg-white bg-opacity-20 rounded border">
@@ -765,46 +997,15 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
 
             {/* 입력 영역 */}
             <div className="p-3 border-t bg-white rounded-b-lg flex-shrink-0">
-              {/* 이미지 미리보기 */}
-              {imagePreview && (
-                <div className="mb-3 relative">
-                  <div className="flex items-center space-x-2 p-2 bg-gray-50 rounded border">
-                    <img
-                      src={imagePreview}
-                      alt="미리보기"
-                      className="w-16 h-16 object-cover rounded border"
-                    />
-                    <div className="flex-1 text-sm text-gray-600">
-                      사진이 선택되었습니다
-                    </div>
-                    <button
-                      onClick={removeImage}
-                      className="p-1 text-red-500 hover:text-red-700"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className={`flex ${isMobile ? 'space-x-2' : 'space-x-2'}`}> 
-                {/* 이미지 업로드 버튼 */}
+              <div className={`flex ${isMobile ? 'space-x-2' : 'space-x-2'}`}>
+                {/* 시간표 업로드 버튼 (기존 이미지 버튼 대체) */}
                 <button
-                  onClick={() => imageInputRef.current?.click()}
+                  onClick={() => setShowTimetableUpload(true)}
                   className={`${isMobile ? 'p-2 w-12 h-12' : 'p-3'} bg-gray-500 text-white rounded-lg hover:bg-gray-600 flex items-center justify-center flex-shrink-0`}
-                  title="이미지 업로드"
+                  title="시간표 업로드"
                 >
                   <Image size={isMobile ? 20 : 18} />
                 </button>
-
-                {/* 숨겨진 파일 입력 */}
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageSelect}
-                  className="hidden"
-                />
 
                 <input
                   type="text"
@@ -825,6 +1026,33 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 시간표 업로드 모달 */}
+      {showTimetableUpload && (
+        <TimetableUploadBox
+          onSchedulesExtracted={handleSchedulesExtracted}
+          onClose={() => setShowTimetableUpload(false)}
+        />
+      )}
+
+      {/* 최적 시간표 모달 */}
+      {showScheduleModal && extractedScheduleData && (
+        <ScheduleOptimizationModal
+          combinations={extractedScheduleData.optimalCombinations}
+          onSelect={(schedules, applyScope) => {
+            handleSchedulesExtracted({
+              type: 'schedule_selected',
+              schedules: schedules,
+              applyScope: applyScope,
+              data: extractedScheduleData
+            });
+            setShowScheduleModal(false);
+          }}
+          onClose={() => setShowScheduleModal(false)}
+          userAge={extractedScheduleData.age}
+          gradeLevel={extractedScheduleData.gradeLevel}
+        />
       )}
     </>
   );

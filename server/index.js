@@ -100,6 +100,7 @@ app.use('/api/calendar', require('./routes/calendar'));
 app.use('/api/call-analysis', require('./routes/callAnalysis'));
 app.use('/api/coordination', require('./routes/coordination'));
 app.use('/api/conflict', require('./routes/conflict'));
+app.use('/api/ocr', require('./routes/ocr'));
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '..', 'client', 'build')));
