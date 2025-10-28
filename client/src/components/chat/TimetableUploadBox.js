@@ -117,12 +117,24 @@ const TimetableUploadBox = ({ onSchedulesExtracted, onClose }) => {
       console.log('✅ OCR 처리 완료!', result);
       setExtractedData(result);
 
-      // 항상 모달 표시
-      if (onSchedulesExtracted) {
-        onSchedulesExtracted({
-          type: 'ask_show_examples',
-          data: result
-        });
+      // 나이 필터링으로 0개가 된 경우 처리
+      if (result.schedules.length === 0 && result.allSchedulesBeforeFilter && result.allSchedulesBeforeFilter.length > 0) {
+        // 필터링 전 스케줄이 있었다면 나이 필터링으로 제외된 것
+        if (onSchedulesExtracted) {
+          onSchedulesExtracted({
+            type: 'age_filtered',
+            data: result,
+            allSchedulesCount: result.allSchedulesBeforeFilter.length
+          });
+        }
+      } else {
+        // 항상 모달 표시
+        if (onSchedulesExtracted) {
+          onSchedulesExtracted({
+            type: 'ask_show_examples',
+            data: result
+          });
+        }
       }
 
     } catch (err) {

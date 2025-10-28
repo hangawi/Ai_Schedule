@@ -757,6 +757,7 @@ export const extractSchedulesFromImages = async (imageFiles, birthdate) => {
     age,
     gradeLevel,
     schedules: filteredSchedules,
+    allSchedulesBeforeFilter: schedulesWithDuration, // 필터링 전 전체 스케줄
     conflicts,
     optimalCombinations,
     ocrResults: [],
