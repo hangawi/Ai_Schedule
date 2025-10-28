@@ -46,12 +46,12 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
     try {
       // 기존 스케줄 가져오기
       const userSchedule = await userService.getUserSchedule();
-      const existingSchedule = userSchedule.defaultSchedule || [];
+      const existingPersonalTimes = userSchedule.personalTimes || [];
 
-      // 시간표를 defaultSchedule 형식으로 변환
+      // 시간표를 personalTimes 형식으로 변환
       console.log('📝 변환할 스케줄:', schedules, '범위:', applyScope);
 
-      const newSchedules = [];
+      const newPersonalTimes = [];
 
       schedules.forEach(schedule => {
         if (!schedule.days || schedule.days.length === 0) {
@@ -66,35 +66,72 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
 
         const mappedDays = schedule.days.map(day => dayMap[day] || day).filter(d => d);
 
-        // 각 요일마다 별도의 스케줄 항목으로 생성
-        mappedDays.forEach(dayOfWeek => {
+        // 이번 주만 옵션일 경우 각 요일별로 이번 주 날짜 계산
+        if (applyScope === 'week') {
+          const today = new Date();
+          const currentDay = today.getDay(); // 0=일, 1=월, ..., 6=토
+
+          mappedDays.forEach(targetDay => {
+            // targetDay는 1=월, 2=화, ..., 7=일
+            // currentDay와 비교하기 위해 변환 (0=일, 1=월)
+            const targetDayIndex = targetDay === 7 ? 0 : targetDay;
+
+            // 이번 주에서 해당 요일까지의 일수 차이 계산
+            let daysUntilTarget = targetDayIndex - currentDay;
+            if (daysUntilTarget < 0) {
+              daysUntilTarget += 7; // 다음 주로 넘어감
+            }
+
+            const targetDate = new Date(today);
+            targetDate.setDate(today.getDate() + daysUntilTarget);
+
+            const converted = {
+              id: Date.now() + Math.floor(Math.random() * 100000),
+              title: schedule.title || '수업',
+              type: 'study',
+              startTime: schedule.startTime,
+              endTime: schedule.endTime,
+              days: [targetDay],
+              isRecurring: false,
+              specificDate: targetDate.toISOString().split('T')[0], // YYYY-MM-DD
+              color: '#9333ea'
+            };
+
+            console.log('✅ 변환된 personalTime (이번 주):', converted);
+            newPersonalTimes.push(converted);
+          });
+        } else {
+          // 전체 달 옵션 (반복)
           const converted = {
-            dayOfWeek: dayOfWeek,
+            id: Date.now() + Math.floor(Math.random() * 100000),
+            title: schedule.title || '수업',
+            type: 'study',
             startTime: schedule.startTime,
             endTime: schedule.endTime,
-            priority: 2,
-            specificDate: applyScope === 'week' ? null : undefined // 이번 주만일 경우 나중에 처리
+            days: mappedDays,
+            isRecurring: true,
+            color: '#9333ea'
           };
 
-          console.log('✅ 변환된 schedule:', converted);
-          newSchedules.push(converted);
-        });
+          console.log('✅ 변환된 personalTime (반복):', converted);
+          newPersonalTimes.push(converted);
+        }
       });
 
-      console.log('📦 전체 newSchedules:', newSchedules);
+      console.log('📦 전체 newPersonalTimes:', newPersonalTimes);
 
       // 기존 일정과 합치기
-      const updatedSchedule = [...existingSchedule, ...newSchedules];
+      const updatedPersonalTimes = [...existingPersonalTimes, ...newPersonalTimes];
 
       // 서버에 저장
-      console.log('💾 서버에 저장 중... 전체 defaultSchedule 개수:', updatedSchedule.length);
+      console.log('💾 서버에 저장 중... 전체 personalTimes 개수:', updatedPersonalTimes.length);
       const result = await userService.updateUserSchedule({
         ...userSchedule,
-        defaultSchedule: updatedSchedule
+        personalTimes: updatedPersonalTimes
       });
       console.log('💾 저장 완료:', result);
 
-      console.log(`✅ ${newSchedules.length}개의 시간표를 캘린더에 추가했습니다!`);
+      console.log(`✅ ${newPersonalTimes.length}개의 시간표를 캘린더에 추가했습니다!`);
 
       // 캘린더 새로고침
       console.log('🔄 캘린더 새로고침 호출:', onEventUpdate ? 'OK' : 'onEventUpdate 없음');
@@ -103,10 +140,12 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
       }
 
       // ProfileTab의 calendarUpdate 이벤트 발생
-      window.dispatchEvent(new Event('calendarUpdate'));
+      window.dispatchEvent(new CustomEvent('calendarUpdate', {
+        detail: { type: 'schedule_added', context: 'profile' }
+      }));
       console.log('📅 calendarUpdate 이벤트 발생!');
 
-      return { success: true, count: newSchedules.length };
+      return { success: true, count: newPersonalTimes.length };
     } catch (error) {
       console.error('시간표 추가 에러:', error);
       return { success: false, error: error.message };
@@ -115,6 +154,28 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
 
   // 시간표 추출 완료 핸들러
   const handleSchedulesExtracted = async (result) => {
+    // 나이 필터링으로 0개가 된 경우
+    if (result.type === 'age_filtered') {
+      const botMessage = {
+        id: Date.now(),
+        text: `총 ${result.allSchedulesCount}개의 시간표를 찾았지만, 나이(${result.data.age}세)에 맞지 않아 필터링되었습니다.\n\n예상 학년부: ${result.data.gradeLevel === 'elementary' ? '초등부' : result.data.gradeLevel === 'middle' ? '중등부' : '고등부'}\n\n그래도 추가하시겠습니까?`,
+        sender: 'bot',
+        timestamp: new Date(),
+        _nextStep: 'force_add_filtered_schedules',
+        _scheduleData: result.data,
+        _showButtons: true,
+        _buttons: [
+          { text: '예, 강제로 추가', value: '강제추가' },
+          { text: '아니오', value: '취소' }
+        ],
+        _isScheduleMessage: true
+      };
+      setMessages(prev => [...prev, botMessage]);
+      setExtractedScheduleData(result.data);
+      setShowTimetableUpload(false);
+      return;
+    }
+
     // 충돌 여부와 관계없이 항상 모달을 보여줌
     const botMessage = {
       id: Date.now(),
@@ -921,39 +982,51 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
 
                     {/* 예/아니오 버튼 */}
                     {message._showButtons && message._buttons && (
-                      <div className="mt-3 flex gap-2">
-                        {message._buttons.map((button, index) => (
-                          <button
-                            key={index}
-                            onClick={() => {
-                              // "예" 버튼이면 바로 모달 열기
-                              if (button.value === '예' && message._nextStep === 'show_schedule_examples') {
-                                setShowScheduleModal(true);
-                              } else if (button.value === '예' && message._nextStep === 'confirm_add_schedules') {
-                                // 시간표 추가
-                                addSchedulesToCalendar(message._schedules).then(result => {
-                                  const botMessage = {
-                                    id: Date.now() + 1,
-                                    text: result.success
-                                      ? `시간표 ${result.count}개를 일정에 추가했습니다! ✅ 프로필 탭에서 확인하세요!`
-                                      : `시간표 추가 중 오류가 발생했습니다: ${result.error}`,
-                                    sender: 'bot',
-                                    timestamp: new Date(),
-                                    success: result.success
+                      <div className="mt-3 p-2 bg-white bg-opacity-20 rounded border">
+                        <div className="space-y-2">
+                          {message._buttons.map((button, index) => (
+                            <button
+                              key={index}
+                              onClick={() => {
+                                // "예" 버튼이면 바로 모달 열기
+                                if (button.value === '예' && message._nextStep === 'show_schedule_examples') {
+                                  setShowScheduleModal(true);
+                                } else if (button.value === '강제추가' && message._nextStep === 'force_add_filtered_schedules') {
+                                  // 필터링 전 전체 스케줄로 모달 열기
+                                  const updatedData = {
+                                    ...message._scheduleData,
+                                    schedules: message._scheduleData.allSchedulesBeforeFilter,
+                                    conflicts: [], // 필터링 없이 전체 추가하므로 충돌 재계산 생략
+                                    optimalCombinations: [message._scheduleData.allSchedulesBeforeFilter]
                                   };
-                                  setMessages(prev => [...prev, botMessage]);
-                                });
-                              } else {
-                                // "아니오"는 기본 처리
-                                setInputText(button.value);
-                                setTimeout(() => handleSend(), 100);
-                              }
-                            }}
-                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium shadow-md"
-                          >
-                            {button.text}
-                          </button>
-                        ))}
+                                  setExtractedScheduleData(updatedData);
+                                  setShowScheduleModal(true);
+                                } else if (button.value === '예' && message._nextStep === 'confirm_add_schedules') {
+                                  // 시간표 추가
+                                  addSchedulesToCalendar(message._schedules).then(result => {
+                                    const botMessage = {
+                                      id: Date.now() + 1,
+                                      text: result.success
+                                        ? `시간표 ${result.count}개를 일정에 추가했습니다! ✅ 프로필 탭에서 확인하세요!`
+                                        : `시간표 추가 중 오류가 발생했습니다: ${result.error}`,
+                                      sender: 'bot',
+                                      timestamp: new Date(),
+                                      success: result.success
+                                    };
+                                    setMessages(prev => [...prev, botMessage]);
+                                  });
+                                } else {
+                                  // "아니오"는 기본 처리
+                                  setInputText(button.value);
+                                  setTimeout(() => handleSend(), 100);
+                                }
+                              }}
+                              className="w-full px-3 py-2 bg-white bg-opacity-40 hover:bg-opacity-60 rounded text-xs text-left transition-all font-medium"
+                            >
+                              {button.text}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
 

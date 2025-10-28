@@ -305,6 +305,13 @@ const ProfileTab = ({ onEditingChange }) => {
         return;
       }
 
+      // 시간표 추가인 경우
+      if (event.detail && event.detail.type === 'schedule_added' && event.detail.context === 'profile') {
+        console.log('📚 [ProfileTab] 시간표 추가 감지, 전체 새로고침');
+        fetchSchedule();
+        return;
+      }
+
       // 반복 일정 추가인 경우
       if (event.detail && event.detail.isRecurring && event.detail.context === 'profile') {
         console.log('🔁 [ProfileTab] 반복 일정 추가 감지, 전체 새로고침');
