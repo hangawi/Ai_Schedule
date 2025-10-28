@@ -15,6 +15,7 @@ const ScheduleOptimizationModal = ({
   const [modifiedCombinations, setModifiedCombinations] = useState(combinations);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
+  const [selectedSchedules, setSelectedSchedules] = useState({}); // 겹치는 일정 선택 상태
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -70,9 +71,9 @@ const ScheduleOptimizationModal = ({
       }
     });
 
-    // 최소 9시, 최대 22시로 제한
-    minHour = Math.max(Math.min(minHour, 9), 0);
-    maxHour = Math.min(Math.max(maxHour, 18), 24);
+    // 실제 시간표에 맞춰 동적 조정 (제한 없음)
+    if (minHour === 24) minHour = 9; // 시간 정보가 없으면 기본 9시
+    if (maxHour === 0) maxHour = 18; // 시간 정보가 없으면 기본 18시
 
     return { start: minHour, end: maxHour };
   };
@@ -109,22 +110,8 @@ const ScheduleOptimizationModal = ({
 
   const handleSelectSchedule = () => {
     console.log('🔍 선택된 combination:', currentCombination);
-    console.log('🔍 원본 combinations[currentIndex]:', combinations[currentIndex]);
 
-    // 채팅으로 수정된 내용 사용 (modifiedCombinations)
-    // 단, 원본 데이터의 startTime/endTime 사용
-    const selectedSchedules = modifiedCombinations[currentIndex].map((modifiedSchedule, idx) => {
-      const originalSchedule = combinations[currentIndex][idx];
-      return {
-        ...modifiedSchedule,
-        startTime: originalSchedule?.startTime || modifiedSchedule.startTime,
-        endTime: originalSchedule?.endTime || modifiedSchedule.endTime
-      };
-    });
-
-    console.log('🔍 최종 선택된 schedules:', selectedSchedules);
-
-    onSelect(selectedSchedules, applyScope);
+    onSelect(currentCombination, applyScope);
     onClose();
   };
 
@@ -520,26 +507,29 @@ const ScheduleOptimizationModal = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-6 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full my-auto max-h-[85vh] overflow-hidden flex flex-row">
-        {/* 왼쪽: 시간표 영역 */}
-        <div className="flex-1 flex flex-col overflow-hidden" style={{ maxWidth: '60%' }}>
-          {/* 헤더 */}
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-5 py-3 flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold">최적 시간표 추천</h2>
-                <p className="text-xs text-purple-100 mt-1">
-                  충돌 없는 시간표 조합을 찾았습니다
-                </p>
-              </div>
-              <button
-                onClick={onClose}
-                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
-              >
-                <X size={24} />
-              </button>
+      <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full my-auto max-h-[85vh] overflow-hidden flex flex-col">
+        {/* 통합 헤더 */}
+        <div className="bg-gradient-to-r from-purple-600 via-purple-500 to-blue-600 text-white px-5 py-3 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex-1 text-center">
+              <h2 className="text-xl font-bold">최적 시간표 추천</h2>
+              <p className="text-xs text-purple-100 mt-1">
+                충돌 없는 시간표 조합을 찾았습니다
+              </p>
             </div>
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
+            >
+              <X size={24} />
+            </button>
           </div>
+        </div>
+
+        {/* 메인 컨텐츠 영역 */}
+        <div className="flex flex-row flex-1 overflow-hidden">
+          {/* 왼쪽: 시간표 영역 */}
+          <div className="flex-1 flex flex-col overflow-hidden">{/* 헤더를 제거하고 내용만 유지 */}
 
         {/* 사용자 정보 */}
         <div className="px-5 py-3 bg-purple-50 border-b border-purple-100 flex-shrink-0">
@@ -612,6 +602,7 @@ const ScheduleOptimizationModal = ({
               enableMonthView={false}
               showViewControls={false}
               initialTimeRange={timeRange}
+              defaultShowMerged={true}
             />
           </div>
         </div>
@@ -666,18 +657,7 @@ const ScheduleOptimizationModal = ({
       </div>
 
       {/* 오른쪽: 채팅 영역 */}
-      <div className="flex flex-col bg-gradient-to-b from-purple-50 to-blue-50" style={{ width: '40%', maxWidth: '420px' }}>
-        {/* 채팅 헤더 */}
-        <div className="bg-gradient-to-r from-purple-600 via-purple-500 to-blue-600 text-white px-5 py-4 flex-shrink-0 shadow-md">
-          <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
-            <div>
-              <h3 className="font-bold text-base">시간표 편집 어시스턴트</h3>
-              <p className="text-xs text-purple-100 mt-0.5">대화로 시간표를 자유롭게 수정하세요</p>
-            </div>
-          </div>
-        </div>
-
+      <div className="flex flex-col bg-gradient-to-b from-purple-50 to-blue-50 border-l border-gray-200" style={{ width: '40%', maxWidth: '420px' }}>
         {/* 채팅 메시지 영역 */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4" style={{ background: 'linear-gradient(to bottom, #faf5ff, #eff6ff)' }}>
           {chatMessages.length === 0 && (
@@ -762,7 +742,7 @@ const ScheduleOptimizationModal = ({
           </form>
         </div>
       </div>
-
+        </div>
       </div>
     </div>
   );
