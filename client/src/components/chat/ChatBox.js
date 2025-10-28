@@ -125,19 +125,18 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
           const today = new Date();
           const currentDay = today.getDay(); // 0=일, 1=월, ..., 6=토
 
+          // 이번 주 월요일 날짜 계산
+          const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay; // 일요일이면 -6, 아니면 월요일까지 차이
+          const thisWeekMonday = new Date(today);
+          thisWeekMonday.setDate(today.getDate() + mondayOffset);
+
           mappedDays.forEach(targetDay => {
             // targetDay는 1=월, 2=화, ..., 7=일
-            // currentDay와 비교하기 위해 변환 (0=일, 1=월)
-            const targetDayIndex = targetDay === 7 ? 0 : targetDay;
+            // 이번 주 월요일로부터 며칠 후인지 계산
+            const daysFromMonday = targetDay === 7 ? 6 : targetDay - 1; // 월=0, 화=1, ..., 일=6
 
-            // 이번 주에서 해당 요일까지의 일수 차이 계산
-            let daysUntilTarget = targetDayIndex - currentDay;
-            if (daysUntilTarget < 0) {
-              daysUntilTarget += 7; // 다음 주로 넘어감
-            }
-
-            const targetDate = new Date(today);
-            targetDate.setDate(today.getDate() + daysUntilTarget);
+            const targetDate = new Date(thisWeekMonday);
+            targetDate.setDate(thisWeekMonday.getDate() + daysFromMonday);
 
             maxId++;
             const converted = {

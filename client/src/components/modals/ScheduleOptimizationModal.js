@@ -111,8 +111,20 @@ const ScheduleOptimizationModal = ({
     console.log('🔍 선택된 combination:', currentCombination);
     console.log('🔍 원본 combinations[currentIndex]:', combinations[currentIndex]);
 
-    // modifiedCombinations가 아닌 원본 combinations 사용
-    onSelect(combinations[currentIndex], applyScope);
+    // 채팅으로 수정된 내용 사용 (modifiedCombinations)
+    // 단, 원본 데이터의 startTime/endTime 사용
+    const selectedSchedules = modifiedCombinations[currentIndex].map((modifiedSchedule, idx) => {
+      const originalSchedule = combinations[currentIndex][idx];
+      return {
+        ...modifiedSchedule,
+        startTime: originalSchedule?.startTime || modifiedSchedule.startTime,
+        endTime: originalSchedule?.endTime || modifiedSchedule.endTime
+      };
+    });
+
+    console.log('🔍 최종 선택된 schedules:', selectedSchedules);
+
+    onSelect(selectedSchedules, applyScope);
     onClose();
   };
 
