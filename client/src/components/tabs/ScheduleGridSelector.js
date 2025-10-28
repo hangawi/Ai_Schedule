@@ -153,8 +153,8 @@ const ScheduleGridSelector = ({
                 // 개인시간의 days 배열이 있는지 확인
                 const personalDays = p.days || [];
 
-                // 디버그 로그 추가 (일요일 첫 번째 슬롯에서만)
-                if (timeMinutes === timeToMinutes(allPossibleSlots[0]) && dayOfWeek === 0) {
+                // 디버그 로그 제거
+                if (false && timeMinutes === timeToMinutes(allPossibleSlots[0]) && dayOfWeek === 0) {
                     console.log('Personal time debug for dayOfWeek', dayOfWeek, ':', {
                         personalTimes: personalTimes.length,
                         allPersonalTimes: personalTimes,
@@ -840,21 +840,26 @@ const ScheduleGridSelector = ({
                   return (
                     <div
                       key={index}
-                      className={`p-3 rounded-lg ${bgColor}`}
+                      className={`p-3 rounded-lg ${multipleSchedules.length > 1 ? 'bg-gray-100' : bgColor}`}
                     >
-                      <div className="flex justify-between items-center">
-                        <span className={`text-sm font-medium ${textColor}`}>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className={`text-sm font-medium ${multipleSchedules.length > 1 ? 'text-gray-700' : textColor}`}>
                           {block.startTime}
                         </span>
-                        <span className={`text-xs ${textColor}`}>
+                        <span className={`text-xs ${multipleSchedules.length > 1 ? 'text-gray-600' : textColor}`}>
                           {Math.floor(block.duration / 60) > 0 && `${Math.floor(block.duration / 60)}시간 `}
                           {block.duration % 60 > 0 && `${block.duration % 60}분`}
                         </span>
                       </div>
                       {multipleSchedules.length > 1 ? (
-                        <div className={`text-sm mt-1 ${textColor} space-y-0.5`}>
+                        <div className="flex gap-2">
                           {multipleSchedules.map((p, idx) => (
-                            <div key={idx}>{p.title}</div>
+                            <div
+                              key={idx}
+                              className="flex-1 bg-purple-400 text-white text-sm px-3 py-2 rounded-lg text-center border border-purple-500"
+                            >
+                              {p.title}
+                            </div>
                           ))}
                         </div>
                       ) : (
@@ -943,13 +948,18 @@ const ScheduleGridSelector = ({
                   return (
                     <div
                       key={time}
-                      className={`flex items-center justify-between p-2 rounded ${bgColor} ${bgColor === 'bg-white' ? 'border border-gray-200' : ''}`}
+                      className={`flex items-center justify-between p-2 rounded ${!hasMultiple && bgColor} ${bgColor === 'bg-white' ? 'border border-gray-200' : ''}`}
                     >
-                      <span className={`text-sm font-medium ${textColor}`}>{time}</span>
+                      <span className={`text-sm font-medium ${!hasMultiple ? textColor : 'text-gray-700'}`}>{time}</span>
                       {hasMultiple ? (
-                        <div className={`text-xs ${textColor} text-right leading-tight`}>
+                        <div className="flex gap-1 flex-1 ml-2">
                           {personalSlots.map((p, idx) => (
-                            <div key={idx}>{p.title}</div>
+                            <div
+                              key={idx}
+                              className="flex-1 bg-purple-400 text-white text-xs px-2 py-1 rounded text-center border border-purple-500"
+                            >
+                              {p.title}
+                            </div>
                           ))}
                         </div>
                       ) : (

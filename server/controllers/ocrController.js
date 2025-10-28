@@ -365,6 +365,15 @@ PM이나 오후가 보이면 반드시 13:00 이후로 변환!
     // 모든 시간표를 하나로 합치기
     const allSchedules = scheduleResults.flatMap(r => r.schedules || []);
 
+    console.log('📊 이미지별 추출 결과:');
+    scheduleResults.forEach((result, idx) => {
+      console.log(`  이미지 ${idx + 1} (${result.fileName}): ${result.schedules?.length || 0}개 추출`);
+      if (result.schedules && result.schedules.length > 0) {
+        console.log('    샘플:', result.schedules.slice(0, 3).map(s => `${s.title} ${s.startTime}-${s.endTime}`));
+      }
+    });
+    console.log(`📦 총 합계: ${allSchedules.length}개 스케줄`);
+
     // 점심시간 자동 감지 및 추가
     const addLunchTimeIfMissing = (schedules) => {
       // 4교시와 5교시 찾기
