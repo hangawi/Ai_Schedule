@@ -793,6 +793,29 @@ const ScheduleGridSelector = ({
                   let bgColor = 'bg-gray-50';
                   let textColor = 'text-gray-500';
                   let content = '';
+                  let multipleSchedules = [];
+
+                  // 같은 시간대의 모든 personalTimes 찾기
+                  if (block.type === 'personal') {
+                    const startMin = timeToMinutes(block.startTime);
+                    const endMin = timeToMinutes(block.endTime);
+
+                    multipleSchedules = personalTimes.filter(p => {
+                      const personalDays = p.days || [];
+                      const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
+
+                      if (p.isRecurring !== false && convertedDays.includes(dayData.dayOfWeek)) {
+                        const pStart = timeToMinutes(p.startTime);
+                        const pEnd = timeToMinutes(p.endTime);
+
+                        // 시간대가 겹치는지 확인
+                        return (pStart >= startMin && pStart < endMin) ||
+                               (pEnd > startMin && pEnd <= endMin) ||
+                               (pStart <= startMin && pEnd >= endMin);
+                      }
+                      return false;
+                    });
+                  }
 
                   if (block.type === 'schedule') {
                     bgColor = priorityConfig[block.priority]?.color || 'bg-blue-400';
@@ -803,9 +826,13 @@ const ScheduleGridSelector = ({
                     textColor = 'text-white';
                     content = `${block.title} (${block.duration}분)`;
                   } else if (block.type === 'personal') {
-                    bgColor = 'bg-red-400';
+                    bgColor = 'bg-purple-400';
                     textColor = 'text-white';
-                    content = `${block.title} (${block.duration}분)`;
+                    if (multipleSchedules.length > 1) {
+                      content = multipleSchedules.map(p => p.title).join(' / ');
+                    } else {
+                      content = `${block.title} (${block.duration}분)`;
+                    }
                   } else {
                     content = `빈 시간 (${block.duration}분)`;
                   }
@@ -824,9 +851,17 @@ const ScheduleGridSelector = ({
                           {block.duration % 60 > 0 && `${block.duration % 60}분`}
                         </span>
                       </div>
-                      <div className={`text-sm mt-1 ${textColor}`}>
-                        {content}
-                      </div>
+                      {multipleSchedules.length > 1 ? (
+                        <div className={`text-sm mt-1 ${textColor} space-y-0.5`}>
+                          {multipleSchedules.map((p, idx) => (
+                            <div key={idx}>{p.title}</div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className={`text-sm mt-1 ${textColor}`}>
+                          {content}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -860,11 +895,12 @@ const ScheduleGridSelector = ({
 
                     return timeMinutes >= startMins && timeMinutes < endMins;
                   });
-                  const personalSlot = personalTimes.find(p => {
+                  // 같은 시간대의 모든 personalTimes 찾기
+                  const personalSlots = personalTimes.filter(p => {
                     const personalDays = p.days || [];
                     if (p.isRecurring !== false && personalDays.length > 0) {
                       const convertedDays = personalDays.map(day => {
-                        return day === 7 ? 0 : day; // 7(일요일) -> 0, 나머지는 그대로
+                        return day === 7 ? 0 : day;
                       });
                       if (convertedDays.includes(dayData.dayOfWeek)) {
                         const startMinutes = timeToMinutes(p.startTime);
@@ -883,15 +919,21 @@ const ScheduleGridSelector = ({
                   let bgColor = 'bg-white';
                   let textColor = 'text-gray-900';
                   let content = '빈 시간';
+                  let hasMultiple = false;
 
                   if (exceptionSlot) {
                     bgColor = priorityConfig[exceptionSlot.priority]?.color || 'bg-blue-600';
                     textColor = 'text-white';
                     content = exceptionSlot.title;
-                  } else if (personalSlot) {
-                    bgColor = 'bg-red-400';
+                  } else if (personalSlots.length > 0) {
+                    bgColor = 'bg-purple-400';
                     textColor = 'text-white';
-                    content = personalSlot.title;
+                    if (personalSlots.length > 1) {
+                      hasMultiple = true;
+                      content = personalSlots.map(p => p.title).join('\n');
+                    } else {
+                      content = personalSlots[0].title;
+                    }
                   } else if (recurringSlot) {
                     bgColor = priorityConfig[recurringSlot.priority]?.color || 'bg-blue-400';
                     textColor = 'text-white';
@@ -904,7 +946,15 @@ const ScheduleGridSelector = ({
                       className={`flex items-center justify-between p-2 rounded ${bgColor} ${bgColor === 'bg-white' ? 'border border-gray-200' : ''}`}
                     >
                       <span className={`text-sm font-medium ${textColor}`}>{time}</span>
-                      <span className={`text-sm ${textColor}`}>{content}</span>
+                      {hasMultiple ? (
+                        <div className={`text-xs ${textColor} text-right leading-tight`}>
+                          {personalSlots.map((p, idx) => (
+                            <div key={idx}>{p.title}</div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className={`text-sm ${textColor}`}>{content}</span>
+                      )}
                     </div>
                   );
                 })}

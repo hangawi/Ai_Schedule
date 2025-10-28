@@ -215,34 +215,94 @@ const ScheduleOptimizationModal = ({
       const updatedCombinations = [...modifiedCombinations];
       const currentSchedules = [...updatedCombinations[currentIndex]];
 
-      // 필터링 - 모든 조건이 일치하는 것만 삭제 (AND 조건)
-      const filteredSchedules = currentSchedules.filter(schedule => {
-        let shouldDelete = true;
+      // 디버깅 로그
+      console.log('🔍 삭제 조건:', { dayToDelete, timeToDelete, gradeToDelete });
+      console.log('📋 현재 스케줄 첫 번째 days:', currentSchedules[0]?.days);
+      console.log('📋 MON 포함 여부:', currentSchedules[0]?.days?.includes('MON'));
 
-        if (dayToDelete && (!schedule.days || !schedule.days.includes(dayToDelete))) {
-          shouldDelete = false;
+      // 필터링 및 요일 제거 처리
+      const filteredSchedules = currentSchedules.map((schedule, idx) => {
+        let shouldModify = false;
+        let matchesAllConditions = true;
+
+        // 조건이 하나라도 지정되어 있으면 체크 시작
+        const hasAnyCondition = dayToDelete || timeToDelete || gradeToDelete;
+
+        if (hasAnyCondition) {
+          // 요일 조건이 있으면 체크
+          if (dayToDelete) {
+            if (!schedule.days || !schedule.days.includes(dayToDelete)) {
+              matchesAllConditions = false;
+            } else {
+              shouldModify = true;
+            }
+          }
+
+          // 시간 조건이 있으면 체크
+          if (timeToDelete && matchesAllConditions) {
+            if (schedule.startTime !== timeToDelete) {
+              matchesAllConditions = false;
+            }
+          }
+
+          // 학년 조건이 있으면 체크
+          if (gradeToDelete && matchesAllConditions) {
+            if (schedule.gradeLevel !== gradeToDelete) {
+              matchesAllConditions = false;
+            }
+          }
         }
 
-        if (timeToDelete && schedule.startTime !== timeToDelete) {
-          shouldDelete = false;
+        // 첫 번째 스케줄만 디버깅
+        if (idx === 0) {
+          console.log('🔍 첫 번째 스케줄 체크:', {
+            matchesAllConditions,
+            shouldModify,
+            dayToDelete,
+            hasDays: schedule.days?.length,
+            willModify: matchesAllConditions && shouldModify && dayToDelete
+          });
         }
 
-        if (gradeToDelete && schedule.gradeLevel !== gradeToDelete) {
-          shouldDelete = false;
+        // 조건에 맞으면
+        if (matchesAllConditions && shouldModify && dayToDelete) {
+          // 요일만 삭제 조건이고, days가 여러 개면 해당 요일만 제거
+          if (!timeToDelete && !gradeToDelete && schedule.days && schedule.days.length > 1) {
+            const updatedDays = schedule.days.filter(day => day !== dayToDelete);
+            if (updatedDays.length > 0) {
+              console.log(`✂️ 스케줄 ${idx}: 요일만 제거 ${schedule.days} → ${updatedDays}`);
+              return { ...schedule, days: updatedDays };
+            }
+          }
+          // days가 1개거나 다른 조건도 있으면 전체 삭제
+          console.log(`🗑️ 스케줄 ${idx}: 전체 삭제`);
+          return null;
         }
 
-        return !shouldDelete; // 삭제하지 않을 것만 남김
-      });
+        return schedule;
+      }).filter(schedule => schedule !== null);
 
       const deletedCount = currentSchedules.length - filteredSchedules.length;
 
-      if (deletedCount > 0) {
+      // 스케줄이 수정되었는지 확인 (요일만 제거된 경우)
+      const hasChanges = deletedCount > 0 ||
+        JSON.stringify(currentSchedules) !== JSON.stringify(filteredSchedules);
+
+      if (hasChanges) {
         updatedCombinations[currentIndex] = filteredSchedules;
         setModifiedCombinations(updatedCombinations);
 
+        let message = '';
+        if (deletedCount > 0) {
+          message = `✅ ${deletedCount}개의 시간표를 삭제했습니다.`;
+        } else {
+          // 요일만 제거된 경우
+          message = `✅ 월요일 시간표를 제거했습니다.`;
+        }
+
         const botMessage = {
           id: Date.now() + 1,
-          text: `✅ ${deletedCount}개의 시간표를 삭제했습니다.`,
+          text: message,
           sender: 'bot',
           timestamp: new Date()
         };
