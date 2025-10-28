@@ -14,7 +14,12 @@ const request = async (url, options) => {
 
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.msg || 'API request failed');
+    console.error('❌ API 에러:', errorData);
+    const errorMsg = errorData.details || errorData.msg || 'API request failed';
+    if (errorData.errors) {
+      console.error('❌ Validation 에러들:', errorData.errors);
+    }
+    throw new Error(errorMsg);
   }
 
   return response.json();

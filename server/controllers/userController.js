@@ -139,8 +139,24 @@ exports.updateUserSchedule = async (req, res) => {
       personalTimes: updatedUser.personalTimes
     });
   } catch (err) {
-    console.error('Error updating user schedule:', err);
-    res.status(500).send('Server Error');
+    console.error('❌ [userController] 스케줄 업데이트 에러:', err);
+    console.error('에러 상세:', err.message);
+    console.error('에러 스택:', err.stack);
+
+    // Mongoose validation 에러인 경우
+    if (err.name === 'ValidationError') {
+      const errors = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({
+        msg: 'Validation Error',
+        errors: errors,
+        details: err.message
+      });
+    }
+
+    res.status(500).json({
+      msg: 'Server Error',
+      error: err.message
+    });
   }
 };
 

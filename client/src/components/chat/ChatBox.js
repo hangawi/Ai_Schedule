@@ -46,17 +46,71 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
     try {
       // 기존 스케줄 가져오기
       const userSchedule = await userService.getUserSchedule();
-      const existingPersonalTimes = userSchedule.personalTimes || [];
+
+      console.log('🔍 원본 personalTimes:', userSchedule.personalTimes);
+
+      const existingPersonalTimes = (userSchedule.personalTimes || [])
+        .filter(pt => {
+          // startTime과 endTime이 제대로 있는지 확인
+          const hasValidTimes = pt.startTime && pt.endTime &&
+                                typeof pt.startTime === 'string' &&
+                                typeof pt.endTime === 'string' &&
+                                pt.startTime.trim() !== '' &&
+                                pt.endTime.trim() !== '';
+
+          if (!hasValidTimes) {
+            console.warn('⚠️ 유효하지 않은 personalTime 제외:', pt);
+          }
+
+          return hasValidTimes;
+        })
+        .map(pt => {
+          // startTime이 ISO 형식인 경우 HH:MM 형식으로 변환
+          let startTime = pt.startTime;
+          let endTime = pt.endTime;
+
+          if (pt.startTime.includes('T') || pt.startTime.includes(':00+')) {
+            const startDate = new Date(pt.startTime);
+            startTime = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
+          }
+
+          if (pt.endTime.includes('T') || pt.endTime.includes(':00+')) {
+            const endDate = new Date(pt.endTime);
+            endTime = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
+          }
+
+          return {
+            id: pt.id || Date.now() + Math.floor(Math.random() * 1000000),
+            title: pt.title || '일정',
+            type: pt.type || 'event',
+            startTime,
+            endTime,
+            days: pt.days || [],
+            isRecurring: pt.isRecurring !== undefined ? pt.isRecurring : true,
+            specificDate: pt.specificDate || undefined,
+            color: pt.color || '#9333ea'
+          };
+        });
 
       // 시간표를 personalTimes 형식으로 변환
       console.log('📝 변환할 스케줄:', schedules, '범위:', applyScope);
 
+      // 가장 큰 id 값 찾기
+      let maxId = Math.max(0, ...existingPersonalTimes.map(pt => pt.id || 0));
+
       const newPersonalTimes = [];
 
-      schedules.forEach(schedule => {
+      schedules.forEach((schedule, idx) => {
+        console.log('🔍 원본 schedule:', schedule);
+
         if (!schedule.days || schedule.days.length === 0) {
           console.warn('⚠️ 요일 정보 없음:', schedule);
           return; // 요일 정보가 없으면 스킵
+        }
+
+        if (!schedule.startTime || !schedule.endTime) {
+          console.error('❌ startTime 또는 endTime 없음:', schedule);
+          return;
         }
 
         const dayMap = {
@@ -85,8 +139,9 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
             const targetDate = new Date(today);
             targetDate.setDate(today.getDate() + daysUntilTarget);
 
+            maxId++;
             const converted = {
-              id: Date.now() + Math.floor(Math.random() * 100000),
+              id: maxId,
               title: schedule.title || '수업',
               type: 'study',
               startTime: schedule.startTime,
@@ -102,8 +157,9 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
           });
         } else {
           // 전체 달 옵션 (반복)
+          maxId++;
           const converted = {
-            id: Date.now() + Math.floor(Math.random() * 100000),
+            id: maxId,
             title: schedule.title || '수업',
             type: 'study',
             startTime: schedule.startTime,
@@ -119,15 +175,39 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
       });
 
       console.log('📦 전체 newPersonalTimes:', newPersonalTimes);
+      console.log('📦 기존 existingPersonalTimes:', existingPersonalTimes);
 
-      // 기존 일정과 합치기
-      const updatedPersonalTimes = [...existingPersonalTimes, ...newPersonalTimes];
+      // 기존 일정과 합치기 (유효한 것만)
+      const validExistingTimes = existingPersonalTimes.filter(pt =>
+        pt.startTime && pt.endTime &&
+        pt.startTime !== 'null' && pt.endTime !== 'null'
+      );
+
+      console.log(`📦 유효한 기존 일정: ${validExistingTimes.length}개`);
+
+      const updatedPersonalTimes = [...validExistingTimes, ...newPersonalTimes];
+
+      console.log('📦 최종 updatedPersonalTimes (첫 5개):', updatedPersonalTimes.slice(0, 5));
+
+      // 최종 검증 - 모든 항목이 startTime과 endTime을 가지고 있는지 확인
+      const validatedPersonalTimes = updatedPersonalTimes.filter(pt => {
+        const isValid = pt.startTime && pt.endTime &&
+                       pt.startTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/) &&
+                       pt.endTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/);
+
+        if (!isValid) {
+          console.error('❌ 유효하지 않은 항목 제외:', pt);
+        }
+
+        return isValid;
+      });
+
+      console.log(`💾 서버에 저장 중... 검증 전: ${updatedPersonalTimes.length}개, 검증 후: ${validatedPersonalTimes.length}개`);
 
       // 서버에 저장
-      console.log('💾 서버에 저장 중... 전체 personalTimes 개수:', updatedPersonalTimes.length);
       const result = await userService.updateUserSchedule({
         ...userSchedule,
-        personalTimes: updatedPersonalTimes
+        personalTimes: validatedPersonalTimes
       });
       console.log('💾 저장 완료:', result);
 

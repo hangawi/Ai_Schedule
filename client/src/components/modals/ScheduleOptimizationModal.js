@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Calendar, Clock, X, CheckCircle, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Calendar, Clock, X, CheckCircle, AlertTriangle, ChevronLeft, ChevronRight, Send } from 'lucide-react';
 import { formatWeeklySchedule, summarizeSchedule } from '../../utils/ocrUtils';
 import ScheduleGridSelector from '../tabs/ScheduleGridSelector';
 
@@ -12,12 +12,20 @@ const ScheduleOptimizationModal = ({
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [applyScope, setApplyScope] = useState('month'); // 'week' 또는 'month'
+  const [modifiedCombinations, setModifiedCombinations] = useState(combinations);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const chatEndRef = useRef(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
   if (!combinations || combinations.length === 0) {
     return null;
   }
 
-  const currentCombination = combinations[currentIndex];
+  const currentCombination = modifiedCombinations[currentIndex];
   const weeklySchedule = formatWeeklySchedule(currentCombination);
 
   // ScheduleGridSelector를 위해 personalTimes 형식으로 변환
@@ -100,8 +108,356 @@ const ScheduleOptimizationModal = ({
   };
 
   const handleSelectSchedule = () => {
-    onSelect(currentCombination, applyScope); // applyScope 전달
+    console.log('🔍 선택된 combination:', currentCombination);
+    console.log('🔍 원본 combinations[currentIndex]:', combinations[currentIndex]);
+
+    // modifiedCombinations가 아닌 원본 combinations 사용
+    onSelect(combinations[currentIndex], applyScope);
     onClose();
+  };
+
+  // 채팅 제출 핸들러
+  const handleChatSubmit = (e) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+
+    const userMessage = {
+      id: Date.now(),
+      text: chatInput,
+      sender: 'user',
+      timestamp: new Date()
+    };
+
+    setChatMessages(prev => [...prev, userMessage]);
+    const input = chatInput.trim();
+    setChatInput('');
+
+    // 명령 파싱
+    const dayMap = {
+      '월요일': 'MON', '화요일': 'TUE', '수요일': 'WED', '목요일': 'THU',
+      '금요일': 'FRI', '토요일': 'SAT', '일요일': 'SUN',
+      '월': 'MON', '화': 'TUE', '수': 'WED', '목': 'THU',
+      '금': 'FRI', '토': 'SAT', '일': 'SUN'
+    };
+
+    const gradeLevelMap = {
+      '초등부': 'elementary', '중등부': 'middle', '고등부': 'high',
+      '초등': 'elementary', '중등': 'middle', '고등': 'high'
+    };
+
+    // 시간 파싱 함수 (오후 3시, 3pm, 15:00 등 다양한 형식 지원)
+    const parseTime = (timeStr) => {
+      // "오후 3시" 형식
+      const koreanTimeMatch = timeStr.match(/(오전|오후)\s*(\d+)시?\s*(\d+)?분?/);
+      if (koreanTimeMatch) {
+        let hour = parseInt(koreanTimeMatch[2]);
+        const minute = koreanTimeMatch[3] ? parseInt(koreanTimeMatch[3]) : 0;
+        if (koreanTimeMatch[1] === '오후' && hour !== 12) hour += 12;
+        if (koreanTimeMatch[1] === '오전' && hour === 12) hour = 0;
+        return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+      }
+
+      // "3pm", "3PM" 형식
+      const pmMatch = timeStr.match(/(\d+)\s*(pm|PM)/);
+      if (pmMatch) {
+        let hour = parseInt(pmMatch[1]);
+        if (hour !== 12) hour += 12;
+        return `${hour.toString().padStart(2, '0')}:00`;
+      }
+
+      // "3am", "3AM" 형식
+      const amMatch = timeStr.match(/(\d+)\s*(am|AM)/);
+      if (amMatch) {
+        let hour = parseInt(amMatch[1]);
+        if (hour === 12) hour = 0;
+        return `${hour.toString().padStart(2, '0')}:00`;
+      }
+
+      // "14:40", "14시 40분" 형식
+      const timeMatch = timeStr.match(/(\d+)[시:]?\s*(\d+)?분?/);
+      if (timeMatch) {
+        const hour = parseInt(timeMatch[1]);
+        const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+        return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+      }
+
+      return null;
+    };
+
+    // 삭제 명령
+    const deletePattern = /삭제|지워|없애/;
+    if (deletePattern.test(input)) {
+      let dayToDelete = null;
+      let timeToDelete = null;
+      let gradeToDelete = null;
+
+      // 요일 추출
+      for (const [key, value] of Object.entries(dayMap)) {
+        if (input.includes(key)) {
+          dayToDelete = value;
+          break;
+        }
+      }
+
+      // 시간 추출
+      const parsedTime = parseTime(input);
+      if (parsedTime) {
+        timeToDelete = parsedTime;
+      }
+
+      // 학년부 추출
+      for (const [key, value] of Object.entries(gradeLevelMap)) {
+        if (input.includes(key)) {
+          gradeToDelete = value;
+          break;
+        }
+      }
+
+      const updatedCombinations = [...modifiedCombinations];
+      const currentSchedules = [...updatedCombinations[currentIndex]];
+
+      // 필터링 - 모든 조건이 일치하는 것만 삭제 (AND 조건)
+      const filteredSchedules = currentSchedules.filter(schedule => {
+        let shouldDelete = true;
+
+        if (dayToDelete && (!schedule.days || !schedule.days.includes(dayToDelete))) {
+          shouldDelete = false;
+        }
+
+        if (timeToDelete && schedule.startTime !== timeToDelete) {
+          shouldDelete = false;
+        }
+
+        if (gradeToDelete && schedule.gradeLevel !== gradeToDelete) {
+          shouldDelete = false;
+        }
+
+        return !shouldDelete; // 삭제하지 않을 것만 남김
+      });
+
+      const deletedCount = currentSchedules.length - filteredSchedules.length;
+
+      if (deletedCount > 0) {
+        updatedCombinations[currentIndex] = filteredSchedules;
+        setModifiedCombinations(updatedCombinations);
+
+        const botMessage = {
+          id: Date.now() + 1,
+          text: `✅ ${deletedCount}개의 시간표를 삭제했습니다.`,
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, botMessage]);
+      } else {
+        const botMessage = {
+          id: Date.now() + 1,
+          text: '❌ 해당 조건에 맞는 시간표를 찾을 수 없습니다.',
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, botMessage]);
+      }
+      return;
+    }
+
+    // 수정 명령
+    const modifyPattern = /수정|변경|바꿔/;
+    if (modifyPattern.test(input)) {
+      // "월요일 14:40 초등부 시간표를 16:00으로 수정"
+      let dayToModify = null;
+      let oldTime = null;
+      let newTime = null;
+      let gradeToModify = null;
+
+      // 요일 추출
+      for (const [key, value] of Object.entries(dayMap)) {
+        if (input.includes(key)) {
+          dayToModify = value;
+          break;
+        }
+      }
+
+      // 학년부 추출
+      for (const [key, value] of Object.entries(gradeLevelMap)) {
+        if (input.includes(key)) {
+          gradeToModify = value;
+          break;
+        }
+      }
+
+      // "을/를/에서" 기준으로 이전 시간과 이후 시간 분리
+      const modifyMatch = input.match(/(.+?)(을|를|에서)\s*(.+?)(으로|로)\s*(.+)/);
+      if (modifyMatch) {
+        const beforePart = modifyMatch[1] + modifyMatch[3];
+        const afterPart = modifyMatch[5];
+
+        oldTime = parseTime(beforePart);
+        newTime = parseTime(afterPart);
+      }
+
+      if (oldTime && newTime) {
+        const updatedCombinations = [...modifiedCombinations];
+        const currentSchedules = [...updatedCombinations[currentIndex]];
+
+        let modified = false;
+        const newSchedules = currentSchedules.map(schedule => {
+          let shouldModify = true;
+
+          if (dayToModify && (!schedule.days || !schedule.days.includes(dayToModify))) {
+            shouldModify = false;
+          }
+
+          if (oldTime && schedule.startTime !== oldTime) {
+            shouldModify = false;
+          }
+
+          if (gradeToModify && schedule.gradeLevel !== gradeToModify) {
+            shouldModify = false;
+          }
+
+          if (shouldModify) {
+            modified = true;
+            // 시간 차이 계산
+            const [oldHour, oldMin] = oldTime.split(':').map(Number);
+            const [newHour, newMin] = newTime.split(':').map(Number);
+            const oldMinutes = oldHour * 60 + oldMin;
+            const newMinutes = newHour * 60 + newMin;
+            const diff = newMinutes - oldMinutes;
+
+            // endTime도 같이 조정
+            if (schedule.endTime) {
+              const [endHour, endMin] = schedule.endTime.split(':').map(Number);
+              const endMinutes = endHour * 60 + endMin + diff;
+              const newEndHour = Math.floor(endMinutes / 60);
+              const newEndMin = endMinutes % 60;
+
+              return {
+                ...schedule,
+                startTime: newTime,
+                endTime: `${newEndHour.toString().padStart(2, '0')}:${newEndMin.toString().padStart(2, '0')}`
+              };
+            }
+
+            return { ...schedule, startTime: newTime };
+          }
+
+          return schedule;
+        });
+
+        if (modified) {
+          updatedCombinations[currentIndex] = newSchedules;
+          setModifiedCombinations(updatedCombinations);
+
+          const botMessage = {
+            id: Date.now() + 1,
+            text: `✅ 시간표를 ${oldTime}에서 ${newTime}로 수정했습니다.`,
+            sender: 'bot',
+            timestamp: new Date()
+          };
+          setChatMessages(prev => [...prev, botMessage]);
+        } else {
+          const botMessage = {
+            id: Date.now() + 1,
+            text: '❌ 해당 조건에 맞는 시간표를 찾을 수 없습니다.',
+            sender: 'bot',
+            timestamp: new Date()
+          };
+          setChatMessages(prev => [...prev, botMessage]);
+        }
+      } else {
+        const botMessage = {
+          id: Date.now() + 1,
+          text: '❌ 시간 정보를 찾을 수 없습니다. 예: "월요일 14:40을 16:00으로 수정"',
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, botMessage]);
+      }
+      return;
+    }
+
+    // 추가 명령
+    const addPattern = /추가|넣어|생성/;
+    if (addPattern.test(input)) {
+      let dayToAdd = null;
+      let timeToAdd = null;
+      let gradeToAdd = null;
+      let titleToAdd = '수업';
+
+      // 요일 추출
+      for (const [key, value] of Object.entries(dayMap)) {
+        if (input.includes(key)) {
+          dayToAdd = value;
+          break;
+        }
+      }
+
+      // 시간 추출
+      const parsedTime = parseTime(input);
+      if (parsedTime) {
+        timeToAdd = parsedTime;
+      }
+
+      // 학년부 추출
+      for (const [key, value] of Object.entries(gradeLevelMap)) {
+        if (input.includes(key)) {
+          gradeToAdd = value;
+          titleToAdd = key;
+          break;
+        }
+      }
+
+      if (dayToAdd && timeToAdd) {
+        const updatedCombinations = [...modifiedCombinations];
+        const currentSchedules = [...updatedCombinations[currentIndex]];
+
+        // 기본 종료 시간 (1시간 후)
+        const [hour, min] = timeToAdd.split(':').map(Number);
+        const endMinutes = hour * 60 + min + 60;
+        const endHour = Math.floor(endMinutes / 60);
+        const endMin = endMinutes % 60;
+        const endTime = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`;
+
+        const newSchedule = {
+          title: titleToAdd,
+          days: [dayToAdd],
+          startTime: timeToAdd,
+          endTime: endTime,
+          duration: 60,
+          gradeLevel: gradeToAdd
+        };
+
+        currentSchedules.push(newSchedule);
+        updatedCombinations[currentIndex] = currentSchedules;
+        setModifiedCombinations(updatedCombinations);
+
+        const botMessage = {
+          id: Date.now() + 1,
+          text: `✅ ${dayMap[dayToAdd] ? Object.keys(dayMap).find(k => dayMap[k] === dayToAdd) : dayToAdd} ${timeToAdd}에 ${titleToAdd} 시간표를 추가했습니다.`,
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, botMessage]);
+      } else {
+        const botMessage = {
+          id: Date.now() + 1,
+          text: '❌ 요일과 시간을 지정해주세요. 예: "토요일 오후 3시 초등부 추가"',
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, botMessage]);
+      }
+      return;
+    }
+
+    // 알 수 없는 명령
+    const botMessage = {
+      id: Date.now() + 1,
+      text: '사용 가능한 명령:\n- 삭제: "토요일 11:00 삭제"\n- 수정: "월요일 14:40을 16:00으로 수정"\n- 추가: "토요일 오후 3시 초등부 추가"',
+      sender: 'bot',
+      timestamp: new Date()
+    };
+    setChatMessages(prev => [...prev, botMessage]);
   };
 
   const getTotalClassHours = () => {
@@ -152,24 +508,26 @@ const ScheduleOptimizationModal = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-6 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full my-auto max-h-[85vh] overflow-hidden flex flex-col">
-        {/* 헤더 */}
-        <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-5 py-3 rounded-t-xl flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold">최적 시간표 추천</h2>
-              <p className="text-xs text-purple-100 mt-1">
-                충돌 없는 시간표 조합을 찾았습니다
-              </p>
+      <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full my-auto max-h-[85vh] overflow-hidden flex flex-row">
+        {/* 왼쪽: 시간표 영역 */}
+        <div className="flex-1 flex flex-col overflow-hidden" style={{ maxWidth: '60%' }}>
+          {/* 헤더 */}
+          <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-5 py-3 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold">최적 시간표 추천</h2>
+                <p className="text-xs text-purple-100 mt-1">
+                  충돌 없는 시간표 조합을 찾았습니다
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
+              >
+                <X size={24} />
+              </button>
             </div>
-            <button
-              onClick={onClose}
-              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
-            >
-              <X size={24} />
-            </button>
           </div>
-        </div>
 
         {/* 사용자 정보 */}
         <div className="px-5 py-3 bg-purple-50 border-b border-purple-100 flex-shrink-0">
@@ -276,7 +634,7 @@ const ScheduleOptimizationModal = ({
         </div>
 
         {/* 액션 버튼 */}
-        <div className="px-5 py-3 bg-gray-50 border-t border-gray-200 rounded-b-xl flex-shrink-0">
+        <div className="px-5 py-3 bg-gray-50 border-t border-gray-200 flex-shrink-0">
           <div className="flex space-x-3">
             <button
               onClick={onClose}
@@ -293,6 +651,74 @@ const ScheduleOptimizationModal = ({
             </button>
           </div>
         </div>
+      </div>
+
+      {/* 오른쪽: 채팅 영역 */}
+      <div className="flex flex-col border-l border-gray-200" style={{ width: '40%', maxWidth: '400px' }}>
+        {/* 채팅 헤더 */}
+        <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-3 flex-shrink-0">
+          <h3 className="font-bold text-sm">시간표 수정 채팅</h3>
+          <p className="text-xs text-purple-100 mt-0.5">대화로 시간표를 편집하세요</p>
+        </div>
+
+        {/* 채팅 메시지 영역 */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+          {chatMessages.length === 0 && (
+            <div className="text-center text-gray-500 text-xs mt-4">
+              <p className="font-semibold mb-2">사용 가능한 명령:</p>
+              <div className="text-left space-y-1 bg-white p-3 rounded-lg">
+                <p>• <span className="font-medium text-red-600">삭제:</span> "토요일 11:00 삭제"</p>
+                <p>• <span className="font-medium text-blue-600">수정:</span> "월요일 14:40을 16:00으로 수정"</p>
+                <p>• <span className="font-medium text-green-600">추가:</span> "토요일 오후 3시 초등부 추가"</p>
+              </div>
+            </div>
+          )}
+
+          {chatMessages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[80%] p-2.5 rounded-lg text-xs ${
+                  message.sender === 'user'
+                    ? 'bg-purple-600 text-white rounded-br-none'
+                    : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none'
+                }`}
+              >
+                <p className="whitespace-pre-line">{message.text}</p>
+                <p className={`text-xs mt-1 ${
+                  message.sender === 'user' ? 'text-purple-200' : 'text-gray-400'
+                }`}>
+                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            </div>
+          ))}
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* 채팅 입력 영역 */}
+        <div className="p-3 border-t border-gray-200 bg-white flex-shrink-0">
+          <form onSubmit={handleChatSubmit} className="flex space-x-2">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              placeholder="명령을 입력하세요..."
+              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+            <button
+              type="submit"
+              disabled={!chatInput.trim()}
+              className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Send size={16} />
+            </button>
+          </form>
+        </div>
+      </div>
+
       </div>
     </div>
   );

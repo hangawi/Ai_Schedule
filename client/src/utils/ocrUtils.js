@@ -246,7 +246,7 @@ const convertPeriodToTime = (description) => {
  * @param {string} gradeLevel - 학년부
  * @returns {Object} - 수업 시간이 추가된 시간표
  */
-export const inferClassDuration = (schedule, gradeLevel) => {
+export const inferClassDuration = (schedule, gradeLevel, index = 0) => {
   if (!schedule) return schedule;
 
   // startTime 처리
@@ -281,8 +281,12 @@ export const inferClassDuration = (schedule, gradeLevel) => {
     }
   }
 
-  // 여전히 startTime이 없으면 그대로 반환
-  if (!startTime) return schedule;
+  // 4. 여전히 startTime이 없으면 기본 시간 할당 (9시부터 시작, 1시간 간격)
+  if (!startTime) {
+    const defaultStartHour = 9 + index; // 9시, 10시, 11시...
+    startTime = `${String(defaultStartHour).padStart(2, '0')}:00`;
+    console.warn(`⚠️ "${schedule.title}"에 시간 정보 없음. 기본 시간 할당: ${startTime}`);
+  }
 
   // 이미 endTime이 있으면 그대로 반환
   if (schedule.endTime) return { ...schedule, startTime };
@@ -738,8 +742,8 @@ export const extractSchedulesFromImages = async (imageFiles, birthdate) => {
   });
 
   // 수업 시간이 없는 경우 추론
-  const schedulesWithDuration = processedSchedules.map(schedule =>
-    inferClassDuration(schedule, schedule.gradeLevel)
+  const schedulesWithDuration = processedSchedules.map((schedule, index) =>
+    inferClassDuration(schedule, schedule.gradeLevel, index)
   );
 
   // 사용자 나이에 맞는 시간표만 필터링
