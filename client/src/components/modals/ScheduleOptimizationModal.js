@@ -666,22 +666,50 @@ const ScheduleOptimizationModal = ({
       </div>
 
       {/* 오른쪽: 채팅 영역 */}
-      <div className="flex flex-col border-l border-gray-200" style={{ width: '40%', maxWidth: '400px' }}>
+      <div className="flex flex-col bg-gradient-to-b from-purple-50 to-blue-50" style={{ width: '40%', maxWidth: '420px' }}>
         {/* 채팅 헤더 */}
-        <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-3 flex-shrink-0">
-          <h3 className="font-bold text-sm">시간표 수정 채팅</h3>
-          <p className="text-xs text-purple-100 mt-0.5">대화로 시간표를 편집하세요</p>
+        <div className="bg-gradient-to-r from-purple-600 via-purple-500 to-blue-600 text-white px-5 py-4 flex-shrink-0 shadow-md">
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
+            <div>
+              <h3 className="font-bold text-base">시간표 편집 어시스턴트</h3>
+              <p className="text-xs text-purple-100 mt-0.5">대화로 시간표를 자유롭게 수정하세요</p>
+            </div>
+          </div>
         </div>
 
         {/* 채팅 메시지 영역 */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-5 space-y-4" style={{ background: 'linear-gradient(to bottom, #faf5ff, #eff6ff)' }}>
           {chatMessages.length === 0 && (
-            <div className="text-center text-gray-500 text-xs mt-4">
-              <p className="font-semibold mb-2">사용 가능한 명령:</p>
-              <div className="text-left space-y-1 bg-white p-3 rounded-lg">
-                <p>• <span className="font-medium text-red-600">삭제:</span> "토요일 11:00 삭제"</p>
-                <p>• <span className="font-medium text-blue-600">수정:</span> "월요일 14:40을 16:00으로 수정"</p>
-                <p>• <span className="font-medium text-green-600">추가:</span> "토요일 오후 3시 초등부 추가"</p>
+            <div className="text-center mt-8">
+              <div className="inline-block bg-white rounded-2xl shadow-lg p-5 border border-purple-100">
+                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Send size={20} className="text-white" />
+                </div>
+                <p className="font-bold text-gray-700 mb-3 text-sm">💬 사용 가능한 명령</p>
+                <div className="text-left space-y-2.5 text-xs">
+                  <div className="flex items-start space-x-2 p-2.5 bg-red-50 rounded-lg border-l-3 border-red-400">
+                    <span className="font-bold text-red-600 text-lg leading-none">×</span>
+                    <div>
+                      <p className="font-semibold text-red-700">삭제</p>
+                      <p className="text-gray-600 mt-0.5">"토요일 11:00 삭제"</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start space-x-2 p-2.5 bg-blue-50 rounded-lg border-l-3 border-blue-400">
+                    <span className="font-bold text-blue-600 text-lg leading-none">✎</span>
+                    <div>
+                      <p className="font-semibold text-blue-700">수정</p>
+                      <p className="text-gray-600 mt-0.5">"월요일 14:40을 16:00으로 수정"</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start space-x-2 p-2.5 bg-green-50 rounded-lg border-l-3 border-green-400">
+                    <span className="font-bold text-green-600 text-lg leading-none">+</span>
+                    <div>
+                      <p className="font-semibold text-green-700">추가</p>
+                      <p className="text-gray-600 mt-0.5">"토요일 오후 3시 초등부 추가"</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -689,17 +717,21 @@ const ScheduleOptimizationModal = ({
           {chatMessages.map((message) => (
             <div
               key={message.id}
-              className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`}
             >
               <div
-                className={`max-w-[80%] p-2.5 rounded-lg text-xs ${
+                className={`max-w-[85%] rounded-2xl text-sm shadow-md ${
                   message.sender === 'user'
-                    ? 'bg-purple-600 text-white rounded-br-none'
-                    : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none'
+                    ? 'bg-gradient-to-br from-purple-600 to-purple-500 text-white'
+                    : 'bg-white text-gray-800 border border-gray-100'
                 }`}
+                style={{
+                  borderBottomRightRadius: message.sender === 'user' ? '4px' : '16px',
+                  borderBottomLeftRadius: message.sender === 'bot' ? '4px' : '16px'
+                }}
               >
-                <p className="whitespace-pre-line">{message.text}</p>
-                <p className={`text-xs mt-1 ${
+                <p className="px-4 pt-3 pb-1 whitespace-pre-line leading-relaxed">{message.text}</p>
+                <p className={`px-4 pb-2 text-xs ${
                   message.sender === 'user' ? 'text-purple-200' : 'text-gray-400'
                 }`}>
                   {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -711,21 +743,21 @@ const ScheduleOptimizationModal = ({
         </div>
 
         {/* 채팅 입력 영역 */}
-        <div className="p-3 border-t border-gray-200 bg-white flex-shrink-0">
+        <div className="p-4 bg-white border-t border-gray-200 flex-shrink-0 shadow-lg">
           <form onSubmit={handleChatSubmit} className="flex space-x-2">
             <input
               type="text"
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              placeholder="명령을 입력하세요..."
-              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="예: 토요일 11:00 삭제"
+              className="flex-1 px-4 py-3 text-sm border-2 border-gray-200 rounded-full focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all placeholder-gray-400"
             />
             <button
               type="submit"
               disabled={!chatInput.trim()}
-              className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-full hover:from-purple-700 hover:to-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
             >
-              <Send size={16} />
+              <Send size={18} />
             </button>
           </form>
         </div>
