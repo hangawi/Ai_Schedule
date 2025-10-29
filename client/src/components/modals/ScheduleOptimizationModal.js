@@ -1072,9 +1072,7 @@ const ScheduleOptimizationModal = ({
         overflow: 'hidden'
       }}>
         {/* 채팅 헤더 */}
-        <div className="p-3 bg-gradient-to-r from-purple-600 to-blue-600 border-b border-purple-300 flex justify-center items-center" style={{ flexShrink: 0 }}>
-          <span className="text-white text-sm font-semibold">💬 AI 스케줄 비서</span>
-        </div>
+
 
         {/* 채팅 메시지 영역 - 스크롤 가능 */}
         <div
