@@ -14,6 +14,7 @@ const ScheduleOptimizationModal = ({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [applyScope, setApplyScope] = useState('month'); // 'week' 또는 'month'
   const [modifiedCombinations, setModifiedCombinations] = useState(combinations);
+  const [originalSchedule, setOriginalSchedule] = useState(null); // 원본 시간표 저장
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [selectedSchedules, setSelectedSchedules] = useState({}); // 겹치는 일정 선택 상태
@@ -161,6 +162,65 @@ const ScheduleOptimizationModal = ({
     setChatMessages(prev => [...prev, userMessage]);
     const input = chatInput.trim();
     setChatInput('');
+
+    // AI 응답 대기 중 메시지
+    const thinkingMessageId = Date.now() + 1;
+    const thinkingMessage = {
+      id: thinkingMessageId,
+      text: '💭 답변을 생각하고 있어요...',
+      sender: 'bot',
+      timestamp: new Date()
+    };
+    setChatMessages(prev => [...prev, thinkingMessage]);
+
+    // AI에게 자연어 요청 보내기
+    try {
+      const token = localStorage.getItem('token');
+      console.log('🔑 토큰 확인:', token ? '있음' : '없음');
+      console.log('📋 원본 스케줄:', originalSchedule ? `${originalSchedule.length}개` : '없음');
+      console.log('📋 현재 스케줄:', modifiedCombinations[currentIndex].length, '개');
+
+      const response = await fetch('http://localhost:5000/api/schedule/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token
+        },
+        body: JSON.stringify({
+          message: input,
+          currentSchedule: modifiedCombinations[currentIndex],
+          originalSchedule: originalSchedule || combinations[currentIndex]
+        })
+      });
+
+      const data = await response.json();
+      console.log('📥 AI 응답:', data);
+
+      // 생각 중 메시지 제거
+      setChatMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId));
+
+      if (data.success) {
+        // 시간표 업데이트
+        const updatedCombinations = [...modifiedCombinations];
+        updatedCombinations[currentIndex] = data.schedule;
+        setModifiedCombinations(updatedCombinations);
+
+        // AI 응답 메시지
+        const botMessage = {
+          id: Date.now() + 2,
+          text: data.explanation,
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, botMessage]);
+        return;
+      }
+    } catch (error) {
+      console.error('AI 채팅 에러:', error);
+      // 생각 중 메시지 제거
+      setChatMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId));
+      // 에러 시 기존 명령어 파싱 방식으로 폴백
+    }
 
     // 명령 파싱
     const dayMap = {
@@ -629,6 +689,12 @@ const ScheduleOptimizationModal = ({
 
   // AI 최적화 버튼 클릭 핸들러 (자동 처리)
   const handleOpenOptimizer = async () => {
+    // 원본 시간표 저장 (AI 최적화 전)
+    if (!originalSchedule) {
+      console.log('💾 원본 시간표 저장:', currentCombination.length, '개 항목');
+      setOriginalSchedule(JSON.parse(JSON.stringify(currentCombination)));
+    }
+
     // 충돌 감지
     const conflicts = detectConflicts(currentCombination);
 
@@ -646,10 +712,11 @@ const ScheduleOptimizationModal = ({
       return;
     }
 
-    // 처리 중 메시지
+    // 처리 중 메시지 (진행 상태 표시)
+    const processingMessageId = Date.now();
     const processingMessage = {
-      id: Date.now(),
-      text: `🤖 AI가 자동으로 스케줄을 분석하고 있어요...\n\n겹치는 일정 ${conflicts.length}건을 해결할게요!`,
+      id: processingMessageId,
+      text: `🤖 AI가 자동으로 스케줄을 분석하고 있어요...\n\n⏳ 겹치는 일정 ${conflicts.length}건을 해결 중...`,
       sender: 'bot',
       timestamp: new Date()
     };
@@ -660,6 +727,24 @@ const ScheduleOptimizationModal = ({
       ...prev,
       isProcessing: true
     }));
+
+    // 진행 상태 업데이트 (점진적으로 증가, 속도 감소)
+    let currentProgress = 0;
+    let progressSpeed = 8; // 초기 속도
+    const progressInterval = setInterval(() => {
+      // 진행률에 따라 속도 감소
+      if (currentProgress > 70) progressSpeed = 2; // 70% 이후 느리게
+      else if (currentProgress > 50) progressSpeed = 4; // 50% 이후 조금 느리게
+
+      currentProgress += progressSpeed;
+      if (currentProgress > 98) currentProgress = 98; // 최대 98%까지 (100%는 완료 시)
+
+      setChatMessages(prev => prev.map(msg =>
+        msg.id === processingMessageId
+          ? { ...msg, text: `🤖 AI가 자동으로 스케줄을 분석하고 있어요...\n\n⏳ 최적 시간표 생성 중... ${currentProgress}%` }
+          : msg
+      ));
+    }, 500); // 0.5초마다 업데이트
 
     try {
       // 자동으로 AI 최적화 실행 (질문 없이)
@@ -674,11 +759,24 @@ const ScheduleOptimizationModal = ({
         setModifiedCombinations(updatedCombinations);
       }
 
-      // 결과 메시지 (대화형)
+      // 진행 상태 인터벌 정리
+      clearInterval(progressInterval);
+
+      // 100% 완료 표시
+      setChatMessages(prev => prev.map(msg =>
+        msg.id === processingMessageId
+          ? { ...msg, text: `🤖 AI가 자동으로 스케줄을 분석하고 있어요...\n\n✅ 최적 시간표 생성 완료! 100%` }
+          : msg
+      ));
+
+      // 결과 메시지 (대화형) - 즉시 표시
       setTimeout(() => {
+        // 처리 중 메시지 제거
+        setChatMessages(prev => prev.filter(msg => msg.id !== processingMessageId));
+
         const resultMessage = {
           id: Date.now(),
-          text: `✨ 자동 최적화 완료!\n\n${result.explanation}\n\n혹시 수정하고 싶은 부분이 있으시면 말씀해주세요!\n예: "수요일 영어 삭제해줘", "금요일 비워줘"`,
+          text: `✨ 자동 최적화 완료!\n\n${result.explanation}\n\n혹시 수정하고 싶은 부분이 있으시면 말씀해주세요!\n예: "아까 시간표로 돌려줘", "예체능만 남겨줘", "학교공부 위주로"`,
           sender: 'bot',
           timestamp: new Date()
         };
@@ -692,9 +790,14 @@ const ScheduleOptimizationModal = ({
           answers: {},
           isProcessing: false
         });
-      }, 1000);
+      }, 300); // 1000ms → 300ms로 단축
     } catch (error) {
+      clearInterval(progressInterval);
       console.error('AI 자동 최적화 실패:', error);
+
+      // 처리 중 메시지 제거
+      setChatMessages(prev => prev.filter(msg => msg.id !== processingMessageId));
+
       const errorMessage = {
         id: Date.now(),
         text: `❌ 최적화 중 문제가 생겼어요.\n\n다시 시도하시거나, 채팅으로 직접 수정해주세요.\n예: "월요일 수학 삭제"`,
@@ -771,7 +874,7 @@ const ScheduleOptimizationModal = ({
         </div>
 
         {/* 메인 컨텐츠 영역 */}
-        <div className="flex flex-row flex-1 overflow-hidden">
+        <div className="flex flex-row flex-1 overflow-hidden" style={{ minHeight: 0 }}>
           {/* 왼쪽: 시간표 영역 */}
           <div className="flex-1 flex flex-col overflow-hidden">{/* 헤더를 제거하고 내용만 유지 */}
 
@@ -901,9 +1004,9 @@ const ScheduleOptimizationModal = ({
       </div>
 
       {/* 오른쪽: 채팅 영역 */}
-      <div className="flex flex-col border-l border-gray-200" style={{ width: '40%', maxWidth: '420px', background: '#f8fafc' }}>
+      <div className="flex flex-col border-l border-gray-200" style={{ width: '40%', maxWidth: '420px', background: '#f8fafc', height: '100%' }}>
         {/* AI 최적화 버튼 (상단 오른쪽) */}
-        <div className="p-3 bg-gradient-to-r from-purple-600 to-blue-600 border-b border-purple-300 flex justify-between items-center">
+        <div className="p-3 bg-gradient-to-r from-purple-600 to-blue-600 border-b border-purple-300 flex justify-between items-center flex-shrink-0">
           <span className="text-white text-sm font-semibold">💬 채팅</span>
           <button
             onClick={handleOpenOptimizer}
@@ -915,8 +1018,16 @@ const ScheduleOptimizationModal = ({
           </button>
         </div>
 
-        {/* 채팅 메시지 영역 */}
-        <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3" style={{ background: '#f8fafc' }}>
+        {/* 채팅 메시지 영역 - 스크롤 영역 */}
+        <div
+          ref={chatContainerRef}
+          className="flex-1 overflow-y-auto p-4 space-y-3"
+          style={{
+            background: '#f8fafc',
+            minHeight: 0,
+            maxHeight: '100%'
+          }}
+        >
           {chatMessages.length === 0 && (
             <div className="text-center mt-8">
               <div className="inline-block bg-white rounded-2xl shadow-lg p-5 border border-purple-100">
