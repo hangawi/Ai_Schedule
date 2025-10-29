@@ -564,9 +564,9 @@ export const analyzeScheduleImages = async (imageFiles, birthdate) => {
   try {
     console.log('📡 백엔드로 요청 전송 중...');
 
-    // 타임아웃 설정 (60초)
+    // 타임아웃 설정 (180초 = 3분)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), 180000);
 
     const response = await fetch(`${API_BASE_URL}/api/ocr/analyze-schedule`, {
       method: 'POST',
@@ -603,8 +603,8 @@ export const analyzeScheduleImages = async (imageFiles, birthdate) => {
     return data.allSchedules || [];
   } catch (error) {
     if (error.name === 'AbortError') {
-      console.error('❌ 요청 타임아웃 (60초 초과)');
-      throw new Error('이미지 분석 시간이 너무 오래 걸립니다. 이미지 개수를 줄여주세요.');
+      console.error('❌ 요청 타임아웃 (180초 초과)');
+      throw new Error('이미지 분석 시간이 너무 오래 걸립니다 (3분 초과). 이미지 개수를 줄이거나 이미지 크기를 줄여주세요.');
     }
     console.error('❌ 시간표 분석 에러:', error);
     throw error;

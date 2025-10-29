@@ -85,37 +85,41 @@ const TimetableUploadBox = ({ onSchedulesExtracted, onClose }) => {
 
       // OCR 처리 (타임아웃 추가)
       console.log('🤖 OCR 처리 중... (최대 5분 소요될 수 있습니다)');
-      setProgress({ current: 0, total: 100, message: `AI가 이미지를 분석하고 있습니다...` });
+      const totalImages = selectedImages.length;
+      setProgress({ current: 0, total: 100, message: `이미지 ${totalImages}개 분석 시작...` });
 
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('처리 시간이 너무 오래 걸립니다. 이미지 개수를 줄여주세요.')), 300000) // 5분
       );
 
-      // 진행률 시뮬레이션 (부드럽게 증가)
+      // 예상 시간 기반 진행률 (이미지당 약 10-15초 소요)
+      const estimatedTotalTime = totalImages * 12000; // 이미지당 평균 12초
+      const startTime = Date.now();
       let progressValue = 0;
+
       const progressInterval = setInterval(() => {
-        setProgress(prev => {
-          // 90%까지만 시뮬레이션, 완료되면 100%로
-          if (progressValue < 90) {
-            progressValue += Math.random() * 15; // 0-15% 랜덤 증가
-            progressValue = Math.min(progressValue, 90);
+        const elapsedTime = Date.now() - startTime;
+        // 경과 시간 기반으로 진행률 계산 (최대 95%까지)
+        const timeBasedProgress = Math.min((elapsedTime / estimatedTotalTime) * 100, 95);
 
-            let message = 'AI가 이미지를 분석하고 있습니다...';
-            if (progressValue > 30 && progressValue <= 60) {
-              message = '시간표 데이터를 추출하고 있습니다...';
-            } else if (progressValue > 60) {
-              message = '일정을 정리하고 있습니다...';
-            }
+        // 부드러운 증가를 위해 현재 값과 목표 값의 중간으로 이동
+        progressValue = progressValue + (timeBasedProgress - progressValue) * 0.1;
 
-            return {
-              current: Math.floor(progressValue),
-              total: 100,
-              message
-            };
-          }
-          return prev;
+        let message = `이미지 분석 중... (${totalImages}개)`;
+        if (progressValue > 30 && progressValue <= 60) {
+          message = `시간표 데이터 추출 중... (${Math.floor(progressValue)}%)`;
+        } else if (progressValue > 60 && progressValue <= 90) {
+          message = `일정 정리 및 병합 중... (${Math.floor(progressValue)}%)`;
+        } else if (progressValue > 90) {
+          message = `최종 처리 중... (${Math.floor(progressValue)}%)`;
+        }
+
+        setProgress({
+          current: Math.floor(progressValue),
+          total: 100,
+          message
         });
-      }, 800); // 0.8초마다 증가
+      }, 500); // 0.5초마다 업데이트
 
       const result = await Promise.race([
         extractSchedulesFromImages(selectedImages, birthdate),
