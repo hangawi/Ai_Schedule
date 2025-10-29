@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Calendar, Clock, X, CheckCircle, AlertTriangle, ChevronLeft, ChevronRight, Send } from 'lucide-react';
+import { Calendar, Clock, X, CheckCircle, AlertTriangle, ChevronLeft, ChevronRight, Send, Sparkles } from 'lucide-react';
 import { formatWeeklySchedule, summarizeSchedule } from '../../utils/ocrUtils';
 import ScheduleGridSelector from '../tabs/ScheduleGridSelector';
+import { detectConflicts, generateOptimizationQuestions, optimizeScheduleWithGPT } from '../../utils/scheduleOptimizer';
 
 const ScheduleOptimizationModal = ({
   combinations,
@@ -16,10 +17,21 @@ const ScheduleOptimizationModal = ({
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [selectedSchedules, setSelectedSchedules] = useState({}); // 겹치는 일정 선택 상태
+  const [aiOptimizationState, setAiOptimizationState] = useState({
+    isActive: false,
+    questions: [],
+    currentQuestionIndex: 0,
+    answers: {},
+    isProcessing: false
+  }); // AI 최적화 상태
   const chatEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // 채팅 메시지가 추가될 때마다 맨 아래로 스크롤
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
   }, [chatMessages]);
 
   if (!combinations || combinations.length === 0) {
@@ -135,7 +147,7 @@ const ScheduleOptimizationModal = ({
   };
 
   // 채팅 제출 핸들러
-  const handleChatSubmit = (e) => {
+  const handleChatSubmit = async (e) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
 
@@ -614,6 +626,93 @@ const ScheduleOptimizationModal = ({
     return total;
   };
 
+
+  // AI 최적화 버튼 클릭 핸들러 (자동 처리)
+  const handleOpenOptimizer = async () => {
+    // 충돌 감지
+    const conflicts = detectConflicts(currentCombination);
+
+    console.log('🤖 AI 자동 최적화 시작:', conflicts.length, '건의 충돌');
+
+    // 충돌이 없으면
+    if (conflicts.length === 0) {
+      const noConflictMessage = {
+        id: Date.now(),
+        text: '✅ 완벽해요! 겹치는 일정이 없어서 최적화가 필요없습니다.\n\n현재 시간표가 이미 최적 상태예요! 😊',
+        sender: 'bot',
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, noConflictMessage]);
+      return;
+    }
+
+    // 처리 중 메시지
+    const processingMessage = {
+      id: Date.now(),
+      text: `🤖 AI가 자동으로 스케줄을 분석하고 있어요...\n\n겹치는 일정 ${conflicts.length}건을 해결할게요!`,
+      sender: 'bot',
+      timestamp: new Date()
+    };
+    setChatMessages(prev => [...prev, processingMessage]);
+
+    // AI 최적화 상태 활성화
+    setAiOptimizationState(prev => ({
+      ...prev,
+      isProcessing: true
+    }));
+
+    try {
+      // 자동으로 AI 최적화 실행 (질문 없이)
+      const result = await optimizeScheduleWithGPT(currentCombination, conflicts, {
+        auto: true // 자동 모드
+      });
+
+      // 최적화된 스케줄로 업데이트
+      if (result.optimizedSchedule && result.optimizedSchedule.length > 0) {
+        const updatedCombinations = [...modifiedCombinations];
+        updatedCombinations[currentIndex] = result.optimizedSchedule;
+        setModifiedCombinations(updatedCombinations);
+      }
+
+      // 결과 메시지 (대화형)
+      setTimeout(() => {
+        const resultMessage = {
+          id: Date.now(),
+          text: `✨ 자동 최적화 완료!\n\n${result.explanation}\n\n혹시 수정하고 싶은 부분이 있으시면 말씀해주세요!\n예: "수요일 영어 삭제해줘", "금요일 비워줘"`,
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, resultMessage]);
+
+        // AI 최적화 모드 종료
+        setAiOptimizationState({
+          isActive: false,
+          questions: [],
+          currentQuestionIndex: 0,
+          answers: {},
+          isProcessing: false
+        });
+      }, 1000);
+    } catch (error) {
+      console.error('AI 자동 최적화 실패:', error);
+      const errorMessage = {
+        id: Date.now(),
+        text: `❌ 최적화 중 문제가 생겼어요.\n\n다시 시도하시거나, 채팅으로 직접 수정해주세요.\n예: "월요일 수학 삭제"`,
+        sender: 'bot',
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+
+      setAiOptimizationState({
+        isActive: false,
+        questions: [],
+        currentQuestionIndex: 0,
+        answers: {},
+        isProcessing: false
+      });
+    }
+  };
+
   const renderScheduleCard = (schedule, index) => {
     return (
       <div
@@ -802,9 +901,22 @@ const ScheduleOptimizationModal = ({
       </div>
 
       {/* 오른쪽: 채팅 영역 */}
-      <div className="flex flex-col bg-gradient-to-b from-purple-50 to-blue-50 border-l border-gray-200" style={{ width: '40%', maxWidth: '420px' }}>
+      <div className="flex flex-col border-l border-gray-200" style={{ width: '40%', maxWidth: '420px', background: '#f8fafc' }}>
+        {/* AI 최적화 버튼 (상단 오른쪽) */}
+        <div className="p-3 bg-gradient-to-r from-purple-600 to-blue-600 border-b border-purple-300 flex justify-between items-center">
+          <span className="text-white text-sm font-semibold">💬 채팅</span>
+          <button
+            onClick={handleOpenOptimizer}
+            disabled={aiOptimizationState.isProcessing}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white text-purple-600 rounded-lg hover:bg-purple-50 transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Sparkles size={14} />
+            AI 최적화
+          </button>
+        </div>
+
         {/* 채팅 메시지 영역 */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4" style={{ background: 'linear-gradient(to bottom, #faf5ff, #eff6ff)' }}>
+        <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3" style={{ background: '#f8fafc' }}>
           {chatMessages.length === 0 && (
             <div className="text-center mt-8">
               <div className="inline-block bg-white rounded-2xl shadow-lg p-5 border border-purple-100">
@@ -868,21 +980,22 @@ const ScheduleOptimizationModal = ({
         </div>
 
         {/* 채팅 입력 영역 */}
-        <div className="p-4 bg-white border-t border-gray-200 flex-shrink-0 shadow-lg">
-          <form onSubmit={handleChatSubmit} className="flex space-x-2">
+        <div className="p-3 bg-white border-t border-gray-200 flex-shrink-0">
+          <form onSubmit={handleChatSubmit} className="flex gap-2">
             <input
               type="text"
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              placeholder="예: 토요일 11:00 삭제"
-              className="flex-1 px-4 py-3 text-sm border-2 border-gray-200 rounded-full focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all placeholder-gray-400"
+              placeholder={aiOptimizationState.isProcessing ? "AI가 생각 중..." : "예: 월요일 영어 삭제"}
+              className="flex-1 px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all placeholder-gray-400"
+              disabled={aiOptimizationState.isProcessing}
             />
             <button
               type="submit"
-              disabled={!chatInput.trim()}
-              className="px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-full hover:from-purple-700 hover:to-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
+              disabled={!chatInput.trim() || aiOptimizationState.isProcessing}
+              className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
             >
-              <Send size={18} />
+              <Send size={16} />
             </button>
           </form>
         </div>
