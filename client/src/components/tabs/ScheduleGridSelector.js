@@ -462,13 +462,49 @@ const ScheduleGridSelector = ({
   const renderMergedWeekView = () => {
     console.log('📅 renderMergedWeekView 호출됨');
 
-    // 새로운 접근: personalTimes를 직접 사용하여 각 요일별 일정 추출
+    // 새로운 접근: personalTimes를 직접 사용하여 각 요일별 일정 추출 + 같은 제목끼리 병합
     const getDaySchedules = (dayOfWeek) => {
-      return personalTimes.filter(p => {
+      const filteredSchedules = personalTimes.filter(p => {
         const personalDays = p.days || [];
         const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
         return p.isRecurring !== false && convertedDays.includes(dayOfWeek);
       });
+
+      // 같은 제목끼리 그룹화
+      const groupedByTitle = {};
+      filteredSchedules.forEach(schedule => {
+        const key = schedule.title;
+        if (!groupedByTitle[key]) {
+          groupedByTitle[key] = [];
+        }
+        groupedByTitle[key].push(schedule);
+      });
+
+      // 각 그룹에서 시간대를 병합
+      const mergedSchedules = [];
+      Object.values(groupedByTitle).forEach(group => {
+        if (group.length === 0) return;
+
+        // 시작 시간 기준으로 정렬
+        group.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+
+        // 연속된 시간대 병합
+        let current = { ...group[0] };
+        for (let i = 1; i < group.length; i++) {
+          const next = group[i];
+          // 현재 블록의 끝 시간과 다음 블록의 시작 시간이 같거나 겹치면 병합
+          if (timeToMinutes(current.endTime) >= timeToMinutes(next.startTime)) {
+            current.endTime = next.endTime;
+          } else {
+            // 병합 불가능하면 현재 블록 저장하고 새로운 블록 시작
+            mergedSchedules.push(current);
+            current = { ...next };
+          }
+        }
+        mergedSchedules.push(current);
+      });
+
+      return mergedSchedules;
     };
 
     const timeSlots = getCurrentTimeSlots();
@@ -509,55 +545,131 @@ const ScheduleGridSelector = ({
               const daySchedules = getDaySchedules(dateInfo.dayOfWeek);
               const totalHeight = timeSlots.length * 16; // 전체 컬럼 높이 (h-4 = 16px)
 
+              // 각 일정을 세그먼트로 분할 (겹치는 구간별로)
+              const segments = [];
+
+              daySchedules.forEach((schedule, scheduleIndex) => {
+                const startMin = timeToMinutes(schedule.startTime);
+                const endMin = timeToMinutes(schedule.endTime);
+
+                // 모든 경계점 찾기 (이 일정의 시작/끝 + 겹치는 일정들의 시작/끝)
+                const boundaries = [startMin];
+                daySchedules.forEach(other => {
+                  const otherStart = timeToMinutes(other.startTime);
+                  const otherEnd = timeToMinutes(other.endTime);
+                  if (otherStart > startMin && otherStart < endMin) boundaries.push(otherStart);
+                  if (otherEnd > startMin && otherEnd < endMin) boundaries.push(otherEnd);
+                });
+                boundaries.push(endMin);
+                boundaries.sort((a, b) => a - b);
+
+                // 각 세그먼트마다 겹치는 일정 개수 계산
+                for (let i = 0; i < boundaries.length - 1; i++) {
+                  const segStart = boundaries[i];
+                  const segEnd = boundaries[i + 1];
+
+                  // 이 세그먼트와 겹치는 일정들
+                  const overlapping = daySchedules.filter(other => {
+                    const otherStart = timeToMinutes(other.startTime);
+                    const otherEnd = timeToMinutes(other.endTime);
+                    return otherStart <= segStart && otherEnd >= segEnd;
+                  });
+
+                  const overlapIndex = overlapping.findIndex(s => s === schedule);
+                  if (overlapIndex === -1) continue; // 이 세그먼트에 현재 일정이 없음
+
+                  segments.push({
+                    schedule,
+                    startMin: segStart,
+                    endMin: segEnd,
+                    overlapIndex,
+                    overlapCount: overlapping.length
+                  });
+                }
+              });
+
               return (
                 <div key={dayIndex} className="flex-1 border-l border-gray-200 relative" style={{ height: `${totalHeight}px` }}>
-                  {daySchedules.map((schedule, scheduleIndex) => {
-                    // 시간 계산
-                    const startMin = timeToMinutes(schedule.startTime);
-                    const endMin = timeToMinutes(schedule.endTime);
-                    const duration = endMin - startMin;
+                  {segments.map((seg, segIndex) => {
+                    const duration = seg.endMin - seg.startMin;
                     const blockHeight = duration * 1.6; // 1분 = 1.6px
-                    const startIndex = getTimeSlotIndex(schedule.startTime);
+                    const startTime = minutesToTime(seg.startMin);
+                    const startIndex = getTimeSlotIndex(startTime);
                     const topPosition = startIndex * 16;
 
-                    // 이 일정과 겹치는 다른 일정들 찾기
-                    const overlappingSchedules = daySchedules.filter(other => {
-                      const otherStart = timeToMinutes(other.startTime);
-                      const otherEnd = timeToMinutes(other.endTime);
-                      // 겹치는지 확인
-                      return (startMin < otherEnd && endMin > otherStart);
-                    });
+                    // 색상을 Tailwind 스타일로 변경 (눈에 편한 색)
+                    const bgColor = '#f87171'; // bg-red-400 색상
+                    const columnWidth = seg.overlapCount > 1 ? `${100 / seg.overlapCount}%` : '100%';
+                    const leftPosition = seg.overlapCount > 1 ? `${(100 / seg.overlapCount) * seg.overlapIndex}%` : '0%';
 
-                    // 겹치는 일정들 중에서 현재 일정의 인덱스 찾기
-                    const overlapIndex = overlappingSchedules.findIndex(s => s === schedule);
-                    const overlapCount = overlappingSchedules.length;
+                    // 같은 일정의 연속 세그먼트인지 확인 (같은 스케줄이면 overlapIndex 달라도 OK)
+                    const prevSeg = segIndex > 0 ? segments[segIndex - 1] : null;
+                    const nextSeg = segIndex < segments.length - 1 ? segments[segIndex + 1] : null;
 
-                    const bgColor = schedule.color || '#ef4444';
+                    const isSameSchedule = (s1, s2) => {
+                      return s1.schedule === s2.schedule ||
+                             (s1.schedule.title === s2.schedule.title &&
+                              s1.schedule.startTime === s2.schedule.startTime &&
+                              s1.schedule.endTime === s2.schedule.endTime);
+                    };
 
-                    // 겹치는 경우 좌우 배치 계산
-                    const columnWidth = overlapCount > 1 ? `${100 / overlapCount}%` : '100%';
-                    const leftPosition = overlapCount > 1 ? `${(100 / overlapCount) * overlapIndex}%` : '0%';
+                    const hasSameAbove = prevSeg &&
+                                        isSameSchedule(prevSeg, seg) &&
+                                        prevSeg.endMin === seg.startMin;
+
+                    const hasSameBelow = nextSeg &&
+                                        isSameSchedule(nextSeg, seg) &&
+                                        nextSeg.startMin === seg.endMin;
+
+                    // 같은 일정(schedule 객체 기준)의 모든 세그먼트 찾고 가장 큰 세그먼트 찾기
+                    const allSameSegments = segments.filter(s =>
+                      s.schedule === seg.schedule ||
+                      (s.schedule.title === seg.schedule.title &&
+                       s.schedule.startTime === seg.schedule.startTime &&
+                       s.schedule.endTime === seg.schedule.endTime)
+                    );
+
+                    // 가장 큰 세그먼트 찾기
+                    const largestSeg = allSameSegments.reduce((max, curr) => {
+                      const currDuration = curr.endMin - curr.startMin;
+                      const maxDuration = max.endMin - max.startMin;
+                      return currDuration > maxDuration ? curr : max;
+                    }, allSameSegments[0]);
+
+                    const isLargestSegment = largestSeg.startMin === seg.startMin &&
+                                            largestSeg.endMin === seg.endMin &&
+                                            largestSeg.overlapIndex === seg.overlapIndex;
+
+                    // border 클래스 동적 생성
+                    let borderClasses = 'absolute text-center px-1 text-white';
+                    if (!hasSameAbove) borderClasses += ' border-t';
+                    if (!hasSameBelow) borderClasses += ' border-b';
+                    borderClasses += ' border-l border-r border-gray-300';
 
                     return (
                       <div
-                        key={`${dateInfo.dayOfWeek}-${schedule.id || scheduleIndex}`}
-                        className={`absolute border border-gray-300 text-center px-1 text-white`}
+                        key={`${dateInfo.dayOfWeek}-${segIndex}`}
+                        className={borderClasses}
                         style={{
                           height: `${blockHeight}px`,
                           top: `${topPosition}px`,
                           left: leftPosition,
                           width: columnWidth,
                           backgroundColor: bgColor,
-                          zIndex: scheduleIndex
+                          zIndex: seg.overlapIndex
                         }}
-                        title={`${schedule.title} (${schedule.startTime}~${schedule.endTime})`}
+                        title={`${seg.schedule.title} (${seg.schedule.startTime}~${seg.schedule.endTime})`}
                       >
-                        <div className="text-xs leading-tight flex items-center justify-center h-full">
-                          <div>
-                            <div className="font-semibold">{schedule.title}</div>
-                            {blockHeight > 25 && <div className="text-xs">{schedule.startTime}~{schedule.endTime}</div>}
+                        {isLargestSegment && (
+                          <div className="text-xs leading-tight flex items-center justify-center h-full overflow-hidden">
+                            <div className="truncate w-full px-1">
+                              <div className="font-semibold truncate text-[11px]">{seg.schedule.title}</div>
+                              {blockHeight > 50 && (
+                                <div className="text-[10px] truncate mt-0.5">{seg.schedule.startTime}~{seg.schedule.endTime}</div>
+                              )}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     );
                   })}
