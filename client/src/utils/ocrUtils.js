@@ -801,19 +801,92 @@ export const extractSchedulesFromImages = async (imageFiles, birthdate) => {
 
   // 나이 필터링 제거 - 모든 스케줄 사용
 
-  // 충돌 감지
-  const conflicts = detectConflicts(schedulesWithDuration);
+  // 겹치는 시간 블록 분할
+  const splitOverlappingBlocks = (schedules) => {
+    const timeToMinutes = (time) => {
+      const [h, m] = time.split(':').map(Number);
+      return h * 60 + m;
+    };
 
-  // 최적 조합 생성
-  const optimalCombinations = conflicts.length > 0
-    ? generateOptimalCombinations(schedulesWithDuration, 5)
-    : [schedulesWithDuration];
+    const minutesToTime = (minutes) => {
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    };
+
+    // 모든 시간 경계점 수집
+    const allBoundaries = new Set();
+    schedules.forEach(s => {
+      if (s.days && s.startTime && s.endTime) {
+        s.days.forEach(day => {
+          allBoundaries.add(`${day}:${timeToMinutes(s.startTime)}`);
+          allBoundaries.add(`${day}:${timeToMinutes(s.endTime)}`);
+        });
+      }
+    });
+
+    // 각 스케줄을 경계점에서 분할
+    const splitSchedules = [];
+    schedules.forEach(schedule => {
+      if (!schedule.days || !schedule.startTime || !schedule.endTime) {
+        splitSchedules.push(schedule);
+        return;
+      }
+
+      const startMin = timeToMinutes(schedule.startTime);
+      const endMin = timeToMinutes(schedule.endTime);
+
+      schedule.days.forEach(day => {
+        // 이 요일의 모든 경계점 찾기
+        const dayBoundaries = Array.from(allBoundaries)
+          .filter(b => b.startsWith(`${day}:`))
+          .map(b => parseInt(b.split(':')[1]))
+          .filter(b => b > startMin && b < endMin)
+          .sort((a, b) => a - b);
+
+        // 경계점으로 분할
+        let currentStart = startMin;
+        const boundaries = [startMin, ...dayBoundaries, endMin];
+
+        for (let i = 0; i < boundaries.length - 1; i++) {
+          const segmentStart = boundaries[i];
+          const segmentEnd = boundaries[i + 1];
+
+          splitSchedules.push({
+            ...schedule,
+            days: [day],
+            startTime: minutesToTime(segmentStart),
+            endTime: minutesToTime(segmentEnd),
+            duration: segmentEnd - segmentStart
+          });
+        }
+      });
+    });
+
+    return splitSchedules;
+  };
+
+  const schedulesWithSplit = splitOverlappingBlocks(schedulesWithDuration);
+
+  // 충돌 감지 (참고용)
+  const conflicts = detectConflicts(schedulesWithSplit);
+
+  // 최적 조합 생성 건너뛰기 - 모든 스케줄 그대로 사용
+  const optimalCombinations = [schedulesWithSplit];
+
+  console.log('📊 최종 스케줄 개수:', schedulesWithSplit.length);
+
+  // 월요일 15:00 시간대 확인
+  const mon15 = schedulesWithSplit.filter(s =>
+    s.days?.includes('MON') && s.startTime === '15:00'
+  );
+  console.log('🔍 월요일 15:00 스케줄:', mon15.map(s => `${s.title} days=${s.days} ${s.startTime}-${s.endTime}`));
 
   return {
     age,
     gradeLevel,
-    schedules: schedulesWithDuration, // 필터링 제거
-    allSchedulesBeforeFilter: schedulesWithDuration,
+    schedules: schedulesWithSplit,
+    allSchedulesBeforeFilter: schedulesWithSplit,
     conflicts,
     optimalCombinations,
     ocrResults: [],
