@@ -35,6 +35,42 @@ const ScheduleOptimizationModal = ({
     }
   }, [chatMessages]);
 
+  // 모달이 열릴 때 자동으로 충돌 검사 및 최적화 제안
+  useEffect(() => {
+    const checkAndOfferOptimization = async () => {
+      // 원본 시간표 저장
+      if (!originalSchedule) {
+        setOriginalSchedule(JSON.parse(JSON.stringify(currentCombination)));
+      }
+
+      // 충돌 감지
+      const conflicts = detectConflicts(currentCombination);
+
+      if (conflicts.length > 0) {
+        // 충돌이 있으면 확인 메시지 표시
+        const confirmMessage = {
+          id: Date.now(),
+          text: `⚠️ ${conflicts.length}건의 겹치는 일정이 발견되었습니다.\n\nAI가 자동으로 최적화해드릴까요? 😊`,
+          sender: 'bot',
+          timestamp: new Date(),
+          requiresConfirmation: true
+        };
+        setChatMessages([confirmMessage]);
+      } else {
+        // 충돌이 없으면 환영 메시지만 표시
+        const welcomeMessage = {
+          id: Date.now(),
+          text: `✅ 완벽해요! 겹치는 일정이 없습니다.\n\n현재 시간표가 이미 최적 상태예요! 😊\n\n수정이 필요하시면 말씀해주세요!`,
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setChatMessages([welcomeMessage]);
+      }
+    };
+
+    checkAndOfferOptimization();
+  }, []); // 모달이 열릴 때 한 번만 실행
+
   if (!combinations || combinations.length === 0) {
     return null;
   }
@@ -162,6 +198,29 @@ const ScheduleOptimizationModal = ({
     setChatMessages(prev => [...prev, userMessage]);
     const input = chatInput.trim();
     setChatInput('');
+
+    // 확인 응답 감지 (최적화 제안에 대한 승인)
+    const confirmKeywords = ['네', '예', '응', '좋아', '바꿔', '해줘', '해', 'yes', 'ok', 'ㅇㅋ', 'ㅇ', 'ㅇㅇ'];
+    const hasConfirmation = chatMessages.some(msg => msg.requiresConfirmation);
+
+    if (hasConfirmation && confirmKeywords.some(keyword => input.toLowerCase().includes(keyword) || input === keyword)) {
+      // 확인 응답 → 즉시 AI 최적화 실행
+      await handleOpenOptimizer();
+      return;
+    }
+
+    // 거부 응답 감지
+    const rejectKeywords = ['아니', '싫어', '괜찮', '안해', '안 해', 'no'];
+    if (hasConfirmation && rejectKeywords.some(keyword => input.includes(keyword))) {
+      const rejectMessage = {
+        id: Date.now() + 1,
+        text: '알겠습니다! 😊\n\n현재 시간표를 그대로 유지할게요.\n수정이 필요하시면 언제든 말씀해주세요!',
+        sender: 'bot',
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, rejectMessage]);
+      return;
+    }
 
     // AI 응답 대기 중 메시지
     const thinkingMessageId = Date.now() + 1;
@@ -1012,17 +1071,9 @@ const ScheduleOptimizationModal = ({
         flexDirection: 'column',
         overflow: 'hidden'
       }}>
-        {/* AI 최적화 버튼 (상단 오른쪽) - 고정 */}
-        <div className="p-3 bg-gradient-to-r from-purple-600 to-blue-600 border-b border-purple-300 flex justify-between items-center" style={{ flexShrink: 0 }}>
-          <span className="text-white text-sm font-semibold">💬 채팅</span>
-          <button
-            onClick={handleOpenOptimizer}
-            disabled={aiOptimizationState.isProcessing}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white text-purple-600 rounded-lg hover:bg-purple-50 transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Sparkles size={14} />
-            AI 최적화
-          </button>
+        {/* 채팅 헤더 */}
+        <div className="p-3 bg-gradient-to-r from-purple-600 to-blue-600 border-b border-purple-300 flex justify-center items-center" style={{ flexShrink: 0 }}>
+          <span className="text-white text-sm font-semibold">💬 AI 스케줄 비서</span>
         </div>
 
         {/* 채팅 메시지 영역 - 스크롤 가능 */}
