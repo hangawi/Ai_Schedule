@@ -44,7 +44,9 @@ const ScheduleOptimizationModal = ({
       'FRI': 5, 'SAT': 6, 'SUN': 7
     };
 
-    const mappedDays = schedule.days.map(day => dayMap[day] || day).filter(d => d);
+    // days가 배열이 아니면 배열로 변환
+    const daysArray = Array.isArray(schedule.days) ? schedule.days : [schedule.days];
+    const mappedDays = daysArray.map(day => dayMap[day] || day).filter(d => d);
 
     return {
       id: Date.now() + index,
@@ -58,6 +60,12 @@ const ScheduleOptimizationModal = ({
       isRecurring: true
     };
   }).filter(item => item !== null);
+
+  // 월요일 15:00 확인
+  const mon15Personal = personalTimes.filter(p =>
+    p.days.includes(1) && p.startTime === '15:00'
+  );
+  console.log('🔍 personalTimes에서 월 15:00:', mon15Personal.map(p => `${p.title} days=${p.days} ${p.startTime}`));
 
   // 시간표 데이터에서 최소/최대 시간 추출
   const getTimeRange = () => {
@@ -83,6 +91,8 @@ const ScheduleOptimizationModal = ({
     // 실제 시간표에 맞춰 동적 조정 (제한 없음)
     if (minHour === 24) minHour = 9; // 시간 정보가 없으면 기본 9시
     if (maxHour === 0) maxHour = 18; // 시간 정보가 없으면 기본 18시
+
+    console.log('⏰ 시간 범위:', { start: minHour, end: maxHour });
 
     return { start: minHour, end: maxHour };
   };
