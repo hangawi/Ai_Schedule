@@ -1003,10 +1003,17 @@ const ScheduleOptimizationModal = ({
         </div>
       </div>
 
-      {/* 오른쪽: 채팅 영역 */}
-      <div className="flex flex-col border-l border-gray-200" style={{ width: '40%', maxWidth: '420px', background: '#f8fafc', height: '100%' }}>
-        {/* AI 최적화 버튼 (상단 오른쪽) */}
-        <div className="p-3 bg-gradient-to-r from-purple-600 to-blue-600 border-b border-purple-300 flex justify-between items-center flex-shrink-0">
+      {/* 오른쪽: 채팅 영역 - 고정 높이 */}
+      <div className="flex flex-col border-l border-gray-200" style={{
+        width: '40%',
+        maxWidth: '420px',
+        background: '#f8fafc',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden'
+      }}>
+        {/* AI 최적화 버튼 (상단 오른쪽) - 고정 */}
+        <div className="p-3 bg-gradient-to-r from-purple-600 to-blue-600 border-b border-purple-300 flex justify-between items-center" style={{ flexShrink: 0 }}>
           <span className="text-white text-sm font-semibold">💬 채팅</span>
           <button
             onClick={handleOpenOptimizer}
@@ -1018,14 +1025,16 @@ const ScheduleOptimizationModal = ({
           </button>
         </div>
 
-        {/* 채팅 메시지 영역 - 스크롤 영역 */}
+        {/* 채팅 메시지 영역 - 스크롤 가능 */}
         <div
           ref={chatContainerRef}
-          className="flex-1 overflow-y-auto p-4 space-y-3"
+          className="p-4 space-y-3"
           style={{
             background: '#f8fafc',
-            minHeight: 0,
-            maxHeight: '100%'
+            flex: '1 1 0',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            minHeight: 0
           }}
         >
           {chatMessages.length === 0 && (
@@ -1090,8 +1099,8 @@ const ScheduleOptimizationModal = ({
           <div ref={chatEndRef} />
         </div>
 
-        {/* 채팅 입력 영역 */}
-        <div className="p-3 bg-white border-t border-gray-200 flex-shrink-0">
+        {/* 채팅 입력 영역 - 맨 아래 고정 */}
+        <div className="p-3 bg-white border-t border-gray-200" style={{ flexShrink: 0 }}>
           <form onSubmit={handleChatSubmit} className="flex gap-2">
             <input
               type="text"

@@ -98,6 +98,8 @@ function generateOptimizationPrompt(schedules, conflicts, preferences) {
 
   return `당신은 친근하고 따뜻한 AI 스케줄 비서입니다. 사용자와 자연스럽게 대화하듯이 스케줄을 추천해주세요.
 
+**중요: 기존 스케줄만 수정하세요. 새로운 스케줄을 추가하거나 없는 시간/과목을 만들지 마세요!**
+
 ## 현재 상황
 - 전체 학원 수업: ${schedules.length}개
 - 시간 충돌: ${conflicts.length}건
@@ -109,13 +111,17 @@ ${conflicts.map(c => `  • ${c.schedule1.title}와 ${c.schedule2.title}이(가)
 - 쉬는 날: ${Array.isArray(preferred_rest_days) ? preferred_rest_days.join(', ') : (preferred_rest_days || '자동 배치')}
 - 이동 시간: ${travel_time || '보통'}분
 
+## 최적화 규칙
+1. **충돌 해결 방법**: 겹치는 수업 중 우선순위가 낮은 것을 삭제하거나 시간 이동
+2. **절대 금지**: 새로운 수업 추가, 없는 시간대에 배치, 새 과목 생성
+3. **허용**: 기존 수업의 삭제, 시간 변경, 요일 변경
+
 ## 응답 가이드
 1. **친근하게**: "~해요", "~세요" 등 친근한 말투 사용
 2. **공감**: "일정이 바쁘시네요", "힘드실 수 있어요" 등
 3. **구체적 추천**: "월요일은 이렇게 하시면 어떨까요?"
 4. **이유 설명**: 왜 그렇게 추천하는지 설명
-5. **선택지 제시**: 2-3가지 대안 제시
-6. **격려**: "이렇게 하시면 더 효율적일 거예요"
+5. **격려**: "이렇게 하시면 더 효율적일 거예요"
 
 ## 스케줄 데이터
 ${JSON.stringify(schedules, null, 2)}
