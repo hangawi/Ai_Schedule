@@ -14,7 +14,8 @@ const ScheduleOptimizationModal = ({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [applyScope, setApplyScope] = useState('month'); // 'week' 또는 'month'
   const [modifiedCombinations, setModifiedCombinations] = useState(combinations);
-  const [originalSchedule, setOriginalSchedule] = useState(null); // 원본 시간표 저장
+  const [originalSchedule, setOriginalSchedule] = useState(null); // 맨 처음 원본 시간표
+  const [scheduleHistory, setScheduleHistory] = useState([]); // 단계별 히스토리 (스택)
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [selectedSchedules, setSelectedSchedules] = useState({}); // 겹치는 일정 선택 상태
@@ -222,7 +223,8 @@ const ScheduleOptimizationModal = ({
         body: JSON.stringify({
           message: input,
           currentSchedule: modifiedCombinations[currentIndex],
-          originalSchedule: originalSchedule || combinations[currentIndex]
+          originalSchedule: originalSchedule || combinations[currentIndex],
+          scheduleHistory: scheduleHistory  // 히스토리 전달
         })
       });
 
@@ -246,11 +248,33 @@ const ScheduleOptimizationModal = ({
       }, 300);
 
       if (data.success) {
-        // 시간표 업데이트 (action이 delete, undo일 때만)
-        if (data.action === 'delete' || data.action === 'undo') {
+        // 시간표 업데이트
+        if (data.action === 'delete') {
+          // 현재 상태를 히스토리에 저장 (실행 전)
+          setScheduleHistory(prev => [...prev, modifiedCombinations[currentIndex]]);
+
           const updatedCombinations = [...modifiedCombinations];
           updatedCombinations[currentIndex] = data.schedule;
           setModifiedCombinations(updatedCombinations);
+        } else if (data.action === 'step_back') {
+          // 한 단계 이전으로 되돌리기
+          const updatedCombinations = [...modifiedCombinations];
+          updatedCombinations[currentIndex] = data.schedule;
+          setModifiedCombinations(updatedCombinations);
+
+          // 히스토리에서 마지막 항목 제거
+          setScheduleHistory(prev => prev.slice(0, -1));
+        } else if (data.action === 'undo') {
+          // 맨 처음 원본으로 되돌리기
+          const updatedCombinations = [...modifiedCombinations];
+          updatedCombinations[currentIndex] = data.schedule;
+          setModifiedCombinations(updatedCombinations);
+
+          // 히스토리 초기화
+          setScheduleHistory([]);
+        } else if (data.action === 'question') {
+          // 추천/질문 응답 - 시간표는 변경하지 않음
+          console.log('💡 추천 응답 - 시간표 변경 없음');
         }
 
         // AI 응답 메시지

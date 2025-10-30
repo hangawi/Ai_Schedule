@@ -637,14 +637,39 @@ function filterScheduleByCode(message, currentSchedule) {
  */
 router.post('/chat', auth, async (req, res) => {
   try {
-    const { message, currentSchedule, originalSchedule } = req.body;
+    const { message, currentSchedule, originalSchedule, scheduleHistory } = req.body;
 
     console.log('\n💬 채팅 요청:', message);
+    console.log('📚 히스토리:', scheduleHistory ? scheduleHistory.length + '단계' : '없음');
 
-    // 롤백 요청인지 먼저 확인 (빠른 처리)
-    const undoKeywords = ['롤백', '되돌려', '돌려', '이전', '아까', '원래', '취소', 'undo'];
-    if (undoKeywords.some(keyword => message.includes(keyword))) {
-      console.log('✅ 롤백 요청 감지 - 원본 스케줄로 복원');
+    // "방금전" 키워드 감지 (한 단계 이전)
+    const stepBackKeywords = ['방금전', '방금', '바로 전', '직전', '한 단계 전', '아까'];
+    const isStepBack = stepBackKeywords.some(keyword => message.includes(keyword));
+
+    // "맨 처음", "원본", "롤백" 키워드 감지 (맨 처음으로)
+    const fullUndoKeywords = ['맨 처음', '맨처음', '원본', '롤백', '처음', '초기', 'reset'];
+    const isFullUndo = fullUndoKeywords.some(keyword => message.includes(keyword));
+
+    // 되돌리기 요청
+    const undoKeywords = ['되돌려', '돌려', '취소', 'undo'];
+    const isUndo = undoKeywords.some(keyword => message.includes(keyword));
+
+    if (isUndo || isStepBack || isFullUndo) {
+      // 1. "방금전" = 한 단계 이전
+      if (isStepBack && scheduleHistory && scheduleHistory.length > 0) {
+        const previousSchedule = scheduleHistory[scheduleHistory.length - 1];
+        console.log('✅ 한 단계 이전으로 되돌리기:', scheduleHistory.length - 1, '단계');
+        return res.json({
+          success: true,
+          understood: '한 단계 이전 시간표로 되돌리기',
+          action: 'step_back',
+          schedule: previousSchedule,
+          explanation: '네, 방금 전 시간표로 되돌려드렸어요! 😊'
+        });
+      }
+
+      // 2. "맨 처음" 또는 히스토리 없음 = 원본으로
+      console.log('✅ 원본 스케줄로 복원');
       return res.json({
         success: true,
         understood: '원본 시간표로 되돌리기',
@@ -751,7 +776,7 @@ ${conflicts.length > 0 ? conflicts.map((c, i) =>
 **의도**: 18:00 시간대에 겹치는 수업들 처리 필요
 **행동**: action: "question"
 **응답**: "18:00에 시작하는 수업이 5개 있네요! 저녁 식사 시간을 확보하려면 이 수업들을 삭제하는 게 좋을 것 같아요. 삭제해드릴까요? 아니면 특정 수업만 남기고 싶으신가요?"
-**schedule**: 원본 그대로 반환
+**schedule**: [] (빈 배열)
 
 ### 예시 5: "추천좀 해줘" (이전 질문의 후속 대화)
 **의도**: 사용자가 구체적인 추천을 원함
@@ -759,7 +784,7 @@ ${conflicts.length > 0 ? conflicts.map((c, i) =>
 **응답**: 구체적이고 실용적인 추천 제시. 예를 들어:
 - "18:00 수업 5개를 모두 삭제하는 걸 추천드려요. 그러면 매일 저녁 6시에 여유롭게 식사하실 수 있어요!"
 - 또는 "월/수/금만 삭제하고 화/목은 늦게 드시는 건 어때요?"
-**schedule**: 원본 그대로 반환 (추천만 하고 실행은 안함)
+**schedule**: [] (빈 배열)
 
 ### 예시 7: "추천 2로 하자" / "1번으로 해줘" (사용자가 선택)
 **의도**: 사용자가 추천안 중 하나를 선택해서 실행 명령
@@ -771,7 +796,7 @@ ${conflicts.length > 0 ? conflicts.map((c, i) =>
 **의도**: 8시 이후 수업 삭제 원함
 **행동**: action: "question"
 **응답**: "8시 넘어가는 수업들이 있어요! 월요일 8:00-8:10 영어, 화요일 8:00-8:30 수학이 있는데, 이 수업들도 삭제하는 게 어떨까요? 8시까지만 하시려면 이 수업들도 빼는 게 좋을 것 같아요!"
-**schedule**: 원본 그대로 반환
+**schedule**: [] (빈 배열)
 
 ### 예시 9: "응, 그것들도 삭제해" (후속 확인)
 **의도**: 이전에 AI가 제안한 것을 승인
@@ -801,7 +826,7 @@ ${conflicts.length > 0 ? conflicts.map((c, i) =>
 • 팝핀 (20:20-21:30)
 
 학교 수업만 삭제해드릴까요?"
-**schedule**: 원본 그대로 반환
+**schedule**: [] (빈 배열)
 
 ### 예시 11: "국어랑 사회만 삭제해" (맥락: 위 대화 이어짐, 수요일 얘기 중)
 **의도**:
@@ -871,7 +896,7 @@ ${conflicts.length > 0 ? conflicts.map((c, i) =>
 **의도**: 특정 수업을 주 3회로 줄임
 **행동**: action: "question"
 **응답**: "○○ 수업을 주 3회로 줄이시려면, 어느 요일을 남기고 싶으세요? 현재 월/화/수/목/금 5일인데, 월/수/금으로 하시겠어요?"
-**schedule**: 원본 그대로 반환
+**schedule**: [] (빈 배열)
 
 ### 예시 15: "화요일이랑 목요일만 남겨"
 **의도**: 특정 수업을 화/목만 유지, 나머지 요일 삭제
@@ -889,13 +914,61 @@ ${conflicts.length > 0 ? conflicts.map((c, i) =>
 4. 늦은 시간(저녁 7시 이후) 수업 삭제
 
 어떤 방법이 좋을까요?"
-**schedule**: 원본 그대로 반환
+**schedule**: [] (빈 배열)
 
 ### 예시 17: "월요일 너무 빡빡해"
 **의도**: 월요일 수업 감소 요청
 **행동**: action: "question"
 **응답**: "월요일 수업이 15개나 있네요! 몇 시까지 하시겠어요? 아니면 특정 수업을 삭제할까요?"
-**schedule**: 원본 그대로 반환
+**schedule**: [] (빈 배열)
+
+### 예시 20: "토 일 저녁시간 삭제" / "토요일 일요일 저녁 삭제"
+**의도**: 토요일, 일요일의 저녁(18:00-19:00) 스케줄만 삭제 (월~금 저녁은 유지!)
+**행동**: action: "delete"
+
+**⚠️ 중요: 요일이 지정되면 그 요일의 것만 삭제!**
+- "토 일 저녁시간 삭제" = SAT, SUN의 저녁만 삭제
+- 월~금 저녁은 **절대 삭제하지 마세요!**
+
+**삭제 조건:**
+\`\`\`javascript
+const result = originalSchedule.map(item => {
+  // 저녁 스케줄인지 체크
+  const isDinner = item.title === "저녁" && item.startTime === "18:00" && item.endTime === "19:00";
+
+  if (!isDinner) return item;  // 저녁이 아니면 그대로 반환
+
+  // 저녁이면 days에서 SAT, SUN 제거
+  const daysArray = Array.isArray(item.days) ? item.days : [item.days];
+  const remainingDays = daysArray.filter(day => day !== "SAT" && day !== "SUN");
+
+  if (remainingDays.length === 0) {
+    return null;  // 모든 요일 제거되면 null
+  }
+
+  // 새 객체 생성 (원본 복사 + days만 업데이트)
+  return {
+    ...item,
+    days: remainingDays
+  };
+}).filter(item => item !== null);  // null 제거
+\`\`\`
+
+**응답**: "토요일, 일요일 저녁 시간을 삭제했어요!
+
+삭제된 요일:
+• 저녁 (토요일, 일요일)
+
+유지된 요일:
+• 저녁 (월, 화, 수, 목, 금) - 그대로 유지됨
+
+월~금 저녁은 그대로 남아있어요!"
+
+**schedule**: 저녁 스케줄의 days에서 SAT, SUN만 제거하고 나머지 요일은 유지
+**주의**:
+- 저녁 스케줄이 ["MON","TUE","WED","THU","FRI","SAT","SUN"]이면
+- → ["MON","TUE","WED","THU","FRI"]로 변경
+- 다른 스케줄은 **절대 건드리지 마세요!**
 
 ### 예시 18: "주니어 A 전부 삭제해주고 매일 저녁 6시에 밥 먹어야 되니까 겹치는거 있으면 삭제해줘"
 **의도**:
@@ -1029,7 +1102,7 @@ const result = [...filtered, dinnerSchedule];
 **추천 2**: 주니어A를 삭제하고 학교 수업을 유지하는 방법도 있어요.
 
 어떤 방법이 좋을까요?"
-**schedule**: 원본 그대로 반환
+**schedule**: [] (빈 배열)
 **주의**: 위 응답은 실제 겹침 정보를 바탕으로 작성하세요!
 
 ### 예시 4: "피곤하니까 오후 6시 이후 삭제"
@@ -1058,16 +1131,22 @@ const result = [...filtered, dinnerSchedule];
    - "6시까지만" = startTime < "18:00" (6시 전에 시작하는 것만)
    - **주의**: endTime이 "18:00"인 수업은 **안 겹침** (17:00-18:00 같은 건 유지)
 
-3. **요일 지정**:
+3. **요일 지정 (⚠️ 매우 중요!):**
+   - **"토 일 저녁시간 삭제"**:
+     - = 저녁 스케줄의 days 배열에서 SAT, SUN만 제거
+     - = 월~금 저녁은 **절대 삭제하지 마세요!**
+     - = days: ["MON","TUE","WED","THU","FRI","SAT","SUN"] → ["MON","TUE","WED","THU","FRI"]
    - "금요일 6시 이후" = FRI이면서 startTime >= "18:00"
-   - 요일 없으면 = 모든 요일
+   - "월요일 국어 삭제" = MON에 속한 국어만 삭제
+   - 요일 지정 없으면 = 모든 요일
 
-4. **질문/추천 요청 처리**:
+4. **질문/추천 요청 처리 (⚠️ 매우 중요!):**
    - "일정 정리해줘" → 현재 시간표 분석 후 구체적 추천 제시
    - "추천해줘" / "어떻게 하는게 좋을까?" → 구체적인 추천안 2-3개 제시
    - "겹치는데 어떻게 할까?" → 겹치는 수업 찾아서 우선순위 기반 추천
    - **추천 형식**: "○○를 △△하는 걸 추천드려요! 왜냐하면 ~~이기 때문이에요. 이렇게 해드릴까요?"
-   - action: "question", schedule: 원본 그대로 (추천만, 실행 안함)
+   - **⚠️ action: "question", schedule: [] (빈 배열!)**
+   - **⚠️ 절대 schedule 배열에 원본 데이터를 넣지 마세요! 응답이 너무 길어집니다!**
 
 **삭제 명령 vs 질문:**
 - "삭제해줘" / "지워줘" / "없애줘" → **즉시 실행!** (물어보지 마세요)
@@ -1109,22 +1188,25 @@ const result = [...filtered, dinnerSchedule];
 📤 JSON 응답 형식 (정확히 따르세요!)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+**⚠️ action에 따른 schedule 처리:**
+
+1. **action: "question"** (추천/질문)
 \`\`\`json
 {
-  "understood": "사용자 의도 한 줄 요약",
-  "action": "delete|question",
-  "schedule": [
-    {
-      "title": "수업명",
-      "days": ["MON", "TUE"],
-      "startTime": "15:00",
-      "endTime": "16:00",
-      "duration": 60,
-      "type": "study",
-      "gradeLevel": "elementary"
-    }
-  ],
-  "explanation": "친근한 설명"
+  "understood": "사용자 의도",
+  "action": "question",
+  "schedule": [],
+  "explanation": "추천 내용"
+}
+\`\`\`
+
+2. **action: "delete"** (삭제 실행)
+\`\`\`json
+{
+  "understood": "사용자 의도",
+  "action": "delete",
+  "schedule": [위 JSON에서 조건에 맞는 것만 제외한 배열],
+  "explanation": "삭제 결과"
 }
 \`\`\`
 
@@ -1188,10 +1270,24 @@ const result = [{
 \`\`\`
 
 **중요**:
-- delete이면 → 위 JSON에서 조건에 맞는 것만 제외하고 나머지는 **원본 그대로** 반환
-- question이면 → 위 JSON 전체를 **그대로** 반환 (삭제 없음)
+- **delete일 때**:
+  - 위 JSON에서 조건에 맞는 것만 제외하고 나머지는 **원본 그대로** 반환
+  - schedule 배열에 전체 스케줄 포함
+- **question일 때**:
+  - schedule은 **빈 배열 []** 반환 (원본을 그대로 유지하라는 의미)
+  - explanation에만 추천 내용 작성
+  - **JSON을 짧게 유지하여 응답 제한 초과 방지!**
 - **절대 title을 "기타"로 바꾸지 마세요!**
-- **절대 빈 배열 [] 반환하지 마세요!**`;
+
+**question 응답 예시:**
+\`\`\`json
+{
+  "understood": "겹치는 수업 해결 방법 추천 요청",
+  "action": "question",
+  "schedule": [],
+  "explanation": "겹치는 수업이 5건 있네요!\n\n• 월요일 15:00: 음악 vs 주니어A\n• 화요일 15:00: 과학 vs 주니어A\n\n추천 1: 주니어A를 유지하고 학교 수업 삭제\n추천 2: 주니어A를 삭제하고 학교 수업 유지\n\n어떤 방법이 좋을까요?"
+}
+\`\`\``;
 
     // 여러 모델명 시도
     const modelNames = ['gemini-2.0-flash-exp', 'gemini-2.0-flash', 'gemini-1.5-flash'];
@@ -1200,12 +1296,19 @@ const result = [{
 
     for (const modelName of modelNames) {
       try {
-        const model = genAI.getGenerativeModel({ model: modelName });
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            maxOutputTokens: 8192,  // 최대 출력 토큰 증가
+            temperature: 0.1  // 일관성 향상
+          }
+        });
         const result = await model.generateContent(prompt);
         const response = await result.response;
         aiResponse = response.text();
         break;
       } catch (error) {
+        console.error(`${modelName} 에러:`, error.message);
         continue;
       }
     }
