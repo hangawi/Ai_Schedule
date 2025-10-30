@@ -466,7 +466,10 @@ export const formatWeeklySchedule = (schedules) => {
 
   schedules.forEach(schedule => {
     if (schedule.days) {
-      schedule.days.forEach(day => {
+      // days가 배열이 아니면 배열로 변환
+      const daysArray = Array.isArray(schedule.days) ? schedule.days : [schedule.days];
+
+      daysArray.forEach(day => {
         if (weeklySchedule[day]) {
           weeklySchedule[day].push(schedule);
         }

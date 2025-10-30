@@ -35,40 +35,21 @@ const ScheduleOptimizationModal = ({
     }
   }, [chatMessages]);
 
-  // 모달이 열릴 때 자동으로 충돌 검사 및 최적화 제안
+  // 모달이 열릴 때 원본 저장만 (자동 최적화 제안 비활성화)
   useEffect(() => {
-    const checkAndOfferOptimization = async () => {
-      // 원본 시간표 저장
-      if (!originalSchedule) {
-        setOriginalSchedule(JSON.parse(JSON.stringify(currentCombination)));
-      }
+    // 원본 시간표 저장
+    if (!originalSchedule) {
+      setOriginalSchedule(JSON.parse(JSON.stringify(currentCombination)));
+    }
 
-      // 충돌 감지
-      const conflicts = detectConflicts(currentCombination);
-
-      if (conflicts.length > 0) {
-        // 충돌이 있으면 확인 메시지 표시
-        const confirmMessage = {
-          id: Date.now(),
-          text: `⚠️ ${conflicts.length}건의 겹치는 일정이 발견되었습니다.\n\nAI가 자동으로 최적화해드릴까요? 😊`,
-          sender: 'bot',
-          timestamp: new Date(),
-          requiresConfirmation: true
-        };
-        setChatMessages([confirmMessage]);
-      } else {
-        // 충돌이 없으면 환영 메시지만 표시
-        const welcomeMessage = {
-          id: Date.now(),
-          text: `✅ 완벽해요! 겹치는 일정이 없습니다.\n\n현재 시간표가 이미 최적 상태예요! 😊\n\n수정이 필요하시면 말씀해주세요!`,
-          sender: 'bot',
-          timestamp: new Date()
-        };
-        setChatMessages([welcomeMessage]);
-      }
+    // 환영 메시지 표시
+    const welcomeMessage = {
+      id: Date.now(),
+      text: `안녕하세요! 😊\n\n시간표 수정이 필요하시면 말씀해주세요!\n\n예: "금요일 6시까지만", "수요일 공연반 삭제", "아까 시간표로 돌려줘"`,
+      sender: 'bot',
+      timestamp: new Date()
     };
-
-    checkAndOfferOptimization();
+    setChatMessages([welcomeMessage]);
   }, []); // 모달이 열릴 때 한 번만 실행
 
   if (!combinations || combinations.length === 0) {
@@ -199,38 +180,31 @@ const ScheduleOptimizationModal = ({
     const input = chatInput.trim();
     setChatInput('');
 
-    // 확인 응답 감지 (최적화 제안에 대한 승인)
-    const confirmKeywords = ['네', '예', '응', '좋아', '바꿔', '해줘', '해', 'yes', 'ok', 'ㅇㅋ', 'ㅇ', 'ㅇㅇ'];
-    const hasConfirmation = chatMessages.some(msg => msg.requiresConfirmation);
+    // (자동 최적화 제안 비활성화로 인해 확인 응답 로직 제거)
 
-    if (hasConfirmation && confirmKeywords.some(keyword => input.toLowerCase().includes(keyword) || input === keyword)) {
-      // 확인 응답 → 즉시 AI 최적화 실행
-      await handleOpenOptimizer();
-      return;
-    }
-
-    // 거부 응답 감지
-    const rejectKeywords = ['아니', '싫어', '괜찮', '안해', '안 해', 'no'];
-    if (hasConfirmation && rejectKeywords.some(keyword => input.includes(keyword))) {
-      const rejectMessage = {
-        id: Date.now() + 1,
-        text: '알겠습니다! 😊\n\n현재 시간표를 그대로 유지할게요.\n수정이 필요하시면 언제든 말씀해주세요!',
-        sender: 'bot',
-        timestamp: new Date()
-      };
-      setChatMessages(prev => [...prev, rejectMessage]);
-      return;
-    }
-
-    // AI 응답 대기 중 메시지
+    // AI 응답 대기 중 메시지 (진행률 포함)
     const thinkingMessageId = Date.now() + 1;
     const thinkingMessage = {
       id: thinkingMessageId,
-      text: '💭 답변을 생각하고 있어요...',
+      text: '💭 답변을 생성하고 있어요...',
       sender: 'bot',
-      timestamp: new Date()
+      timestamp: new Date(),
+      progress: 0
     };
     setChatMessages(prev => [...prev, thinkingMessage]);
+
+    // 진행률 시뮬레이션 (점진적 증가)
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+      progress += Math.random() * 15 + 5; // 5-20% 랜덤 증가
+      if (progress > 95) progress = 95; // 최대 95%까지
+
+      setChatMessages(prev => prev.map(msg =>
+        msg.id === thinkingMessageId
+          ? { ...msg, progress: Math.round(progress) }
+          : msg
+      ));
+    }, 300); // 0.3초마다 업데이트
 
     // AI에게 자연어 요청 보내기
     try {
@@ -253,16 +227,31 @@ const ScheduleOptimizationModal = ({
       });
 
       const data = await response.json();
-      console.log('📥 AI 응답:', data);
 
-      // 생각 중 메시지 제거
-      setChatMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId));
+      console.log('📥 AI:', data.action, '|', modifiedCombinations[currentIndex].length, '→', data.schedule?.length || 0);
+
+      // 진행률 인터벌 정리
+      clearInterval(progressInterval);
+
+      // 100% 완료 표시 (잠깐 보여주기)
+      setChatMessages(prev => prev.map(msg =>
+        msg.id === thinkingMessageId
+          ? { ...msg, progress: 100 }
+          : msg
+      ));
+
+      // 0.3초 후 메시지 제거
+      setTimeout(() => {
+        setChatMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId));
+      }, 300);
 
       if (data.success) {
-        // 시간표 업데이트
-        const updatedCombinations = [...modifiedCombinations];
-        updatedCombinations[currentIndex] = data.schedule;
-        setModifiedCombinations(updatedCombinations);
+        // 시간표 업데이트 (action이 delete, undo일 때만)
+        if (data.action === 'delete' || data.action === 'undo') {
+          const updatedCombinations = [...modifiedCombinations];
+          updatedCombinations[currentIndex] = data.schedule;
+          setModifiedCombinations(updatedCombinations);
+        }
 
         // AI 응답 메시지
         const botMessage = {
@@ -276,6 +265,8 @@ const ScheduleOptimizationModal = ({
       }
     } catch (error) {
       console.error('AI 채팅 에러:', error);
+      // 진행률 인터벌 정리
+      clearInterval(progressInterval);
       // 생각 중 메시지 제거
       setChatMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId));
       // 에러 시 기존 명령어 파싱 방식으로 폴백
@@ -1136,7 +1127,14 @@ const ScheduleOptimizationModal = ({
                   borderBottomLeftRadius: message.sender === 'bot' ? '4px' : '16px'
                 }}
               >
-                <p className="px-4 pt-3 pb-1 whitespace-pre-line leading-relaxed">{message.text}</p>
+                <p className="px-4 pt-3 pb-1 whitespace-pre-line leading-relaxed">
+                  {message.text}
+                  {message.progress !== undefined && (
+                    <span className="ml-2 text-xs opacity-60">
+                      {message.progress}%
+                    </span>
+                  )}
+                </p>
                 <p className={`px-4 pb-2 text-xs ${
                   message.sender === 'user' ? 'text-purple-200' : 'text-gray-400'
                 }`}>
