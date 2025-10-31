@@ -16,6 +16,7 @@ const ScheduleOptimizationModal = ({
   const [modifiedCombinations, setModifiedCombinations] = useState(combinations);
   const [originalSchedule, setOriginalSchedule] = useState(null); // 맨 처음 원본 시간표
   const [scheduleHistory, setScheduleHistory] = useState([]); // 단계별 히스토리 (스택)
+  const [redoStack, setRedoStack] = useState([]); // Redo 스택 (되돌리기 취소용)
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [selectedSchedules, setSelectedSchedules] = useState({}); // 겹치는 일정 선택 상태
@@ -214,6 +215,14 @@ const ScheduleOptimizationModal = ({
       console.log('📋 원본 스케줄:', originalSchedule ? `${originalSchedule.length}개` : '없음');
       console.log('📋 현재 스케줄:', modifiedCombinations[currentIndex].length, '개');
 
+      // 직전 봇 응답 찾기 (대화 컨텍스트 유지)
+      const lastBotMessage = chatMessages
+        .slice()
+        .reverse()
+        .find(msg => msg.sender === 'bot' && !msg.text.includes('💭'));
+      const lastAiResponse = lastBotMessage ? lastBotMessage.text : null;
+      console.log('🤖 직전 AI 응답:', lastAiResponse ? `있음 (${lastAiResponse.substring(0, 50)}...)` : '없음');
+
       const response = await fetch('http://localhost:5000/api/schedule/chat', {
         method: 'POST',
         headers: {
@@ -224,7 +233,9 @@ const ScheduleOptimizationModal = ({
           message: input,
           currentSchedule: modifiedCombinations[currentIndex],
           originalSchedule: originalSchedule || combinations[currentIndex],
-          scheduleHistory: scheduleHistory  // 히스토리 전달
+          scheduleHistory: scheduleHistory,  // 히스토리 전달
+          lastAiResponse: lastAiResponse,  // 직전 AI 응답 전달
+          redoStack: redoStack  // Redo 스택 전달
         })
       });
 
@@ -252,16 +263,30 @@ const ScheduleOptimizationModal = ({
         if (data.action === 'delete') {
           // 현재 상태를 히스토리에 저장 (실행 전)
           setScheduleHistory(prev => [...prev, modifiedCombinations[currentIndex]]);
+          // 새 작업 시 redo 스택 클리어
+          setRedoStack([]);
 
           const updatedCombinations = [...modifiedCombinations];
           updatedCombinations[currentIndex] = data.schedule;
           setModifiedCombinations(updatedCombinations);
+        } else if (data.action === 'redo') {
+          // Redo: 되돌리기 취소
+          const updatedCombinations = [...modifiedCombinations];
+          updatedCombinations[currentIndex] = data.schedule;
+          setModifiedCombinations(updatedCombinations);
+
+          // Redo 스택에서 마지막 항목 제거
+          setRedoStack(prev => prev.slice(0, -1));
+          // 히스토리에 다시 추가
+          setScheduleHistory(prev => [...prev, modifiedCombinations[currentIndex]]);
         } else if (data.action === 'step_back') {
           // 한 단계 이전으로 되돌리기
           const updatedCombinations = [...modifiedCombinations];
           updatedCombinations[currentIndex] = data.schedule;
           setModifiedCombinations(updatedCombinations);
 
+          // 현재 상태를 redo 스택에 저장
+          setRedoStack(prev => [...prev, modifiedCombinations[currentIndex]]);
           // 히스토리에서 마지막 항목 제거
           setScheduleHistory(prev => prev.slice(0, -1));
         } else if (data.action === 'undo') {
