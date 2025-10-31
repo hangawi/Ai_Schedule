@@ -9,7 +9,9 @@ import {
    ListTodo,
    Bot,
    History,
-   User
+   User,
+   Clipboard,
+   ClipboardX
 } from 'lucide-react';
 import MyCalendar from './components/calendar/Calendar';
 import EventFormModal from './components/forms/EventFormModal';
@@ -77,7 +79,7 @@ const formatEventForClient = (event, color) => {
 };
 
 
-const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled, loginMethod }) => {
+const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled, isClipboardMonitoring, setIsClipboardMonitoring, loginMethod }) => {
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
    const [activeTab, setActiveTab] = useState(() => {
      const savedTab = localStorage.getItem('activeTab');
@@ -519,8 +521,28 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                      <Calendar size={20} />
                   </button>
                   
-                  {/* 백그라운드 모니터링 버튼 - 달력 아이콘 바로 옆 */}
-                  <div className="hidden sm:block">
+                  {/* 백그라운드 모니터링 & 클립보드 버튼 */}
+                  <div className="hidden sm:flex items-center space-x-2">
+                     <button
+                        onClick={() => setIsClipboardMonitoring(prev => !prev)}
+                        className={`flex items-center px-3 py-2 rounded-full transition-colors duration-200 text-sm ${
+                           isClipboardMonitoring
+                              ? 'bg-green-100 text-green-600 hover:text-green-700'
+                              : 'bg-gray-100 text-gray-600 hover:text-gray-700'
+                        }`}
+                        title={isClipboardMonitoring ? "클립보드 감지 활성화됨" : "클립보드 감지 비활성화됨"}
+                     >
+                        <div className="flex items-center space-x-2">
+                           {isClipboardMonitoring ?
+                              <Clipboard size={16} /> :
+                              <ClipboardX size={16} />
+                           }
+                           <span className="font-medium">
+                              {isClipboardMonitoring ? '클립보드 ON' : '클립보드 OFF'}
+                           </span>
+                        </div>
+                     </button>
+
                      <BackgroundCallIndicator
                         isMonitoring={isBackgroundMonitoring}
                         isCallDetected={isCallDetected}
@@ -530,16 +552,15 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                         isAnalyzing={voiceAnalyzing}
                      />
                   </div>
-                  
+
                   {isLoggedIn && (
                      <button className="hidden sm:flex w-auto min-w-[40px] h-8 bg-blue-100 text-blue-600 rounded-full items-center justify-center cursor-pointer px-3 mr-2" onClick={() => enhancedSetActiveTab('profile')}>
                         {user && user.firstName ? user.firstName : '프로필'}
                      </button>
                   )}
-                  
-                  <button 
-                     onClick={() => setIsVoiceRecognitionEnabled(prev => !prev)} 
-                     title={isVoiceRecognitionEnabled ? "음성 인식 활성화됨 (클릭하여 비활성화)" : "음성 인식 비활성화됨 (클릭하여 활성화)"} 
+                  <button
+                     onClick={() => setIsVoiceRecognitionEnabled(prev => !prev)}
+                     title={isVoiceRecognitionEnabled ? "음성 인식 활성화됨 (클릭하여 비활성화)" : "음성 인식 비활성화됨 (클릭하여 활성화)"}
                      aria-label={isVoiceRecognitionEnabled ? "음성 인식 비활성화" : "음성 인식 활성화"}
                      className={`text-lg sm:text-xl transition-colors ${isVoiceRecognitionEnabled ? 'text-blue-500 hover:text-blue-600' : 'text-gray-400 hover:text-gray-500'}`}>
                      {isVoiceRecognitionEnabled ? '🎙️' : '🔇'}
