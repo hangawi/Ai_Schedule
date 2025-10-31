@@ -20,6 +20,8 @@ const Header = ({
   showAlert,
   isVoiceRecognitionEnabled,
   setIsVoiceRecognitionEnabled,
+  isClipboardMonitoring,
+  setIsClipboardMonitoring,
   handleManualLogout
 }) => {
   return (
@@ -58,9 +60,16 @@ const Header = ({
               {user && user.firstName ? user.firstName : '프로필'}
             </button>
           )}
-          <button 
-            onClick={() => setIsVoiceRecognitionEnabled(prev => !prev)} 
-            title={isVoiceRecognitionEnabled ? "음성 인식 활성화됨 (클릭하여 비활성화)" : "음성 인식 비활성화됨 (클릭하여 활성화)"} 
+          <button
+            onClick={() => setIsClipboardMonitoring(prev => !prev)}
+            title={isClipboardMonitoring ? "클립보드 감지 활성화됨" : "클립보드 감지 비활성화됨"}
+            aria-label={isClipboardMonitoring ? "클립보드 감지 비활성화" : "클립보드 감지 활성화"}
+            className={`text-lg sm:text-xl transition-colors ${isClipboardMonitoring ? 'text-green-500 hover:text-green-600' : 'text-gray-400 hover:text-gray-500'}`}>
+            {isClipboardMonitoring ? '📋' : '📋'}
+          </button>
+          <button
+            onClick={() => setIsVoiceRecognitionEnabled(prev => !prev)}
+            title={isVoiceRecognitionEnabled ? "음성 인식 활성화됨 (클릭하여 비활성화)" : "음성 인식 비활성화됨 (클릭하여 활성화)"}
             aria-label={isVoiceRecognitionEnabled ? "음성 인식 비활성화" : "음성 인식 활성화"}
             className={`text-lg sm:text-xl transition-colors ${isVoiceRecognitionEnabled ? 'text-blue-500 hover:text-blue-600' : 'text-gray-400 hover:text-gray-500'}`}>
             {isVoiceRecognitionEnabled ? '🎙️' : '🔇'}

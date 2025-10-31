@@ -25,6 +25,7 @@ function App() {
       const saved = localStorage.getItem('voiceRecognitionEnabled');
       return saved !== null ? JSON.parse(saved) : true;
    });
+   const [isClipboardMonitoring, setIsClipboardMonitoring] = useState(true); // 클립보드 모니터링 ON/OFF
    const [eventActions, setEventActions] = useState(null);
    const [areEventActionsReady, setAreEventActionsReady] = useState(false);
    const { handleChatMessage } = useChat(isLoggedIn, setEventAddedKey, eventActions);
@@ -106,27 +107,42 @@ function App() {
    }, []);
 
    const readClipboard = useCallback(async () => {
+      // 클립보드 모니터링이 OFF면 종료
+      if (!isClipboardMonitoring) return;
+
       if (!navigator.clipboard?.readText || document.visibilityState !== 'visible') return;
 
       try {
          const text = await navigator.clipboard.readText();
-         if (text && text.trim().length >= 5 && !dismissedCopiedTexts.has(text)) {
-            // 먼저 백그라운드에서 분석하고, 일정이 맞을 때만 모달 표시
-            const isSchedule = await analyzeClipboard(text);
-            if (isSchedule) {
-               setCopiedText(text);
-               setIsAnalyzing(true);
-               // 짧은 시간 후 분석 완료 상태로 변경
-               setTimeout(() => setIsAnalyzing(false), 500);
+         const trimmedText = text.trim();
+
+         // 50자 이내, 5자 이상, 이미 무시한 텍스트가 아닐 때만
+         if (trimmedText.length >= 5 && trimmedText.length <= 50 && !dismissedCopiedTexts.has(text)) {
+            // 날짜/요일 패턴 체크
+            const hasDateOrDay = /(\d{1,2}월|\d{1,2}일|\d{4}년|월요일|화요일|수요일|목요일|금요일|토요일|일요일|오늘|내일|모레|다음주|이번주)/.test(trimmedText);
+
+            // 날짜/요일이 있을 때만 분석
+            if (hasDateOrDay) {
+               const isSchedule = await analyzeClipboard(text);
+               if (isSchedule) {
+                  setCopiedText(text);
+                  setIsAnalyzing(true);
+                  setTimeout(() => setIsAnalyzing(false), 500);
+               } else {
+                  addToDismissedTexts(text);
+               }
             } else {
-               // 일정이 아니면 바로 무시 목록에 추가
+               // 날짜/요일 없으면 무시 목록에 추가
                addToDismissedTexts(text);
             }
+         } else if (trimmedText.length > 50) {
+            // 50자 초과하면 무시 목록에 추가
+            addToDismissedTexts(text);
          }
       } catch (err) {
          // Clipboard read failed - silently handle error
       }
-   }, [dismissedCopiedTexts, analyzeClipboard, addToDismissedTexts]);
+   }, [isClipboardMonitoring, dismissedCopiedTexts, analyzeClipboard, addToDismissedTexts]);
 
    useEffect(() => {
       const handleVisibilityChange = () => {
@@ -152,8 +168,9 @@ function App() {
 
    const schedulingSystemProps = useMemo(() => ({
       isLoggedIn, user, handleLogout, isVoiceRecognitionEnabled,
-      setIsVoiceRecognitionEnabled: handleToggleVoiceRecognition, loginMethod
-   }), [isLoggedIn, user, handleLogout, isVoiceRecognitionEnabled, handleToggleVoiceRecognition, loginMethod]);
+      setIsVoiceRecognitionEnabled: handleToggleVoiceRecognition,
+      isClipboardMonitoring, setIsClipboardMonitoring, loginMethod
+   }), [isLoggedIn, user, handleLogout, isVoiceRecognitionEnabled, handleToggleVoiceRecognition, isClipboardMonitoring, loginMethod]);
 
    const handleConfirmSharedText = (text) => {
       handleChatMessage(`다음 내용으로 일정 추가: ${text}`);
