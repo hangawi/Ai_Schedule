@@ -80,10 +80,29 @@ export const handleChatSubmit = async (
       updatedCombinations[currentIndex] = data.schedule;
       setModifiedCombinations(updatedCombinations);
 
+      // explanation에서 JSON 형식 제거
+      let cleanExplanation = data.explanation;
+
+      // JSON 블록 제거 (```json ... ``` 또는 { ... } 형식)
+      if (cleanExplanation) {
+        // JSON 코드 블록 제거
+        cleanExplanation = cleanExplanation.replace(/```json\s*[\s\S]*?\s*```/g, '');
+        cleanExplanation = cleanExplanation.replace(/```\s*[\s\S]*?\s*```/g, '');
+
+        // 단독 JSON 객체 제거 (줄 시작부터 끝까지 { ... } 형식)
+        cleanExplanation = cleanExplanation.replace(/^\s*\{[\s\S]*?\}\s*$/m, '');
+
+        // "understood": ... 같은 JSON 필드 제거
+        cleanExplanation = cleanExplanation.replace(/"(understood|action|schedule)":\s*[^\n]*/g, '');
+
+        // 여러 줄 공백 정리
+        cleanExplanation = cleanExplanation.replace(/\n{3,}/g, '\n\n').trim();
+      }
+
       // AI 응답 메시지
       const botMessage = {
         id: Date.now() + 2,
-        text: data.explanation,
+        text: cleanExplanation,
         sender: 'bot',
         timestamp: new Date()
       };
