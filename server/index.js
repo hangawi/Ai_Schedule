@@ -101,6 +101,7 @@ app.use('/api/call-analysis', require('./routes/callAnalysis'));
 app.use('/api/coordination', require('./routes/coordination'));
 app.use('/api/conflict', require('./routes/conflict'));
 app.use('/api/ocr', require('./routes/ocr'));
+app.use('/api/ocr-chat', require('./routes/ocrChat'));
 app.use('/api/schedule', require('./routes/scheduleOptimizer'));
 
 if (process.env.NODE_ENV === 'production') {
