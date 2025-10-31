@@ -6,14 +6,58 @@ import { detectConflicts, generateOptimizationQuestions, optimizeScheduleWithGPT
 
 const ScheduleOptimizationModal = ({
   combinations,
+  initialSchedules, // 새로 추가: OCR 채팅에서 직접 전달
   onSelect,
   onClose,
+  onSchedulesApplied, // 새로 추가: 적용 완료 콜백
   userAge,
   gradeLevel
 }) => {
+  // 🔍 Props 디버깅
+  console.log('📦 ScheduleOptimizationModal Props:', {
+    combinations,
+    combinationsType: combinations ? (Array.isArray(combinations) ? 'array' : typeof combinations) : 'undefined',
+    combinationsLength: combinations?.length,
+    initialSchedules,
+    initialSchedulesType: initialSchedules ? (Array.isArray(initialSchedules) ? 'array' : typeof initialSchedules) : 'undefined',
+    initialSchedulesLength: initialSchedules?.length,
+    hasOnSelect: !!onSelect,
+    hasOnClose: !!onClose,
+    hasOnSchedulesApplied: !!onSchedulesApplied
+  });
+
+  // combinations 또는 initialSchedules를 배열로 변환
+  const initialCombinations = React.useMemo(() => {
+    console.log('🔍 useMemo 실행:', {
+      hasCombinations: !!combinations,
+      combinationsLength: combinations?.length,
+      hasInitialSchedules: !!initialSchedules,
+      initialSchedulesLength: initialSchedules?.length
+    });
+
+    if (combinations && Array.isArray(combinations) && combinations.length > 0) {
+      // combinations가 유효한 경우
+      const isValid = combinations.every(c => Array.isArray(c));
+      if (isValid) {
+        console.log('✅ combinations 사용:', combinations.length, '개 조합');
+        return combinations;
+      } else {
+        console.warn('⚠️ combinations가 잘못된 형식');
+      }
+    }
+
+    if (initialSchedules && Array.isArray(initialSchedules) && initialSchedules.length > 0) {
+      console.log('✅ initialSchedules 사용:', initialSchedules.length, '개 스케줄');
+      return [initialSchedules]; // 단일 배열을 combinations 형식으로 감싸기
+    }
+
+    console.warn('⚠️ 유효한 데이터가 없어 빈 배열 반환');
+    return [[]]; // 기본값
+  }, [combinations, initialSchedules]);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [applyScope, setApplyScope] = useState('month'); // 'week' 또는 'month'
-  const [modifiedCombinations, setModifiedCombinations] = useState(combinations);
+  const [modifiedCombinations, setModifiedCombinations] = useState(initialCombinations);
   const [originalSchedule, setOriginalSchedule] = useState(null); // 맨 처음 원본 시간표
   const [scheduleHistory, setScheduleHistory] = useState([]); // 단계별 히스토리 (스택)
   const [redoStack, setRedoStack] = useState([]); // Redo 스택 (되돌리기 취소용)
@@ -40,58 +84,91 @@ const ScheduleOptimizationModal = ({
   // 모달이 열릴 때 원본 저장만 (자동 최적화 제안 비활성화)
   useEffect(() => {
     // 원본 시간표 저장
-    if (!originalSchedule) {
-      setOriginalSchedule(JSON.parse(JSON.stringify(currentCombination)));
+    if (!originalSchedule && modifiedCombinations[currentIndex]) {
+      setOriginalSchedule(JSON.parse(JSON.stringify(modifiedCombinations[currentIndex])));
     }
 
     // 환영 메시지 표시
-    const welcomeMessage = {
-      id: Date.now(),
-      text: `안녕하세요! 😊\n\n시간표 수정이 필요하시면 말씀해주세요!\n\n예: "금요일 6시까지만", "수요일 공연반 삭제", "아까 시간표로 돌려줘"`,
-      sender: 'bot',
-      timestamp: new Date()
-    };
-    setChatMessages([welcomeMessage]);
-  }, []); // 모달이 열릴 때 한 번만 실행
+    if (chatMessages.length === 0) {
+      const welcomeMessage = {
+        id: Date.now(),
+        text: `안녕하세요! 😊\n\n시간표 수정이 필요하시면 말씀해주세요!\n\n예: "금요일 6시까지만", "수요일 공연반 삭제", "아까 시간표로 돌려줘"`,
+        sender: 'bot',
+        timestamp: new Date()
+      };
+      setChatMessages([welcomeMessage]);
+    }
+  }, [modifiedCombinations, currentIndex]); // modifiedCombinations가 준비되면 실행
 
-  if (!combinations || combinations.length === 0) {
+  if (!modifiedCombinations || modifiedCombinations.length === 0) {
+    return null;
+  }
+
+  // 현재 인덱스가 유효한지 확인
+  if (currentIndex >= modifiedCombinations.length) {
+    return null;
+  }
+
+  const currentCombination = modifiedCombinations[currentIndex];
+
+  // currentCombination이 undefined이거나 배열이 아닌 경우 체크
+  if (!currentCombination || !Array.isArray(currentCombination)) {
+    console.error('❌ currentCombination is invalid:', currentCombination);
     return null;
   }
 
   // 디버그: 조합 확인
   if (currentIndex === 0) {
-    console.log('📦 Total combinations:', combinations.length);
-    console.log('📦 Combination 0 has', combinations[0]?.length, 'schedules');
+    console.log('📦 Total combinations:', modifiedCombinations.length);
+    console.log('📦 Combination 0 has', currentCombination?.length, 'schedules');
   }
 
-  const currentCombination = modifiedCombinations[currentIndex];
   const weeklySchedule = formatWeeklySchedule(currentCombination);
 
   // ScheduleGridSelector를 위해 personalTimes 형식으로 변환
-  const personalTimes = currentCombination.map((schedule, index) => {
-    if (!schedule.days || schedule.days.length === 0) return null;
+  let personalTimes;
+  try {
+    console.log('🔄 personalTimes 생성 시작, currentCombination:', currentCombination?.length, '개');
 
-    const dayMap = {
-      'MON': 1, 'TUE': 2, 'WED': 3, 'THU': 4,
-      'FRI': 5, 'SAT': 6, 'SUN': 7
-    };
+    personalTimes = currentCombination.map((schedule, index) => {
+      if (!schedule) {
+        console.warn(`⚠️ schedule[${index}]가 null/undefined`);
+        return null;
+      }
 
-    // days가 배열이 아니면 배열로 변환
-    const daysArray = Array.isArray(schedule.days) ? schedule.days : [schedule.days];
-    const mappedDays = daysArray.map(day => dayMap[day] || day).filter(d => d);
+      if (!schedule.days || schedule.days.length === 0) {
+        console.warn(`⚠️ schedule[${index}] (${schedule.title})에 days가 없음`);
+        return null;
+      }
 
-    return {
-      id: Date.now() + index,
-      type: 'study',
-      days: mappedDays,
-      startTime: schedule.startTime,
-      endTime: schedule.endTime,
-      title: schedule.title || '수업',
-      color: '#9333ea',
-      description: schedule.description || '',
-      isRecurring: true
-    };
-  }).filter(item => item !== null);
+      const dayMap = {
+        'MON': 1, 'TUE': 2, 'WED': 3, 'THU': 4,
+        'FRI': 5, 'SAT': 6, 'SUN': 7
+      };
+
+      // days가 배열이 아니면 배열로 변환
+      const daysArray = Array.isArray(schedule.days) ? schedule.days : [schedule.days];
+      const mappedDays = daysArray.map(day => dayMap[day] || day).filter(d => d);
+
+      return {
+        id: Date.now() + index,
+        type: 'study',
+        days: mappedDays,
+        startTime: schedule.startTime,
+        endTime: schedule.endTime,
+        title: schedule.title || '수업',
+        color: '#9333ea',
+        description: schedule.description || '',
+        isRecurring: true
+      };
+    }).filter(item => item !== null);
+
+    console.log('✅ personalTimes 생성 완료:', personalTimes?.length, '개');
+  } catch (error) {
+    console.error('❌ personalTimes 생성 중 에러:', error);
+    console.error('currentCombination:', currentCombination);
+    return null;
+  }
 
   // 월요일 15:00 확인
   const mon15Personal = personalTimes.filter(p =>
@@ -154,7 +231,7 @@ const ScheduleOptimizationModal = ({
   };
 
   const handleNext = () => {
-    if (currentIndex < combinations.length - 1) {
+    if (currentIndex < modifiedCombinations.length - 1) {
       setCurrentIndex(currentIndex + 1);
     }
   };
@@ -162,7 +239,16 @@ const ScheduleOptimizationModal = ({
   const handleSelectSchedule = () => {
     console.log('🔍 선택된 combination:', currentCombination);
 
-    onSelect(currentCombination, applyScope);
+    // 기존 콜백 (기존 시간표 최적화 플로우)
+    if (onSelect) {
+      onSelect(currentCombination, applyScope);
+    }
+
+    // 새로운 콜백 (OCR 채팅 필터링 플로우)
+    if (onSchedulesApplied) {
+      onSchedulesApplied(currentCombination);
+    }
+
     onClose();
   };
 
@@ -232,7 +318,7 @@ const ScheduleOptimizationModal = ({
         body: JSON.stringify({
           message: input,
           currentSchedule: modifiedCombinations[currentIndex],
-          originalSchedule: originalSchedule || combinations[currentIndex],
+          originalSchedule: originalSchedule || modifiedCombinations[currentIndex],
           scheduleHistory: scheduleHistory,  // 히스토리 전달
           lastAiResponse: lastAiResponse,  // 직전 AI 응답 전달
           redoStack: redoStack  // Redo 스택 전달
@@ -991,7 +1077,7 @@ const ScheduleOptimizationModal = ({
             <div className="flex items-center ml-auto">
               <CheckCircle size={16} className="text-green-600 mr-2" />
               <span className="text-green-700 font-medium">
-                {combinations.length}개의 최적 조합 발견
+                {modifiedCombinations?.length || 1}개의 최적 조합 발견
               </span>
             </div>
           </div>
@@ -1015,7 +1101,7 @@ const ScheduleOptimizationModal = ({
 
             <div className="text-center">
               <div className="text-base font-bold text-gray-800">
-                조합 {currentIndex + 1} / {combinations.length}
+                조합 {currentIndex + 1} / {modifiedCombinations.length}
               </div>
               <div className="text-xs text-gray-600">
                 총 {currentCombination.length}개 수업 · {getTotalClassHours()}분
@@ -1024,9 +1110,9 @@ const ScheduleOptimizationModal = ({
 
             <button
               onClick={handleNext}
-              disabled={currentIndex === combinations.length - 1}
+              disabled={currentIndex === modifiedCombinations.length - 1}
               className={`flex items-center px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                currentIndex === combinations.length - 1
+                currentIndex === modifiedCombinations.length - 1
                   ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   : 'bg-purple-600 text-white hover:bg-purple-700'
               }`}

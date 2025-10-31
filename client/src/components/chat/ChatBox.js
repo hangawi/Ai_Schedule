@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, MessageCircle, Image } from 'lucide-react';
-import TimetableUploadBox from './TimetableUploadBox';
+import TimetableUploadWithChat from './TimetableUploadWithChat';
 import ScheduleOptimizationModal from '../modals/ScheduleOptimizationModal';
 import { userService } from '../../services/userService';
 
@@ -1180,9 +1180,9 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
         </div>
       )}
 
-      {/* 시간표 업로드 모달 */}
+      {/* 시간표 업로드 모달 (채팅 기능 포함) */}
       {showTimetableUpload && (
-        <TimetableUploadBox
+        <TimetableUploadWithChat
           onSchedulesExtracted={handleSchedulesExtracted}
           onClose={() => setShowTimetableUpload(false)}
         />

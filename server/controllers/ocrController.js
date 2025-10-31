@@ -362,8 +362,14 @@ PM이나 오후가 보이면 반드시 13:00 이후로 변환!
       }
     }
 
-    // 모든 시간표를 하나로 합치기
-    const allSchedules = scheduleResults.flatMap(r => r.schedules || []);
+    // 모든 시간표를 하나로 합치되, 이미지 출처 정보 추가
+    const allSchedules = scheduleResults.flatMap((result, imageIndex) =>
+      (result.schedules || []).map(schedule => ({
+        ...schedule,
+        sourceImage: result.fileName,
+        sourceImageIndex: imageIndex
+      }))
+    );
 
     console.log('📊 이미지별 추출 결과:');
     scheduleResults.forEach((result, idx) => {
@@ -417,6 +423,7 @@ PM이나 오후가 보이면 반드시 13:00 이후로 변환!
       success: true,
       allSchedules: allSchedules,
       totalSchedules: allSchedules.length,
+      schedulesByImage: scheduleResults, // 이미지별 정보 추가
     };
 
     console.log('📤 응답 전송 중... (데이터 크기:', JSON.stringify(responseData).length, 'bytes)');

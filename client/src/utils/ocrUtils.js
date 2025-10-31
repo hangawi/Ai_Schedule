@@ -464,6 +464,12 @@ export const formatWeeklySchedule = (schedules) => {
     SUN: []
   };
 
+  // 안전 장치: schedules가 없거나 배열이 아니면 빈 객체 반환
+  if (!schedules || !Array.isArray(schedules)) {
+    console.warn('⚠️ formatWeeklySchedule: schedules가 유효하지 않음:', schedules);
+    return weeklySchedule;
+  }
+
   schedules.forEach(schedule => {
     if (schedule.days) {
       // days가 배열이 아니면 배열로 변환
@@ -603,7 +609,7 @@ export const analyzeScheduleImages = async (imageFiles, birthdate) => {
     ]);
 
     console.log('✅ 데이터 파싱 완료:', data);
-    return data.allSchedules || [];
+    return data; // 전체 데이터 반환 (allSchedules, schedulesByImage 포함)
   } catch (error) {
     if (error.name === 'AbortError') {
       console.error('❌ 요청 타임아웃 (180초 초과)');
@@ -675,15 +681,23 @@ export const parseScheduleFromOCR = (ocrText, gradeLevel) => {
 /**
  * 여러 이미지에서 시간표 추출 및 통합
  * @param {Array<File>} imageFiles - 이미지 파일 배열
+ * @param {Function} progressCallback - 진행률 콜백 (0-100)
  * @param {string} birthdate - 사용자 생년월일
  * @returns {Promise<Object>} - 추출된 시간표와 메타데이터
  */
-export const extractSchedulesFromImages = async (imageFiles, birthdate) => {
+export const extractSchedulesFromImages = async (imageFiles, progressCallback, birthdate) => {
   const age = calculateAge(birthdate);
   const gradeLevel = getGradeLevelFromAge(age);
 
+  // 진행률 보고
+  if (progressCallback) progressCallback(10);
+
   // 백엔드 API를 사용하여 구조화된 시간표 데이터 가져오기
-  const rawSchedules = await analyzeScheduleImages(imageFiles, birthdate);
+  const apiResponse = await analyzeScheduleImages(imageFiles, birthdate);
+  const rawSchedules = apiResponse.allSchedules || [];
+  const schedulesByImage = apiResponse.schedulesByImage || [];
+
+  if (progressCallback) progressCallback(50);
 
   // 병합된 시간대를 분리하는 함수
   const splitMergedTimeSlots = (schedule) => {
@@ -871,11 +885,15 @@ export const extractSchedulesFromImages = async (imageFiles, birthdate) => {
 
   const schedulesWithSplit = splitOverlappingBlocks(schedulesWithDuration);
 
+  if (progressCallback) progressCallback(80);
+
   // 충돌 감지 (참고용)
   const conflicts = detectConflicts(schedulesWithSplit);
 
   // 최적 조합 생성 건너뛰기 - 모든 스케줄 그대로 사용
   const optimalCombinations = [schedulesWithSplit];
+
+  if (progressCallback) progressCallback(90);
 
   console.log('📊 최종 스케줄 개수:', schedulesWithSplit.length);
 
@@ -885,6 +903,8 @@ export const extractSchedulesFromImages = async (imageFiles, birthdate) => {
   );
   console.log('🔍 월요일 15:00 스케줄:', mon15.map(s => `${s.title} days=${s.days} ${s.startTime}-${s.endTime}`));
 
+  if (progressCallback) progressCallback(100);
+
   return {
     age,
     gradeLevel,
@@ -893,6 +913,7 @@ export const extractSchedulesFromImages = async (imageFiles, birthdate) => {
     conflicts,
     optimalCombinations,
     ocrResults: [],
-    hasConflicts: conflicts.length > 0
+    hasConflicts: conflicts.length > 0,
+    schedulesByImage: schedulesByImage // 이미지별 정보 추가
   };
 };
