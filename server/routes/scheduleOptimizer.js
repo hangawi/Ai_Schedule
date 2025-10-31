@@ -775,6 +775,32 @@ router.post('/chat', auth, async (req, res) => {
 
     console.log('✅ 처리 완료:', parsed.action, '|', currentSchedule.length, '→', parsed.schedule?.length || 0);
 
+    // ⚠️ explanation에서 JSON 제거 (AI가 실수로 JSON을 포함시킨 경우)
+    if (parsed.explanation && typeof parsed.explanation === 'string') {
+      // JSON 블록 제거
+      let cleanExplanation = parsed.explanation;
+      cleanExplanation = cleanExplanation.replace(/```json\s*[\s\S]*?\s*```/g, '');
+      cleanExplanation = cleanExplanation.replace(/```\s*[\s\S]*?\s*```/g, '');
+
+      // 단독 JSON 객체 제거 (여러 줄에 걸친 { ... })
+      cleanExplanation = cleanExplanation.replace(/\{[\s\S]*?"understood"[\s\S]*?\}/g, '');
+      cleanExplanation = cleanExplanation.replace(/\{[\s\S]*?"action"[\s\S]*?\}/g, '');
+      cleanExplanation = cleanExplanation.replace(/\{[\s\S]*?"schedule"[\s\S]*?\}/g, '');
+
+      // JSON 필드 라인 제거
+      cleanExplanation = cleanExplanation.replace(/"(understood|action|schedule|explanation)":\s*[^\n]*/g, '');
+
+      // 여러 줄 공백 정리
+      cleanExplanation = cleanExplanation.replace(/\n{3,}/g, '\n\n').trim();
+
+      // 빈 문자열이 되면 기본 메시지
+      if (!cleanExplanation || cleanExplanation.length < 5) {
+        cleanExplanation = parsed.understood || '처리했습니다.';
+      }
+
+      parsed.explanation = cleanExplanation;
+    }
+
     // ⚠️ DEBUG: 첫 3개 스케줄 비교
     console.log('\n🔍 SCHEDULE COMPARISON:');
     console.log('📋 ORIGINAL (첫 3개):');
@@ -840,6 +866,62 @@ router.post('/chat', auth, async (req, res) => {
       console.log('\n🔍 실제 삭제 검증:');
       console.log(`원본: ${currentSchedule.length}개 → AI 결과: ${parsed.schedule.length}개`);
       console.log(`실제 삭제: ${deletedItems.length}개`);
+
+      // 🚨 [유지됨] 검증: lastAiResponse에 [유지됨]이 있으면 체크
+      if (lastAiResponse && lastAiResponse.includes('[유지됨')) {
+        console.log('\n🔍 [유지됨] 검증 시작...');
+
+        // [유지됨] 섹션 추출 (여러 개일 수 있음)
+        const maintainSections = lastAiResponse.match(/\[유지됨[^\]]*\]([\s\S]*?)(?=\[|삭제해드릴까요\?|$)/g);
+
+        if (maintainSections) {
+          const shouldBeMaintained = [];
+
+          maintainSections.forEach(section => {
+            // • 항목명 (시간) 패턴 추출
+            const itemMatches = section.match(/•\s*([가-힣a-zA-Z0-9\s&]+?)\s*\((\d{2}:\d{2})-(\d{2}:\d{2})\)/g);
+            if (itemMatches) {
+              itemMatches.forEach(match => {
+                const titleMatch = match.match(/•\s*([가-힣a-zA-Z0-9\s&]+?)\s*\(/);
+                if (titleMatch) {
+                  shouldBeMaintained.push(titleMatch[1].trim());
+                }
+              });
+            }
+          });
+
+          console.log('📋 [유지됨] 항목:', shouldBeMaintained);
+
+          // 삭제된 항목 중 [유지됨]에 있는 것 찾기
+          const wronglyDeleted = deletedItems.filter(item =>
+            shouldBeMaintained.some(maintainTitle =>
+              item.title.includes(maintainTitle) || maintainTitle.includes(item.title)
+            )
+          );
+
+          if (wronglyDeleted.length > 0) {
+            console.error('\n🚨🚨🚨 심각한 오류: [유지됨] 항목이 삭제됨!');
+            wronglyDeleted.forEach(item => {
+              const daysStr = Array.isArray(item.days) ? item.days.join(',') : item.days;
+              console.error(`  ❌ ${item.title} (${daysStr} ${item.startTime}-${item.endTime})`);
+            });
+
+            // 잘못 삭제된 항목을 복원
+            console.log('🔧 잘못 삭제된 항목 복원 중...');
+            parsed.schedule = [...parsed.schedule, ...wronglyDeleted];
+
+            // 설명 업데이트
+            const dayKorean = {'MON':'월','TUE':'화','WED':'수','THU':'목','FRI':'금','SAT':'토','SUN':'일'};
+            const restoredList = wronglyDeleted.map(item => {
+              const daysStr = Array.isArray(item.days) ? item.days.join(',') : item.days;
+              const dayDisplay = daysStr.split(',').map(d => dayKorean[d] || d).join(',');
+              return `• ${item.title} (${dayDisplay} ${item.startTime}-${item.endTime})`;
+            }).join('\n');
+
+            parsed.explanation = `⚠️ AI가 [유지됨] 항목을 잘못 삭제하여 복원했습니다.\n\n복원된 항목:\n${restoredList}\n\n${parsed.explanation}`;
+          }
+        }
+      }
 
       if (deletedItems.length > 0) {
         console.log('\n✂️ 실제 삭제된 항목:');
