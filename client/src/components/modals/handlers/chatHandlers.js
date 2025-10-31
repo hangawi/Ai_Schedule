@@ -13,7 +13,8 @@ export const handleChatSubmit = async (
   setModifiedCombinations,
   dayMap,
   gradeLevelMap,
-  parseTime
+  parseTime,
+  chatMessages  // 추가: 대화 히스토리
 ) => {
   e.preventDefault();
   if (!chatInput.trim()) return;
@@ -46,6 +47,13 @@ export const handleChatSubmit = async (
     console.log('📋 원본 스케줄:', originalSchedule ? `${originalSchedule.length}개` : '없음');
     console.log('📋 현재 스케줄:', modifiedCombinations[currentIndex].length, '개');
 
+    // 직전 봇 응답 찾기 (대화 컨텍스트 유지)
+    const lastBotMessage = chatMessages
+      ? [...chatMessages].reverse().find(msg => msg.sender === 'bot' && msg.text !== '💭 답변을 생각하고 있어요...')
+      : null;
+    const lastAiResponse = lastBotMessage ? lastBotMessage.text : null;
+    console.log('🤖 직전 AI 응답:', lastAiResponse ? '있음' : '없음');
+
     const response = await fetch('http://localhost:5000/api/schedule/chat', {
       method: 'POST',
       headers: {
@@ -55,7 +63,8 @@ export const handleChatSubmit = async (
       body: JSON.stringify({
         message: input,
         currentSchedule: modifiedCombinations[currentIndex],
-        originalSchedule: originalSchedule || modifiedCombinations[currentIndex]
+        originalSchedule: originalSchedule || modifiedCombinations[currentIndex],
+        lastAiResponse: lastAiResponse  // 직전 AI 응답 전달
       })
     });
 
