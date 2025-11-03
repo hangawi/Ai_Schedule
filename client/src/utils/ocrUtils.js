@@ -555,9 +555,10 @@ export const performOCR = async (imageFile) => {
  * 여러 이미지에서 구조화된 시간표 데이터 추출 (백엔드 API 사용)
  * @param {Array<File>} imageFiles - 이미지 파일 배열
  * @param {string} birthdate - 사용자 생년월일
+ * @param {Function} progressCallback - 진행률 콜백 (10-50 범위)
  * @returns {Promise<Array>} - 구조화된 시간표 배열
  */
-export const analyzeScheduleImages = async (imageFiles, birthdate) => {
+export const analyzeScheduleImages = async (imageFiles, birthdate, progressCallback) => {
   const formData = new FormData();
 
   imageFiles.forEach((file) => {
@@ -570,8 +571,20 @@ export const analyzeScheduleImages = async (imageFiles, birthdate) => {
 
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
+  let progressInterval = null;
+
   try {
     console.log('📡 백엔드로 요청 전송 중...');
+    if (progressCallback) progressCallback(15);
+
+    // 진행률 시뮬레이션 (서버 응답 대기 중)
+    let currentProgress = 15;
+    progressInterval = setInterval(() => {
+      if (currentProgress < 80) {
+        currentProgress += 5;
+        if (progressCallback) progressCallback(currentProgress);
+      }
+    }, 2000); // 2초마다 5%씩 증가
 
     // 타임아웃 설정 (180초 = 3분)
     const controller = new AbortController();
@@ -586,9 +599,12 @@ export const analyzeScheduleImages = async (imageFiles, birthdate) => {
       signal: controller.signal
     });
 
+    clearInterval(progressInterval); // 진행률 시뮬레이션 중지
+    progressInterval = null;
     clearTimeout(timeoutId);
 
     console.log('📥 응답 수신:', response.status, response.statusText);
+    if (progressCallback) progressCallback(85);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -597,6 +613,7 @@ export const analyzeScheduleImages = async (imageFiles, birthdate) => {
     }
 
     console.log('🔄 JSON 파싱 중...');
+    if (progressCallback) progressCallback(90);
 
     // JSON 파싱도 타임아웃 추가
     const parseTimeout = new Promise((_, reject) =>
@@ -609,8 +626,14 @@ export const analyzeScheduleImages = async (imageFiles, birthdate) => {
     ]);
 
     console.log('✅ 데이터 파싱 완료:', data);
+    if (progressCallback) progressCallback(95);
     return data; // 전체 데이터 반환 (allSchedules, schedulesByImage 포함)
   } catch (error) {
+    // 에러 발생 시에도 진행률 시뮬레이션 중지
+    if (progressInterval) {
+      clearInterval(progressInterval);
+    }
+
     if (error.name === 'AbortError') {
       console.error('❌ 요청 타임아웃 (180초 초과)');
       throw new Error('이미지 분석 시간이 너무 오래 걸립니다 (3분 초과). 이미지 개수를 줄이거나 이미지 크기를 줄여주세요.');
@@ -692,12 +715,12 @@ export const extractSchedulesFromImages = async (imageFiles, progressCallback, b
   // 진행률 보고
   if (progressCallback) progressCallback(10);
 
-  // 백엔드 API를 사용하여 구조화된 시간표 데이터 가져오기
-  const apiResponse = await analyzeScheduleImages(imageFiles, birthdate);
+  // 백엔드 API를 사용하여 구조화된 시간표 데이터 가져오기 (10% → 95%)
+  const apiResponse = await analyzeScheduleImages(imageFiles, birthdate, progressCallback);
   const rawSchedules = apiResponse.allSchedules || [];
   const schedulesByImage = apiResponse.schedulesByImage || [];
 
-  if (progressCallback) progressCallback(50);
+  if (progressCallback) progressCallback(96);
 
   // 병합된 시간대를 분리하는 함수
   const splitMergedTimeSlots = (schedule) => {

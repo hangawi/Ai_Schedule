@@ -11,7 +11,8 @@ const ScheduleOptimizationModal = ({
   onClose,
   onSchedulesApplied, // 새로 추가: 적용 완료 콜백
   userAge,
-  gradeLevel
+  gradeLevel,
+  isEmbedded = false // 새로 추가: 임베드 모드 (TimetableUploadWithChat 내부)
 }) => {
   // 🔍 Props 디버깅
   console.log('📦 ScheduleOptimizationModal Props:', {
@@ -1037,89 +1038,49 @@ const ScheduleOptimizationModal = ({
     );
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-6 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full my-auto max-h-[85vh] overflow-hidden flex flex-col">
-        {/* 통합 헤더 */}
-        <div className="bg-gradient-to-r from-purple-600 via-purple-500 to-blue-600 text-white px-5 py-3 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex-1 text-center">
-              <h2 className="text-xl font-bold">최적 시간표 추천</h2>
-              <p className="text-xs text-purple-100 mt-1">
-                충돌 없는 시간표 조합을 찾았습니다
-              </p>
+  const modalContent = (
+    <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full my-auto max-h-[85vh] overflow-hidden flex flex-col" style={isEmbedded ? { maxWidth: '100%', maxHeight: '100%', height: '100%', borderRadius: 0, boxShadow: 'none' } : {}}>
+        {/* 통합 헤더 - 임베드 모드에서는 숨김 */}
+        {!isEmbedded && (
+          <div className="bg-gradient-to-r from-purple-600 via-purple-500 to-blue-600 text-white px-5 py-3 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={onClose}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
+                title="뒤로 가기"
+              >
+                <ChevronLeft size={24} />
+              </button>
+              <div className="flex-1 text-center">
+                <h2 className="text-xl font-bold">최적 시간표 추천</h2>
+                <p className="text-xs text-purple-100 mt-1">
+                  충돌 없는 시간표 조합을 찾았습니다
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
+              >
+                <X size={24} />
+              </button>
             </div>
-            <button
-              onClick={onClose}
-              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
-            >
-              <X size={24} />
-            </button>
           </div>
-        </div>
+        )}
 
         {/* 메인 컨텐츠 영역 */}
         <div className="flex flex-row flex-1 overflow-hidden" style={{ minHeight: 0 }}>
           {/* 왼쪽: 시간표 영역 */}
           <div className="flex-1 flex flex-col overflow-hidden">{/* 헤더를 제거하고 내용만 유지 */}
 
-        {/* 사용자 정보 */}
+        {/* 시간표 제목 */}
         <div className="px-5 py-3 bg-purple-50 border-b border-purple-100 flex-shrink-0">
-          <div className="flex items-center space-x-4 text-xs">
-            <div className="flex items-center">
-              <span className="font-medium text-gray-700">나이:</span>
-              <span className="ml-2 text-gray-900">{userAge}세</span>
+          <div className="text-center">
+            <div className="text-base font-bold text-gray-800">
+              업로드된 시간표
             </div>
-            <div className="flex items-center">
-              <span className="font-medium text-gray-700">학년부:</span>
-              <span className="ml-2 text-gray-900">{gradeLevelLabels[gradeLevel]}</span>
+            <div className="text-xs text-gray-600 mt-1">
+              총 {currentCombination.length}개 수업 · {getTotalClassHours()}분
             </div>
-            <div className="flex items-center ml-auto">
-              <CheckCircle size={16} className="text-green-600 mr-2" />
-              <span className="text-green-700 font-medium">
-                {modifiedCombinations?.length || 1}개의 최적 조합 발견
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* 조합 네비게이션 */}
-        <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={handlePrevious}
-              disabled={currentIndex === 0}
-              className={`flex items-center px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                currentIndex === 0
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-purple-600 text-white hover:bg-purple-700'
-              }`}
-            >
-              <ChevronLeft size={20} className="mr-1" />
-              이전
-            </button>
-
-            <div className="text-center">
-              <div className="text-base font-bold text-gray-800">
-                조합 {currentIndex + 1} / {modifiedCombinations.length}
-              </div>
-              <div className="text-xs text-gray-600">
-                총 {currentCombination.length}개 수업 · {getTotalClassHours()}분
-              </div>
-            </div>
-
-            <button
-              onClick={handleNext}
-              disabled={currentIndex === modifiedCombinations.length - 1}
-              className={`flex items-center px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                currentIndex === modifiedCombinations.length - 1
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-purple-600 text-white hover:bg-purple-700'
-              }`}
-            >
-              다음
-              <ChevronRight size={20} className="ml-1" />
-            </button>
           </div>
         </div>
 
@@ -1304,6 +1265,11 @@ const ScheduleOptimizationModal = ({
       </div>
         </div>
       </div>
+  );
+
+  return isEmbedded ? modalContent : (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-6 overflow-y-auto">
+      {modalContent}
     </div>
   );
 };
