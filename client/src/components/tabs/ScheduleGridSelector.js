@@ -111,6 +111,29 @@ const ScheduleGridSelector = ({
     setTimeRange(newShowFullDay ? { start: 0, end: 24 } : { start: 9, end: 18 });
   };
 
+  // 일정에 맞춰 timeRange 자동 조정 (올림 처리)
+  useEffect(() => {
+    if (!personalTimes || personalTimes.length === 0) return;
+
+    let maxEndHour = 18;
+    personalTimes.forEach(p => {
+      if (p.endTime) {
+        const [hour, minute] = p.endTime.split(':').map(Number);
+        // 분이 있으면 다음 시간으로 올림
+        const endHour = minute > 0 ? hour + 1 : hour;
+        if (endHour > maxEndHour) {
+          maxEndHour = endHour;
+        }
+      }
+    });
+
+    // 최소 18시까지는 표시
+    maxEndHour = Math.max(18, maxEndHour);
+
+    if (!showFullDay && maxEndHour > timeRange.end) {
+      setTimeRange(prev => ({ ...prev, end: maxEndHour }));
+    }
+  }, [personalTimes, showFullDay]);
 
   const getCurrentTimeSlots = () => generateTimeSlots(timeRange.start, timeRange.end);
 
@@ -470,17 +493,23 @@ const ScheduleGridSelector = ({
         return p.isRecurring !== false && convertedDays.includes(dayOfWeek);
       });
 
+      // 디버깅: 이고은 원장 일정 확인
+      const debugSchedules = filteredSchedules.filter(s => s.title?.includes('이고은') || s.instructor?.includes('이고은'));
+      if (debugSchedules.length > 0) {
+        console.log(`🔍 [요일 ${dayOfWeek}] 이고은 원장 일정:`, debugSchedules.map(s => `${s.startTime}-${s.endTime}`));
+      }
+
       // 같은 제목끼리 그룹화
       const groupedByTitle = {};
       filteredSchedules.forEach(schedule => {
-        const key = schedule.title;
+        const key = `${schedule.title}_${schedule.instructor || ''}_${schedule.type || ''}`;
         if (!groupedByTitle[key]) {
           groupedByTitle[key] = [];
         }
         groupedByTitle[key].push(schedule);
       });
 
-      // 각 그룹에서 시간대를 병합
+      // 각 그룹에서 시간대를 병합 (실제로 연속되고 중간에 다른 일정이 없을 때만)
       const mergedSchedules = [];
       Object.values(groupedByTitle).forEach(group => {
         if (group.length === 0) return;
@@ -488,21 +517,60 @@ const ScheduleGridSelector = ({
         // 시작 시간 기준으로 정렬
         group.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
 
-        // 연속된 시간대 병합
+        // 연속된 시간대만 병합 (중간에 다른 일정이 없는지 확인)
         let current = { ...group[0] };
         for (let i = 1; i < group.length; i++) {
           const next = group[i];
-          // 현재 블록의 끝 시간과 다음 블록의 시작 시간이 같거나 겹치면 병합
-          if (timeToMinutes(current.endTime) >= timeToMinutes(next.startTime)) {
-            current.endTime = next.endTime;
+          const currentEndMinutes = timeToMinutes(current.endTime);
+          const nextStartMinutes = timeToMinutes(next.startTime);
+
+          // 현재 블록의 끝 시간과 다음 블록의 시작 시간이 정확히 같은지 확인
+          if (currentEndMinutes === nextStartMinutes) {
+            // 중간에 다른 일정이 있는지 확인
+            const hasConflict = filteredSchedules.some(other => {
+              const otherKey = `${other.title}_${other.instructor || ''}_${other.type || ''}`;
+              const currentKey = `${current.title}_${current.instructor || ''}_${current.type || ''}`;
+
+              // 다른 일정이고, 현재-다음 사이에 겹치는지 확인
+              if (otherKey !== currentKey) {
+                const otherStart = timeToMinutes(other.startTime);
+                const otherEnd = timeToMinutes(other.endTime);
+
+                // 중간 시간대에 겹치는 일정이 있으면 병합 불가
+                const conflict = (otherStart < nextStartMinutes && otherEnd > currentEndMinutes) ||
+                       (otherStart >= currentEndMinutes && otherStart < nextStartMinutes);
+
+                if (conflict) {
+                  console.log(`🚫 [요일 ${dayOfWeek}] 병합 중단: ${current.title} (${current.startTime}-${current.endTime}) + ${next.title} (${next.startTime}-${next.endTime}) 사이에 ${other.title} (${other.startTime}-${other.endTime}) 있음`);
+                }
+
+                return conflict;
+              }
+              return false;
+            });
+
+            if (!hasConflict) {
+              // 중간에 다른 일정이 없으면 병합
+              current.endTime = next.endTime;
+            } else {
+              // 중간에 다른 일정이 있으면 병합 안함
+              mergedSchedules.push(current);
+              current = { ...next };
+            }
           } else {
-            // 병합 불가능하면 현재 블록 저장하고 새로운 블록 시작
+            // 연속되지 않으면 현재 블록 저장하고 새로운 블록 시작
             mergedSchedules.push(current);
             current = { ...next };
           }
         }
         mergedSchedules.push(current);
       });
+
+      // 디버깅: 병합 후 이고은 원장 일정 확인
+      const debugMerged = mergedSchedules.filter(s => s.title?.includes('이고은') || s.instructor?.includes('이고은'));
+      if (debugMerged.length > 0) {
+        console.log(`✅ [요일 ${dayOfWeek}] 병합 후 이고은 원장:`, debugMerged.map(s => `${s.startTime}-${s.endTime}`));
+      }
 
       return mergedSchedules;
     };
@@ -526,7 +594,7 @@ const ScheduleGridSelector = ({
           ))}
         </div>
 
-        <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
+        <div style={{ maxHeight: '70vh' }}>
           <div className="flex">
             {/* 시간 컬럼은 전체 시간대 표시 */}
             <div className="w-12 flex-shrink-0">

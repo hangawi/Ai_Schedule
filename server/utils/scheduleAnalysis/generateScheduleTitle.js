@@ -46,8 +46,17 @@ function extractAcademyType(schedules) {
 
 /**
  * 단일 이미지의 시간표 제목 생성
+ * @param {Array} schedules - 스케줄 배열
+ * @param {string} extractedTitle - AI가 추출한 이미지 제목 (우선 사용)
  */
-function generateImageTitle(schedules) {
+function generateImageTitle(schedules, extractedTitle = null) {
+  // AI가 추출한 제목이 있으면 우선 사용
+  if (extractedTitle && extractedTitle.trim()) {
+    console.log(`✅ AI 추출 제목 사용: "${extractedTitle}"`);
+    return extractedTitle.trim();
+  }
+
+  // 제목이 없으면 기존 키워드 기반 추론
   if (!schedules || schedules.length === 0) {
     return '빈 시간표';
   }
@@ -99,7 +108,7 @@ function generateOverallTitle(schedulesByImage) {
   }
 
   const titles = schedulesByImage.map(imageData =>
-    generateImageTitle(imageData.schedules)
+    generateImageTitle(imageData.schedules, imageData.imageTitle)
   );
 
   // 중복 제거
@@ -119,7 +128,8 @@ function generateOverallTitle(schedulesByImage) {
  */
 function generateTitlesForImages(schedulesByImage) {
   const results = schedulesByImage.map((imageData, index) => {
-    const title = generateImageTitle(imageData.schedules);
+    // AI 추출 제목을 우선 사용, 없으면 키워드 기반 추론
+    const title = generateImageTitle(imageData.schedules, imageData.imageTitle);
 
     console.log(`📝 이미지 ${index + 1} (${imageData.fileName}): "${title}"`);
 
