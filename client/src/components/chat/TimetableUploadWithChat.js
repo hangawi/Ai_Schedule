@@ -230,11 +230,14 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
           console.warn('⚠️ days가 없는 스케줄:', schedulesWithoutDays);
         }
 
+        console.log('🔄 filteredSchedules 업데이트:', data.filteredSchedules.length, '개');
+        console.log('첫 3개 수업:', data.filteredSchedules.slice(0, 3).map(s => s.title));
         setFilteredSchedules(data.filteredSchedules);
 
         // 모달 띄우기 (왼쪽으로 슬라이드)
         setSlideDirection('left');
         setTimeout(() => {
+          console.log('✅ 모달 열기 - 현재 filteredSchedules:', filteredSchedules?.length);
           setShowOptimizationModal(true);
         }, 50);
       } else if (data.action === 'filter' && (!data.filteredSchedules || data.filteredSchedules.length === 0)) {
@@ -528,6 +531,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                 }}
               >
                 <ScheduleOptimizationModal
+                  key={JSON.stringify(filteredSchedules.map(s => s.title + s.startTime))}
                   initialSchedules={filteredSchedules}
                   onClose={() => setShowOptimizationModal(false)}
                   onSchedulesApplied={handleSchedulesApplied}
