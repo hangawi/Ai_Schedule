@@ -3,6 +3,7 @@ import { Calendar, Clock, X, CheckCircle, AlertTriangle, ChevronLeft, ChevronRig
 import { formatWeeklySchedule, summarizeSchedule } from '../../utils/ocrUtils';
 import ScheduleGridSelector from '../tabs/ScheduleGridSelector';
 import { detectConflicts, generateOptimizationQuestions, optimizeScheduleWithGPT } from '../../utils/scheduleOptimizer';
+import { COLOR_PALETTE, getColorForImageIndex } from '../../utils/scheduleAnalysis/assignScheduleColors';
 
 const ScheduleOptimizationModal = ({
   combinations,
@@ -12,7 +13,8 @@ const ScheduleOptimizationModal = ({
   onSchedulesApplied, // 새로 추가: 적용 완료 콜백
   userAge,
   gradeLevel,
-  isEmbedded = false // 새로 추가: 임베드 모드 (TimetableUploadWithChat 내부)
+  isEmbedded = false, // 새로 추가: 임베드 모드 (TimetableUploadWithChat 내부)
+  schedulesByImage = null // 새로 추가: 이미지별 스케줄 정보 (색상 할당용)
 }) => {
   // 🔍 Props 디버깅
   console.log('📦 ScheduleOptimizationModal Props:', {
@@ -151,6 +153,16 @@ const ScheduleOptimizationModal = ({
       const daysArray = Array.isArray(schedule.days) ? schedule.days : [schedule.days];
       const mappedDays = daysArray.map(day => dayMap[day] || day).filter(d => d);
 
+      // 이미지 인덱스로 색상 가져오기
+      let scheduleColor = '#9333ea'; // 기본 보라색
+      if (schedule.sourceImageIndex !== undefined) {
+        const colorInfo = getColorForImageIndex(schedule.sourceImageIndex);
+        scheduleColor = colorInfo.border; // 색상 팔레트에서 border 색상 사용
+        console.log(`🎨 ${schedule.title}: 이미지${schedule.sourceImageIndex} → ${colorInfo.label} (${scheduleColor})`);
+      } else {
+        console.log(`⚠️ ${schedule.title}: sourceImageIndex 없음 → 기본 색상`);
+      }
+
       return {
         id: Date.now() + index,
         type: 'study',
@@ -158,7 +170,7 @@ const ScheduleOptimizationModal = ({
         startTime: schedule.startTime,
         endTime: schedule.endTime,
         title: schedule.title || '수업',
-        color: '#9333ea',
+        color: scheduleColor,
         description: schedule.description || '',
         isRecurring: true
       };

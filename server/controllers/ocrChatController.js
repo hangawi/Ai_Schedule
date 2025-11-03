@@ -84,11 +84,12 @@ function applyCondition(schedules, condition, allSchedules) {
  */
 exports.filterSchedulesByChat = async (req, res) => {
   try {
-    const { chatMessage, extractedSchedules, schedulesByImage, imageDescription } = req.body;
+    const { chatMessage, extractedSchedules, schedulesByImage, imageDescription, baseSchedules } = req.body;
 
     console.log('📩 OCR 채팅 필터링 요청:', chatMessage);
     console.log('📊 추출된 스케줄 개수:', extractedSchedules?.length || 0);
     console.log('📸 이미지별 스케줄:', schedulesByImage?.length || 0, '개 이미지');
+    console.log('📚 기본 베이스 스케줄:', baseSchedules?.length || 0, '개');
 
     // 입력 검증
     if (!chatMessage || !chatMessage.trim()) {
@@ -214,6 +215,46 @@ exports.filterSchedulesByChat = async (req, res) => {
         }
 
         console.log(`✅ 필터링 완료: ${extractedSchedules.length} → ${filteredSchedules.length}개`);
+
+        // 기본 베이스 스케줄 자동 추가 (학교 시간표 등)
+        if (baseSchedules && Array.isArray(baseSchedules) && baseSchedules.length > 0) {
+          console.log('📚 baseSchedules 샘플:', baseSchedules.slice(0, 3).map(s => ({
+            title: s.title,
+            days: s.days,
+            sourceImageIndex: s.sourceImageIndex,
+            startTime: s.startTime
+          })));
+
+          // 한글 요일을 영어 코드로 변환
+          const dayMap = {
+            '월': 'MON', '화': 'TUE', '수': 'WED', '목': 'THU',
+            '금': 'FRI', '토': 'SAT', '일': 'SUN'
+          };
+
+          const baseIds = new Set(baseSchedules.map(s => `${s.title}-${s.startTime}-${s.days?.join(',')}`));
+          const filteredIds = new Set(filteredSchedules.map(s => `${s.title}-${s.startTime}-${s.days?.join(',')}`));
+
+          // 기본 베이스 중에서 아직 포함되지 않은 것만 추가
+          baseSchedules.forEach(baseSchedule => {
+            const id = `${baseSchedule.title}-${baseSchedule.startTime}-${baseSchedule.days?.join(',')}`;
+            if (!filteredIds.has(id)) {
+              // days를 영어 코드로 변환
+              const convertedDays = baseSchedule.days?.map(day => dayMap[day] || day) || [];
+              filteredSchedules.push({
+                ...baseSchedule,
+                days: convertedDays
+              });
+            }
+          });
+
+          console.log(`📚 기본 베이스 포함 완료: 총 ${filteredSchedules.length}개 (기본 ${baseSchedules.length}개 포함)`);
+          console.log('📚 최종 filteredSchedules 샘플 (변환 후):', filteredSchedules.slice(-3).map(s => ({
+            title: s.title,
+            days: s.days,
+            sourceImageIndex: s.sourceImageIndex
+          })));
+        }
+
         parsed.filteredSchedules = filteredSchedules;
       }
     }

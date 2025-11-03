@@ -345,10 +345,17 @@ PM이나 오후가 보이면 반드시 13:00 이후로 변환!
           parsedSchedules = { schedules: [] };
         }
 
+        // sourceImageIndex 추가
+        const schedulesWithIndex = (parsedSchedules.schedules || []).map(schedule => ({
+          ...schedule,
+          sourceImage: file.originalname,
+          sourceImageIndex: i
+        }));
+
         scheduleResults.push({
           success: true,
           fileName: file.originalname,
-          schedules: parsedSchedules.schedules || [],
+          schedules: schedulesWithIndex,
         });
 
       } catch (error) {
@@ -419,11 +426,30 @@ PM이나 오후가 보이면 반드시 13:00 이후로 변환!
 
     console.log(`🎉 모든 이미지 처리 완료! 총 ${allSchedules.length}개의 시간표 추출`);
 
+    // ========== 새로운 분석 로직 적용 ==========
+    const { detectBaseScheduleFromImages, extractBaseSchedules } = require('../utils/scheduleAnalysis/detectBaseSchedule');
+    const { generateTitlesForImages } = require('../utils/scheduleAnalysis/generateScheduleTitle');
+
+    // 1. 기본 베이스 감지 (학교 시간표 자동 인식)
+    console.log('📋 scheduleResults 구조:', scheduleResults.map(r => ({ fileName: r.fileName, scheduleCount: r.schedules?.length })));
+    const baseAnalysis = detectBaseScheduleFromImages(scheduleResults);
+    console.log('📊 baseAnalysis 결과:', baseAnalysis.map(r => ({ fileName: r.fileName, isBase: r.isBaseSchedule, scheduleCount: r.schedules?.length })));
+
+    // 2. 이미지별 제목 생성
+    const { schedulesByImage: titledImages, overallTitle } = generateTitlesForImages(scheduleResults);
+
+    // 3. 기본 베이스 스케줄 추출
+    const baseSchedules = extractBaseSchedules(baseAnalysis);
+    console.log('📚 최종 baseSchedules:', baseSchedules.length, '개');
+
     const responseData = {
       success: true,
       allSchedules: allSchedules,
       totalSchedules: allSchedules.length,
-      schedulesByImage: scheduleResults, // 이미지별 정보 추가
+      schedulesByImage: titledImages, // 제목이 포함된 이미지별 정보
+      overallTitle: overallTitle, // 전체 제목
+      baseSchedules: baseSchedules, // 기본 베이스 스케줄 (학교)
+      baseAnalysis: baseAnalysis, // 기본 베이스 분석 결과
     };
 
     console.log('📤 응답 전송 중... (데이터 크기:', JSON.stringify(responseData).length, 'bytes)');

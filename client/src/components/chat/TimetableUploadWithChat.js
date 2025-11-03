@@ -28,6 +28,8 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
   // OCR 결과 및 모달
   const [extractedSchedules, setExtractedSchedules] = useState(null);
   const [schedulesByImage, setSchedulesByImage] = useState(null); // 이미지별 스케줄 정보
+  const [baseSchedules, setBaseSchedules] = useState(null); // 기본 베이스 스케줄 (학교 시간표)
+  const [overallTitle, setOverallTitle] = useState('업로드된 시간표'); // 전체 시간표 제목
   const [filteredSchedules, setFilteredSchedules] = useState(null);
   const [showOptimizationModal, setShowOptimizationModal] = useState(false);
   const [slideDirection, setSlideDirection] = useState('left'); // 'left' or 'right'
@@ -113,6 +115,19 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
 
       setExtractedSchedules(result.schedules);
       setSchedulesByImage(result.schedulesByImage); // 이미지별 정보 저장
+
+      // 기본 베이스 스케줄 저장 (서버에서 분석된 것)
+      if (result.baseSchedules && result.baseSchedules.length > 0) {
+        console.log('📚 기본 베이스 스케줄:', result.baseSchedules.length, '개');
+        setBaseSchedules(result.baseSchedules);
+      }
+
+      // 전체 제목 저장 (서버에서 생성된 것)
+      if (result.overallTitle) {
+        console.log('📋 전체 제목:', result.overallTitle);
+        setOverallTitle(result.overallTitle);
+      }
+
       setProgress({ current: 100, total: 100, message: 'OCR 분석 완료!' });
 
       // 이미지별로 반 목록 구성
@@ -121,7 +136,9 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
         classListByImage = result.schedulesByImage.map((imageResult, idx) => {
           const classNames = [...new Set(imageResult.schedules.map(s => s.title))];
           const classList = classNames.map((name, i) => `  ${i + 1}. ${name}`).join('\n');
-          return `📸 이미지 ${idx + 1} (${imageResult.fileName}):\n${classList}`;
+          // 생성된 제목이 있으면 사용, 없으면 기본 형식
+          const imageTitle = imageResult.title || `이미지 ${idx + 1}`;
+          return `📸 ${imageTitle} (${imageResult.fileName}):\n${classList}`;
         }).join('\n\n');
       } else {
         // 이미지별 정보 없으면 전체 목록으로
@@ -173,6 +190,14 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
     try {
       const token = localStorage.getItem('token');
 
+      console.log('📤 전송 데이터:', {
+        chatMessage: currentMessage,
+        extractedSchedulesCount: extractedSchedules?.length,
+        schedulesByImageCount: schedulesByImage?.length,
+        baseSchedulesCount: baseSchedules?.length,
+        baseSchedules: baseSchedules?.slice(0, 3) // 처음 3개만 출력
+      });
+
       const response = await fetch(`${API_BASE_URL}/api/ocr-chat/filter`, {
         method: 'POST',
         headers: {
@@ -183,6 +208,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
           chatMessage: currentMessage,
           extractedSchedules: extractedSchedules,
           schedulesByImage: schedulesByImage, // 이미지별 정보 추가
+          baseSchedules: baseSchedules, // 기본 베이스 스케줄 추가 (학교 시간표)
           imageDescription: `이미지 ${selectedImages.length}개에서 추출된 시간표`
         })
       });
@@ -272,9 +298,24 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
     console.log('✅ 시간표 적용 완료:', appliedSchedules.length, '개');
     setShowOptimizationModal(false);
 
-    // 부모 컴포넌트에 전달
+    // 부모 컴포넌트에 전달 - 올바른 형식으로
     if (onSchedulesExtracted) {
-      onSchedulesExtracted(appliedSchedules);
+      // 색상 제거 (개인시간은 자주색으로 표시되어야 함)
+      const schedulesWithoutColor = appliedSchedules.map(s => {
+        const { color, sourceImageIndex, sourceImage, ...rest } = s;
+        return rest;
+      });
+
+      onSchedulesExtracted({
+        type: 'schedule_selected',
+        schedules: schedulesWithoutColor,
+        data: {
+          schedules: schedulesWithoutColor,
+          conflicts: [],
+          age: null,
+          gradeLevel: null
+        }
+      });
     }
 
     // 완료 메시지
@@ -310,7 +351,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                 <ArrowLeft size={20} />
               </button>
             )}
-            <h2 className="text-xl font-bold">{showOptimizationModal ? '최적 시간표 추천' : '시간표 이미지 업로드'}</h2>
+            <h2 className="text-xl font-bold">{showOptimizationModal ? overallTitle : '시간표 이미지 업로드'}</h2>
           </div>
           <button
             onClick={onClose}
@@ -533,6 +574,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                 <ScheduleOptimizationModal
                   key={JSON.stringify(filteredSchedules.map(s => s.title + s.startTime))}
                   initialSchedules={filteredSchedules}
+                  schedulesByImage={schedulesByImage}
                   onClose={() => setShowOptimizationModal(false)}
                   onSchedulesApplied={handleSchedulesApplied}
                   isEmbedded={true}
