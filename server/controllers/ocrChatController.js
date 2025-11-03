@@ -289,8 +289,13 @@ exports.filterSchedulesByChat = async (req, res) => {
         console.log('🔍 AI가 반환한 조건:', JSON.stringify(parsed.conditions, null, 2));
 
         // 조건에 따라 실제 필터링 수행
-        // 초기값은 전체 스케줄에서 시작
-        let filteredSchedules = extractedSchedules;
+        // 선택 조건(imageIndex, titleMatch, timeRange)이 있으면 빈 배열에서 시작
+        // 필터링 조건(removeOverlaps, daySpecificTimeLimit)만 있으면 전체에서 시작
+        const selectionConditions = ['imageIndex', 'titleMatch', 'timeRange'];
+        const hasSelectionCondition = parsed.conditions.some(c => selectionConditions.includes(c.type));
+
+        let filteredSchedules = hasSelectionCondition ? [] : extractedSchedules;
+        console.log(`🔄 초기 스케줄: ${filteredSchedules.length}개 (${hasSelectionCondition ? '선택 모드' : '필터링 모드'})`);
 
         for (const condition of parsed.conditions) {
           console.log(`\n🔄 조건 적용 중: ${condition.type}`);
@@ -302,7 +307,10 @@ exports.filterSchedulesByChat = async (req, res) => {
         console.log(`\n✅ 필터링 완료: ${extractedSchedules.length} → ${filteredSchedules.length}개`);
 
         // 기본 베이스 스케줄 자동 추가 (학교 시간표 등)
-        if (baseSchedules && Array.isArray(baseSchedules) && baseSchedules.length > 0) {
+        // 기본적으로 항상 추가 (학교는 기본으로 포함되어야 함)
+        const shouldIncludeBase = baseSchedules && Array.isArray(baseSchedules) && baseSchedules.length > 0;
+
+        if (shouldIncludeBase) {
           console.log('📚 baseSchedules 샘플:', baseSchedules.slice(0, 3).map(s => ({
             title: s.title,
             days: s.days,
