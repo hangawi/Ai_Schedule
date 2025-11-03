@@ -351,7 +351,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                 <ArrowLeft size={20} />
               </button>
             )}
-            <h2 className="text-xl font-bold">{showOptimizationModal ? overallTitle : '시간표 이미지 업로드'}</h2>
+            <h2 className="text-xl font-bold">{showOptimizationModal ? '최적 시간표 추천' : '시간표 이미지 업로드'}</h2>
           </div>
           <button
             onClick={onClose}
@@ -575,6 +575,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                   key={JSON.stringify(filteredSchedules.map(s => s.title + s.startTime))}
                   initialSchedules={filteredSchedules}
                   schedulesByImage={schedulesByImage}
+                  overallTitle={overallTitle}
                   onClose={() => setShowOptimizationModal(false)}
                   onSchedulesApplied={handleSchedulesApplied}
                   isEmbedded={true}
