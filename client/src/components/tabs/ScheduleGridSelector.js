@@ -695,7 +695,7 @@ const ScheduleGridSelector = ({
                     <div key={index} className="col-span-1 p-2 text-center font-semibold text-gray-700 border-r border-gray-200 last:border-r-0 text-sm">{date.display}</div>
                 ))}
             </div>
-            <div className="overflow-y-auto" style={{ maxHeight: 'calc(' + maxHeight + ' - 60px)' }}>
+            <div>
                 {timeSlots.map(time => (
                     <div key={time} className="grid grid-cols-8 border-b border-gray-200 last:border-b-0 hover:bg-gray-50 transition-colors">
                         <div className="col-span-1 p-2 text-center text-xs font-medium text-gray-600 flex items-center justify-center bg-gray-50 border-r border-gray-300 h-8">{time}</div>
@@ -933,7 +933,7 @@ const ScheduleGridSelector = ({
             </h3>
           </div>
 
-          <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 80px)' }}>
+          <div className="p-4">
             {showMerged && dayData.blocks ? (
               // 병합 모드: 블록 형태로 표시
               <div className="space-y-2">

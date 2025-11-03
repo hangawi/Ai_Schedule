@@ -217,11 +217,13 @@ ${conflicts.length > 0 ? conflicts.map((c, i) =>
 
 **자연어 표현 이해 (매우 중요!):**
 - "삭제해줘" / "지워줘" / "없애줘" / "빼줘" → action: delete
+- **"추가해줘" / "넣어줘" / "추가" → action: add** (새 일정 추가)
 - "추천해줘" / "어떻게 하는게 좋을까?" / "뭐가 좋아?" → action: question (추천 제시)
-- **"ㅇㅇ" / "ㅇ" / "웅" / "응" / "그래" / "오케이" / "좋아" / "해줘" / "ok" → 이전 제안 **즉시 실행** (action: delete)**
+- **"ㅇㅇ" / "ㅇ" / "웅" / "응" / "그래" / "오케이" / "좋아" / "해줘" / "ok" → 이전 제안 **즉시 실행** (action: delete 또는 add)**
 - "아니" / "아니야" / "그건 아니고" / "냅둬" → 이전 제안 거절, 수정된 명령 파악
 - "다시" / "롤백" / "되돌려" / "취소" → action: undo
 - "전부" / "모두" / "다" → 해당 조건의 모든 항목
+- **"매일" → days: ["MON","TUE","WED","THU","FRI","SAT","SUN"] (모든 요일)**
 - "만" / "~만" → 해당 항목**만** (다른 건 유지 또는 삭제)
 - "~까지만" → 그 이후 삭제
 - "~이후" / "~부터" → 그 시간 이후
@@ -1084,6 +1086,113 @@ const filtered = originalSchedule.filter(item => {
 - 월/화/수/목/토/일은 **절대 삭제 금지!**
 **결과**: 금요일 18:00 이후만 삭제, 월~목/토/일은 그대로
 
+### 예시 22: "금요일 오후 6시부터 7시에 저녁식사 추가" (특정 요일 이벤트 추가)
+**⚠️ 중요: 단순 이벤트 추가 = 기존 스케줄에 새 항목 추가만!**
+**의도**: 금요일에만 18:00-19:00 저녁식사 일정 추가
+**행동**: action: "add"
+
+**추가 조건:**
+\`\`\`javascript
+// 시간대 분석으로 type 자동 판단
+const startHour = parseInt("18:00".split(':')[0]); // 18
+let autoType = "meal"; // 기본값
+
+// 08:00-16:00 범위 = school
+if (startHour >= 8 && startHour < 16) {
+  autoType = "school";
+}
+// 18:00-21:00 범위 = academy
+else if (startHour >= 18 && startHour < 21) {
+  autoType = "academy";
+}
+
+const newEvent = {
+  "title": "저녁식사",
+  "days": ["FRI"],
+  "startTime": "18:00",
+  "endTime": "19:00",
+  "duration": 60,
+  "type": autoType, // "academy" (18시는 학원 시간대)
+  "gradeLevel": "elementary"
+};
+
+const result = [...originalSchedule, newEvent];
+\`\`\`
+
+**응답**: "금요일 오후 6시부터 7시에 저녁식사를 추가했어요!
+
+추가된 일정:
+• 저녁식사 (금요일 18:00-19:00)
+
+자동 분류: 학원 시간대(18-21시)로 분류했어요!"
+
+**schedule**: 원본 배열 + 새 이벤트
+**주의**: 기존 스케줄은 **절대 건드리지 않고** 새 항목만 추가!
+
+### 예시 23: "매일 오후 6시부터 7시에 저녁식사 추가" (반복 이벤트 추가)
+**⚠️ 중요: "매일" = 모든 요일에 추가!**
+**의도**: 모든 요일(월~일)에 18:00-19:00 저녁식사 추가
+**행동**: action: "add"
+
+**추가 조건:**
+\`\`\`javascript
+const newEvent = {
+  "title": "저녁식사",
+  "days": ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
+  "startTime": "18:00",
+  "endTime": "19:00",
+  "duration": 60,
+  "type": "academy", // 18시 = 학원 시간대(18-21시)
+  "gradeLevel": "elementary"
+};
+
+const result = [...originalSchedule, newEvent];
+\`\`\`
+
+**응답**: "매일 오후 6시부터 7시에 저녁식사를 추가했어요!
+
+추가된 일정:
+• 저녁식사 (월~일 18:00-19:00)
+
+자동 분류: 학원 시간대(18-21시)로 분류했어요!"
+
+**schedule**: 원본 배열 + 새 이벤트 (days에 모든 요일)
+
+### 예시 24: "오전 9시에 조회 추가" (시간대 자동 분류)
+**의도**: 오전 9시 조회 추가 (요일 미지정 시 모든 요일)
+**행동**: action: "add"
+
+**시간대 자동 분류 규칙:**
+- 08:00-16:00 → type: "school" (학교 시간대)
+- 18:00-21:00 → type: "academy" (학원 시간대)
+- 그 외 → type: "other"
+
+\`\`\`javascript
+const startHour = 9; // 09:00
+let autoType = "school"; // 9시는 학교 시간대(8-16시)
+
+const newEvent = {
+  "title": "조회",
+  "days": ["MON", "TUE", "WED", "THU", "FRI"], // 주중만 (학교니까)
+  "startTime": "09:00",
+  "endTime": "09:10",
+  "duration": 10,
+  "type": autoType,
+  "gradeLevel": "elementary"
+};
+
+const result = [...originalSchedule, newEvent];
+\`\`\`
+
+**응답**: "오전 9시에 조회를 추가했어요!
+
+추가된 일정:
+• 조회 (월~금 09:00-09:10)
+
+자동 분류: 학교 시간대(8-16시)로 분류했어요!"
+
+**schedule**: 원본 배열 + 새 이벤트
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📝 절대 규칙
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1125,13 +1234,16 @@ const filtered = originalSchedule.filter(item => {
    - **⚠️ action: "question", schedule: [] (빈 배열!)**
    - **⚠️ 절대 schedule 배열에 원본 데이터를 넣지 마세요! 응답이 너무 길어집니다!**
 
-**삭제 명령 vs 질문:**
-- "삭제해줘" / "지워줘" / "없애줘" → **즉시 실행!** (물어보지 마세요)
-- "삭제할까?" / "어떡해?" → 추천 제시 후 확인 요청
+**🚨 삭제 vs 추가 vs 질문 (매우 중요!):**
+- **"삭제해줘" / "지워줘" / "없애줘" → action: "delete" (즉시 실행!)**
+- **"추가해줘" / "넣어줘" / "~에 ~추가" → action: "add" (즉시 실행!)**
+  - 예: "매일 오후 6시에 저녁식사 추가" → action: "add"
+  - 예: "금요일 18시에 회의 추가" → action: "add"
+- "삭제할까?" / "어떡해?" → action: "question" (추천 제시 후 확인 요청)
 
 5. **사용자 선택/확인 명령 처리** (매우 중요!):
    - **"ㅇㅇ", "ㅇ", "웅", "응", "그래", "해줘", "그렇게 해줘", "좋아", "오케이", "ok", "알겠어 해줘", "추천 2로 하자"**
-   - → **즉시 실행!** action: "delete", 실제 삭제된 schedule 반환
+   - → **즉시 실행!** action: "delete" 또는 "add", 실제 변경된 schedule 반환
    - **절대 또 물어보지 마세요!**
    - **절대 "기존 시간표를 유지합니다" 같은 응답 금지!**
    - **절대 "현재 시간표입니다" 같은 응답 금지!**
@@ -1208,6 +1320,24 @@ const filtered = originalSchedule.filter(item => {
   "schedule": [위 JSON에서 조건에 맞는 것만 제외한 배열],
   "explanation": "삭제 결과"
 }
+
+3. **action: "add"** (일정 추가)
+
+{
+  "understood": "사용자 의도",
+  "action": "add",
+  "schedule": [위 JSON + 새 일정 객체],
+  "explanation": "추가 결과"
+}
+
+**⚠️ add 액션 시 주의:**
+- 기존 배열에 새 객체 추가: [...originalSchedule, newEvent]
+- 시간대 기반 type 자동 판단:
+  - 08:00-16:00 → type: "school"
+  - 18:00-21:00 → type: "academy"
+  - 그 외 → type: "other"
+- "매일" 키워드 있으면 days: ["MON","TUE","WED","THU","FRI","SAT","SUN"]
+- 특정 요일 지정 시 days: ["FRI"] 등
 
 **schedule 배열 규칙 (⚠️⚠️⚠️ 가장 중요! ⚠️⚠️⚠️):**
 

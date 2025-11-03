@@ -6,13 +6,22 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /**
  * 필터링 조건 적용 함수
+ * @param {Array} schedules - 현재까지 선택된 스케줄 (누적)
+ * @param {Object} condition - 적용할 조건
+ * @param {Array} allSchedules - 전체 스케줄 (원본)
  */
 function applyCondition(schedules, condition, allSchedules) {
   const { type } = condition;
 
+  // 선택 조건들: allSchedules에서 찾아서 schedules에 추가
+  const isSelectionCondition = ['imageIndex', 'titleMatch', 'timeRange'].includes(type);
+
+  // 필터링 조건들: schedules를 필터링
+  const isFilterCondition = ['dayMatch', 'daySpecificTimeLimit', 'removeOverlaps'].includes(type);
+
   switch (type) {
     case 'imageIndex':
-      // 특정 이미지의 스케줄 선택
+      // 특정 이미지의 스케줄 선택 (추가)
       if (condition.mode === 'all') {
         const imageSchedules = allSchedules.filter(s => s.sourceImageIndex === condition.value);
         console.log(`  → imageIndex ${condition.value} 전체: ${imageSchedules.length}개`);
@@ -21,7 +30,7 @@ function applyCondition(schedules, condition, allSchedules) {
       return schedules;
 
     case 'titleMatch':
-      // 제목 키워드 매칭
+      // 제목 키워드 매칭 (추가)
       const { keywords, matchAll, imageIndex } = condition;
       let filtered = allSchedules.filter(s => {
         // imageIndex 지정된 경우 해당 이미지만
@@ -51,7 +60,7 @@ function applyCondition(schedules, condition, allSchedules) {
       return [...new Set([...schedules, ...filtered])]; // 중복 제거하며 합침
 
     case 'timeRange':
-      // 시간대 필터링
+      // 시간대 필터링 (추가)
       let timeFiltered = allSchedules.filter(s => {
         // imageIndex 지정된 경우 해당 이미지만
         if (condition.imageIndex !== undefined && s.sourceImageIndex !== condition.imageIndex) {
@@ -71,6 +80,78 @@ function applyCondition(schedules, condition, allSchedules) {
         if (!s.days || !Array.isArray(s.days)) return false;
         return s.days.some(day => condition.days.includes(day));
       });
+
+    case 'daySpecificTimeLimit':
+      // 특정 요일에만 시간 제한 적용
+      const { day, endBefore, imageIndex: imgIdx } = condition;
+
+      return schedules.filter(s => {
+        // imageIndex 지정된 경우 해당 이미지만 필터링
+        if (imgIdx !== undefined && s.sourceImageIndex !== imgIdx) {
+          return true; // 다른 이미지는 그대로 통과
+        }
+
+        // 해당 요일이 포함된 수업만 제한
+        if (s.days && Array.isArray(s.days) && s.days.includes(day)) {
+          // 해당 요일에 포함된 수업: endBefore 시간 전까지만
+          return s.startTime < endBefore;
+        }
+
+        // 해당 요일이 아닌 수업은 그대로 통과
+        return true;
+      });
+
+    case 'removeOverlaps':
+      // 겹치는 시간대의 수업 완전 삭제
+      // 시간이 겹치는 스케줄을 찾아서 하나는 남기고 겹친 것은 전부 삭제
+      const keptSchedules = [];
+      const deletedTitles = new Set(); // 삭제된 수업 이름 저장
+
+      schedules.forEach((schedule, idx) => {
+        if (!schedule.days || !Array.isArray(schedule.days)) {
+          keptSchedules.push(schedule);
+          return;
+        }
+
+        // 이미 삭제 대상으로 표시된 수업은 스킵
+        if (deletedTitles.has(schedule.title)) {
+          console.log(`  → 이미 삭제 대상: ${schedule.title}`);
+          return;
+        }
+
+        let hasOverlap = false;
+
+        // 이미 추가된 스케줄들과 겹치는지 확인
+        for (const kept of keptSchedules) {
+          if (!kept.days || !Array.isArray(kept.days)) continue;
+
+          // 같은 요일이 있는지 확인
+          const commonDays = schedule.days.filter(day => kept.days.includes(day));
+
+          if (commonDays.length > 0) {
+            // 시간이 겹치는지 확인 (start < other.end && end > other.start)
+            const overlaps = schedule.startTime < kept.endTime && schedule.endTime > kept.startTime;
+
+            if (overlaps) {
+              hasOverlap = true;
+              deletedTitles.add(schedule.title); // 이 수업 이름 전부 삭제 대상
+              console.log(`  → 겹침 발견 및 "${schedule.title}" 전체 삭제 대상 등록: ${commonDays.join(',')} ${schedule.startTime}-${schedule.endTime} ⚔️ ${kept.title}`);
+              break;
+            }
+          }
+        }
+
+        if (!hasOverlap) {
+          keptSchedules.push(schedule);
+        }
+      });
+
+      // 삭제 대상 title을 가진 스케줄 전부 제거
+      const finalSchedules = keptSchedules.filter(s => !deletedTitles.has(s.title));
+
+      console.log(`  → removeOverlaps: ${schedules.length}개 → ${finalSchedules.length}개`);
+      console.log(`  → 삭제된 수업: ${Array.from(deletedTitles).join(', ')}`);
+      return finalSchedules;
 
     default:
       console.warn('⚠️ 알 수 없는 조건 타입:', type);
@@ -208,13 +289,17 @@ exports.filterSchedulesByChat = async (req, res) => {
         console.log('🔍 AI가 반환한 조건:', JSON.stringify(parsed.conditions, null, 2));
 
         // 조건에 따라 실제 필터링 수행
-        let filteredSchedules = [];
+        // 초기값은 전체 스케줄에서 시작
+        let filteredSchedules = extractedSchedules;
 
         for (const condition of parsed.conditions) {
+          console.log(`\n🔄 조건 적용 중: ${condition.type}`);
+          console.log(`  현재 스케줄: ${filteredSchedules.length}개`);
           filteredSchedules = applyCondition(filteredSchedules, condition, extractedSchedules);
+          console.log(`  적용 후: ${filteredSchedules.length}개`);
         }
 
-        console.log(`✅ 필터링 완료: ${extractedSchedules.length} → ${filteredSchedules.length}개`);
+        console.log(`\n✅ 필터링 완료: ${extractedSchedules.length} → ${filteredSchedules.length}개`);
 
         // 기본 베이스 스케줄 자동 추가 (학교 시간표 등)
         if (baseSchedules && Array.isArray(baseSchedules) && baseSchedules.length > 0) {

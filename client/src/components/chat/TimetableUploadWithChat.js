@@ -294,8 +294,8 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
   };
 
   // 모달에서 최종 적용
-  const handleSchedulesApplied = (appliedSchedules) => {
-    console.log('✅ 시간표 적용 완료:', appliedSchedules.length, '개');
+  const handleSchedulesApplied = (appliedSchedules, applyScope = 'month') => {
+    console.log('✅ 시간표 적용 완료:', appliedSchedules.length, '개', '범위:', applyScope);
     setShowOptimizationModal(false);
 
     // 부모 컴포넌트에 전달 - 올바른 형식으로
@@ -309,6 +309,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
       onSchedulesExtracted({
         type: 'schedule_selected',
         schedules: schedulesWithoutColor,
+        applyScope: applyScope, // 적용 범위 추가
         data: {
           schedules: schedulesWithoutColor,
           conflicts: [],

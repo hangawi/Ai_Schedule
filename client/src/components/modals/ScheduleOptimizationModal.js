@@ -251,7 +251,7 @@ const ScheduleOptimizationModal = ({
   };
 
   const handleSelectSchedule = () => {
-    console.log('🔍 선택된 combination:', currentCombination);
+    console.log('🔍 선택된 combination:', currentCombination, '범위:', applyScope);
 
     // 기존 콜백 (기존 시간표 최적화 플로우)
     if (onSelect) {
@@ -260,7 +260,7 @@ const ScheduleOptimizationModal = ({
 
     // 새로운 콜백 (OCR 채팅 필터링 플로우)
     if (onSchedulesApplied) {
-      onSchedulesApplied(currentCombination);
+      onSchedulesApplied(currentCombination, applyScope);
     }
 
     onClose();
