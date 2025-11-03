@@ -14,7 +14,8 @@ const ScheduleOptimizationModal = ({
   userAge,
   gradeLevel,
   isEmbedded = false, // 새로 추가: 임베드 모드 (TimetableUploadWithChat 내부)
-  schedulesByImage = null // 새로 추가: 이미지별 스케줄 정보 (색상 할당용)
+  schedulesByImage = null, // 새로 추가: 이미지별 스케줄 정보 (색상 할당용)
+  overallTitle = '업로드된 시간표' // 새로 추가: 전체 제목
 }) => {
   // 🔍 Props 디버깅
   console.log('📦 ScheduleOptimizationModal Props:', {
@@ -1088,12 +1089,34 @@ const ScheduleOptimizationModal = ({
         <div className="px-5 py-3 bg-purple-50 border-b border-purple-100 flex-shrink-0">
           <div className="text-center">
             <div className="text-base font-bold text-gray-800">
-              업로드된 시간표
+              {overallTitle}
             </div>
             <div className="text-xs text-gray-600 mt-1">
               총 {currentCombination.length}개 수업 · {getTotalClassHours()}분
             </div>
           </div>
+
+          {/* 범례 (색상 구분) */}
+          {schedulesByImage && schedulesByImage.length > 1 && (
+            <div className="mt-3 pt-3 border-t border-purple-200">
+              <div className="flex flex-wrap gap-3 justify-center">
+                {schedulesByImage.map((imageData, idx) => {
+                  const color = getColorForImageIndex(idx);
+                  return (
+                    <div key={idx} className="flex items-center gap-2">
+                      <div
+                        className="w-4 h-4 rounded border-2"
+                        style={{ backgroundColor: color.bg, borderColor: color.border }}
+                      ></div>
+                      <span className="text-xs text-gray-700">
+                        {imageData.title || `이미지 ${idx + 1}`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 주간 시간표 그리드 */}
