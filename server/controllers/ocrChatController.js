@@ -32,6 +32,9 @@ function applyCondition(schedules, condition, allSchedules) {
     case 'titleMatch':
       // 제목 키워드 매칭 (추가)
       const { keywords, matchAll, imageIndex } = condition;
+
+      console.log(`  🔍 titleMatch: [${keywords?.join(', ')}], 검색 대상=${allSchedules.length}개`);
+
       let filtered = allSchedules.filter(s => {
         // imageIndex 지정된 경우 해당 이미지만
         if (imageIndex !== undefined && s.sourceImageIndex !== imageIndex) {
@@ -42,37 +45,96 @@ function applyCondition(schedules, condition, allSchedules) {
         const titleLower = (s.title || '').toLowerCase();
         const instructorLower = (s.instructor || '').toLowerCase();
 
+        let match = false;
         if (matchAll) {
           // 모든 키워드 포함
-          return keywords.every(kw =>
+          match = keywords.every(kw =>
             titleLower.includes(kw.toLowerCase()) ||
             instructorLower.includes(kw.toLowerCase())
           );
         } else {
           // 하나라도 포함
-          return keywords.some(kw =>
+          match = keywords.some(kw =>
             titleLower.includes(kw.toLowerCase()) ||
             instructorLower.includes(kw.toLowerCase())
           );
         }
+
+        if (match) {
+          console.log(`    ✓ "${s.title}" (강사: ${s.instructor || '없음'})`);
+        }
+
+        return match;
       });
-      console.log(`  → titleMatch [${keywords.join(', ')}]: ${filtered.length}개`);
+
+      // 매칭 실패시 샘플 출력
+      if (filtered.length === 0 && allSchedules.length > 0) {
+        console.log(`  ⚠️ 매칭 없음! 전체 제목 샘플:`);
+        const uniqueTitles = [...new Set(allSchedules.map(s => s.title))].slice(0, 15);
+        console.log(`    제목들: ${uniqueTitles.join(', ')}`);
+      }
+
+      console.log(`  → titleMatch [${keywords?.join(', ')}]: ${filtered.length}개`);
       return [...new Set([...schedules, ...filtered])]; // 중복 제거하며 합침
 
     case 'timeRange':
-      // 시간대 필터링 (추가)
-      let timeFiltered = allSchedules.filter(s => {
-        // imageIndex 지정된 경우 해당 이미지만
-        if (condition.imageIndex !== undefined && s.sourceImageIndex !== condition.imageIndex) {
-          return false;
-        }
+      // 시간대 필터링
+      // applyTo가 있으면 해당 과목만 필터링, 나머지는 그대로 유지
+      if (condition.applyTo) {
+        const applyToLower = condition.applyTo.toLowerCase();
 
-        if (condition.startAfter && s.startTime < condition.startAfter) return false;
-        if (condition.endBefore && s.startTime >= condition.endBefore) return false;
-        return true;
-      });
-      console.log(`  → timeRange (${condition.startAfter || 'start'} ~ ${condition.endBefore || 'end'}): ${timeFiltered.length}개`);
-      return [...new Set([...schedules, ...timeFiltered])]; // 중복 제거하며 합침
+        console.log(`  📌 applyTo 모드: "${condition.applyTo}" 키워드 포함된 것만 시간 필터 적용`);
+
+        // 대상과 비대상 분리
+        const targetSchedules = schedules.filter(s => {
+          const titleLower = (s.title || '').toLowerCase();
+          const matches = titleLower.includes(applyToLower);
+          if (matches) {
+            console.log(`    ✓ 대상: ${s.title} (${s.startTime}-${s.endTime})`);
+          }
+          return matches;
+        });
+        const otherSchedules = schedules.filter(s => {
+          const titleLower = (s.title || '').toLowerCase();
+          return !titleLower.includes(applyToLower);
+        });
+
+        console.log(`  📊 대상: ${targetSchedules.length}개, 비대상: ${otherSchedules.length}개`);
+
+        // 대상에만 시간 조건 적용
+        const filteredTargets = targetSchedules.filter(s => {
+          if (condition.imageIndex !== undefined && s.sourceImageIndex !== condition.imageIndex) {
+            console.log(`    ✗ 제외 (imageIndex): ${s.title}`);
+            return false;
+          }
+          if (condition.startAfter && s.startTime < condition.startAfter) {
+            console.log(`    ✗ 제외 (시간): ${s.title} ${s.startTime} < ${condition.startAfter}`);
+            return false;
+          }
+          if (condition.endBefore && s.startTime >= condition.endBefore) {
+            console.log(`    ✗ 제외 (시간): ${s.title} ${s.startTime} >= ${condition.endBefore}`);
+            return false;
+          }
+          console.log(`    ✓ 통과: ${s.title} (${s.startTime}-${s.endTime})`);
+          return true;
+        });
+
+        console.log(`  → timeRange [${condition.applyTo}만] (${condition.startAfter || 'start'} ~ ${condition.endBefore || 'end'}): ${filteredTargets.length}개 (원본 ${targetSchedules.length}개)`);
+        console.log(`  🎯 최종 반환: ${otherSchedules.length}개(비대상) + ${filteredTargets.length}개(필터된 대상) = ${otherSchedules.length + filteredTargets.length}개`);
+        return [...otherSchedules, ...filteredTargets];
+      } else {
+        // applyTo 없으면 기존 selection 방식
+        let timeFiltered = allSchedules.filter(s => {
+          if (condition.imageIndex !== undefined && s.sourceImageIndex !== condition.imageIndex) {
+            return false;
+          }
+          if (condition.startAfter && s.startTime < condition.startAfter) return false;
+          if (condition.endBefore && s.startTime >= condition.endBefore) return false;
+          return true;
+        });
+        console.log(`  → timeRange (${condition.startAfter || 'start'} ~ ${condition.endBefore || 'end'}): ${timeFiltered.length}개`);
+        return [...new Set([...schedules, ...timeFiltered])]; // 중복 제거하며 합침
+      }
 
     case 'dayMatch':
       // 요일 필터링
@@ -187,6 +249,10 @@ exports.filterSchedulesByChat = async (req, res) => {
       });
     }
 
+    // 디버깅: 추출된 스케줄의 제목들 확인
+    const uniqueTitles = [...new Set(extractedSchedules.map(s => s.title))];
+    console.log('📚 추출된 스케줄 제목들:', uniqueTitles.join(', '));
+
     // 프롬프트 생성
     const prompt = generateOcrChatPrompt(chatMessage, extractedSchedules, schedulesByImage, imageDescription);
 
@@ -298,8 +364,8 @@ exports.filterSchedulesByChat = async (req, res) => {
         console.log(`🔄 초기 스케줄: ${filteredSchedules.length}개 (${hasSelectionCondition ? '선택 모드' : '필터링 모드'})`);
 
         for (const condition of parsed.conditions) {
-          console.log(`\n🔄 조건 적용 중: ${condition.type}`);
-          console.log(`  현재 스케줄: ${filteredSchedules.length}개`);
+          console.log(`\n🔄 조건 적용 중: ${condition.type}`, JSON.stringify(condition));
+          console.log(`  이전 스케줄: ${filteredSchedules.length}개`);
           filteredSchedules = applyCondition(filteredSchedules, condition, extractedSchedules);
           console.log(`  적용 후: ${filteredSchedules.length}개`);
         }
