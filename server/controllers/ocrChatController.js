@@ -5,6 +5,80 @@ const { generateOcrChatPrompt } = require('../prompts/ocrChatFilter');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /**
+ * 필터링 조건 적용 함수
+ */
+function applyCondition(schedules, condition, allSchedules) {
+  const { type } = condition;
+
+  switch (type) {
+    case 'imageIndex':
+      // 특정 이미지의 스케줄 선택
+      if (condition.mode === 'all') {
+        const imageSchedules = allSchedules.filter(s => s.sourceImageIndex === condition.value);
+        console.log(`  → imageIndex ${condition.value} 전체: ${imageSchedules.length}개`);
+        return [...new Set([...schedules, ...imageSchedules])]; // 중복 제거하며 합침
+      }
+      return schedules;
+
+    case 'titleMatch':
+      // 제목 키워드 매칭
+      const { keywords, matchAll, imageIndex } = condition;
+      let filtered = allSchedules.filter(s => {
+        // imageIndex 지정된 경우 해당 이미지만
+        if (imageIndex !== undefined && s.sourceImageIndex !== imageIndex) {
+          return false;
+        }
+
+        // 키워드 매칭
+        const titleLower = (s.title || '').toLowerCase();
+        const instructorLower = (s.instructor || '').toLowerCase();
+
+        if (matchAll) {
+          // 모든 키워드 포함
+          return keywords.every(kw =>
+            titleLower.includes(kw.toLowerCase()) ||
+            instructorLower.includes(kw.toLowerCase())
+          );
+        } else {
+          // 하나라도 포함
+          return keywords.some(kw =>
+            titleLower.includes(kw.toLowerCase()) ||
+            instructorLower.includes(kw.toLowerCase())
+          );
+        }
+      });
+      console.log(`  → titleMatch [${keywords.join(', ')}]: ${filtered.length}개`);
+      return [...new Set([...schedules, ...filtered])]; // 중복 제거하며 합침
+
+    case 'timeRange':
+      // 시간대 필터링
+      let timeFiltered = allSchedules.filter(s => {
+        // imageIndex 지정된 경우 해당 이미지만
+        if (condition.imageIndex !== undefined && s.sourceImageIndex !== condition.imageIndex) {
+          return false;
+        }
+
+        if (condition.startAfter && s.startTime < condition.startAfter) return false;
+        if (condition.endBefore && s.startTime >= condition.endBefore) return false;
+        return true;
+      });
+      console.log(`  → timeRange (${condition.startAfter || 'start'} ~ ${condition.endBefore || 'end'}): ${timeFiltered.length}개`);
+      return [...new Set([...schedules, ...timeFiltered])]; // 중복 제거하며 합침
+
+    case 'dayMatch':
+      // 요일 필터링
+      return schedules.filter(s => {
+        if (!s.days || !Array.isArray(s.days)) return false;
+        return s.days.some(day => condition.days.includes(day));
+      });
+
+    default:
+      console.warn('⚠️ 알 수 없는 조건 타입:', type);
+      return schedules;
+  }
+}
+
+/**
  * OCR 결과를 채팅 메시지로 필터링
  * POST /api/ocr-chat/filter
  */
@@ -133,7 +207,7 @@ exports.filterSchedulesByChat = async (req, res) => {
         console.log('🔍 AI가 반환한 조건:', JSON.stringify(parsed.conditions, null, 2));
 
         // 조건에 따라 실제 필터링 수행
-        let filteredSchedules = extractedSchedules;
+        let filteredSchedules = [];
 
         for (const condition of parsed.conditions) {
           filteredSchedules = applyCondition(filteredSchedules, condition, extractedSchedules);

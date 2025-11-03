@@ -80,23 +80,42 @@ export const handleChatSubmit = async (
       updatedCombinations[currentIndex] = data.schedule;
       setModifiedCombinations(updatedCombinations);
 
-      // explanation에서 JSON 형식 제거
+      // explanation에서 JSON 형식 완전 제거
       let cleanExplanation = data.explanation;
 
-      // JSON 블록 제거 (```json ... ``` 또는 { ... } 형식)
       if (cleanExplanation) {
-        // JSON 코드 블록 제거
+        // 1. JSON 코드 블록 제거 (```json ... ``` 또는 ``` ... ```)
         cleanExplanation = cleanExplanation.replace(/```json\s*[\s\S]*?\s*```/g, '');
         cleanExplanation = cleanExplanation.replace(/```\s*[\s\S]*?\s*```/g, '');
 
-        // 단독 JSON 객체 제거 (줄 시작부터 끝까지 { ... } 형식)
-        cleanExplanation = cleanExplanation.replace(/^\s*\{[\s\S]*?\}\s*$/m, '');
+        // 2. 중괄호로 시작하는 JSON 객체 전체 제거 (여러 줄 포함)
+        cleanExplanation = cleanExplanation.replace(/\{[\s\S]*?"understood"[\s\S]*?\}/g, '');
+        cleanExplanation = cleanExplanation.replace(/\{[\s\S]*?"action"[\s\S]*?\}/g, '');
 
-        // "understood": ... 같은 JSON 필드 제거
-        cleanExplanation = cleanExplanation.replace(/"(understood|action|schedule)":\s*[^\n]*/g, '');
+        // 3. JSON 필드 라인 제거
+        cleanExplanation = cleanExplanation.replace(/"(understood|action|schedule|explanation)":\s*[^\n]*/g, '');
 
-        // 여러 줄 공백 정리
+        // 4. 남은 중괄호, 대괄호, 쉼표 제거
+        cleanExplanation = cleanExplanation.replace(/[{}\[\],]/g, '');
+
+        // 5. 여러 줄 공백 정리
         cleanExplanation = cleanExplanation.replace(/\n{3,}/g, '\n\n').trim();
+
+        // 6. 삭제된 수업 목록 줄바꿈 포맷팅
+        // "• 월요일: 도덕 (09:00), 영어 (10:00)" → "월요일:\n  • 도덕 (09:00)\n  • 영어 (10:00)"
+        cleanExplanation = cleanExplanation.replace(/• ([월화수목금토일]요일):\s*([^•\n]+)/g, (match, day, items) => {
+          const itemList = items.split(/[,，]/).map(item => item.trim()).filter(item => item);
+          if (itemList.length > 3) {
+            // 3개 이상이면 줄바꿈
+            return `${day}:\n${itemList.map(item => `  • ${item}`).join('\n')}`;
+          }
+          return match; // 3개 이하면 그대로
+        });
+
+        // 7. 빈 문자열이면 기본 메시지
+        if (!cleanExplanation || cleanExplanation.length < 3) {
+          cleanExplanation = data.understood || '처리했어요!';
+        }
       }
 
       // AI 응답 메시지

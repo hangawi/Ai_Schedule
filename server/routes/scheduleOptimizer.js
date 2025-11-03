@@ -813,6 +813,65 @@ router.post('/chat', auth, async (req, res) => {
     });
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
+    // 🚨 "ㅇㅇ" 확인 응답 검증 및 보정
+    const confirmationKeywords = ['ㅇㅇ', '응', '웅', '그래', '해줘', 'ㅇ', 'ㅇㄱ', '오케이', 'ok'];
+    const isConfirmation = confirmationKeywords.some(kw => message.trim().toLowerCase() === kw || message.trim() === kw);
+
+    if (isConfirmation && lastAiResponse) {
+      console.log('🚨 확인 응답 감지 - 검증 시작');
+
+      // [삭제 예정] 목록 추출
+      const deleteListMatch = lastAiResponse.match(/\[삭제 예정[^\]]*\]([\s\S]*?)(?:\n\n|삭제해드릴까요|$)/);
+      if (deleteListMatch) {
+        const deleteSection = deleteListMatch[1];
+        console.log('📝 삭제 예정 섹션:\n', deleteSection);
+
+        // title과 startTime 추출 (요일별로)
+        const deleteTargets = [];
+        const dayLines = deleteSection.split('\n').filter(line => line.trim().startsWith('•'));
+
+        dayLines.forEach(line => {
+          // "• 월요일: 도덕 (09:00-09:50), 영어 (10:00-10:50)" 형식 파싱
+          const dayMatch = line.match(/([월화수목금토일]요일):\s*(.+)/);
+          if (dayMatch) {
+            const items = dayMatch[2].split(/[,，]/);
+            items.forEach(item => {
+              const timeMatch = item.match(/(.+?)\s*\((\d{2}:\d{2})-/);
+              if (timeMatch) {
+                deleteTargets.push({
+                  title: timeMatch[1].trim(),
+                  startTime: timeMatch[2]
+                });
+              }
+            });
+          }
+        });
+
+        console.log('🎯 삭제 대상:', deleteTargets.length, '개');
+        deleteTargets.slice(0, 5).forEach((t, i) => {
+          console.log(`  ${i + 1}. ${t.title} (${t.startTime})`);
+        });
+
+        // 원본 스케줄에서 매칭 (title과 startTime만!)
+        const correctedSchedule = currentSchedule.filter(item => {
+          const shouldDelete = deleteTargets.some(target =>
+            item.title === target.title && item.startTime === target.startTime
+          );
+          return !shouldDelete; // 삭제 대상 아니면 유지
+        });
+
+        const deletedCount = currentSchedule.length - correctedSchedule.length;
+        console.log(`✅ 보정 완료: ${deletedCount}개 삭제 (목록: ${deleteTargets.length}개)`);
+
+        if (deletedCount !== deleteTargets.length) {
+          console.warn(`⚠️ 개수 불일치: 삭제 ${deletedCount} vs 목록 ${deleteTargets.length}`);
+        }
+
+        // 보정된 스케줄로 교체
+        parsed.schedule = correctedSchedule;
+      }
+    }
+
     // 스케줄이 비어있거나 잘못된 경우 체크
     if (!parsed.schedule || !Array.isArray(parsed.schedule)) {
       console.error('❌ AI가 잘못된 schedule 반환:', parsed.schedule);

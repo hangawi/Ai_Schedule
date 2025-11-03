@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, X, Image as ImageIcon, Send, MessageCircle } from 'lucide-react';
+import { Upload, X, Image as ImageIcon, Send, MessageCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 import { extractSchedulesFromImages } from '../../utils/ocrUtils';
 import ScheduleOptimizationModal from '../modals/ScheduleOptimizationModal';
 
@@ -30,6 +30,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
   const [schedulesByImage, setSchedulesByImage] = useState(null); // 이미지별 스케줄 정보
   const [filteredSchedules, setFilteredSchedules] = useState(null);
   const [showOptimizationModal, setShowOptimizationModal] = useState(false);
+  const [slideDirection, setSlideDirection] = useState('left'); // 'left' or 'right'
 
   const fileInputRef = useRef(null);
   const chatEndRef = useRef(null);
@@ -164,6 +165,11 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
     setChatMessage('');
     setIsFilteringChat(true);
 
+    // 새로운 필터링 시작 - 모달 닫기
+    if (showOptimizationModal) {
+      setShowOptimizationModal(false);
+    }
+
     try {
       const token = localStorage.getItem('token');
 
@@ -226,10 +232,11 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
 
         setFilteredSchedules(data.filteredSchedules);
 
-        // 0.5초 후 모달 띄우기
+        // 모달 띄우기 (왼쪽으로 슬라이드)
+        setSlideDirection('left');
         setTimeout(() => {
           setShowOptimizationModal(true);
-        }, 500);
+        }, 50);
       } else if (data.action === 'filter' && (!data.filteredSchedules || data.filteredSchedules.length === 0)) {
         console.warn('⚠️ 필터링된 스케줄이 없습니다');
         const warningMessage = {
@@ -286,75 +293,123 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
   };
 
   return (
-    <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg max-w-7xl w-full max-h-[98vh] flex flex-col">
-          {/* 헤더 */}
-          <div className="flex justify-between items-center p-4 border-b">
-            <h2 className="text-xl font-bold">시간표 이미지 업로드</h2>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              disabled={isProcessing || isFilteringChat}
-            >
-              <X size={20} />
-            </button>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg w-full" style={{ height: '80vh', maxHeight: '80vh', maxWidth: '1200px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* 헤더 */}
+        <div className="flex justify-between items-center p-4 border-b" style={{ flexShrink: 0 }}>
+          <div className="flex items-center gap-3">
+            {showOptimizationModal && (
+              <button
+                onClick={() => setShowOptimizationModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                title="뒤로 가기"
+              >
+                <ArrowLeft size={20} />
+              </button>
+            )}
+            <h2 className="text-xl font-bold">{showOptimizationModal ? '최적 시간표 추천' : '시간표 이미지 업로드'}</h2>
           </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            disabled={isProcessing || isFilteringChat}
+          >
+            <X size={20} />
+          </button>
+        </div>
 
           {/* 내용 */}
-          <div className="flex-1 overflow-hidden flex">
+          <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
             {/* 왼쪽: 이미지 업로드 */}
-            <div className="w-1/2 p-4 border-r overflow-y-auto">
-              <div className="space-y-4">
-                {/* 파일 선택 */}
-                <div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleImageSelect}
-                    className="hidden"
-                  />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isProcessing}
-                    className="w-full border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-blue-500 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Upload className="mx-auto mb-2 text-gray-400" size={32} />
-                    <p className="text-sm text-gray-600">
-                      클릭하여 이미지 선택 (최대 10개)
-                    </p>
-                  </button>
-                </div>
-
-                {/* 이미지 미리보기 */}
-                {imagePreviews.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="font-semibold text-sm">선택된 이미지 ({imagePreviews.length}개)</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {imagePreviews.map((preview, index) => (
-                        <div key={preview.id} className="relative group">
-                          <img
-                            src={preview.url}
-                            alt={preview.name}
-                            className="w-full h-32 object-cover rounded border"
-                          />
-                          <button
-                            onClick={() => removeImage(index)}
-                            disabled={isProcessing}
-                            className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+            <div
+              className="w-1/2 border-r"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                flexShrink: 0,
+                position: 'absolute',
+                left: showOptimizationModal ? '-50%' : '0',
+                top: 0,
+                bottom: 0,
+                transition: 'left 0.3s ease-in-out'
+              }}>
+              <div className="p-4 flex-1" style={{ overflowY: 'auto' }}>
+                <div className="space-y-4">
+                  {/* 파일 선택 */}
+                  <div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleImageSelect}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isProcessing}
+                      className="w-full border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-blue-500 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Upload className="mx-auto mb-2 text-gray-400" size={32} />
+                      <p className="text-sm text-gray-600">
+                        클릭하여 이미지 선택 (최대 10개)
+                      </p>
+                    </button>
                   </div>
-                )}
 
-                {/* 분석 버튼 */}
-                {selectedImages.length > 0 && !extractedSchedules && (
+                  {/* 이미지 미리보기 */}
+                  {imagePreviews.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="font-semibold text-sm">선택된 이미지 ({imagePreviews.length}개)</h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        {imagePreviews.map((preview, index) => (
+                          <div key={preview.id} className="relative group">
+                            <img
+                              src={preview.url}
+                              alt={preview.name}
+                              className="w-full h-32 object-cover rounded border"
+                            />
+                            <button
+                              onClick={() => removeImage(index)}
+                              disabled={isProcessing}
+                              className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 진행률 */}
+                  {isProcessing && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>{progress.message}</span>
+                        <span>{progress.current}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${progress.current}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 에러 메시지 */}
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                      {error}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 분석 버튼 - 맨 아래 고정 */}
+              {selectedImages.length > 0 && !extractedSchedules && (
+                <div className="p-4 border-t bg-white" style={{ flexShrink: 0 }}>
                   <button
                     onClick={handleProcessImages}
                     disabled={isProcessing}
@@ -362,37 +417,27 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                   >
                     {isProcessing ? '분석 중...' : '시간표 분석 시작'}
                   </button>
-                )}
-
-                {/* 진행률 */}
-                {isProcessing && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>{progress.message}</span>
-                      <span>{progress.current}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${progress.current}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* 에러 메시지 */}
-                {error && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-                    {error}
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             {/* 오른쪽: 채팅 */}
-            <div className="w-1/2 flex flex-col">
+            <div
+              className="w-1/2 bg-gray-50"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                flexShrink: 0,
+                minHeight: 0,
+                maxHeight: '100%',
+                position: 'absolute',
+                left: showOptimizationModal ? '-50%' : '50%',
+                top: 0,
+                bottom: 0,
+                transition: 'left 0.3s ease-in-out'
+              }}>
               {/* 채팅 메시지 영역 */}
-              <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
+              <div className="p-4 bg-gray-50" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
                 {chatHistory.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-gray-400">
                     <div className="text-center">
@@ -431,7 +476,23 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
               </div>
 
               {/* 채팅 입력 */}
-              <div className="p-4 border-t bg-white">
+              <div className="p-4 border-t bg-white" style={{ flexShrink: 0 }}>
+                {/* 다음으로 버튼 */}
+                {filteredSchedules && !showOptimizationModal && (
+                  <div className="mb-2">
+                    <button
+                      onClick={() => {
+                        setSlideDirection('left');
+                        setTimeout(() => setShowOptimizationModal(true), 50);
+                      }}
+                      className="w-full px-3 py-2 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all flex items-center justify-center gap-2"
+                    >
+                      최적 시간표 보기
+                      <ArrowRight size={16} />
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -452,28 +513,31 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                 </div>
               </div>
             </div>
+
+            {/* 최적 시간표 패널 - 슬라이드 */}
+            {filteredSchedules && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: showOptimizationModal ? '0' : '100%',
+                  top: 0,
+                  width: '100%',
+                  height: '100%',
+                  transition: 'left 0.3s ease-in-out',
+                  backgroundColor: 'white'
+                }}
+              >
+                <ScheduleOptimizationModal
+                  initialSchedules={filteredSchedules}
+                  onClose={() => setShowOptimizationModal(false)}
+                  onSchedulesApplied={handleSchedulesApplied}
+                  isEmbedded={true}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
-
-      {/* AI 최적 시간표 모달 */}
-      {showOptimizationModal && filteredSchedules && (
-        <>
-          {console.log('🔍 모달 렌더링 전 체크:', {
-            showOptimizationModal,
-            filteredSchedulesExists: !!filteredSchedules,
-            filteredSchedulesLength: filteredSchedules?.length,
-            filteredSchedulesType: Array.isArray(filteredSchedules) ? 'array' : typeof filteredSchedules,
-            firstSchedule: filteredSchedules?.[0]
-          })}
-          <ScheduleOptimizationModal
-            initialSchedules={filteredSchedules}
-            onClose={() => setShowOptimizationModal(false)}
-            onSchedulesApplied={handleSchedulesApplied}
-          />
-        </>
-      )}
-    </>
   );
 };
 
