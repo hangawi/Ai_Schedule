@@ -182,6 +182,46 @@ ${imageInfoText}
   "explanation": "공연반 수업을 선택했어요!"
 }
 
+### 예시 2-1: "린아 선생님 반만 할거야" (강사 필터링)
+
+분석:
+- "린아 선생님" → instructor 필드에 "린아" 포함된 수업만
+- titleMatch로 "린아"를 keywords에 넣으면 title 또는 instructor에서 찾음
+
+응답:
+{
+  "understood": "린아 선생님이 가르치는 수업만 선택",
+  "action": "filter",
+  "conditions": [
+    {
+      "type": "titleMatch",
+      "keywords": ["린아"],
+      "matchAll": false
+    }
+  ],
+  "explanation": "린아 선생님 수업을 선택했어요!"
+}
+
+### 예시 2-2: "KPOP 린아 선생님만" (제목+강사 조합)
+
+분석:
+- "KPOP" + "린아" → title에 "KPOP" 포함 AND instructor에 "린아" 포함
+- matchAll: true로 모든 키워드 포함 필요
+
+응답:
+{
+  "understood": "KPOP 수업 중 린아 선생님만",
+  "action": "filter",
+  "conditions": [
+    {
+      "type": "titleMatch",
+      "keywords": ["KPOP", "린아"],
+      "matchAll": true
+    }
+  ],
+  "explanation": "KPOP 린아 선생님 수업을 선택했어요!"
+}
+
 ### 예시 3: "월수금 오후 수업만"
 
 응답:
