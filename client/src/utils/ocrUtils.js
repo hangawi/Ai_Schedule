@@ -719,6 +719,15 @@ export const extractSchedulesFromImages = async (imageFiles, progressCallback, b
   const apiResponse = await analyzeScheduleImages(imageFiles, birthdate, progressCallback);
   const rawSchedules = apiResponse.allSchedules || [];
   const schedulesByImage = apiResponse.schedulesByImage || [];
+  const baseSchedules = apiResponse.baseSchedules || [];
+  const overallTitle = apiResponse.overallTitle || '업로드된 시간표';
+
+  console.log('📥 서버 응답:', {
+    allSchedules: rawSchedules.length,
+    schedulesByImage: schedulesByImage.length,
+    baseSchedules: baseSchedules.length,
+    overallTitle
+  });
 
   if (progressCallback) progressCallback(96);
 
@@ -937,6 +946,8 @@ export const extractSchedulesFromImages = async (imageFiles, progressCallback, b
     optimalCombinations,
     ocrResults: [],
     hasConflicts: conflicts.length > 0,
-    schedulesByImage: schedulesByImage // 이미지별 정보 추가
+    schedulesByImage: schedulesByImage, // 이미지별 정보 추가
+    baseSchedules: baseSchedules, // 기본 베이스 스케줄 추가
+    overallTitle: overallTitle // 전체 제목 추가
   };
 };

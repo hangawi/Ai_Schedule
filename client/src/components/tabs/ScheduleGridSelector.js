@@ -597,8 +597,8 @@ const ScheduleGridSelector = ({
                     const startIndex = getTimeSlotIndex(startTime);
                     const topPosition = startIndex * 16;
 
-                    // 색상을 Tailwind 스타일로 변경 (눈에 편한 색)
-                    const bgColor = '#f87171'; // bg-red-400 색상
+                    // 스케줄의 색상 사용 (없으면 기본 빨간색)
+                    const bgColor = seg.schedule.color || '#f87171';
                     const columnWidth = seg.overlapCount > 1 ? `${100 / seg.overlapCount}%` : '100%';
                     const leftPosition = seg.overlapCount > 1 ? `${(100 / seg.overlapCount) * seg.overlapIndex}%` : '0%';
 
@@ -754,11 +754,15 @@ const ScheduleGridSelector = ({
                             let slotClass = 'bg-white hover:bg-blue-50';
                             let content = null;
 
+                            let customStyle = {};
                             if (exceptionSlot) {
                                 slotClass = `${priorityConfig[exceptionSlot.priority]?.color || 'bg-blue-600'} hover:opacity-90`;
                                 content = <span className="text-xs text-white truncate px-1 font-medium" title={exceptionSlot.title}>{exceptionSlot.title}</span>;
                             } else if (personalSlot) {
-                                slotClass = 'bg-red-400 hover:bg-red-500';
+                                // personalSlot의 색상 사용
+                                const personalColor = personalSlot.color || '#f87171';
+                                slotClass = 'hover:opacity-90';
+                                customStyle = { backgroundColor: personalColor };
                                 content = <span className="text-xs text-white truncate px-1 font-medium" title={`개인시간: ${personalSlot.title}`}>{personalSlot.title}</span>;
                             } else if (recurringSlot) {
                                 slotClass = `${priorityConfig[recurringSlot.priority]?.color || 'bg-blue-400'} hover:opacity-90`;
@@ -766,7 +770,7 @@ const ScheduleGridSelector = ({
                             }
 
                             return (
-                                <div key={day.dayOfWeek} className={`col-span-1 border-r border-gray-200 last:border-r-0 h-8 flex items-center justify-center transition-all duration-200 cursor-pointer ${slotClass}`}>
+                                <div key={day.dayOfWeek} className={`col-span-1 border-r border-gray-200 last:border-r-0 h-8 flex items-center justify-center transition-all duration-200 cursor-pointer ${slotClass}`} style={customStyle}>
                                     {content}
                                 </div>
                             );
@@ -981,7 +985,9 @@ const ScheduleGridSelector = ({
                     textColor = 'text-white';
                     content = `${block.title} (${block.duration}분)`;
                   } else if (block.type === 'personal') {
-                    bgColor = 'bg-purple-400';
+                    // personalTime에 color가 있으면 사용, 없으면 보라색
+                    const personalColor = multipleSchedules[0]?.color || '#9333ea';
+                    bgColor = personalColor; // inline style로 사용
                     textColor = 'text-white';
                     if (multipleSchedules.length > 1) {
                       content = multipleSchedules.map(p => p.title).join(' / ');
@@ -992,10 +998,14 @@ const ScheduleGridSelector = ({
                     content = `빈 시간 (${block.duration}분)`;
                   }
 
+                  // bgColor가 hex 색상인지 Tailwind 클래스인지 확인
+                  const isHexColor = typeof bgColor === 'string' && bgColor.startsWith('#');
+
                   return (
                     <div
                       key={index}
-                      className={`p-3 rounded-lg ${multipleSchedules.length > 1 ? 'bg-gray-100' : bgColor}`}
+                      className={`p-3 rounded-lg ${multipleSchedules.length > 1 ? 'bg-gray-100' : (isHexColor ? '' : bgColor)}`}
+                      style={isHexColor && !multipleSchedules.length ? { backgroundColor: bgColor } : {}}
                     >
                       <div className="flex justify-between items-center mb-2">
                         <span className={`text-sm font-medium ${multipleSchedules.length > 1 ? 'text-gray-700' : textColor}`}>
@@ -1011,7 +1021,8 @@ const ScheduleGridSelector = ({
                           {multipleSchedules.map((p, idx) => (
                             <div
                               key={idx}
-                              className="flex-1 bg-purple-400 text-white text-sm px-3 py-2 rounded-lg text-center border border-purple-500"
+                              className="flex-1 text-white text-sm px-3 py-2 rounded-lg text-center"
+                              style={{ backgroundColor: p.color || '#9333ea' }}
                             >
                               {p.title}
                             </div>
@@ -1092,7 +1103,8 @@ const ScheduleGridSelector = ({
                     textColor = 'text-white';
                     content = exceptionSlot.title;
                   } else if (personalSlots.length > 0) {
-                    bgColor = 'bg-purple-400';
+                    // personalTime에 color가 있으면 사용
+                    bgColor = personalSlots[0].color || '#9333ea';
                     textColor = 'text-white';
                     if (personalSlots.length > 1) {
                       hasMultiple = true;
@@ -1106,10 +1118,14 @@ const ScheduleGridSelector = ({
                     content = priorityConfig[recurringSlot.priority]?.label;
                   }
 
+                  // bgColor가 hex 색상인지 확인
+                  const isHexColor = typeof bgColor === 'string' && bgColor.startsWith('#');
+
                   return (
                     <div
                       key={time}
-                      className={`flex items-center justify-between p-2 rounded ${!hasMultiple && bgColor} ${bgColor === 'bg-white' ? 'border border-gray-200' : ''}`}
+                      className={`flex items-center justify-between p-2 rounded ${!hasMultiple && !isHexColor ? bgColor : ''} ${bgColor === 'bg-white' ? 'border border-gray-200' : ''}`}
+                      style={!hasMultiple && isHexColor ? { backgroundColor: bgColor } : {}}
                     >
                       <span className={`text-sm font-medium ${!hasMultiple ? textColor : 'text-gray-700'}`}>{time}</span>
                       {hasMultiple ? (
@@ -1117,7 +1133,8 @@ const ScheduleGridSelector = ({
                           {personalSlots.map((p, idx) => (
                             <div
                               key={idx}
-                              className="flex-1 bg-purple-400 text-white text-xs px-2 py-1 rounded text-center border border-purple-500"
+                              className="flex-1 text-white text-xs px-2 py-1 rounded text-center"
+                              style={{ backgroundColor: p.color || '#9333ea' }}
                             >
                               {p.title}
                             </div>
