@@ -134,6 +134,20 @@ ${imageInfoText}
 - days: 요일 배열 (예: ["MON", "WED", "FRI"])
 - imageIndex: (선택) 특정 이미지에서만 찾기
 
+### type: "daySpecificTimeLimit"
+특정 요일에만 시간 제한 적용
+- day: 요일 (예: "TUE")
+- endBefore: 이 시간 이전까지만 (예: "18:00")
+- imageIndex: (선택) 특정 이미지에서만 찾기
+
+예시: "화요일은 학원 6시까지만" → { type: "daySpecificTimeLimit", day: "TUE", endBefore: "18:00", imageIndex: 1 }
+
+### type: "removeOverlaps"
+겹치는 시간대의 수업 삭제
+- description: "겹치는 시간 삭제"
+
+예시: "겹치는 시간은 삭제" → { type: "removeOverlaps" }
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📝 예시
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -268,6 +282,32 @@ ${imageInfoText}
     }
   ],
   "explanation": "학교 시간표 전체와 학원 오후 5시~저녁 6시 사이 수업을 선택했어요!"
+}
+
+### 예시 5: "겹치는 시간은 삭제하고 화요일은 학원 6시까지만 하고"
+
+분석:
+- "겹치는 시간은 삭제" → removeOverlaps 조건
+- "화요일은 학원 6시까지만" → 화요일(TUE)에만 학원(imageIndex: 1) 18:00 이전 수업만
+
+응답:
+{
+  "understood": "겹치는 시간 삭제, 화요일은 학원 오후 6시까지만",
+  "action": "filter",
+  "conditions": [
+    {
+      "type": "removeOverlaps",
+      "description": "겹치는 시간 삭제"
+    },
+    {
+      "type": "daySpecificTimeLimit",
+      "day": "TUE",
+      "endBefore": "18:00",
+      "imageIndex": 1,
+      "description": "화요일은 학원 6시까지만"
+    }
+  ],
+  "explanation": "겹치는 시간을 삭제하고 화요일은 학원 오후 6시까지만 수업을 선택했어요!"
 }
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
