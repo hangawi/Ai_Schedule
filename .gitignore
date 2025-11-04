@@ -42,3 +42,6 @@ logs
 # Other files and folders
 .settings/
 commit_message.txt
+
+# Accidentally created files
+nul
