@@ -35,6 +35,7 @@ function applyCondition(schedules, condition, allSchedules) {
 
       console.log(`  🔍 titleMatch: [${keywords?.join(', ')}], 검색 대상=${allSchedules.length}개`);
 
+      let matchCount = 0;
       let filtered = allSchedules.filter(s => {
         // imageIndex 지정된 경우 해당 이미지만
         if (imageIndex !== undefined && s.sourceImageIndex !== imageIndex) {
@@ -54,14 +55,23 @@ function applyCondition(schedules, condition, allSchedules) {
           );
         } else {
           // 하나라도 포함
-          match = keywords.some(kw =>
-            titleLower.includes(kw.toLowerCase()) ||
-            instructorLower.includes(kw.toLowerCase())
-          );
+          match = keywords.some(kw => {
+            const kwLower = kw.toLowerCase();
+            const titleMatch = titleLower.includes(kwLower);
+            const instructorMatch = instructorLower.includes(kwLower);
+
+            // 디버깅: 첫 3개만 출력
+            if (matchCount < 3) {
+              console.log(`    🔎 "${kw}" in "${s.title}" (idx=${s.sourceImageIndex}): title=${titleMatch}, instructor=${instructorMatch}`);
+            }
+
+            return titleMatch || instructorMatch;
+          });
         }
 
         if (match) {
-          console.log(`    ✓ "${s.title}" (강사: ${s.instructor || '없음'})`);
+          matchCount++;
+          console.log(`    ✓ "${s.title}" (강사: ${s.instructor || '없음'}, imageIndex=${s.sourceImageIndex})`);
         }
 
         return match;
@@ -79,8 +89,57 @@ function applyCondition(schedules, condition, allSchedules) {
 
     case 'timeRange':
       // 시간대 필터링
-      // applyTo가 있으면 해당 과목만 필터링, 나머지는 그대로 유지
-      if (condition.applyTo) {
+      // applyToKeywords가 있으면 해당 키워드 포함된 것만 필터링
+      if (condition.applyToKeywords && Array.isArray(condition.applyToKeywords)) {
+        console.log(`  📌 applyToKeywords 모드: [${condition.applyToKeywords.join(', ')}] 키워드 포함된 것만 시간 필터 적용`);
+
+        // 대상과 비대상 분리
+        const targetSchedules = schedules.filter(s => {
+          const titleLower = (s.title || '').toLowerCase();
+          const instructorLower = (s.instructor || '').toLowerCase();
+
+          const matches = condition.applyToKeywords.some(kw => {
+            const kwLower = kw.toLowerCase();
+            return titleLower.includes(kwLower) || instructorLower.includes(kwLower);
+          });
+
+          if (matches) {
+            console.log(`    ✓ 대상: ${s.title} (${s.startTime}-${s.endTime})`);
+          }
+          return matches;
+        });
+        const otherSchedules = schedules.filter(s => {
+          const titleLower = (s.title || '').toLowerCase();
+          const instructorLower = (s.instructor || '').toLowerCase();
+
+          const matches = condition.applyToKeywords.some(kw => {
+            const kwLower = kw.toLowerCase();
+            return titleLower.includes(kwLower) || instructorLower.includes(kwLower);
+          });
+
+          return !matches;
+        });
+
+        console.log(`  📊 대상: ${targetSchedules.length}개, 비대상: ${otherSchedules.length}개`);
+
+        // 대상에만 시간 조건 적용
+        const filteredTargets = targetSchedules.filter(s => {
+          if (condition.startAfter && s.startTime < condition.startAfter) {
+            console.log(`    ✗ 제외 (시간): ${s.title} ${s.startTime} < ${condition.startAfter}`);
+            return false;
+          }
+          if (condition.endBefore && s.startTime >= condition.endBefore) {
+            console.log(`    ✗ 제외 (시간): ${s.title} ${s.startTime} >= ${condition.endBefore}`);
+            return false;
+          }
+          console.log(`    ✓ 통과: ${s.title} (${s.startTime}-${s.endTime})`);
+          return true;
+        });
+
+        console.log(`  → timeRange [키워드 매칭] (${condition.startAfter || 'start'} ~ ${condition.endBefore || 'end'}): ${filteredTargets.length}개 (원본 ${targetSchedules.length}개)`);
+        console.log(`  🎯 최종 반환: ${otherSchedules.length}개(비대상) + ${filteredTargets.length}개(필터된 대상) = ${otherSchedules.length + filteredTargets.length}개`);
+        return [...otherSchedules, ...filteredTargets];
+      } else if (condition.applyTo) {
         const applyToLower = condition.applyTo.toLowerCase();
 
         console.log(`  📌 applyTo 모드: "${condition.applyTo}" 키워드 포함된 것만 시간 필터 적용`);
@@ -122,12 +181,23 @@ function applyCondition(schedules, condition, allSchedules) {
         console.log(`  → timeRange [${condition.applyTo}만] (${condition.startAfter || 'start'} ~ ${condition.endBefore || 'end'}): ${filteredTargets.length}개 (원본 ${targetSchedules.length}개)`);
         console.log(`  🎯 최종 반환: ${otherSchedules.length}개(비대상) + ${filteredTargets.length}개(필터된 대상) = ${otherSchedules.length + filteredTargets.length}개`);
         return [...otherSchedules, ...filteredTargets];
+      } else if (condition.imageIndex !== undefined) {
+        // imageIndex가 있으면 해당 이미지만 필터링 (filter 모드)
+        const targetSchedules = schedules.filter(s => s.sourceImageIndex === condition.imageIndex);
+        const otherSchedules = schedules.filter(s => s.sourceImageIndex !== condition.imageIndex);
+
+        const filteredTargets = targetSchedules.filter(s => {
+          if (condition.startAfter && s.startTime < condition.startAfter) return false;
+          if (condition.endBefore && s.startTime >= condition.endBefore) return false;
+          return true;
+        });
+
+        console.log(`  → timeRange [imageIndex ${condition.imageIndex}만] (${condition.startAfter || 'start'} ~ ${condition.endBefore || 'end'}): ${filteredTargets.length}개 (원본 ${targetSchedules.length}개)`);
+        console.log(`  🎯 최종 반환: ${otherSchedules.length}개(다른 이미지) + ${filteredTargets.length}개(필터된 대상) = ${otherSchedules.length + filteredTargets.length}개`);
+        return [...otherSchedules, ...filteredTargets];
       } else {
-        // applyTo 없으면 기존 selection 방식
+        // imageIndex도 applyTo도 없으면 selection 방식
         let timeFiltered = allSchedules.filter(s => {
-          if (condition.imageIndex !== undefined && s.sourceImageIndex !== condition.imageIndex) {
-            return false;
-          }
           if (condition.startAfter && s.startTime < condition.startAfter) return false;
           if (condition.endBefore && s.startTime >= condition.endBefore) return false;
           return true;

@@ -25,7 +25,8 @@ const priorityConfig = {
 
 const generateTimeSlots = (startHour = 0, endHour = 24) => {
   const slots = [];
-  for (let h = startHour; h < endHour; h++) {
+  // endHour까지 포함하도록 <= 사용
+  for (let h = startHour; h <= endHour; h++) {
     for (let m = 0; m < 60; m += 10) {
       const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
       slots.push(time);
@@ -123,19 +124,26 @@ const ScheduleGridSelector = ({
         const endHour = minute > 0 ? hour + 1 : hour;
         if (endHour > maxEndHour) {
           maxEndHour = endHour;
+          console.log(`🕐 최대 시간 업데이트: ${p.endTime} → ${endHour}시까지 표시`);
         }
       }
     });
 
     // 최소 18시까지는 표시
     maxEndHour = Math.max(18, maxEndHour);
+    console.log(`📊 최종 시간 범위: ${timeRange.start}시 ~ ${maxEndHour}시`);
 
     if (!showFullDay && maxEndHour > timeRange.end) {
       setTimeRange(prev => ({ ...prev, end: maxEndHour }));
     }
   }, [personalTimes, showFullDay]);
 
-  const getCurrentTimeSlots = () => generateTimeSlots(timeRange.start, timeRange.end);
+  const getCurrentTimeSlots = () => {
+    const slots = generateTimeSlots(timeRange.start, timeRange.end);
+    console.log(`⏰ 현재 타임슬롯: ${timeRange.start}시 ~ ${timeRange.end}시 (${slots.length}개 슬롯)`);
+    console.log(`   마지막 슬롯: ${slots[slots.length - 1]}`);
+    return slots;
+  };
 
   const getBlocksForDay = (date, dayOfWeek) => {
     const allPossibleSlots = getCurrentTimeSlots();
@@ -499,10 +507,10 @@ const ScheduleGridSelector = ({
         console.log(`🔍 [요일 ${dayOfWeek}] 이고은 원장 일정:`, debugSchedules.map(s => `${s.startTime}-${s.endTime}`));
       }
 
-      // 같은 제목끼리 그룹화
+      // 같은 제목끼리 그룹화 (sourceImageIndex도 포함하여 서로 다른 이미지의 같은 제목은 병합 안함)
       const groupedByTitle = {};
       filteredSchedules.forEach(schedule => {
-        const key = `${schedule.title}_${schedule.instructor || ''}_${schedule.type || ''}`;
+        const key = `${schedule.title}_${schedule.instructor || ''}_${schedule.type || ''}_${schedule.sourceImageIndex || ''}`;
         if (!groupedByTitle[key]) {
           groupedByTitle[key] = [];
         }
@@ -528,8 +536,8 @@ const ScheduleGridSelector = ({
           if (currentEndMinutes === nextStartMinutes) {
             // 중간에 다른 일정이 있는지 확인
             const hasConflict = filteredSchedules.some(other => {
-              const otherKey = `${other.title}_${other.instructor || ''}_${other.type || ''}`;
-              const currentKey = `${current.title}_${current.instructor || ''}_${current.type || ''}`;
+              const otherKey = `${other.title}_${other.instructor || ''}_${other.type || ''}_${other.sourceImageIndex || ''}`;
+              const currentKey = `${current.title}_${current.instructor || ''}_${current.type || ''}_${current.sourceImageIndex || ''}`;
 
               // 다른 일정이고, 현재-다음 사이에 겹치는지 확인
               if (otherKey !== currentKey) {
@@ -594,7 +602,7 @@ const ScheduleGridSelector = ({
           ))}
         </div>
 
-        <div style={{ maxHeight: '70vh' }}>
+        <div>
           <div className="flex">
             {/* 시간 컬럼은 전체 시간대 표시 */}
             <div className="w-12 flex-shrink-0">
