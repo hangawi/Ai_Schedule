@@ -146,11 +146,35 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
         classListByImage = classNames.map((name, idx) => `${idx + 1}. ${name}`).join('\n');
       }
 
+      // 동적 예시 생성 (실제 추출된 반 이름 기반)
+      let exampleTexts = [];
+      if (result.schedulesByImage && result.schedulesByImage.length > 0) {
+        // 첫 번째 이미지에서 2-3개 반 이름 추출
+        const firstImageClasses = [...new Set(result.schedulesByImage[0].schedules.map(s => s.title))];
+        if (firstImageClasses.length >= 1) {
+          exampleTexts.push(`"${firstImageClasses[0]}만 할거야"`);
+        }
+        if (firstImageClasses.length >= 2) {
+          exampleTexts.push(`"${firstImageClasses[1]} 반 하고 싶어요"`);
+        }
+        // 빈도 정보가 있으면 추가
+        const hasFrequency = firstImageClasses.some(c => c.includes('주') && (c.includes('회') || c.includes('일')));
+        if (hasFrequency) {
+          exampleTexts.push(`"주5회만"`);
+        } else {
+          exampleTexts.push(`"월수금만"`);
+        }
+      } else {
+        exampleTexts = ['"1학년만"', '"오전만"', '"월수금만"'];
+      }
+
+      const exampleText = exampleTexts.join(', ');
+
       // 채팅 히스토리에 봇 메시지 추가
       const botMessage = {
         id: Date.now(),
         sender: 'bot',
-        text: `시간표 이미지를 분석했어요! 총 ${result.schedules.length}개의 수업을 찾았습니다.\n\n📋 발견된 반 목록:\n${classListByImage}\n\n어떤 수업을 추가하고 싶으세요?\n예: "공연반만 할거야", "주니어A 사랑 선생님 반만", "월수금만"`,
+        text: `시간표 이미지를 분석했어요! 총 ${result.schedules.length}개의 수업을 찾았습니다.\n\n📋 발견된 반 목록:\n${classListByImage}\n\n어떤 수업을 추가하고 싶으세요?\n예: ${exampleText}`,
         timestamp: new Date()
       };
 

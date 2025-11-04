@@ -275,6 +275,68 @@ function applyCondition(schedules, condition, allSchedules) {
         });
       }
 
+    case 'floorFilter':
+      // 층 필터링
+      if (condition.applyToKeywords && Array.isArray(condition.applyToKeywords)) {
+        console.log(`  📌 floorFilter with applyToKeywords: [${condition.applyToKeywords.join(', ')}], floors: [${condition.floors.join(', ')}]`);
+
+        // 대상과 비대상 분리
+        const targetSchedules = schedules.filter(s => {
+          const titleLower = (s.title || '').toLowerCase();
+          const instructorLower = (s.instructor || '').toLowerCase();
+
+          const matches = condition.applyToKeywords.some(kw => {
+            const kwLower = kw.toLowerCase();
+            return titleLower.includes(kwLower) || instructorLower.includes(kwLower);
+          });
+
+          if (matches) {
+            console.log(`    ✓ 대상: ${s.title} (floor=${s.floor}) → floor 필터 적용`);
+          }
+          return matches;
+        });
+
+        const otherSchedules = schedules.filter(s => {
+          const titleLower = (s.title || '').toLowerCase();
+          const instructorLower = (s.instructor || '').toLowerCase();
+
+          const matches = condition.applyToKeywords.some(kw => {
+            const kwLower = kw.toLowerCase();
+            return titleLower.includes(kwLower) || instructorLower.includes(kwLower);
+          });
+
+          return !matches;
+        });
+
+        // 대상에만 층 필터 적용
+        const filteredTargets = targetSchedules.filter(s => {
+          if (!s.floor) return false;
+          const hasMatchingFloor = condition.floors.some(floor => {
+            const floorLower = floor.toLowerCase();
+            const sFloorLower = (s.floor || '').toLowerCase();
+            return sFloorLower.includes(floorLower) || floorLower.includes(sFloorLower);
+          });
+          if (!hasMatchingFloor) {
+            console.log(`    ✗ 제외: ${s.title} (floor=${s.floor})`);
+          }
+          return hasMatchingFloor;
+        });
+
+        console.log(`  → floorFilter [키워드 매칭] [${condition.floors.join(',')}]: ${filteredTargets.length}개 (원본 ${targetSchedules.length}개)`);
+        console.log(`  🎯 최종 반환: ${otherSchedules.length}개(비대상) + ${filteredTargets.length}개(필터된 대상) = ${otherSchedules.length + filteredTargets.length}개`);
+        return [...otherSchedules, ...filteredTargets];
+      } else {
+        // 전체에 층 필터 적용
+        return schedules.filter(s => {
+          if (!s.floor) return false;
+          return condition.floors.some(floor => {
+            const floorLower = floor.toLowerCase();
+            const sFloorLower = (s.floor || '').toLowerCase();
+            return sFloorLower.includes(floorLower) || floorLower.includes(sFloorLower);
+          });
+        });
+      }
+
     case 'daySpecificTimeLimit':
       // 특정 요일에만 시간 제한 적용
       const { day, endBefore, imageIndex: imgIdx } = condition;
@@ -477,7 +539,7 @@ exports.filterSchedulesByChat = async (req, res) => {
     }
 
     // 조건 기반 필터링 실행
-    if (parsed.action === 'filter') {
+    if (parsed.action === 'filter' || parsed.action === 'recommend') {
       if (!parsed.conditions || !Array.isArray(parsed.conditions)) {
         console.error('❌ AI가 조건을 반환하지 않음:', parsed);
         parsed.action = 'question';
