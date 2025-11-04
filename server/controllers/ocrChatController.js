@@ -209,8 +209,22 @@ function applyCondition(schedules, condition, allSchedules) {
     case 'dayMatch':
     case 'dayFilter':
       // 요일 필터링
+      // 영어/한글 요일 매핑
+      const dayMap = {
+        'MON': '월', 'TUE': '화', 'WED': '수', 'THU': '목', 'FRI': '금', 'SAT': '토', 'SUN': '일',
+        '월': 'MON', '화': 'TUE', '수': 'WED', '목': 'THU', '금': 'FRI', '토': 'SAT', '일': 'SUN'
+      };
+
+      // 조건의 요일들을 영어/한글 모두 포함하도록 확장
+      const expandedDays = new Set();
+      condition.days.forEach(day => {
+        expandedDays.add(day);
+        if (dayMap[day]) expandedDays.add(dayMap[day]);
+      });
+      const expandedDaysArray = Array.from(expandedDays);
+
       if (condition.applyToKeywords && Array.isArray(condition.applyToKeywords)) {
-        console.log(`  📌 dayFilter with applyToKeywords: [${condition.applyToKeywords.join(', ')}], days: [${condition.days.join(', ')}]`);
+        console.log(`  📌 dayFilter with applyToKeywords: [${condition.applyToKeywords.join(', ')}], days: [${condition.days.join(', ')}] (확장: [${expandedDaysArray.join(', ')}])`);
 
         // 대상과 비대상 분리
         const targetSchedules = schedules.filter(s => {
@@ -240,10 +254,10 @@ function applyCondition(schedules, condition, allSchedules) {
           return !matches;
         });
 
-        // 대상에만 요일 필터 적용
+        // 대상에만 요일 필터 적용 (영어/한글 모두 지원)
         const filteredTargets = targetSchedules.filter(s => {
           if (!s.days || !Array.isArray(s.days)) return false;
-          const hasMatchingDay = s.days.some(day => condition.days.includes(day));
+          const hasMatchingDay = s.days.some(day => expandedDaysArray.includes(day));
           if (!hasMatchingDay) {
             console.log(`    ✗ 제외: ${s.title} (${s.days?.join(',')})`);
           }
@@ -254,10 +268,10 @@ function applyCondition(schedules, condition, allSchedules) {
         console.log(`  🎯 최종 반환: ${otherSchedules.length}개(비대상) + ${filteredTargets.length}개(필터된 대상) = ${otherSchedules.length + filteredTargets.length}개`);
         return [...otherSchedules, ...filteredTargets];
       } else {
-        // 전체에 요일 필터 적용
+        // 전체에 요일 필터 적용 (영어/한글 모두 지원)
         return schedules.filter(s => {
           if (!s.days || !Array.isArray(s.days)) return false;
-          return s.days.some(day => condition.days.includes(day));
+          return s.days.some(day => expandedDaysArray.includes(day));
         });
       }
 
