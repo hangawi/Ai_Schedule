@@ -207,11 +207,59 @@ function applyCondition(schedules, condition, allSchedules) {
       }
 
     case 'dayMatch':
+    case 'dayFilter':
       // 요일 필터링
-      return schedules.filter(s => {
-        if (!s.days || !Array.isArray(s.days)) return false;
-        return s.days.some(day => condition.days.includes(day));
-      });
+      if (condition.applyToKeywords && Array.isArray(condition.applyToKeywords)) {
+        console.log(`  📌 dayFilter with applyToKeywords: [${condition.applyToKeywords.join(', ')}], days: [${condition.days.join(', ')}]`);
+
+        // 대상과 비대상 분리
+        const targetSchedules = schedules.filter(s => {
+          const titleLower = (s.title || '').toLowerCase();
+          const instructorLower = (s.instructor || '').toLowerCase();
+
+          const matches = condition.applyToKeywords.some(kw => {
+            const kwLower = kw.toLowerCase();
+            return titleLower.includes(kwLower) || instructorLower.includes(kwLower);
+          });
+
+          if (matches) {
+            console.log(`    ✓ 대상: ${s.title} (${s.days?.join(',')}) → days 필터 적용`);
+          }
+          return matches;
+        });
+
+        const otherSchedules = schedules.filter(s => {
+          const titleLower = (s.title || '').toLowerCase();
+          const instructorLower = (s.instructor || '').toLowerCase();
+
+          const matches = condition.applyToKeywords.some(kw => {
+            const kwLower = kw.toLowerCase();
+            return titleLower.includes(kwLower) || instructorLower.includes(kwLower);
+          });
+
+          return !matches;
+        });
+
+        // 대상에만 요일 필터 적용
+        const filteredTargets = targetSchedules.filter(s => {
+          if (!s.days || !Array.isArray(s.days)) return false;
+          const hasMatchingDay = s.days.some(day => condition.days.includes(day));
+          if (!hasMatchingDay) {
+            console.log(`    ✗ 제외: ${s.title} (${s.days?.join(',')})`);
+          }
+          return hasMatchingDay;
+        });
+
+        console.log(`  → dayFilter [키워드 매칭] [${condition.days.join(',')}]: ${filteredTargets.length}개 (원본 ${targetSchedules.length}개)`);
+        console.log(`  🎯 최종 반환: ${otherSchedules.length}개(비대상) + ${filteredTargets.length}개(필터된 대상) = ${otherSchedules.length + filteredTargets.length}개`);
+        return [...otherSchedules, ...filteredTargets];
+      } else {
+        // 전체에 요일 필터 적용
+        return schedules.filter(s => {
+          if (!s.days || !Array.isArray(s.days)) return false;
+          return s.days.some(day => condition.days.includes(day));
+        });
+      }
 
     case 'daySpecificTimeLimit':
       // 특정 요일에만 시간 제한 적용
