@@ -705,8 +705,14 @@ router.post('/chat', auth, async (req, res) => {
     const conflicts = detectConflicts(currentSchedule);
     console.log(`🔍 겹치는 수업: ${conflicts.length}건`);
 
-    // 프롬프트 생성 - 인간 수준의 이해력 (직전 AI 응답 포함)
-    const prompt = generatePrompt(message, currentSchedule, conflicts, lastAiResponse);
+    // 확인 응답 체크 (ㅇㅇ, 응, 웅 등)
+    const confirmationKeywords = ['ㅇㅇ', '응', '웅', '그래', '해줘', 'ㅇ', 'ㅇㄱ', '오케이', 'ok'];
+    const isConfirmation = confirmationKeywords.some(kw => message.trim().toLowerCase() === kw || message.trim() === kw);
+
+    // 프롬프트 생성 - 확인 응답일 때만 직전 AI 응답 포함
+    const contextToUse = isConfirmation ? lastAiResponse : null;
+    console.log('📝 맥락 사용:', contextToUse ? '직전 응답 포함 (확인 응답)' : '새로운 명령 (맥락 없음)');
+    const prompt = generatePrompt(message, currentSchedule, conflicts, contextToUse);
 
     // 여러 모델명 시도
     const modelNames = ['gemini-2.0-flash-exp', 'gemini-2.0-flash', 'gemini-1.5-flash'];
@@ -718,7 +724,7 @@ router.post('/chat', auth, async (req, res) => {
         const model = genAI.getGenerativeModel({
           model: modelName,
           generationConfig: {
-            maxOutputTokens: 16384,  // 최대 출력 토큰 대폭 증가 (큰 스케줄 처리)
+            maxOutputTokens: 4096,  // 응답 길이 제한 (기존 16384 → 4096)
             temperature: 0.1  // 일관성 향상
           }
         });
@@ -816,9 +822,6 @@ router.post('/chat', auth, async (req, res) => {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     // 🚨 "ㅇㅇ" 확인 응답 검증 및 보정
-    const confirmationKeywords = ['ㅇㅇ', '응', '웅', '그래', '해줘', 'ㅇ', 'ㅇㄱ', '오케이', 'ok'];
-    const isConfirmation = confirmationKeywords.some(kw => message.trim().toLowerCase() === kw || message.trim() === kw);
-
     if (isConfirmation && lastAiResponse) {
       console.log('🚨 확인 응답 감지 - 검증 시작');
 
@@ -957,6 +960,27 @@ router.post('/chat', auth, async (req, res) => {
           explanation: parsed.explanation || '현재 시간표를 유지했어요. 😊'
         });
       }
+    }
+
+    // ⚠️⚠️⚠️ add 액션 처리: AI가 새 항목만 반환하므로 기존 스케줄과 합치기 ⚠️⚠️⚠️
+    if (parsed.action === 'add') {
+      console.log('\n🔍 ADD 액션 처리:');
+      console.log(`AI 반환: ${parsed.schedule.length}개 항목`);
+      console.log(`기존 스케줄: ${currentSchedule.length}개`);
+
+      // AI가 새 항목만 반환 (1개 또는 몇 개)
+      const newItems = parsed.schedule;
+
+      // 기존 스케줄과 합치기
+      const mergedSchedule = [...currentSchedule, ...newItems];
+      parsed.schedule = mergedSchedule;
+
+      console.log(`합친 결과: ${mergedSchedule.length}개`);
+      console.log('\n✂️ 추가된 항목:');
+      newItems.slice(0, 10).forEach((item, i) => {
+        const dayDisplay = item.days?.join(',') || 'undefined';
+        console.log(`  ${i + 1}. ${item.title} (${dayDisplay} ${item.startTime}-${item.endTime})`);
+      });
     }
 
     // ⚠️⚠️⚠️ 실제 삭제 검증 (AI 거짓말 방지!) ⚠️⚠️⚠️

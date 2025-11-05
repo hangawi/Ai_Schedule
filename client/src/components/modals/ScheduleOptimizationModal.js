@@ -369,6 +369,17 @@ const ScheduleOptimizationModal = ({
           const updatedCombinations = [...modifiedCombinations];
           updatedCombinations[currentIndex] = data.schedule;
           setModifiedCombinations(updatedCombinations);
+        } else if (data.action === 'add') {
+          // 일정 추가
+          console.log('✅ ADD 액션: 시간표 업데이트');
+          // 현재 상태를 히스토리에 저장 (실행 전)
+          setScheduleHistory(prev => [...prev, modifiedCombinations[currentIndex]]);
+          // 새 작업 시 redo 스택 클리어
+          setRedoStack([]);
+
+          const updatedCombinations = [...modifiedCombinations];
+          updatedCombinations[currentIndex] = data.schedule;
+          setModifiedCombinations(updatedCombinations);
         } else if (data.action === 'redo') {
           // Redo: 되돌리기 취소
           const updatedCombinations = [...modifiedCombinations];
