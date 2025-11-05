@@ -761,15 +761,17 @@ router.post('/chat', auth, async (req, res) => {
       }
     } catch (parseError) {
       console.error('JSON 파싱 실패:', parseError);
-      console.log('원본 응답:', aiResponse);
+      console.log('원본 응답 길이:', aiResponse.length, '자');
+      console.log('원본 응답 (앞 500자):', aiResponse.substring(0, 500));
+      console.log('원본 응답 (뒤 500자):', aiResponse.substring(aiResponse.length - 500));
 
       // 파싱 실패 시 원본 스케줄 반환
       return res.json({
         success: true,
-        understood: '요청을 이해했지만 형식 오류가 발생했습니다',
+        understood: 'AI 응답 처리 중 오류 발생',
         action: 'none',
         schedule: currentSchedule,
-        explanation: aiResponse.substring(0, 200) // 앞 200자만 보여줌
+        explanation: '죄송해요, 응답이 너무 길어서 처리하지 못했습니다. 😥\n\n다시 한번 말씀해주시거나, 더 구체적으로 요청해주세요.\n\n예: "금요일 6시 이후 삭제" 대신 "금요일 공연반 삭제"'
       });
     }
 
@@ -820,18 +822,34 @@ router.post('/chat', auth, async (req, res) => {
     if (isConfirmation && lastAiResponse) {
       console.log('🚨 확인 응답 감지 - 검증 시작');
 
+      // 요일 변환 맵
+      const dayNameMap = {
+        '월요일': 'MON', '화요일': 'TUE', '수요일': 'WED', '목요일': 'THU',
+        '금요일': 'FRI', '토요일': 'SAT', '일요일': 'SUN'
+      };
+
+      // 직전 응답에서 대화 맥락 요일 추출
+      let contextDay = null;
+      for (const [dayName, dayCode] of Object.entries(dayNameMap)) {
+        if (lastAiResponse.includes(dayName)) {
+          contextDay = dayCode;
+          console.log(`📅 대화 맥락 요일 감지: ${dayName} (${dayCode})`);
+          break;
+        }
+      }
+
       // [삭제 예정] 목록 추출
       const deleteListMatch = lastAiResponse.match(/\[삭제 예정[^\]]*\]([\s\S]*?)(?:\n\n|삭제해드릴까요|$)/);
       if (deleteListMatch) {
         const deleteSection = deleteListMatch[1];
         console.log('📝 삭제 예정 섹션:\n', deleteSection);
 
-        // title과 startTime 추출 (요일별로)
+        // title과 startTime 추출
         const deleteTargets = [];
-        const dayLines = deleteSection.split('\n').filter(line => line.trim().startsWith('•'));
+        const bulletLines = deleteSection.split('\n').filter(line => line.trim().startsWith('•'));
 
-        dayLines.forEach(line => {
-          // "• 월요일: 도덕 (09:00-09:50), 영어 (10:00-10:50)" 형식 파싱
+        bulletLines.forEach(line => {
+          // 형식 1: "• 월요일: 도덕 (09:00-09:50), 영어 (10:00-10:50)"
           const dayMatch = line.match(/([월화수목금토일]요일):\s*(.+)/);
           if (dayMatch) {
             const items = dayMatch[2].split(/[,，]/);
@@ -844,19 +862,47 @@ router.post('/chat', auth, async (req, res) => {
                 });
               }
             });
+          } else {
+            // 형식 2: "• 금요일 수학 (13:50-14:40)" 또는 "• 수학 (13:50-14:40)"
+            const timeMatch = line.match(/•\s*(?:([월화수목금토일]요일)\s+)?(.+?)\s*\((\d{2}:\d{2})-/);
+            if (timeMatch) {
+              const day = timeMatch[1]; // 요일 (있으면)
+              const title = timeMatch[2].trim();
+              const startTime = timeMatch[3];
+
+              // 요일이 명시되지 않았으면 대화 맥락 요일 사용
+              const targetDay = day ? dayNameMap[day] : contextDay;
+
+              deleteTargets.push({
+                day: targetDay, // 요일 코드 (명시된 요일 또는 맥락 요일, 없으면 null)
+                title: title,
+                startTime: startTime
+              });
+            }
           }
         });
 
         console.log('🎯 삭제 대상:', deleteTargets.length, '개');
         deleteTargets.slice(0, 5).forEach((t, i) => {
-          console.log(`  ${i + 1}. ${t.title} (${t.startTime})`);
+          console.log(`  ${i + 1}. ${t.day || '모든요일'} ${t.title} (${t.startTime})`);
         });
 
-        // 원본 스케줄에서 매칭 (title과 startTime만!)
+        // 원본 스케줄에서 매칭 (title, startTime, day)
         const correctedSchedule = currentSchedule.filter(item => {
-          const shouldDelete = deleteTargets.some(target =>
-            item.title === target.title && item.startTime === target.startTime
-          );
+          const shouldDelete = deleteTargets.some(target => {
+            // title과 startTime이 일치하는지 확인
+            const titleMatch = item.title === target.title;
+            const timeMatch = item.startTime === target.startTime;
+
+            // 요일 확인 (target.day가 없으면 모든 요일 삭제, 있으면 해당 요일만)
+            let dayMatch = true;
+            if (target.day) {
+              const itemDays = Array.isArray(item.days) ? item.days : [item.days];
+              dayMatch = itemDays.includes(target.day);
+            }
+
+            return titleMatch && timeMatch && dayMatch;
+          });
           return !shouldDelete; // 삭제 대상 아니면 유지
         });
 

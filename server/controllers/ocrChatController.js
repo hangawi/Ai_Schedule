@@ -584,12 +584,45 @@ exports.filterSchedulesByChat = async (req, res) => {
             '금': 'FRI', '토': 'SAT', '일': 'SUN'
           };
 
-          const baseIds = new Set(baseSchedules.map(s => `${s.title}-${s.startTime}-${s.days?.join(',')}`));
-          const filteredIds = new Set(filteredSchedules.map(s => `${s.title}-${s.startTime}-${s.days?.join(',')}`));
+          // 중복 체크: filteredSchedules의 ID를 영어 요일로 변환해서 생성
+          const filteredIds = new Set();
+          const filteredLunchExists = new Set(); // 점심시간 특별 체크
+
+          filteredSchedules.forEach(s => {
+            // 이미 영어 요일인 경우와 한글 요일인 경우 모두 처리
+            const normalizedDays = s.days?.map(day => dayMap[day] || day).sort().join(',') || '';
+            const id = `${s.title}-${s.startTime}-${s.endTime}-${normalizedDays}`;
+            filteredIds.add(id);
+
+            // 점심시간 체크: 제목 또는 시간대
+            const isLunch = (s.title && s.title.includes('점심')) || (s.startTime === '12:50' && s.endTime === '13:50');
+            if (isLunch) {
+              filteredLunchExists.add(normalizedDays || 'any');
+            }
+          });
+
+          console.log('🔍 중복 체크 ID 샘플:', Array.from(filteredIds).slice(0, 3));
+          console.log('🍱 기존 점심시간 요일:', Array.from(filteredLunchExists));
 
           // 기본 베이스 중에서 아직 포함되지 않은 것만 추가
+          let addedCount = 0;
+          let skippedLunch = 0;
+
           baseSchedules.forEach(baseSchedule => {
-            const id = `${baseSchedule.title}-${baseSchedule.startTime}-${baseSchedule.days?.join(',')}`;
+            // baseSchedule의 한글 요일을 영어로 변환해서 ID 생성
+            const normalizedDays = baseSchedule.days?.map(day => dayMap[day] || day).sort().join(',') || '';
+            const id = `${baseSchedule.title}-${baseSchedule.startTime}-${baseSchedule.endTime}-${normalizedDays}`;
+
+            // 점심시간 특별 처리
+            const isLunch = (baseSchedule.title && baseSchedule.title.includes('점심')) ||
+                           (baseSchedule.startTime === '12:50' && baseSchedule.endTime === '13:50');
+
+            if (isLunch && filteredLunchExists.size > 0) {
+              // 점심시간이 이미 존재하면 스킵
+              skippedLunch++;
+              return;
+            }
+
             if (!filteredIds.has(id)) {
               // days를 영어 코드로 변환
               const convertedDays = baseSchedule.days?.map(day => dayMap[day] || day) || [];
@@ -597,10 +630,12 @@ exports.filterSchedulesByChat = async (req, res) => {
                 ...baseSchedule,
                 days: convertedDays
               });
+              addedCount++;
             }
           });
 
-          console.log(`📚 기본 베이스 포함 완료: 총 ${filteredSchedules.length}개 (기본 ${baseSchedules.length}개 포함)`);
+          console.log(`📚 baseSchedules 중복 제거: ${baseSchedules.length}개 중 ${addedCount}개만 추가됨 (${baseSchedules.length - addedCount}개는 이미 포함)${skippedLunch > 0 ? `, 점심시간 ${skippedLunch}개 스킵` : ''}`);
+          console.log(`📚 기본 베이스 포함 완료: 총 ${filteredSchedules.length}개`);
           console.log('📚 최종 filteredSchedules 샘플 (변환 후):', filteredSchedules.slice(-3).map(s => ({
             title: s.title,
             days: s.days,
