@@ -6,6 +6,102 @@ const path = require('path');
 // Gemini AI 초기화
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+/**
+ * 연속된 같은 제목의 스케줄을 하나로 병합
+ * 예: 수학 13:50-14:00 + 수학 14:00-14:20 + 수학 14:20-14:40 → 수학 13:50-14:40
+ */
+function mergeConsecutiveSchedules(schedules) {
+  if (!schedules || schedules.length === 0) return schedules;
+
+  const merged = [];
+  const processed = new Set();
+
+  // 각 스케줄을 요일별로 전개
+  const expandedSchedules = [];
+  schedules.forEach(schedule => {
+    const days = Array.isArray(schedule.days) ? schedule.days : [schedule.days];
+    days.forEach(day => {
+      expandedSchedules.push({ ...schedule, days: [day], originalDaysCount: days.length });
+    });
+  });
+
+  // 요일별로 그룹화 및 시간순 정렬
+  const byDay = {};
+  expandedSchedules.forEach(schedule => {
+    const day = schedule.days[0];
+    if (!byDay[day]) byDay[day] = [];
+    byDay[day].push(schedule);
+  });
+
+  Object.keys(byDay).forEach(day => {
+    const daySchedules = byDay[day].sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    for (let i = 0; i < daySchedules.length; i++) {
+      const current = daySchedules[i];
+      const currentId = `${day}_${current.title}_${current.startTime}_${current.endTime}`;
+
+      if (processed.has(currentId)) continue;
+
+      // 연속된 같은 제목의 스케줄 찾기
+      let endTime = current.endTime;
+      const toMerge = [current];
+
+      for (let j = i + 1; j < daySchedules.length; j++) {
+        const next = daySchedules[j];
+
+        if (next.title === current.title &&
+            next.instructor === current.instructor &&
+            next.startTime === endTime) {
+          toMerge.push(next);
+          endTime = next.endTime;
+
+          const nextId = `${day}_${next.title}_${next.startTime}_${next.endTime}`;
+          processed.add(nextId);
+        } else {
+          break;
+        }
+      }
+
+      // 병합 결과 생성
+      if (toMerge.length > 1) {
+        console.log(`  🔗 병합: ${day} ${current.title} ${current.startTime}-${endTime} (${toMerge.length}개 블록)`);
+      }
+
+      const mergedSchedule = { ...current };
+      mergedSchedule.endTime = endTime;
+      mergedSchedule.days = [day];
+
+      // duration 재계산
+      const [startH, startM] = current.startTime.split(':').map(Number);
+      const [endH, endM] = endTime.split(':').map(Number);
+      mergedSchedule.duration = (endH * 60 + endM) - (startH * 60 + startM);
+
+      merged.push(mergedSchedule);
+      processed.add(currentId);
+    }
+  });
+
+  // 같은 title + startTime + endTime + instructor를 가진 스케줄을 다시 묶기
+  const finalMerged = [];
+  const scheduleMap = new Map();
+
+  merged.forEach(schedule => {
+    const key = `${schedule.title}_${schedule.startTime}_${schedule.endTime}_${schedule.instructor || ''}`;
+
+    if (scheduleMap.has(key)) {
+      // 기존 스케줄에 요일 추가
+      const existing = scheduleMap.get(key);
+      existing.days.push(schedule.days[0]);
+    } else {
+      scheduleMap.set(key, { ...schedule, days: [...schedule.days] });
+    }
+  });
+
+  scheduleMap.forEach(schedule => finalMerged.push(schedule));
+
+  return finalMerged;
+}
+
 // Multer 설정 (메모리 저장)
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -193,8 +289,30 @@ exports.analyzeScheduleImages = async (req, res) => {
         ];
 
         const prompt = `
-이 이미지는 학원 또는 학습 시간표입니다.
-다음 정보를 JSON 형식으로 추출해주세요:
+이 이미지의 시간표를 정확히 추출하세요.
+
+**시간 해석 규칙 (매우 중요!)**
+왼쪽 시간 열의 **이미지 내 위치**로 오전/오후 판단:
+- 이미지 **상단**에 9:30, 10, 11 → **오전** (09:30, 10:00, 11:00)
+- 이미지 **하단**에 6, 7, 8, 9 → **오후** (18:00, 19:00, 20:00, 21:00)
+
+학교 시간표 (1,2,3,4,5,6,7):
+- 1교시=09:00-09:50, 2교시=10:00-10:50, 3교시=11:00-11:50
+- 4교시=12:00-12:50, 5교시=13:50-14:40, 6교시=14:50-15:40
+
+**그리드 읽기**:
+첫 행: 월요일, 화요일, 수요일, 목요일, 금요일, 토요일
+
+각 시간 행마다 왼쪽→오른쪽 스캔:
+- 월요일 열: 텍스트 있으면 추출, 빈 셀은 스킵
+- 화요일 열: 텍스트 있으면 추출, 빈 셀은 스킵
+- (모든 요일 반복)
+
+**셀 크기로 시간 결정**:
+- 1행 셀 = 30분 (or 50분)
+- 2행 병합 = 1시간 (or 1시간40분)
+
+**다음 정보를 JSON 형식으로 추출해주세요:
 
 {
   "imageTitle": "이미지 상단의 제목 (예: 기구필라테스 야샤야 PT 시간표, 학교 시간표, KPOP 댄스 학원 등)",
@@ -397,26 +515,54 @@ exports.analyzeScheduleImages = async (req, res) => {
 
 **⚠️⚠️⚠️ 30분 단위 시간대 처리 (매우매우 중요!) ⚠️⚠️⚠️**:
 **시간표 왼쪽 열을 먼저 확인하세요!**
-- "7-7:30", "7:30-8", "8-8:30" 등이 보이면 **무조건 30분 단위입니다!**
+- "7", "7:30", "8", "8:30" 같이 30분 간격으로 행이 있으면 → **각 행은 30분 단위입니다**
 - **절대로 10분, 20분 단위로 쪼개지 마세요!**
-- **절대로 시간을 추측하지 말고, 왼쪽 열에 표시된 정확한 시간을 사용하세요!**
+
+**⚠️⚠️ 셀 크기로 시간 길이 결정 (가장 중요!) ⚠️⚠️**
+**그리드 경계선을 보고 셀이 몇 개 행을 차지하는지 세세요!**
+
+- **1개 행만 차지** → 30분 (예: "7" 행에만 있는 작은 셀 → 19:00-19:30)
+  - ⚠️ **"7" 행 셀이 "7:30" 행까지 안 내려갔으면 무조건 30분!**
+  - ⚠️ **셀이 시각적으로 크게 보여도, 다음 행 경계선을 넘지 않았으면 30분!**
+- **2개 행 차지** → 1시간 (예: "10"+"11" 행 병합 → 10:00-12:00)
+  - ⚠️ **"10" 행 경계선에서 시작해서 "11" 행 경계선을 넘어야 1시간!**
+- **3개 행 차지** → 1시간30분 (예: "6"+"7"+"7:30" 행 병합 → 18:00-19:30)
 
 **올바른 예시:**
+- 왼쪽 열에 "10", "11" 행이 있고, "10~11" 행에 걸친 큰 셀 "김다희 강사":
+  - ✅ 올바름: {"title": "김다희 강사", "startTime": "10:00", "endTime": "12:00"} (2시간!)
+  - ❌ 잘못: {"title": "김다희 강사", "startTime": "10:00", "endTime": "10:30"} (30분으로 잘못!)
+
+- "7" 행에만 있는 작은 셀 "이고은 원장":
+  - ✅ 올바름: {"title": "이고은 원장", "startTime": "19:00", "endTime": "19:30"} (30분!)
+  - ❌ 잘못: {"title": "이고은 원장", "startTime": "19:00", "endTime": "20:00"} (1시간으로 잘못!)
+  - ⚠️⚠️ **"7" 행에만 있고 "7:30" 행 경계선을 안 넘었으면 절대 1시간 안 됨!**
 - 왼쪽 열: "7-7:30" → 이 행의 모든 일정은 startTime: "19:00", endTime: "19:30" (정확히 30분!)
 - 왼쪽 열: "7:30-8" → 이 행의 모든 일정은 startTime: "19:30", endTime: "20:00" (정확히 30분!)
 - 왼쪽 열: "8-8:30" → 이 행의 모든 일정은 startTime: "20:00", endTime: "20:30" (정확히 30분!)
 - 왼쪽 열: "8:30-9" → 이 행의 모든 일정은 startTime: "20:30", endTime: "21:00" (정확히 30분!)
 
-**잘못된 예시 (절대 금지!):**
-- ❌ "7-7:30" 행인데 19:00-19:20, 19:20-19:30으로 쪼갬 (절대 안됨!)
-- ❌ "7:30-8" 행인데 19:30-19:50, 19:50-20:00으로 쪼갬 (절대 안됨!)
-- ❌ 시간을 추측해서 10분/20분 단위로 나눔 (절대 안됨!)
+**구체적인 예시 (필라테스 시간표):**
 
-**반드시 기억하세요:**
-- 왼쪽 열의 시간 = startTime과 endTime
-- 셀이 여러 행에 걸쳐있어도, **각 행의 시간을 정확히 사용**
-- "7-7:30"은 **19:00-19:30** (정확히 30분!)
-- "7-7:30"은 **절대로 19:00-19:20이 아닙니다!**
+왼쪽 열 | 월요일         | 수요일
+--------|---------------|-------------
+7       | 이고은 원장    | 이고은 원장
+7:30    | 이민영 강사    | 이민영 강사
+8       | 박진영 강사    | 이고은 원장
+
+→ **올바른 추출 (총 6개):**
+1. {"title": "이고은 원장", "days": ["월"], "startTime": "19:00", "endTime": "19:30", "instructor": "이고은"}
+2. {"title": "이민영 강사", "days": ["월"], "startTime": "19:30", "endTime": "20:00", "instructor": "이민영"}
+3. {"title": "박진영 강사", "days": ["월"], "startTime": "20:00", "endTime": "20:30", "instructor": "박진영"}
+4. {"title": "이고은 원장", "days": ["수"], "startTime": "19:00", "endTime": "19:30", "instructor": "이고은"}
+5. {"title": "이민영 강사", "days": ["수"], "startTime": "19:30", "endTime": "20:00", "instructor": "이민영"}
+6. {"title": "이고은 원장", "days": ["수"], "startTime": "20:00", "endTime": "20:30", "instructor": "이고은"}
+
+**잘못된 예시 (절대 금지!):**
+- ❌ {"title": "이고은 원장", "days": ["월"], "startTime": "19:00", "endTime": "20:00"} ← 이민영 시간 먹음! **"7" 행만 차지하는데 1시간으로 잘못!**
+- ❌ "7-7:30" 행인데 19:00-19:20, 19:20-19:30으로 쪼갬
+- ❌ 셀이 크다고 1시간으로 만듦 **← 경계선 확인 안 하고 임의로 시간 늘림!**
+- ⚠️⚠️⚠️ **중요: "7" 행 셀이 "7:30" 행 경계선까지 안 내려가면 절대 20:00까지 안 됨! 무조건 19:30까지만!**
 
 **학원/PT 수업 시간대 컨텍스트**:
 - 학원이나 PT 수업은 **오후/저녁 시간대**에만 있습니다
@@ -502,7 +648,7 @@ PM이나 오후가 보이면 반드시 13:00 이후로 변환!
     }
 
     // 모든 시간표를 하나로 합치되, 이미지 출처 정보 추가
-    const allSchedules = scheduleResults.flatMap((result, imageIndex) =>
+    let allSchedules = scheduleResults.flatMap((result, imageIndex) =>
       (result.schedules || []).map(schedule => ({
         ...schedule,
         sourceImage: result.fileName,
@@ -557,6 +703,12 @@ PM이나 오후가 보이면 반드시 13:00 이후로 변환!
     addLunchTimeIfMissing(allSchedules);
 
     console.log(`🎉 모든 이미지 처리 완료! 총 ${allSchedules.length}개의 시간표 추출`);
+
+    // ========== 중복 제거 및 병합 로직 ==========
+    console.log('🔧 중복 제거 및 연속 시간 병합 시작...');
+    const mergedSchedules = mergeConsecutiveSchedules(allSchedules);
+    console.log(`✅ 병합 완료: ${allSchedules.length}개 → ${mergedSchedules.length}개 (${allSchedules.length - mergedSchedules.length}개 병합됨)`);
+    allSchedules = mergedSchedules;
 
     // ========== 새로운 분석 로직 적용 ==========
     const { detectBaseScheduleFromImages, extractBaseSchedules } = require('../utils/scheduleAnalysis/detectBaseSchedule');
