@@ -838,11 +838,12 @@ router.post('/chat', auth, async (req, res) => {
         }
       }
 
-      // [삭제 예정] 목록 추출
-      const deleteListMatch = lastAiResponse.match(/\[삭제 예정[^\]]*\]([\s\S]*?)(?:\n\n|삭제해드릴까요|$)/);
-      if (deleteListMatch) {
-        const deleteSection = deleteListMatch[1];
-        console.log('📝 삭제 예정 섹션:\n', deleteSection);
+      // [삭제 예정] 목록 추출 (여러 섹션 지원)
+      // 정규식: 모든 [삭제 예정...] 섹션부터 [유지됨] 또는 "삭제해드릴까요" 전까지
+      const allDeleteSections = lastAiResponse.match(/\[삭제 예정[^\]]*\]([\s\S]*?)(?=\[유지됨|삭제해드릴까요|$)/g);
+      if (allDeleteSections && allDeleteSections.length > 0) {
+        const deleteSection = allDeleteSections.join('\n');
+        console.log(`📝 삭제 예정 섹션 (${allDeleteSections.length}개):\n`, deleteSection);
 
         // title과 startTime 추출
         const deleteTargets = [];
