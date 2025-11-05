@@ -567,8 +567,13 @@ exports.filterSchedulesByChat = async (req, res) => {
         console.log(`\n✅ 필터링 완료: ${extractedSchedules.length} → ${filteredSchedules.length}개`);
 
         // 기본 베이스 스케줄 자동 추가 (학교 시간표 등)
-        // 기본적으로 항상 추가 (학교는 기본으로 포함되어야 함)
-        const shouldIncludeBase = baseSchedules && Array.isArray(baseSchedules) && baseSchedules.length > 0;
+        // ⚠️ 단, "~만" 키워드가 있으면 baseSchedules 추가 안 함!
+        const hasOnlyKeyword = chatMessage.includes('만') || chatMessage.includes('만요') || chatMessage.includes('만할');
+        const shouldIncludeBase = !hasOnlyKeyword && baseSchedules && Array.isArray(baseSchedules) && baseSchedules.length > 0;
+
+        if (hasOnlyKeyword) {
+          console.log('🚫 "만" 키워드 감지 → baseSchedules 추가 안 함 (선택된 항목만!)');
+        }
 
         if (shouldIncludeBase) {
           console.log('📚 baseSchedules 샘플:', baseSchedules.slice(0, 3).map(s => ({
