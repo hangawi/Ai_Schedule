@@ -268,7 +268,7 @@ exports.analyzeScheduleImages = async (req, res) => {
       return res.status(400).json({ error: '최소 1개 이상의 이미지 파일이 필요합니다.' });
     }
 
-    const { birthdate, userId, skipDuplicateCheck } = req.body;
+    const { birthdate, userId, skipDuplicateCheck, clearSession } = req.body;
     const sessionKey = userId || 'default';
 
     console.log(`📸 총 ${req.files.length}개의 이미지 처리 시작...`);
@@ -279,6 +279,13 @@ exports.analyzeScheduleImages = async (req, res) => {
     if (!imageHashStore.has(sessionKey)) {
       imageHashStore.set(sessionKey, []);
     }
+
+    // ⭐ clearSession 플래그가 있으면 기존 저장소 초기화 (모달 열 때마다 새로 시작)
+    if (clearSession === 'true' || clearSession === true) {
+      console.log('🔄 세션 초기화 - 기존 이미지 저장소 삭제');
+      imageHashStore.set(sessionKey, []);
+    }
+
     const existingImages = imageHashStore.get(sessionKey);
 
     // 🔍 1단계: 중복 체크 (skipDuplicateCheck가 false일 때만)

@@ -581,7 +581,7 @@ export const performOCR = async (imageFile) => {
  * @param {boolean} skipDuplicateCheck - 중복 체크 건너뛰기
  * @returns {Promise<Array>} - 구조화된 시간표 배열
  */
-export const analyzeScheduleImages = async (imageFiles, birthdate, progressCallback, skipDuplicateCheck = false) => {
+export const analyzeScheduleImages = async (imageFiles, birthdate, progressCallback, skipDuplicateCheck = false, clearSession = true) => {
   const formData = new FormData();
 
   imageFiles.forEach((file) => {
@@ -599,6 +599,12 @@ export const analyzeScheduleImages = async (imageFiles, birthdate, progressCallb
     formData.append('skipDuplicateCheck', 'true');
   } else {
     console.log('⏭️ skipDuplicateCheck=false이므로 FormData에 추가하지 않음');
+  }
+
+  // ⭐ 새로운 업로드 세션 시작 (이전 이미지 기록 초기화)
+  if (clearSession) {
+    console.log('🔄 clearSession=true - 이전 이미지 기록 초기화');
+    formData.append('clearSession', 'true');
   }
 
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';

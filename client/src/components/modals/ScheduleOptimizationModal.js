@@ -75,6 +75,7 @@ const ScheduleOptimizationModal = ({
     answers: {},
     isProcessing: false
   }); // AI 최적화 상태
+  const [hoveredImageIndex, setHoveredImageIndex] = useState(null); // hover된 이미지 인덱스
   const chatEndRef = useRef(null);
   const chatContainerRef = useRef(null);
 
@@ -134,7 +135,14 @@ const ScheduleOptimizationModal = ({
   try {
     console.log('🔄 personalTimes 생성 시작, currentCombination:', currentCombination?.length, '개');
 
-    personalTimes = currentCombination.map((schedule, index) => {
+    // hover된 이미지가 있으면 해당 이미지의 스케줄만 필터링
+    const schedulesToShow = hoveredImageIndex !== null
+      ? currentCombination.filter(schedule => schedule.sourceImageIndex === hoveredImageIndex)
+      : currentCombination;
+
+    console.log(`🎯 표시할 스케줄: ${schedulesToShow.length}개 (hover: ${hoveredImageIndex !== null ? `이미지${hoveredImageIndex}` : '전체'})`);
+
+    personalTimes = schedulesToShow.map((schedule, index) => {
       if (!schedule) {
         console.warn(`⚠️ schedule[${index}]가 null/undefined`);
         return null;
@@ -1115,13 +1123,19 @@ const ScheduleOptimizationModal = ({
               <div className="flex flex-wrap gap-3 justify-center">
                 {schedulesByImage.map((imageData, idx) => {
                   const color = getColorForImageIndex(idx);
+                  const isHovered = hoveredImageIndex === idx;
                   return (
-                    <div key={idx} className="flex items-center gap-2">
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2 cursor-pointer transition-all"
+                      onMouseEnter={() => setHoveredImageIndex(idx)}
+                      onMouseLeave={() => setHoveredImageIndex(null)}
+                    >
                       <div
-                        className="w-4 h-4 rounded border-2"
+                        className={`w-4 h-4 rounded border-2 transition-all ${isHovered ? 'scale-125' : ''}`}
                         style={{ backgroundColor: color.bg, borderColor: color.border }}
                       ></div>
-                      <span className="text-xs text-gray-700">
+                      <span className={`text-xs transition-all ${isHovered ? 'text-purple-700 font-bold' : 'text-gray-700'}`}>
                         {imageData.title || `이미지 ${idx + 1}`}
                       </span>
                     </div>
