@@ -285,6 +285,9 @@ exports.analyzeScheduleImages = async (req, res) => {
     const shouldSkipDuplicateCheck = skipDuplicateCheck === true || skipDuplicateCheck === 'true';
     console.log(`🔍 중복 체크 건너뛰기 여부:`, shouldSkipDuplicateCheck);
 
+    let filesToProcess = req.files; // 처리할 파일 목록
+    let removedDuplicates = []; // 제거된 중복 이미지 목록
+
     if (!shouldSkipDuplicateCheck) {
       console.log('🔍 중복 이미지 감지 중...');
       console.log(`📦 기존 이미지 저장소: ${existingImages.length}개`);
@@ -332,18 +335,56 @@ exports.analyzeScheduleImages = async (req, res) => {
 
       console.log('✅ 중복 없음 - OCR 처리 시작');
     } else {
-      console.log('⏭️ 중복 체크 스킵 - 바로 OCR 처리');
+      console.log('⏭️ 중복 체크 스킵 - 중복 이미지 제거 시작');
+
+      // skipDuplicateCheck=true일 때: 중복 이미지를 자동으로 제거
+      const currentBatchImages = [];
+      const indicesToRemove = [];
+
+      for (let i = 0; i < req.files.length; i++) {
+        const file = req.files[i];
+
+        // 기존 저장소 + 현재 배치와 비교
+        const allImagesToCompare = [...existingImages, ...currentBatchImages];
+        const duplicateCheck = await detectDuplicate(file.buffer, file.originalname, allImagesToCompare, 95);
+
+        if (duplicateCheck.isDuplicate) {
+          console.log(`🗑️ 중복 제거: ${file.originalname} ≈ ${duplicateCheck.duplicateWith} (${duplicateCheck.similarity}%)`);
+          indicesToRemove.push(i);
+          removedDuplicates.push({
+            filename: file.originalname,
+            duplicateWith: duplicateCheck.duplicateWith,
+            similarity: duplicateCheck.similarity
+          });
+        } else {
+          // 중복이 아니면 현재 배치에 추가
+          currentBatchImages.push({
+            buffer: file.buffer,
+            hash: duplicateCheck.newHash,
+            filename: file.originalname
+          });
+        }
+      }
+
+      // 중복되지 않은 파일만 처리 목록에 포함
+      filesToProcess = req.files.filter((_, index) => !indicesToRemove.includes(index));
+      console.log(`✅ ${req.files.length}개 → ${filesToProcess.length}개로 감소 (${removedDuplicates.length}개 제거)`);
+
+      // 중복 제거 후 남은 이미지들을 저장소에 추가 (OCR 전에 미리 추가)
+      for (const img of currentBatchImages) {
+        existingImages.push(img);
+      }
+      console.log(`📦 저장소 업데이트: ${existingImages.length}개 이미지`);
     }
 
     // 2단계: OCR 처리
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
     const scheduleResults = [];
-    const duplicates = []; // 중복 체크를 건너뛴 경우 빈 배열
 
-    for (let i = 0; i < req.files.length; i++) {
-      const file = req.files[i];
+    for (let i = 0; i < filesToProcess.length; i++) {
+      const file = filesToProcess[i];
       try {
-        console.log(`🔄 [${i + 1}/${req.files.length}] ${file.originalname} OCR 처리 중...`);
+        console.log(`🔄 [${i + 1}/${filesToProcess.length}] ${file.originalname} OCR 처리 중...`);
 
         const imageBuffer = file.buffer;
         const mimeType = file.mimetype;
@@ -856,7 +897,7 @@ PM이나 오후가 보이면 반드시 13:00 이후로 변환!
       overallTitle: overallTitle, // 전체 제목
       baseSchedules: baseSchedules, // 기본 베이스 스케줄 (학교)
       baseAnalysis: baseAnalysis, // 기본 베이스 분석 결과
-      duplicates: duplicates, // 중복 감지된 이미지 목록
+      removedDuplicates: removedDuplicates, // 제거된 중복 이미지 목록 (skipDuplicateCheck=true일 때)
     };
 
     console.log('📤 응답 전송 중... (데이터 크기:', JSON.stringify(responseData).length, 'bytes)');
