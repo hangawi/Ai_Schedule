@@ -1,13 +1,10 @@
 /**
  * 스케줄 자동 최적화 유틸리티
  *
- * 새로운 로직 (세트 기반):
- * 1. 이미지별로 그룹화
- * 2. 각 이미지 내에서 색상별 세트로 분리 (같은 색 = 한 세트)
- * 3. 모든 세트에 우선순위 부여: 학교(1) > 공부학원(2) > 학습지(3) > 예체능(4)
- * 4. 우선순위 높은 세트부터 하나씩 선택 시도
- * 5. 겹치지 않으면 추가, 겹치면 건너뛰고 다음 세트 시도
- * 6. 결과: 학교 + 영어학원 한 반 + 댄스 여러 반 조합
+ * 새로운 로직:
+ * 1. 학교 시간표 = 전체가 1개의 불가분 세트 (중복 제거 절대 안 됨!)
+ * 2. 영어학원 = 여러 옵션 중 1개만 선택 (상호 배타적)
+ * 3. 우선순위: 학교(1) > 공부학원(2) > 학습지(3) > 예체능(4)
  */
 
 function categorizeSchedule(schedule, imageTitle) {
@@ -16,14 +13,26 @@ function categorizeSchedule(schedule, imageTitle) {
   const description = (schedule.description || '').toLowerCase();
   const combined = `${title} ${image} ${description}`;
 
-  // 1순위: 학교 (단, "학원"이 명시적으로 있으면 제외)
+  // 1순위: 학교 (imageTitle 기준으로 우선 판단)
+  const schoolPatterns = [
+    /초$/,           // "○○초"
+    /중$/,           // "미리중", "○○중"
+    /고$/,           // "○○고"
+    /초등학교/,
+    /중학교/,
+    /고등학교/,
+    /\d+학년.*\d+반/, // "1학년 3반"
+  ];
+
+  const hasSchoolPattern = schoolPatterns.some(pattern => pattern.test(image));
+
   if (
     !combined.includes('학원') &&
-    (combined.includes('학교') ||
-    combined.includes('초등') ||
-    combined.includes('중학') ||
-    combined.includes('고등') ||
-    (combined.includes('시간표') && (combined.includes('반') || combined.includes('학년'))))
+    (hasSchoolPattern ||
+    combined.includes('학교') ||
+    combined.includes('초등부') ||
+    combined.includes('중등부') ||
+    combined.includes('고등부'))
   ) {
     return { category: '학교', priority: 1 };
   }
@@ -80,44 +89,8 @@ function imageHasOverlap(imageSchedules, otherSchedules) {
   return false;
 }
 
-// 색상 + Title로 세트 그룹화 (같은 이미지 내에서만)
-function groupByColorInImage(imageSchedules) {
-  const setGroups = {};
-
-  imageSchedules.forEach(schedule => {
-    const color = schedule.backgroundColor || schedule.color || null;
-    const title = schedule.title || 'unnamed';
-
-    let setKey;
-
-    // 색이 있으면 "색상_제목"으로 세트 구분
-    if (color && color !== 'null' && color !== 'white' && color.trim() !== '') {
-      setKey = `${color}_${title}`;
-    } else {
-      // 색이 없으면 제목만으로 구분 (또는 전체를 하나로)
-      // 학교 시간표처럼 색이 없고 모두 같은 세트인 경우
-      const hasMultipleTitles = imageSchedules.some(s => s.title !== title);
-      if (hasMultipleTitles) {
-        // 제목이 여러 개면 제목별로 구분
-        setKey = `nocolor_${title}`;
-      } else {
-        // 제목이 하나면 전체가 하나의 세트
-        setKey = 'no_color_all';
-      }
-    }
-
-    if (!setGroups[setKey]) {
-      setGroups[setKey] = [];
-    }
-
-    setGroups[setKey].push(schedule);
-  });
-
-  return Object.values(setGroups);
-}
-
 function optimizeSchedules(allSchedules, schedulesByImage) {
-  console.log('\n🔍 ========== 세트 기반 자동 최적화 시작 ==========');
+  console.log('\n🔍 ========== 새로운 최적화 로직 시작 ==========');
   console.log(`📊 총 ${allSchedules.length}개 스케줄 입력`);
 
   // 1. 이미지별로 그룹화
@@ -132,115 +105,157 @@ function optimizeSchedules(allSchedules, schedulesByImage) {
 
   console.log(`📸 ${Object.keys(imageGroups).length}개 이미지 발견`);
 
-  // 2. 모든 세트 추출 (이미지별 → 색상별 세트)
-  const allSets = [];
-  let setIdCounter = 1;
+  // 2. 이미지별로 카테고리 판단 및 옵션 생성
+  const imageOptions = [];
 
   Object.entries(imageGroups).forEach(([fileName, schedules]) => {
     const imageInfo = schedulesByImage.find(img => img.fileName === fileName);
     const imageTitle = imageInfo?.imageTitle || fileName;
 
-    // 색상별로 세트 분리
-    const colorSets = groupByColorInImage(schedules);
+    // 모든 스케줄에 카테고리 부여
+    const schedulesWithCategory = schedules.map(schedule => {
+      const { category, priority } = categorizeSchedule(schedule, imageTitle);
+      return { ...schedule, category, priority, imageTitle };
+    });
 
-    colorSets.forEach(setSchedules => {
-      // 각 스케줄에 카테고리 부여
-      const schedulesWithCategory = setSchedules.map(schedule => {
-        const { category, priority } = categorizeSchedule(schedule, imageTitle);
-        return { ...schedule, category, priority, imageTitle };
-      });
+    // 이미지의 카테고리 = 가장 높은 우선순위
+    const imagePriority = Math.min(...schedulesWithCategory.map(s => s.priority));
+    const imageCategory = schedulesWithCategory.find(s => s.priority === imagePriority)?.category || '기타';
 
-      // 세트의 우선순위 = 세트 내 가장 높은 우선순위
-      const setPriority = Math.min(...schedulesWithCategory.map(s => s.priority));
-      const setCategory = schedulesWithCategory.find(s => s.priority === setPriority)?.category || '기타';
-
-      // 세트 이름 추출 (첫 번째 스케줄의 title 사용)
-      const setName = setSchedules[0]?.title || `세트${setIdCounter}`;
-      const setColor = setSchedules[0]?.backgroundColor || setSchedules[0]?.color || 'none';
-
-      allSets.push({
-        id: setIdCounter++,
-        name: setName,
-        color: setColor,
+    // ⭐ 학교면 전체가 1개 옵션 (불가분!)
+    if (imageCategory === '학교') {
+      imageOptions.push({
+        type: 'single',
         imageTitle,
         fileName,
-        category: setCategory,
-        priority: setPriority,
-        schedules: schedulesWithCategory,
-        count: schedulesWithCategory.length
+        category: imageCategory,
+        priority: imagePriority,
+        options: [
+          {
+            name: `${imageTitle} 전체`,
+            schedules: schedulesWithCategory
+          }
+        ]
       });
-    });
+      console.log(`🏫 [학교] ${imageTitle} - ${schedulesWithCategory.length}개 수업 (불가분 세트)`);
+    }
+    // ⭐ 학원이면 제목+시간대별로 옵션 분리 (상호 배타적!)
+    else {
+      // 각 스케줄을 개별 옵션으로 처리 (같은 제목이어도 시간이 다르면 다른 옵션)
+      const options = schedulesWithCategory.map(schedule => {
+        const timeRange = `${schedule.startTime}-${schedule.endTime}`;
+        const daysStr = (schedule.days || []).join(',');
+        const title = schedule.title || 'unnamed';
+
+        // 옵션 우선순위 계산 (주5회 > 주3회 > 주2회 > 주1회)
+        let optionPriority = 100; // 기본값
+        if (title.includes('주5회') || title.includes('주 5회')) optionPriority = 1;
+        else if (title.includes('주4회') || title.includes('주 4회')) optionPriority = 2;
+        else if (title.includes('주3회') || title.includes('주 3회')) optionPriority = 3;
+        else if (title.includes('주2회') || title.includes('주 2회')) optionPriority = 4;
+        else if (title.includes('주1회') || title.includes('주 1회')) optionPriority = 5;
+
+        return {
+          name: `${title} (${daysStr} ${timeRange})`,
+          schedules: [schedule],
+          optionPriority  // 옵션 내 우선순위
+        };
+      });
+
+      // 옵션을 우선순위로 정렬 (주5회가 먼저 시도됨)
+      options.sort((a, b) => a.optionPriority - b.optionPriority);
+
+      imageOptions.push({
+        type: 'exclusive',  // 상호 배타적
+        imageTitle,
+        fileName,
+        category: imageCategory,
+        priority: imagePriority,
+        options: options
+      });
+
+      console.log(`📚 [${imageCategory}] ${imageTitle} - ${options.length}개 옵션 (상호 배타적):`);
+      options.forEach(opt => {
+        console.log(`   옵션: ${opt.name} (${opt.schedules.length}개 수업)`);
+      });
+    }
   });
 
-  // 3. 세트를 우선순위로 정렬
-  allSets.sort((a, b) => {
-    if (a.priority !== b.priority) return a.priority - b.priority;
-    return b.count - a.count; // 같은 우선순위면 수업 개수 많은 것 우선
-  });
+  // 3. 우선순위로 정렬
+  imageOptions.sort((a, b) => a.priority - b.priority);
 
-  console.log(`\n🎨 총 ${allSets.length}개 세트 발견:`);
-  allSets.forEach(set => {
-    console.log(`  [세트${set.id}] ${set.priority}순위 (${set.category}) - ${set.imageTitle} - ${set.name} (${set.count}개 수업)`);
-  });
-
-  // 4. 세트별로 선택 시도 (겹치지 않으면 추가)
+  // 4. 최적화: 우선순위대로 선택
   const selectedSchedules = [];
-  const selectedSets = [];
-  const rejectedSets = [];
+  const selectionLog = [];
 
-  console.log('\n🎯 세트별 최적화 진행:');
+  console.log('\n🎯 최적화 진행:');
 
-  for (const set of allSets) {
-    const hasConflict = imageHasOverlap(set.schedules, selectedSchedules);
+  for (const imageOpt of imageOptions) {
+    if (imageOpt.type === 'single') {
+      // 학교: 무조건 선택 (최우선순위니까)
+      const option = imageOpt.options[0];
+      const hasConflict = imageHasOverlap(option.schedules, selectedSchedules);
 
-    if (hasConflict) {
-      console.log(`❌ [세트${set.id}] ${set.category} - ${set.name} (${set.count}개) - 시간 겹침`);
-      rejectedSets.push(set);
+      if (!hasConflict) {
+        console.log(`✅ [${imageOpt.category}] ${imageOpt.imageTitle} - 전체 선택 (${option.schedules.length}개)`);
+        selectedSchedules.push(...option.schedules);
+        selectionLog.push({
+          image: imageOpt.imageTitle,
+          selected: option.name,
+          count: option.schedules.length
+        });
+      } else {
+        console.log(`❌ [${imageOpt.category}] ${imageOpt.imageTitle} - 시간 겹침으로 제외`);
+      }
     } else {
-      console.log(`✅ [세트${set.id}] ${set.category} - ${set.name} (${set.count}개)`);
+      // 학원: 여러 옵션 중 겹치지 않는 것 1개만 선택
+      let selected = false;
 
-      // 시간대 출력
-      const timeSlots = set.schedules.map(s =>
-        `${s.days?.join(',') || '?'} ${s.startTime}-${s.endTime}`
-      ).join(', ');
-      console.log(`   ⏰ ${timeSlots}`);
+      for (const option of imageOpt.options) {
+        const hasConflict = imageHasOverlap(option.schedules, selectedSchedules);
 
-      selectedSchedules.push(...set.schedules);
-      selectedSets.push(set);
+        if (!hasConflict) {
+          console.log(`✅ [${imageOpt.category}] ${imageOpt.imageTitle} - "${option.name}" 선택 (${option.schedules.length}개)`);
+
+          const timeSlots = option.schedules.map(s =>
+            `${s.days?.join(',') || '?'} ${s.startTime}-${s.endTime}`
+          ).join(', ');
+          console.log(`   ⏰ ${timeSlots}`);
+
+          selectedSchedules.push(...option.schedules);
+          selectionLog.push({
+            image: imageOpt.imageTitle,
+            selected: option.name,
+            count: option.schedules.length
+          });
+          selected = true;
+          break; // ⭐ 1개만 선택하고 중단!
+        } else {
+          console.log(`   ⏭️ "${option.name}" - 시간 겹침으로 건너뜀`);
+        }
+      }
+
+      if (!selected) {
+        console.log(`❌ [${imageOpt.category}] ${imageOpt.imageTitle} - 모든 옵션이 겹쳐서 제외`);
+      }
     }
   }
 
-  // 최종 중복 제거
-  const uniqueSchedules = [];
-  const seenKeys = new Set();
-
-  selectedSchedules.forEach(schedule => {
-    const key = `${schedule.days?.join(',')}_${schedule.startTime}_${schedule.endTime}_${schedule.title}`;
-    if (!seenKeys.has(key)) {
-      seenKeys.add(key);
-      uniqueSchedules.push(schedule);
-    }
-  });
-
   console.log('\n✨ ========== 최적화 완료 ==========');
-  console.log(`✅ 선택된 세트: ${selectedSets.length}개`);
-  console.log(`✅ 선택된 수업: ${uniqueSchedules.length}개`);
-  console.log(`❌ 제외된 세트: ${rejectedSets.length}개`);
-  console.log(`❌ 제외된 수업: ${rejectedSets.reduce((sum, s) => sum + s.count, 0)}개`);
+  console.log(`✅ 선택된 수업: ${selectedSchedules.length}개`);
+  console.log(`✅ 선택 내역:`);
+  selectionLog.forEach(log => {
+    console.log(`   - ${log.image}: ${log.selected} (${log.count}개)`);
+  });
   console.log('=====================================\n');
 
   return {
-    optimizedSchedules: uniqueSchedules,
-    removedSchedules: rejectedSets.flatMap(s => s.schedules),
-    selectedSets: selectedSets, // ⭐ 선택된 세트 정보 추가
-    rejectedSets: rejectedSets, // ⭐ 제외된 세트 정보 추가
+    optimizedSchedules: selectedSchedules,  // ⭐ 중복 제거 절대 안 함!
+    removedSchedules: [],
     analysis: {
       totalInput: allSchedules.length,
-      totalSelected: uniqueSchedules.length,
-      totalRemoved: rejectedSets.reduce((sum, s) => sum + s.count, 0),
-      totalSets: allSets.length,
-      selectedSetsCount: selectedSets.length,
-      rejectedSetsCount: rejectedSets.length
+      totalSelected: selectedSchedules.length,
+      totalRemoved: allSchedules.length - selectedSchedules.length
     }
   };
 }
