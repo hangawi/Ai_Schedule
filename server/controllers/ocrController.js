@@ -3,6 +3,7 @@ const multer = require('multer');
 const fs = require('fs').promises;
 const path = require('path');
 const { detectDuplicate, calculateImageHash } = require('../utils/imageHasher');
+const { optimizeSchedules } = require('../utils/scheduleAutoOptimizer');
 
 // Gemini AI 초기화
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -436,10 +437,21 @@ exports.analyzeScheduleImages = async (req, res) => {
       "instructor": "강사명 (있으면)",
       "classroom": "교실/반 이름 (있으면)",
       "floor": "층 정보 (B1, 2F, 3층 등, 없으면 null)",
-      "description": "추가 정보"
+      "description": "추가 정보",
+      "backgroundColor": "셀의 배경색 (예: blue, red, yellow, green, pink, orange 등, 색이 없거나 흰색이면 null)"
     }
   ]
 }
+
+**⚠️ 배경색 추출 (매우 중요!)**:
+- 각 셀의 배경색을 정확히 추출해주세요!
+- 같은 색상 = 같은 반/세트를 의미합니다
+- 색상 이름으로 반환: "blue", "red", "yellow", "green", "pink", "orange", "purple", "skyblue" 등
+- 색이 없거나 흰색/회색이면 null
+- 예시:
+  - 파란색 셀: backgroundColor: "blue"
+  - 빨간색 셀: backgroundColor: "red"
+  - 흰색 셀: backgroundColor: null
 
 **⚠️ 층 정보 추출 (매우 중요!)**:
 - 시간표에 **"B1", "2F", "3층", "지하 1층", "지상 2층"** 같은 층 정보가 있으면 반드시 추출!
@@ -449,15 +461,28 @@ exports.analyzeScheduleImages = async (req, res) => {
 - **같은 시간대, 같은 반 이름**이지만 **층이 다르면** 별도 스케줄로 추출!
   - 예: 8시30분 성인반 B1, 8시30분 성인반 2F → 2개의 스케줄
 
-**⚠️ 이미지 제목 추출 (매우 중요!)**:
+**⚠️ 이미지 제목 추출 및 학년부 인식 (매우 중요!)**:
 1. **imageTitle 필드**:
    - 이미지 상단/제목에서 시간표 이름을 추출
    - 예: "기구필라테스 야샤야 PT 시간표" → imageTitle: "기구필라테스 야샤야 PT"
    - 예: "○○중학교 1학년 시간표" → imageTitle: "○○중학교 1학년"
    - 예: "KPOP 댄스 학원" → imageTitle: "KPOP 댄스 학원"
    - 예: "[범계 영어학원] 7세반과 초등학생 영어 수강료와 수업시간표" → imageTitle: "범계 영어학원"
+   - 예: "12반 중 1학년 3반" → imageTitle: "미리중 1학년 3반"
    - 제목이 없으면 수업 내용으로 유추 (예: 모두 필라테스 수업 → "필라테스")
-2. **주의**: "시간표", "Table", "Schedule" 등은 제외하고 핵심 이름만 추출
+
+2. **⭐ 학년부(gradeLevel) 인식 - 매우 중요!**:
+   - **이미지 제목을 먼저 확인**하여 학년부를 판단하세요!
+   - **초등학교**: "초등", "초", "연산초", "○○초등학교" → gradeLevel: "초등부"
+   - **중학교**: "중학교", "중등", "중", "○○중" (예: "미리중", "서울중") → gradeLevel: "중등부"
+   - **고등학교**: "고등학교", "고등", "고", "○○고" → gradeLevel: "고등부"
+   - **제목에 학년부 정보가 있으면 모든 스케줄의 gradeLevel을 해당 값으로 설정!**
+   - 예시:
+     * 제목: "미리중 1학년 3반" → 모든 스케줄 gradeLevel: "중등부"
+     * 제목: "연산초등학교 3학년 2반" → 모든 스케줄 gradeLevel: "초등부"
+     * 제목: "고등학교 1학년" → 모든 스케줄 gradeLevel: "고등부"
+
+3. **주의**: "시간표", "Table", "Schedule" 등은 제외하고 핵심 이름만 추출
 
 **그리드 시간표 인식 방법 (매우 중요!)**:
 
@@ -474,22 +499,51 @@ exports.analyzeScheduleImages = async (req, res) => {
    - 왼쪽에 "7:30-8"이라고 적혀있으면: 19:30-20:00 (1개)
    - **절대로** 19:00-19:10, 19:10-19:30 같이 10분 단위로 쪼개지 마세요!
 
-2. **교시 번호 → 시간 변환** (초중고 공통):
+2. **교시 번호 → 시간 변환**:
    **매우 중요! 학교는 4교시 후 점심시간 1시간이 있습니다!**
+   **수업 시간은 학년부에 따라 다릅니다:**
+   - **초등학교: 40분 수업** (초등부, 초등학생, 초, 1~6학년)
+   - **중학교: 45분 수업** (중등부, 중학생, 중, 1~3학년)
+   - **고등학교: 50분 수업** (고등부, 고등학생, 고, 1~3학년)
 
+   **초등학교 시간표 (40분 수업)**:
+   - 1교시: 09:00-09:40
+   - 2교시: 09:50-10:30
+   - 3교시: 10:40-11:20
+   - 4교시: 11:30-12:10
+   - **점심시간: 12:10-13:10 (1시간)**
+   - 5교시: 13:10-13:50
+   - 6교시: 14:00-14:40
+   - 7교시: 14:50-15:30
+
+   **중학교 시간표 (45분 수업)**:
+   - 1교시: 09:00-09:45
+   - 2교시: 09:55-10:40
+   - 3교시: 10:50-11:35
+   - 4교시: 11:45-12:30
+   - **점심시간: 12:30-13:30 (1시간)**
+   - 5교시: 13:30-14:15
+   - 6교시: 14:25-15:10
+   - 7교시: 15:20-16:05
+   - 8교시: 16:15-17:00
+
+   **고등학교 시간표 (50분 수업)**:
    - 1교시: 09:00-09:50
    - 2교시: 10:00-10:50
    - 3교시: 11:00-11:50
    - 4교시: 12:00-12:50
-   - **점심시간: 12:50-13:50 (1시간) - 무조건 추출!**
+   - **점심시간: 12:50-13:50 (1시간)**
    - 5교시: 13:50-14:40
    - 6교시: 14:50-15:40
    - 7교시: 15:50-16:40
 
-   **학교 시간표 처리 규칙**:
+   **⭐ 학교 시간표 처리 규칙 (매우 중요!)**:
+   - **반드시 위 학년부별 시간표를 정확히 사용하세요!**
+   - gradeLevel이 "초등부"면 → 초등학교 시간표 사용 (40분)
+   - gradeLevel이 "중등부"면 → 중학교 시간표 사용 (45분)
+   - gradeLevel이 "고등부"면 → 고등학교 시간표 사용 (50분)
    - 1~4교시를 발견하면, 무조건 4교시 종료 시간부터 1시간 점심시간 추가
    - 5교시 이후는 점심시간 1시간을 고려해서 시간 조정
-   - 예: 원본이 "5교시 13:00-13:50"이라고 되어 있어도, 점심시간 1시간 후인 "13:50-14:40"으로 변환
 
    **예시**:
    - 왼쪽 열에 "1"만 있고 월요일 셀에 "도덕" → {"title": "도덕", "days": ["월"], "startTime": "09:00", "endTime": "09:50"}
@@ -889,9 +943,20 @@ PM이나 오후가 보이면 반드시 13:00 이후로 변환!
     const baseSchedules = extractBaseSchedules(baseAnalysis);
     console.log('📚 최종 baseSchedules:', baseSchedules.length, '개');
 
+    // 4. ⭐ 자동 스케줄 최적화 (우선순위 기반 겹침 제거)
+    console.log('\n🔧 자동 스케줄 최적화 시작...');
+    const optimizationResult = optimizeSchedules(allSchedules, titledImages);
+    console.log('✨ 최적화 결과:', {
+      입력: optimizationResult.analysis.totalInput,
+      선택: optimizationResult.analysis.totalSelected,
+      제외: optimizationResult.analysis.totalRemoved
+    });
+
     const responseData = {
       success: true,
-      allSchedules: allSchedules,
+      allSchedules: allSchedules, // 원본 전체 스케줄
+      optimizedSchedules: optimizationResult.optimizedSchedules, // ⭐ 자동 최적화된 스케줄
+      optimizationAnalysis: optimizationResult.analysis, // 최적화 분석 정보
       totalSchedules: allSchedules.length,
       schedulesByImage: titledImages, // 제목이 포함된 이미지별 정보
       overallTitle: overallTitle, // 전체 제목
