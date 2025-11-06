@@ -147,12 +147,14 @@ const ScheduleOptimizationModal = ({
 
       const dayMap = {
         'MON': 1, 'TUE': 2, 'WED': 3, 'THU': 4,
-        'FRI': 5, 'SAT': 6, 'SUN': 7
+        'FRI': 5, 'SAT': 6, 'SUN': 7,
+        '월': 1, '화': 2, '수': 3, '목': 4,
+        '금': 5, '토': 6, '일': 7
       };
 
       // days가 배열이 아니면 배열로 변환
       const daysArray = Array.isArray(schedule.days) ? schedule.days : [schedule.days];
-      const mappedDays = daysArray.map(day => dayMap[day] || day).filter(d => d);
+      const mappedDays = daysArray.map(day => dayMap[day] || day).filter(d => d && typeof d === 'number');
 
       // 이미지 인덱스로 색상 가져오기
       let scheduleColor = '#9333ea'; // 기본 보라색
@@ -1093,8 +1095,8 @@ const ScheduleOptimizationModal = ({
 
         {/* 메인 컨텐츠 영역 */}
         <div className="flex flex-row flex-1 overflow-hidden" style={{ minHeight: 0 }}>
-          {/* 왼쪽: 시간표 영역 */}
-          <div className="flex-1 flex flex-col overflow-hidden">{/* 헤더를 제거하고 내용만 유지 */}
+          {/* 왼쪽: 시간표 영역 (isEmbedded 모드에서는 100% 너비) */}
+          <div className="flex-1 flex flex-col overflow-hidden" style={{ width: isEmbedded ? '100%' : 'auto' }}>{/* 헤더를 제거하고 내용만 유지 */}
 
         {/* 시간표 제목 */}
         <div className="px-5 py-3 bg-purple-50 border-b border-purple-100 flex-shrink-0">
@@ -1195,7 +1197,8 @@ const ScheduleOptimizationModal = ({
         </div>
       </div>
 
-      {/* 오른쪽: 채팅 영역 - 고정 높이 */}
+      {/* 오른쪽: 채팅 영역 - 고정 높이 (isEmbedded 모드에서는 숨김) */}
+      {!isEmbedded && (
       <div className="flex flex-col border-l border-gray-200" style={{
         width: '40%',
         maxWidth: '420px',
@@ -1309,6 +1312,7 @@ const ScheduleOptimizationModal = ({
           </form>
         </div>
       </div>
+      )}
         </div>
       </div>
   );

@@ -10,11 +10,33 @@ export const GRADE_LEVELS = {
   HIGH: 'high'               // 고등부 (17-19세)
 };
 
+// 학년부 한글 → 영어 변환
+export const GRADE_LEVEL_MAPPING = {
+  '초등부': 'elementary',
+  '초등학생': 'elementary',
+  '초등': 'elementary',
+  '중등부': 'middle',
+  '중학생': 'middle',
+  '중등': 'middle',
+  '고등부': 'high',
+  '고등학생': 'high',
+  '고등': 'high'
+};
+
 // 학년부별 기본 수업 시간 (분)
 export const DEFAULT_CLASS_DURATION = {
   [GRADE_LEVELS.ELEMENTARY]: 40,  // 초등부 40분
-  [GRADE_LEVELS.MIDDLE]: 50,       // 중등부 50분
-  [GRADE_LEVELS.HIGH]: 60         // 고등부 60분
+  '초등부': 40,
+  '초등학생': 40,
+  '초등': 40,
+  [GRADE_LEVELS.MIDDLE]: 45,       // 중등부 45분
+  '중등부': 45,
+  '중학생': 45,
+  '중등': 45,
+  [GRADE_LEVELS.HIGH]: 50,         // 고등부 50분
+  '고등부': 50,
+  '고등학생': 50,
+  '고등': 50
 };
 
 // 요일 매핑
@@ -741,19 +763,91 @@ export const extractSchedulesFromImages = async (imageFiles, progressCallback, b
     return apiResponse; // 중복 정보 그대로 반환
   }
 
-  const rawSchedules = apiResponse.allSchedules || [];
+  // ⭐ 최적화된 스케줄 우선 사용
+  const rawSchedules = apiResponse.optimizedSchedules || apiResponse.allSchedules || [];
   const schedulesByImage = apiResponse.schedulesByImage || [];
   const baseSchedules = apiResponse.baseSchedules || [];
   const overallTitle = apiResponse.overallTitle || '업로드된 시간표';
 
   console.log('📥 서버 응답:', {
-    allSchedules: rawSchedules.length,
+    optimizedSchedules: apiResponse.optimizedSchedules?.length || 0,
+    allSchedules: apiResponse.allSchedules?.length || 0,
+    사용할스케줄: rawSchedules.length,
     schedulesByImage: schedulesByImage.length,
     baseSchedules: baseSchedules.length,
     overallTitle
   });
 
+  // ⭐ gradeLevel이 null인 경우 imageTitle/overallTitle에서 추론
+  const inferGradeLevel = (title) => {
+    if (!title) return null;
+    const titleLower = title.toLowerCase();
+
+    // 초등학교 키워드
+    if (titleLower.includes('초등') || titleLower.includes('초')) {
+      return '초등부';
+    }
+    // 중학교 키워드
+    if (titleLower.includes('중등') || titleLower.includes('중학') ||
+        titleLower.match(/\d+학년.*3반/) || titleLower.includes('미리중')) {
+      return '중등부';
+    }
+    // 고등학교 키워드
+    if (titleLower.includes('고등') || titleLower.includes('고')) {
+      return '고등부';
+    }
+    return null;
+  };
+
+  // gradeLevel 보정
+  rawSchedules.forEach(schedule => {
+    if (!schedule.gradeLevel || schedule.gradeLevel === 'null') {
+      const inferredGrade = inferGradeLevel(schedule.imageTitle || overallTitle);
+      if (inferredGrade) {
+        schedule.gradeLevel = inferredGrade;
+        console.log(`🔧 gradeLevel 보정: "${schedule.title}" → ${inferredGrade} (출처: ${schedule.imageTitle || overallTitle})`);
+      }
+    }
+  });
+
   if (progressCallback) progressCallback(96);
+
+  // ⭐ 최적화된 스케줄이면 추가 처리 없이 바로 사용
+  if (apiResponse.optimizedSchedules) {
+    console.log('✅ 최적화된 스케줄 사용 - 추가 처리 건너뛰기');
+
+    // 충돌 감지 (참고용)
+    const conflicts = detectConflicts(rawSchedules);
+
+    // 요일만 한글 → 영문 변환
+    const schedulesWithEnglishDays = rawSchedules.map(schedule => {
+      let days = schedule.days;
+      if (days && Array.isArray(days)) {
+        const dayMap = {
+          '월': 'MON', '화': 'TUE', '수': 'WED', '목': 'THU',
+          '금': 'FRI', '토': 'SAT', '일': 'SUN'
+        };
+        days = days.map(day => dayMap[day] || day);
+      }
+      return { ...schedule, days, source: 'ocr' };
+    });
+
+    return {
+      age,
+      gradeLevel,
+      schedules: schedulesWithEnglishDays,
+      allSchedulesBeforeFilter: schedulesWithEnglishDays,
+      conflicts,
+      optimalCombinations: [schedulesWithEnglishDays],
+      ocrResults: [],
+      hasConflicts: conflicts.length > 0,
+      schedulesByImage: schedulesByImage,
+      baseSchedules: baseSchedules,
+      overallTitle: overallTitle,
+      optimizedSchedules: schedulesWithEnglishDays,
+      optimizationAnalysis: apiResponse.optimizationAnalysis
+    };
+  }
 
   // 병합된 시간대를 분리하는 함수
   const splitMergedTimeSlots = (schedule) => {

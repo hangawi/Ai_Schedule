@@ -587,7 +587,17 @@ const ScheduleGridSelector = ({
 
     // 시간 슬롯별 위치 계산을 위한 헬퍼 함수
     const getTimeSlotIndex = (time) => {
-      return timeSlots.findIndex(slot => slot === time);
+      // 정확히 일치하는 슬롯 찾기
+      const exactIndex = timeSlots.findIndex(slot => slot === time);
+      if (exactIndex !== -1) return exactIndex;
+
+      // 정확히 일치하지 않으면 분 단위로 계산
+      const timeMinutes = timeToMinutes(time);
+      const startMinutes = timeToMinutes(timeSlots[0]);
+
+      // 10분 단위 슬롯 인덱스 계산
+      const index = Math.floor((timeMinutes - startMinutes) / 10);
+      return Math.max(0, index);
     };
 
     return (

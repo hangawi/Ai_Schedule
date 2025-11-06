@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, X, Image as ImageIcon, Send, MessageCircle, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Upload, X, Image as ImageIcon, Send, MessageCircle, ArrowLeft, ArrowRight, Calendar } from 'lucide-react';
 import { extractSchedulesFromImages } from '../../utils/ocrUtils';
 import ScheduleOptimizationModal from '../modals/ScheduleOptimizationModal';
 
@@ -134,8 +134,30 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
 
       console.log('✅ OCR 완료. 추출된 스케줄:', result.schedules.length, '개');
 
-      setExtractedSchedules(result.schedules);
-      setSchedulesByImage(result.schedulesByImage); // 이미지별 정보 저장
+      // ⭐ 최적화된 스케줄 사용
+      const schedulesToUse = result.optimizedSchedules || result.schedules;
+      console.log('🎯 사용할 스케줄:', schedulesToUse.length, '개 (최적화 여부:', !!result.optimizedSchedules, ')');
+      console.log('📋 전체 스케줄:', result.allSchedules?.length || 0, '개');
+      console.log('🔍 스케줄 상세 (처음 3개):');
+      schedulesToUse.slice(0, 3).forEach((s, i) => {
+        console.log(`  ${i+1}. ${s.title} - days:`, s.days, `(타입: ${Array.isArray(s.days) ? 'array' : typeof s.days}) - ${s.startTime}-${s.endTime}`);
+      });
+
+      if (result.optimizationAnalysis) {
+        console.log('📊 최적화 분석:', result.optimizationAnalysis);
+      }
+
+      setExtractedSchedules(schedulesToUse);
+
+      // ⭐ schedulesByImage도 최적화된 스케줄에 맞게 필터링
+      const selectedImageNames = [...new Set(schedulesToUse.map(s => s.sourceImage))];
+      const filteredSchedulesByImage = result.schedulesByImage.filter(img =>
+        selectedImageNames.includes(img.fileName)
+      );
+      console.log('🖼️ 선택된 이미지:', selectedImageNames);
+      console.log('📸 필터링된 schedulesByImage:', filteredSchedulesByImage.length, '개');
+
+      setSchedulesByImage(filteredSchedulesByImage);
 
       // 기본 베이스 스케줄 저장 (서버에서 분석된 것)
       if (result.baseSchedules && result.baseSchedules.length > 0) {
@@ -148,6 +170,10 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
         console.log('📋 전체 제목:', result.overallTitle);
         setOverallTitle(result.overallTitle);
       }
+
+      // ⭐ 최적화된 스케줄을 바로 시간표에 표시
+      console.log('🎯 최적화된 스케줄을 시간표에 표시합니다...');
+      setFilteredSchedules(schedulesToUse);
 
       setProgress({ current: 100, total: 100, message: 'OCR 분석 완료!' });
 
@@ -195,7 +221,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
       const botMessage = {
         id: Date.now(),
         sender: 'bot',
-        text: `시간표 이미지를 분석했어요! 총 ${result.schedules.length}개의 수업을 찾았습니다.\n\n📋 발견된 반 목록:\n${classListByImage}\n\n어떤 수업을 추가하고 싶으세요?\n예: ${exampleText}`,
+        text: `시간표 이미지를 분석했어요! 총 ${result.schedules.length}개의 수업을 찾았고, 그중 ${schedulesToUse.length}개를 선택했습니다.\n\n📋 발견된 반 목록:\n${classListByImage}\n\n어떤 수업을 추가하고 싶으세요?\n예: ${exampleText}`,
         timestamp: new Date()
       };
 
@@ -439,7 +465,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full" style={{ height: '80vh', maxHeight: '80vh', maxWidth: '1200px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="bg-white rounded-lg" style={{ width: '50vw', height: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* 헤더 */}
         <div className="flex justify-between items-center p-4 border-b" style={{ flexShrink: 0 }}>
           <div className="flex items-center gap-3">
@@ -452,7 +478,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                 <ArrowLeft size={20} />
               </button>
             )}
-            <h2 className="text-xl font-bold">{showOptimizationModal ? '최적 시간표 추천' : '시간표 이미지 업로드'}</h2>
+            <h2 className="text-xl font-bold">{filteredSchedules ? '최적 시간표' : '시간표 이미지 업로드'}</h2>
           </div>
           <button
             onClick={onClose}
@@ -464,20 +490,10 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
         </div>
 
           {/* 내용 */}
-          <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
-            {/* 왼쪽: 이미지 업로드 */}
-            <div
-              className="w-1/2 border-r"
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                flexShrink: 0,
-                position: 'absolute',
-                left: showOptimizationModal ? '-50%' : '0',
-                top: 0,
-                bottom: 0,
-                transition: 'left 0.3s ease-in-out'
-              }}>
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+            {/* 분석 전: 업로드 UI만 */}
+            {!filteredSchedules ? (
+              <div className="w-full" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <div className="p-4 flex-1" style={{ overflowY: 'auto' }}>
                 <div className="space-y-4">
                   {/* 파일 선택 */}
@@ -493,11 +509,11 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isProcessing}
-                      className="w-full border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-blue-500 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full border-2 border-dashed border-gray-300 rounded-lg p-3 hover:border-blue-500 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Upload className="mx-auto mb-2 text-gray-400" size={32} />
-                      <p className="text-sm text-gray-600">
-                        클릭하여 이미지 선택 (최대 10개)
+                      <Upload className="mx-auto mb-1 text-gray-400" size={24} />
+                      <p className="text-xs text-gray-600">
+                        이미지 선택 (최대 10개)
                       </p>
                     </button>
                   </div>
@@ -527,10 +543,22 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                     </div>
                   )}
 
+                  {/* 에러 메시지 */}
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                      {error}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 진행률 + 분석 버튼 */}
+              {selectedImages.length > 0 && !extractedSchedules && (
+                <div className="border-t bg-white" style={{ flexShrink: 0 }}>
                   {/* 진행률 */}
                   {isProcessing && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
+                    <div className="px-4 pt-3 pb-2">
+                      <div className="flex justify-between text-sm mb-1">
                         <span>{progress.message}</span>
                         <span>{progress.current}%</span>
                       </div>
@@ -543,145 +571,91 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                     </div>
                   )}
 
-                  {/* 에러 메시지 */}
-                  {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-                      {error}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* 분석 버튼 - 맨 아래 고정 */}
-              {selectedImages.length > 0 && !extractedSchedules && (
-                <div className="p-4 border-t bg-white" style={{ flexShrink: 0 }}>
-                  <button
-                    onClick={() => handleProcessImages()}
-                    disabled={isProcessing}
-                    className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isProcessing ? '분석 중...' : '시간표 분석 시작'}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* 오른쪽: 채팅 */}
-            <div
-              className="w-1/2 bg-gray-50"
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                flexShrink: 0,
-                minHeight: 0,
-                maxHeight: '100%',
-                position: 'absolute',
-                left: showOptimizationModal ? '-50%' : '50%',
-                top: 0,
-                bottom: 0,
-                transition: 'left 0.3s ease-in-out'
-              }}>
-              {/* 채팅 메시지 영역 */}
-              <div className="p-4 bg-gray-50" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-                {chatHistory.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-gray-400">
-                    <div className="text-center">
-                      <MessageCircle size={48} className="mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">이미지를 분석하면 채팅이 시작됩니다</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {chatHistory.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div
-                          className={`max-w-[80%] px-4 py-2 rounded-lg ${
-                            msg.sender === 'user'
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-white border border-gray-200'
-                          }`}
-                        >
-                          <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
-                        </div>
-                      </div>
-                    ))}
-                    {isFilteringChat && (
-                      <div className="flex justify-start">
-                        <div className="bg-white border border-gray-200 px-4 py-2 rounded-lg">
-                          <p className="text-sm text-gray-500">생각 중...</p>
-                        </div>
-                      </div>
-                    )}
-                    <div ref={chatEndRef} />
-                  </div>
-                )}
-              </div>
-
-              {/* 채팅 입력 */}
-              <div className="p-4 border-t bg-white" style={{ flexShrink: 0 }}>
-                {/* 다음으로 버튼 */}
-                {filteredSchedules && !showOptimizationModal && (
-                  <div className="mb-2">
+                  {/* 분석 버튼 */}
+                  <div className="p-4">
                     <button
-                      onClick={() => {
-                        setSlideDirection('left');
-                        setTimeout(() => setShowOptimizationModal(true), 50);
-                      }}
-                      className="w-full px-3 py-2 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all flex items-center justify-center gap-2"
+                      onClick={() => handleProcessImages()}
+                      disabled={isProcessing}
+                      className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      최적 시간표 보기
-                      <ArrowRight size={16} />
+                      {isProcessing ? '분석 중...' : '시간표 분석 시작'}
                     </button>
                   </div>
-                )}
-
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={chatMessage}
-                    onChange={(e) => setChatMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendChat()}
-                    disabled={!extractedSchedules || isFilteringChat}
-                    placeholder={extractedSchedules ? "예: 공연반만 할거야" : "먼저 이미지를 분석해주세요"}
-                    className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  />
-                  <button
-                    onClick={handleSendChat}
-                    disabled={!extractedSchedules || !chatMessage.trim() || isFilteringChat}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Send size={18} />
-                  </button>
                 </div>
+              )}
               </div>
-            </div>
+            ) : (
+              /* 분석 후: 왼쪽 시간표 (70%) + 오른쪽 채팅 (30%) */
+              <>
+                {/* 왼쪽: 시간표 표시 */}
+                <div style={{ width: '70%', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: '1px solid #e5e7eb' }}>
+                  <ScheduleOptimizationModal
+                    key={JSON.stringify(filteredSchedules.map(s => s.title + s.startTime))}
+                    initialSchedules={filteredSchedules}
+                    schedulesByImage={schedulesByImage}
+                    overallTitle={overallTitle}
+                    onClose={null}
+                    onSchedulesApplied={handleSchedulesApplied}
+                    isEmbedded={true}
+                    hideBackButton={true}
+                  />
+                </div>
 
-            {/* 최적 시간표 패널 - 슬라이드 */}
-            {filteredSchedules && (
-              <div
-                style={{
-                  position: 'absolute',
-                  left: showOptimizationModal ? '0' : '100%',
-                  top: 0,
-                  width: '100%',
-                  height: '100%',
-                  transition: 'left 0.3s ease-in-out',
-                  backgroundColor: 'white'
-                }}
-              >
-                <ScheduleOptimizationModal
-                  key={JSON.stringify(filteredSchedules.map(s => s.title + s.startTime))}
-                  initialSchedules={filteredSchedules}
-                  schedulesByImage={schedulesByImage}
-                  overallTitle={overallTitle}
-                  onClose={() => setShowOptimizationModal(false)}
-                  onSchedulesApplied={handleSchedulesApplied}
-                  isEmbedded={true}
-                />
-              </div>
+                {/* 오른쪽: 채팅 */}
+                <div style={{ width: '30%', display: 'flex', flexDirection: 'column', backgroundColor: '#f9fafb' }}>
+                  {/* 채팅 메시지 */}
+                  <div className="p-3" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+                    {chatHistory.length === 0 ? (
+                      <div className="h-full flex items-center justify-center text-gray-400">
+                        <div className="text-center">
+                          <MessageCircle size={32} className="mx-auto mb-2 opacity-50" />
+                          <p className="text-xs">채팅으로 필터링</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {chatHistory.map((msg) => (
+                          <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[85%] px-3 py-1.5 rounded-lg ${msg.sender === 'user' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200'}`}>
+                              <p className="text-xs whitespace-pre-wrap">{msg.text}</p>
+                            </div>
+                          </div>
+                        ))}
+                        {isFilteringChat && (
+                          <div className="flex justify-start">
+                            <div className="bg-white border border-gray-200 px-3 py-1.5 rounded-lg">
+                              <p className="text-xs text-gray-500">생각 중...</p>
+                            </div>
+                          </div>
+                        )}
+                        <div ref={chatEndRef} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 채팅 입력 */}
+                  <div className="p-2 border-t bg-white" style={{ flexShrink: 0 }}>
+                    <div className="flex gap-1">
+                      <input
+                        type="text"
+                        value={chatMessage}
+                        onChange={(e) => setChatMessage(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSendChat()}
+                        disabled={!extractedSchedules || isFilteringChat}
+                        placeholder="예: 공연반만"
+                        className="flex-1 px-2 py-1.5 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
+                      />
+                      <button
+                        onClick={handleSendChat}
+                        disabled={!extractedSchedules || !chatMessage.trim() || isFilteringChat}
+                        className="px-2 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        <Send size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </div>
