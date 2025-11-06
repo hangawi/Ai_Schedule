@@ -25,6 +25,10 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
   const [chatHistory, setChatHistory] = useState([]);
   const [isFilteringChat, setIsFilteringChat] = useState(false);
 
+  // 대화형 추천 상태
+  const [userProfile, setUserProfile] = useState({}); // 나이, 학년 등
+  const [conversationHistory, setConversationHistory] = useState([]); // AI용 대화 히스토리
+
   // OCR 결과 및 모달
   const [extractedSchedules, setExtractedSchedules] = useState(null);
   const [schedulesByImage, setSchedulesByImage] = useState(null); // 이미지별 스케줄 정보
@@ -33,6 +37,10 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
   const [filteredSchedules, setFilteredSchedules] = useState(null);
   const [showOptimizationModal, setShowOptimizationModal] = useState(false);
   const [slideDirection, setSlideDirection] = useState('left'); // 'left' or 'right'
+
+  // 중복 감지 상태
+  const [duplicateInfo, setDuplicateInfo] = useState(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
   const fileInputRef = useRef(null);
   const chatEndRef = useRef(null);
@@ -91,7 +99,9 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
   };
 
   // OCR 처리
-  const handleProcessImages = async () => {
+  const handleProcessImages = async (skipDuplicateCheck = false) => {
+    console.log('🎯 [handleProcessImages] 호출됨 - skipDuplicateCheck:', skipDuplicateCheck, `(타입: ${typeof skipDuplicateCheck})`);
+
     if (selectedImages.length === 0) {
       setError('최소 1개 이상의 이미지를 선택해주세요.');
       return;
@@ -109,7 +119,18 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
 
       const result = await extractSchedulesFromImages(selectedImages, (progressPercent) => {
         setProgress({ current: progressPercent, total: 100, message: `분석 중... ${progressPercent}%` });
-      });
+      }, null, skipDuplicateCheck);
+
+      console.log('✅ 서버 응답:', result);
+
+      // 🔍 중복 감지 처리
+      if (result.hasDuplicates && result.duplicates && result.duplicates.length > 0) {
+        console.log('⚠️ 중복 이미지 발견:', result.duplicates);
+        setDuplicateInfo(result);
+        setShowDuplicateModal(true);
+        setIsProcessing(false);
+        return; // OCR 처리 중단
+      }
 
       console.log('✅ OCR 완료. 추출된 스케줄:', result.schedules.length, '개');
 
@@ -214,15 +235,42 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
     try {
       const token = localStorage.getItem('token');
 
+      // 🔍 대화형 추천 요청 감지
+      const recommendKeywords = ['추천', '시간표', '조율', '겹치지 않게', '균형', '조화', '학년', '살'];
+      const isRecommendRequest = recommendKeywords.some(kw => currentMessage.includes(kw));
+
       console.log('📤 전송 데이터:', {
         chatMessage: currentMessage,
+        isRecommendRequest,
         extractedSchedulesCount: extractedSchedules?.length,
         schedulesByImageCount: schedulesByImage?.length,
         baseSchedulesCount: baseSchedules?.length,
-        baseSchedules: baseSchedules?.slice(0, 3) // 처음 3개만 출력
+        userProfile,
+        conversationHistoryLength: conversationHistory.length
       });
 
-      const response = await fetch(`${API_BASE_URL}/api/ocr-chat/filter`, {
+      let response;
+
+      // 대화형 추천 API vs 필터링 API 선택
+      if (isRecommendRequest) {
+        console.log('🤖 대화형 추천 API 호출');
+        response = await fetch(`${API_BASE_URL}/api/ocr-chat/recommend`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-auth-token': token
+          },
+          body: JSON.stringify({
+            chatMessage: currentMessage,
+            extractedSchedules: extractedSchedules,
+            schedulesByImage: schedulesByImage,
+            conversationHistory: conversationHistory,
+            userProfile: userProfile
+          })
+        });
+      } else {
+        console.log('🔎 필터링 API 호출');
+        response = await fetch(`${API_BASE_URL}/api/ocr-chat/filter`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -236,34 +284,61 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
           imageDescription: `이미지 ${selectedImages.length}개에서 추출된 시간표`
         })
       });
+      }
 
       const data = await response.json();
 
-      console.log('📥 서버 응답 받음:', {
-        success: data.success,
-        action: data.action,
-        hasFilteredSchedules: !!data.filteredSchedules,
-        filteredSchedulesType: data.filteredSchedules ? (Array.isArray(data.filteredSchedules) ? 'array' : typeof data.filteredSchedules) : 'undefined',
-        filteredSchedulesLength: data.filteredSchedules?.length
-      });
+      console.log('📥 서버 응답 받음:', data);
 
       if (!data.success) {
-        throw new Error(data.error || '필터링 실패');
+        throw new Error(data.error || '처리 실패');
       }
 
-      console.log('✅ 채팅 필터링 완료:', data);
+      // 🔄 대화형 추천 응답 처리
+      if (isRecommendRequest && data.intent) {
+        console.log('🤖 대화형 추천 응답:', data.intent);
 
-      const botMessage = {
-        id: Date.now() + 1,
-        sender: 'bot',
-        text: data.explanation,
-        timestamp: new Date()
-      };
+        // 대화 히스토리 및 사용자 프로필 업데이트
+        if (data.conversationHistory) {
+          setConversationHistory(data.conversationHistory);
+        }
+        if (data.userProfile) {
+          setUserProfile(data.userProfile);
+          console.log('👤 사용자 프로필 업데이트:', data.userProfile);
+        }
 
-      setChatHistory(prev => [...prev, botMessage]);
+        const botMessage = {
+          id: Date.now() + 1,
+          sender: 'bot',
+          text: data.explanation || data.nextQuestion || '알 수 없는 응답입니다.',
+          timestamp: new Date()
+        };
+        setChatHistory(prev => [...prev, botMessage]);
 
-      // action === "filter"면 바로 모달 띄우기
-      if (data.action === 'filter' && data.filteredSchedules && data.filteredSchedules.length > 0) {
+        // intent가 "recommend"이면 추천된 시간표 표시
+        if (data.intent === 'recommend' && data.recommendedSchedule && data.recommendedSchedule.length > 0) {
+          console.log('📋 추천된 스케줄:', data.recommendedSchedule.length, '개');
+          setFilteredSchedules(data.recommendedSchedule);
+
+          // 모달 띄우기
+          setSlideDirection('left');
+          setTimeout(() => {
+            setShowOptimizationModal(true);
+          }, 50);
+        }
+      }
+      // 🔎 필터링 응답 처리
+      else {
+        const botMessage = {
+          id: Date.now() + 1,
+          sender: 'bot',
+          text: data.explanation,
+          timestamp: new Date()
+        };
+        setChatHistory(prev => [...prev, botMessage]);
+
+        // action === "filter"면 바로 모달 띄우기
+        if (data.action === 'filter' && data.filteredSchedules && data.filteredSchedules.length > 0) {
         console.log('📋 필터링된 스케줄:', data.filteredSchedules.length, '개');
         console.log('첫 번째 스케줄:', data.filteredSchedules[0]);
         console.log('마지막 스케줄:', data.filteredSchedules[data.filteredSchedules.length - 1]);
@@ -299,6 +374,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
           timestamp: new Date()
         };
         setChatHistory(prev => [...prev, warningMessage]);
+      }
       }
 
     } catch (err) {
@@ -480,7 +556,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
               {selectedImages.length > 0 && !extractedSchedules && (
                 <div className="p-4 border-t bg-white" style={{ flexShrink: 0 }}>
                   <button
-                    onClick={handleProcessImages}
+                    onClick={() => handleProcessImages()}
                     disabled={isProcessing}
                     className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -609,6 +685,72 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
             )}
           </div>
         </div>
+
+        {/* 중복 이미지 확인 모달 */}
+        {showDuplicateModal && duplicateInfo && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style={{ zIndex: 9999 }}>
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-bold mb-4">⚠️ 중복된 이미지 발견</h3>
+              <div className="space-y-3 mb-6">
+                <p className="text-gray-700">다음 이미지가 이미 업로드된 이미지와 중복됩니다:</p>
+                {duplicateInfo.duplicates.map((dup, idx) => (
+                  <div key={idx} className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                    <p className="font-semibold text-sm">"{dup.filename}"</p>
+                    <p className="text-xs text-gray-600 mt-1">
+                      → "{dup.duplicateWith}"와 {dup.similarity}% 유사
+                    </p>
+                  </div>
+                ))}
+                <p className="text-sm text-gray-600 mt-4">
+                  중복된 이미지를 제거하고 계속하시겠습니까?
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    console.log('🔘 중복 제거하고 계속 버튼 클릭');
+                    console.log('🗑️ 중복 이미지 제거 중:', duplicateInfo.duplicates);
+
+                    // 중복된 이미지의 인덱스 추출
+                    const duplicateIndices = duplicateInfo.duplicates.map(dup => dup.index);
+                    console.log('📋 제거할 인덱스:', duplicateIndices);
+
+                    // 중복되지 않은 이미지만 필터링
+                    const filteredImages = selectedImages.filter((_, index) => !duplicateIndices.includes(index));
+                    const filteredPreviews = imagePreviews.filter((_, index) => !duplicateIndices.includes(index));
+
+                    console.log(`✅ ${selectedImages.length}개 → ${filteredImages.length}개로 감소`);
+
+                    // 상태 업데이트
+                    setSelectedImages(filteredImages);
+                    setImagePreviews(filteredPreviews);
+
+                    // 모달 닫기
+                    setShowDuplicateModal(false);
+                    setDuplicateInfo(null);
+
+                    // 중복 체크 건너뛰고 OCR 처리
+                    console.log('🔄 중복 제거 후 OCR 처리 시작');
+                    handleProcessImages(true);
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  중복 제거하고 계속
+                </button>
+                <button
+                  onClick={() => {
+                    setShowDuplicateModal(false);
+                    setDuplicateInfo(null);
+                    setIsProcessing(false);
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
   );
 };

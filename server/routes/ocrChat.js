@@ -9,4 +9,10 @@ const ocrChatController = require('../controllers/ocrChatController');
  */
 router.post('/filter', auth, ocrChatController.filterSchedulesByChat);
 
+/**
+ * POST /api/ocr-chat/recommend
+ * 대화형 시간표 추천 (컨텍스트 유지형)
+ */
+router.post('/recommend', auth, ocrChatController.conversationalRecommend);
+
 module.exports = router;

@@ -1,5 +1,6 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { generateOcrChatPrompt } = require('../prompts/ocrChatFilter');
+const { generateConversationalPrompt, addToHistory, updateUserProfile } = require('../prompts/conversationalScheduleRecommender');
 
 // Gemini AI 초기화
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -665,6 +666,133 @@ exports.filterSchedulesByChat = async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'OCR 채팅 필터링 실패',
+      details: error.message
+    });
+  }
+};
+
+/**
+ * 대화형 시간표 추천
+ * POST /api/ocr-chat/recommend
+ */
+exports.conversationalRecommend = async (req, res) => {
+  try {
+    const {
+      chatMessage,
+      extractedSchedules,
+      schedulesByImage,
+      conversationHistory = [],
+      userProfile = {}
+    } = req.body;
+
+    console.log('💬 대화형 추천 요청:', chatMessage);
+    console.log('👤 사용자 프로필:', userProfile);
+    console.log('📜 대화 히스토리:', conversationHistory.length, '개');
+
+    // 입력 검증
+    if (!chatMessage || !chatMessage.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: '메시지가 비어있습니다'
+      });
+    }
+
+    // 대화형 프롬프트 생성
+    const prompt = generateConversationalPrompt(
+      chatMessage,
+      extractedSchedules,
+      conversationHistory,
+      userProfile
+    );
+
+    // Gemini API 호출
+    const modelNames = ['gemini-2.0-flash-exp', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    let aiResponse = null;
+    let lastError = null;
+
+    for (const modelName of modelNames) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            maxOutputTokens: 8192,
+            temperature: 0.3 // 약간 창의적으로
+          }
+        });
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        aiResponse = response.text();
+        console.log(`✅ ${modelName} 모델 성공!`);
+        break;
+      } catch (error) {
+        console.log(`❌ ${modelName} 실패: ${error.message}`);
+        lastError = error;
+        continue;
+      }
+    }
+
+    if (!aiResponse) {
+      throw lastError || new Error('모든 모델 시도 실패');
+    }
+
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🤖 대화형 AI 응답:');
+    console.log(aiResponse);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+    // JSON 파싱
+    let parsed = null;
+
+    try {
+      const jsonMatch = aiResponse.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[1]);
+      } else {
+        const codeMatch = aiResponse.match(/```\s*([\s\S]*?)\s*```/);
+        if (codeMatch) {
+          parsed = JSON.parse(codeMatch[1]);
+        } else {
+          parsed = JSON.parse(aiResponse);
+        }
+      }
+    } catch (parseError) {
+      console.error('JSON 파싱 실패:', parseError);
+      return res.json({
+        success: false,
+        error: 'AI 응답 파싱 실패',
+        rawResponse: aiResponse.substring(0, 500)
+      });
+    }
+
+    // 대화 히스토리 업데이트
+    const updatedHistory = addToHistory(
+      addToHistory(conversationHistory, 'user', chatMessage),
+      'assistant',
+      parsed.explanation
+    );
+
+    // 사용자 프로필 업데이트
+    const updatedProfile = updateUserProfile(userProfile, parsed.extractedInfo || {});
+
+    res.json({
+      success: true,
+      intent: parsed.intent,
+      understood: parsed.understood,
+      extractedInfo: parsed.extractedInfo,
+      nextQuestion: parsed.nextQuestion,
+      recommendedSchedule: parsed.recommendedSchedule || [],
+      conflicts: parsed.conflicts || [],
+      explanation: parsed.explanation,
+      conversationHistory: updatedHistory,
+      userProfile: updatedProfile
+    });
+
+  } catch (error) {
+    console.error('❌ 대화형 추천 에러:', error);
+    res.status(500).json({
+      success: false,
+      error: '대화형 추천 실패',
       details: error.message
     });
   }

@@ -2,9 +2,13 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const multer = require('multer');
 const fs = require('fs').promises;
 const path = require('path');
+const { detectDuplicate, calculateImageHash } = require('../utils/imageHasher');
 
 // Gemini AI 초기화
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// 업로드된 이미지 해시 저장소 (세션별 관리)
+const imageHashStore = new Map();
 
 /**
  * 연속된 같은 제목의 스케줄을 하나로 병합
@@ -263,18 +267,83 @@ exports.analyzeScheduleImages = async (req, res) => {
       return res.status(400).json({ error: '최소 1개 이상의 이미지 파일이 필요합니다.' });
     }
 
-    const { birthdate } = req.body;
-
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-    const scheduleResults = [];
+    const { birthdate, userId, skipDuplicateCheck } = req.body;
+    const sessionKey = userId || 'default';
 
     console.log(`📸 총 ${req.files.length}개의 이미지 처리 시작...`);
+    console.log(`🔍 전체 req.body:`, JSON.stringify(req.body));
+    console.log(`🔍 skipDuplicateCheck 파라미터:`, skipDuplicateCheck, `(타입: ${typeof skipDuplicateCheck})`);
 
-    // 각 이미지에서 시간표 정보 추출
+    // 세션별 이미지 저장소 초기화
+    if (!imageHashStore.has(sessionKey)) {
+      imageHashStore.set(sessionKey, []);
+    }
+    const existingImages = imageHashStore.get(sessionKey);
+
+    // 🔍 1단계: 중복 체크 (skipDuplicateCheck가 false일 때만)
+    // 문자열 'true'도 체크 (FormData는 문자열로 전달됨)
+    const shouldSkipDuplicateCheck = skipDuplicateCheck === true || skipDuplicateCheck === 'true';
+    console.log(`🔍 중복 체크 건너뛰기 여부:`, shouldSkipDuplicateCheck);
+
+    if (!shouldSkipDuplicateCheck) {
+      console.log('🔍 중복 이미지 감지 중...');
+      console.log(`📦 기존 이미지 저장소: ${existingImages.length}개`);
+      const duplicates = [];
+      const currentBatchImages = []; // 현재 업로드 배치 내 이미지들
+
+      for (let i = 0; i < req.files.length; i++) {
+        const file = req.files[i];
+        console.log(`🔍 [${i + 1}/${req.files.length}] ${file.originalname} 중복 체크...`);
+
+        // 기존 저장소 + 현재 배치의 이미 체크한 이미지들과 비교
+        const allImagesToCompare = [...existingImages, ...currentBatchImages];
+        const duplicateCheck = await detectDuplicate(file.buffer, file.originalname, allImagesToCompare, 95);
+        console.log(`   → 유사도: ${duplicateCheck.similarity || 0}%, 중복: ${duplicateCheck.isDuplicate ? 'YES' : 'NO'}`);
+
+        if (duplicateCheck.isDuplicate) {
+          console.log(`⚠️ 중복 발견: ${file.originalname} ≈ ${duplicateCheck.duplicateWith} (${duplicateCheck.similarity}%)`);
+          duplicates.push({
+            filename: file.originalname,
+            duplicateWith: duplicateCheck.duplicateWith,
+            similarity: duplicateCheck.similarity,
+            index: i
+          });
+        } else {
+          // 중복이 아니면 현재 배치에 추가 (해시 포함)
+          currentBatchImages.push({
+            buffer: file.buffer,
+            hash: duplicateCheck.newHash,
+            filename: file.originalname
+          });
+        }
+      }
+
+      // 중복이 발견되면 즉시 반환 (OCR 처리 안 함)
+      if (duplicates.length > 0) {
+        console.log(`⚠️ ${duplicates.length}개 중복 발견 - 사용자 확인 대기`);
+        return res.json({
+          success: true,
+          hasDuplicates: true,
+          duplicates: duplicates,
+          totalImages: req.files.length,
+          message: '중복된 이미지가 발견되었습니다. 처리 방법을 선택해주세요.'
+        });
+      }
+
+      console.log('✅ 중복 없음 - OCR 처리 시작');
+    } else {
+      console.log('⏭️ 중복 체크 스킵 - 바로 OCR 처리');
+    }
+
+    // 2단계: OCR 처리
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const scheduleResults = [];
+    const duplicates = []; // 중복 체크를 건너뛴 경우 빈 배열
+
     for (let i = 0; i < req.files.length; i++) {
       const file = req.files[i];
       try {
-        console.log(`🔄 [${i + 1}/${req.files.length}] ${file.originalname} 처리 중...`);
+        console.log(`🔄 [${i + 1}/${req.files.length}] ${file.originalname} OCR 처리 중...`);
 
         const imageBuffer = file.buffer;
         const mimeType = file.mimetype;
@@ -681,6 +750,14 @@ PM이나 오후가 보이면 반드시 13:00 이후로 변환!
           imageTitle: extractedTitle // AI가 추출한 제목
         });
 
+        // 이미지 해시 계산 및 저장
+        const imageHash = await calculateImageHash(file.buffer);
+        existingImages.push({
+          buffer: file.buffer,
+          hash: imageHash,
+          filename: file.originalname
+        });
+
       } catch (error) {
         console.error(`이미지 분석 실패 (${file.originalname}):`, error);
         scheduleResults.push({
@@ -779,6 +856,7 @@ PM이나 오후가 보이면 반드시 13:00 이후로 변환!
       overallTitle: overallTitle, // 전체 제목
       baseSchedules: baseSchedules, // 기본 베이스 스케줄 (학교)
       baseAnalysis: baseAnalysis, // 기본 베이스 분석 결과
+      duplicates: duplicates, // 중복 감지된 이미지 목록
     };
 
     console.log('📤 응답 전송 중... (데이터 크기:', JSON.stringify(responseData).length, 'bytes)');
