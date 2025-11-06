@@ -4,6 +4,7 @@ import { formatWeeklySchedule, summarizeSchedule } from '../../utils/ocrUtils';
 import ScheduleGridSelector from '../tabs/ScheduleGridSelector';
 import { detectConflicts, generateOptimizationQuestions, optimizeScheduleWithGPT } from '../../utils/scheduleOptimizer';
 import { COLOR_PALETTE, getColorForImageIndex } from '../../utils/scheduleAnalysis/assignScheduleColors';
+import OriginalScheduleModal from './OriginalScheduleModal';
 
 const ScheduleOptimizationModal = ({
   combinations,
@@ -76,6 +77,7 @@ const ScheduleOptimizationModal = ({
     isProcessing: false
   }); // AI 최적화 상태
   const [hoveredImageIndex, setHoveredImageIndex] = useState(null); // hover된 이미지 인덱스
+  const [selectedImageForOriginal, setSelectedImageForOriginal] = useState(null); // 원본 시간표 모달용
   const chatEndRef = useRef(null);
   const chatContainerRef = useRef(null);
 
@@ -1127,9 +1129,11 @@ const ScheduleOptimizationModal = ({
                   return (
                     <div
                       key={idx}
-                      className="flex items-center gap-2 cursor-pointer transition-all"
+                      className="flex items-center gap-2 cursor-pointer transition-all hover:bg-purple-50 px-2 py-1 rounded"
                       onMouseEnter={() => setHoveredImageIndex(idx)}
                       onMouseLeave={() => setHoveredImageIndex(null)}
+                      onClick={() => setSelectedImageForOriginal({ data: imageData, index: idx })}
+                      title="클릭하여 원본 시간표 전체 보기"
                     >
                       <div
                         className={`w-4 h-4 rounded border-2 transition-all ${isHovered ? 'scale-125' : ''}`}
@@ -1331,10 +1335,23 @@ const ScheduleOptimizationModal = ({
       </div>
   );
 
-  return isEmbedded ? modalContent : (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-6 overflow-y-auto">
-      {modalContent}
-    </div>
+  return (
+    <>
+      {isEmbedded ? modalContent : (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-6 overflow-y-auto">
+          {modalContent}
+        </div>
+      )}
+
+      {/* 원본 시간표 모달 */}
+      {selectedImageForOriginal && (
+        <OriginalScheduleModal
+          imageData={selectedImageForOriginal.data}
+          imageIndex={selectedImageForOriginal.index}
+          onClose={() => setSelectedImageForOriginal(null)}
+        />
+      )}
+    </>
   );
 };
 
