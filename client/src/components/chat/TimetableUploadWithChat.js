@@ -29,6 +29,11 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
   const [userProfile, setUserProfile] = useState({}); // 나이, 학년 등
   const [conversationHistory, setConversationHistory] = useState([]); // AI용 대화 히스토리
 
+  // 시간표 히스토리 및 롤백 기능 (ScheduleOptimizationModal과 동일)
+  const [originalSchedule, setOriginalSchedule] = useState(null); // 맨 처음 원본
+  const [scheduleHistory, setScheduleHistory] = useState([]); // 단계별 히스토리
+  const [redoStack, setRedoStack] = useState([]); // Redo 스택
+
   // OCR 결과 및 모달
   const [extractedSchedules, setExtractedSchedules] = useState(null);
   const [schedulesByImage, setSchedulesByImage] = useState(null); // 이미지별 스케줄 정보
@@ -149,6 +154,12 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
 
       setExtractedSchedules(schedulesToUse);
 
+      // ⭐ 원본 시간표 저장 (롤백용)
+      if (!originalSchedule) {
+        setOriginalSchedule(JSON.parse(JSON.stringify(schedulesToUse)));
+        console.log('💾 원본 시간표 저장:', schedulesToUse.length, '개');
+      }
+
       // ⭐ schedulesByImage도 최적화된 스케줄에 맞게 필터링
       const selectedImageNames = [...new Set(schedulesToUse.map(s => s.sourceImage))];
       const filteredSchedulesByImage = result.schedulesByImage.filter(img =>
@@ -261,67 +272,83 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
     try {
       const token = localStorage.getItem('token');
 
-      // 🔍 대화형 추천 요청 감지
-      const recommendKeywords = ['추천', '시간표', '조율', '겹치지 않게', '균형', '조화', '학년', '살'];
-      const isRecommendRequest = recommendKeywords.some(kw => currentMessage.includes(kw));
+      // 직전 봇 응답 찾기 (대화 컨텍스트 유지)
+      const lastBotMessage = chatHistory
+        .slice()
+        .reverse()
+        .find(msg => msg.sender === 'bot' && !msg.text.includes('💭'));
+      const lastAiResponse = lastBotMessage ? lastBotMessage.text : null;
 
-      console.log('📤 전송 데이터:', {
-        chatMessage: currentMessage,
-        isRecommendRequest,
-        extractedSchedulesCount: extractedSchedules?.length,
-        schedulesByImageCount: schedulesByImage?.length,
-        baseSchedulesCount: baseSchedules?.length,
-        userProfile,
-        conversationHistoryLength: conversationHistory.length
+      console.log('📤 /api/schedule/chat 호출:', {
+        message: currentMessage,
+        currentScheduleCount: extractedSchedules?.length,
+        originalScheduleCount: originalSchedule?.length,
+        historyLength: scheduleHistory.length,
+        redoStackLength: redoStack.length,
+        lastAiResponse: lastAiResponse ? '있음' : '없음'
       });
 
-      let response;
-
-      // 대화형 추천 API vs 필터링 API 선택
-      if (isRecommendRequest) {
-        console.log('🤖 대화형 추천 API 호출');
-        response = await fetch(`${API_BASE_URL}/api/ocr-chat/recommend`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-auth-token': token
-          },
-          body: JSON.stringify({
-            chatMessage: currentMessage,
-            extractedSchedules: extractedSchedules,
-            schedulesByImage: schedulesByImage,
-            conversationHistory: conversationHistory,
-            userProfile: userProfile
-          })
-        });
-      } else {
-        console.log('🔎 필터링 API 호출');
-        response = await fetch(`${API_BASE_URL}/api/ocr-chat/filter`, {
+      // ⭐ 통합 API 호출 (/api/schedule/chat)
+      const response = await fetch(`${API_BASE_URL}/api/schedule/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-auth-token': token
         },
         body: JSON.stringify({
-          chatMessage: currentMessage,
-          extractedSchedules: extractedSchedules,
-          schedulesByImage: schedulesByImage, // 이미지별 정보 추가
-          baseSchedules: baseSchedules, // 기본 베이스 스케줄 추가 (학교 시간표)
-          imageDescription: `이미지 ${selectedImages.length}개에서 추출된 시간표`
+          message: currentMessage,
+          currentSchedule: extractedSchedules,
+          originalSchedule: originalSchedule || extractedSchedules,
+          scheduleHistory: scheduleHistory,
+          lastAiResponse: lastAiResponse,
+          redoStack: redoStack
         })
       });
-      }
 
       const data = await response.json();
 
-      console.log('📥 서버 응답 받음:', data);
+      console.log('📥 서버 응답:', data.action, '|', extractedSchedules.length, '→', data.schedule?.length || 0);
 
       if (!data.success) {
         throw new Error(data.error || '처리 실패');
       }
 
-      // 🔄 대화형 추천 응답 처리
-      if (isRecommendRequest && data.intent) {
+      // ⭐ 시간표 업데이트 (ScheduleOptimizationModal 로직과 동일)
+      if (data.action === 'delete' || data.action === 'add') {
+        // 현재 상태를 히스토리에 저장
+        setScheduleHistory(prev => [...prev, extractedSchedules]);
+        setRedoStack([]);
+        setExtractedSchedules(data.schedule);
+        setFilteredSchedules(data.schedule);
+      } else if (data.action === 'redo') {
+        setExtractedSchedules(data.schedule);
+        setFilteredSchedules(data.schedule);
+        setRedoStack(prev => prev.slice(0, -1));
+        setScheduleHistory(prev => [...prev, extractedSchedules]);
+      } else if (data.action === 'step_back') {
+        setExtractedSchedules(data.schedule);
+        setFilteredSchedules(data.schedule);
+        setRedoStack(prev => [...prev, extractedSchedules]);
+        setScheduleHistory(prev => prev.slice(0, -1));
+      } else if (data.action === 'undo') {
+        setExtractedSchedules(data.schedule);
+        setFilteredSchedules(data.schedule);
+        setScheduleHistory([]);
+      } else if (data.action === 'question') {
+        console.log('💡 추천 응답 - 시간표 변경 없음');
+      }
+
+      // 봇 응답 메시지 추가
+      const botMessage = {
+        id: Date.now() + 1,
+        sender: 'bot',
+        text: data.explanation,
+        timestamp: new Date()
+      };
+      setChatHistory(prev => [...prev, botMessage]);
+
+      // 🔄 대화형 추천 응답 처리 (기존 코드 유지)
+      if (false && data.intent) {  // 비활성화
         console.log('🤖 대화형 추천 응답:', data.intent);
 
         // 대화 히스토리 및 사용자 프로필 업데이트
