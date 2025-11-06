@@ -111,74 +111,91 @@ ${schedules.map((s, idx) => `${idx}. ${s.title} (gradeLevel: ${s.gradeLevel || '
   }
 }
 
-function categorizeSchedule(schedule, imageTitle) {
-  const title = (schedule.title || '').toLowerCase();
-  const image = (imageTitle || '').toLowerCase();
-  const description = (schedule.description || '').toLowerCase();
-  const combined = `${title} ${image} ${description}`;
+// Phase 2: LLM 기반 스케줄 카테고리 판단
+async function categorizeScheduleLLM(schedule, imageTitle) {
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
 
-  // 1순위: 학교 (imageTitle 기준으로 우선 판단)
-  const schoolPatterns = [
-    /초$/,           // "○○초"
-    /중$/,           // "미리중", "○○중"
-    /고$/,           // "○○고"
-    /초등학교/,
-    /중학교/,
-    /고등학교/,
-    /\d+학년.*\d+반/, // "1학년 3반"
-  ];
+    const prompt = `
+당신은 학생 시간표 분류 전문가입니다.
 
-  const hasSchoolPattern = schoolPatterns.some(pattern => pattern.test(image));
+**수업 정보**:
+- 제목: ${schedule.title}
+- 이미지 제목: ${imageTitle}
+- 설명: ${schedule.description || 'null'}
+- 요일: ${schedule.days?.join(', ') || 'null'}
+- 시간: ${schedule.startTime} - ${schedule.endTime}
 
-  if (
-    !combined.includes('학원') &&
-    (hasSchoolPattern ||
-    combined.includes('학교') ||
-    combined.includes('초등부') ||
-    combined.includes('중등부') ||
-    combined.includes('고등부'))
-  ) {
-    return { category: '학교', priority: 1 };
+**카테고리 분류 기준**:
+1. **학교** (최우선): 초등학교, 중학교, 고등학교 정규 수업
+   - 판단 기준: 이미지 제목이 "○○초", "○○중", "○○고", "초등학교", "중학교", "고등학교", "1학년 3반" 등
+   - "학원"이라는 단어가 명확히 있으면 학교가 아님!
+   - "축구 아카데미", "댄스 스튜디오" 등은 학교가 아님!
+
+2. **공부학원** (2순위): 영어, 수학, 국어 등 학습 학원
+   - 판단 기준: "영어학원", "수학학원", "국어", "과학", "논술" 등
+
+3. **학습지** (3순위): 눈높이, 구몬 등
+   - 판단 기준: "학습지", "눈높이", "구몬" 등
+
+4. **예체능** (4순위): 음악, 미술, 체육 활동
+   - 판단 기준: "피아노", "바이올린", "미술", "태권도", "축구", "농구", "수영", "댄스", "발레", "필라테스", "요가", "KPOP", "PT", "스튜디오", "아카데미" 등
+   - **중요**: "플라이 풋볼 아카데미" = 축구 학원 = 예체능!
+   - **중요**: "댄스 스튜디오" = 댄스 학원 = 예체능!
+
+5. **기타** (5순위): 위에 해당하지 않는 모든 것
+
+**출력 형식**: JSON만 반환 (설명 없이)
+{
+  "category": "학교|공부학원|학습지|예체능|기타",
+  "priority": 1|2|3|4|5
+}
+`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    const jsonMatch = text.match(/\{[\s\S]*?\}/);
+
+    if (!jsonMatch) {
+      console.warn(`⚠️ LLM 카테고리 분류 실패 (${schedule.title}) - 기본값 사용`);
+      return { category: '기타', priority: 5 };
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    return { category: parsed.category, priority: parsed.priority };
+
+  } catch (error) {
+    console.error(`❌ LLM 카테고리 분류 오류 (${schedule.title}):`, error.message);
+    return { category: '기타', priority: 5 };
   }
-
-  // 2순위: 공부 학원
-  const studyKeywords = ['학원', '국어', '영어', '수학', '과학', '사회', '논술', '독서', '토론'];
-  if (studyKeywords.some(keyword => combined.includes(keyword))) {
-    return { category: '공부학원', priority: 2 };
-  }
-
-  // 3순위: 학습지
-  if (combined.includes('학습지') || combined.includes('눈높이') || combined.includes('구몬')) {
-    return { category: '학습지', priority: 3 };
-  }
-
-  // 4순위: 예체능
-  const artsKeywords = ['피아노', '바이올린', '기타', '드럼', '음악', '미술', '그림', '태권도', '축구', '농구', '수영', '체육', '댄스', '발레', '필라테스', '요가', 'kpop', 'dance', 'pt', 'studio'];
-  if (artsKeywords.some(keyword => combined.includes(keyword))) {
-    return { category: '예체능', priority: 4 };
-  }
-
-  return { category: '기타', priority: 5 };
 }
 
+// Phase 2: 요일별 시간 겹침 체크 (학교는 요일마다 종료 시간이 다를 수 있음)
 function hasTimeOverlap(schedule1, schedule2) {
   const days1 = schedule1.days || [];
   const days2 = schedule2.days || [];
-  const hasCommonDay = days1.some(day => days2.includes(day));
-
-  if (!hasCommonDay) return false;
 
   const timeToMinutes = (timeStr) => {
     const [hours, minutes] = timeStr.split(':').map(Number);
     return hours * 60 + minutes;
   };
 
-  const start1 = timeToMinutes(schedule1.startTime);
-  const end1 = timeToMinutes(schedule1.endTime);
-  const start2 = timeToMinutes(schedule2.startTime);
-  const end2 = timeToMinutes(schedule2.endTime);
+  // 각 요일별로 겹침 체크
+  for (const day of days1) {
+    if (!days2.includes(day)) continue;
 
-  return (start1 < end2 && end1 > start2);
+    // 같은 요일에서 시간 겹침 체크
+    const start1 = timeToMinutes(schedule1.startTime);
+    const end1 = timeToMinutes(schedule1.endTime);
+    const start2 = timeToMinutes(schedule2.startTime);
+    const end2 = timeToMinutes(schedule2.endTime);
+
+    if (start1 < end2 && end1 > start2) {
+      return true; // 겹침 발견
+    }
+  }
+
+  return false; // 모든 요일 체크 후 겹침 없음
 }
 
 // 이미지 전체가 다른 스케줄들과 겹치는지 확인
@@ -217,18 +234,20 @@ async function optimizeSchedules(allSchedules, schedulesByImage) {
 
   console.log(`📸 ${Object.keys(imageGroups).length}개 이미지 발견`);
 
-  // 2. 이미지별로 카테고리 판단 및 옵션 생성
+  // 2. Phase 2: LLM 기반 카테고리 판단 및 옵션 생성
+  console.log('\n🤖 Phase 2: LLM 기반 카테고리 분류 시작...');
   const imageOptions = [];
 
-  Object.entries(imageGroups).forEach(([fileName, schedules]) => {
+  for (const [fileName, schedules] of Object.entries(imageGroups)) {
     const imageInfo = schedulesByImage.find(img => img.fileName === fileName);
     const imageTitle = imageInfo?.imageTitle || fileName;
 
-    // 모든 스케줄에 카테고리 부여
-    const schedulesWithCategory = schedules.map(schedule => {
-      const { category, priority } = categorizeSchedule(schedule, imageTitle);
-      return { ...schedule, category, priority, imageTitle };
-    });
+    // 모든 스케줄에 LLM으로 카테고리 부여
+    const schedulesWithCategory = [];
+    for (const schedule of schedules) {
+      const { category, priority } = await categorizeScheduleLLM(schedule, imageTitle);
+      schedulesWithCategory.push({ ...schedule, category, priority, imageTitle });
+    }
 
     // 이미지의 카테고리 = 가장 높은 우선순위
     const imagePriority = Math.min(...schedulesWithCategory.map(s => s.priority));
@@ -291,7 +310,9 @@ async function optimizeSchedules(allSchedules, schedulesByImage) {
         console.log(`   옵션: ${opt.name} (${opt.schedules.length}개 수업)`);
       });
     }
-  });
+  }
+
+  console.log('✅ Phase 2: LLM 카테고리 분류 완료\n');
 
   // 3. 우선순위로 정렬
   imageOptions.sort((a, b) => a.priority - b.priority);
