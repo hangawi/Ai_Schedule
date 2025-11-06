@@ -724,7 +724,7 @@ router.post('/chat', auth, async (req, res) => {
         const model = genAI.getGenerativeModel({
           model: modelName,
           generationConfig: {
-            maxOutputTokens: 4096,  // 응답 길이 제한 (기존 16384 → 4096)
+            maxOutputTokens: 2048,  // 응답 길이 강력 제한 (4096 → 2048)
             temperature: 0.1  // 일관성 향상
           }
         });
@@ -751,18 +751,27 @@ router.post('/chat', auth, async (req, res) => {
     let parsed = null;
 
     try {
+      // 백틱 제거 (AI가 실수로 포함한 경우)
+      let cleanResponse = aiResponse.trim();
+
       // 1. ```json ... ``` 형식
-      const jsonMatch = aiResponse.match(/```json\s*([\s\S]*?)\s*```/);
+      const jsonMatch = cleanResponse.match(/```json\s*([\s\S]*?)\s*```/);
       if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[1]);
+        parsed = JSON.parse(jsonMatch[1].trim());
       } else {
         // 2. ``` ... ``` 형식
-        const codeMatch = aiResponse.match(/```\s*([\s\S]*?)\s*```/);
+        const codeMatch = cleanResponse.match(/```\s*([\s\S]*?)\s*```/);
         if (codeMatch) {
-          parsed = JSON.parse(codeMatch[1]);
+          parsed = JSON.parse(codeMatch[1].trim());
         } else {
-          // 3. 직접 JSON
-          parsed = JSON.parse(aiResponse);
+          // 3. 시작 부분에 백틱이 있으면 제거
+          if (cleanResponse.startsWith('```')) {
+            cleanResponse = cleanResponse.replace(/^```(?:json)?\s*/, '').replace(/```\s*$/, '');
+            parsed = JSON.parse(cleanResponse.trim());
+          } else {
+            // 4. 직접 JSON
+            parsed = JSON.parse(cleanResponse);
+          }
         }
       }
     } catch (parseError) {
@@ -779,6 +788,13 @@ router.post('/chat', auth, async (req, res) => {
         schedule: currentSchedule,
         explanation: '죄송해요, 응답이 너무 길어서 처리하지 못했습니다. 😥\n\n다시 한번 말씀해주시거나, 더 구체적으로 요청해주세요.\n\n예: "금요일 6시 이후 삭제" 대신 "금요일 공연반 삭제"'
       });
+    }
+
+    // 인덱스 기반 삭제 처리
+    if (parsed.deleteIndices && Array.isArray(parsed.deleteIndices)) {
+      console.log('🔢 인덱스 기반 삭제:', parsed.deleteIndices);
+      parsed.schedule = currentSchedule.filter((_, idx) => !parsed.deleteIndices.includes(idx + 1));
+      console.log(`✅ ${currentSchedule.length}개 → ${parsed.schedule.length}개 (${currentSchedule.length - parsed.schedule.length}개 삭제)`);
     }
 
     console.log('✅ 처리 완료:', parsed.action, '|', currentSchedule.length, '→', parsed.schedule?.length || 0);

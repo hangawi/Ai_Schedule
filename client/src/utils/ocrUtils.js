@@ -556,9 +556,10 @@ export const performOCR = async (imageFile) => {
  * @param {Array<File>} imageFiles - 이미지 파일 배열
  * @param {string} birthdate - 사용자 생년월일
  * @param {Function} progressCallback - 진행률 콜백 (10-50 범위)
+ * @param {boolean} skipDuplicateCheck - 중복 체크 건너뛰기
  * @returns {Promise<Array>} - 구조화된 시간표 배열
  */
-export const analyzeScheduleImages = async (imageFiles, birthdate, progressCallback) => {
+export const analyzeScheduleImages = async (imageFiles, birthdate, progressCallback, skipDuplicateCheck = false) => {
   const formData = new FormData();
 
   imageFiles.forEach((file) => {
@@ -567,6 +568,15 @@ export const analyzeScheduleImages = async (imageFiles, birthdate, progressCallb
 
   if (birthdate) {
     formData.append('birthdate', birthdate);
+  }
+
+  console.log('🔍 [analyzeScheduleImages] skipDuplicateCheck 파라미터:', skipDuplicateCheck, `(타입: ${typeof skipDuplicateCheck})`);
+
+  if (skipDuplicateCheck) {
+    console.log('✅ FormData에 skipDuplicateCheck=true 추가');
+    formData.append('skipDuplicateCheck', 'true');
+  } else {
+    console.log('⏭️ skipDuplicateCheck=false이므로 FormData에 추가하지 않음');
   }
 
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
@@ -706,17 +716,31 @@ export const parseScheduleFromOCR = (ocrText, gradeLevel) => {
  * @param {Array<File>} imageFiles - 이미지 파일 배열
  * @param {Function} progressCallback - 진행률 콜백 (0-100)
  * @param {string} birthdate - 사용자 생년월일
+ * @param {boolean} skipDuplicateCheck - 중복 체크 건너뛰기
  * @returns {Promise<Object>} - 추출된 시간표와 메타데이터
  */
-export const extractSchedulesFromImages = async (imageFiles, progressCallback, birthdate) => {
+export const extractSchedulesFromImages = async (imageFiles, progressCallback, birthdate, skipDuplicateCheck = false) => {
   const age = calculateAge(birthdate);
   const gradeLevel = getGradeLevelFromAge(age);
 
   // 진행률 보고
   if (progressCallback) progressCallback(10);
 
+  console.log('🔄 [extractSchedulesFromImages] skipDuplicateCheck:', skipDuplicateCheck);
+
   // 백엔드 API를 사용하여 구조화된 시간표 데이터 가져오기 (10% → 95%)
-  const apiResponse = await analyzeScheduleImages(imageFiles, birthdate, progressCallback);
+  const apiResponse = await analyzeScheduleImages(imageFiles, birthdate, progressCallback, skipDuplicateCheck);
+
+  console.log('🔍 [ocrUtils] 서버 응답 전체:', apiResponse);
+  console.log('🔍 [ocrUtils] hasDuplicates:', apiResponse.hasDuplicates);
+  console.log('🔍 [ocrUtils] duplicates:', apiResponse.duplicates);
+
+  // 중복 감지 시 즉시 반환
+  if (apiResponse.hasDuplicates) {
+    console.log('⚠️ [ocrUtils] 중복 감지됨! 즉시 반환');
+    return apiResponse; // 중복 정보 그대로 반환
+  }
+
   const rawSchedules = apiResponse.allSchedules || [];
   const schedulesByImage = apiResponse.schedulesByImage || [];
   const baseSchedules = apiResponse.baseSchedules || [];
