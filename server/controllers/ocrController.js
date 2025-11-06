@@ -950,9 +950,9 @@ PM이나 오후가 보이면 반드시 13:00 이후로 변환!
     const baseSchedules = extractBaseSchedules(baseAnalysis);
     console.log('📚 최종 baseSchedules:', baseSchedules.length, '개');
 
-    // 4. ⭐ 자동 스케줄 최적화 (우선순위 기반 겹침 제거)
+    // 4. ⭐ 자동 스케줄 최적화 (우선순위 기반 겹침 제거 + 학년부 필터링)
     console.log('\n🔧 자동 스케줄 최적화 시작...');
-    const optimizationResult = optimizeSchedules(allSchedules, titledImages);
+    const optimizationResult = await optimizeSchedules(allSchedules, titledImages);
     console.log('✨ 최적화 결과:', {
       입력: optimizationResult.analysis.totalInput,
       선택: optimizationResult.analysis.totalSelected,
