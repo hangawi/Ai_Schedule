@@ -767,16 +767,16 @@ const ScheduleGridSelector = ({
                         title={`${seg.schedule.subjectLabel ? seg.schedule.subjectLabel + ' - ' : ''}${seg.schedule.title}${seg.schedule.floor ? ` (${seg.schedule.floor}층)` : ''} (${seg.schedule.startTime}~${seg.schedule.endTime})`}
                       >
                         {isLargestSegment && (
-                          <div className="text-xs leading-tight flex items-center justify-center h-full overflow-hidden">
-                            <div className="truncate w-full px-1">
+                          <div className="text-xs leading-tight flex flex-col items-center justify-center h-full overflow-hidden">
+                            <div className="w-full px-1 text-center">
                               {seg.schedule.subjectLabel && (
-                                <div className="text-[9px] font-bold truncate opacity-80">{seg.schedule.subjectLabel}</div>
+                                <div className="text-[9px] font-bold opacity-80 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.subjectLabel}</div>
                               )}
-                              <div className="font-semibold truncate text-[11px]">
+                              <div className="font-semibold text-[11px] whitespace-nowrap overflow-hidden text-ellipsis">
                                 {seg.schedule.title}
                                 {seg.schedule.floor && <span className="text-[9px] ml-1">({seg.schedule.floor}층)</span>}
                               </div>
-                              <div className="text-[10px] truncate mt-0.5">{seg.schedule.startTime}~{seg.schedule.endTime}</div>
+                              <div className="text-[10px] mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.startTime}~{seg.schedule.endTime}</div>
                             </div>
                           </div>
                         )}
