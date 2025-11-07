@@ -183,7 +183,8 @@ const ScheduleOptimizationModal = ({
         days: mappedDays,
         startTime: schedule.startTime,
         endTime: schedule.endTime,
-        title: (schedule.subjectLabel ? schedule.subjectLabel + '\n' : '') + (schedule.title || '수업'),
+        title: schedule.title || '수업',
+        subjectLabel: schedule.subjectLabel,  // 과목명 별도 전달
         color: scheduleColor,
         description: schedule.description || '',
         isRecurring: true

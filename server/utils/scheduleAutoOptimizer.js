@@ -542,6 +542,15 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
   selectionLog.forEach(log => {
     console.log(`   - ${log.image}: ${log.selected} (${log.count}개)`);
   });
+
+  // 🔍 디버깅: subjectLabel 확인 (학교 제외)
+  console.log('\n🔍 [DEBUG] 학원 스케줄 subjectLabel 확인:');
+  selectedSchedules
+    .filter(s => s.category !== '학교')
+    .slice(0, 10)
+    .forEach((s, idx) => {
+      console.log(`  ${idx}. ${s.title} - subjectLabel: "${s.subjectLabel || 'null'}" (imageTitle: ${s.imageTitle})`);
+    });
   console.log('=====================================\n');
 
   return {
