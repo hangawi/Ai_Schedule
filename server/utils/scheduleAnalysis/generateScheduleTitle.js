@@ -127,19 +127,28 @@ function generateOverallTitle(schedulesByImage) {
  * 이미지별 제목 생성 (전체)
  */
 function generateTitlesForImages(schedulesByImage) {
-  const results = schedulesByImage.map((imageData, index) => {
-    // AI 추출 제목을 우선 사용, 없으면 키워드 기반 추론
-    const title = generateImageTitle(imageData.schedules, imageData.imageTitle);
+  const results = schedulesByImage
+    .map((imageData, index) => {
+      // AI 추출 제목을 우선 사용, 없으면 키워드 기반 추론
+      const title = generateImageTitle(imageData.schedules, imageData.imageTitle);
 
-    console.log(`📝 이미지 ${index + 1} (${imageData.fileName}): "${title}"`);
+      console.log(`📝 이미지 ${index + 1} (${imageData.fileName}): "${title}"`);
 
-    return {
-      ...imageData,
-      title: title // 이미지별 제목
-    };
-  });
+      return {
+        ...imageData,
+        title: title // 이미지별 제목
+      };
+    })
+    // ⭐ 빈 스케줄 이미지 필터링 (인덱스 오류 방지)
+    .filter(imageData => {
+      if (!imageData.schedules || imageData.schedules.length === 0) {
+        console.warn(`⚠️ 빈 시간표 제외: ${imageData.fileName}`);
+        return false;
+      }
+      return true;
+    });
 
-  const overallTitle = generateOverallTitle(schedulesByImage);
+  const overallTitle = generateOverallTitle(results);
   console.log(`📋 전체 제목: "${overallTitle}"`);
 
   return {
