@@ -16,6 +16,7 @@ const ScheduleOptimizationModal = ({
   gradeLevel,
   isEmbedded = false, // 새로 추가: 임베드 모드 (TimetableUploadWithChat 내부)
   schedulesByImage = null, // 새로 추가: 이미지별 스케줄 정보 (색상 할당용)
+  fixedSchedules = [], // 새로 추가: 고정 일정
   overallTitle = '업로드된 시간표' // 새로 추가: 전체 제목
 }) => {
   // 🔍 Props 디버깅
@@ -182,7 +183,7 @@ const ScheduleOptimizationModal = ({
         days: mappedDays,
         startTime: schedule.startTime,
         endTime: schedule.endTime,
-        title: schedule.title || '수업',
+        title: (schedule.subjectLabel ? schedule.subjectLabel + '\n' : '') + (schedule.title || '수업'),
         color: scheduleColor,
         description: schedule.description || '',
         isRecurring: true
@@ -1157,6 +1158,7 @@ const ScheduleOptimizationModal = ({
               schedule={[]}
               exceptions={[]}
               personalTimes={personalTimes}
+              fixedSchedules={fixedSchedules}
               readOnly={true}
               enableMonthView={false}
               showViewControls={false}

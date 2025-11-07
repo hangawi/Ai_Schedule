@@ -103,6 +103,7 @@ app.use('/api/conflict', require('./routes/conflict'));
 app.use('/api/ocr', require('./routes/ocr'));
 app.use('/api/ocr-chat', require('./routes/ocrChat'));
 app.use('/api/schedule', require('./routes/scheduleOptimizer'));
+app.use('/api/schedule', require('./routes/fixedSchedule'));
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '..', 'client', 'build')));

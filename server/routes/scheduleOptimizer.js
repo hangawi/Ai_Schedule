@@ -9,9 +9,44 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /**
  * POST /api/schedule/optimize
- * GPT 기반 스케줄 최적화
+ * 새로운 자동 최적화 (고정 일정 지원)
  */
+const { optimizeSchedules } = require('../utils/scheduleAutoOptimizer');
+
 router.post('/optimize', auth, async (req, res) => {
+  try {
+    const { schedules, schedulesByImage, fixedSchedules } = req.body;
+
+    console.log('📊 스케줄 재최적화 요청 받음');
+    console.log('- 전체 스케줄:', schedules?.length, '개');
+    console.log('- 이미지별 스케줄:', schedulesByImage?.length, '개');
+    console.log('- 고정 일정:', fixedSchedules?.length || 0, '개');
+
+    // 새로운 최적화 로직 사용
+    const optimizedSchedules = await optimizeSchedules(
+      schedules || [],
+      schedulesByImage || [],
+      fixedSchedules || []
+    );
+
+    res.json({
+      success: true,
+      optimizedSchedules
+    });
+  } catch (error) {
+    console.error('❌ 재최적화 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/schedule/optimize-legacy
+ * GPT 기반 스케줄 최적화 (구버전)
+ */
+router.post('/optimize-legacy', auth, async (req, res) => {
   try {
     const { schedules, conflicts, userPreferences } = req.body;
 
