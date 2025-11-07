@@ -744,12 +744,15 @@ const ScheduleGridSelector = ({
                           backgroundColor: bgColor,
                           zIndex: seg.overlapIndex
                         }}
-                        title={`${seg.schedule.title} (${seg.schedule.startTime}~${seg.schedule.endTime})`}
+                        title={`${seg.schedule.title}${seg.schedule.floor ? ` (${seg.schedule.floor}층)` : ''} (${seg.schedule.startTime}~${seg.schedule.endTime})`}
                       >
                         {isLargestSegment && (
                           <div className="text-xs leading-tight flex items-center justify-center h-full overflow-hidden">
                             <div className="truncate w-full px-1">
-                              <div className="font-semibold truncate text-[11px]">{seg.schedule.title}</div>
+                              <div className="font-semibold truncate text-[11px]">
+                                {seg.schedule.title}
+                                {seg.schedule.floor && <span className="text-[9px] ml-1">({seg.schedule.floor}층)</span>}
+                              </div>
                               {blockHeight > 50 && (
                                 <div className="text-[10px] truncate mt-0.5">{seg.schedule.startTime}~{seg.schedule.endTime}</div>
                               )}

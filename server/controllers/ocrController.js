@@ -330,6 +330,25 @@ exports.analyzeScheduleImages = async (req, res) => {
     });
     console.log(`📦 총 합계: ${allSchedules.length}개 스케줄`);
 
+    // ⭐ O/X/0 기호 및 비수업 활동 강제 필터링
+    console.log('🔧 O/X/0 기호 및 비수업 활동 제거 중...');
+    const beforeFilterCount = allSchedules.length;
+    allSchedules = allSchedules.filter(schedule => {
+      const title = (schedule.title || '').trim();
+      // O, X, 0, △ 같은 단일 기호는 제거
+      if (title === 'O' || title === 'X' || title === '0' || title === '△') {
+        console.log(`  ❌ 제거: "${title}" (기호)`);
+        return false;
+      }
+      // 수업준비, 오프닝, 정리정돈 같은 비수업 활동 제거
+      if (title.includes('수업준비') || title.includes('오프닝') || title.includes('정리정돈')) {
+        console.log(`  ❌ 제거: "${title}" (비수업 활동)`);
+        return false;
+      }
+      return true;
+    });
+    console.log(`✅ 필터링 완료: ${beforeFilterCount}개 → ${allSchedules.length}개 (${beforeFilterCount - allSchedules.length}개 제거됨)`);
+
     // 점심시간 자동 감지 및 추가
     const addLunchTimeIfMissing = (schedules) => {
       // 4교시와 5교시 찾기

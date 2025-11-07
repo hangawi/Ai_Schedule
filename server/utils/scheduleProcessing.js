@@ -48,6 +48,7 @@ function mergeConsecutiveSchedules(schedules) {
 
         if (next.title === current.title &&
             next.instructor === current.instructor &&
+            next.floor === current.floor &&  // ⭐ 층도 같아야 병합
             next.startTime === endTime) {
           toMerge.push(next);
           endTime = next.endTime;
@@ -83,7 +84,7 @@ function mergeConsecutiveSchedules(schedules) {
   const scheduleMap = new Map();
 
   merged.forEach(schedule => {
-    const key = `${schedule.title}_${schedule.startTime}_${schedule.endTime}_${schedule.instructor || ''}`;
+    const key = `${schedule.title}_${schedule.startTime}_${schedule.endTime}_${schedule.instructor || ''}_${schedule.floor || ''}`;  // ⭐ 층도 키에 포함
 
     if (scheduleMap.has(key)) {
       // 기존 스케줄에 요일 추가

@@ -1075,7 +1075,7 @@ const ScheduleOptimizationModal = ({
   };
 
   const modalContent = (
-    <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full my-auto max-h-[85vh] overflow-hidden flex flex-col" style={isEmbedded ? { maxWidth: '100%', maxHeight: '100%', height: '100%', borderRadius: 0, boxShadow: 'none' } : {}}>
+    <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full my-auto max-h-[85vh] overflow-hidden flex flex-col isolate" style={isEmbedded ? { maxWidth: '100%', maxHeight: '100%', height: '100%', borderRadius: 0, boxShadow: 'none' } : {}}>
         {/* 통합 헤더 - 임베드 모드에서는 숨김 */}
         {!isEmbedded && (
           <div className="bg-gradient-to-r from-purple-600 via-purple-500 to-blue-600 text-white px-5 py-3 flex-shrink-0">
@@ -1338,8 +1338,10 @@ const ScheduleOptimizationModal = ({
   return (
     <>
       {isEmbedded ? modalContent : (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-6 overflow-y-auto">
-          {modalContent}
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1000] p-6 overflow-y-auto">
+          <div className="relative z-[1001]">
+            {modalContent}
+          </div>
         </div>
       )}
 

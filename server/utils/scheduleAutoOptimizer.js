@@ -11,9 +11,9 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// 학교 시간표에서 학년부 감지
+// 학교 시간표 또는 학원 시간표에서 학년부 감지
 function detectStudentGrade(allSchedules, schedulesByImage) {
-  // 학교 카테고리 이미지 찾기
+  // 1. 학교 시간표에서 학년부 찾기 (최우선)
   for (const schedule of allSchedules) {
     const imageInfo = schedulesByImage.find(img => img.fileName === schedule.sourceImage);
     if (!imageInfo) continue;
@@ -27,23 +27,31 @@ function detectStudentGrade(allSchedules, schedulesByImage) {
     if (isSchool) {
       // gradeLevel이 있으면 반환
       if (schedule.gradeLevel) {
-        console.log(`📚 학년부 감지: "${schedule.gradeLevel}" (from: ${imageTitle})`);
+        console.log(`📚 학년부 감지 (학교): "${schedule.gradeLevel}" (from: ${imageTitle})`);
         return schedule.gradeLevel;
       }
 
       // imageTitle에서 학년 정보 추출
       if (imageTitle.includes('초등') || imageTitle.includes('초')) {
-        console.log(`📚 학년부 감지: "초등학생" (from: ${imageTitle})`);
+        console.log(`📚 학년부 감지 (학교): "초등학생" (from: ${imageTitle})`);
         return '초등학생';
       }
       if (imageTitle.includes('중학') || imageTitle.includes('중')) {
-        console.log(`📚 학년부 감지: "중학생" (from: ${imageTitle})`);
+        console.log(`📚 학년부 감지 (학교): "중학생" (from: ${imageTitle})`);
         return '중학생';
       }
       if (imageTitle.includes('고등') || imageTitle.includes('고')) {
-        console.log(`📚 학년부 감지: "고등학생" (from: ${imageTitle})`);
+        console.log(`📚 학년부 감지 (학교): "고등학생" (from: ${imageTitle})`);
         return '고등학생';
       }
+    }
+  }
+
+  // 2. 학교가 없으면 학원 시간표에서 "중등부" 같은 힌트 찾기
+  for (const schedule of allSchedules) {
+    if (schedule.gradeLevel) {
+      console.log(`📚 학년부 감지 (학원): "${schedule.gradeLevel}" (from: ${schedule.title})`);
+      return schedule.gradeLevel;
     }
   }
 
@@ -71,12 +79,25 @@ ${schedules.map((s, idx) => `${idx}. ${s.title} (gradeLevel: ${s.gradeLevel || '
 
 **지시사항**:
 1. 위 학생에게 **적합한 수업의 인덱스(번호)만** 배열로 반환하세요.
-2. gradeLevel이 null이면 → 전체 대상이므로 무조건 포함
-3. gradeLevel이 명시되어 있으면 → 학생 학년과 일치하는지 판단
-   - "초등부", "Elementary", "초딩", "초등학생" 등은 모두 초등학생
-   - "중등부", "Middle School", "중딩", "중학생" 등은 모두 중학생
-   - "고등부", "High School", "고딩", "고등학생" 등은 모두 고등학생
-4. 유연하게 판단하세요 (다양한 표현 인정)
+2. **gradeLevel 판단 규칙**:
+   - **학생이 중학생**이면:
+     * gradeLevel: "중등부" → ✅ 포함
+     * gradeLevel: "고등부" → ✅ 포함 (중고등 통합 수업)
+     * gradeLevel: "초등부" → ❌ 제외 (중학생은 초등부 수업 불가)
+     * gradeLevel: null → ✅ 포함 (전체 대상)
+   - **학생이 초등학생**이면:
+     * gradeLevel: "초등부" → ✅ 포함
+     * gradeLevel: "중등부" → ❌ 제외
+     * gradeLevel: "고등부" → ❌ 제외
+     * gradeLevel: null → ✅ 포함 (전체 대상)
+   - **학생이 고등학생**이면:
+     * gradeLevel: "고등부" → ✅ 포함
+     * gradeLevel: "중등부" → ✅ 포함 (중고등 통합 수업)
+     * gradeLevel: "초등부" → ❌ 제외
+     * gradeLevel: null → ✅ 포함 (전체 대상)
+3. **중요**: "초등부", "Elementary", "초딩", "초등학생" 등은 모두 초등학생
+4. **중요**: "중등부", "Middle School", "중딩", "중학생" 등은 모두 중학생
+5. **중요**: "고등부", "High School", "고딩", "고등학생" 등은 모두 고등학생
 
 **출력 형식**: JSON만 반환 (설명 없이)
 { "suitableIndexes": [0, 2, 5, ...] }
@@ -111,20 +132,23 @@ ${schedules.map((s, idx) => `${idx}. ${s.title} (gradeLevel: ${s.gradeLevel || '
   }
 }
 
-// Phase 2: LLM 기반 스케줄 카테고리 판단
-async function categorizeScheduleLLM(schedule, imageTitle) {
+// Phase 2: LLM 기반 스케줄 배치 카테고리 판단 (한 번에 여러 스케줄 처리)
+async function categorizeSchedulesBatch(schedules, imageTitle) {
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+
+    // 스케줄 목록을 텍스트로 변환
+    const scheduleList = schedules.map((s, idx) =>
+      `${idx}. ${s.title} (${s.days?.join(',') || ''} ${s.startTime}-${s.endTime})`
+    ).join('\n');
 
     const prompt = `
 당신은 학생 시간표 분류 전문가입니다.
 
-**수업 정보**:
-- 제목: ${schedule.title}
-- 이미지 제목: ${imageTitle}
-- 설명: ${schedule.description || 'null'}
-- 요일: ${schedule.days?.join(', ') || 'null'}
-- 시간: ${schedule.startTime} - ${schedule.endTime}
+**이미지 제목**: ${imageTitle}
+
+**수업 목록**:
+${scheduleList}
 
 **카테고리 분류 기준**:
 1. **학교** (최우선): 초등학교, 중학교, 고등학교 정규 수업
@@ -133,40 +157,46 @@ async function categorizeScheduleLLM(schedule, imageTitle) {
    - "축구 아카데미", "댄스 스튜디오" 등은 학교가 아님!
 
 2. **공부학원** (2순위): 영어, 수학, 국어 등 학습 학원
-   - 판단 기준: "영어학원", "수학학원", "국어", "과학", "논술" 등
-
 3. **학습지** (3순위): 눈높이, 구몬 등
-   - 판단 기준: "학습지", "눈높이", "구몬" 등
-
-4. **예체능** (4순위): 음악, 미술, 체육 활동
-   - 판단 기준: "피아노", "바이올린", "미술", "태권도", "축구", "농구", "수영", "댄스", "발레", "필라테스", "요가", "KPOP", "PT", "스튜디오", "아카데미" 등
+4. **예체능** (4순위): 피아노, 축구, 댄스, 필라테스, 요가, KPOP, PT 등
    - **중요**: "플라이 풋볼 아카데미" = 축구 학원 = 예체능!
-   - **중요**: "댄스 스튜디오" = 댄스 학원 = 예체능!
+   - **중요**: "댄스 스튜디오" = 예체능!
+5. **기타** (5순위)
 
-5. **기타** (5순위): 위에 해당하지 않는 모든 것
-
-**출력 형식**: JSON만 반환 (설명 없이)
-{
-  "category": "학교|공부학원|학습지|예체능|기타",
-  "priority": 1|2|3|4|5
-}
+**출력 형식**: JSON 배열만 반환 (설명 없이)
+[
+  {"index": 0, "category": "학교", "priority": 1},
+  {"index": 1, "category": "예체능", "priority": 4},
+  ...
+]
 `;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text();
-    const jsonMatch = text.match(/\{[\s\S]*?\}/);
+    const jsonMatch = text.match(/\[[\s\S]*?\]/);
 
     if (!jsonMatch) {
-      console.warn(`⚠️ LLM 카테고리 분류 실패 (${schedule.title}) - 기본값 사용`);
-      return { category: '기타', priority: 5 };
+      console.warn(`⚠️ LLM 배치 분류 실패 (${imageTitle}) - 기본값 사용`);
+      return schedules.map(s => ({ ...s, category: '기타', priority: 5, imageTitle }));
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
-    return { category: parsed.category, priority: parsed.priority };
+    const categorizations = JSON.parse(jsonMatch[0]);
+
+    // 결과를 스케줄에 매핑
+    return schedules.map((schedule, idx) => {
+      const cat = categorizations.find(c => c.index === idx);
+      return {
+        ...schedule,
+        category: cat?.category || '기타',
+        priority: cat?.priority || 5,
+        imageTitle
+      };
+    });
 
   } catch (error) {
-    console.error(`❌ LLM 카테고리 분류 오류 (${schedule.title}):`, error.message);
-    return { category: '기타', priority: 5 };
+    console.error(`❌ LLM 배치 분류 오류 (${imageTitle}):`, error.message);
+    // 에러 시 모든 스케줄을 기본값으로
+    return schedules.map(s => ({ ...s, category: '기타', priority: 5, imageTitle }));
   }
 }
 
@@ -234,20 +264,16 @@ async function optimizeSchedules(allSchedules, schedulesByImage) {
 
   console.log(`📸 ${Object.keys(imageGroups).length}개 이미지 발견`);
 
-  // 2. Phase 2: LLM 기반 카테고리 판단 및 옵션 생성
-  console.log('\n🤖 Phase 2: LLM 기반 카테고리 분류 시작...');
+  // 2. Phase 2: LLM 기반 카테고리 판단 및 옵션 생성 (배치 처리)
+  console.log('\n🤖 Phase 2: LLM 기반 카테고리 분류 시작 (배치 모드)...');
   const imageOptions = [];
 
   for (const [fileName, schedules] of Object.entries(imageGroups)) {
     const imageInfo = schedulesByImage.find(img => img.fileName === fileName);
     const imageTitle = imageInfo?.imageTitle || fileName;
 
-    // 모든 스케줄에 LLM으로 카테고리 부여
-    const schedulesWithCategory = [];
-    for (const schedule of schedules) {
-      const { category, priority } = await categorizeScheduleLLM(schedule, imageTitle);
-      schedulesWithCategory.push({ ...schedule, category, priority, imageTitle });
-    }
+    // 모든 스케줄을 한 번에 배치로 LLM에 전달
+    const schedulesWithCategory = await categorizeSchedulesBatch(schedules, imageTitle);
 
     // 이미지의 카테고리 = 가장 높은 우선순위
     const imagePriority = Math.min(...schedulesWithCategory.map(s => s.priority));
@@ -278,13 +304,25 @@ async function optimizeSchedules(allSchedules, schedulesByImage) {
         const daysStr = (schedule.days || []).join(',');
         const title = schedule.title || 'unnamed';
 
-        // 옵션 우선순위 계산 (주5회 > 주3회 > 주2회 > 주1회)
+        // 옵션 우선순위 계산
         let optionPriority = 100; // 기본값
-        if (title.includes('주5회') || title.includes('주 5회')) optionPriority = 1;
+
+        // 1순위: 학년부가 명시된 옵션 (중등부, 초등부, 고등부)
+        if (schedule.gradeLevel && (
+          title.includes('중등부') || title.includes('초등부') || title.includes('고등부')
+        )) {
+          optionPriority = 0; // 최우선
+        }
+        // 2순위: 주5회 > 주4회 > 주3회 > 주2회 > 주1회
+        else if (title.includes('주5회') || title.includes('주 5회')) optionPriority = 1;
         else if (title.includes('주4회') || title.includes('주 4회')) optionPriority = 2;
         else if (title.includes('주3회') || title.includes('주 3회')) optionPriority = 3;
         else if (title.includes('주2회') || title.includes('주 2회')) optionPriority = 4;
         else if (title.includes('주1회') || title.includes('주 1회')) optionPriority = 5;
+        // 3순위: O, X 같은 기호나 수업준비는 최하위
+        else if (title === 'O' || title === 'X' || title === '0' || title.includes('수업준비')) {
+          optionPriority = 999; // 최하위
+        }
 
         return {
           name: `${title} (${daysStr} ${timeRange})`,
@@ -317,6 +355,20 @@ async function optimizeSchedules(allSchedules, schedulesByImage) {
   // 3. 우선순위로 정렬
   imageOptions.sort((a, b) => a.priority - b.priority);
 
+  // ⭐ 3-1. 학교가 없으면 우선순위 재조정 (가장 높은 우선순위를 1로 만듦)
+  const hasSchool = imageOptions.some(opt => opt.category === '학교');
+  if (!hasSchool && imageOptions.length > 0) {
+    const minPriority = Math.min(...imageOptions.map(opt => opt.priority));
+    console.log(`📊 학교 없음 - 우선순위 재조정: ${minPriority} → 1`);
+
+    // 모든 우선순위를 상대적으로 조정
+    imageOptions.forEach(opt => {
+      const originalPriority = opt.priority;
+      opt.priority = opt.priority - minPriority + 1;
+      console.log(`   ${opt.imageTitle}: ${originalPriority} → ${opt.priority}`);
+    });
+  }
+
   // 4. 최적화: 우선순위대로 선택
   const selectedSchedules = [];
   const selectionLog = [];
@@ -341,8 +393,8 @@ async function optimizeSchedules(allSchedules, schedulesByImage) {
         console.log(`❌ [${imageOpt.category}] ${imageOpt.imageTitle} - 시간 겹침으로 제외`);
       }
     } else {
-      // 학원: 여러 옵션 중 겹치지 않는 것 1개만 선택
-      let selected = false;
+      // 학원: 여러 옵션 중 겹치지 않는 것들을 모두 선택
+      const selectedOptions = [];
 
       for (const option of imageOpt.options) {
         const hasConflict = imageHasOverlap(option.schedules, selectedSchedules);
@@ -356,19 +408,22 @@ async function optimizeSchedules(allSchedules, schedulesByImage) {
           console.log(`   ⏰ ${timeSlots}`);
 
           selectedSchedules.push(...option.schedules);
-          selectionLog.push({
-            image: imageOpt.imageTitle,
-            selected: option.name,
-            count: option.schedules.length
-          });
-          selected = true;
-          break; // ⭐ 1개만 선택하고 중단!
+          selectedOptions.push(option);
         } else {
           console.log(`   ⏭️ "${option.name}" - 시간 겹침으로 건너뜀`);
         }
       }
 
-      if (!selected) {
+      if (selectedOptions.length > 0) {
+        const totalCount = selectedOptions.reduce((sum, opt) => sum + opt.schedules.length, 0);
+        const optionNames = selectedOptions.map(opt => opt.name).join(', ');
+        selectionLog.push({
+          image: imageOpt.imageTitle,
+          selected: optionNames,
+          count: totalCount
+        });
+        console.log(`   📊 총 ${selectedOptions.length}개 옵션, ${totalCount}개 수업 선택됨`);
+      } else {
         console.log(`❌ [${imageOpt.category}] ${imageOpt.imageTitle} - 모든 옵션이 겹쳐서 제외`);
       }
     }

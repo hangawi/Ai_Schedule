@@ -154,21 +154,58 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
 
       setExtractedSchedules(schedulesToUse);
 
-      // ⭐ 원본 시간표 저장 (롤백용)
-      if (!originalSchedule) {
-        setOriginalSchedule(JSON.parse(JSON.stringify(schedulesToUse)));
-        console.log('💾 원본 시간표 저장:', schedulesToUse.length, '개');
-      }
-
       // ⭐ schedulesByImage도 최적화된 스케줄에 맞게 필터링
       const selectedImageNames = [...new Set(schedulesToUse.map(s => s.sourceImage))];
-      const filteredSchedulesByImage = result.schedulesByImage.filter(img =>
+      let filteredSchedulesByImage = result.schedulesByImage.filter(img =>
         selectedImageNames.includes(img.fileName)
       );
-      console.log('🖼️ 선택된 이미지:', selectedImageNames);
-      console.log('📸 필터링된 schedulesByImage:', filteredSchedulesByImage.length, '개');
 
-      setSchedulesByImage(filteredSchedulesByImage);
+      // ⭐ 실제로 선택된 스케줄이 있는 이미지만 유지 (나이 필터링으로 비어있을 수 있음)
+      const imagesWithSchedules = filteredSchedulesByImage.filter(img => {
+        const imageSchedules = schedulesToUse.filter(s => s.sourceImage === img.fileName);
+        const hasSchedules = imageSchedules.length > 0;
+        if (!hasSchedules) {
+          console.log(`⚠️ 범례 제외: ${img.title || img.fileName} - 나이 제한으로 스케줄 없음`);
+        }
+        return hasSchedules;
+      });
+
+      console.log('🖼️ 선택된 이미지:', selectedImageNames);
+      console.log(`📸 필터링 전: ${filteredSchedulesByImage.length}개 → 필터링 후: ${imagesWithSchedules.length}개`);
+
+      filteredSchedulesByImage = imagesWithSchedules;
+
+      // ⭐ sourceImageIndex 재할당 (필터링으로 인한 색상 인덱스 불일치 방지)
+      const reindexedSchedulesByImage = filteredSchedulesByImage.map((img, newIndex) => {
+        console.log(`🎨 색상 인덱스 재할당: ${img.fileName} (원본 ${img.schedules[0]?.sourceImageIndex || '?'}) → 새 인덱스 ${newIndex}`);
+        return {
+          ...img,
+          schedules: img.schedules.map(schedule => ({
+            ...schedule,
+            sourceImageIndex: newIndex  // ⭐ 새로운 인덱스로 재할당
+          }))
+        };
+      });
+
+      // schedulesToUse의 sourceImageIndex도 재할당
+      const imageNameToNewIndex = {};
+      filteredSchedulesByImage.forEach((img, newIndex) => {
+        imageNameToNewIndex[img.fileName] = newIndex;
+      });
+
+      const reindexedSchedulesToUse = schedulesToUse.map(schedule => ({
+        ...schedule,
+        sourceImageIndex: imageNameToNewIndex[schedule.sourceImage]
+      }));
+
+      setSchedulesByImage(reindexedSchedulesByImage);
+      setExtractedSchedules(reindexedSchedulesToUse);  // ⭐ 재할당된 인덱스로 업데이트
+
+      // ⭐ 원본 시간표 저장 (롤백용 - 재할당 후 저장!)
+      if (!originalSchedule) {
+        setOriginalSchedule(JSON.parse(JSON.stringify(reindexedSchedulesToUse)));
+        console.log('💾 원본 시간표 저장 (재할당 후):', reindexedSchedulesToUse.length, '개');
+      }
 
       // 기본 베이스 스케줄 저장 (서버에서 분석된 것)
       if (result.baseSchedules && result.baseSchedules.length > 0) {
@@ -176,39 +213,54 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
         setBaseSchedules(result.baseSchedules);
       }
 
-      // 전체 제목 저장 (서버에서 생성된 것)
-      if (result.overallTitle) {
-        console.log('📋 전체 제목:', result.overallTitle);
-        setOverallTitle(result.overallTitle);
+      // 전체 제목 저장 (서버에서 생성된 것 - 필터링된 이미지 기반)
+      if (reindexedSchedulesByImage.length > 0) {
+        const titles = reindexedSchedulesByImage.map(img => img.title || img.fileName).filter(Boolean);
+        const newOverallTitle = titles.join(' + ') || '업로드된 시간표';
+        console.log('📋 전체 제목 (필터링 후):', newOverallTitle);
+        setOverallTitle(newOverallTitle);
       }
 
-      // ⭐ 최적화된 스케줄을 바로 시간표에 표시
+      // ⭐ 최적화된 스케줄을 바로 시간표에 표시 (재할당된 인덱스 사용!)
       console.log('🎯 최적화된 스케줄을 시간표에 표시합니다...');
-      setFilteredSchedules(schedulesToUse);
+      setFilteredSchedules(reindexedSchedulesToUse);  // ⭐ 수정!
 
       setProgress({ current: 100, total: 100, message: 'OCR 분석 완료!' });
 
-      // 이미지별로 반 목록 구성
+      // ⭐ 필터링된 이미지 정보 추가 (나이 제한으로 제외된 이미지)
+      const removedImages = result.schedulesByImage.filter(img =>
+        !imagesWithSchedules.some(kept => kept.fileName === img.fileName)
+      );
+
+      // 이미지별로 반 목록 구성 (필터링된 이미지만 사용)
       let classListByImage = '';
-      if (result.schedulesByImage && result.schedulesByImage.length > 0) {
-        classListByImage = result.schedulesByImage.map((imageResult, idx) => {
+      if (reindexedSchedulesByImage && reindexedSchedulesByImage.length > 0) {
+        classListByImage = reindexedSchedulesByImage.map((imageResult, idx) => {
           const classNames = [...new Set(imageResult.schedules.map(s => s.title))];
           const classList = classNames.map((name, i) => `  ${i + 1}. ${name}`).join('\n');
           // 생성된 제목이 있으면 사용, 없으면 기본 형식
           const imageTitle = imageResult.title || `이미지 ${idx + 1}`;
           return `📸 ${imageTitle} (${imageResult.fileName}):\n${classList}`;
         }).join('\n\n');
+
+        // 나이 제한으로 제외된 이미지 정보 추가
+        if (removedImages.length > 0) {
+          const removedList = removedImages.map(img =>
+            `  ⚠️ ${img.title || img.fileName} - 학생 나이에 맞지 않아 제외됨`
+          ).join('\n');
+          classListByImage += `\n\n🚫 **제외된 이미지**:\n${removedList}`;
+        }
       } else {
         // 이미지별 정보 없으면 전체 목록으로
         const classNames = [...new Set(result.schedules.map(s => s.title))];
         classListByImage = classNames.map((name, idx) => `${idx + 1}. ${name}`).join('\n');
       }
 
-      // 동적 예시 생성 (실제 추출된 반 이름 기반)
+      // 동적 예시 생성 (실제 추출된 반 이름 기반) - 필터링된 이미지 사용
       let exampleTexts = [];
-      if (result.schedulesByImage && result.schedulesByImage.length > 0) {
+      if (reindexedSchedulesByImage && reindexedSchedulesByImage.length > 0) {
         // 첫 번째 이미지에서 2-3개 반 이름 추출
-        const firstImageClasses = [...new Set(result.schedulesByImage[0].schedules.map(s => s.title))];
+        const firstImageClasses = [...new Set(reindexedSchedulesByImage[0].schedules.map(s => s.title))];
         if (firstImageClasses.length >= 1) {
           exampleTexts.push(`"${firstImageClasses[0]}만 할거야"`);
         }
@@ -337,15 +389,6 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
       } else if (data.action === 'question') {
         console.log('💡 추천 응답 - 시간표 변경 없음');
       }
-
-      // 봇 응답 메시지 추가
-      const botMessage = {
-        id: Date.now() + 1,
-        sender: 'bot',
-        text: data.explanation,
-        timestamp: new Date()
-      };
-      setChatHistory(prev => [...prev, botMessage]);
 
       // 🔄 대화형 추천 응답 처리 (기존 코드 유지)
       if (false && data.intent) {  // 비활성화
