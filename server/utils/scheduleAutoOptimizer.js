@@ -185,11 +185,42 @@ ${scheduleList}
     // 결과를 스케줄에 매핑
     return schedules.map((schedule, idx) => {
       const cat = categorizations.find(c => c.index === idx);
+      const category = cat?.category || '기타';
+
+      // ⭐ 학교가 아닌 경우, 이미지 제목에서 과목 정보 추출
+      let subjectLabel = '';
+      if (category !== '학교') {
+        // 이미지 제목에서 과목 키워드를 **그대로** 추출
+        const keywords = ['필라테스', 'pilates', '요가', 'yoga', 'PT', '수학', 'math', '매스',
+                         '도담', '영어', 'english', '국어', 'korean', '과학', 'science',
+                         '댄스', 'dance', 'KPOP', 'kpop', '케이팝', '힙합', '발레',
+                         '음악', 'music', '피아노', '기타', '바이올린', '드럼',
+                         '미술', 'art', '그림', '체육', '축구', '농구', '수영',
+                         '태권도', '유도', '검도', '코딩', 'coding', '프로그래밍', '컴퓨터'];
+
+        // 가장 먼저 매칭되는 키워드를 과목명으로 사용
+        for (const keyword of keywords) {
+          const titleLower = imageTitle.toLowerCase();
+          const keywordLower = keyword.toLowerCase();
+
+          if (titleLower.includes(keywordLower)) {
+            // 한글이면 그대로, 영어면 첫 글자만 대문자로
+            if (/[가-힣]/.test(keyword)) {
+              subjectLabel = keyword;
+            } else {
+              subjectLabel = keyword.charAt(0).toUpperCase() + keyword.slice(1).toLowerCase();
+            }
+            break;
+          }
+        }
+      }
+
       return {
         ...schedule,
-        category: cat?.category || '기타',
+        category: category,
         priority: cat?.priority || 5,
-        imageTitle
+        imageTitle,
+        subjectLabel,  // 과목명 저장 (줄바꿈용)
       };
     });
 
@@ -210,9 +241,21 @@ function hasTimeOverlap(schedule1, schedule2) {
     return hours * 60 + minutes;
   };
 
+  // 요일 정규화 (한글 → 영어)
+  const normalizeDays = (days) => {
+    const dayMap = {
+      '월': 'MON', '화': 'TUE', '수': 'WED', '목': 'THU',
+      '금': 'FRI', '토': 'SAT', '일': 'SUN'
+    };
+    return days.map(d => dayMap[d] || d);
+  };
+
+  const normalizedDays1 = normalizeDays(days1);
+  const normalizedDays2 = normalizeDays(days2);
+
   // 각 요일별로 겹침 체크
-  for (const day of days1) {
-    if (!days2.includes(day)) continue;
+  for (const day of normalizedDays1) {
+    if (!normalizedDays2.includes(day)) continue;
 
     // 같은 요일에서 시간 겹침 체크
     const start1 = timeToMinutes(schedule1.startTime);
@@ -240,16 +283,82 @@ function imageHasOverlap(imageSchedules, otherSchedules) {
   return false;
 }
 
-async function optimizeSchedules(allSchedules, schedulesByImage) {
+async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules = []) {
   console.log('\n🔍 ========== 새로운 최적화 로직 시작 ==========');
   console.log(`📊 총 ${allSchedules.length}개 스케줄 입력`);
+  console.log(`📌 고정 일정: ${fixedSchedules.length}개`);
 
-  // 0. Phase 1: 학년부 감지 및 필터링
+  // 🔍 디버깅: 모든 스케줄의 gradeLevel 확인
+  console.log('\n🔍 [DEBUG] 모든 스케줄의 gradeLevel 확인:');
+  allSchedules.slice(0, 20).forEach((s, idx) => {
+    console.log(`  ${idx}. ${s.title} (${s.sourceImage}) - gradeLevel: "${s.gradeLevel || 'null'}"`);
+  });
+
+  // 0-1. 고정 일정을 먼저 선택 (최우선)
+  const selectedSchedules = [];
+
+  if (fixedSchedules.length > 0) {
+    console.log('\n📌 Phase 0: 고정 일정 배치 (최우선)');
+    fixedSchedules.forEach(fixed => {
+      console.log(`✅ [고정] ${fixed.title} (${fixed.days?.join(', ')} ${fixed.startTime}-${fixed.endTime})`);
+
+      // 고정 일정이 custom이 아니면 allSchedules에서 원본 찾아서 추가
+      if (fixed.type === 'pinned-class' && fixed.originalSchedule) {
+        selectedSchedules.push(fixed.originalSchedule);
+      } else {
+        selectedSchedules.push(fixed);
+      }
+    });
+
+    // 고정 일정과 겹치는 스케줄 제거
+    console.log('\n🔍 고정 일정과 겹치는 스케줄 제거 중...');
+    const originalCount = allSchedules.length;
+    
+    allSchedules = allSchedules.filter(schedule => {
+      // 고정 일정과 겹치는지 확인
+      const hasOverlap = selectedSchedules.some(fixed => {
+        // 요일 겹침 확인
+        const scheduleDays = Array.isArray(schedule.days) ? schedule.days : [schedule.days];
+        const fixedDays = Array.isArray(fixed.days) ? fixed.days : [fixed.days];
+        const dayOverlap = scheduleDays.some(day => fixedDays.includes(day));
+        
+        if (!dayOverlap) return false;
+        
+        // 시간 겹침 확인
+        const scheduleStart = schedule.startTime;
+        const scheduleEnd = schedule.endTime;
+        const fixedStart = fixed.startTime;
+        const fixedEnd = fixed.endTime;
+        
+        const timeOverlap = scheduleStart < fixedEnd && fixedStart < scheduleEnd;
+        
+        if (timeOverlap) {
+          console.log(`  ✂️ 제거: ${schedule.title} (${scheduleDays.join(',')} ${scheduleStart}-${scheduleEnd}) - ${fixed.title}과 겹침`);
+        }
+        
+        return timeOverlap;
+      });
+      
+      return !hasOverlap;
+    });
+    
+    console.log(`✅ 겹치는 스케줄 ${originalCount - allSchedules.length}개 제거 완료`);
+    console.log(`✅ 고정 일정 ${selectedSchedules.length}개 배치 완료\n`);
+  }
+
+  // 0-2. Phase 1: 학년부 감지 및 필터링
   const studentGrade = detectStudentGrade(allSchedules, schedulesByImage);
   if (studentGrade) {
     console.log(`\n🎓 Phase 1: 학년부 필터링 시작 (학생: ${studentGrade})`);
+    console.log(`🔍 [DEBUG] 필터링 전 스케줄 개수: ${allSchedules.length}`);
     allSchedules = await filterSchedulesByGrade(allSchedules, studentGrade);
     console.log(`✅ 필터링 완료: ${allSchedules.length}개 스케줄\n`);
+
+    // 🔍 디버깅: 필터링 후 남은 스케줄 확인
+    console.log('🔍 [DEBUG] 필터링 후 남은 스케줄 (처음 10개):');
+    allSchedules.slice(0, 10).forEach((s, idx) => {
+      console.log(`  ${idx}. ${s.title} (${s.sourceImage}) - gradeLevel: "${s.gradeLevel || 'null'}"`);
+    });
   }
 
   // 1. 이미지별로 그룹화
@@ -369,33 +478,27 @@ async function optimizeSchedules(allSchedules, schedulesByImage) {
     });
   }
 
-  // 4. 최적화: 우선순위대로 선택
-  const selectedSchedules = [];
+  // 4. 최적화: 우선순위대로 선택 (고정 일정 다음)
   const selectionLog = [];
 
-  console.log('\n🎯 최적화 진행:');
+  console.log('\n🎯 최적화 진행 (고정 일정 제외):');
 
   for (const imageOpt of imageOptions) {
     if (imageOpt.type === 'single') {
-      // 학교: 무조건 선택 (최우선순위니까)
+      // 학교: 무조건 선택 (고정 일정과 겹쳐도 무조건!)
       const option = imageOpt.options[0];
-      const hasConflict = imageHasOverlap(option.schedules, selectedSchedules);
-
-      if (!hasConflict) {
-        console.log(`✅ [${imageOpt.category}] ${imageOpt.imageTitle} - 전체 선택 (${option.schedules.length}개)`);
-        selectedSchedules.push(...option.schedules);
-        selectionLog.push({
-          image: imageOpt.imageTitle,
-          selected: option.name,
-          count: option.schedules.length
-        });
-      } else {
-        console.log(`❌ [${imageOpt.category}] ${imageOpt.imageTitle} - 시간 겹침으로 제외`);
-      }
+      console.log(`✅ [${imageOpt.category}] ${imageOpt.imageTitle} - 전체 선택 (${option.schedules.length}개)`);
+      selectedSchedules.push(...option.schedules);
+      selectionLog.push({
+        image: imageOpt.imageTitle,
+        selected: option.name,
+        count: option.schedules.length
+      });
     } else {
-      // 학원: 여러 옵션 중 겹치지 않는 것들을 모두 선택
+      // 학원: 여러 옵션 중 **하나만** 선택 (같은 수업의 다른 시간대는 상호 배타적)
       const selectedOptions = [];
 
+      // ⭐ 수정: 첫 번째로 겹치지 않는 옵션 하나만 선택
       for (const option of imageOpt.options) {
         const hasConflict = imageHasOverlap(option.schedules, selectedSchedules);
 
@@ -409,6 +512,10 @@ async function optimizeSchedules(allSchedules, schedulesByImage) {
 
           selectedSchedules.push(...option.schedules);
           selectedOptions.push(option);
+
+          // ⭐ 중요: 하나만 선택하고 중단!
+          console.log(`   🛑 학원 옵션 선택 완료 - 나머지 옵션 건너뜀`);
+          break;
         } else {
           console.log(`   ⏭️ "${option.name}" - 시간 겹침으로 건너뜀`);
         }

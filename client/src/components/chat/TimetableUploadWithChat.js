@@ -40,6 +40,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
   const [baseSchedules, setBaseSchedules] = useState(null); // 기본 베이스 스케줄 (학교 시간표)
   const [overallTitle, setOverallTitle] = useState('업로드된 시간표'); // 전체 시간표 제목
   const [filteredSchedules, setFilteredSchedules] = useState(null);
+  const [fixedSchedules, setFixedSchedules] = useState([]); // 고정 일정 (최우선)
   const [showOptimizationModal, setShowOptimizationModal] = useState(false);
   const [slideDirection, setSlideDirection] = useState('left'); // 'left' or 'right'
 
@@ -201,10 +202,10 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
       setSchedulesByImage(reindexedSchedulesByImage);
       setExtractedSchedules(reindexedSchedulesToUse);  // ⭐ 재할당된 인덱스로 업데이트
 
-      // ⭐ 원본 시간표 저장 (롤백용 - 재할당 후 저장!)
-      if (!originalSchedule) {
-        setOriginalSchedule(JSON.parse(JSON.stringify(reindexedSchedulesToUse)));
-        console.log('💾 원본 시간표 저장 (재할당 후):', reindexedSchedulesToUse.length, '개');
+      // ⭐ 원본 전체 시간표 저장 (OCR 추출된 모든 스케줄)
+      if (!originalSchedule && result.allSchedules) {
+        setOriginalSchedule(JSON.parse(JSON.stringify(result.allSchedules)));
+        console.log('💾 원본 전체 시간표 저장:', result.allSchedules.length, '개');
       }
 
       // 기본 베이스 스케줄 저장 (서버에서 분석된 것)
@@ -323,6 +324,138 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
 
     try {
       const token = localStorage.getItem('token');
+
+      // ⭐ 고정 일정 관련 요청인지 먼저 확인
+      const fixedScheduleResponse = await fetch(`${API_BASE_URL}/api/schedule/fixed-intent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token
+        },
+        body: JSON.stringify({
+          message: currentMessage,
+          currentSchedules: extractedSchedules,
+          schedulesByImage: schedulesByImage,
+          fixedSchedules: fixedSchedules
+        })
+      });
+
+      const fixedData = await fixedScheduleResponse.json();
+      console.log('🎯🎯🎯 [v2.0 UPDATED] 고정 일정 응답:', fixedData);
+      console.log('🔍 intent:', fixedData.intent);
+      console.log('✅ success:', fixedData.success);
+      console.log('🎬 action:', fixedData.action);
+
+      // 고정 일정 관련 요청이면 처리하고 리턴
+      if (fixedData.intent && fixedData.intent !== 'none') {
+        console.log('✨ 고정 일정 처리 시작 - 채팅 API 호출 안 함!');
+        console.log('🚫 아래 채팅 API로 안 갑니다!!');
+        // 고정 일정 관련 요청임 (성공 여부와 무관하게)
+
+        // 실패한 경우 메시지만 표시하고 종료
+        if (!fixedData.success || !fixedData.action) {
+          const botMessage = {
+            id: Date.now() + 1,
+            sender: 'bot',
+            text: fixedData.message || '고정 일정 처리에 실패했습니다.',
+            timestamp: new Date()
+          };
+          setChatHistory(prev => [...prev, botMessage]);
+          setIsFilteringChat(false);
+          return;
+        }
+
+        // 성공한 경우 기존 로직 실행
+        let newFixedSchedules = fixedSchedules;
+
+        if (fixedData.action === 'add') {
+          // 중복 체크: 같은 title, days, startTime, endTime이 있으면 추가 안 함
+          const newSchedules = fixedData.schedules.filter(newSched => {
+            return !fixedSchedules.some(existing =>
+              existing.title === newSched.title &&
+              JSON.stringify(existing.days) === JSON.stringify(newSched.days) &&
+              existing.startTime === newSched.startTime &&
+              existing.endTime === newSched.endTime
+            );
+          });
+
+          if (newSchedules.length === 0) {
+            console.log('⚠️ 이미 같은 고정 일정이 존재합니다');
+            setIsFilteringChat(false);
+            return;
+          }
+
+          newFixedSchedules = [...fixedSchedules, ...newSchedules];
+          setFixedSchedules(newFixedSchedules);
+          console.log('✅ 고정 일정 추가:', newSchedules.length, '개 (전체:', newFixedSchedules.length, '개)');
+        } else if (fixedData.action === 'remove') {
+          newFixedSchedules = fixedSchedules.filter(s => !fixedData.scheduleIds.includes(s.id));
+          setFixedSchedules(newFixedSchedules);
+        }
+
+        // 봇 응답 추가
+        const botMessage = {
+          id: Date.now() + 1,
+          sender: 'bot',
+          text: fixedData.message,
+          timestamp: new Date()
+        };
+        setChatHistory(prev => [...prev, botMessage]);
+
+        // ⭐ 고정 일정 추가/삭제 시 즉시 재최적화 실행
+        if (fixedData.action === 'add' || fixedData.action === 'remove') {
+          console.log('🔄 고정 일정 변경 감지 - 자동 재최적화 시작');
+          console.log('📌 전달할 고정 일정:', newFixedSchedules);
+          console.log('📊 전달할 스케줄:', (originalSchedule || extractedSchedules)?.length, '개');
+          console.log('📷 전달할 이미지:', schedulesByImage?.length, '개');
+
+          // 재최적화 API 호출
+          const reoptimizeResponse = await fetch(`${API_BASE_URL}/api/schedule/optimize`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-auth-token': token
+            },
+            body: JSON.stringify({
+              schedules: originalSchedule || extractedSchedules,
+              schedulesByImage: schedulesByImage,
+              fixedSchedules: newFixedSchedules // 새로 업데이트된 고정 일정
+            })
+          });
+
+          const reoptimizeData = await reoptimizeResponse.json();
+          console.log('📥📥📥 [v2.0] 서버 응답:', reoptimizeData);
+          console.log('🔍 success:', reoptimizeData.success);
+          console.log('🔍 optimizedSchedules 타입:', typeof reoptimizeData.optimizedSchedules);
+          console.log('🔍 optimizedSchedules 길이:', reoptimizeData.optimizedSchedules?.length);
+
+          if (reoptimizeData.success && Array.isArray(reoptimizeData.optimizedSchedules)) {
+            console.log('✅ 재최적화 완료:', reoptimizeData.optimizedSchedules.length, '개');
+            console.log('🎯 고정 일정이 포함되어 있는지 확인:');
+            const kpopSchedules = reoptimizeData.optimizedSchedules.filter(s => s.title?.includes('KPOP'));
+            console.log('  → KPOP 스케줄:', kpopSchedules.length, '개', kpopSchedules);
+            setFilteredSchedules(reoptimizeData.optimizedSchedules);
+
+            // 모달 띄우기
+            setSlideDirection('left');
+            setTimeout(() => {
+              setShowOptimizationModal(true);
+            }, 50);
+
+            // 추가 메시지
+            const optimizeMessage = {
+              id: Date.now() + 2,
+              sender: 'bot',
+              text: '✨ 고정 일정을 반영해서 시간표를 다시 최적화했어요!',
+              timestamp: new Date()
+            };
+            setChatHistory(prev => [...prev, optimizeMessage]);
+          }
+        }
+
+        setIsFilteringChat(false);
+        return; // 고정 일정 처리 완료, 일반 채팅 처리 안 함
+      }
 
       // 직전 봇 응답 찾기 (대화 컨텍스트 유지)
       const lastBotMessage = chatHistory
@@ -471,7 +604,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
         };
         setChatHistory(prev => [...prev, warningMessage]);
       }
-      }
+    }
 
     } catch (err) {
       console.error('❌ 채팅 필터링 실패:', err);
@@ -660,9 +793,10 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                 {/* 왼쪽: 시간표 표시 */}
                 <div style={{ width: '70%', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: '1px solid #e5e7eb' }}>
                   <ScheduleOptimizationModal
-                    key={JSON.stringify(filteredSchedules.map(s => s.title + s.startTime))}
+                    key={filteredSchedules && Array.isArray(filteredSchedules) ? JSON.stringify(filteredSchedules.map(s => s.title + s.startTime)) : 'default'}
                     initialSchedules={filteredSchedules}
                     schedulesByImage={schedulesByImage}
+                    fixedSchedules={fixedSchedules}
                     overallTitle={overallTitle}
                     onClose={null}
                     onSchedulesApplied={handleSchedulesApplied}

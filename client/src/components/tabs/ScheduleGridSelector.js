@@ -55,6 +55,7 @@ const ScheduleGridSelector = ({
   schedule,
   exceptions,
   personalTimes,
+  fixedSchedules = [],
   readOnly = true,
   enableMonthView = false,
   showViewControls = true,
@@ -112,12 +113,31 @@ const ScheduleGridSelector = ({
     setTimeRange(newShowFullDay ? { start: 0, end: 24 } : { start: 9, end: 18 });
   };
 
+  // ⭐ personalTimes와 fixedSchedules 합치기
+  const allPersonalTimes = React.useMemo(() => {
+    const combined = [...(personalTimes || [])];
+
+    // 고정 일정을 personalTime 형식으로 변환해서 추가
+    if (fixedSchedules && fixedSchedules.length > 0) {
+      fixedSchedules.forEach(fixed => {
+        combined.push({
+          ...fixed,
+          isFixed: true, // 고정 일정 표시용 플래그
+          color: '#9333EA' // 보라색
+        });
+      });
+    }
+
+    console.log('📌 합쳐진 일정:', combined.length, '개 (고정:', fixedSchedules?.length || 0, ')');
+    return combined;
+  }, [personalTimes, fixedSchedules]);
+
   // 일정에 맞춰 timeRange 자동 조정 (올림 처리)
   useEffect(() => {
-    if (!personalTimes || personalTimes.length === 0) return;
+    if (!allPersonalTimes || allPersonalTimes.length === 0) return;
 
     let maxEndHour = 18;
-    personalTimes.forEach(p => {
+    allPersonalTimes.forEach(p => {
       if (p.endTime) {
         const [hour, minute] = p.endTime.split(':').map(Number);
         // 분이 있으면 다음 시간으로 올림
@@ -136,7 +156,7 @@ const ScheduleGridSelector = ({
     if (!showFullDay && maxEndHour > timeRange.end) {
       setTimeRange(prev => ({ ...prev, end: maxEndHour }));
     }
-  }, [personalTimes, showFullDay]);
+  }, [allPersonalTimes, showFullDay]);
 
   const getCurrentTimeSlots = () => {
     const slots = generateTimeSlots(timeRange.start, timeRange.end);
@@ -185,7 +205,7 @@ const ScheduleGridSelector = ({
         } else {
             // 개인 시간 확인 (자정 넘나드는 시간 처리 포함)
             // filter()로 모든 겹치는 일정 찾기
-            const personalSlots = personalTimes.filter(p => {
+            const personalSlots = allPersonalTimes.filter(p => {
                 // 개인시간의 days 배열이 있는지 확인
                 const personalDays = p.days || [];
 
@@ -203,11 +223,11 @@ const ScheduleGridSelector = ({
                 // 디버그 로그 제거
                 if (false && timeMinutes === timeToMinutes(allPossibleSlots[0]) && dayOfWeek === 0) {
                     console.log('Personal time debug for dayOfWeek', dayOfWeek, ':', {
-                        personalTimes: personalTimes.length,
-                        allPersonalTimes: personalTimes,
+                        personalTimes: allPersonalTimes.length,
+                        allPersonalTimes: allPersonalTimes,
                         time,
                         timeMinutes,
-                        sampleCheck: personalTimes.map(p => ({
+                        sampleCheck: allPersonalTimes.map(p => ({
                             title: p.title,
                             days: p.days,
                             includes: p.days?.includes(dayOfWeek),
@@ -495,7 +515,7 @@ const ScheduleGridSelector = ({
 
     // 새로운 접근: personalTimes를 직접 사용하여 각 요일별 일정 추출 + 같은 제목끼리 병합
     const getDaySchedules = (dayOfWeek) => {
-      const filteredSchedules = personalTimes.filter(p => {
+      const filteredSchedules = allPersonalTimes.filter(p => {
         const personalDays = p.days || [];
         const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
         return p.isRecurring !== false && convertedDays.includes(dayOfWeek);
@@ -744,18 +764,19 @@ const ScheduleGridSelector = ({
                           backgroundColor: bgColor,
                           zIndex: seg.overlapIndex
                         }}
-                        title={`${seg.schedule.title}${seg.schedule.floor ? ` (${seg.schedule.floor}층)` : ''} (${seg.schedule.startTime}~${seg.schedule.endTime})`}
+                        title={`${seg.schedule.subjectLabel ? seg.schedule.subjectLabel + ' - ' : ''}${seg.schedule.title}${seg.schedule.floor ? ` (${seg.schedule.floor}층)` : ''} (${seg.schedule.startTime}~${seg.schedule.endTime})`}
                       >
                         {isLargestSegment && (
                           <div className="text-xs leading-tight flex items-center justify-center h-full overflow-hidden">
                             <div className="truncate w-full px-1">
+                              {seg.schedule.subjectLabel && (
+                                <div className="text-[9px] font-bold truncate opacity-80">{seg.schedule.subjectLabel}</div>
+                              )}
                               <div className="font-semibold truncate text-[11px]">
                                 {seg.schedule.title}
                                 {seg.schedule.floor && <span className="text-[9px] ml-1">({seg.schedule.floor}층)</span>}
                               </div>
-                              {blockHeight > 50 && (
-                                <div className="text-[10px] truncate mt-0.5">{seg.schedule.startTime}~{seg.schedule.endTime}</div>
-                              )}
+                              <div className="text-[10px] truncate mt-0.5">{seg.schedule.startTime}~{seg.schedule.endTime}</div>
                             </div>
                           </div>
                         )}
@@ -819,7 +840,7 @@ const ScheduleGridSelector = ({
                                 return currentMinutes >= startMins && currentMinutes < endMins;
                             });
 
-                            const personalSlot = personalTimes.find(p => {
+                            const personalSlot = allPersonalTimes.find(p => {
                                 const personalDays = p.days || [];
                                 if (p.isRecurring !== false && personalDays.length > 0) {
                                     const convertedDays = personalDays.map(day => {
@@ -902,7 +923,7 @@ const ScheduleGridSelector = ({
       // 해당 날짜의 일정 확인
       const hasSchedule = schedule.some(s => s.dayOfWeek === dayOfWeek);
       const hasException = exceptions.some(e => e.specificDate === dateStr);
-      const hasPersonal = personalTimes.some(p => {
+      const hasPersonal = allPersonalTimes.some(p => {
         const personalDays = p.days || [];
         const isRecurring = p.isRecurring !== false;
         return isRecurring && personalDays.includes(dayOfWeek);
@@ -1042,7 +1063,7 @@ const ScheduleGridSelector = ({
                       console.log('🔍 [병합모드] 월 15:00 블록:', block);
                     }
 
-                    multipleSchedules = personalTimes.filter(p => {
+                    multipleSchedules = allPersonalTimes.filter(p => {
                       const personalDays = p.days || [];
                       const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
 
@@ -1156,7 +1177,7 @@ const ScheduleGridSelector = ({
                     return timeMinutes >= startMins && timeMinutes < endMins;
                   });
                   // 같은 시간대의 모든 personalTimes 찾기
-                  const personalSlots = personalTimes.filter(p => {
+                  const personalSlots = allPersonalTimes.filter(p => {
                     const personalDays = p.days || [];
                     if (p.isRecurring !== false && personalDays.length > 0) {
                       const convertedDays = personalDays.map(day => {
