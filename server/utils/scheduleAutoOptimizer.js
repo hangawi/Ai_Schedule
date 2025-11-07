@@ -187,10 +187,12 @@ ${scheduleList}
       const cat = categorizations.find(c => c.index === idx);
       const category = cat?.category || '기타';
 
-      // ⭐ 학교가 아닌 경우, 이미지 제목에서 과목 정보 추출
-      let subjectLabel = '';
+      // ⭐ 학교가 아닌 경우, 이미지 제목에서 학원 풀네임과 과목 추출
+      let academyName = '';  // 학원 풀네임
+      let subjectName = '';  // 과목명
+
       if (category !== '학교') {
-        // 이미지 제목에서 과목 키워드를 **그대로** 추출
+        // 과목 키워드 정의
         const keywords = ['필라테스', 'pilates', '요가', 'yoga', 'PT', '수학', 'math', '매스',
                          '도담', '영어', 'english', '국어', 'korean', '과학', 'science',
                          '댄스', 'dance', 'KPOP', 'kpop', '케이팝', '힙합', '발레',
@@ -198,20 +200,35 @@ ${scheduleList}
                          '미술', 'art', '그림', '체육', '축구', '농구', '수영',
                          '태권도', '유도', '검도', '코딩', 'coding', '프로그래밍', '컴퓨터'];
 
-        // 가장 먼저 매칭되는 키워드를 과목명으로 사용
+        // 1. 과목명 찾기
+        let foundSubject = null;
         for (const keyword of keywords) {
-          const titleLower = imageTitle.toLowerCase();
           const keywordLower = keyword.toLowerCase();
+          const titleLower = imageTitle.toLowerCase();
 
           if (titleLower.includes(keywordLower)) {
             // 한글이면 그대로, 영어면 첫 글자만 대문자로
             if (/[가-힣]/.test(keyword)) {
-              subjectLabel = keyword;
+              foundSubject = keyword;
             } else {
-              subjectLabel = keyword.charAt(0).toUpperCase() + keyword.slice(1).toLowerCase();
+              foundSubject = keyword.charAt(0).toUpperCase() + keyword.slice(1).toLowerCase();
             }
+            subjectName = foundSubject;
             break;
           }
+        }
+
+        // 2. 학원 풀네임 추출 (이미지 제목 전체를 학원명으로 사용)
+        // "시간표", "schedule" 등의 단어 제거
+        academyName = imageTitle
+          .replace(/\s*시간표\s*/gi, '')
+          .replace(/\s*schedule\s*/gi, '')
+          .replace(/\s*timetable\s*/gi, '')
+          .trim();
+
+        // 학원명이 비어있으면 원본 제목 사용
+        if (!academyName) {
+          academyName = imageTitle;
         }
       }
 
@@ -220,7 +237,8 @@ ${scheduleList}
         category: category,
         priority: cat?.priority || 5,
         imageTitle,
-        subjectLabel,  // 과목명 저장 (줄바꿈용)
+        academyName,   // 학원 풀네임 (예: 기구필라테스 야샤야 PT)
+        subjectName,   // 과목명 (예: 필라테스)
       };
     });
 
