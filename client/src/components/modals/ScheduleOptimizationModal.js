@@ -5,7 +5,7 @@ import ScheduleGridSelector from '../tabs/ScheduleGridSelector';
 import { detectConflicts, generateOptimizationQuestions, optimizeScheduleWithGPT } from '../../utils/scheduleOptimizer';
 import { COLOR_PALETTE, getColorForImageIndex } from '../../utils/scheduleAnalysis/assignScheduleColors';
 import OriginalScheduleModal from './OriginalScheduleModal';
-import { addFixedSchedule, resolveFixedConflict } from '../../services/fixedSchedule/fixedScheduleAPI';
+import { addFixedSchedule, resolveFixedConflict, selectFixedOption } from '../../services/fixedSchedule/fixedScheduleAPI';
 
 const ScheduleOptimizationModal = ({
   combinations,
@@ -339,6 +339,53 @@ const ScheduleOptimizationModal = ({
     }
   };
 
+  // 옵션 선택 핸들러
+  const handleOptionSelection = async (selectedSchedule) => {
+    console.log('✅ 사용자가 선택한 옵션:', selectedSchedule);
+
+    try {
+      const allSchedules = schedulesByImage?.flatMap(img => img.schedules || []) || modifiedCombinations[currentIndex];
+
+      const result = await selectFixedOption(
+        selectedSchedule,
+        currentFixedSchedules,
+        allSchedules,
+        schedulesByImage
+      );
+
+      console.log('📦 옵션 선택 API 응답:', result);
+      console.log('  - optimizedSchedule:', result.optimizedSchedule?.length, '개');
+      console.log('  - fixedSchedules:', result.fixedSchedules?.length, '개');
+
+      if (result.success) {
+        // 시간표 업데이트
+        const updatedCombinations = [...modifiedCombinations];
+        updatedCombinations[currentIndex] = result.optimizedSchedule;
+        setModifiedCombinations(updatedCombinations);
+        setCurrentFixedSchedules(result.fixedSchedules);
+
+        // 성공 메시지 추가
+        const botMessage = {
+          id: Date.now(),
+          text: `${result.message}\n\n✨ 시간표가 자동으로 재최적화되었습니다!\n- 총 ${result.stats.total}개 수업\n- 고정 ${result.stats.fixed}개`,
+          sender: 'bot',
+          timestamp: new Date()
+        };
+
+        setChatMessages(prev => [...prev, botMessage]);
+      }
+    } catch (error) {
+      console.error('옵션 선택 오류:', error);
+      const errorMessage = {
+        id: Date.now(),
+        text: '❌ 옵션 선택 중 오류가 발생했습니다.',
+        sender: 'bot',
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    }
+  };
+
   // 채팅 제출 핸들러
   const handleChatSubmit = async (e) => {
     e.preventDefault();
@@ -397,6 +444,9 @@ const ScheduleOptimizationModal = ({
       );
 
       console.log('📦 고정 일정 API 응답:', fixedResult);
+      console.log('  - hasConflict:', fixedResult.hasConflict);
+      console.log('  - optimizedSchedule:', fixedResult.optimizedSchedule?.length, '개');
+      console.log('  - fixedSchedules:', fixedResult.fixedSchedules?.length, '개');
 
       clearInterval(progressInterval);
       setChatMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId));
@@ -406,6 +456,23 @@ const ScheduleOptimizationModal = ({
         console.log('⏭️ 고정 일정 아님 → 기존 채팅 API로 폴백');
         // 여기서 기존 채팅 API 호출하도록 throw
         throw new Error('NOT_FIXED_SCHEDULE');
+      }
+
+      // 사용자 선택이 필요한 경우 (여러 개 매칭)
+      if (fixedResult.needsUserChoice) {
+        console.log('❓ 사용자 선택 필요:', fixedResult.options?.length, '개 옵션');
+
+        const botMessage = {
+          id: Date.now() + 2,
+          text: fixedResult.message,
+          sender: 'bot',
+          timestamp: new Date(),
+          needsUserChoice: true,
+          options: fixedResult.options
+        };
+
+        setChatMessages(prev => [...prev, botMessage]);
+        return;
       }
 
       // 충돌 발생 시 사용자에게 선택 옵션 제시
@@ -432,14 +499,24 @@ const ScheduleOptimizationModal = ({
 
       // 충돌 없음 → 시간표 업데이트
       if (fixedResult.optimizedSchedule) {
+        console.log('\n🔄 시간표 업데이트 시작:');
+        console.log('  - 현재 조합 인덱스:', currentIndex);
+        console.log('  - 기존 스케줄 개수:', modifiedCombinations[currentIndex]?.length);
+        console.log('  - 새 스케줄 개수:', fixedResult.optimizedSchedule.length);
+        console.log('  - 새 스케줄 첫 3개:', fixedResult.optimizedSchedule.slice(0, 3).map(s =>
+          `${s.title} (${s.days} ${s.startTime}-${s.endTime})`
+        ));
+
         const updatedCombinations = [...modifiedCombinations];
         updatedCombinations[currentIndex] = fixedResult.optimizedSchedule;
         setModifiedCombinations(updatedCombinations);
         setCurrentFixedSchedules(fixedResult.fixedSchedules);
 
+        console.log('✅ 시간표 업데이트 완료');
+
         const botMessage = {
           id: Date.now() + 2,
-          text: `${fixedResult.message}\n\n✨ 시간표가 자동으로 재최적화되었습니다!\n- 총 ${fixedResult.stats.total}개 수업\n- 고정 ${fixedResult.stats.fixed}개\n- 제외 ${fixedResult.stats.removed}개`,
+          text: `${fixedResult.message}\n\n✨ 시간표가 자동으로 재최적화되었습니다!\n- 총 ${fixedResult.stats.total}개 수업\n- 고정 ${fixedResult.stats.fixed}개\n- 제외 ${fixedResult.stats.removed || 0}개`,
           sender: 'bot',
           timestamp: new Date()
         };
@@ -1486,6 +1563,24 @@ const ScheduleOptimizationModal = ({
                     >
                       ⚠️ 둘 다 유지 (겹침 허용)
                     </button>
+                  </div>
+                )}
+
+                {/* 옵션 선택 버튼 */}
+                {message.needsUserChoice && message.options && (
+                  <div className="px-4 pb-3 space-y-2">
+                    {message.options.map((option, idx) => {
+                      const daysStr = Array.isArray(option.days) ? option.days.join(', ') : option.days;
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => handleOptionSelection(option)}
+                          className="w-full px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-left"
+                        >
+                          {idx + 1}. {option.title} ({option.instructor || 'N/A'}) - {daysStr} {option.startTime}-{option.endTime}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 

@@ -22,9 +22,40 @@ router.post('/optimize', auth, async (req, res) => {
     console.log('- 이미지별 스케줄:', schedulesByImage?.length, '개');
     console.log('- 고정 일정:', fixedSchedules?.length || 0, '개');
 
+    // ⭐ 고정 일정이 있으면, schedules에 없어도 원본에서 찾아서 추가
+    let allSchedulesForOptimization = schedules || [];
+
+    if (fixedSchedules && fixedSchedules.length > 0) {
+      const allSchedulesForSearch = schedulesByImage?.flatMap(img => img.schedules || []) || [];
+      const fixedOriginals = fixedSchedules.map(fixed => {
+        if (fixed.originalSchedule) return fixed.originalSchedule;
+        const found = allSchedulesForSearch.find(s =>
+          s.title === fixed.title &&
+          s.startTime === fixed.startTime &&
+          s.endTime === fixed.endTime
+        );
+        return found || fixed;
+      });
+
+      // schedules에 고정 일정 원본이 없으면 추가
+      fixedOriginals.forEach(fixedOrig => {
+        const exists = allSchedulesForOptimization.some(s =>
+          s.title === fixedOrig.title &&
+          s.startTime === fixedOrig.startTime &&
+          s.endTime === fixedOrig.endTime
+        );
+        if (!exists) {
+          console.log(`  ➕ 고정 일정 원본 추가: ${fixedOrig.title} (${fixedOrig.days} ${fixedOrig.startTime}-${fixedOrig.endTime})`);
+          allSchedulesForOptimization.push(fixedOrig);
+        }
+      });
+
+      console.log('  - 최종 입력:', allSchedulesForOptimization.length, '개 (고정 원본 포함)');
+    }
+
     // 새로운 최적화 로직 사용
     const optimizedSchedules = await optimizeSchedules(
-      schedules || [],
+      allSchedulesForOptimization,
       schedulesByImage || [],
       fixedSchedules || []
     );
