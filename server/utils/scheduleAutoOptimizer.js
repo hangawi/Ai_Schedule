@@ -342,6 +342,8 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
     });
 
     const originalCount = allSchedules.length;
+    const originalAllSchedules = [...allSchedules]; // 원본 저장
+    const removedSchedules = []; // 제거된 스케줄 저장
 
     allSchedules = allSchedules.filter(schedule => {
       // 고정 일정의 원본인지 확인 (자기 자신은 제거 안 함)
@@ -355,6 +357,7 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
 
       if (isFixedOriginal) {
         console.log(`  ⏭️ 건너뜀 (고정 일정 원본): ${schedule.title} (${schedule.days} ${schedule.startTime}-${schedule.endTime})`);
+        removedSchedules.push(schedule);
         return false; // 고정 일정 원본은 제거 (selectedSchedules에 이미 추가됨)
       }
 
@@ -395,6 +398,7 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
 
         if (timeOverlap) {
           console.log(`  ✂️ 제거: ${schedule.title} (${scheduleDays.join(',')} ${schedule.startTime}-${schedule.endTime}) - ${fixed.title}과 겹침`);
+          removedSchedules.push(schedule);
         }
 
         return timeOverlap;
@@ -402,9 +406,24 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
 
       return !hasOverlap;
     });
-    
-    console.log(`✅ 겹치는 스케줄 ${originalCount - allSchedules.length}개 제거 완료`);
+
+    console.log(`✅ 겹치는 스케줄 ${removedSchedules.length}개 제거 완료`);
     console.log(`✅ 고정 일정 ${selectedSchedules.length}개 배치 완료\n`);
+
+    // ⭐ 고정 일정 모드: Phase 1, 2 건너뛰고 바로 반환
+    console.log('✅ 고정 일정 모드 활성화 → Phase 1, 2 건너뛰기');
+    const finalSchedules = [...selectedSchedules, ...allSchedules];
+    console.log(`📊 최종 스케줄: ${finalSchedules.length}개 (고정: ${selectedSchedules.length}, 일반: ${allSchedules.length})`);
+
+    return {
+      optimizedSchedules: finalSchedules,
+      alternatives: [],
+      stats: {
+        total: finalSchedules.length,
+        fixed: selectedSchedules.length,
+        removed: removedSchedules.length
+      }
+    };
   }
 
   // 0-2. Phase 1: 학년부 감지 및 필터링
