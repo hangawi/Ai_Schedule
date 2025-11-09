@@ -54,15 +54,16 @@ router.post('/optimize', auth, async (req, res) => {
     }
 
     // 새로운 최적화 로직 사용
-    const optimizedSchedules = await optimizeSchedules(
+    const result = await optimizeSchedules(
       allSchedulesForOptimization,
       schedulesByImage || [],
       fixedSchedules || []
     );
 
+    // result가 { optimizedSchedules: [...] } 형태로 반환되므로 그대로 사용
     res.json({
       success: true,
-      optimizedSchedules
+      optimizedSchedules: result.optimizedSchedules || result
     });
   } catch (error) {
     console.error('❌ 재최적화 오류:', error);
@@ -704,12 +705,14 @@ function filterScheduleByCode(message, currentSchedule) {
  */
 router.post('/chat', auth, async (req, res) => {
   try {
-    const { message, currentSchedule, originalSchedule, scheduleHistory, lastAiResponse, redoStack } = req.body;
+    const { message, currentSchedule, originalSchedule, scheduleHistory, lastAiResponse, redoStack, fixedSchedules, schedulesByImage } = req.body;
 
     console.log('\n💬 채팅 요청:', message);
     console.log('📚 히스토리:', scheduleHistory ? scheduleHistory.length + '단계' : '없음');
     console.log('🔄 Redo 스택:', redoStack ? redoStack.length + '개' : '없음');
     console.log('🤖 직전 AI 응답:', lastAiResponse ? '있음' : '없음');
+    console.log('📌 고정 일정:', fixedSchedules?.length || 0, '개');
+    console.log('🖼️ 이미지별 스케줄:', schedulesByImage?.length || 0, '개');
 
     // Redo (되돌리기 취소) 키워드 감지
     const redoKeywords = ['되돌리기 취소', '취소 취소', 'redo', '다시 실행', '되살려'];
@@ -1181,11 +1184,67 @@ router.post('/chat', auth, async (req, res) => {
       });
     }
 
+    // ⭐ 고정 일정이 있으면 최종적으로 optimizeSchedules 호출해서 겹침 제거
+    let finalSchedule = parsed.schedule;
+    if (fixedSchedules && fixedSchedules.length > 0) {
+      console.log('\n🔄 고정 일정 있음 → 최종 재최적화 실행');
+      console.log('  - AI 결과:', parsed.schedule.length, '개');
+      console.log('  - 고정 일정:', fixedSchedules.length, '개');
+
+      // AI가 반환한 스케줄 + 고정 일정 원본으로 재최적화
+      const allSchedulesForSearch = schedulesByImage?.flatMap(img => img.schedules || []) || [];
+      const fixedOriginals = fixedSchedules.map(fixed => {
+        if (fixed.originalSchedule) return fixed.originalSchedule;
+        const found = allSchedulesForSearch.find(s =>
+          s.title === fixed.title &&
+          s.startTime === fixed.startTime &&
+          s.endTime === fixed.endTime
+        );
+        return found || fixed;
+      });
+
+      // AI 결과 + 고정 원본 합치기 (중복 제거)
+      const schedulesForReoptimization = [...parsed.schedule];
+      fixedOriginals.forEach(fixedOrig => {
+        const exists = schedulesForReoptimization.some(s =>
+          s.title === fixedOrig.title &&
+          s.startTime === fixedOrig.startTime &&
+          s.endTime === fixedOrig.endTime
+        );
+        if (!exists) {
+          console.log(`  ➕ 고정 일정 원본 추가: ${fixedOrig.title} (${fixedOrig.days} ${fixedOrig.startTime}-${fixedOrig.endTime})`);
+          schedulesForReoptimization.push(fixedOrig);
+        }
+      });
+
+      console.log('  - 재최적화 입력:', schedulesForReoptimization.length, '개');
+
+      // optimizeSchedules 호출 (Phase 0 겹침 제거 포함)
+      const optimizedResult = await optimizeSchedules(
+        schedulesForReoptimization,
+        schedulesByImage || [],
+        fixedSchedules
+      );
+
+      finalSchedule = optimizedResult.optimizedSchedules || optimizedResult;
+      console.log('  - 재최적화 결과:', finalSchedule.length, '개');
+
+      // 🔍 김다희 강사가 있는지 확인
+      const hasDahee = finalSchedule.some(s => s.title?.includes('김다희'));
+      console.log('  - 🔍 최종 스케줄에 김다희 강사 포함 여부:', hasDahee);
+      if (hasDahee) {
+        const daheeSchedules = finalSchedule.filter(s => s.title?.includes('김다희'));
+        console.log('  - ⚠️ 김다희 강사 스케줄:', daheeSchedules.map(s =>
+          `${s.title} (${s.days} ${s.startTime}-${s.endTime})`
+        ));
+      }
+    }
+
     res.json({
       success: true,
       understood: parsed.understood,
       action: parsed.action,
-      schedule: parsed.schedule,
+      schedule: finalSchedule,
       explanation: parsed.explanation
     });
 
