@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Grid, Clock, Merge, Split, X } from 'lucide-react';
+import { getColorForImageIndex } from '../../utils/scheduleAnalysis/assignScheduleColors';
 
 // --- Constants and Helpers ---
 const days = [
@@ -131,24 +132,29 @@ const ScheduleGridSelector = ({
         const daysArray = Array.isArray(fixed.days) ? fixed.days : [fixed.days];
         const mappedDays = daysArray.map(day => dayMap[day] || day).filter(d => d && typeof d === 'number');
 
+        // 이미지 인덱스로 색상 가져오기
+        let scheduleColor = '#9333ea'; // 기본 보라색
+        if (fixed.sourceImageIndex !== undefined) {
+          const colorInfo = getColorForImageIndex(fixed.sourceImageIndex);
+          scheduleColor = colorInfo.border; // 색상 팔레트에서 border 색상 사용
+          console.log(`🎨 고정 일정 "${fixed.title}": 이미지${fixed.sourceImageIndex} → ${colorInfo.label} (${scheduleColor})`);
+        }
+
         console.log('🔧 고정 일정 추가:', {
           title: fixed.title,
-          hasAcademyName: !!fixed.academyName,
-          hasSubjectName: !!fixed.subjectName,
-          academyName: fixed.academyName,
-          subjectName: fixed.subjectName,
-          color: fixed.color || fixed.originalSchedule?.color,
+          sourceImageIndex: fixed.sourceImageIndex,
+          color할당전: fixed.color,
+          color할당후: scheduleColor,
           days원본: fixed.days,
-          days변환후: mappedDays,
-          startTime: fixed.startTime,
-          endTime: fixed.endTime
+          days변환후: mappedDays
         });
 
         combined.push({
           ...fixed,
           days: mappedDays, // ⭐ 숫자 배열로 변환
+          color: scheduleColor, // ⭐ 원본 이미지 색상으로 할당
           isFixed: true, // 고정 일정 표시용 플래그
-          color: fixed.color || fixed.originalSchedule?.color || '#9333EA' // 원본 색상 우선, 없으면 보라색
+          sourceImageIndex: fixed.sourceImageIndex // 범례 필터링용
         });
       });
     }

@@ -1318,7 +1318,11 @@ const ScheduleOptimizationModal = ({
               schedule={[]}
               exceptions={[]}
               personalTimes={personalTimes}
-              fixedSchedules={currentFixedSchedules}
+              fixedSchedules={
+                hoveredImageIndex !== null
+                  ? currentFixedSchedules.filter(fixed => fixed.sourceImageIndex === hoveredImageIndex)
+                  : currentFixedSchedules
+              }
               readOnly={true}
               enableMonthView={false}
               showViewControls={false}
