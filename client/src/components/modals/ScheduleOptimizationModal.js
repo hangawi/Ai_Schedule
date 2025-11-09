@@ -542,6 +542,7 @@ const ScheduleOptimizationModal = ({
         };
 
         setChatMessages(prev => [...prev, botMessage]);
+        console.log('🛑 고정 일정 처리 완료 - 함수 종료');
         return;
       }
 
@@ -554,12 +555,14 @@ const ScheduleOptimizationModal = ({
       };
 
       setChatMessages(prev => [...prev, botMessage]);
+      console.log('🛑 고정 일정 처리 완료 (기타) - 함수 종료');
       return;
     } catch (error) {
       // 고정 일정 아닌 경우 기존 채팅 API로 폴백
       if (error.message === 'NOT_FIXED_SCHEDULE') {
-        console.log('📨 기존 채팅 API 호출');
+        console.log('📨 기존 채팅 API 호출 (NOT_FIXED_SCHEDULE)');
       } else {
+        console.error('🚨 고정 일정 API 에러:', error.message);
         console.error('❌ 고정 일정 처리 오류:', error);
         clearInterval(progressInterval);
         setChatMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId));

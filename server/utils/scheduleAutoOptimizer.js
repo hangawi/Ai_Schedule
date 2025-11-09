@@ -342,7 +342,17 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
     });
 
     const originalCount = allSchedules.length;
-    const originalAllSchedules = [...allSchedules]; // 원본 저장
+
+    // ⭐ 전체 스케줄 풀 생성 (schedulesByImage에서 모든 스케줄 추출)
+    const fullSchedulePool = [];
+    schedulesByImage.forEach(imageInfo => {
+      if (imageInfo.schedules && Array.isArray(imageInfo.schedules)) {
+        fullSchedulePool.push(...imageInfo.schedules);
+      }
+    });
+    console.log(`📦 전체 스케줄 풀: ${fullSchedulePool.length}개 (최적화 전 모든 스케줄)`);
+
+    const originalAllSchedules = [...allSchedules]; // 현재 최적화된 스케줄 (30개)
     const removedSchedules = []; // 제거된 스케줄 저장
 
     allSchedules = allSchedules.filter(schedule => {
@@ -357,7 +367,7 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
 
       if (isFixedOriginal) {
         console.log(`  ⏭️ 건너뜀 (고정 일정 원본): ${schedule.title} (${schedule.days} ${schedule.startTime}-${schedule.endTime})`);
-        removedSchedules.push(schedule);
+        // ⭐ removedSchedules에 추가하지 않음 - 이건 원래 있던 것이므로 후보 스케줄 풀에서 제외하면 안됨
         return false; // 고정 일정 원본은 제거 (selectedSchedules에 이미 추가됨)
       }
 
@@ -412,8 +422,107 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
 
     // ⭐ 고정 일정 모드: Phase 1, 2 건너뛰고 바로 반환
     console.log('✅ 고정 일정 모드 활성화 → Phase 1, 2 건너뛰기');
-    const finalSchedules = [...selectedSchedules, ...allSchedules];
-    console.log(`📊 최종 스케줄: ${finalSchedules.length}개 (고정: ${selectedSchedules.length}, 일반: ${allSchedules.length})`);
+    let finalSchedules = [...selectedSchedules, ...allSchedules];
+    console.log(`📊 현재 스케줄 분석:`);
+    console.log(`  - 고정 일정: ${selectedSchedules.length}개`);
+    console.log(`  - 일반 일정: ${allSchedules.length}개`);
+    console.log(`  - 합계: ${finalSchedules.length}개`);
+    console.log(`  - 원본: ${originalCount}개`);
+    console.log(`  - 제거됨: ${removedSchedules.length}개`);
+    console.log(`  - 부족: ${originalCount - finalSchedules.length}개`);
+
+    // 원본 개수를 유지하기 위해 추가 스케줄 선택
+    if (finalSchedules.length < originalCount) {
+      const needed = originalCount - finalSchedules.length;
+      console.log(`🔄 ${needed}개 스케줄 추가 필요`);
+
+      // 시간 변환 헬퍼
+      const timeToMinutes = (time) => {
+        const [h, m] = time.split(':').map(Number);
+        return h * 60 + m;
+      };
+
+      // 요일 정규화
+      const normalizeDays = (days) => {
+        const dayMap = {
+          '월': 'MON', '화': 'TUE', '수': 'WED', '목': 'THU',
+          '금': 'FRI', '토': 'SAT', '일': 'SUN',
+          'MON': 'MON', 'TUE': 'TUE', 'WED': 'WED', 'THU': 'THU',
+          'FRI': 'FRI', 'SAT': 'SAT', 'SUN': 'SUN'
+        };
+        const daysArray = Array.isArray(days) ? days : [days];
+        return daysArray.map(d => dayMap[d] || d);
+      };
+
+      // 겹침 체크
+      const hasOverlapWith = (newSchedule, existingSchedules) => {
+        const newStart = timeToMinutes(newSchedule.startTime);
+        const newEnd = timeToMinutes(newSchedule.endTime);
+        const newDays = normalizeDays(newSchedule.days);
+
+        return existingSchedules.some(existing => {
+          const existStart = timeToMinutes(existing.startTime);
+          const existEnd = timeToMinutes(existing.endTime);
+          const existDays = normalizeDays(existing.days);
+
+          const dayOverlap = newDays.some(day => existDays.includes(day));
+          if (!dayOverlap) return false;
+
+          return !(newEnd <= existStart || newStart >= existEnd);
+        });
+      };
+
+      // 제거되지 않은 스케줄 중에서 후보 선택 (⭐ fullSchedulePool 사용!)
+      const removedKeys = new Set(removedSchedules.map(s => `${s.title}-${s.startTime}-${s.endTime}`));
+      const finalKeys = new Set(finalSchedules.map(s => `${s.title}-${s.startTime}-${s.endTime}`));
+
+      // ⭐ 제거된 스케줄이 속한 이미지 찾기 (같은 학원에서 대체 스케줄 선택)
+      const removedImageSources = new Set(removedSchedules.map(s => s.sourceImage));
+      console.log(`🔍 제거된 스케줄의 출처 이미지: ${Array.from(removedImageSources).join(', ')}`);
+
+      // 모든 후보 스케줄 (제거되지 않고, 최종에도 없는 것)
+      let candidateSchedules = fullSchedulePool.filter(s => {
+        const key = `${s.title}-${s.startTime}-${s.endTime}`;
+        const notRemoved = !removedKeys.has(key);
+        const notInFinal = !finalKeys.has(key);
+        return notRemoved && notInFinal;
+      });
+
+      // ⭐ 같은 이미지 출처 우선 정렬 (제거된 스케줄과 같은 학원 우선)
+      candidateSchedules.sort((a, b) => {
+        const aIsSameSource = removedImageSources.has(a.sourceImage);
+        const bIsSameSource = removedImageSources.has(b.sourceImage);
+        if (aIsSameSource && !bIsSameSource) return -1;
+        if (!aIsSameSource && bIsSameSource) return 1;
+        return 0;
+      });
+
+      console.log(`🔍 후보 스케줄: ${candidateSchedules.length}개`);
+      console.log(`  📊 전체 풀: ${fullSchedulePool.length}, 제거된 키: ${removedKeys.size}, 최종 키: ${finalKeys.size}`);
+      if (candidateSchedules.length > 0) {
+        console.log(`  🎯 우선순위 top 3:`);
+        candidateSchedules.slice(0, 3).forEach((s, i) => {
+          const isSameSource = removedImageSources.has(s.sourceImage);
+          console.log(`    ${i + 1}. ${s.title} (${s.days} ${s.startTime}-${s.endTime}) ${isSameSource ? '✅ 같은 출처' : '❌ 다른 출처'}`);
+        });
+      }
+
+      // 겹치지 않는 스케줄 추가
+      let added = 0;
+      for (const candidate of candidateSchedules) {
+        if (added >= needed) break;
+
+        if (!hasOverlapWith(candidate, finalSchedules)) {
+          finalSchedules.push(candidate);
+          added++;
+          console.log(`  ➕ 추가: ${candidate.title} (${candidate.days} ${candidate.startTime}-${candidate.endTime})`);
+        }
+      }
+
+      console.log(`✅ ${added}개 스케줄 추가 완료`);
+    }
+
+    console.log(`📊 최종 스케줄: ${finalSchedules.length}개 (고정: ${selectedSchedules.length}, 일반: ${finalSchedules.length - selectedSchedules.length})`);
 
     return {
       optimizedSchedules: finalSchedules,

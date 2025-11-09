@@ -128,6 +128,19 @@ const ScheduleGridSelector = ({
       };
 
       fixedSchedules.forEach(fixed => {
+        // ⭐ 중복 체크: personalTimes에 이미 있는지 확인
+        const isDuplicate = combined.some(existing =>
+          existing.title === fixed.title &&
+          existing.startTime === fixed.startTime &&
+          existing.endTime === fixed.endTime &&
+          JSON.stringify(existing.days) === JSON.stringify(fixed.days)
+        );
+
+        if (isDuplicate) {
+          console.log(`⏭️ 고정 일정 "${fixed.title}" 이미 존재 - 건너뜀`);
+          return;
+        }
+
         // days를 숫자 배열로 변환
         const daysArray = Array.isArray(fixed.days) ? fixed.days : [fixed.days];
         const mappedDays = daysArray.map(day => dayMap[day] || day).filter(d => d && typeof d === 'number');
