@@ -519,6 +519,8 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
         setExtractedSchedules(data.schedule);
         setFilteredSchedules(data.schedule);
         setScheduleHistory([]);
+        setFixedSchedules([]); // 고정 일정도 초기화
+        console.log('✅ 롤백: 고정 일정도 함께 초기화');
       } else if (data.action === 'question') {
         console.log('💡 추천 응답 - 시간표 변경 없음');
       }

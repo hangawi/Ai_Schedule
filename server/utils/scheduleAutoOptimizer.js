@@ -394,6 +394,7 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
   // 2. Phase 2: LLM 기반 카테고리 판단 및 옵션 생성 (배치 처리)
   console.log('\n🤖 Phase 2: LLM 기반 카테고리 분류 시작 (배치 모드)...');
   const imageOptions = [];
+  const allProcessedSchedules = []; // ⭐ academyName, subjectName이 추가된 전체 스케줄
 
   for (const [fileName, schedules] of Object.entries(imageGroups)) {
     const imageInfo = schedulesByImage.find(img => img.fileName === fileName);
@@ -401,6 +402,9 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
 
     // 모든 스케줄을 한 번에 배치로 LLM에 전달
     const schedulesWithCategory = await categorizeSchedulesBatch(schedules, imageTitle);
+
+    // ⭐ 처리된 스케줄을 전체 목록에 추가 (academyName, subjectName 포함)
+    allProcessedSchedules.push(...schedulesWithCategory);
 
     // 이미지의 카테고리 = 가장 높은 우선순위
     const imagePriority = Math.min(...schedulesWithCategory.map(s => s.priority));
@@ -573,6 +577,7 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
 
   return {
     optimizedSchedules: selectedSchedules,  // ⭐ 중복 제거 절대 안 함!
+    allProcessedSchedules,  // ⭐ academyName, subjectName이 추가된 전체 스케줄
     removedSchedules: [],
     analysis: {
       totalInput: allSchedules.length,
@@ -582,4 +587,4 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
   };
 }
 
-module.exports = { optimizeSchedules };
+module.exports = { optimizeSchedules, categorizeSchedulesBatch };

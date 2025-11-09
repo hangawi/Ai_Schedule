@@ -410,7 +410,28 @@ exports.analyzeScheduleImages = async (req, res) => {
     const baseSchedules = extractBaseSchedules(baseAnalysis);
     console.log('📚 최종 baseSchedules:', baseSchedules.length, '개');
 
-    // 4. ⭐ 자동 스케줄 최적화 (우선순위 기반 겹침 제거 + 학년부 필터링)
+    // 4. ⭐ 병합 전 원본 스케줄에 academyName, subjectName 추가
+    console.log('\n🔧 원본 스케줄 처리 시작 (academyName, subjectName 추가)...');
+    const { categorizeSchedulesBatch } = require('../utils/scheduleAutoOptimizer');
+
+    // titledImages의 각 이미지별로 스케줄 처리
+    const processedSchedulesByImage = [];
+    for (const img of titledImages) {
+      const imageTitle = img.imageTitle || img.fileName;
+      const schedulesForImage = allSchedules.filter(s => s.sourceImage === img.fileName);
+
+      // categorizeSchedulesBatch로 academyName, subjectName 추가
+      const processedSchedules = await categorizeSchedulesBatch(schedulesForImage, imageTitle);
+
+      processedSchedulesByImage.push({
+        ...img,
+        schedules: processedSchedules
+      });
+
+      console.log(`  ✅ ${img.fileName}: ${processedSchedules.length}개 처리 완료`);
+    }
+
+    // 5. ⭐ 자동 스케줄 최적화 (우선순위 기반 겹침 제거 + 학년부 필터링)
     console.log('\n🔧 자동 스케줄 최적화 시작...');
     const optimizationResult = await optimizeSchedules(allSchedules, titledImages);
     console.log('✨ 최적화 결과:', {
@@ -425,7 +446,7 @@ exports.analyzeScheduleImages = async (req, res) => {
       optimizedSchedules: optimizationResult.optimizedSchedules, // ⭐ 자동 최적화된 스케줄
       optimizationAnalysis: optimizationResult.analysis, // 최적화 분석 정보
       totalSchedules: allSchedules.length,
-      schedulesByImage: titledImages, // 제목이 포함된 이미지별 정보
+      schedulesByImage: processedSchedulesByImage, // ⭐ academyName, subjectName이 추가된 이미지별 정보
       overallTitle: overallTitle, // 전체 제목
       baseSchedules: baseSchedules, // 기본 베이스 스케줄 (학교)
       baseAnalysis: baseAnalysis, // 기본 베이스 분석 결과

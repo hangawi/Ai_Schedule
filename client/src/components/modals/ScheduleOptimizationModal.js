@@ -5,6 +5,7 @@ import ScheduleGridSelector from '../tabs/ScheduleGridSelector';
 import { detectConflicts, generateOptimizationQuestions, optimizeScheduleWithGPT } from '../../utils/scheduleOptimizer';
 import { COLOR_PALETTE, getColorForImageIndex } from '../../utils/scheduleAnalysis/assignScheduleColors';
 import OriginalScheduleModal from './OriginalScheduleModal';
+import { addFixedSchedule, resolveFixedConflict } from '../../services/fixedSchedule/fixedScheduleAPI';
 
 const ScheduleOptimizationModal = ({
   combinations,
@@ -79,6 +80,8 @@ const ScheduleOptimizationModal = ({
   }); // AI 최적화 상태
   const [hoveredImageIndex, setHoveredImageIndex] = useState(null); // hover된 이미지 인덱스
   const [selectedImageForOriginal, setSelectedImageForOriginal] = useState(null); // 원본 시간표 모달용
+  const [currentFixedSchedules, setCurrentFixedSchedules] = useState(fixedSchedules || []); // 고정 일정 목록
+  const [conflictState, setConflictState] = useState(null); // 충돌 상태 { pendingFixed, conflicts }
   const chatEndRef = useRef(null);
   const chatContainerRef = useRef(null);
 
@@ -88,6 +91,12 @@ const ScheduleOptimizationModal = ({
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [chatMessages]);
+
+  // fixedSchedules prop 변경 시 currentFixedSchedules 동기화
+  useEffect(() => {
+    console.log('🔄 fixedSchedules prop 변경 감지:', fixedSchedules?.length, '개');
+    setCurrentFixedSchedules(fixedSchedules || []);
+  }, [fixedSchedules]);
 
   // 모달이 열릴 때 원본 저장만 (자동 최적화 제안 비활성화)
   useEffect(() => {
@@ -281,6 +290,55 @@ const ScheduleOptimizationModal = ({
     onClose();
   };
 
+  // 충돌 해결 핸들러
+  const handleConflictResolution = async (resolution) => {
+    if (!conflictState) return;
+
+    try {
+      const allSchedules = schedulesByImage?.flatMap(img => img.schedules || []) || modifiedCombinations[currentIndex];
+
+      const result = await resolveFixedConflict(
+        resolution,
+        conflictState.pendingFixed,
+        conflictState.conflicts,
+        allSchedules,
+        currentFixedSchedules
+      );
+
+      if (result.success) {
+        // 시간표 업데이트
+        const updatedCombinations = [...modifiedCombinations];
+        updatedCombinations[currentIndex] = result.optimizedSchedule;
+        setModifiedCombinations(updatedCombinations);
+        setCurrentFixedSchedules(result.fixedSchedules);
+
+        // 충돌 상태 초기화
+        setConflictState(null);
+
+        // 결과 메시지 표시
+        const botMessage = {
+          id: Date.now(),
+          text: `${result.message}\n\n✨ 시간표가 재최적화되었습니다!\n- 총 ${result.stats.total}개 수업\n- 고정 ${result.stats.fixed}개\n- 제외 ${result.stats.removed}개`,
+          sender: 'bot',
+          timestamp: new Date()
+        };
+
+        setChatMessages(prev => [...prev, botMessage]);
+      }
+    } catch (error) {
+      console.error('❌ 충돌 해결 오류:', error);
+
+      const errorMessage = {
+        id: Date.now(),
+        text: '충돌 해결 중 오류가 발생했습니다. 다시 시도해주세요.',
+        sender: 'bot',
+        timestamp: new Date()
+      };
+
+      setChatMessages(prev => [...prev, errorMessage]);
+    }
+  };
+
   // 채팅 제출 핸들러
   const handleChatSubmit = async (e) => {
     e.preventDefault();
@@ -323,7 +381,104 @@ const ScheduleOptimizationModal = ({
       ));
     }, 300); // 0.3초마다 업데이트
 
-    // AI에게 자연어 요청 보내기
+    // 고정 일정 처리 우선 시도
+    try {
+      console.log('🔍 고정 일정 처리 시도:', input);
+      console.log('📋 currentSchedules:', modifiedCombinations[currentIndex]?.length, '개');
+      console.log('📋 주니어 찾기:', modifiedCombinations[currentIndex]?.filter(s => s.title?.includes('주니어')).map(s => s.title));
+      console.log('📋 현재 고정 일정 (currentFixedSchedules):', currentFixedSchedules?.length, '개');
+      console.log('📋 원본 고정 일정 (fixedSchedules prop):', fixedSchedules?.length, '개');
+
+      const fixedResult = await addFixedSchedule(
+        input,
+        modifiedCombinations[currentIndex],
+        schedulesByImage,
+        currentFixedSchedules
+      );
+
+      console.log('📦 고정 일정 API 응답:', fixedResult);
+
+      clearInterval(progressInterval);
+      setChatMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId));
+
+      // 고정 일정 관련 요청이 아니면 기존 채팅 API로 폴백
+      if (!fixedResult.success && fixedResult.intent === 'none') {
+        console.log('⏭️ 고정 일정 아님 → 기존 채팅 API로 폴백');
+        // 여기서 기존 채팅 API 호출하도록 throw
+        throw new Error('NOT_FIXED_SCHEDULE');
+      }
+
+      // 충돌 발생 시 사용자에게 선택 옵션 제시
+      if (fixedResult.hasConflict) {
+        console.warn('⚠️ 충돌 발생:', fixedResult.conflicts);
+
+        setConflictState({
+          pendingFixed: fixedResult.pendingFixed,
+          conflicts: fixedResult.conflicts,
+          message: fixedResult.message
+        });
+
+        const botMessage = {
+          id: Date.now() + 2,
+          text: fixedResult.message,
+          sender: 'bot',
+          timestamp: new Date(),
+          isConflict: true // 충돌 UI 표시용 플래그
+        };
+
+        setChatMessages(prev => [...prev, botMessage]);
+        return;
+      }
+
+      // 충돌 없음 → 시간표 업데이트
+      if (fixedResult.optimizedSchedule) {
+        const updatedCombinations = [...modifiedCombinations];
+        updatedCombinations[currentIndex] = fixedResult.optimizedSchedule;
+        setModifiedCombinations(updatedCombinations);
+        setCurrentFixedSchedules(fixedResult.fixedSchedules);
+
+        const botMessage = {
+          id: Date.now() + 2,
+          text: `${fixedResult.message}\n\n✨ 시간표가 자동으로 재최적화되었습니다!\n- 총 ${fixedResult.stats.total}개 수업\n- 고정 ${fixedResult.stats.fixed}개\n- 제외 ${fixedResult.stats.removed}개`,
+          sender: 'bot',
+          timestamp: new Date()
+        };
+
+        setChatMessages(prev => [...prev, botMessage]);
+        return;
+      }
+
+      // 기타 성공 (목록 조회, 삭제 등)
+      const botMessage = {
+        id: Date.now() + 2,
+        text: fixedResult.message,
+        sender: 'bot',
+        timestamp: new Date()
+      };
+
+      setChatMessages(prev => [...prev, botMessage]);
+      return;
+    } catch (error) {
+      // 고정 일정 아닌 경우 기존 채팅 API로 폴백
+      if (error.message === 'NOT_FIXED_SCHEDULE') {
+        console.log('📨 기존 채팅 API 호출');
+      } else {
+        console.error('❌ 고정 일정 처리 오류:', error);
+        clearInterval(progressInterval);
+        setChatMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId));
+
+        const errorMessage = {
+          id: Date.now() + 2,
+          text: '고정 일정 처리 중 오류가 발생했습니다. 다시 시도해주세요.',
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, errorMessage]);
+        return;
+      }
+    }
+
+    // 기존 AI 채팅 API로 폴백
     try {
       const token = localStorage.getItem('token');
       console.log('🔑 토큰 확인:', token ? '있음' : '없음');
@@ -423,6 +578,9 @@ const ScheduleOptimizationModal = ({
 
           // 히스토리 초기화
           setScheduleHistory([]);
+          // 고정 일정 초기화
+          setCurrentFixedSchedules([]);
+          console.log('✅ 고정 일정도 함께 초기화');
         } else if (data.action === 'question') {
           // 추천/질문 응답 - 시간표는 변경하지 않음
           console.log('💡 추천 응답 - 시간표 변경 없음');
@@ -1160,7 +1318,7 @@ const ScheduleOptimizationModal = ({
               schedule={[]}
               exceptions={[]}
               personalTimes={personalTimes}
-              fixedSchedules={fixedSchedules}
+              fixedSchedules={currentFixedSchedules}
               readOnly={true}
               enableMonthView={false}
               showViewControls={false}
@@ -1302,6 +1460,31 @@ const ScheduleOptimizationModal = ({
                     </span>
                   )}
                 </p>
+
+                {/* 충돌 해결 버튼 */}
+                {message.isConflict && conflictState && (
+                  <div className="px-4 pb-3 space-y-2">
+                    <button
+                      onClick={() => handleConflictResolution('keep_new')}
+                      className="w-full px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                      ✅ 새 일정 유지 (기존 제거)
+                    </button>
+                    <button
+                      onClick={() => handleConflictResolution('keep_existing')}
+                      className="w-full px-3 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                    >
+                      ⏸️ 기존 일정 유지 (새 일정 취소)
+                    </button>
+                    <button
+                      onClick={() => handleConflictResolution('keep_both')}
+                      className="w-full px-3 py-2 text-sm bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors"
+                    >
+                      ⚠️ 둘 다 유지 (겹침 허용)
+                    </button>
+                  </div>
+                )}
+
                 <p className={`px-4 pb-2 text-xs ${
                   message.sender === 'user' ? 'text-purple-200' : 'text-gray-400'
                 }`}>
