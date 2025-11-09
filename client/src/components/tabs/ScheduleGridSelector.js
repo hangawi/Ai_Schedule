@@ -119,11 +119,36 @@ const ScheduleGridSelector = ({
 
     // 고정 일정을 personalTime 형식으로 변환해서 추가
     if (fixedSchedules && fixedSchedules.length > 0) {
+      const dayMap = {
+        'MON': 1, 'TUE': 2, 'WED': 3, 'THU': 4,
+        'FRI': 5, 'SAT': 6, 'SUN': 7,
+        '월': 1, '화': 2, '수': 3, '목': 4,
+        '금': 5, '토': 6, '일': 7
+      };
+
       fixedSchedules.forEach(fixed => {
+        // days를 숫자 배열로 변환
+        const daysArray = Array.isArray(fixed.days) ? fixed.days : [fixed.days];
+        const mappedDays = daysArray.map(day => dayMap[day] || day).filter(d => d && typeof d === 'number');
+
+        console.log('🔧 고정 일정 추가:', {
+          title: fixed.title,
+          hasAcademyName: !!fixed.academyName,
+          hasSubjectName: !!fixed.subjectName,
+          academyName: fixed.academyName,
+          subjectName: fixed.subjectName,
+          color: fixed.color || fixed.originalSchedule?.color,
+          days원본: fixed.days,
+          days변환후: mappedDays,
+          startTime: fixed.startTime,
+          endTime: fixed.endTime
+        });
+
         combined.push({
           ...fixed,
+          days: mappedDays, // ⭐ 숫자 배열로 변환
           isFixed: true, // 고정 일정 표시용 플래그
-          color: '#9333EA' // 보라색
+          color: fixed.color || fixed.originalSchedule?.color || '#9333EA' // 원본 색상 우선, 없으면 보라색
         });
       });
     }
@@ -512,6 +537,11 @@ const ScheduleGridSelector = ({
 
   const renderMergedWeekView = () => {
     console.log('📅 renderMergedWeekView 호출됨');
+    console.log('📊 사용할 데이터:', {
+      allPersonalTimes: allPersonalTimes?.length,
+      고정일정포함여부: allPersonalTimes?.some(p => p.isFixed),
+      주니어B개수: allPersonalTimes?.filter(p => p.title?.includes('주니어B')).length
+    });
 
     // 새로운 접근: personalTimes를 직접 사용하여 각 요일별 일정 추출 + 같은 제목끼리 병합
     const getDaySchedules = (dayOfWeek) => {
@@ -769,34 +799,34 @@ const ScheduleGridSelector = ({
                         {isLargestSegment && (
                           <div className="text-xs leading-tight flex flex-col items-center justify-center h-full overflow-hidden">
                             <div className="w-full px-1 text-center">
-                              {/* ===== 3줄 버전 (현재 사용) ===== */}
+                              {/* ===== 4줄 버전 (현재 사용) ===== */}
                               {/* 1. 학원 풀네임 표시 (예: 기구필라테스 야샤야 PT) */}
                               {seg.schedule.academyName && (
-                                <div className="text-[9px] font-bold opacity-90 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.academyName}</div>
+                                <div className="text-[8px] font-bold opacity-90 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.academyName}</div>
                               )}
                               {/* 2. 과목 표시 (예: 필라테스, 수학) */}
                               {seg.schedule.subjectName && (
-                                <div className="text-[10px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.subjectName}</div>
+                                <div className="text-[9px] font-semibold opacity-80 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.subjectName}</div>
                               )}
-                              {/* 3. 시간 표시 */}
-                              <div className="text-[10px] mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.startTime}~{seg.schedule.endTime}</div>
+                              {/* 3. 강사이름 표시 (예: 김다희 강사) */}
+                              <div className="font-semibold text-[10px] whitespace-nowrap overflow-hidden text-ellipsis">
+                                {seg.schedule.title}
+                                {seg.schedule.floor && <span className="text-[8px] ml-1">({seg.schedule.floor}층)</span>}
+                              </div>
+                              {/* 4. 시간 표시 */}
+                              <div className="text-[9px] mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.startTime}~{seg.schedule.endTime}</div>
 
-                              {/* ===== 4줄 버전 (주석처리) ===== */}
+                              {/* ===== 3줄 버전 (주석처리) ===== */}
                               {/* 1. 학원 풀네임 표시 (예: 기구필라테스 야샤야 PT) */}
                               {/* {seg.schedule.academyName && (
-                                <div className="text-[8px] font-bold opacity-90 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.academyName}</div>
+                                <div className="text-[9px] font-bold opacity-90 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.academyName}</div>
                               )} */}
                               {/* 2. 과목 표시 (예: 필라테스, 수학) */}
                               {/* {seg.schedule.subjectName && (
-                                <div className="text-[9px] font-semibold opacity-80 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.subjectName}</div>
+                                <div className="text-[10px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.subjectName}</div>
                               )} */}
-                              {/* 3. 강사이름 표시 (예: 김다희 강사) */}
-                              {/* <div className="font-semibold text-[10px] whitespace-nowrap overflow-hidden text-ellipsis">
-                                {seg.schedule.title}
-                                {seg.schedule.floor && <span className="text-[8px] ml-1">({seg.schedule.floor}층)</span>}
-                              </div> */}
-                              {/* 4. 시간 표시 */}
-                              {/* <div className="text-[9px] mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.startTime}~{seg.schedule.endTime}</div> */}
+                              {/* 3. 시간 표시 */}
+                              {/* <div className="text-[10px] mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.startTime}~{seg.schedule.endTime}</div> */}
                             </div>
                           </div>
                         )}

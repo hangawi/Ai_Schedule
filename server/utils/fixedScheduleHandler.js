@@ -78,6 +78,16 @@ function findClassByName(schedules, className) {
     const title = (schedule.title || '').toLowerCase().replace(/\s+/g, '');
     const instructor = (schedule.instructor || '').toLowerCase().replace(/\s+/g, '').replace(/t$/i, '');
 
+    // 색상 필드 확인
+    if (schedule.title?.includes('주니어B')) {
+      console.log(`  📝 주니어B 스케줄 필드:`, {
+        title: schedule.title,
+        color: schedule.color,
+        hasColor: !!schedule.color,
+        allKeys: Object.keys(schedule)
+      });
+    }
+
     let matches = false;
 
     if (searchInstructor && searchTitle) {
@@ -120,6 +130,15 @@ function findClassByName(schedules, className) {
  * 시간표 수업을 고정 스케줄로 변환
  */
 function convertToFixedSchedule(schedule, type = 'pinned-class') {
+  console.log('🔄 convertToFixedSchedule:', {
+    title: schedule.title,
+    hasAcademyName: !!schedule.academyName,
+    hasSubjectName: !!schedule.subjectName,
+    academyName: schedule.academyName,
+    subjectName: schedule.subjectName,
+    color: schedule.color
+  });
+
   return {
     id: `${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     type,
@@ -129,9 +148,13 @@ function convertToFixedSchedule(schedule, type = 'pinned-class') {
     endTime: schedule.endTime,
     floor: schedule.floor,
     instructor: schedule.instructor,
+    academyName: schedule.academyName,  // ⭐ 추가: 학원 풀네임
+    subjectName: schedule.subjectName,  // ⭐ 추가: 과목명
+    color: schedule.color,  // ⭐ 추가: 원본 시간표 색상
+    sourceImageIndex: schedule.sourceImageIndex,  // ⭐ 추가: 이미지 인덱스 (색상 할당용)
     priority: 0, // 최우선
     userFixed: true,
-    originalSchedule: schedule // 원본 참조
+    originalSchedule: schedule // 원본 참조 (모든 필드 포함)
   };
 }
 
@@ -172,15 +195,30 @@ async function handleFixedScheduleRequest(userInput, currentSchedules, fixedSche
       }
 
       // 이미 고정되어 있는지 확인 (title, instructor, startTime, endTime 모두 확인)
-      const alreadyPinned = fixedSchedules.some(fixed =>
-        fixed.type === 'pinned-class' &&
-        foundClasses.some(fc => 
-          fc.title === fixed.title && 
-          fc.instructor === fixed.instructor &&
-          fc.startTime === fixed.startTime &&
-          fc.endTime === fixed.endTime
-        )
-      );
+      console.log('🔍 중복 체크:');
+      console.log('  - fixedSchedules:', fixedSchedules?.length, '개');
+      console.log('  - foundClasses:', foundClasses?.length, '개');
+
+      const alreadyPinned = fixedSchedules.some(fixed => {
+        if (fixed.type !== 'pinned-class') return false;
+
+        const isDuplicate = foundClasses.some(fc => {
+          const match = fc.title === fixed.title &&
+            fc.instructor === fixed.instructor &&
+            fc.startTime === fixed.startTime &&
+            fc.endTime === fixed.endTime;
+
+          if (match) {
+            console.log(`  ⚠️ 중복 발견: ${fc.title} (${fc.instructor}) ${fc.startTime}-${fc.endTime}`);
+          }
+
+          return match;
+        });
+
+        return isDuplicate;
+      });
+
+      console.log('  - 중복 여부:', alreadyPinned);
 
       if (alreadyPinned) {
         return {
