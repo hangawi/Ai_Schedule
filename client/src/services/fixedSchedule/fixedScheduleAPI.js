@@ -58,3 +58,30 @@ export async function resolveFixedConflict(resolution, pendingFixed, conflicting
 
   return await response.json();
 }
+
+/**
+ * 사용자가 여러 옵션 중 하나를 선택
+ */
+export async function selectFixedOption(selectedSchedule, fixedSchedules, allSchedules, schedulesByImage) {
+  const token = localStorage.getItem('token');
+
+  const response = await fetch(`${API_BASE_URL}/api/schedule/select-fixed-option`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-auth-token': token
+    },
+    body: JSON.stringify({
+      selectedSchedule,
+      fixedSchedules,
+      allSchedules,
+      schedulesByImage
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`옵션 선택 실패: ${response.status}`);
+  }
+
+  return await response.json();
+}

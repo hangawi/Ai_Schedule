@@ -18,11 +18,13 @@ router.post('/fixed-intent', async (req, res) => {
     console.log('현재:', currentSchedules?.length, '개');
     console.log('이미지:', schedulesByImage?.length, '개');
 
-    // ⭐ 범례의 원본 시간표를 사용 (schedulesByImage가 이미 academyName, subjectName 포함)
-    // schedulesByImage는 optimizeSchedules를 거쳐서 academyName, subjectName이 추가된 상태
-    const allSchedules = schedulesByImage?.flatMap(img => img.schedules || []) || [];
+    // ⭐ 고정 일정 "찾기"는 원본 전체에서, "재최적화"는 현재 시간표 기준으로
+    // schedulesByImage: 원본 전체 스케줄 (고정 일정 찾기용)
+    // currentSchedules: 현재 최적화된 시간표 (재최적화 기준)
+    const allSchedulesForSearch = schedulesByImage?.flatMap(img => img.schedules || []) || [];
+    const allSchedules = allSchedulesForSearch; // 일단 검색은 원본에서
 
-    console.log('사용할 스케줄 (원본):', allSchedules.length, '개');
+    console.log('사용할 스케줄 (검색용 - 원본):', allSchedules.length, '개');
 
     const kpops = allSchedules.filter(s => s.title?.includes('KPOP') || s.title?.includes('주니어'));
     console.log('KPOP/주니어:', kpops.map(s =>
@@ -50,39 +52,97 @@ router.post('/fixed-intent', async (req, res) => {
       // 기존 고정 일정과 충돌 체크
       const conflictCheck = checkFixedScheduleConflicts(newFixed, existingFixed);
 
-      if (conflictCheck.hasConflict) {
-        // 충돌 발생 → 사용자에게 선택 요청
-        console.warn('⚠️ 기존 고정 일정과 충돌 발견:', conflictCheck.conflicts);
+      let finalExistingFixed = existingFixed;
+      let removedFixedSchedules = [];
 
-        return res.json({
-          ...result,
-          hasConflict: true,
-          conflictType: 'fixed_schedule',
-          conflicts: conflictCheck.conflicts,
-          pendingFixed: newFixed, // 추가 대기 중인 고정 일정
-          message: `"${newFixed.title}"이(가) 기존 고정 일정과 겹칩니다.\n\n겹치는 일정:\n${conflictCheck.conflicts.map(c => `• ${c.title} (${c.days?.join(', ')} ${c.time})`).join('\n')}\n\n어떻게 하시겠어요?`
+      if (conflictCheck.hasConflict) {
+        // 충돌 발생 → 자동으로 충돌하는 기존 고정 일정 제거
+        console.warn('⚠️ 기존 고정 일정과 충돌 발견:', conflictCheck.conflicts);
+        console.log('🔧 충돌하는 고정 일정을 자동으로 제거합니다...');
+
+        const conflictIds = conflictCheck.conflicts.map(c => c.id);
+        finalExistingFixed = existingFixed.filter(f => !conflictIds.includes(f.id));
+        removedFixedSchedules = existingFixed.filter(f => conflictIds.includes(f.id));
+
+        console.log(`✅ 제거된 고정 일정: ${removedFixedSchedules.length}개`);
+        removedFixedSchedules.forEach(f => {
+          console.log(`   - ${f.title} (${f.days?.join(', ')} ${f.startTime}-${f.endTime})`);
         });
       }
 
-      // 충돌 없음 → 시간표 재최적화
-      const reoptResult = reoptimizeWithFixedSchedules(
-        allSchedules,
-        existingFixed,
-        newFixed
+      // AI 재최적화 호출 (충돌하는 고정 일정 제외)
+      const allFixedSchedules = [...finalExistingFixed, newFixed];
+
+      console.log('\n🤖 AI 재최적화 시작...');
+      console.log('  - 전체 고정 일정:', allFixedSchedules.length, '개');
+
+      const { optimizeSchedules } = require('../utils/scheduleAutoOptimizer');
+
+      // ⭐ 재최적화는 현재 시간표 + 고정 일정의 원본을 합쳐서 진행
+      // currentSchedules: 현재 최적화된 시간표 (겹치는 것 제외된 상태)
+      // 고정 일정의 원본: schedulesByImage에서 찾아서 추가
+      const fixedOriginals = allFixedSchedules.map(fixed => {
+        if (fixed.originalSchedule) return fixed.originalSchedule;
+        // originalSchedule이 없으면 schedulesByImage에서 찾기
+        const found = allSchedulesForSearch.find(s =>
+          s.title === fixed.title &&
+          s.startTime === fixed.startTime &&
+          s.endTime === fixed.endTime
+        );
+        return found || fixed;
+      });
+
+      // 현재 시간표 + 고정 일정 원본 합치기
+      const schedulesForReoptimization = [...currentSchedules, ...fixedOriginals];
+
+      console.log('  - 재최적화 입력:', schedulesForReoptimization.length, '개');
+      console.log('    (현재:', currentSchedules.length, '+ 고정 원본:', fixedOriginals.length, ')');
+
+      // 충돌 없는 스케줄로 AI 최적화 다시 실행
+      const aiResult = await optimizeSchedules(
+        schedulesForReoptimization, // 현재 시간표 + 고정 일정 원본
+        schedulesByImage || [], // 이미지별 스케줄 (메타데이터용)
+        allFixedSchedules // 고정 일정들
       );
 
-      console.log(`✅ 재최적화 완료: ${reoptResult.totalCount}개 (제외: ${reoptResult.removedCount}개)`);
+      console.log(`✅ AI 재최적화 완료`);
+      console.log('  - optimizedSchedules:', aiResult.optimizedSchedules?.length, '개');
+
+      // optimizeSchedules는 객체를 반환 (배열이 아님!)
+      const optimizedSchedule = aiResult.optimizedSchedules || [];
+
+      console.log('\n📊 재최적화 결과 상세:');
+      console.log('  - optimizedSchedule:', optimizedSchedule.length, '개');
+      console.log('  - 고정 일정:', allFixedSchedules.length, '개');
+      console.log('  - 첫 5개 스케줄:', optimizedSchedule.slice(0, 5).map(s =>
+        `${s.title} (${s.days} ${s.startTime}-${s.endTime})`
+      ));
+
+      // 사용자 메시지 생성
+      let userMessage = result.message;
+
+      if (removedFixedSchedules.length > 0) {
+        const removedList = removedFixedSchedules.map(f =>
+          `• ${f.title} (${f.days?.join(', ')} ${f.startTime}-${f.endTime})`
+        ).join('\n');
+        userMessage += `\n\n⚠️ 기존 고정 일정과 겹쳐서 자동으로 제거되었습니다:\n${removedList}`;
+      }
+
+      userMessage += `\n\n✨ AI가 고정 일정을 포함한 최적 시간표를 다시 생성했습니다!`;
 
       return res.json({
         ...result,
+        message: userMessage,
         hasConflict: false,
-        optimizedSchedule: reoptResult.optimizedSchedule,
-        fixedSchedules: reoptResult.fixedSchedules,
-        removedSchedules: reoptResult.conflicts,
+        optimizedSchedule: optimizedSchedule,
+        optimizedCombinations: [optimizedSchedule], // 배열로 감싸기
+        fixedSchedules: allFixedSchedules,
+        removedFixedSchedules: removedFixedSchedules,
         stats: {
-          total: reoptResult.totalCount,
-          fixed: reoptResult.fixedSchedules.length,
-          removed: reoptResult.removedCount
+          total: optimizedSchedule.length,
+          fixed: allFixedSchedules.length,
+          combinations: 1,
+          removedFixed: removedFixedSchedules.length
         }
       });
     }
@@ -90,6 +150,77 @@ router.post('/fixed-intent', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('❌ 고정 일정 처리 오류:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/schedule/select-fixed-option
+ * 사용자가 여러 옵션 중 하나를 선택
+ */
+router.post('/select-fixed-option', async (req, res) => {
+  try {
+    const { selectedSchedule, fixedSchedules, allSchedules, schedulesByImage } = req.body;
+
+    console.log('\n✅ 사용자 선택:', selectedSchedule.title, selectedSchedule.startTime);
+
+    const { convertToFixedSchedule } = require('../utils/fixedScheduleHandler');
+    const newFixed = convertToFixedSchedule(selectedSchedule);
+
+    // 기존 고정 일정과 합치기
+    const allFixedSchedules = [...(fixedSchedules || []), newFixed];
+
+    console.log('\n🤖 AI 재최적화 시작...');
+    console.log('  - 전체 고정 일정:', allFixedSchedules.length, '개');
+
+    const { optimizeSchedules } = require('../utils/scheduleAutoOptimizer');
+
+    // ⭐ 재최적화는 현재 시간표(allSchedules) + 고정 일정 원본 합치기
+    const allSchedulesForSearch = schedulesByImage?.flatMap(img => img.schedules || []) || [];
+    const fixedOriginals = allFixedSchedules.map(fixed => {
+      if (fixed.originalSchedule) return fixed.originalSchedule;
+      const found = allSchedulesForSearch.find(s =>
+        s.title === fixed.title &&
+        s.startTime === fixed.startTime &&
+        s.endTime === fixed.endTime
+      );
+      return found || fixed;
+    });
+
+    const schedulesForReoptimization = [...allSchedules, ...fixedOriginals];
+
+    console.log('  - 재최적화 입력:', schedulesForReoptimization.length, '개');
+    console.log('    (현재:', allSchedules.length, '+ 고정 원본:', fixedOriginals.length, ')');
+
+    // AI 최적화 실행
+    const aiResult = await optimizeSchedules(
+      schedulesForReoptimization,
+      schedulesByImage || [],
+      allFixedSchedules
+    );
+
+    console.log(`✅ AI 재최적화 완료`);
+    console.log('  - optimizedSchedules:', aiResult.optimizedSchedules?.length, '개');
+
+    const optimizedSchedule = aiResult.optimizedSchedules || [];
+
+    return res.json({
+      success: true,
+      message: `"${selectedSchedule.title}" (${selectedSchedule.startTime})을 고정했습니다! ✨\n\n✨ AI가 고정 일정을 포함한 최적 시간표를 다시 생성했습니다!`,
+      optimizedSchedule: optimizedSchedule,
+      optimizedCombinations: [optimizedSchedule],
+      fixedSchedules: allFixedSchedules,
+      stats: {
+        total: optimizedSchedule.length,
+        fixed: allFixedSchedules.length,
+        combinations: 1
+      }
+    });
+  } catch (error) {
+    console.error('❌ 옵션 선택 오류:', error);
     res.status(500).json({
       success: false,
       error: error.message

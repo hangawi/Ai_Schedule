@@ -40,10 +40,66 @@ async function analyzeFixedScheduleIntent(userInput, availableClasses = []) {
 }
 
 /**
- * 시간표에서 특정 수업 찾기
+ * 시간을 분 단위로 변환
  */
-function findClassByName(schedules, className) {
-  const cleaned = className.replace(/반$|수업$/g, '').trim();
+function timeToMinutes(timeStr) {
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+/**
+ * 두 시간 사이의 차이를 분 단위로 계산
+ */
+function getTimeDifference(time1, time2) {
+  return Math.abs(timeToMinutes(time1) - timeToMinutes(time2));
+}
+
+/**
+ * 사용자 입력에서 시간 추출
+ */
+function extractTimeFromInput(userInput) {
+  // "17시", "5시", "17:10", "5:10", "17시 반", "5시반" 등의 패턴 감지
+  const timePatterns = [
+    /(\d{1,2}):(\d{2})/,           // 17:10, 5:10
+    /(\d{1,2})시\s*반/,             // 17시 반, 17시반
+    /(\d{1,2})시/,                  // 17시, 5시
+  ];
+
+  for (const pattern of timePatterns) {
+    const match = userInput.match(pattern);
+    if (match) {
+      let hours = parseInt(match[1]);
+      let minutes = match[2] ? parseInt(match[2]) : 0;
+
+      // "반" 키워드가 있으면 30분으로 처리
+      if (userInput.includes('반') && !match[2]) {
+        minutes = 30;
+      }
+
+      // 시간 정규화 (24시간 형식)
+      if (hours < 12 && userInput.includes('오후')) {
+        hours += 12;
+      }
+
+      const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      console.log(`🕐 사용자 입력에서 시간 추출: "${userInput}" → ${timeStr}`);
+      return timeStr;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 시간표에서 특정 수업 찾기 (시간 기반 선택 포함)
+ */
+function findClassByName(schedules, className, userInput = '') {
+  // "T", "반", "수업" 제거 (강사명 뒤의 "T"도 제거)
+  // "린아T 공연반" → "린아 공연", "공연반" → "공연"
+  const cleaned = className
+    .replace(/t\s/gi, ' ')  // "T " → " " (강사명 뒤의 T)
+    .replace(/반$|수업$/g, '')  // 끝의 "반", "수업" 제거
+    .trim();
   const normalized = cleaned.toLowerCase().replace(/\s+/g, '');
 
   console.log('🔍 검색:', `"${className}" → "${normalized}"`);
@@ -55,18 +111,28 @@ function findClassByName(schedules, className) {
   let searchTitle = null;
 
   if (parts.length >= 2) {
-    // 마지막 단어를 수업명으로, 나머지를 강사명으로 시도
-    const lastPart = parts[parts.length - 1];
-    const firstParts = parts.slice(0, -1).join('');
-    
-    // 첫 부분이 한글 2-3자면 강사명으로 간주
-    if (firstParts.match(/^[가-힣]{2,3}$/)) {
-      searchInstructor = firstParts;
-      searchTitle = lastPart;
-      console.log(`강사+수업 패턴: "${searchInstructor}" + "${searchTitle}"`);
-    } else {
-      // 그 외에는 전체를 수업명으로
+    // "주X회" 패턴이 있으면 전체를 수업명으로 처리
+    // 예: "초등부 주5회", "초등부 주3회" 등
+    const hasWeeklyPattern = normalized.match(/주\d+회/);
+
+    if (hasWeeklyPattern) {
+      // 주X회 패턴 → 전체를 수업명으로
       searchTitle = normalized;
+      console.log(`주X회 패턴 감지 → 전체를 수업명으로: "${searchTitle}"`);
+    } else {
+      // 마지막 단어를 수업명으로, 나머지를 강사명으로 시도
+      const lastPart = parts[parts.length - 1];
+      const firstParts = parts.slice(0, -1).join('');
+
+      // 첫 부분이 한글 2-3자면 강사명으로 간주
+      if (firstParts.match(/^[가-힣]{2,3}$/)) {
+        searchInstructor = firstParts;
+        searchTitle = lastPart;
+        console.log(`강사+수업 패턴: "${searchInstructor}" + "${searchTitle}"`);
+      } else {
+        // 그 외에는 전체를 수업명으로
+        searchTitle = normalized;
+      }
     }
   } else {
     searchTitle = normalized;
@@ -113,8 +179,10 @@ function findClassByName(schedules, className) {
         console.log(`    → 매칭 이유: case1=${case1}, case2=${case2}, case3=${case3}`);
       }
     } else if (searchTitle) {
-      // 수업명만 있으면 제목만 매칭
-      matches = title.includes(searchTitle) || searchTitle.includes(title);
+      // 수업명만 있으면 제목만 매칭 (instructor 유무 상관없이)
+      const titleMatch = title.includes(searchTitle) || searchTitle.includes(title);
+
+      matches = titleMatch;
     }
 
     console.log(`  ${schedule.title} (${schedule.instructor || 'N/A'}) [${schedule.days} ${schedule.startTime}-${schedule.endTime}] ${matches ? '✅' : '❌'}`);
@@ -122,7 +190,42 @@ function findClassByName(schedules, className) {
     return matches;
   });
 
-  console.log(`매칭 결과: ${found.length}개\n`);
+  console.log(`매칭 결과: ${found.length}개`);
+
+  // 여러 개 발견된 경우 → 시간 기반 선택 또는 사용자에게 물어보기
+  if (found.length > 1) {
+    console.log(`⚠️ 동일한 수업이 ${found.length}개 발견됨`);
+
+    // 사용자 입력에서 시간 추출
+    const userTime = extractTimeFromInput(userInput);
+
+    if (userTime) {
+      // 시간이 명시됨 → 가장 가까운 시간 선택
+      console.log(`🕐 시간 명시됨: ${userTime} → 가장 가까운 시간표 선택`);
+
+      let closestSchedule = found[0];
+      let minDiff = getTimeDifference(userTime, found[0].startTime);
+
+      found.forEach(schedule => {
+        const diff = getTimeDifference(userTime, schedule.startTime);
+        console.log(`  - ${schedule.title} ${schedule.startTime}: 차이 ${diff}분`);
+
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestSchedule = schedule;
+        }
+      });
+
+      console.log(`✅ 가장 가까운 시간표 선택: ${closestSchedule.title} ${closestSchedule.startTime} (차이: ${minDiff}분)\n`);
+      return [closestSchedule];
+    } else {
+      // 시간 없음 → 사용자에게 물어보기
+      console.log(`❓ 시간 명시 없음 → 사용자에게 선택 요청\n`);
+      return { needsUserChoice: true, options: found };
+    }
+  }
+
+  console.log('');
   return found.length > 0 ? found : null;
 }
 
@@ -183,16 +286,36 @@ async function handleFixedScheduleRequest(userInput, currentSchedules, fixedSche
 
   switch (intent.intent) {
     case 'pin_class': {
-      // 시간표에서 수업 찾기
-      const foundClasses = findClassByName(currentSchedules, intent.className);
+      // 시간표에서 수업 찾기 (userInput 전달하여 시간 추출)
+      const foundResult = findClassByName(currentSchedules, intent.className, userInput);
 
-      if (!foundClasses || foundClasses.length === 0) {
+      // 수업을 못 찾은 경우
+      if (!foundResult || foundResult.length === 0) {
         return {
           success: false,
           intent: 'pin_class',
           message: `"${intent.className}" 수업을 찾을 수 없어요. 업로드된 시간표를 다시 확인해주세요! 😅`
         };
       }
+
+      // 사용자 선택이 필요한 경우
+      if (foundResult.needsUserChoice) {
+        const optionsList = foundResult.options.map((opt, idx) => {
+          const daysStr = Array.isArray(opt.days) ? opt.days.join(', ') : opt.days;
+          return `${idx + 1}. ${opt.title} (${opt.instructor || 'N/A'}) - ${daysStr} ${opt.startTime}-${opt.endTime}`;
+        }).join('\n');
+
+        return {
+          success: false,
+          intent: 'pin_class',
+          needsUserChoice: true,
+          options: foundResult.options,
+          message: `"${intent.className}" 수업이 여러 개 있어요! 어떤 걸로 추가할까요?\n\n${optionsList}\n\n번호를 말씀해주세요! 😊`
+        };
+      }
+
+      // 단일 또는 시간 기반 선택된 결과
+      const foundClasses = Array.isArray(foundResult) ? foundResult : [foundResult];
 
       // 이미 고정되어 있는지 확인 (title, instructor, startTime, endTime 모두 확인)
       console.log('🔍 중복 체크:');

@@ -333,30 +333,62 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
     const originalCount = allSchedules.length;
     
     allSchedules = allSchedules.filter(schedule => {
+      // 고정 일정의 원본인지 확인 (자기 자신은 제거 안 함)
+      const isFixedOriginal = selectedSchedules.some(fixed => {
+        return fixed.originalSchedule === schedule ||
+               (fixed.title === schedule.title &&
+                fixed.startTime === schedule.startTime &&
+                fixed.endTime === schedule.endTime &&
+                JSON.stringify(fixed.days) === JSON.stringify(schedule.days));
+      });
+
+      if (isFixedOriginal) {
+        console.log(`  ⏭️ 건너뜀 (고정 일정 원본): ${schedule.title} (${schedule.days} ${schedule.startTime}-${schedule.endTime})`);
+        return false; // 고정 일정 원본은 제거 (selectedSchedules에 이미 추가됨)
+      }
+
       // 고정 일정과 겹치는지 확인
       const hasOverlap = selectedSchedules.some(fixed => {
         // 요일 겹침 확인
         const scheduleDays = Array.isArray(schedule.days) ? schedule.days : [schedule.days];
         const fixedDays = Array.isArray(fixed.days) ? fixed.days : [fixed.days];
-        const dayOverlap = scheduleDays.some(day => fixedDays.includes(day));
-        
+
+        // 요일 정규화 (한글 → 영어)
+        const normalizeDays = (days) => {
+          const dayMap = {
+            '월': 'MON', '화': 'TUE', '수': 'WED', '목': 'THU',
+            '금': 'FRI', '토': 'SAT', '일': 'SUN'
+          };
+          return days.map(d => dayMap[d] || d);
+        };
+
+        const normalizedScheduleDays = normalizeDays(scheduleDays);
+        const normalizedFixedDays = normalizeDays(fixedDays);
+
+        const dayOverlap = normalizedScheduleDays.some(day => normalizedFixedDays.includes(day));
+
         if (!dayOverlap) return false;
-        
-        // 시간 겹침 확인
-        const scheduleStart = schedule.startTime;
-        const scheduleEnd = schedule.endTime;
-        const fixedStart = fixed.startTime;
-        const fixedEnd = fixed.endTime;
-        
-        const timeOverlap = scheduleStart < fixedEnd && fixedStart < scheduleEnd;
-        
+
+        // 시간 겹침 확인 (시간을 분으로 변환하여 비교)
+        const timeToMinutes = (timeStr) => {
+          const [hours, minutes] = timeStr.split(':').map(Number);
+          return hours * 60 + minutes;
+        };
+
+        const scheduleStart = timeToMinutes(schedule.startTime);
+        const scheduleEnd = timeToMinutes(schedule.endTime);
+        const fixedStart = timeToMinutes(fixed.startTime);
+        const fixedEnd = timeToMinutes(fixed.endTime);
+
+        const timeOverlap = scheduleStart < fixedEnd && scheduleEnd > fixedStart;
+
         if (timeOverlap) {
-          console.log(`  ✂️ 제거: ${schedule.title} (${scheduleDays.join(',')} ${scheduleStart}-${scheduleEnd}) - ${fixed.title}과 겹침`);
+          console.log(`  ✂️ 제거: ${schedule.title} (${scheduleDays.join(',')} ${schedule.startTime}-${schedule.endTime}) - ${fixed.title}과 겹침`);
         }
-        
+
         return timeOverlap;
       });
-      
+
       return !hasOverlap;
     });
     
@@ -507,14 +539,61 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
 
   for (const imageOpt of imageOptions) {
     if (imageOpt.type === 'single') {
-      // 학교: 무조건 선택 (고정 일정과 겹쳐도 무조건!)
+      // 학교: 전체 선택 (단, 고정 일정과 겹치지 않는 것만!)
       const option = imageOpt.options[0];
-      console.log(`✅ [${imageOpt.category}] ${imageOpt.imageTitle} - 전체 선택 (${option.schedules.length}개)`);
-      selectedSchedules.push(...option.schedules);
+
+      // ⭐ 고정 일정과 겹치는 스케줄은 제외
+      const nonOverlappingSchedules = option.schedules.filter(schedule => {
+        // 고정 일정(fixedSchedules)과 겹치는지 확인
+        const hasOverlapWithFixed = fixedSchedules?.some(fixed => {
+          // 요일 겹침 확인
+          const scheduleDays = Array.isArray(schedule.days) ? schedule.days : [schedule.days];
+          const fixedDays = Array.isArray(fixed.days) ? fixed.days : [fixed.days];
+
+          // 요일 정규화
+          const normalizeDays = (days) => {
+            const dayMap = {
+              '월': 'MON', '화': 'TUE', '수': 'WED', '목': 'THU',
+              '금': 'FRI', '토': 'SAT', '일': 'SUN'
+            };
+            return days.map(d => dayMap[d] || d);
+          };
+
+          const normalizedScheduleDays = normalizeDays(scheduleDays);
+          const normalizedFixedDays = normalizeDays(fixedDays);
+          const dayOverlap = normalizedScheduleDays.some(day => normalizedFixedDays.includes(day));
+
+          if (!dayOverlap) return false;
+
+          // 시간 겹침 확인
+          const timeToMinutes = (timeStr) => {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 60 + minutes;
+          };
+
+          const scheduleStart = timeToMinutes(schedule.startTime);
+          const scheduleEnd = timeToMinutes(schedule.endTime);
+          const fixedStart = timeToMinutes(fixed.startTime);
+          const fixedEnd = timeToMinutes(fixed.endTime);
+
+          const timeOverlap = scheduleStart < fixedEnd && scheduleEnd > fixedStart;
+
+          if (timeOverlap) {
+            console.log(`  ✂️ 학교 스케줄 제외: ${schedule.title} (${scheduleDays.join(',')} ${schedule.startTime}-${schedule.endTime}) - 고정 일정 ${fixed.title}과 겹침`);
+          }
+
+          return timeOverlap;
+        });
+
+        return !hasOverlapWithFixed;
+      });
+
+      console.log(`✅ [${imageOpt.category}] ${imageOpt.imageTitle} - 전체 선택 (${nonOverlappingSchedules.length}/${option.schedules.length}개, 고정 일정과 겹침 ${option.schedules.length - nonOverlappingSchedules.length}개 제외)`);
+      selectedSchedules.push(...nonOverlappingSchedules);
       selectionLog.push({
         image: imageOpt.imageTitle,
         selected: option.name,
-        count: option.schedules.length
+        count: nonOverlappingSchedules.length
       });
     } else {
       // 학원: 여러 옵션 중 **하나만** 선택 (같은 수업의 다른 시간대는 상호 배타적)
@@ -574,6 +653,30 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
       console.log(`  ${idx}. ${s.title} - subjectLabel: "${s.subjectLabel || 'null'}" (imageTitle: ${s.imageTitle})`);
     });
   console.log('=====================================\n');
+
+  // 고정 일정을 최종 결과에 강제로 포함
+  if (fixedSchedules && fixedSchedules.length > 0) {
+    console.log('\n📌 고정 일정 최종 포함 확인:');
+    fixedSchedules.forEach(fixed => {
+      // Phase 0에서 이미 추가했는지 확인
+      // Line 325에서 fixed.originalSchedule을 추가했으므로, 그것과 비교
+      const scheduleToCheck = fixed.originalSchedule || fixed;
+      const alreadyIncluded = selectedSchedules.includes(scheduleToCheck) ||
+        selectedSchedules.some(s =>
+          s.title === fixed.title &&
+          s.startTime === fixed.startTime &&
+          s.endTime === fixed.endTime &&
+          JSON.stringify(s.days) === JSON.stringify(fixed.days)
+        );
+
+      if (!alreadyIncluded) {
+        console.log(`  ➕ 추가: ${fixed.title} (${fixed.days} ${fixed.startTime}-${fixed.endTime})`);
+        selectedSchedules.push(scheduleToCheck);
+      } else {
+        console.log(`  ✅ 이미 포함됨: ${fixed.title} (${fixed.days} ${fixed.startTime}-${fixed.endTime})`);
+      }
+    });
+  }
 
   return {
     optimizedSchedules: selectedSchedules,  // ⭐ 중복 제거 절대 안 함!
