@@ -160,6 +160,23 @@ const ScheduleGridSelector = ({
     }
 
     console.log('📌 합쳐진 일정:', combined.length, '개 (고정:', fixedSchedules?.length || 0, ')');
+
+    // 🔍 김다희 강사 확인
+    const daheeSchedules = combined.filter(s => s.title?.includes('김다희'));
+    if (daheeSchedules.length > 0) {
+      console.log('⚠️ 김다희 강사 발견:', daheeSchedules.map(s =>
+        `${s.title} (${s.days} ${s.startTime}-${s.endTime})`
+      ));
+    }
+
+    // 🔍 공연반 확인
+    const gongSchedules = combined.filter(s => s.title?.includes('공연반'));
+    if (gongSchedules.length > 0) {
+      console.log('✅ 공연반 발견:', gongSchedules.map(s =>
+        `${s.title} (${s.days} ${s.startTime}-${s.endTime})`
+      ));
+    }
+
     return combined;
   }, [personalTimes, fixedSchedules]);
 

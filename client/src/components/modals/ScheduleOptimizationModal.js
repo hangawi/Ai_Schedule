@@ -202,6 +202,16 @@ const ScheduleOptimizationModal = ({
     }).filter(item => item !== null);
 
     console.log('✅ personalTimes 생성 완료:', personalTimes?.length, '개');
+
+    // 🔍 김다희 강사 확인
+    const daheeInPersonalTimes = personalTimes.filter(p => p.title?.includes('김다희'));
+    if (daheeInPersonalTimes.length > 0) {
+      console.log('⚠️⚠️⚠️ personalTimes에 김다희 강사 있음:', daheeInPersonalTimes.map(p =>
+        `${p.title} (${p.startTime}-${p.endTime})`
+      ));
+    } else {
+      console.log('✅ personalTimes에 김다희 강사 없음');
+    }
   } catch (error) {
     console.error('❌ personalTimes 생성 중 에러:', error);
     console.error('currentCombination:', currentCombination);
@@ -514,6 +524,16 @@ const ScheduleOptimizationModal = ({
 
         console.log('✅ 시간표 업데이트 완료');
 
+        // 🔍 업데이트된 스케줄에 김다희가 있는지 확인
+        const hasDaheeAfterUpdate = fixedResult.optimizedSchedule.some(s => s.title?.includes('김다희'));
+        console.log('  - 🔍 업데이트 후 김다희 포함 여부:', hasDaheeAfterUpdate);
+        if (hasDaheeAfterUpdate) {
+          const daheeSchedules = fixedResult.optimizedSchedule.filter(s => s.title?.includes('김다희'));
+          console.log('  - ⚠️⚠️⚠️ 김다희 강사 스케줄:', daheeSchedules.map(s =>
+            `${s.title} (${s.days} ${s.startTime}-${s.endTime})`
+          ));
+        }
+
         const botMessage = {
           id: Date.now() + 2,
           text: `${fixedResult.message}\n\n✨ 시간표가 자동으로 재최적화되었습니다!\n- 총 ${fixedResult.stats.total}개 수업\n- 고정 ${fixedResult.stats.fixed}개\n- 제외 ${fixedResult.stats.removed || 0}개`,
@@ -582,7 +602,9 @@ const ScheduleOptimizationModal = ({
           originalSchedule: originalSchedule || modifiedCombinations[currentIndex],
           scheduleHistory: scheduleHistory,  // 히스토리 전달
           lastAiResponse: lastAiResponse,  // 직전 AI 응답 전달
-          redoStack: redoStack  // Redo 스택 전달
+          redoStack: redoStack,  // Redo 스택 전달
+          fixedSchedules: currentFixedSchedules,  // ⭐ 고정 일정 전달
+          schedulesByImage: schedulesByImage  // ⭐ 이미지별 스케줄 전달
         })
       });
 

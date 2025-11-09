@@ -306,15 +306,10 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
   console.log(`📊 총 ${allSchedules.length}개 스케줄 입력`);
   console.log(`📌 고정 일정: ${fixedSchedules.length}개`);
 
-  // 🔍 디버깅: 모든 스케줄의 gradeLevel 확인
-  console.log('\n🔍 [DEBUG] 모든 스케줄의 gradeLevel 확인:');
-  allSchedules.slice(0, 20).forEach((s, idx) => {
-    console.log(`  ${idx}. ${s.title} (${s.sourceImage}) - gradeLevel: "${s.gradeLevel || 'null'}"`);
-  });
-
   // 0-1. 고정 일정을 먼저 선택 (최우선)
   const selectedSchedules = [];
 
+  console.log(`🔍 [DEBUG] fixedSchedules.length > 0: ${fixedSchedules.length > 0}`);
   if (fixedSchedules.length > 0) {
     console.log('\n📌 Phase 0: 고정 일정 배치 (최우선)');
     fixedSchedules.forEach(fixed => {
@@ -330,8 +325,24 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
 
     // 고정 일정과 겹치는 스케줄 제거
     console.log('\n🔍 고정 일정과 겹치는 스케줄 제거 중...');
+    console.log(`📋 입력 스케줄: ${allSchedules.length}개`);
+    console.log(`📌 고정 일정 정보:`);
+    selectedSchedules.forEach(fixed => {
+      console.log(`  - ${fixed.title} (${fixed.days} ${fixed.startTime}-${fixed.endTime})`);
+    });
+
+    // 🔍 디버깅: 18-19시 사이 스케줄 확인
+    console.log(`\n🔍 18-19시 사이 스케줄 확인 (공연반과 겹칠 수 있는 것들):`);
+    allSchedules.forEach(s => {
+      const start = parseInt(s.startTime.split(':')[0]);
+      const end = parseInt(s.endTime.split(':')[0]);
+      if ((start >= 17 && start < 20) || (end > 17 && end <= 20)) {
+        console.log(`  - ${s.title} (${s.days} ${s.startTime}-${s.endTime})`);
+      }
+    });
+
     const originalCount = allSchedules.length;
-    
+
     allSchedules = allSchedules.filter(schedule => {
       // 고정 일정의 원본인지 확인 (자기 자신은 제거 안 함)
       const isFixedOriginal = selectedSchedules.some(fixed => {

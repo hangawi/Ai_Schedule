@@ -118,6 +118,16 @@ router.post('/fixed-intent', async (req, res) => {
         `${s.title} (${s.days} ${s.startTime}-${s.endTime})`
       ));
 
+      // 🔍 김다희 강사가 있는지 확인
+      const hasDahee = optimizedSchedule.some(s => s.title?.includes('김다희'));
+      console.log('  - 🔍 김다희 강사 포함 여부:', hasDahee);
+      if (hasDahee) {
+        const daheeSchedules = optimizedSchedule.filter(s => s.title?.includes('김다희'));
+        console.log('  - ⚠️ 김다희 강사 스케줄:', daheeSchedules.map(s =>
+          `${s.title} (${s.days} ${s.startTime}-${s.endTime})`
+        ));
+      }
+
       // 사용자 메시지 생성
       let userMessage = result.message;
 
