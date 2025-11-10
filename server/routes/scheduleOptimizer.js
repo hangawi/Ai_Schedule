@@ -1318,17 +1318,52 @@ router.post('/chat', auth, async (req, res) => {
             console.log(`  - 기존 커스텀 최대 인덱스: ${maxCustomIndex}, 새 시작 인덱스: ${newImageIndex}`);
           }
 
+          // ⭐ 제목 분류 함수 (fixedScheduleHandler와 동일)
+          const isSpecificTitle = (title) => {
+            const genericTerms = [
+              '일정', '약속', '새로운', '개인', '기타', '할일',
+              'schedule', 'todo', 'event', '미정', '기록'
+            ];
+            const titleLower = title.toLowerCase();
+            return !genericTerms.some(term => titleLower.includes(term));
+          };
+
           const titleToNewIndex = new Map();
-          Array.from(newTitles).forEach(title => {
+          const hasGeneric = Array.from(newTitles).some(title => !isSpecificTitle(title));
+          let genericIndex = null;
+
+          // "기타" 일정이 있으면 인덱스 9999 할당
+          if (hasGeneric) {
+            genericIndex = 9999;
             customSchedules.push({
-              fileName: `커스텀 일정 ${newImageIndex + 1}`,
-              sourceImageIndex: newImageIndex,
-              title: title,
-              isCustom: true
+              fileName: `커스텀 일정 (기타)`,
+              sourceImageIndex: 9999,
+              title: '기타',
+              isCustom: true,
+              isGeneric: true
             });
-            titleToNewIndex.set(title, newImageIndex);
-            console.log(`  - 범례 추가: ${title} (인덱스 ${newImageIndex})`);
-            newImageIndex++;
+            console.log(`  - 범례 추가: 기타 (인덱스 9999)`);
+          }
+
+          Array.from(newTitles).forEach(title => {
+            const isSpecific = isSpecificTitle(title);
+
+            if (!isSpecific) {
+              // 불명확한 제목은 "기타"로 통합
+              titleToNewIndex.set(title, 9999);
+              console.log(`  - "${title}" → 기타로 통합 (인덱스 9999)`);
+            } else {
+              // 명확한 제목은 개별 인덱스
+              customSchedules.push({
+                fileName: `커스텀 일정 ${newImageIndex + 1}`,
+                sourceImageIndex: newImageIndex,
+                title: title,
+                isCustom: true
+              });
+              titleToNewIndex.set(title, newImageIndex);
+              console.log(`  - 범례 추가: ${title} (인덱스 ${newImageIndex})`);
+              newImageIndex++;
+            }
           });
 
           // ⭐ 새로 추가된 일정에 sourceImageIndex 할당

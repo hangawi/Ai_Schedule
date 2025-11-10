@@ -527,7 +527,9 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
           originalSchedule: originalSchedule || extractedSchedules,
           scheduleHistory: scheduleHistory,
           lastAiResponse: lastAiResponse,
-          redoStack: redoStack
+          redoStack: redoStack,
+          fixedSchedules: fixedSchedules,  // ⭐ 고정 일정 전달
+          schedulesByImage: schedulesByImage  // ⭐ 이미지별 스케줄 전달
         })
       });
 
@@ -557,11 +559,13 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
         setRedoStack(prev => [...prev, extractedSchedules]);
         setScheduleHistory(prev => prev.slice(0, -1));
       } else if (data.action === 'undo') {
+        console.log('🔄 [UNDO] 원본 시간표 복원 시작');
         setExtractedSchedules(data.schedule);
         setFilteredSchedules(data.schedule);
         setScheduleHistory([]);
         setFixedSchedules([]); // 고정 일정도 초기화
-        console.log('✅ 롤백: 고정 일정도 함께 초기화');
+        setCustomSchedulesForLegend([]); // ⭐ 커스텀 범례도 초기화
+        console.log('✅ 롤백 완료: 고정 일정 + 커스텀 범례 초기화');
       } else if (data.action === 'question') {
         console.log('💡 추천 응답 - 시간표 변경 없음');
       }
