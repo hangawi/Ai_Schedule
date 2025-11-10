@@ -92,7 +92,7 @@ router.post('/optimize-legacy', auth, async (req, res) => {
 
     // 여러 모델명 시도 (OCR에서 작동하는 모델 우선)
     const modelNames = [
-      'gemini-2.0-flash-exp',
+      'gemini-2.0-flash',
       'gemini-2.0-flash',
       'gemini-1.5-flash-002',
       'gemini-1.5-flash-001',
