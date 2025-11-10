@@ -35,6 +35,9 @@ const OriginalScheduleModal = ({ imageData, imageIndex, onClose }) => {
       startTime: schedule.startTime,
       endTime: schedule.endTime,
       title: schedule.title || '수업',
+      academyName: schedule.academyName,  // 학원 이름 추가
+      subjectName: schedule.subjectName,  // 과목명 추가
+      instructor: schedule.instructor,  // 강사명 추가
       color: color.border,
       description: schedule.description || '',
       isRecurring: true

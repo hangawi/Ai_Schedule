@@ -128,22 +128,22 @@ const ScheduleGridSelector = ({
       };
 
       fixedSchedules.forEach(fixed => {
-        // ⭐ 중복 체크: personalTimes에 이미 있는지 확인
+        // days를 숫자 배열로 먼저 변환
+        const daysArray = Array.isArray(fixed.days) ? fixed.days : [fixed.days];
+        const mappedDays = daysArray.map(day => dayMap[day] || day).filter(d => d && typeof d === 'number');
+
+        // ⭐ 중복 체크: personalTimes에 이미 있는지 확인 (숫자 배열로 비교)
         const isDuplicate = combined.some(existing =>
           existing.title === fixed.title &&
           existing.startTime === fixed.startTime &&
           existing.endTime === fixed.endTime &&
-          JSON.stringify(existing.days) === JSON.stringify(fixed.days)
+          JSON.stringify(existing.days?.sort()) === JSON.stringify(mappedDays.sort())
         );
 
         if (isDuplicate) {
           console.log(`⏭️ 고정 일정 "${fixed.title}" 이미 존재 - 건너뜀`);
           return;
         }
-
-        // days를 숫자 배열로 변환
-        const daysArray = Array.isArray(fixed.days) ? fixed.days : [fixed.days];
-        const mappedDays = daysArray.map(day => dayMap[day] || day).filter(d => d && typeof d === 'number');
 
         // 이미지 인덱스로 색상 가져오기
         let scheduleColor = '#9333ea'; // 기본 보라색
@@ -830,39 +830,43 @@ const ScheduleGridSelector = ({
                           backgroundColor: bgColor,
                           zIndex: seg.overlapIndex
                         }}
-                        title={`${seg.schedule.academyName ? seg.schedule.academyName + ' - ' : ''}${seg.schedule.subjectName ? seg.schedule.subjectName + ' - ' : ''}${seg.schedule.title}${seg.schedule.floor ? ` (${seg.schedule.floor}층)` : ''} (${seg.schedule.startTime}~${seg.schedule.endTime})`}
+                        title={`${seg.schedule.academyName ? seg.schedule.academyName + ' - ' : ''}${seg.schedule.subjectName ? seg.schedule.subjectName + ' - ' : ''}${seg.schedule.title}${seg.schedule.instructor ? ` (${seg.schedule.instructor})` : ''}${seg.schedule.floor ? ` (${seg.schedule.floor}층)` : ''} (${seg.schedule.startTime}~${seg.schedule.endTime})`}
                       >
                         {isLargestSegment && (
                           <div className="text-xs leading-tight flex flex-col items-center justify-center h-full overflow-hidden">
                             <div className="w-full px-1 text-center">
-                              {/* ===== 4줄 버전 (현재 사용) ===== */}
-                              {/* 1. 학원 풀네임 표시 (예: 기구필라테스 야샤야 PT) */}
-                              {seg.schedule.academyName && (
-                                <div className="text-[8px] font-bold opacity-90 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.academyName}</div>
+                              {/* 블록 높이에 따라 표시 방식 변경 */}
+                              {duration >= 60 ? (
+                                // ===== 60분 이상: 4줄 전체 표시 =====
+                                <>
+                                  {/* 1. 학원 풀네임 */}
+                                  {seg.schedule.academyName && (
+                                    <div className="text-[8px] font-bold opacity-90 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.academyName}</div>
+                                  )}
+                                  {/* 2. 과목명 */}
+                                  {seg.schedule.subjectName && (
+                                    <div className="text-[9px] font-semibold opacity-80 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.subjectName}</div>
+                                  )}
+                                  {/* 3. 반이름(강사명) */}
+                                  <div className="font-semibold text-[10px] whitespace-nowrap overflow-hidden text-ellipsis">
+                                    {seg.schedule.title}
+                                    {seg.schedule.instructor && <span className="text-[9px]">({seg.schedule.instructor})</span>}
+                                    {seg.schedule.floor && <span className="text-[8px] ml-1">({seg.schedule.floor}층)</span>}
+                                  </div>
+                                  {/* 4. 시간 */}
+                                  <div className="text-[9px] mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.startTime}~{seg.schedule.endTime}</div>
+                                </>
+                              ) : (
+                                // ===== 30분: 2줄만 표시 (과목명 + 시간) =====
+                                <>
+                                  {/* 1. 과목명 (없으면 강사명) */}
+                                  <div className="font-semibold text-[11px] whitespace-nowrap overflow-hidden text-ellipsis">
+                                    {seg.schedule.subjectName || seg.schedule.title}
+                                  </div>
+                                  {/* 2. 시간 */}
+                                  <div className="text-[10px] mt-1 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.startTime}~{seg.schedule.endTime}</div>
+                                </>
                               )}
-                              {/* 2. 과목 표시 (예: 필라테스, 수학) */}
-                              {seg.schedule.subjectName && (
-                                <div className="text-[9px] font-semibold opacity-80 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.subjectName}</div>
-                              )}
-                              {/* 3. 강사이름 표시 (예: 김다희 강사) */}
-                              <div className="font-semibold text-[10px] whitespace-nowrap overflow-hidden text-ellipsis">
-                                {seg.schedule.title}
-                                {seg.schedule.floor && <span className="text-[8px] ml-1">({seg.schedule.floor}층)</span>}
-                              </div>
-                              {/* 4. 시간 표시 */}
-                              <div className="text-[9px] mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.startTime}~{seg.schedule.endTime}</div>
-
-                              {/* ===== 3줄 버전 (주석처리) ===== */}
-                              {/* 1. 학원 풀네임 표시 (예: 기구필라테스 야샤야 PT) */}
-                              {/* {seg.schedule.academyName && (
-                                <div className="text-[9px] font-bold opacity-90 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.academyName}</div>
-                              )} */}
-                              {/* 2. 과목 표시 (예: 필라테스, 수학) */}
-                              {/* {seg.schedule.subjectName && (
-                                <div className="text-[10px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.subjectName}</div>
-                              )} */}
-                              {/* 3. 시간 표시 */}
-                              {/* <div className="text-[10px] mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.startTime}~{seg.schedule.endTime}</div> */}
                             </div>
                           </div>
                         )}
