@@ -264,7 +264,11 @@ function convertToFixedSchedule(schedule, type = 'pinned-class') {
 /**
  * 개인 일정을 고정 스케줄로 변환
  */
-function createCustomFixedSchedule(customData) {
+function createCustomFixedSchedule(customData, existingCustomCount = 0) {
+  // 커스텀 일정마다 고유한 sourceImageIndex 부여
+  // 기존 이미지는 0부터 시작하므로, 커스텀은 1000 + existingCustomCount부터 시작
+  const customImageIndex = 1000 + existingCustomCount;
+  
   return {
     id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     type: 'custom',
@@ -274,6 +278,8 @@ function createCustomFixedSchedule(customData) {
     endTime: customData.endTime,
     priority: 0, // 최우선
     userFixed: true,
+    sourceImageIndex: customImageIndex, // ⭐ 범례용 고유 인덱스
+    academyName: customData.title, // 범례에 표시될 이름
     color: customData.color || '#FF6B6B'
   };
 }
@@ -364,8 +370,9 @@ async function handleFixedScheduleRequest(userInput, currentSchedules, fixedSche
     }
 
     case 'add_custom': {
-      // 개인 일정 추가
-      const newFixed = createCustomFixedSchedule(intent.schedule);
+      // 기존 커스텀 일정 개수 세기
+      const existingCustomCount = fixedSchedules.filter(f => f.type === 'custom').length;
+      const newFixed = createCustomFixedSchedule(intent.schedule, existingCustomCount);
 
       return {
         success: true,
