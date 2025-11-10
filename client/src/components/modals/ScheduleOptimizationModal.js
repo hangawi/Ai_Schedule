@@ -18,6 +18,7 @@ const ScheduleOptimizationModal = ({
   isEmbedded = false, // 새로 추가: 임베드 모드 (TimetableUploadWithChat 내부)
   schedulesByImage = null, // 새로 추가: 이미지별 스케줄 정보 (색상 할당용)
   fixedSchedules = [], // 새로 추가: 고정 일정
+  customSchedulesForLegend: customSchedulesForLegendProp = [], // 새로 추가: 커스텀 일정 범례
   overallTitle = '업로드된 시간표' // 새로 추가: 전체 제목
 }) => {
   // 🔍 Props 디버깅
@@ -81,7 +82,7 @@ const ScheduleOptimizationModal = ({
   const [hoveredImageIndex, setHoveredImageIndex] = useState(null); // hover된 이미지 인덱스
   const [selectedImageForOriginal, setSelectedImageForOriginal] = useState(null); // 원본 시간표 모달용
   const [currentFixedSchedules, setCurrentFixedSchedules] = useState(fixedSchedules || []); // 고정 일정 목록
-  const [customSchedulesForLegend, setCustomSchedulesForLegend] = useState([]); // ⭐ 커스텀 일정 범례용
+  const [customSchedulesForLegend, setCustomSchedulesForLegend] = useState(customSchedulesForLegendProp || []); // ⭐ 커스텀 일정 범례용
   const [conflictState, setConflictState] = useState(null); // 충돌 상태 { pendingFixed, conflicts }
   const chatEndRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -98,6 +99,17 @@ const ScheduleOptimizationModal = ({
     console.log('🔄 fixedSchedules prop 변경 감지:', fixedSchedules?.length, '개');
     setCurrentFixedSchedules(fixedSchedules || []);
   }, [fixedSchedules]);
+
+  // customSchedulesForLegend prop 변경 시 동기화
+  useEffect(() => {
+    if (customSchedulesForLegendProp && customSchedulesForLegendProp.length > 0) {
+      console.log('🔄 customSchedulesForLegend prop 변경 감지:', customSchedulesForLegendProp.length, '개');
+      customSchedulesForLegendProp.forEach(c => {
+        console.log(`  - ${c.title} (sourceImageIndex: ${c.sourceImageIndex})`);
+      });
+      setCustomSchedulesForLegend(customSchedulesForLegendProp);
+    }
+  }, [customSchedulesForLegendProp]);
 
   // 모달이 열릴 때 원본 저장만 (자동 최적화 제안 비활성화)
   useEffect(() => {
@@ -618,7 +630,8 @@ const ScheduleOptimizationModal = ({
           lastAiResponse: lastAiResponse,  // 직전 AI 응답 전달
           redoStack: redoStack,  // Redo 스택 전달
           fixedSchedules: currentFixedSchedules,  // ⭐ 고정 일정 전달
-          schedulesByImage: schedulesByImage  // ⭐ 이미지별 스케줄 전달
+          schedulesByImage: schedulesByImage,  // ⭐ 이미지별 스케줄 전달
+          existingCustomSchedules: customSchedulesForLegend  // ⭐ 기존 커스텀 일정 전달 (같은 제목 재사용)
         })
       });
 
@@ -652,6 +665,17 @@ const ScheduleOptimizationModal = ({
           const updatedCombinations = [...modifiedCombinations];
           updatedCombinations[currentIndex] = data.schedule;
           setModifiedCombinations(updatedCombinations);
+
+          // ⭐ 삭제 후 사용 중인 커스텀 일정만 범례에 유지
+          console.log('🔄 삭제 액션 → 사용 중인 커스텀 범례만 유지');
+          const usedCustomTitles = new Set();
+          data.schedule.forEach(item => {
+            if (item.sourceImageIndex >= (schedulesByImage?.length || 0)) {
+              usedCustomTitles.add(item.title);
+            }
+          });
+          setCustomSchedulesForLegend(prev => prev.filter(c => usedCustomTitles.has(c.title)));
+          console.log('  - 유지된 커스텀 일정:', Array.from(usedCustomTitles));
         } else if (data.action === 'add') {
           // 일정 추가
           console.log('✅ ADD 액션: 시간표 업데이트');
@@ -663,6 +687,23 @@ const ScheduleOptimizationModal = ({
           const updatedCombinations = [...modifiedCombinations];
           updatedCombinations[currentIndex] = data.schedule;
           setModifiedCombinations(updatedCombinations);
+
+          // ⭐ 커스텀 일정 범례 업데이트 (제목 기준으로 중복 제거)
+          if (data.customSchedules && data.customSchedules.length > 0) {
+            console.log('🎨 [ADD] 서버에서 받은 customSchedules:', data.customSchedules.length, '개');
+            data.customSchedules.forEach(c => console.log(`  - ${c.title} (인덱스 ${c.sourceImageIndex})`));
+
+            const existingTitles = new Set(customSchedulesForLegend.map(c => c.title));
+            const newCustoms = data.customSchedules.filter(c => !existingTitles.has(c.title));
+
+            if (newCustoms.length > 0) {
+              setCustomSchedulesForLegend([...customSchedulesForLegend, ...newCustoms]);
+              console.log('🎨 범례 추가:', newCustoms.length, '개');
+              newCustoms.forEach(c => console.log(`  ✅ 추가: ${c.title} (인덱스 ${c.sourceImageIndex})`));
+            } else {
+              console.log('🎨 같은 제목의 범례가 이미 존재 - 추가 안함');
+            }
+          }
         } else if (data.action === 'redo') {
           // Redo: 되돌리기 취소
           const updatedCombinations = [...modifiedCombinations];
@@ -683,6 +724,18 @@ const ScheduleOptimizationModal = ({
           setRedoStack(prev => [...prev, modifiedCombinations[currentIndex]]);
           // 히스토리에서 마지막 항목 제거
           setScheduleHistory(prev => prev.slice(0, -1));
+
+          // ⭐ 되돌린 시간표에서 실제 사용 중인 커스텀 일정만 범례에 유지
+          console.log('🔄 한 단계 되돌리기 → 사용 중인 커스텀 범례만 유지');
+          const usedCustomTitles = new Set();
+          data.schedule.forEach(item => {
+            if (item.sourceImageIndex >= (schedulesByImage?.length || 0)) {
+              // sourceImageIndex가 이미지 개수보다 크면 커스텀 일정
+              usedCustomTitles.add(item.title);
+            }
+          });
+          setCustomSchedulesForLegend(prev => prev.filter(c => usedCustomTitles.has(c.title)));
+          console.log('  - 유지된 커스텀 일정:', Array.from(usedCustomTitles));
         } else if (data.action === 'undo') {
           // 맨 처음 원본으로 되돌리기
           const updatedCombinations = [...modifiedCombinations];
@@ -691,6 +744,13 @@ const ScheduleOptimizationModal = ({
 
           // 히스토리 초기화
           setScheduleHistory([]);
+
+          // ⭐ 커스텀 일정 범례도 초기화 (원본에는 커스텀 일정 없음)
+          console.log('🔄 [UNDO] 원본 시간표 복원 → 커스텀 범례 초기화');
+          console.log('  - 기존 범례:', customSchedulesForLegend.length, '개');
+          customSchedulesForLegend.forEach(c => console.log(`    * ${c.title} (인덱스 ${c.sourceImageIndex})`));
+          setCustomSchedulesForLegend([]);
+          console.log('  - 범례 초기화 완료');
           // 고정 일정 초기화
           setCurrentFixedSchedules([]);
           console.log('✅ 고정 일정도 함께 초기화');
@@ -1394,7 +1454,7 @@ const ScheduleOptimizationModal = ({
           </div>
 
           {/* 범례 (색상 구분) */}
-          {schedulesByImage && schedulesByImage.length > 1 && (
+          {(schedulesByImage && schedulesByImage.length > 1 || (customSchedulesForLegend && customSchedulesForLegend.length > 0)) && (
             <div className="mt-3 pt-3 border-t border-purple-200">
               <div className="flex flex-wrap gap-3 justify-center">
                 {schedulesByImage.map((imageData, idx) => {
@@ -1415,6 +1475,28 @@ const ScheduleOptimizationModal = ({
                       ></div>
                       <span className={`text-xs transition-all ${isHovered ? 'text-purple-700 font-bold' : 'text-gray-700'}`}>
                         {imageData.title || `이미지 ${idx + 1}`}
+                      </span>
+                    </div>
+                  );
+                })}
+                {customSchedulesForLegend && customSchedulesForLegend.length > 0 && customSchedulesForLegend.map((customData) => {
+                  console.log('🎨 [범례 렌더링] customData:', customData);
+                  const color = getColorForImageIndex(customData.sourceImageIndex);
+                  const isHovered = hoveredImageIndex === customData.sourceImageIndex;
+                  return (
+                    <div
+                      key={`custom-${customData.sourceImageIndex}`}
+                      className="flex items-center gap-2 transition-all hover:bg-purple-50 px-2 py-1 rounded"
+                      onMouseEnter={() => setHoveredImageIndex(customData.sourceImageIndex)}
+                      onMouseLeave={() => setHoveredImageIndex(null)}
+                      title="커스텀 일정"
+                    >
+                      <div
+                        className={`w-4 h-4 rounded border-2 transition-all ${isHovered ? 'scale-125' : ''}`}
+                        style={{ backgroundColor: color.bg, borderColor: color.border }}
+                      ></div>
+                      <span className={`text-xs transition-all ${isHovered ? 'text-purple-700 font-bold' : 'text-gray-700'}`}>
+                        {customData.title} 📌
                       </span>
                     </div>
                   );
@@ -1539,9 +1621,15 @@ const ScheduleOptimizationModal = ({
             })}
 
             {/* ⭐ 커스텀 일정 범례 */}
+            {(() => {
+              console.log('🎨 [렌더링] customSchedulesForLegend:', customSchedulesForLegend);
+              console.log('🎨 [렌더링] customSchedulesForLegend 개수:', customSchedulesForLegend?.length || 0);
+              return null;
+            })()}
             {customSchedulesForLegend.map((customData) => {
               const color = getColorForImageIndex(customData.sourceImageIndex);
               const isHovered = hoveredImageIndex === customData.sourceImageIndex;
+              console.log(`🎨 [렌더링] ${customData.title} 범례 버튼 생성 중... (색상:`, color, ')');
 
               return (
                 <button

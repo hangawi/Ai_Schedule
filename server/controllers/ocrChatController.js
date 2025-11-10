@@ -706,7 +706,7 @@ exports.conversationalRecommend = async (req, res) => {
     );
 
     // Gemini API 호출
-    const modelNames = ['gemini-2.0-flash-exp', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    const modelNames = ['gemini-2.0-flash', 'gemini-1.5-flash'];
     let aiResponse = null;
     let lastError = null;
 
