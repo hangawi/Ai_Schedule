@@ -195,6 +195,7 @@ const ScheduleOptimizationModal = ({
         title: schedule.title || '수업',
         academyName: schedule.academyName,  // 학원 풀네임
         subjectName: schedule.subjectName,  // 과목명
+        instructor: schedule.instructor,  // 강사명
         color: scheduleColor,
         description: schedule.description || '',
         isRecurring: true
