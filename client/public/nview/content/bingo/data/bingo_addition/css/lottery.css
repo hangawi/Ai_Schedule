@@ -1,0 +1,320 @@
+#app {
+  display: grid;
+  background-color: transparent;
+  overflow: hidden;
+  height: 700px;
+}
+
+#main {
+  background-color: transparent;
+}
+
+body.md-theme-default.vs-main-bg {
+  background-color: transparent;
+  background: url(../assets/img/bg.png) no-repeat 0 0;
+  max-width: 1280px;
+  max-height: 800px;
+  margin: 0;
+  position: relative;
+  width: 1280px;
+  height: 800px;
+  overflow-y: hidden;
+  min-height: 800px;
+  min-width: 1280px;
+}
+
+#vs-top {
+  height: 95px;
+  background-color: #522B76;
+}
+
+.vs-main-bg {
+  background-color: #184372;
+}
+
+.vs-who-box-bg {
+  background-color: #769FC0;
+}
+
+.vs-box {
+  width: 850px;
+  height: 622px;
+  margin: 0 215px 10px 215px;
+  /* background-color: #FBCD5C; */
+  background-color: transparent;
+  border-radius: 40px;
+  display: block;
+  position: relative;
+}
+
+.vs-index-title {
+  /* float: left; */
+  /* position: fixed; */
+  margin-top: 50px;
+  text-align: center;
+  width: 100%;
+  height: 100px;
+  font-size: 60px;
+  font-weight: 700;
+  color: #2d2d2d;
+}
+
+.vs-white-button {
+  color: #fff;
+  font-size: 30px;
+  font-weight: 700;
+  /* width: 250px; */
+  height: 73px;
+  line-height: 78px;
+  /* background: transparent url(../assets/img/btn_choice_default.png) no-repeat 0 0; */
+}
+/* 
+.vs-white-button:hover, .vs-white-button.selected {
+  background: transparent url(../assets/img/btn_choice_select.png) no-repeat 0 0;
+} */
+
+.vs-start-button {
+  color: #fff;
+  font-size: 30px;
+  font-weight: 700;
+  width: 256px;
+  height: 78px;
+  line-height: 78px;
+  margin-top: 25px;
+  left: calc(50% - 256px/2);
+  background: transparent url(../assets/img/btn_box_default.png) no-repeat 0 0;
+}
+
+.vs-start-button:hover {
+  background: transparent url(../assets/img/btn_box_select.png) no-repeat 0 0;
+}
+
+.vs-wide-button {
+  color: #fff;
+  font-size: 30px;
+  font-weight: 700;
+  width: 250px;
+  height: 73px;
+  line-height: 65px;
+  padding: 0;
+  margin: 0;
+  background: transparent url(../assets/img/btn_level_default.png) no-repeat 0 0;
+}
+.vs-wide-button:hover, .vs-wide-button.selected {
+  background: transparent url(../assets/img/btn_level_select.png) no-repeat 0 0;
+}
+
+.vs-short-button {
+  color: #fff;
+  font-size: 30px;
+  font-weight: 700;
+  width: 160px;
+  height: 72px;
+  line-height: 65px;
+  padding: 0;
+  margin: 0;
+  background: transparent url(../assets/img/btn_grid_default.png) no-repeat 0 0;
+}
+.vs-short-button:hover, .vs-short-button.selected {
+  background: transparent url(../assets/img/btn_grid_select.png) no-repeat 0 0;
+}
+
+.vs-with-line-list > button {
+  padding: 0;
+  margin: 0 10px;
+}
+
+.row {
+  display: grid;
+  grid-gap: 2rem;
+  grid-template-columns: repeat(6, auto);
+  justify-content: center;
+}
+
+.half-card {
+  width: 50%;
+  margin-top: 200px;
+  text-align: center;
+}
+
+.md-theme-default.md-card {
+  background-color: #fff;
+  border: #1AABA4 1px solid;
+  border-radius: 15px;
+}
+
+.md-boards-navigation { display: none; }
+
+
+.md-button:hover:not([disabled]):not(.md-raised) { background-color: transparent !important; }
+
+.vs-tar { text-align: right !important; }
+.vs-tal { text-align: left !important; }
+.vs-tac { text-align: center !important; }
+
+
+/* #machine {
+  width: 397px;
+  height: 622px;
+  margin-left: 500px;
+  background: transparent url(../assets/img/bingo_body_Machine01.png) no-repeat 0 0;
+} */
+
+#ball {
+  display: none;
+  width: 92px;
+  height: 92px;
+  left: 840px;
+  top: 560px;
+  position: absolute;
+  color: #333;
+  background: transparent url(../assets/img/ball_pink_m.png) no-repeat 0 0;
+}
+
+#gacha {
+  position: absolute;
+  display: none;
+  width: 289px;
+  height: 289px;
+  left: 240px;
+  top: 160px;
+  border-radius: 50%;
+  background: transparent url(../assets/img/bingo_ball_hint.png) no-repeat 0 0;
+}
+
+#gacha #question {
+  /* background-color: #FAC959; */
+  /* margin-top: 300px; */
+  /* border-radius: 10px; */
+  color: #333;
+  width: 289px;
+  height: 289px;
+  display: table-cell;
+  vertical-align: middle;
+  border-radius: 50%;
+  font-size: 80px;
+}
+
+body {
+  text-align: center;
+  background-color: #000;
+}
+
+#machine {
+  position: absolute;
+  left: 390px;
+  top: -50px;
+  width: 559px;
+  height: 749px;
+  background: transparent url(../assets/img/bingo_body_Machine01.png) no-repeat 0 0;
+  cursor: pointer;
+}
+
+#machine_line { 
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 559px;
+  height: 749px;
+  display: none;
+  background: transparent url(../assets/img/machine_line.png) no-repeat 0 0;
+}
+
+#canvas {
+  position: absolute;
+  left: 675px;
+  top: 135px;
+  /* background-color: #cdcdcd; */
+  background-color: rgba(0, 0, 0, 0);
+  margin: 1em auto;
+  cursor: pointer;
+}
+
+.ball {
+  background-color: black;
+  position: absolute;
+  display: inline-block;
+  border-radius: 50%;
+}
+
+.vs-list-button {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  width: 75px;
+  height: 75px;
+  left: calc(50% - 75px/2);
+  background: transparent url(../assets/img/btnList.png) no-repeat 0 0;
+  position: absolute;
+  bottom: 20px;
+  margin: 0;
+}
+
+#bingo-context {
+  width: 90px;
+  height: 90px;
+  display: table-cell;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 24px;
+}
+
+.lottie {
+  width: 400px;
+  height: 400px;
+  position: absolute;
+  /* top: 122px;
+  left: 185px; */
+  top: -80px;
+  left: -10px;
+  z-index: 9999;
+}
+
+#lottie_1 {
+  top: 140px;
+  left: 180px;
+}
+
+@keyframes rotation {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(359deg);
+  }
+}
+
+.rotate {
+  animation: rotation 0.5s infinite linear;
+}
+
+#btnProgress {
+  display: none;
+  position: absolute;
+  bottom: -10px;
+  right: 0;
+  touch-action: none;
+  padding: 0px;
+  border: none;
+  background-color: transparent;
+  outline: none;
+  background-image: url(../assets/img/btn_stop_quiz.png);
+  background-repeat: no-repeat;
+  width: 105px;
+  height: 104px;
+  pointer-events: unset;
+  cursor: pointer;
+  text-align: center;
+}
+
+#btnProgress span {
+  font-size: 15px;
+  color: #fff;
+  line-height: 1;
+  position: relative;
+  top: 10px;
+  left: -3px;
+  font-family: "MaplestoryOTFBold";
+}
+
+#tab-pages { cursor: default !important; }

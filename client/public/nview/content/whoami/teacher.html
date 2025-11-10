@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Math Alive</title>
+<style>
+html, body{
+	padding:0px; margin:0px; 
+	width:100%;height:100%;
+	overflow:hidden;
+}
+</style>
+<script type="text/javascript" src="/content/mathalive_lib/common.js"></script>
+<script type="text/javascript" src="/content/mathalive_lib/tsoc.js"></script>
+<script type="text/javascript">
+var my_o = {};
+(function(){
+	if(comm_o.isDvlp){
+		function _add(){
+			var popups = tsoc_o.popups
+			
+			var win = window.open("student.html?kdmtdvlp=y&dmode=" + comm_o.displayMode, "_blank", "location=0,menubar=0,resizable=0,scrollbars=0,status=0,titlebar=0,toolbar=0,width=1280,height=800");
+			var ipt = document.getElementById("pad_id");
+			var id_prev = ipt.value.trim();
+			ipt.value = "";
+			var id_cnt = 0;
+			var pad_id;
+			if(id_prev==""){
+				id_prev = "pad_";
+				id_cnt = 1;
+				pad_id = id_prev + id_cnt;
+			}else pad_id = id_prev;
+	
+			while(true){
+				var isDup = false;
+				for(var i=0; i<popups.length; i++){
+					if(popups[i].name==pad_id){
+						isDup = true;
+						break;
+					}
+				}
+				if(isDup){
+					id_cnt++;
+					pad_id = id_prev + id_cnt;
+				}else break;
+			}
+			win.name = pad_id;
+			popups.push(win);
+		}
+		function _start(kdmtload){
+			if(kdmtload==null || typeof(kdmtload)=="undefined") kdmtload = "";
+			popups = tsoc_o.popups
+			
+			for(var i = popups.length -1; i>=0; i--){
+				var win = popups[i];
+				if(win.closed){
+					popups.splice(i,1);
+				}
+			}
+			if(popups.length==0){
+				alert("pad가 없습니다.");
+				return;
+			}
+			document.getElementById("control").style.display= "none";
+			document.getElementById("view").style.display= "";
+			var ifrm = document.getElementById("ifrm");
+			ifrm.src = "./teacher/index.html?kdmtdvlp=y&lang=ko&kdmtload=" + kdmtload;
+			ifrm.style.display = "";
+		}
+
+		function _reload(){
+			var ifrm = document.getElementById("ifrm");
+			ifrm.contentWindow.location.reload();
+		}
+		
+		my_o.add = _add;
+		my_o.start = _start;
+		my_o.reload = _reload;
+		
+		var padurl = window.location.href;
+		var ne = padurl.lastIndexOf("/");	
+		padurl = padurl.substring(0, ne);
+		padurl = padurl + "/student.html";
+		
+		tsoc_o.gotoPAD(padurl);
+		
+		document.addEventListener("DOMContentLoaded", function(event) {
+			if(comm_o.getQuery("kdmtload")=="next" || comm_o.getQuery("kdmtload")=="prev"){
+				var fnc = null;
+				 fnc = function(){
+					var popups = tsoc_o.popups;
+					if(popups.length>0) _start(comm_o.getQuery("kdmtload"));
+					else{
+						tsoc_o.gotoPAD(padurl);
+						window.requestAnimationFrame(fnc);
+					}
+				}
+				window.requestAnimationFrame(fnc);
+			}else{
+				document.getElementById("control").style.display= "";
+			}
+		});
+		
+		tsoc_o.gotoNextBook = function(){
+			//
+		};
+		tsoc_o.gotoPrevBook = function(){
+			// 
+		};
+	}else{
+		document.location.href="./teacher/index.html?kdmttest=y&kdmtdvlp=y&tmp=" + comm_o.getQuery("tmp");	
+	}
+})();
+</script>
+</head>
+<body>
+	<div id="control" style="display:none;">
+		<input type="text" id="pad_id"/><input type="button" value="add student" onclick="javascript:my_o.add();"></input>	
+		<br/>
+		<input type="button" value="start" onclick="javascript:my_o.start();"></input>
+
+	</div>
+	<div id="view" style="display:none;width:100%;height:100%;text-align:center;">
+		<iframe id="ifrm"  width="1280px" height="800px" frameborder="0" scrolling="no" frameborder="1" allowFullScreen="true"></iframe>
+		<br/>
+		<input type="button" value="reload" onclick="javascript:my_o.reload();"></input>	
+	</div>
+</body>
+</html>

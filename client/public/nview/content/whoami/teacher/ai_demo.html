@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Math Alive - AI 추리 문제 출제 (데모)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .controls {
+            margin-bottom: 30px;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            color: #555;
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        select:hover {
+            border-color: #667eea;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            flex: 1;
+            min-width: 150px;
+            padding: 18px;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: white;
+        }
+
+        #openStudentBtn {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        #openStudentBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(17, 153, 142, 0.3);
+        }
+
+        #generateBtn {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+
+        #generateBtn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        #generateBtn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        #sendBtn {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        #sendBtn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(245, 87, 108, 0.3);
+        }
+
+        #sendBtn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .student-status {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .student-status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        }
+
+        .preview {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            min-height: 100px;
+            display: none;
+        }
+
+        .preview.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .preview h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .question-display {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            font-size: 24px;
+            color: #333;
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .answer-display {
+            color: #666;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        .loading {
+            text-align: center;
+            color: #667eea;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 15px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .info {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 5px;
+            font-size: 14px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎓 AI 문제 자동 출제</h1>
+        <p class="subtitle">Powered by Google Gemini AI</p>
+
+        <button id="openStudentBtn">👨‍🎓 학생 창 열기</button>
+
+        <div id="studentStatus" class="student-status">
+            📱 학생 창을 먼저 열어주세요
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="difficulty">난이도 선택</label>
+                <select id="difficulty">
+                    <option value="easy">쉬움 (초등 저학년)</option>
+                    <option value="medium" selected>보통 (초등 중학년)</option>
+                    <option value="hard">어려움 (초등 고학년)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="type">문제 유형</label>
+                <select id="type">
+                    <option value="person" selected>인물</option>
+                    <option value="animal">동물</option>
+                    <option value="object">사물</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button id="generateBtn">✨ AI 문제 생성</button>
+            <button id="sendBtn" disabled>📤 학생에게 전송</button>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            AI가 문제를 생성 중입니다...
+        </div>
+
+        <div id="preview" class="preview">
+            <h3>📝 생성된 문제 미리보기</h3>
+            <div class="question-display" id="questionDisplay"></div>
+            <div class="answer-display">정답: <span id="answerDisplay"></span></div>
+        </div>
+
+        <div id="status"></div>
+
+        <div class="info">
+            <strong>💡 사용 방법:</strong><br>
+            1. <strong>"학생 창 열기"</strong> 버튼을 클릭하여 학생 화면을 엽니다<br>
+            2. 난이도와 문제 유형을 선택하세요<br>
+            3. <strong>"AI 문제 생성"</strong> 버튼을 클릭하여 문제를 만듭니다<br>
+            4. 생성된 문제를 확인하고 <strong>"학생에게 전송"</strong> 버튼을 클릭하세요<br>
+            5. 학생 화면에 문제가 나타나고, 학생이 답을 제출하면 결과를 확인할 수 있습니다
+        </div>
+    </div>
+
+    <!-- 기존 Math Alive 라이브러리 로드 -->
+    <script type="text/javascript" src="/content/mathalive_lib/common.js"></script>
+    <script type="text/javascript" src="/content/mathalive_lib/bunddle.js"></script>
+    <script type="text/javascript" src="../data/data.js"></script>
+    <script type="text/javascript" src="/content/mathalive_lib/MA/activity/teacher/js/teacher.js"></script>
+    <script type="text/javascript" src="/content/mathalive_lib/tsoc_prod.js"></script>
+
+    <script>
+        let currentQuestion = null;
+        let studentWindow = null;
+
+        const openStudentBtn = document.getElementById('openStudentBtn');
+        const studentStatus = document.getElementById('studentStatus');
+        const generateBtn = document.getElementById('generateBtn');
+        const sendBtn = document.getElementById('sendBtn');
+        const loading = document.getElementById('loading');
+        const preview = document.getElementById('preview');
+        const questionDisplay = document.getElementById('questionDisplay');
+        const answerDisplay = document.getElementById('answerDisplay');
+        const statusDiv = document.getElementById('status');
+
+        // 학생 창 열기
+        openStudentBtn.addEventListener('click', () => {
+            // 이미 열려있는 창이 있으면 포커스
+            if (studentWindow && !studentWindow.closed) {
+                studentWindow.focus();
+                showStatus('success', '학생 창이 이미 열려있습니다.');
+                return;
+            }
+
+            // 새 창 열기
+            const width = 800;
+            const height = 600;
+            const left = window.screen.width - width - 100;
+            const top = 100;
+
+            studentWindow = window.open(
+                '../student/ai_demo_student.html',
+                'StudentWindow',
+                `width=${width},height=${height},left=${left},top=${top}`
+            );
+
+            if (studentWindow) {
+                studentStatus.textContent = '✅ 학생 창이 연결되었습니다!';
+                studentStatus.classList.add('connected');
+                showStatus('success', '학생 창이 열렸습니다! 이제 문제를 전송할 수 있습니다.');
+
+                // 창이 닫힐 때 처리
+                const checkClosed = setInterval(() => {
+                    if (studentWindow.closed) {
+                        clearInterval(checkClosed);
+                        studentStatus.textContent = '📱 학생 창이 닫혔습니다. 다시 열어주세요.';
+                        studentStatus.classList.remove('connected');
+                        studentWindow = null;
+                    }
+                }, 1000);
+            } else {
+                showStatus('error', '학생 창을 열 수 없습니다. 팝업이 차단되었을 수 있습니다.');
+            }
+        });
+
+        // 학생으로부터 메시지 수신
+        window.addEventListener('message', function(event) {
+            console.log('Received from student:', event.data);
+
+            if (event.data.type === 'student_ready') {
+                studentStatus.textContent = '✅ 학생이 준비되었습니다!';
+                studentStatus.classList.add('connected');
+            } else if (event.data.type === 'answer_submitted') {
+                const icon = event.data.correct ? '🎉' : '❌';
+                const msg = event.data.correct
+                    ? `학생이 정답을 맞혔습니다! (답: ${event.data.answer})`
+                    : `학생이 틀렸습니다. (답: ${event.data.answer}, 정답: ${event.data.correctAnswer})`;
+                showStatus(event.data.correct ? 'success' : 'error', `${icon} ${msg}`);
+            } else if (event.data.type === 'student_closed') {
+                studentStatus.textContent = '📱 학생 창이 닫혔습니다. 다시 열어주세요.';
+                studentStatus.classList.remove('connected');
+                studentWindow = null;
+            }
+        });
+
+        // AI 문제 생성
+        generateBtn.addEventListener('click', async () => {
+            const difficulty = document.getElementById('difficulty').value;
+            const type = document.getElementById('type').value;
+
+            // UI 상태 업데이트
+            generateBtn.disabled = true;
+            sendBtn.disabled = true;
+            loading.style.display = 'block';
+            preview.classList.remove('show');
+            statusDiv.innerHTML = '';
+
+            try {
+                const response = await fetch('http://localhost:5000/api/nview/api/generate-question', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ difficulty, type, game_type: 'whoami' })
+                });
+
+                if (!response.ok) {
+                    throw new Error('서버 응답 오류');
+                }
+
+                const data = await response.json();
+                currentQuestion = data;
+
+                // 미리보기 표시
+                questionDisplay.textContent = data.question;
+                answerDisplay.textContent = data.answer;
+                preview.classList.add('show');
+
+                // 전송 버튼 활성화
+                sendBtn.disabled = false;
+
+                showStatus('success', '✅ 문제가 성공적으로 생성되었습니다!');
+
+            } catch (error) {
+                console.error('Error:', error);
+                showStatus('error', '❌ 문제 생성 실패: ' + error.message);
+            } finally {
+                generateBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        });
+
+        // 학생에게 전송
+        sendBtn.addEventListener('click', () => {
+            if (!currentQuestion) {
+                showStatus('error', '전송할 문제가 없습니다.');
+                return;
+            }
+
+            // 학생 창이 열려있는지 확인
+            if (!studentWindow || studentWindow.closed) {
+                showStatus('error', '❌ 학생 창이 열려있지 않습니다. 먼저 "학생 창 열기" 버튼을 클릭하세요.');
+                return;
+            }
+
+            try {
+                // 학생 창으로 메시지 전송
+                studentWindow.postMessage({
+                    type: 'new_question',
+                    data: currentQuestion
+                }, '*');
+
+                showStatus('success', '📤 문제가 학생에게 전송되었습니다!');
+                console.log('Question sent to student:', currentQuestion);
+
+                // 전송 후 상태 업데이트
+                studentStatus.textContent = '✅ 문제 전송 완료!';
+                setTimeout(() => {
+                    studentStatus.textContent = '✅ 학생이 준비되었습니다!';
+                }, 2000);
+
+            } catch (error) {
+                console.error('Send error:', error);
+                showStatus('error', '❌ 전송 실패: ' + error.message);
+            }
+        });
+
+        function showStatus(type, message) {
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+        }
+
+        // 페이지 로드 시 서버 상태 확인
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch('http://localhost:5000/api/nview/health');
+                if (response.ok) {
+                    console.log('✅ Backend server is ready');
+                }
+            } catch (error) {
+                showStatus('error', '⚠️ 백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요.');
+            }
+        });
+    </script>
+</body>
+</html>

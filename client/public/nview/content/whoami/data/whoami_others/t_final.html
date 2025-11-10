@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ko" translate="no">
+
+<head>
+  <meta charset="utf-8">
+  <meta content="on" http-equiv="cleartype">
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <meta content="yes" name="mobile-web-app-capable">
+  <meta content="yes" name="apple-mobile-web-app-status-bar-style">
+  <meta content="black" name="apple-mobile-web-app-status-bar-style">
+
+  <title>Who Am I</title>
+
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="./css/notosanskr.css">
+  <link rel="stylesheet" href="./css/material_icon.css">
+
+  <link rel="stylesheet" type="text/css" href="./vue-material/vue-material.css">
+  <link rel="stylesheet" type="text/css" href="./vuetify/vuetify.min.css">
+
+  <script src='./js/store.legacy.min.js'></script>
+  <script src="./js/xml2json.min.js"></script>
+
+  <script src="./js/jquery.js"></script>
+  <script src="./js/jquery.scrollTo.min.js"></script>
+
+  <script src="./js/vue.min.js"></script>
+  <script src="./js/vuex.min.js"></script>
+  <script src="./vue-material/vue-material.js"></script>
+  <script src="./vuetify/vuetify.min.js"></script>
+
+  <script src="/content/mathalive_lib/mathinterface.js"></script>
+</head>
+
+<body class='app vs-main-bg'>
+  <div id="loader">
+    <md-spinner :md-size="150" md-indeterminate></md-spinner>
+  </div>
+  <div id="main" class="hide">
+    
+    <div class="app-viewport" id="vs-top">
+      <md-switch class="md-primary vs-main-color vs-position-change" labelPosition="left" v-model="bgm" value="1">BGM
+      </md-switch>
+    </div>
+
+    <div id="app" class="index">
+      <div class="vs-box md-layout">
+        <div class="contents-title"></div>
+        <div class="contents-body md-layout-item vs-center">
+          <div class="answer">
+            <div id="rImg" class="nick-img"><img src="./assets/img/img_player.png" /></div>
+            <div id="rName" class="content-txt">Name</div>
+          </div>
+          
+          <div class="answer">
+            <div class="content-img"><img v-bind:src="resultData.img" /></div>
+            <div class="content-txt" v-html="resultData.name"></div>
+          </div>
+        </div>
+        <div class="md-layout-item vs-center mt-30"></div>
+      </div>
+      
+    </div>
+    
+    <audio id='vs-effect' src=''></audio>
+  </div>
+
+  <link rel="stylesheet" href="./css/application.css">
+  <link rel="stylesheet" href="./css/t_final.css">
+
+  <script src="./js/application.js"></script>
+  <script src="./js/t_final.js"></script>
+</body>
+
+</html>

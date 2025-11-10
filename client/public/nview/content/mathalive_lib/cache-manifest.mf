@@ -1,0 +1,13 @@
+CACHE MANIFEST
+# v1.0 : 10-22-2020
+ 
+CACHE:
+/content/mathalive_lib/MA/warmup_quiz/common/bg_countdown_01.jpg
+/content/mathalive_lib/MA/warmup_quiz/common/bg_countdown_02.jpg
+/content/mathalive_lib/MA/warmup_quiz/common/bg_countdown_03.jpg
+/content/mathalive_lib/MA/warmup_quiz/common/bg_countdown_04.jpg
+/content/mathalive_lib/MA/warmup_quiz/common/bg_countdown_05.jpg
+ 
+NETWORK:
+ 
+FALLBACK:

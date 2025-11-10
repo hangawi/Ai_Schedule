@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<word>
+  <lesson index="1" name="Animals">
+    <item id="1" module="animal" no="1" eng="camel" kor="낙타"/>
+    <item id="2" module="animal" no="2" eng="panda" kor="판다"/>
+    <item id="3" module="animal" no="3" eng="octopus" kor="문어"/>
+    <item id="4" module="animal" no="4" eng="cat" kor="고양이"/>
+    <item id="5" module="animal" no="5" eng="turtle" kor="거북이"/>
+    <item id="6" module="animal" no="6" eng="giraffe" kor="기린"/>
+    <item id="7" module="animal" no="7" eng="leopard" kor="표범"/>
+    <item id="8" module="animal" no="8" eng="whale" kor="고래"/>
+    <item id="9" module="animal" no="9" eng="shark" kor="상어"/>
+    <item id="10" module="animal" no="10" eng="seahorse" kor="해마"/>
+    <item id="11" module="animal" no="11" eng="pig" kor="돼지"/>
+    <item id="12" module="animal" no="12" eng="horse" kor="말"/>
+    <item id="13" module="animal" no="13" eng="lion" kor="사자"/>
+    <item id="14" module="animal" no="14" eng="dog" kor="개"/>
+    <item id="15" module="animal" no="15" eng="bear" kor="곰"/>
+    <item id="16" module="animal" no="16" eng="snake" kor="뱀"/>
+    <item id="17" module="animal" no="17" eng="chameleon" kor="카멜레온"/>
+    <item id="18" module="animal" no="18" eng="eagle" kor="독수리"/>
+    <item id="19" module="animal" no="19" eng="parrot" kor="앵무새"/>
+    <item id="20" module="animal" no="20" eng="rhinoceros" kor="코뿔소"/>
+  </lesson>
+  <lesson index="2" name="Places">
+    <item id="1" module="place" no="1" eng="school" kor="학교"/>
+    <item id="2" module="place" no="2" eng="hospital" kor="병원"/>
+    <item id="3" module="place" no="3" eng="pharmacy" kor="약국"/>
+    <item id="4" module="place" no="4" eng="grocery store" kor="식료품점 (마트)"/>
+    <item id="5" module="place" no="5" eng="playground" kor="놀이터"/>
+    <item id="6" module="place" no="6" eng="museum" kor="박물관"/>
+    <item id="7" module="place" no="7" eng="beach" kor="바닷가"/>
+    <item id="8" module="place" no="8" eng="library" kor="도서관"/>
+    <item id="9" module="place" no="9" eng="police station" kor="경찰서"/>
+    <item id="10" module="place" no="10" eng="post office" kor="우체국"/>
+    <item id="11" module="place" no="11" eng="restaurant" kor="식당"/>
+    <item id="12" module="place" no="12" eng="mountain" kor="산"/>
+    <item id="13" module="place" no="13" eng="USA" kor="미국"/>
+    <item id="14" module="place" no="14" eng="UK" kor="영국"/>
+    <item id="15" module="place" no="15" eng="France" kor="프랑스"/>
+    <item id="16" module="place" no="16" eng="Korea" kor="한국"/>
+    <item id="17" module="place" no="17" eng="China" kor="중국"/>
+    <item id="18" module="place" no="18" eng="Austraila" kor="호수"/>
+    <item id="19" module="place" no="19" eng="Canada" kor="캐나다 "/>
+    <item id="20" module="place" no="20" eng="Vietnam" kor="베트남"/>
+  </lesson>
+  <lesson index="3" name="Things">
+    <item id="1" module="things" no="1" eng="glue stick" kor="딱풀"/>
+    <item id="2" module="things" no="2" eng="scissors" kor="가위"/>
+    <item id="3" module="things" no="3" eng="mirror" kor="거울"/>
+    <item id="4" module="things" no="4" eng="soap" kor="비누"/>
+    <item id="5" module="things" no="5" eng="wallet" kor="지갑"/>
+    <item id="6" module="things" no="6" eng="phone" kor="핸드폰"/>
+    <item id="7" module="things" no="7" eng="brush" kor="붓"/>
+    <item id="8" module="things" no="8" eng="calendar" kor="달력"/>
+    <item id="9" module="things" no="9" eng="fan" kor="선풍기"/>
+    <item id="10" module="things" no="10" eng="refrigerator" kor="냉장고"/>
+    <item id="11" module="things" no="11" eng="couch" kor="소파 (카우치)"/>
+    <item id="12" module="things" no="12" eng="desk" kor="책상"/>
+    <item id="13" module="things" no="13" eng="chair" kor="의자"/>
+    <item id="14" module="things" no="14" eng="umbrella" kor="우산"/>
+    <item id="15" module="things" no="15" eng="cup" kor="컵"/>
+    <item id="16" module="things" no="16" eng="pencil" kor="연필"/>
+    <item id="17" module="things" no="17" eng="watch" kor="손목시계"/>
+    <item id="18" module="things" no="18" eng="glasses" kor="안경"/>
+    <item id="19" module="things" no="19" eng="bag" kor="가방"/>
+    <item id="20" module="things" no="20" eng="sneakers" kor="운동화"/>
+  </lesson>
+</word>

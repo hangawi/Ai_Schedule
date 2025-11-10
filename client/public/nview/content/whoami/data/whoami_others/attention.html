@@ -1,0 +1,61 @@
+<html lang="ko" translate="no">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="./css/application.css">
+  <script src="/content/mathalive_lib/mathinterface.js"></script>
+  <title>Document</title>
+  <style>
+    body {
+      padding: 0;
+      margin: 0;
+      opacity: 1 !important;
+      overflow: hidden;
+    }
+    div#main {
+      max-width: 100%;
+      /* width: 100%; */
+      width: 1280px;
+      height: 800px;
+      /* background-color: #184372; */
+      background: transparent url(./assets/img/bg_attention.jpg) no-repeat 0 0;
+      text-align: center;
+      color: #fff;
+      font-size: 100px;
+      font-weight: 700;
+      line-height: 800px;
+    }
+  </style>
+</head>
+<body>
+  <div id="main">Attention</div>
+
+  <script>
+    window.globalHandleNotifyCurrentPage(1);
+    window.handleProtocol('totalpage', 1);
+    window.parent.hitBuzzed = false;
+    function fnToAttention() {
+      // document.location.reload();
+    }
+    function fnForceToAttention() {
+      // document.location.reload();
+    }
+    function fnToNote() {
+      if (window.parent._sharedObject.user_opened.id == window.parent._studentId.id) {
+        document.location.href = 's_note.html';
+      }
+    }
+    function fnToQuestion() {
+      if (window.parent._sharedObject.user_questioner.id == window.parent._studentId.id) {
+        document.location.href = 's_question_list.html';
+      }
+    }
+    function fnToBuzzer() {
+      if (window.parent._sharedObject.user_opened.id != window.parent._studentId.id) {
+        document.location.href = 's_hit_buzzer.html';
+      }
+    }
+  </script>
+</body>
+</html>

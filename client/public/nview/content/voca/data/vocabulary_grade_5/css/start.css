@@ -1,0 +1,237 @@
+#app {
+  display: grid;
+  height: 670px;
+}
+
+#app.index {
+  top: 129px;
+}
+
+#vs-top-menu {
+  background: url(../assets/img/top_bg.png) no-repeat 0 0;
+}
+
+.vs-top-title {
+  background-position: 0 22px;
+  text-indent: 60px;
+  margin-top: -34px;
+  margin-left: 10px;
+}
+
+#app.index::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+#app.index::-webkit-scrollbar-thumb {
+  background: rgba(90, 90, 90, 0.2);
+}
+
+#app.index::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.row {
+  display: grid;
+  grid-gap: 120px 30px;
+  grid-template-columns: repeat(4, auto);
+  justify-content: center;
+  margin-bottom: 120px;
+}
+
+.lesson-list-item {
+  background-color: transparent;
+  width: 275px;
+  height: 200px;
+  border-radius: 4px;
+}
+
+.md-theme-default.md-card {
+  background-color: #fff;
+  border: #fed24b 1px solid;
+  border-radius: 15px;
+  overflow: hidden;
+  cursor: default;
+}
+
+.lesson-list-item:hover .md-theme-default.md-card {
+  /* background-color: #FFB12D; */
+}
+
+.lesson-list-item .md-theme-default.md-card > * {
+  color: #666;
+}
+
+.lesson-list-item:hover .md-theme-default.md-card > * {
+  /* color: #fff; */
+}
+
+.lesson-list-item img {
+  filter: none;
+}
+
+.lesson-list-item:hover img {
+  /* filter: brightness(0) invert(1); */
+}
+
+#vs-top-menu .md-button {
+  width: 65px;
+  min-width: 65px;
+  height: 65px;
+  min-height: 65px;
+  background: url(../assets/img/btnClose.png) no-repeat 0 0;
+  padding: 0;
+  text-indent: -9999em;
+}
+
+/*  */
+
+.md-card-actions {
+  z-index: 9999;
+  position: relative;
+  top: -24px;
+  left: calc(275px / 2 - 63px / 2);
+}
+
+.md-card-actions input {position: absolute; display: none}
+
+.topicBtn {
+  width: 63px;
+  height: 63px;
+  border-radius: 63px;
+  position: absolute;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.topicBtn {
+  top:0px;
+  left:0px;
+  font-size: 15px;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-pack: center;
+      -ms-flex-pack: center;
+          justify-content: center;
+  -webkit-box-align: center;
+      -ms-flex-align: center;
+          align-items: center;
+  
+  /* box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); */
+  
+  -webkit-transition: all 0.3s cubic-bezier(.25,.8,.25,1);
+  transition: all 0.3s cubic-bezier(.25,.8,.25,1);
+}
+
+.topicBtn:not(:first-child) {
+  opacity: 0;
+  z-index: -2;
+  -webkit-transition: all 0.6s cubic-bezier(.87,-.41,.19,1.44);
+  transition: all 0.6s cubic-bezier(.87,-.41,.19,1.44);
+  text-indent: -9999em;
+}
+
+.topicBtn:nth-child(2) {-webkit-transition-delay: 0.1s;transition-delay: 0.1s}
+.topicBtn:nth-child(3) {-webkit-transition-delay: 0.2s;transition-delay: 0.2s}
+.topicBtn:nth-child(4) {-webkit-transition-delay: 0.3s;transition-delay: 0.3s}
+.topicBtn:nth-child(5) {-webkit-transition-delay: 0.4s;transition-delay: 0.4s}
+
+.topicBtn.btnTopic_1 {background: transparent url(../assets/img/btnT1.png) no-repeat 0 0;}
+.topicBtn.btnTopic_2 {background: transparent url(../assets/img/btnT2.png) no-repeat 0 0;}
+.topicBtn.btnTopic_3 {background: transparent url(../assets/img/btnT3.png) no-repeat 0 0;}
+.topicBtn.btnTopic_4 {background: transparent url(../assets/img/btnT4.png) no-repeat 0 0;}
+
+.topicBtn > button {
+  border: none;
+  background-color: transparent;
+  width: 63px;
+  height: 63px;
+  text-indent: -9999em;
+  cursor: pointer;
+}
+
+input.toggle:checked ~ .show-menu.counts_4 .topicBtn:nth-child(2) {top:35px;left:-85px;opacity:1;}
+input.toggle:checked ~ .show-menu.counts_4 .topicBtn:nth-child(3) {top:85px;left:-35px;opacity:1;}
+input.toggle:checked ~ .show-menu.counts_4 .topicBtn:nth-child(4) {top:85px;left: 35px;opacity:1;}
+input.toggle:checked ~ .show-menu.counts_4 .topicBtn:nth-child(5) {top:35px;left: 85px;opacity:1;}
+
+input.toggle:checked ~ .show-menu.counts_3 .topicBtn:nth-child(2) {top:35px;left:-85px;opacity:1;}
+input.toggle:checked ~ .show-menu.counts_3 .topicBtn:nth-child(3) {top:85px;left: 0px;opacity:1;}
+input.toggle:checked ~ .show-menu.counts_3 .topicBtn:nth-child(4) {top:35px;left: 83px;opacity:1;}
+
+input.toggle:checked ~ .show-menu.counts_2 .topicBtn:nth-child(2) {top:65px;left:-45px;opacity:1;}
+input.toggle:checked ~ .show-menu.counts_2 .topicBtn:nth-child(3) {top:65px;left: 45px;opacity:1;}
+
+input.toggle:checked ~ .show-menu.counts_1 .topicBtn:nth-child(2) {top:85px;left:  0px;opacity:1;}
+
+.menuBtn, .closeBtn {
+  position: absolute;
+  transition: all 0.3s ease;
+  width: 64px;
+  height: 64px;
+  background: transparent url(../assets/img/btnOpen.png) no-repeat 0 0;
+  text-indent: -9999em;
+}
+
+.closeBtn {
+  transform: translateY(50px);
+  opacity: 0;
+  background: transparent url(../assets/img/btnClosed.png) no-repeat 0 0;
+}
+
+input.toggle:checked ~ .show-menu .topicBtn .menuBtn {
+  transform: translateY(-50px);
+  opacity: 0;
+}
+
+input.toggle:checked ~ .show-menu .topicBtn .closeBtn {
+  transform: translateY(0px);
+  opacity: 1;
+}
+
+/* .md-card-actions i.md-icon.md-size-2x {
+  width: 64px;
+  height: 64px;
+  background: transparent url(../assets/img/btnOpen.png) no-repeat 0 0;
+  text-indent: -9999em;
+} */
+
+.md-card.md-theme-default > .md-card-content {
+  height: 137px;
+  margin-top: 40px;
+}
+
+.icon_1 { background: url(../assets/img/icon_1.png) no-repeat 0 0; }
+.icon_2 { background: url(../assets/img/icon_2.png) no-repeat 0 0; }
+.icon_3 { background: url(../assets/img/icon_3.png) no-repeat 0 0; }
+.icon_4 { background: url(../assets/img/icon_4.png) no-repeat 0 0; }
+
+.icon {
+  margin-top: -20px;
+  height: 65px;
+}
+
+.icon img.w_25 { width: 25%; }
+.icon img.w_30 { width: 30%; }
+.icon img.w_35 { width: 35%; }
+.icon img.w_40 { width: 40%; }
+.icon img.w_45 { width: 45%; }
+.icon img.w_50 { width: 50%; }
+.icon img.mt_20 { margin-top: 20px; }
+.icon img.ml_5 { margin-left: 5px; }
+.icon img.ml_10 { margin-left: 10px; }
+.icon img.ml_15 { margin-left: 15px; }
+.icon img.mr_5 { margin-right: 5px; }
+.icon img.mr_10 { margin-right: 10px; }
+.icon img.mr_15 { margin-right: 15px; }
+
+.lesson_name {
+  height: 55px;
+  margin-top: 30px;
+}
+
+.lesson-list-item span.sequence {
+  font-family: 'MaplestoryOTFBold';
+  font-size: 24px;
+}

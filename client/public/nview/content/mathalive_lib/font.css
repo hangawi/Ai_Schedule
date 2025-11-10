@@ -1,0 +1,82 @@
+@font-face {
+  font-family: NotoSans-Black;
+  src: url(/content/mathalive_lib/font/NotoSansCJKkr-Black-en.woff) format('woff');
+}
+@font-face {
+  font-family: NotoSans;
+  src: url(/content/mathalive_lib/font/NotoSansCJK-Medium-en.woff) format('woff');
+}
+@font-face {
+  font-family: Maplestory-Bold;
+  font-weight:bold;
+src: url(/content/mathalive_lib/font/Maplestory-Bold.woff) format('woff');
+}
+@font-face {
+  font-family: Maplestory-Light;
+  font-weight:bold;
+src: url(/content/mathalive_lib/font/Maplestory-Light.woff) format('woff');
+}
+/* 
+  21-06-24 최순철 수학셀 김민정CP님이 요청
+  Xelf 저작 결과물에 폰트 네임이 KR 이 붙어서 나오게 되어 있어서 추가
+*/
+@font-face {
+  font-family: NotoSansKR-Light;
+  src: url(/content/mathalive_lib/font/NotoSansKR-Light.woff) format('woff');
+}
+@font-face {
+  font-family: NotoSansKR-Regular;
+  src: url(/content/mathalive_lib/font/NotoSansKR-Regular.woff) format('woff');
+}
+@font-face {
+  font-family: NotoSansKR-Medium;
+  src: url(/content/mathalive_lib/font/NotoSansKR-Medium.woff) format('woff');
+}
+
+@font-face {
+  font-family: NotoSansKR-Bold;
+  src: url(/content/mathalive_lib/font/NotoSansKR-Bold.woff) format('woff');
+}
+/* 
+  21-07-02 최순철 기오정CP님과 변경
+*/
+@font-face {
+  font-family: NotoSans_light;
+  font-weight:lighter;
+  src: url(/content/mathalive_lib/font/NotoSansKR-Light.woff) format('woff');
+}
+@font-face {
+  font-family: NotoSansB-Regular;
+  src: url(/content/mathalive_lib/font/NotoSans-Regular.woff) format('woff');
+}
+@font-face {
+  font-family: NotoSans-Regular;
+  src: url(/content/mathalive_lib/font/NotoSansKR-Regular.woff) format('woff');
+}
+@font-face {
+  font-family: NotoSansB_bold;
+  font-weight:bold;
+  src: url(/content/mathalive_lib/font/NotoSans-Bold.woff) format('woff');
+}
+@font-face {
+  font-family: NotoSans_bold;
+  font-weight:bold;
+  src: url(/content/mathalive_lib/font/NotoSansKR-Bold.woff) format('woff');
+}
+@font-face {
+  font-family: NotoSansB_light;
+  font-weight:lighter;
+  src: url(/content/mathalive_lib/font/NotoSans-Light.woff) format('woff');
+}
+/* 
+  21-09-06 최순철 수학셀 요청으로 추가 
+  (regular 위에 정의되어있지만 외부업체 전달해야함으로 네이밍 규칙을 맞추느라 새로 추가)
+*/
+@font-face {
+  font-family: NotoSansB_regular;
+  src: url(/content/mathalive_lib/font/NotoSans-Regular.woff) format('woff');
+}
+@font-face {
+  font-family: NotoSansB_medium;
+  src: url(/content/mathalive_lib/font/NotoSans-Medium.woff) format('woff');
+}

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko" translate="no">
+
+<head>
+  <meta charset="utf-8">
+  <meta content="on" http-equiv="cleartype">
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <meta content="yes" name="mobile-web-app-capable">
+  <meta content="yes" name="apple-mobile-web-app-status-bar-style">
+  <meta content="black" name="apple-mobile-web-app-status-bar-style">
+
+  <title>Who Am I</title>
+
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="./css/notosanskr.css">
+  <link rel="stylesheet" href="./css/material_icon.css">
+
+  <link rel="stylesheet" type="text/css" href="./vue-material/vue-material.css">
+  <link rel="stylesheet" type="text/css" href="./vuetify/vuetify.min.css">
+
+  <script src='./js/store.legacy.min.js'></script>
+  <script src="./js/xml2json.min.js"></script>
+
+  <script src="./js/jquery.js"></script>
+  <script src="./js/jquery.scrollTo.min.js"></script>
+
+  <script src="./js/vue.min.js"></script>
+  <script src="./js/vuex.min.js"></script>
+  <script src="./vue-material/vue-material.js"></script>
+  <script src="./vuetify/vuetify.min.js"></script>
+
+  <script src="/content/mathalive_lib/mathinterface.js"></script>
+</head>
+
+<body class='app vs-main-bg'>
+  <div id="loader">
+    <md-spinner :md-size="150" md-indeterminate></md-spinner>
+  </div>
+  <div id="main" class="hide">
+    
+    <div class="app-viewport" id="vs-top">
+      <md-switch class="md-primary vs-main-color vs-position-change" labelPosition="left" v-model="bgm" value="1">BGM
+      </md-switch>
+    </div>
+
+    <div id="app" class="index">
+
+      <div class="vs-box md-layout">
+        <div class="md-layout-item vs-center">
+          <md-button class="vs-white-button note_1" note="1" @click="noteClick"><img src="./assets/img/note01.png" />
+          </md-button>
+          <md-button class="vs-white-button note_2" note="2" @click="noteClick"><img src="./assets/img/note02.png" />
+          </md-button>
+          <md-button class="vs-white-button note_3" note="3" @click="noteClick"><img src="./assets/img/note03.png" />
+          </md-button>
+        </div>
+        <div class="md-layout-item vs-center">
+          <md-button class="vs-white-button note_4" note="4" @click="noteClick"><img src="./assets/img/note04.png" />
+          </md-button>
+          <md-button class="vs-white-button note_5" note="5" @click="noteClick"><img src="./assets/img/note05.png" />
+          </md-button>
+          <md-button class="vs-white-button note_6" note="6" @click="noteClick"><img src="./assets/img/note06.png" />
+          </md-button>
+        </div>
+      </div>
+      <md-button class="vs-list-button vs-radius-40" @click="toHome"></md-button>
+    </div>
+    
+    
+    <audio id='vs-effect' src=''></audio>
+  </div>
+
+  <link rel="stylesheet" href="./css/application.css">
+  <link rel="stylesheet" href="./css/t_note.css">
+
+  <script src="./js/application.js"></script>
+  <script src="./js/t_note.js"></script>
+</body>
+
+</html>

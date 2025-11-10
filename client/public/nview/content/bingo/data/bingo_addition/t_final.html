@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko" translate="no">
+
+<head>
+  <meta charset="utf-8">
+  <meta content="on" http-equiv="cleartype">
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <meta content="yes" name="mobile-web-app-capable">
+  <meta content="yes" name="apple-mobile-web-app-status-bar-style">
+  <meta content="black" name="apple-mobile-web-app-status-bar-style">
+
+  <title>Bingo!</title>
+
+  <link rel="stylesheet" href="./css/google_material_icons.css">
+  <link rel="stylesheet" href="./css/notosanskr.css">
+  <link rel="stylesheet" href="./css/material_icon.css">
+
+  <link rel="stylesheet" type="text/css" href="./vue-material/vue-material.css">
+  <link rel="stylesheet" type="text/css" href="./vuetify/vuetify.min.css">
+
+  <script src='./js/store.legacy.min.js'></script>
+  <script src="./js/xml2json.min.js"></script>
+
+  <script src="./js/jquery.js"></script>
+  <script src="./js/jquery.scrollTo.min.js"></script>
+
+  <script src="./js/vue.min.js"></script>
+  <script src="./js/vuex.min.js"></script>
+  <script src="./vue-material/vue-material.js"></script>
+  <script src="./vuetify/vuetify.min.js"></script>
+  <script src="./js/lottie-player.js"></script>
+  <script src="/content/mathalive_lib/mathinterface.js"></script>
+</head>
+
+<body class='app vs-main-bg'>
+  <div id="loader">
+    <md-spinner :md-size="150" md-indeterminate></md-spinner>
+  </div>
+  <div id="main" class="hide">
+    
+    <div class="app-viewport" id="vs-top">
+      <md-switch class="md-primary vs-main-color vs-position-change" v-model="bgm" value="1">BGM</md-switch>
+    </div>
+
+    <div id="app" class="index">
+      <div class="vs-box md-layout">
+        <div class="contents-title"></div>
+        <div class="md-layout-item vs-center ml-30">
+          <div id="user">
+            <div id="imgArea"><img src="./assets/img/avatar_01.png" /></div>
+            <p class="nickname">Nick Name</p>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+    <audio id='vs-bgm' loop src=''></audio>
+    <audio id='vs-effect' src=''></audio>
+  </div>
+
+  <link rel="stylesheet" href="./css/application.css">
+  <link rel="stylesheet" href="./css/t_final.css">
+
+  <script src="./js/application.js"></script>
+  <script src="./js/t_final.js"></script>
+</body>
+
+</html>

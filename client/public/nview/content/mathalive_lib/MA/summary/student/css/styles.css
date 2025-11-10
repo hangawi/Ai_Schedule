@@ -1,0 +1,698 @@
+@charset "UTF-8";
+@keyframes arrowMove {
+    from {
+        opacity: 0.2;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+#wrap {
+    font-family: NotoSans;
+}
+
+#wrap .eyeon_svg {
+    position: absolute;
+    left: 0px;
+    width: 100%;
+    top: 0px;
+    height: 100%;
+    pointer-events: none;
+}
+
+#wrap .goodjob-svg {
+    position: absolute;
+    left: 0px;
+    width: 100%;
+    top: 0px;
+    height: 100%;
+    z-index: 100;
+}
+
+#wrap .content-container {
+    position: absolute;
+    left: 0px;
+    width: 100%;
+    top: 0px;
+    height: 100%;
+}
+
+#wrap .content-container .content-wrapper {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    width: 100%;
+    height: 100%;
+    white-space: nowrap;
+    transition: left 0.3s ease-in-out;
+}
+
+#wrap .content-container .content-wrapper > div {
+    position: relative;
+    display: inline-block;
+    vertical-align: top;
+    width: 100%;
+    height: 100%;
+}
+
+#wrap .video-direction {
+    position: absolute;
+    left: 0px;
+    width: 100%;
+    top: 0px;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("/content/mathalive_lib/MA/summary/common/bg_direction.jpg");
+}
+
+#wrap .video-direction > div.direction {
+    position: absolute;
+    transform: translateY(100px);
+    transition: transform 0.5s ease-out, opacity 0.5s;
+    opacity: 0;
+}
+
+#wrap .video-direction.on > div.direction {
+    transform: translateY(0px);
+    opacity: 1;
+}
+
+#wrap .video-direction .direction_top_menu {
+    position: fixed;
+    top: 18px;
+    left: 20px;
+    width: 40px;
+    height: 31px;
+    border: 0;
+    background: url("/content/mathalive_lib/images/ico_video_top_menu.png");
+    z-index: 100;
+}
+
+#wrap .video-direction .direction_left_menu {
+    display: none;
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 30;
+}
+
+#wrap .video-direction .direction_left_menu.show {
+    display: block;
+}
+
+#wrap .video-direction .direction_left_menu .innerbox {
+    width: 354px;
+    height: 100%;
+    background-color: #394ec0;
+}
+
+#wrap .video-direction .direction_left_menu .innerbox .close {
+    padding: 43px 25px 0 0;
+    text-align: right;
+}
+
+#wrap .video-direction .direction_left_menu .innerbox .close .btn_close {
+    width: 30px;
+    height: 31px;
+    border: 0;
+    background: url("/content/mathalive_lib/images/ico_video_menu_close.png");
+}
+
+#wrap .video-direction .direction_left_menu .innerbox ul {
+    padding: 40px 0 0 30px;
+}
+
+#wrap .video-direction .direction_left_menu .innerbox ul li {
+    margin-bottom: 38px;
+    padding-left: 80px;
+    height: 42px;
+    line-height: 42px;
+    font-family: "Maplestory-Bold";
+    color: #fff;
+    font-size: 28px;
+    background-repeat: no-repeat;
+    cursor: pointer;
+}
+
+#wrap .video-direction .direction_left_menu .innerbox ul li:nth-of-type(1) {
+    background-image: url("/content/mathalive_lib/images/ico_video_menu_lesson.png");
+}
+
+#wrap .video-direction .direction_left_menu .innerbox ul li:nth-of-type(2) {
+    background-image: url("/content/mathalive_lib/images/ico_video_menu_endclass.png");
+}
+
+#wrap .video-direction .direction_left_menu .innerbox ul li:nth-of-type(3) {
+    background-image: url("/content/mathalive_lib/images/ico_video_menu_logout.png");
+}
+
+#wrap .video-direction .concept_name {
+    position: absolute;
+    left: 80px;
+    top: 19px;
+    font-size: 28px;
+    color: #fff;
+    font-family: "Maplestory-Bold";
+    z-index: 10;
+}
+
+#wrap .video-direction .video video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1280px;
+    height: 800px;
+}
+
+#wrap .video-direction .progress_dot {
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: 67px;
+    padding: 25px 10px 0  0;
+    text-align: center;
+    z-index: 10;
+}
+
+#wrap .video-direction .progress_dot span {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    margin: 0 5px;
+    border-radius: 100%;
+    background-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+}
+
+#wrap .video-direction .progress_dot span.on {
+    background-color: #f5e942;
+}
+
+#wrap .video-direction .text {
+    font-family: "maplestory-bold";
+    white-space: normal;
+    /* 210520 2�� ���� �߰� */
+}
+
+#wrap .video-direction .text .t1 {
+    font-size: 35px;
+    color: #fff;
+    height: 39px;
+}
+
+#wrap .video-direction .text .t2 {
+    margin-top: 6px;
+    font-size: 81px;
+    color: #f5e942;
+    word-break: keep-all;
+    /* 210520 2�� ���� �߰� */
+}
+
+#wrap .video-direction.hide > div.direction {
+    visibility: hidden;
+}
+
+#wrap .video-direction.loaded > video {
+    opacity: 1;
+}
+
+#wrap .video-direction .course .title, #wrap .video-direction .course .concept {
+    position: absolute;
+    width: 200px;
+    height: 100px;
+    padding-top: 17px;
+    border: 2px solid #ccc;
+    background: #fff;
+    border-radius: 50%;
+    box-sizing: border-box;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    font-size: 1.6em;
+    font-weight: bold;
+    color: #999;
+}
+
+#wrap .video-direction .course .concept span.tit {
+    display: block;
+    width: 100%;
+    float: none;
+    color: royalblue;
+}
+
+#wrap .video-direction .course .title {
+    top: 110px;
+    left: 30%;
+    color: #000;
+    background-color: rgba(255, 255, 255, 0.5);
+}
+
+#wrap .video-direction .course .c1 {
+    left: 55%;
+    top: 110px;
+    border-color: royalblue;
+}
+
+#wrap .video-direction .course .c2 {
+    left: 75%;
+    top: 40%;
+    border-color: royalblue;
+}
+
+#wrap .video-direction .course .c3 {
+    left: 60%;
+    top: 70%;
+    border-color: coral;
+}
+
+#wrap .video-direction .course .black {
+    color: #000;
+}
+
+#wrap .video-direction .course .type2 {
+    padding: 20px 40px 30px;
+}
+
+#wrap .video-direction .course .type2 .small-title {
+    left: 40px;
+    top: -25px;
+    color: #ffff;
+}
+
+#wrap .video-direction .course.independent .type2 .small-title {
+    top: -10px;
+    color: #999;
+}
+
+#wrap .video-direction > .movieclip {
+    position: absolute;
+}
+
+#wrap .video-direction > div.direction {
+    position: absolute;
+    background-image: url("/content/mathalive_lib/MA/summary/common/direction.png");
+    width: 397px;
+    height: 81px;
+    left: calc(50% - 397px/2);
+    top: calc(50% - 81px/2);
+}
+
+#wrap .video-direction > div.text {
+    position: absolute;
+    left: 82px;
+    top: 395px;
+}
+
+#wrap .video-direction > div.text .t1 {
+    opacity: 0;
+}
+
+#wrap .video-direction > div.text .t2 {
+    color: #96f9ff;
+}
+
+#wrap .video-direction > div.text_cate {
+    position: absolute;
+    background-image: url("/content/mathalive_lib/MA/summary/common/text_cate.png");
+    width: 234px;
+    height: 26px;
+    right: 20px;
+    top: 15px;
+}
+
+#wrap .video-direction > div.lesson {
+    font-size: 40px;
+    position: absolute;
+    left: 30px;
+    top: 20px;
+    color: #fff;
+}
+
+#wrap .fel_toteacher {
+    position: absolute;
+    z-index: 11;
+    touch-action: none;
+    bottom: 65px !important;
+    right: 20px;
+    width: 80px;
+    height: 80px;
+    border-radius: 100%;
+    border: 0;
+    background-color: #f1436d;
+    box-shadow: 4px 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+#wrap .fel_toteacher:before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 27px;
+    height: 31px;
+    background: url("/content/mathalive_lib/images/fel_arr_up.png") no-repeat center;
+    transform: translate(-50%, -30%);
+    animation-name: arrowMove;
+    animation-direction: alternate;
+    animation-duration: .4s;
+    animation-iteration-count: infinite;
+    animation-timing-function: linear;
+}
+
+#wrap .fel_toteacher:after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 27px;
+    height: 31px;
+    background: url("/content/mathalive_lib/images/fel_arr_up.png") no-repeat center;
+    transform: translate(-50%, -75%);
+    animation-name: arrowMove;
+    animation-direction: alternate;
+    animation-duration: .4s;
+    animation-iteration-count: infinite;
+    animation-timing-function: linear;
+    animation-delay: .1s;
+}
+
+#wrap .loading {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 110;
+}
+
+#wrap .loading.hide {
+    display: none;
+}
+
+#wrap .loading_bg {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+#wrap .loading_img {
+    position: relative;
+    width: 177px;
+    margin: 240px auto 0;
+    text-align: center;
+    color: #fff;
+    z-index: 10;
+    font-size: 28px;
+}
+
+#wrap .loading_img .img {
+    display: block;
+    width: 182px;
+    height: 200px;
+    margin-bottom: 10px;
+    background-image: url("/content/mathalive_lib/images/loading.png");
+    animation: loading 1s steps(37) infinite;
+}
+
+@keyframes loading {
+    from {
+        background-position-x: 0px;
+    }
+    to {
+        background-position-x: -6734px;
+    }
+}
+
+#wrap .attention {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background-image: url("/content/mathalive_lib/images/eyeon_ma.jpg");
+}
+
+#wrap .attention.hide {
+    display: none;
+}
+
+#wrap .attention span {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 100px;
+    font-family: "Maplestory-Bold";
+    color: #fff;
+}
+
+@font-face {
+    font-family: Visang_e_HT;
+    src: url(/content/mathalive_lib/font/Visang_e_HT.woff) format("woff");
+}
+
+@font-face {
+    font-family: Visang_e_HT;
+    font-weight: bold;
+    src: url(/content/mathalive_lib/font/Visang_e_HT_Bold.woff) format("woff");
+}
+
+@font-face {
+    font-family: NotoSans_bold;
+    font-weight: bold;
+    src: url(/content/mathalive_lib/font/NotoSans-Bold.woff) format("woff");
+}
+
+@font-face {
+    font-family: NotoSans_light;
+    font-weight: lighter;
+    src: url(/content/mathalive_lib/font/NotoSans-Light.woff) format("woff");
+}
+
+@font-face {
+    font-family: NotoSans-Regular;
+    src: url(/content/mathalive_lib/font/NotoSans-Regular.woff) format("woff");
+}
+
+@font-face {
+    font-family: NotoSans-Black;
+    src: url(/content/mathalive_lib/font/NotoSansCJKkr-Black.woff) format("woff");
+}
+
+@font-face {
+    font-family: NotoSans;
+    /* src: url(/content/mathalive_lib/font/NotoSansCJKkr-Medium.woff) format('woff'); */
+    src: url(/content/mathalive_lib/font/NotoSansCJK-Medium-en.woff) format("woff");
+}
+
+@font-face {
+    font-family: HelveticaRounded;
+    font-weight: bold;
+    src: url(/content/mathalive_lib/font/HelveticaRounded-Bold.woff) format("woff");
+}
+
+@font-face {
+    font-family: HelveticaRoundedLTStd;
+    font-weight: bold;
+    src: url(/content/mathalive_lib/font/HelveticaRoundedLTStd-Bd.woff) format("woff");
+}
+
+@font-face {
+    font-family: Maplestory-Bold;
+    font-weight: bold;
+    src: url(/content/mathalive_lib/font/Maplestory-Bold.woff) format("woff");
+}
+
+@font-face {
+    font-family: Maplestory-Light;
+    font-weight: bold;
+    src: url(/content/mathalive_lib/font/Maplestory-Light.woff) format("woff");
+}
+
+@charset "UTF-8";
+html, body {
+    padding: 0px;
+    margin: 0px;
+    user-select: none;
+    border: 0px;
+    backface-visibility: hidden;
+    user-select: none;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+    font-family: NotoSans !important;
+    -webkit-font-smoothing: none;
+    font-size: 12px;
+    overflow: hidden;
+    image-rendering: -webkit-optimize-contrast;
+    text-rendering: optimizeSpeed;
+}
+
+body, h1, h2, h3, h4, input, button {
+    /*font-family:Helvetica,Arial,"����",Dotum,sans-serif;*/
+    font-size: 12px;
+}
+
+body, div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, form, fieldset, p, button, input {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, p {
+    word-break: break-all;
+    word-wrap: break-word;
+}
+
+img, fieldset, iframe {
+    border: 0 none;
+}
+
+button {
+    outline: none;
+    cursor: pointer;
+    font-family: NotoSans !important;
+    -webkit-font-smoothing: none;
+}
+
+img {
+    padding: 0px;
+    margin: 0px;
+    user-select: none;
+    border: 0px;
+    outline: 0px solid transparent;
+}
+
+div, p {
+    padding: 0px;
+    margin: 0px;
+}
+
+li {
+    list-style: none;
+}
+
+#common_audio {
+    position: absolute;
+    left: 0px;
+    right: 0px;
+}
+
+#ding_audio {
+    position: absolute;
+    left: 0px;
+    right: 0px;
+}
+
+#dingend_audio {
+    position: absolute;
+    left: 0px;
+    right: 0px;
+}
+
+#wrap {
+    width: 1280px;
+    height: 800px;
+    margin: auto;
+    overflow: hidden;
+    position: relative;
+}
+
+.bg_svg {
+    position: absolute;
+    left: 0px;
+    width: 100%;
+    top: 0px;
+    height: 100%;
+}
+
+.swiper-scrollbar.white {
+    background: rgba(0, 0, 0, 0);
+    width: 7px;
+}
+
+.swiper-scrollbar.white .swiper-scrollbar-drag {
+    width: 7px;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 10px;
+}
+
+.swiper-scrollbar.black {
+    background: rgba(0, 0, 0, 0);
+    width: 7px;
+}
+
+.swiper-scrollbar.black .swiper-scrollbar-drag {
+    width: 7px;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 10px;
+}
+
+/*
+.common_back{
+	background-size: 100% 100%;
+	@include btn_down_dis(
+		resolve('mathalive_lib/images/btn_back.png'), 
+		resolve('mathalive_lib/images/btn_back_down.png'),
+		'',
+		width('mathalive_lib/images/btn_back.png'),
+		height('mathalive_lib/images/btn_back.png')
+	);
+	&.down{
+		transform: scale(1.1, 1.1);
+	}
+}
+*/
+.swiper-container-horizontal > .swiper-pagination-bullets .swiper-pagination-bullet {
+    margin: 0 16px;
+}
+
+.swiper-pagination-bullet {
+    width: 15px;
+    height: 15px;
+    background-color: #fff;
+    opacity: 0.3;
+}
+
+.swiper-pagination-bullet-active {
+    opacity: 1;
+    background: #47F6E9;
+    box-shadow: 0px 5px 5px rgba(0, 0, 0, 0.3);
+}
+
+#preload_hidden {
+    position: absolute;
+    pointer-events: none;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    overflow: hidden;
+}
+
+#preload_hidden .helvetica {
+    font-family: HelveticaRounded;
+}
+
+#preload_hidden .helveticastd {
+    font-family: HelveticaRoundedLTStd;
+}
+
+.clear:after {
+    content: "";
+    display: block;
+    clear: both;
+}
+
+.none {
+    display: none;
+}
+
