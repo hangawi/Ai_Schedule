@@ -262,21 +262,42 @@ function convertToFixedSchedule(schedule, type = 'pinned-class') {
 }
 
 /**
+ * 제목이 명확한지 판단 (학원/과목명인지)
+ */
+function isSpecificTitle(title) {
+  const genericTerms = [
+    '일정', '약속', '새로운', '개인', '기타', '할일',
+    'schedule', 'todo', 'event', '미정', '기록'
+  ];
+
+  // 일반적인 용어가 포함되어 있으면 불명확
+  const titleLower = title.toLowerCase();
+  return !genericTerms.some(term => titleLower.includes(term));
+}
+
+/**
  * 개인 일정을 고정 스케줄로 변환
  * @param {Object} customData - 추가할 커스텀 일정 데이터
  * @param {Array} existingFixedSchedules - 기존 고정 일정 배열 (같은 제목 확인용)
  */
 function createCustomFixedSchedule(customData, existingFixedSchedules = []) {
+  // ⭐ 제목이 명확한지 확인
+  const isSpecific = isSpecificTitle(customData.title);
+  const displayTitle = isSpecific ? customData.title : '기타';
+
+  console.log(`📝 제목 분류: "${customData.title}" → ${isSpecific ? '명확 (개별 범례)' : '불명확 (기타로 통합)'}`);
+
   // ⭐ 같은 제목의 커스텀 일정이 이미 있으면 그 인덱스 재사용
+  // 불명확한 제목들은 모두 "기타"로 통합
   const existingCustom = existingFixedSchedules.find(
-    f => f.type === 'custom' && f.title === customData.title
+    f => f.type === 'custom' && (isSpecific ? f.title === customData.title : f.title === '기타' || !isSpecificTitle(f.title))
   );
 
   let customImageIndex;
   if (existingCustom) {
     // 같은 제목이면 같은 인덱스 재사용
     customImageIndex = existingCustom.sourceImageIndex;
-    console.log(`♻️ 같은 제목 발견: "${customData.title}" → 인덱스 ${customImageIndex} 재사용`);
+    console.log(`♻️ 같은 범주 발견: "${displayTitle}" → 인덱스 ${customImageIndex} 재사용`);
   } else {
     // 새로운 제목이면 새 인덱스 할당
     const existingCustomCount = existingFixedSchedules.filter(f => f.type === 'custom').length;
@@ -284,22 +305,30 @@ function createCustomFixedSchedule(customData, existingFixedSchedules = []) {
       .filter(f => f.type === 'custom')
       .map(f => f.sourceImageIndex);
     const maxIndex = existingIndices.length > 0 ? Math.max(...existingIndices) : 999;
-    customImageIndex = Math.max(1000 + existingCustomCount, maxIndex + 1);
-    console.log(`🆕 새로운 제목: "${customData.title}" → 인덱스 ${customImageIndex} 할당`);
+
+    // ⭐ "기타"는 특별한 인덱스 9999 사용
+    if (!isSpecific) {
+      customImageIndex = 9999;
+      console.log(`🆕 기타 일정: "${customData.title}" → 고정 인덱스 9999 할당`);
+    } else {
+      customImageIndex = Math.max(1000 + existingCustomCount, maxIndex + 1);
+      console.log(`🆕 새로운 제목: "${customData.title}" → 인덱스 ${customImageIndex} 할당`);
+    }
   }
 
   return {
     id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     type: 'custom',
-    title: customData.title,
+    title: displayTitle, // ⭐ 범례에 표시될 제목 (명확하면 원본, 불명확하면 "기타")
+    originalTitle: customData.title, // 원본 제목 보존
     days: customData.days || [],
     startTime: customData.startTime,
     endTime: customData.endTime,
     priority: 0, // 최우선
     userFixed: true,
-    sourceImageIndex: customImageIndex, // ⭐ 범례용 고유 인덱스 (같은 제목이면 재사용)
-    academyName: customData.title, // 범례에 표시될 이름
-    color: customData.color || '#FF6B6B'
+    isGeneric: !isSpecific, // ⭐ 기타 여부 플래그
+    sourceImageIndex: customImageIndex, // ⭐ 범례용 고유 인덱스 (색상은 클라이언트에서 인덱스별 자동 할당)
+    academyName: displayTitle // 범례에 표시될 이름
   };
 }
 
