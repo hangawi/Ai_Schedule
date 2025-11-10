@@ -1,0 +1,194 @@
+#app {
+  display: grid;
+}
+
+body.md-theme-default.vs-main-bg {
+  background-color: transparent;
+}
+
+.vs-main-bg {
+  background-color: #184372;
+}
+
+.vs-who-box-bg {
+  background-color: #769FC0;
+}
+
+.vs-box {
+  width: 1000px;
+  height: 680px;
+  margin: 0 140px;
+  /* background-color: rgba(118, 159, 192, 1); */
+  /* border-radius: 40px; */
+}
+
+.vs-index-title {
+  float: left;
+  position: fixed;
+  margin-top: 50px;
+  text-align: center;
+  width: 60%;
+  font-size: 60px;
+  font-weight: 700;
+  color: #FEEC34;
+}
+
+.vs-white-button {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  width: 310px;
+  height: 328px;
+  line-height: 73px;
+}
+
+
+.vs-list-button {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  width: 75px;
+  height: 75px;
+  left: calc(50% - 75px/2);
+  background: transparent url(../assets/img/btnList.png) no-repeat 0 0;
+  position: absolute;
+  bottom: 20px;
+  margin: 0;
+}
+/* 
+.vs-list-button:hover {
+  background: transparent url(../assets/img/btn_start_select.png) no-repeat 0 0;
+} */
+
+.vs-list-button .md-ink-ripple {
+  width: 75px !important;
+}
+
+.row {
+  display: grid;
+  grid-gap: 2rem;
+  grid-template-columns: repeat(6, auto);
+  justify-content: center;
+}
+
+.half-card {
+  width: 50%;
+  margin-top: 200px;
+  text-align: center;
+}
+
+.md-theme-default.md-card {
+  background-color: #fff;
+  border: #1AABA4 1px solid;
+  border-radius: 15px;
+}
+
+.md-boards-navigation { display: none; }
+
+.rotate300 {
+  animation-duration: 667ms;
+  animation-delay: 500ms;
+  animation-name: rotateOut300;
+}
+
+.rotate600 {
+  animation-duration: 667ms;
+  animation-delay: 500ms;
+  animation-name: rotateOut600;
+}
+
+/* #vs-intro-mov {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+} */
+
+.md-layout-item .vs-white-button {
+  /* display: none; */
+}
+
+.note_1 { animation-duration: 1s; animation-name: anim_1; }
+.note_2 { animation-duration: 1s; animation-name: anim_2; }
+.note_3 { animation-duration: 1s; animation-name: anim_3; }
+.note_4 { animation-duration: 1s; animation-name: anim_4; }
+.note_5 { animation-duration: 1s; animation-name: anim_5; }
+.note_6 { animation-duration: 1s; animation-name: anim_6; }
+
+@keyframes anim_1 {
+  from {
+    top: -300px; left: -300px; transform: rotate(-90deg); opacity: 0;
+  }
+  to {
+    top: 0;left: 0;transform: rotate(0);opacity: 1;
+  }
+}
+
+@keyframes anim_2 {
+  from {
+    top: -300px; left: 0; transform: rotate(-90deg); opacity: 0;
+  }
+  to {
+    top: 0;left: 0;transform: rotate(0);opacity: 1;
+  }
+}
+
+@keyframes anim_3 {
+  from {
+    top: -300px; left: 300px; transform: rotate(-90deg); opacity: 0;
+  }
+  to {
+    top: 0;left: 0;transform: rotate(0);opacity: 1;
+  }
+}
+
+@keyframes anim_4 {
+  from {
+    top: 300px; left: -300px; transform: rotate(-90deg); opacity: 0;
+  }
+  to {
+    top: 0;left: 0;transform: rotate(0);opacity: 1;
+  }
+}
+
+@keyframes anim_5 {
+  from {
+    top: 300px; left: 0; transform: rotate(-90deg); opacity: 0;
+  }
+  to {
+    top: 0;left: 0;transform: rotate(0);opacity: 1;
+  }
+}
+
+@keyframes anim_6 {
+  from {
+    top: 300px; left: 300px; transform: rotate(-90deg); opacity: 0;
+  }
+  to {
+    top: 0;left: 0;transform: rotate(0);opacity: 1;
+  }
+}
+
+@keyframes rotateOut300 {
+  from {
+    top: 0;
+    transform: rotate(0);
+  }
+
+  to {
+    top: -300px;
+    transform: rotate(90deg);
+  }
+}
+
+@keyframes rotateOut600 {
+  from {
+    top: 0;
+    transform: rotate(0);
+  }
+
+  to {
+    top: -600px;
+    transform: rotate(90deg);
+  }
+}

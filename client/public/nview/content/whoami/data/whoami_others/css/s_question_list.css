@@ -1,0 +1,153 @@
+#main {
+  background-color: transparent;
+}
+
+#app.index {
+  display: grid;
+  top: 50px;
+}
+
+body.md-theme-default.vs-main-bg {
+  background-color: transparent;
+  background: url(../assets/img/background_04.png) no-repeat 0 0;
+}
+
+.vs-main-bg {
+  background-color: #1f4b81;
+}
+
+.vs-who-box-bg {
+  background-color: #769FC0;
+}
+
+.vs-box {
+  width: 1100px;
+  height: 400px;
+  margin: 20px 90px 0 90px;
+  /* background-color: #fff; */
+  /* border: 1px solid #00748A; */
+  /* border-radius: 40px; */
+}
+
+.vs-box .contents-title {
+  width: 451px;
+  height: 105px;
+  background: transparent url(../assets/img/txtimg_02.png) no-repeat 0 0;
+  margin-left: calc(50% - 451px/2);
+  margin-bottom: 0px;
+  z-index: 99;
+}
+
+.vs-box .md-list {
+  width: 100%;
+  height: 100%;
+  /* color: #DADADA; */
+}
+
+.vs-box .md-list-item {
+  margin-bottom: 30px;
+}
+
+.vs-box .md-list-item-container {
+  float: left;
+}
+
+.icon-q {
+  width: 60px;
+  height: 60px;
+  /* background-color: #43BCAB; */
+  /* border-radius: 50%; */
+  text-align: center;
+  line-height: 72px;
+  font-size: 36px;
+  font-weight: 700;
+  font-family: 'MaplestoryOTFBold';
+  color: #78a6d7;
+  margin-right: 20px;
+  margin-bottom: 0;
+}
+
+.vs-box .md-theme-default.md-list {
+  background-color: #26568b;
+  color: #fff;
+  margin-top: -50px;
+  padding-top: 70px;
+  border: 6px solid rgba(2, 17, 53, 0.5);
+  border-radius: 60px;
+}
+
+.vs-box .md-list-item-text {
+  font-size: 36px;
+  font-family: 'Noto Sans KR';
+  font-weight: 700;
+}
+
+.vs-index-title {
+  float: left;
+  position: absolute;
+  bottom: 130px;
+  text-align: center;
+  width: 1280px;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 70px;
+  color: #F3C95D;
+}
+
+.vs-white-button {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  width: 400px;
+  height: 400px;
+  line-height: 73px;
+}
+
+
+.vs-list-button {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  width: 204px;
+  height: 75px;
+  left: calc(50% - 218px/2);
+  background: transparent url(../assets/img/btnList.png) no-repeat 0 0;
+  position: absolute;
+  bottom: 20px;
+}
+/* 
+.vs-list-button:hover {
+  background: transparent url(../assets/img/btn_start_select.png) no-repeat 0 0;
+} */
+
+.row {
+  display: grid;
+  grid-gap: 2rem;
+  grid-template-columns: repeat(6, auto);
+  justify-content: center;
+}
+
+.half-card {
+  width: 50%;
+  margin-top: 200px;
+  text-align: center;
+}
+
+.md-theme-default.md-card {
+  background-color: #fff;
+  border: #1AABA4 1px solid;
+  border-radius: 15px;
+}
+
+.md-boards-navigation { display: none; }
+
+.test-button {
+  background-color: #fff;
+  position: absolute;
+  left: 980px;
+  bottom: 140px;
+  z-index: 9999;
+}
+.test-button:hover { background-color: #fff; }
+
+.test-button.md-button:hover:not([disabled]):not(.md-raised) { background-color: #fff !important; }

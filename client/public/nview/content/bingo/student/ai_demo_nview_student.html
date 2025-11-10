@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8"/>
+    <title>Math Alive - 학생</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Malgun Gothic, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 { color: #333; text-align: center; margin-bottom: 10px; font-size: 32px; }
+        .student-id {
+            text-align: center;
+            color: #667eea;
+            font-weight: bold;
+            margin-bottom: 30px;
+            font-size: 18px;
+        }
+        .status {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 16px;
+            color: #666;
+        }
+        .status.ready {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        }
+        .question-box {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .question-box.show { display: block; }
+        .question-text {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .answer-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 18px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .answer-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 18px;
+            margin-top: 15px;
+            display: none;
+        }
+        .result.show { display: block; }
+        .result.correct { background: #d4edda; color: #155724; }
+        .result.incorrect { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>👨‍🎓 학생 화면</h1>
+        <div class="student-id" id="studentId">연결 중...</div>
+        <div class="status" id="status">문제를 기다리는 중입니다...</div>
+        <div class="question-box" id="questionBox">
+            <div class="question-text" id="questionText"></div>
+            <input type="text" id="answerInput" class="answer-input" placeholder="정답을 입력하세요" />
+            <button class="submit-btn" id="submitBtn">정답 제출</button>
+        </div>
+        <div class="result" id="result"></div>
+    </div>
+    <script>
+        const API_BASE = 'http://localhost:5000/api/nview';
+        const urlParams = new URLSearchParams(window.location.search);
+        const studentId = urlParams.get('studentId') || 'unknown';
+        let currentQuestion = null;
+        let startTime = null; // 문제 받은 시간
+        let dailyQuestions = []; // 오늘의 5문제
+        let currentQuestionIndex = 0; // 현재 문제 번호
+
+        document.getElementById('studentId').textContent = studentId.replace('student', '학생 ');
+
+        window.addEventListener('message', function(event) {
+            console.log('📩 학생 메시지 수신:', event.data);
+
+            if (event.data.type === 'daily_questions') {
+                console.log('✅ 오늘의 5문제 받음:', event.data.questions);
+
+                dailyQuestions = event.data.questions;
+                currentQuestionIndex = 0;
+
+                // 첫 번째 문제 표시
+                showNextQuestion();
+            }
+            else if (event.data.type === 'new_question') {
+                console.log('✅ 새 문제 받음 (AI/맞춤형):', event.data.data);
+
+                // AI/맞춤형 문제 모드로 전환
+                dailyQuestions = []; // 오늘의 문제 모드 종료
+                currentQuestionIndex = 0;
+                currentQuestion = event.data.data;
+                startTime = Date.now(); // 시간 추적 시작
+
+                console.log('현재 문제 설정 (일반 제출 모드):', currentQuestion);
+
+                document.getElementById('questionText').textContent = currentQuestion.question;
+                document.getElementById('questionBox').classList.add('show');
+                document.getElementById('status').textContent = '문제가 도착했습니다! 정답을 입력하세요.';
+                document.getElementById('status').className = 'status ready';
+                document.getElementById('answerInput').value = '';
+                document.getElementById('answerInput').disabled = false;
+                document.getElementById('submitBtn').disabled = false;
+                document.getElementById('result').classList.remove('show');
+                document.getElementById('answerInput').focus();
+
+                console.log('✅ 문제 표시 완료!');
+            }
+        });
+
+        function showNextQuestion() {
+            if (currentQuestionIndex >= dailyQuestions.length) {
+                // 모든 문제 완료
+                document.getElementById('status').textContent = '🎉 모든 문제를 완료했습니다!';
+                document.getElementById('status').className = 'status ready';
+                document.getElementById('questionBox').classList.remove('show');
+                document.getElementById('result').innerHTML = '<div style="font-size:24px;">🏆 수고하셨습니다!</div>';
+                document.getElementById('result').className = 'result show correct';
+                return;
+            }
+
+            currentQuestion = dailyQuestions[currentQuestionIndex];
+            startTime = Date.now();
+
+            document.getElementById('questionText').textContent = `문제 ${currentQuestionIndex + 1}/5: ${currentQuestion.question}`;
+            document.getElementById('questionBox').classList.add('show');
+            document.getElementById('status').textContent = `문제 ${currentQuestionIndex + 1}/5 - 정답을 입력하세요`;
+            document.getElementById('status').className = 'status ready';
+            document.getElementById('answerInput').value = '';
+            document.getElementById('answerInput').disabled = false;
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('result').classList.remove('show');
+            document.getElementById('answerInput').focus();
+        }
+
+        document.getElementById('submitBtn').addEventListener('click', submitAnswer);
+        document.getElementById('answerInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') submitAnswer();
+        });
+
+        async function submitAnswer() {
+            if (!currentQuestion) return;
+
+            const answer = document.getElementById('answerInput').value.trim();
+            if (!answer) {
+                alert('정답을 입력해주세요!');
+                return;
+            }
+
+            // 소요 시간 계산 (초 단위)
+            const timeSpent = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+
+            const correct = String(answer).toLowerCase() === String(currentQuestion.answer).toLowerCase();
+
+            // 백엔드에 답안 제출 (학습 데이터 자동 저장)
+            try {
+                // 오늘의 문제인 경우
+                if (dailyQuestions.length > 0) {
+                    await fetch(`${API_BASE}/submit-daily-answer`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            studentId,
+                            questionIndex: currentQuestionIndex,
+                            answer,
+                            timeSpent
+                        })
+                    });
+                } else {
+                    // 일반 문제인 경우
+                    await fetch(`${API_BASE}/submit-answer`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            studentId,
+                            answer,
+                            timeSpent
+                        })
+                    });
+                }
+            } catch (error) {
+                console.error('답안 제출 오류:', error);
+            }
+
+            // 교사 페이지로 결과 전송
+            if (window.opener) {
+                window.opener.postMessage({
+                    type: 'answer_submitted',
+                    studentId,
+                    answer,
+                    correct,
+                    correctAnswer: currentQuestion.answer,
+                    timeSpent
+                }, '*');
+            }
+
+            const resultEl = document.getElementById('result');
+            resultEl.className = `result show ${correct ? 'correct' : 'incorrect'}`;
+            resultEl.innerHTML = correct
+                ? `🎉 정답입니다!<br><small style="font-size:14px; opacity:0.7;">소요 시간: ${timeSpent}초</small>`
+                : `❌ 틀렸습니다! 정답은 "${currentQuestion.answer}" 입니다.<br><small style="font-size:14px; opacity:0.7;">소요 시간: ${timeSpent}초</small>`;
+
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('answerInput').disabled = true;
+
+            // 오늘의 문제인 경우 3초 후 다음 문제로
+            if (dailyQuestions.length > 0) {
+                document.getElementById('status').textContent = correct ? '정답! 3초 후 다음 문제...' : '3초 후 다음 문제...';
+
+                setTimeout(() => {
+                    currentQuestionIndex++;
+                    showNextQuestion();
+                }, 3000);
+            } else {
+                document.getElementById('status').textContent = correct ? '정답을 맞혔습니다!' : '다음 문제를 기다려주세요.';
+            }
+        }
+
+        window.addEventListener('load', () => {
+            window.opener.postMessage({
+                type: 'student_ready',
+                studentId
+            }, '*');
+        });
+    </script>
+</body>
+</html>

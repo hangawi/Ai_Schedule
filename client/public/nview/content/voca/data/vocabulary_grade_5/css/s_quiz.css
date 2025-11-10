@@ -1,0 +1,240 @@
+body {
+  opacity: 0;
+}
+
+#app {
+  top: 100px;
+  position: relative;
+}
+
+#app > .main { width: 94%; margin: 70px 3% 0 3%; }
+
+.half-card {
+  width: 48%;
+  margin: 1%;
+}
+
+.full-card {
+  width: 98%;
+  margin: 1%;
+}
+
+.half-card .md-card-content, .full-card .md-card-content, .vs-text {
+  font-family: 'Noto Sans KR';
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.vs-f-r {
+  float: right;
+}
+
+.vs-bgm {
+  position: absolute;
+  left: 1142px;
+}
+
+.md-card .md-card-header + .md-card-content {
+  /* height: 220px; */
+  overflow: hidden;
+}
+
+.vs-main-color {
+  color: #43BCAB
+}
+
+.md-theme-default.md-switch.md-checked.vs-main-color .md-switch-thumb {
+  color: #43BCAB
+}
+
+.circle-drag {
+  z-index: 9999;
+  background-color: #0e112a;
+  position: absolute;
+  left: 200px;
+  top: 400px;
+  width: 166px;
+  height: 166px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 28px;
+  text-align: center;
+  line-height: 1em;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0px 2px 4px 2px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  vertical-align: middle;
+  word-break: break-word;
+  /* text-shadow: #ccc 0 3px 3px; */
+}
+
+.circle-1 { background-color: #FF9B20; position: absolute; left: calc(20% - 83px); top: 020px; }
+.circle-2 { background-color: #FF9B20; position: absolute; left: calc(50% - 83px); top: 220px; }
+.circle-3 { background-color: #FF9B20; position: absolute; left: calc(80% - 83px); top: 020px; }
+
+/* 67C425
+FD3C33 */
+
+.circle-drag.disabled {
+  cursor: default;
+  background-color: #ccc;
+}
+
+.circle-drag.correct {
+  background-color: #67C425 !important;
+}
+.circle-drag.incorrect {
+  background-color: #FD3C33 !important;
+}
+
+.md-theme-default.md-boards.md-primary > .md-boards-navigation {
+  top: -95px;
+}
+
+.md-theme-default.md-card {
+  border-radius: 16px;
+  width: 520px;
+  height: 260px;
+  margin: 0 auto;
+  border: 6px solid transparent;
+  overflow: hidden;
+}
+
+.md-theme-default.md-card.correct {
+  border-color: #67c425;
+}
+
+.md-theme-default.md-card.wrong {
+  border-color: #FD3C33;
+}
+
+.md-card .md-card-content:last-child {
+  padding: 0;
+  margin: 0;
+  width: 508px;
+  height: 248px;
+}
+
+.md-card .md-card-content:last-child img {
+  user-select: none;
+  width: 204px;
+  height: 248px;
+}
+
+.vs-hide {
+  display: none;
+}
+
+button[feedback='right'] {
+  color: #5ABF30 !important;
+}
+
+button[feedback='wrong'] {
+  color: #FE362F !important;
+}
+
+.none-select {
+  user-drag: none; 
+  user-select: none;
+  -moz-user-select: none;
+  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+}
+
+.vs-definition {
+  left: 204px;
+  width: 305px;
+  height: 248px;
+  line-height: 1.4em;
+  font-size: 22px;
+  font-weight: 400;
+  background-color: #fff;
+  display: table-cell;
+  vertical-align: middle;
+  padding-right: 0.5em;
+  text-align: center;
+}
+
+.vs-definition p {
+  display: inline-block;
+  text-align: left;
+  margin-left: 20px;
+}
+
+.vs-point-color {
+  color: #FDBE53;/*transparent;*/
+  /* border: 2px solid #D86C66; */
+  border-radius: 4px;
+  background-color: #FDBE53;
+  font-size: 0.8em;
+  letter-spacing: 4px;
+}
+
+.md-boards .md-board {
+  height: 560px;
+}
+
+#vs-top-menu {
+  background-color: #FDC356;
+}
+
+* {
+  user-select: none;
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+}
+
+.md-boards-navigation .md-board-header {
+  transform: scale(1.0);
+}
+
+.md-boards-navigation .md-board-header.md-active {
+  transform: scale(1.5);
+}
+
+#feedback {
+  position: absolute;
+  background-color: rgba(0, 0, 0, 0.5);
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+  display: none;
+}
+
+#feedback .feedback_img {
+  position: absolute;
+  display: none;
+}
+
+#feedback_wrong {
+  left: calc(50% - 318px/2);
+  top: calc(50% - 263px/2);
+}
+
+#feedback_correct {
+  left: calc(50% - 384px/2);
+  top: calc(50% - 276px/2);
+}
+
+#feedback #particle {
+  position: absolute;
+  left: calc(50% - 850px / 2);
+  top: 200px;
+}
+
+img.vs-image {
+  max-width: 204px;
+  max-height: 248px;
+  object-fit: contain;
+  float: left;
+}
+
+.border-radius .md-dialog { border-radius: 30px; }
+.border-radius .md-dialog button.md-button  { position: absolute; right: -10px; top: 10px; }

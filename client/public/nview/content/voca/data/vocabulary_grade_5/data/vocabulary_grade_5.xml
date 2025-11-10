@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<word>
+  <lesson index="1" name="Module 1" icon="2" topics="2" elem="1_2">
+    <word id="586" grade="5" module="1" topic="1" word="exponent" wrong_1="power" wrong_2="squared" definition="The [] is the number that tells how many times a base number is used as a factor."/>
+    <word id="587" grade="5" module="1" topic="1" word="power" wrong_1="squared" wrong_2="cubed" definition="The product that results from multiplying the same number over and over is a [] of that number."/>
+    <word id="588" grade="5" module="1" topic="1" word="squared" wrong_1="cubed" wrong_2="base" definition="A number raised to the second power."/>
+    <word id="589" grade="5" module="1" topic="1" word="cubed" wrong_1="base" wrong_2="value" definition="A number raised to the third power."/>
+    <word id="590" grade="5" module="1" topic="1" word="base" wrong_1="value" wrong_2="expanded form" definition="When a number is written using exponents, the [] is the number that is used as a factor."/>
+    <word id="591" grade="5" module="1" topic="1" word="value" wrong_1="expanded form" wrong_2="thousandth" definition="The place of a digit in a number tells you its []."/>
+    <word id="592" grade="5" module="1" topic="1" word="expanded form" wrong_1="thousandth" wrong_2="hundredths" definition="[] is a way to write a number that shows the sum of each digit multiplied by its place value."/>
+    <word id="593" grade="5" module="1" topic="1" word="thousandth" wrong_1="hundredths" wrong_2="decimal point" definition="A [] is one out of 1,000 equal parts of a whole."/>
+    <word id="594" grade="5" module="1" topic="1" word="hundredths" wrong_1="decimal point" wrong_2="decimal" definition="A [] is one out of 100 equal parts of a whole."/>
+    <word id="595" grade="5" module="1" topic="1" word="decimal point" wrong_1="decimal" wrong_2="equivalent decimals" definition="A [] is a symbol used to separate the ones place from the tenths place in decimal numbers."/>
+    <word id="596" grade="5" module="1" topic="1" word="decimal" wrong_1="equivalent decimals" wrong_2="period" definition="A number with one or more digits to the right of the decimal point is called a []."/>
+    <word id="597" grade="5" module="1" topic="2" word="equivalent decimals" wrong_1="period" wrong_2="place" definition="Decimals that name the same part of a whole are called []."/>
+    <word id="598" grade="5" module="1" topic="2" word="period" wrong_1="place" wrong_2="standard form" definition="The name given to each group of three digits in a place-value chart."/>
+    <word id="599" grade="5" module="1" topic="2" word="place" wrong_1="standard form" wrong_2="place value" definition="The position of a digit in a number."/>
+    <word id="600" grade="5" module="1" topic="2" word="standard form" wrong_1="place value" wrong_2="place-value chart" definition="The usual way of writing a number that shows only its digits, no words."/>
+    <word id="601" grade="5" module="1" topic="2" word="place value" wrong_1="place-value chart" wrong_2="exponent" definition="The value given to a digit by its place in a number."/>
+    <word id="602" grade="5" module="1" topic="2" word="place-value chart" wrong_1="exponent" wrong_2="power" definition="A chart showing the value of each number in a multi-digit whole number."/>
+  </lesson>
+  <lesson index="2" name="Module 2" icon="2" topics="2" elem="1_2">
+    <word id="603" grade="5" module="2" topic="1" word="Commutative Property of Addition" wrong_1="Associative Property of Addition" wrong_2="Identity Property of Addition" definition="The [] states that addends can be added in any order and the sum remains the same."/>
+    <word id="604" grade="5" module="2" topic="1" word="Associative Property of Addition" wrong_1="Identity Property of Addition" wrong_2="power of 10" definition="The [] states that addends can be regrouped and the sum remains the same."/>
+    <word id="605" grade="5" module="2" topic="1" word="Identity Property of Addition" wrong_1="power of 10" wrong_2="underestimate" definition="The sum of any number and 0 equals the number."/>
+    <word id="606" grade="5" module="2" topic="2" word="power of 10" wrong_1="underestimate" wrong_2="overestimate" definition="A number like 10, 100, 1,000 and so on. It is the result of using only 10 as a factor."/>
+    <word id="607" grade="5" module="2" topic="2" word="underestimate" wrong_1="overestimate" wrong_2="partial products" definition="The result of using lesser numbers to estimate a sum or product is called an []."/>
+    <word id="608" grade="5" module="2" topic="2" word="overestimate" wrong_1="partial products" wrong_2="estimate" definition="The result of using greater numbers to estimate a sum or product is called an []."/>
+    <word id="609" grade="5" module="2" topic="2" word="partial products" wrong_1="estimate" wrong_2="round" definition="[] are products found by breaking one of two factors into ones, tens, hundreds, and so on, and then multiplying each of these by the other factor."/>
+    <word id="610" grade="5" module="2" topic="2" word="estimate" wrong_1="round" wrong_2="tenth" definition="You can [] to find a number that is close to the exact amount."/>
+    <word id="611" grade="5" module="2" topic="2" word="round" wrong_1="tenth" wrong_2="compatible numbers" definition="A [] figure or amount is one that is given as a whole number, usually one ending in 0."/>
+    <!-- <word id="612" grade="5" module="2" topic="2" word="tenth" wrong_1="compatible numbers" wrong_2="compensation" definition="A [] is one out of 10 equal parts of a whole."/> -->
+    <word id="613" grade="5" module="2" topic="2" word="compatible numbers" wrong_1="compensation" wrong_2="Commutative Property of Addition" definition="[] are numbers that are easy to compute with mentally."/>
+    <!-- <word id="614" grade="5" module="2" topic="2" word="compensation" wrong_1="Commutative Property of Addition" wrong_2="Associative Property of Addition" definition="[] is adjusting one number to make a computation easier and balancing the adjustment by changing another number."/> -->
+  </lesson>
+  <lesson index="3" name="Module 3" icon="2" topics="1" elem="3">
+    <word id="615" grade="5" module="3" topic="3" word="dividend" wrong_1="divisor" wrong_2="quotient" definition="A number that is being divided."/>
+    <word id="616" grade="5" module="3" topic="3" word="divisor" wrong_1="quotient" wrong_2="remainder" definition="The number that divides the dividend."/>
+    <word id="617" grade="5" module="3" topic="3" word="quotient" wrong_1="remainder" wrong_2="dividend" definition="The result of a division problem."/>
+    <word id="618" grade="5" module="3" topic="3" word="remainder" wrong_1="dividend" wrong_2="divisor" definition="The number that is left after one whole number is divided by another."/>
+  </lesson>
+  <lesson index="4" name="Module 4" icon="2" topics="1" elem="1">
+    <word id="619" grade="5" module="4" topic="1" word="partial quotients" wrong_1="estimate" wrong_2="compensation" definition="A dividing method in which the dividend is separated into addends that are easy to divide."/>
+  </lesson>
+  <lesson index="5" name="Module 5" icon="2" topics="1" elem="3">
+    <word id="620" grade="5" module="5" topic="3" word="coordinate grid" wrong_1="x-axis" wrong_2="y-axis" definition="A [] is used to locate points in a plane using an ordered pair of numbers."/>
+    <word id="621" grade="5" module="5" topic="3" word="x-axis" wrong_1="y-axis" wrong_2="origin" definition="A horizontal line passing through the origin that includes both positive and negative numbers is called the []."/>
+    <word id="622" grade="5" module="5" topic="3" word="y-axis" wrong_1="origin" wrong_2="ordered pair" definition="A vertical line passing through the origin that includes both positive and negative numbers is called the []."/>
+    <word id="623" grade="5" module="5" topic="3" word="origin" wrong_1="ordered pair" wrong_2="x-coordinate" definition="The [] is the point where the two axes of a coordinate grid intersect. It is represented by the ordered pair (0, 0)."/>
+    <word id="624" grade="5" module="5" topic="3" word="ordered pair" wrong_1="x-coordinate" wrong_2="y-coordinate" definition="An [] is pair of numbers used to locate a point on a coordinate grid."/>
+    <word id="625" grade="5" module="5" topic="3" word="x-coordinate" wrong_1="y-coordinate" wrong_2="coordinate plane" definition="The first number in an ordered pair, which names the distance to the right or left from the origin along the x-axis, is called the []."/>
+    <word id="626" grade="5" module="5" topic="3" word="y-coordinate" wrong_1="coordinate plane" wrong_2="interval" definition="The second number in an ordered pair, which names the distance up or down from the origin along t he y-axis, is called the []."/>
+    <word id="627" grade="5" module="5" topic="3" word="coordinate plane" wrong_1="interval" wrong_2="coordinate grid" definition="A plane that is formed when two number lines intersect at a right angle."/>
+    <word id="628" grade="5" module="5" topic="3" word="interval" wrong_1="coordinate grid" wrong_2="x-axis" definition="The difference between the values on the scale of a graph is an []."/>
+  </lesson>
+  <lesson index="6" name="Module 6" icon="2" topics="3" elem="1_2_3">
+    <word id="629" grade="5" module="6" topic="1" word="number sequence" wrong_1="corresponding terms" wrong_2="sequence" definition="A set of numbers that follows a rule is a []."/>
+    <word id="630" grade="5" module="6" topic="1" word="corresponding terms" wrong_1="sequence" wrong_2="term" definition="Terms that are in the same relative position as one another in a pair of number sequences are []."/>
+    <word id="631" grade="5" module="6" topic="1" word="sequence" wrong_1="term" wrong_2="benchmark fraction" definition="A list of numbers that follows a specific pattern."/>
+    <word id="632" grade="5" module="6" topic="1" word="term" wrong_1="benchmark fraction" wrong_2="equivalent fractions" definition="A number in a pattern or sequence."/>
+    <word id="633" grade="5" module="6" topic="2" word="benchmark fraction" wrong_1="equivalent fractions" wrong_2="common denominator" definition="Common fractions used for estimating, such as ¼, ⅓, ½, ⅔, and ¾, are called []."/>
+    <word id="634" grade="5" module="6" topic="2" word="equivalent fractions" wrong_1="common denominator" wrong_2="greatest common factor (GCF)" definition="[] are fractions that name the same part of a whole region, length, or set."/>
+    <word id="635" grade="5" module="6" topic="2" word="common denominator" wrong_1="greatest common factor (GCF)" wrong_2="least common denominator (LCD)" definition="A [] is a number that is the denominator of two or more fractions."/>
+    <word id="636" grade="5" module="6" topic="3" word="greatest common factor (GCF)" wrong_1="least common denominator (LCD)" wrong_2="least common multiple (LCM)" definition="The greatest of the common factors of two or more numbers."/>
+    <word id="637" grade="5" module="6" topic="3" word="least common denominator (LCD)" wrong_1="least common multiple (LCM)" wrong_2="multiple" definition="The least common multiple of the denominators of two fractions."/>
+    <word id="638" grade="5" module="6" topic="3" word="least common multiple (LCM)" wrong_1="multiple" wrong_2="numerator" definition="The least multiple, other than 0, common to sets of multiples."/>
+    <word id="639" grade="5" module="6" topic="3" word="multiple" wrong_1="numerator" wrong_2="simplest form" definition="A multiple of a number is the product of that number and any whole number."/>
+    <word id="640" grade="5" module="6" topic="3" word="numerator" wrong_1="simplest form" wrong_2="like fractions" definition="The top number in a fraction. It tells how many of the equal parts are being used."/>
+    <word id="641" grade="5" module="6" topic="3" word="simplest form" wrong_1="like fractions" wrong_2="unlike fractions" definition="A fraction in which the GCF of the numerator and the denominator is 1."/>
+    <word id="642" grade="5" module="6" topic="3" word="like fractions" wrong_1="unlike fractions" wrong_2="common factors" definition="Fractions that have the same denominator."/>
+    <word id="643" grade="5" module="6" topic="3" word="unlike fractions" wrong_1="common factors" wrong_2="number sequence" definition="Fractions that have different denominators."/>
+    <word id="644" grade="5" module="6" topic="3" word="common factors" wrong_1="number sequence" wrong_2="corresponding terms" definition="The highest number that can be divided exactly into two or more numbers."/>
+  </lesson>
+  <lesson index="7" name="Module 7" icon="2" topics="1" elem="1">
+    <word id="645" grade="5" module="7" topic="1" word="mixed number" wrong_1="benchmark" wrong_2="common multiple" definition="A number that has a whole-number part and a fractional part is called a []."/>
+    <word id="646" grade="5" module="7" topic="1" word="benchmark" wrong_1="common multiple" wrong_2="denominator" definition="A familiar number used as a point of reference."/>
+    <word id="647" grade="5" module="7" topic="1" word="common multiple" wrong_1="denominator" wrong_2="mixed number" definition="A whole number that is a multiple of two or more numbers."/>
+    <word id="648" grade="5" module="7" topic="1" word="denominator" wrong_1="mixed number" wrong_2="benchmark" definition="The bottom number in a fraction. It represents the total number of equal parts."/>
+  </lesson>
+  <lesson index="8" name="Module 8" icon="2" topics="1" elem="1">
+    <word id="649" grade="5" module="8" topic="1" word="scaling" wrong_1="braces" wrong_2="multiple" definition="The process of resizing a number when it is multiplied by a fraction that is greater than or less than 1."/>
+  </lesson>
+  <lesson index="9" name="Module 9" icon="2" topics="3" elem="1_2_3">
+    <word id="650" grade="5" module="9" topic="1" word="unit fraction" wrong_1="line plot" wrong_2="data" definition="A fraction with a numerator of 1 is called a []."/>
+    <word id="651" grade="5" module="9" topic="2" word="line plot" wrong_1="data" wrong_2="outlier" definition="A display of responses along a number line, with dots or Xs recorded above the responses to indicate the number of times a response occurred, is called a []."/>
+    <word id="652" grade="5" module="9" topic="2" word="data" wrong_1="outlier" wrong_2="numerical expression" definition="Collected information is called []."/>
+    <word id="653" grade="5" module="9" topic="2" word="outlier" wrong_1="numerical expression" wrong_2="evaluate" definition="An [] is a value that is much greater or much less than the other values in a data set."/>
+    <word id="654" grade="5" module="9" topic="3" word="numerical expression" wrong_1="evaluate" wrong_2="order of operations" definition="A [] is a mathematical phrase that contains numbers and at least one operation."/>
+    <word id="655" grade="5" module="9" topic="3" word="evaluate" wrong_1="order of operations" wrong_2="parentheses" definition="To [] means doing the calculations to find the value of an expression."/>
+    <word id="656" grade="5" module="9" topic="3" word="order of operations" wrong_1="parentheses" wrong_2="brackets" definition="The [] tells which calculations to do before others. First, simplify inside parentheses, brackets, and braces. Then multiply and divide in order from left to right. Finally, add and subtract in order from left to right."/>
+    <word id="657" grade="5" module="9" topic="3" word="parentheses" wrong_1="brackets" wrong_2="braces" definition="Curved symbols used in mathematical expressions and equations to group numbers or variables together are called []."/>
+    <word id="658" grade="5" module="9" topic="3" word="brackets" wrong_1="braces" wrong_2="unit fraction" definition="Square symbols used in mathematical expressions and equations to group numbers or variables together are called []."/>
+    <word id="659" grade="5" module="9" topic="3" word="braces" wrong_1="unit fraction" wrong_2="line plot" definition="Symbols used with parentheses and brackets in mathematical expressions and equations to group numbers or variables together are called []."/>
+  </lesson>
+  <lesson index="10" name="Module 10" icon="3" topics="4" elem="1_2_3_4">
+    <word id="660" grade="5" module="10" topic="1" word="convert" wrong_1="fair share" wrong_2="length" definition="To change from one unit of measurement to another."/>
+    <word id="661" grade="5" module="10" topic="1" word="fair share" wrong_1="length" wrong_2="inch (in.)" definition="An amount divided equally."/>
+    <word id="662" grade="5" module="10" topic="1" word="length" wrong_1="inch (in.)" wrong_2="foot (ft)" definition="Distance measured between two points."/>
+    <word id="663" grade="5" module="10" topic="1" word="inch (in.)" wrong_1="foot (ft)" wrong_2="yard (yd)" definition="A customary unit of length less than 1 foot is an []."/>
+    <word id="664" grade="5" module="10" topic="1" word="foot (ft)" wrong_1="yard (yd)" wrong_2="mile (mi)" definition="A customary unit of length equal to 12 inches is a []."/>
+    <word id="665" grade="5" module="10" topic="1" word="yard (yd)" wrong_1="mile (mi)" wrong_2="capacity" definition="A customary unit of length equal to 3 feet is a []."/>
+    <word id="666" grade="5" module="10" topic="1" word="mile (mi)" wrong_1="capacity" wrong_2="cup (c)" definition="A customary unit of length equal to 5,280 feet is a []."/>
+    <word id="667" grade="5" module="10" topic="1" word="capacity" wrong_1="cup (c)" wrong_2="fluid ounce (fl oz)" definition="[] is the volume of a container measured in liquid units."/>
+    <word id="668" grade="5" module="10" topic="1" word="cup (c)" wrong_1="fluid ounce (fl oz)" wrong_2="pint (pt)" definition="A customary unit of capacity equal to 8 fluid ounces is a []."/>
+    <word id="669" grade="5" module="10" topic="1" word="fluid ounce (fl oz)" wrong_1="pint (pt)" wrong_2="quart (qt)" definition="A customary unit of capacity equal to 8 [] is a cup."/>
+    <word id="670" grade="5" module="10" topic="1" word="pint (pt)" wrong_1="quart (qt)" wrong_2="gallon (gal)" definition="A customary unit of capacity equal to 2 cups is a []."/>
+    <word id="671" grade="5" module="10" topic="1" word="quart (qt)" wrong_1="gallon (gal)" wrong_2="weight" definition="A customary unit of capacity equal to 2 pints is a []."/>
+    <word id="672" grade="5" module="10" topic="1" word="gallon (gal)" wrong_1="weight" wrong_2="ton (T)" definition="A customary unit of capacity equal to 4 quarts is a []."/>
+    <word id="673" grade="5" module="10" topic="1" word="weight" wrong_1="ton (T)" wrong_2="pound (lb)" definition="[] is a measure of how light or heavy something is."/>
+    <word id="674" grade="5" module="10" topic="1" word="ton (T)" wrong_1="pound (lb)" wrong_2="ounce (oz)" definition="A customary unit of weight equal to 2,000 pounds is a []."/>
+    <word id="675" grade="5" module="10" topic="1" word="pound (lb)" wrong_1="ounce (oz)" wrong_2="metric system" definition="A customary unit of weight equal to 16 ounces is a []."/>
+    <word id="676" grade="5" module="10" topic="1" word="ounce (oz)" wrong_1="metric system" wrong_2="decimeter" definition="A customary unit of weight less than 1 pound is an []."/>
+    <word id="677" grade="5" module="10" topic="1" word="metric system" wrong_1="decimeter" wrong_2="dekameter" definition="A decimal system of measurement. Includes units such as meter, gram, and liter."/>
+    <word id="678" grade="5" module="10" topic="2" word="decimeter" wrong_1="dekameter" wrong_2="kilometer (km)" definition="A metric unit of length that is equal to one tenth of a meter is a []."/>
+    <word id="679" grade="5" module="10" topic="2" word="dekameter" wrong_1="kilometer (km)" wrong_2="meter (m)" definition="A metric unit of length that is equal to 10 meters is a []."/>
+    <word id="680" grade="5" module="10" topic="2" word="kilometer (km)" wrong_1="meter (m)" wrong_2="centimeter (cm)" definition="A metric unit of length equal to 1,000 meters is a []."/>
+    <word id="681" grade="5" module="10" topic="2" word="meter (m)" wrong_1="centimeter (cm)" wrong_2="millimeter (mm)" definition="A metric unit of length equal to 100 centimeters is a []."/>
+    <word id="682" grade="5" module="10" topic="2" word="centimeter (cm)" wrong_1="millimeter (mm)" wrong_2="liter (L)" definition="A metric unit of length equal to 10 millimeters is a []."/>
+    <word id="683" grade="5" module="10" topic="2" word="millimeter (mm)" wrong_1="liter (L)" wrong_2="milliliter (mL)" definition="A metric unit of length less than a centimeter is a []."/>
+    <word id="684" grade="5" module="10" topic="2" word="liter (L)" wrong_1="milliliter (mL)" wrong_2="mass" definition="A metric unit of capacity equal to 1,000 milliliters is a []."/>
+    <word id="685" grade="5" module="10" topic="2" word="milliliter (mL)" wrong_1="mass" wrong_2="milligram (mg)" definition="A metric unit of capacity less than a liter is a []."/>
+    <word id="686" grade="5" module="10" topic="2" word="mass" wrong_1="milligram (mg)" wrong_2="gram (g)" definition="[] is the measure of the amount of matter in an object."/>
+    <word id="687" grade="5" module="10" topic="2" word="milligram (mg)" wrong_1="gram (g)" wrong_2="kilogram (kg)" definition="A metric unit of mass less than a gram is a []."/>
+    <word id="688" grade="5" module="10" topic="2" word="gram (g)" wrong_1="kilogram (kg)" wrong_2="equilateral triangle" definition="A metric unit of mass equal to 1,000 milligrams is a []."/>
+    <word id="689" grade="5" module="10" topic="2" word="kilogram (kg)" wrong_1="equilateral triangle" wrong_2="isosceles triangle" definition="A metric unit of mass equal to 1,000 grams is a []."/>
+    <word id="690" grade="5" module="10" topic="3" word="equilateral triangle" wrong_1="isosceles triangle" wrong_2="scalene triangle" definition="In an [], all sides are the same length."/>
+    <word id="691" grade="5" module="10" topic="3" word="isosceles triangle" wrong_1="scalene triangle" wrong_2="right triangle" definition="An [] has at least two sides of the same length."/>
+    <word id="692" grade="5" module="10" topic="3" word="scalene triangle" wrong_1="right triangle" wrong_2="acute triangle" definition="In a [], no sides are the same length."/>
+    <word id="693" grade="5" module="10" topic="3" word="right triangle" wrong_1="acute triangle" wrong_2="obtuse triangle" definition="A triangle with 1 right angle and 2 acute angles."/>
+    <word id="694" grade="5" module="10" topic="3" word="acute triangle" wrong_1="obtuse triangle" wrong_2="parallelogram" definition="An [] has three acute angles."/>
+    <word id="695" grade="5" module="10" topic="3" word="obtuse triangle" wrong_1="parallelogram" wrong_2="trapezoid" definition="An [] has one obtuse angle."/>
+    <word id="696" grade="5" module="10" topic="3" word="parallelogram" wrong_1="trapezoid" wrong_2="square" definition="A [] is a quadrilateral with both pairs of opposite sides parallel and equal in length."/>
+    <word id="697" grade="5" module="10" topic="3" word="trapezoid" wrong_1="square" wrong_2="rectangle" definition="A [] is a quadrilateral that has one pair of parallel sides."/>
+    <word id="698" grade="5" module="10" topic="3" word="square" wrong_1="rectangle" wrong_2="rhombus" definition="A [] is a rectangle with all sides the same length."/>
+    <word id="699" grade="5" module="10" topic="3" word="rectangle" wrong_1="rhombus" wrong_2="volume" definition="A [] is a parallelogram with four right angles."/>
+    <word id="700" grade="5" module="10" topic="3" word="rhombus" wrong_1="volume" wrong_2="cube" definition="A [] is a parallelogram with all sides the same length."/>
+    <word id="701" grade="5" module="10" topic="4" word="volume" wrong_1="cube" wrong_2="cubic unit" definition="[] is the number of cubic units needed to fill a solid figure."/>
+    <word id="702" grade="5" module="10" topic="4" word="cube" wrong_1="cubic unit" wrong_2="rectangular prism" definition="A [] is a solid figure with six identical squares as its faces."/>
+    <word id="703" grade="5" module="10" topic="4" word="cubic unit" wrong_1="rectangular prism" wrong_2="bases" definition="A [] is the volume of a cube that measures 1 unit along each edge."/>
+    <word id="704" grade="5" module="10" topic="4" word="rectangular prism" wrong_1="bases" wrong_2="composite figures" definition="A [] is a solid figure with six rectangular faces."/>
+    <word id="705" grade="5" module="10" topic="4" word="bases" wrong_1="composite figures" wrong_2="formula" definition="Two parallel congruent faces in a prism."/>
+    <word id="706" grade="5" module="10" topic="4" word="composite figures" wrong_1="formula" wrong_2="convert" definition="A figure that is made of two or more three-dimensional figures."/>
+    <word id="707" grade="5" module="10" topic="4" word="formula" wrong_1="convert" wrong_2="fair share" definition="A [] is a rule that uses symbols to relate two or more quantities."/>
+  </lesson>
+</word>

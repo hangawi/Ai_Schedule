@@ -50,6 +50,13 @@ const corsOptions = {
       if (origin && origin.includes('127.0.0.1')) {
         return callback(null, true);
       }
+      // Allow local network IPs (for laptop access)
+      if (origin && origin.match(/^http:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/)) {
+        return callback(null, true);
+      }
+      if (origin && origin.match(/^http:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/)) {
+        return callback(null, true);
+      }
     }
 
     if (allowedOrigins.indexOf(origin) !== -1) {
@@ -104,6 +111,7 @@ app.use('/api/ocr', require('./routes/ocr'));
 app.use('/api/ocr-chat', require('./routes/ocrChat'));
 app.use('/api/schedule', require('./routes/scheduleOptimizer'));
 app.use('/api/schedule', require('./routes/fixedSchedule'));
+app.use('/api/nview', require('./routes/nview')); // AI 학습 시스템
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '..', 'client', 'build')));

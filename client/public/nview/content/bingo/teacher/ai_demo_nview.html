@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8"/>
+    <title>Math Alive - N-View AI</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Malgun Gothic, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { color: white; text-align: center; margin-bottom: 10px; font-size: 36px; }
+        .subtitle { color: rgba(255,255,255,0.9); text-align: center; margin-bottom: 30px; }
+        .control-panel { background: white; border-radius: 15px; padding: 25px; margin-bottom: 20px; }
+        .control-row { display: flex; gap: 15px; margin-bottom: 15px; }
+        .control-row label { min-width: 100px; font-weight: bold; }
+        select { flex: 1; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; }
+        .student-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
+        .student-card { background: white; border-radius: 15px; padding: 25px; }
+        .student-header { display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 2px solid #f0f0f0; padding-bottom: 15px; }
+        .student-name { font-size: 24px; font-weight: bold; }
+        .student-status { padding: 6px 12px; border-radius: 20px; font-size: 12px; }
+        .student-status.ready { background: #d4edda; color: #155724; }
+        .student-status.waiting { background: #fff3cd; color: #856404; }
+        .button { width: 100%; padding: 15px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; color: white; margin-bottom: 10px; }
+        .button:disabled { background: #ccc !important; }
+        .button.open { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+        .button.generate { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .button.send { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .question-preview { background: #f8f9fa; border-radius: 10px; padding: 15px; margin-top: 15px; display: none; }
+        .question-preview.show { display: block; }
+        .question-text { background: white; padding: 15px; border-radius: 8px; font-size: 18px; text-align: center; margin-bottom: 10px; }
+        .answer-text { text-align: center; color: #666; }
+        .result-box { border-radius: 10px; padding: 15px; margin-top: 15px; display: none; text-align: center; }
+        .result-box.show { display: block; }
+        .result-box.correct { background: #d4edda; }
+        .result-box.incorrect { background: #f8d7da; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎓 N-View AI 문제 출제 시스템</h1>
+        <p class="subtitle">여러 학생에게 동시에 다른 문제를 출제하세요</p>
+        <div class="control-panel">
+            <h3 style="margin-bottom: 15px;">📝 공통 설정</h3>
+            <div class="control-row">
+                <label>난이도:</label>
+                <select id="globalDifficulty">
+                    <option value="easy">쉬움</option>
+                    <option value="medium" selected>보통</option>
+                    <option value="hard">어려움</option>
+                </select>
+            </div>
+            <div class="control-row">
+                <label>문제 유형:</label>
+                <select id="globalType">
+                    <option value="addition" selected>덧셈</option>
+                    <option value="subtraction">뺄셈</option>
+                    <option value="multiplication">곱셈</option>
+                    <option value="division">나눗셈</option>
+                </select>
+            </div>
+        </div>
+        <div class="student-grid" id="studentGrid"></div>
+    </div>
+    <script src='nview_teacher.js'></script>
+</body>
+</html>

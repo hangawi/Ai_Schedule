@@ -1,0 +1,151 @@
+#main {
+  background-color: transparent;
+}
+
+#app {
+  background-color: transparent;
+}
+
+#app {
+  display: grid;
+}
+
+body.md-theme-default.vs-main-bg {
+  background-color: transparent;
+}
+
+.vs-main-bg {
+  background-color: transparent;
+  background: url(../assets/img/background_04.png) no-repeat 0 0;
+}
+
+.vs-who-box-bg {
+  background-color: #769FC0;
+}
+
+.vs-w360 { width: 360px; }
+.vs-w520 { width: 520px; }
+
+.vs-box {
+  width: 920px;
+  height: 400px;
+  margin: 110px 180px;
+  /* background-color: rgba(118, 159, 192, 1); */
+  /* border-radius: 40px; */
+}
+
+.vs-index-title {
+  float: left;
+  text-align: left;
+  font-size: 60px;
+  font-weight: 700;
+  line-height: 70px;
+  color: #30B3A0;
+  height: 80px;
+  /* margin-top: 140px; */
+  text-shadow: 4px 4px 5px #fff, -4px -4px 5px #ffff, 4px -4px 5px #fff, -4px 4px 5px #fff;
+  text-indent: -9999em;
+  width: 503px !important;
+  height: 118px !important;
+  left: calc(50% - 503px/2);
+  background: url(../assets/img/txt_got_a_note.png) no-repeat 0 0;
+}
+
+.vs-white-button {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  width: 400px;
+  height: 400px;
+  line-height: 73px;
+}
+
+
+.vs-list-button {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  width: 75px;
+  height: 75px;
+  left: calc(50% - 75px/2);
+  background: transparent url(../assets/img/btnList.png) no-repeat 0 0;
+  position: absolute;
+  bottom: 20px;
+  margin: 0;
+}
+/* 
+.vs-list-button:hover {
+  background: transparent url(../assets/img/btn_start_select.png) no-repeat 0 0;
+} */
+
+.vs-list-button .md-ink-ripple {
+  width: 75px !important;
+}
+
+.row {
+  display: grid;
+  grid-gap: 2rem;
+  grid-template-columns: repeat(6, auto);
+  justify-content: center;
+}
+
+.half-card {
+  width: 50%;
+  margin-top: 200px;
+  text-align: center;
+}
+
+.md-theme-default.md-card {
+  background-color: #fff;
+  border: #1AABA4 1px solid;
+  border-radius: 15px;
+}
+
+.md-boards-navigation { display: none; }
+
+.md-layout-item {
+  width: 100%;
+  text-align: center;
+}
+p.nickname {
+  position: absolute;
+  width: 800px;
+  top: calc(50%);
+  left: calc(50% - 800px/2);
+  font-size: 30px;
+  color: #C29E47;
+}
+#oImg {
+  width: 256px;
+  height: 256px;
+  border: 10px solid #fff;
+  border-radius: 50%;
+  margin-bottom: 44px;
+}
+
+#imgArea {
+  display: table;
+  width: 256px;
+  height: 256px;
+  font-size: 120px;
+  margin-bottom: 44px;
+  margin-left: calc(920px/2 - 256px/2);
+}
+
+.iName {
+  display: table-cell;
+  justify-content: center;
+  vertical-align: middle;
+  border: 8px solid #fff;
+  border-radius: 50%;
+  background-color: #ffa1a7;
+  color: #fff;
+}
+
+.iName.male {
+  background-color: #2cd1c3;
+}
+
+.iName.female {
+  background-color: #ffa1a7;
+}

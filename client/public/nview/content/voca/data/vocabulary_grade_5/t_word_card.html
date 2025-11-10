@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ko" translate="no">
+
+<head>
+  <meta charset="utf-8">
+  <meta content="on" http-equiv="cleartype">
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <meta content="yes" name="mobile-web-app-capable">
+  <meta content="yes" name="apple-mobile-web-app-status-bar-style">
+  <meta content="black" name="apple-mobile-web-app-status-bar-style">
+
+  <title>Vocabulary</title>
+
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="./css/notosanskr.css">
+  <link rel="stylesheet" href="./css/material_icon.css">
+
+  <link rel="stylesheet" type="text/css" href="./vue-material/vue-material.css">
+  <link rel="stylesheet" type="text/css" href="./vuetify/vuetify.min.css">
+
+  <script src='./js/store.legacy.min.js'></script>
+  <script src="./js/xml2json.min.js"></script>
+
+  <script src="./js/jquery.js"></script>
+  <script src="./js/jquery.scrollTo.min.js"></script>
+
+  <script src="./js/vue.min.js"></script>
+  <script src="./vue-material/vue-material.js"></script>
+  <script src="./vuetify/vuetify.min.js"></script>
+
+  <script src="/content/mathalive_lib/mathinterface.js"></script>
+</head>
+
+<body class='high_school'>
+  <div id="loader">
+    <md-spinner :md-size="150" md-indeterminate></md-spinner>
+  </div>
+  <div id="main" class='hide'>
+    
+    <div class="app-viewport" id="vs-top">
+      <md-toolbar id="vs-top-menu">
+        
+        <div class='vs-under_line' style="flex: 1">
+          <md-button class="md-title vs-radius-none vs-with-underline" id="tab-home" md-label="Word Card" @click="linkToPage('t_word_card')">
+            <span class="vs-normal-text">Word Card</span>
+          </md-button>
+          <md-button class="md-title vs-radius-none" id="tab-pages" md-label="Quiz" @click="linkToPage('t_quiz')">
+            <span class="vs-normal-text">Quiz</span>
+          </md-button>
+        </div>
+        
+        <md-button id="vs-setting" @click="openDialog('settings')">setting</md-button>
+      </md-toolbar>
+    </div>
+    
+    <div id="app">
+
+      <md-boards class="md-primary" :md-controls="true" :md-swipeable="false" v-on:click="navClick">
+        <md-board v-for="(word, index) in wordData" :key="word.index" v-bind:id="'slide' + index" class="word-card"
+          v-on:click="navClick">
+          <div class="md-layout">
+            <div class="md-layout-item half-card">
+              <md-card class="vs">
+                <md-card-header>
+                  <div class="md-title vs-f-r">
+                    <div class='vs-section'>definition</div><md-switch v-model="boolean_1" class="md-primary vs-main-color"></md-switch>
+                  </div>
+                </md-card-header>
+                <md-card-content class="attr_1" v-html="word.word"></md-card-content>
+              </md-card>
+            </div>
+            <div class="md-layout-item half-card">
+              <md-card class="vs">
+                <md-card-header>
+                  <div class="md-title vs-f-r">
+                    <div class='vs-section'>images</div><md-switch v-model="boolean_2" class="md-primary vs-main-color"></md-switch>
+                  </div>
+                </md-card-header>
+                <md-card-content class="attr_2"><div class="vs-data vs-image" @click="openDialog('bigImage', word.img)" v-html="word.img">IMAGES</div> </md-card-content>
+              </md-card>
+            </div>
+          </div>
+          <div class="md-layout">
+            <div class="md-layout-item full-card">
+              <md-card class="vs">
+                <md-card-header>
+                  <div class="md-title vs-f-r">
+                    <div class='vs-section'>vocabulary</div><md-switch v-model="boolean_3" class="md-primary vs-main-color"></md-switch>
+                  </div>
+                </md-card-header>
+                <md-card-content class="attr_3" v-html="word.definition"></md-card-content>
+              </md-card>
+            </div>
+          </div>
+        </md-board>
+      </md-boards>
+
+      <div class='vs-card-prev'>
+        <md-button class="vs-btn-next" v-on:click="nextCard"></md-button>
+        <md-button class="vs-btn-prev" v-on:click="prevCard"></md-button>
+      </div>
+      <div class='vs-card-next'>
+        <md-button class="vs-btn-next" v-on:click="nextCard"></md-button>
+        <md-button class="vs-btn-prev" v-on:click="prevCard"></md-button>
+      </div>
+    </div>
+    
+    <md-bottom-bar id="vs-bottom-menu">
+      <md-button id="vs-list-button" @click="linkToHome"><img src="./assets/img/btnList.png" /></md-button>
+    </md-bottom-bar>
+
+    <md-dialog ref="settings" class="settings">
+      <h1>Click or tap boxes to hide or show information on</h1>
+      <div class="md-layout">
+        <div class="md-layout-item half-card" v-bind:class="{ selected: !boolean_1 }" value="1" @click="setting"><span class="small-title"></span>Vocabulary</div>
+        <div class="md-layout-item half-card" v-bind:class="{ selected: !boolean_2 }" value="2" @click="setting"><span class="small-title"></span>Image</div>
+        <div class="md-layout-item full-card" v-bind:class="{ selected: !boolean_3 }" value="3" @click="setting"><span class="small-title"></span>Denifition</div>
+      </div>
+    </md-dialog>
+    <md-dialog ref="bigImage" class="border-radius">
+      <div class="md-layout">
+        <div class="md-layout-item modal-img" @click="closeDialog('bigImage')">
+          <img src="" />
+        </div>
+      </div>
+      <md-button class="" @click="closeDialog('bigImage')">
+        <md-icon class="md-size-2x">close</md-icon>
+      </md-button>
+    </md-dialog>
+    <audio id='vs-bgm' src=''></audio>
+    <audio id='vs-effect' src=''></audio>
+  </div>
+
+  <link rel="stylesheet" href="./css/application.css">
+  
+  <script src="./js/application.js"></script>
+  <script src="./js/t_word_card.js"></script>
+  <link rel="stylesheet" href="./css/t_word_card.css">
+</body>
+
+</html>

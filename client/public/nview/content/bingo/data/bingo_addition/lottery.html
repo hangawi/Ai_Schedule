@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko" translate="no">
+
+<head>
+  <meta charset="utf-8">
+  <meta content="on" http-equiv="cleartype">
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <meta content="yes" name="mobile-web-app-capable">
+  <meta content="yes" name="apple-mobile-web-app-status-bar-style">
+  <meta content="black" name="apple-mobile-web-app-status-bar-style">
+
+  <title>Bingo!</title>
+
+  <link rel="stylesheet" href="./css/google_material_icons.css">
+  <link rel="stylesheet" href="./css/animate.min.css">
+  <link rel="stylesheet" href="./css/notosanskr.css">
+  <link rel="stylesheet" href="./css/material_icon.css">
+
+  <link rel="stylesheet" type="text/css" href="./vue-material/vue-material.css">
+  <link rel="stylesheet" type="text/css" href="./vuetify/vuetify.min.css">
+
+  <script src='./js/store.legacy.min.js'></script>
+  <script src="./js/xml2json.min.js"></script>
+
+  <script src="./js/jquery.js"></script>
+  <script src="./js/jquery.path.js"></script>
+  <script src="./js/jquery.scrollTo.min.js"></script>
+
+  <script src="./js/vue.min.js"></script>
+  <script src="./js/vuex.min.js"></script>
+  <script src="./vue-material/vue-material.js"></script>
+  <script src="./vuetify/vuetify.min.js"></script>
+  <script src="./js/lottie-player.js"></script>
+  <script src="/content/mathalive_lib/mathinterface.js"></script>
+</head>
+
+<body class='app vs-main-bg'>
+  <div id="loader">
+    <md-spinner :md-size="150" md-indeterminate></md-spinner>
+  </div>
+  <div id="main" class="hide">
+    
+    <div class="app-viewport" id="vs-top">
+      <md-switch class="md-primary vs-main-color vs-position-change" v-model="bgm" value="1">BGM</md-switch>
+    </div>
+
+    <div id="app" class="index">
+
+      <div class="vs-box md-layout vs-who-box-bg">
+        
+        <div id="machine" @click="fnGacha">
+          <div id="machine_line"></div>
+          <div id="canvas" @click="fnGacha"></div>
+        </div>
+      </div>
+      <div id="gacha" class="vs-start-button vs-radius-20">
+        <p id='question' v-html="word.equation">1+1</p>
+      </div>
+      
+      <div id="ball"></div>
+      
+      <lottie-player id="lottie_1" class="lottie" src="./lottie/particle_ball_effect.json" background="transparent" speed="1"  style="width: 800px; height: 800px;"></lottie-player>
+      <lottie-player id="lottie_2" class="lottie" src="./lottie/particle_ball_effect_2.json" background="transparent" speed="1"  style="width: 800px; height: 800px;"></lottie-player>
+    </div>
+    <md-bottom-bar id="vs-bottom-menu">
+      <md-button class="vs-list-button vs-radius-40" @click="toHome"></md-button>
+    </md-bottom-bar>
+    <audio id='vs-bgm' loop src=''></audio>
+    <audio id='vs-effect' src=''></audio>
+  </div>
+
+  <link rel="stylesheet" href="./css/application.css">
+  <link rel="stylesheet" href="./css/lottery.css">
+
+  <script src="./js/application.js"></script>
+  <script src="./js/lottery.js"></script>
+</body>
+
+</html>

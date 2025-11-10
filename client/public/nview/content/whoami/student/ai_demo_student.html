@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Math Alive - 학생 화면 (데모)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            min-height: 400px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .status {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 18px;
+            color: #666;
+        }
+
+        .status.waiting {
+            background: #fff3cd;
+            color: #856404;
+            border: 2px dashed #ffc107;
+        }
+
+        .question-container {
+            display: none;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        .question-container.show {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        .question-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+
+        .question-text {
+            font-size: 48px;
+            font-weight: bold;
+            color: white;
+            text-align: center;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .answer-input {
+            width: 100%;
+            padding: 20px;
+            font-size: 24px;
+            border: 3px solid #667eea;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+
+        .answer-input:focus {
+            outline: none;
+            border-color: #764ba2;
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 20px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(245, 87, 108, 0.3);
+        }
+
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            display: none;
+        }
+
+        .result.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .result.correct {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        }
+
+        .result.wrong {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #f5c6cb;
+        }
+
+        .info {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 5px;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: #28a745;
+            color: white;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .connection-status.disconnected {
+            background: #dc3545;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .waiting-indicator {
+            display: inline-block;
+            animation: blink 1.5s infinite;
+        }
+
+        .celebration {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 100px;
+            animation: celebrate 1s ease-out;
+            z-index: 1000;
+        }
+
+        @keyframes celebrate {
+            0% {
+                transform: translate(-50%, -50%) scale(0);
+                opacity: 0;
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.2);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status" id="connectionStatus">
+        🔗 교사 연결 대기 중
+    </div>
+
+    <div class="container">
+        <h1>🎓 학생 화면</h1>
+        <p class="subtitle">교사가 보내는 문제를 기다리고 있습니다</p>
+
+        <div id="waitingStatus" class="status waiting">
+            <span class="waiting-indicator">📚 선생님의 문제를 기다리는 중...</span>
+        </div>
+
+        <div id="questionContainer" class="question-container">
+            <div class="question-box">
+                <div class="question-text" id="questionText"></div>
+            </div>
+
+            <input type="text"
+                   class="answer-input"
+                   id="answerInput"
+                   placeholder="정답을 입력하세요"
+                   autocomplete="off">
+
+            <button class="submit-btn" id="submitBtn">정답 제출</button>
+
+            <div id="result" class="result"></div>
+        </div>
+
+        <div class="info">
+            <strong>💡 사용 방법:</strong><br>
+            1. 교사 페이지에서 "학생 창 열기" 버튼을 클릭했을 때 이 페이지가 열립니다<br>
+            2. 교사가 문제를 전송하면 이 화면에 문제가 나타납니다<br>
+            3. 정답을 입력하고 제출 버튼을 클릭하세요<br>
+            4. 정답 여부를 즉시 확인할 수 있습니다
+        </div>
+    </div>
+
+    <div class="celebration" id="celebration">🎉</div>
+
+    <script>
+        let currentQuestion = null;
+
+        const waitingStatus = document.getElementById('waitingStatus');
+        const questionContainer = document.getElementById('questionContainer');
+        const questionText = document.getElementById('questionText');
+        const answerInput = document.getElementById('answerInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const result = document.getElementById('result');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const celebration = document.getElementById('celebration');
+
+        // 교사 창과의 연결 감지
+        if (window.opener) {
+            connectionStatus.textContent = '✅ 교사 연결됨';
+            connectionStatus.classList.remove('disconnected');
+
+            // 교사에게 준비 완료 신호 전송
+            window.opener.postMessage({
+                type: 'student_ready',
+                message: '학생 준비 완료'
+            }, '*');
+        } else {
+            connectionStatus.textContent = '⚠️ 교사 연결 안됨';
+            connectionStatus.classList.add('disconnected');
+        }
+
+        // 교사로부터 메시지 수신
+        window.addEventListener('message', function(event) {
+            console.log('Received message:', event.data);
+
+            if (event.data.type === 'new_question') {
+                receiveQuestion(event.data.data);
+            }
+        });
+
+        // 문제 수신 처리
+        function receiveQuestion(questionData) {
+            currentQuestion = questionData;
+
+            // 대기 상태 숨기기
+            waitingStatus.style.display = 'none';
+
+            // 문제 표시
+            questionText.textContent = questionData.question;
+            questionContainer.classList.add('show');
+
+            // 입력 필드 초기화
+            answerInput.value = '';
+            answerInput.focus();
+            result.classList.remove('show');
+            result.textContent = '';
+
+            // 연결 상태 업데이트
+            connectionStatus.textContent = '✅ 새 문제 수신!';
+            setTimeout(() => {
+                connectionStatus.textContent = '✅ 교사 연결됨';
+            }, 2000);
+
+            console.log('Question received:', questionData);
+        }
+
+        // 정답 제출
+        submitBtn.addEventListener('click', checkAnswer);
+        answerInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                checkAnswer();
+            }
+        });
+
+        function checkAnswer() {
+            if (!currentQuestion) {
+                alert('문제가 없습니다!');
+                return;
+            }
+
+            const userAnswer = answerInput.value.trim();
+            if (!userAnswer) {
+                alert('정답을 입력해주세요!');
+                return;
+            }
+
+            const correctAnswer = currentQuestion.answer.toString().trim();
+            const isCorrect = userAnswer === correctAnswer;
+
+            result.classList.remove('correct', 'wrong');
+            result.classList.add(isCorrect ? 'correct' : 'wrong');
+
+            if (isCorrect) {
+                result.textContent = '🎉 정답입니다!';
+                showCelebration();
+
+                // 교사에게 정답 알림
+                if (window.opener) {
+                    window.opener.postMessage({
+                        type: 'answer_submitted',
+                        correct: true,
+                        answer: userAnswer
+                    }, '*');
+                }
+            } else {
+                result.textContent = `❌ 틀렸습니다. 정답: ${correctAnswer}`;
+
+                // 교사에게 오답 알림
+                if (window.opener) {
+                    window.opener.postMessage({
+                        type: 'answer_submitted',
+                        correct: false,
+                        answer: userAnswer,
+                        correctAnswer: correctAnswer
+                    }, '*');
+                }
+            }
+
+            result.classList.add('show');
+            submitBtn.disabled = true;
+
+            // 3초 후 다음 문제 대기 상태로
+            setTimeout(() => {
+                submitBtn.disabled = false;
+                waitingStatus.style.display = 'block';
+                waitingStatus.innerHTML = '<span class="waiting-indicator">📚 다음 문제를 기다리는 중...</span>';
+            }, 3000);
+        }
+
+        function showCelebration() {
+            celebration.style.display = 'block';
+            setTimeout(() => {
+                celebration.style.display = 'none';
+            }, 1000);
+        }
+
+        // 페이지 언로드 시 교사에게 알림
+        window.addEventListener('beforeunload', function() {
+            if (window.opener) {
+                window.opener.postMessage({
+                    type: 'student_closed'
+                }, '*');
+            }
+        });
+
+        console.log('Student demo page loaded');
+    </script>
+</body>
+</html>

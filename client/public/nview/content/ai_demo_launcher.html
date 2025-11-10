@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Math Alive - AI Demo Launcher</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 900px;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 42px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 16px;
+        }
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        .game-card {
+            border-radius: 15px;
+            padding: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            text-align: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        .game-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+        }
+        .game-card.bingo {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .game-card.voca {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .game-card.whoami {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        .game-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            display: block;
+        }
+        .game-title {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .game-description {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+        .game-features {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.3);
+            text-align: left;
+            list-style: none;
+        }
+        .game-features li {
+            margin-bottom: 5px;
+            padding-left: 15px;
+            position: relative;
+        }
+        .game-features li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+        }
+        .shortcut {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #eee;
+        }
+        .footer-info {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Math Alive AI 데모</h1>
+        <p class="subtitle">3가지 학습 게임을 체험해보세요 (키보드 1, 2, 3 또는 클릭)</p>
+        <div class="games-grid">
+            <div class="game-card bingo" onclick="window.location.href='bingo/teacher/ai_demo.html'">
+                <span class="shortcut">1</span>
+                <span class="game-icon">🎯</span>
+                <div class="game-title">수학 빙고</div>
+                <div class="game-description">AI가 자동으로 사칙연산 문제를 생성합니다</div>
+                <ul class="game-features">
+                    <li>덧셈, 뺄셈, 곱셈, 나눗셈</li>
+                    <li>쉬움/보통/어려움 난이도</li>
+                    <li>실시간 문제 전송</li>
+                </ul>
+            </div>
+            <div class="game-card voca" onclick="window.location.href='voca/teacher/ai_demo.html'">
+                <span class="shortcut">2</span>
+                <span class="game-icon">📚</span>
+                <div class="game-title">어휘 학습</div>
+                <div class="game-description">국어와 영어 단어를 AI로 학습합니다</div>
+                <ul class="game-features">
+                    <li>국어/영어 단어</li>
+                    <li>유의어/반의어</li>
+                    <li>학년별 맞춤 문제</li>
+                </ul>
+            </div>
+            <div class="game-card whoami" onclick="window.location.href='whoami/teacher/ai_demo.html'">
+                <span class="shortcut">3</span>
+                <span class="game-icon">🔍</span>
+                <div class="game-title">나는 누구</div>
+                <div class="game-description">AI가 만든 힌트로 정답을 추리합니다</div>
+                <ul class="game-features">
+                    <li>인물/동물/사물 추리</li>
+                    <li>단계별 힌트 제공</li>
+                    <li>논리적 사고력 향상</li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer">
+            <div><strong>💡 하나의 AI로 모든 게임 지원</strong></div>
+            <div class="footer-info">
+                백엔드: <code>http://localhost:5000/api/nview</code> | 프론트엔드: <code>http://localhost:8080</code>
+            </div>
+            <div class="footer-info">버전 3.0 | 3게임 통합 | 2025-11-08</div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('keydown', (e) => {
+            if (e.key === '1') window.location.href = 'bingo/teacher/ai_demo.html';
+            else if (e.key === '2') window.location.href = 'voca/teacher/ai_demo.html';
+            else if (e.key === '3') window.location.href = 'whoami/teacher/ai_demo.html';
+        });
+    </script>
+</body>
+</html>

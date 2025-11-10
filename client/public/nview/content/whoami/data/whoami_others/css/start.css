@@ -1,0 +1,149 @@
+#app {
+  display: grid;
+}
+
+#vs-top-menu {
+  height: 100px;
+  background-color: transparent;
+  float: right;
+}
+
+#vs-top-menu .md-button {
+  width: 65px;
+  min-width: 65px;
+  height: 65px;
+  min-height: 65px;
+  background: url(../assets/img/btnClose.png) no-repeat 0 0;
+  padding: 0;
+  text-indent: -9999em;
+}
+
+body.md-theme-default.vs-main-bg {
+  background-color: transparent;
+}
+
+.vs-main-bg {
+  background-color: #184372;
+}
+
+.vs-who-box-bg {
+  background-color: #769FC0;
+}
+
+.vs-box {
+  width: 740px;
+  height: 400px;
+  margin: 100px 270px 10px 270px;
+  background-color: rgba(118, 159, 192, 1);
+  border-radius: 40px;
+}
+
+.vs-index-title {
+  float: left;
+  position: fixed;
+  margin-top: 50px;
+  text-align: center;
+  width: 740px;
+  font-size: 60px;
+  font-weight: 700;
+  color: #FEEC34;
+}
+
+.vs-white-button {
+  color: #fff;
+  font-size: 30px;
+  font-weight: 700;
+  width: 250px;
+  height: 73px;
+  line-height: 73px;
+  background: transparent url(../assets/img/btn_choice_default.png) no-repeat 0 0;
+}
+.vs-white-button.vs-button-small {
+  color: #fff;
+  font-size: 30px;
+  font-weight: 700;
+  width: 200px;
+  height: 73px;
+  line-height: 73px;
+  background: transparent url(../assets/img/btn_choice_small.png) no-repeat 0 0;
+}
+
+.vs-white-button:hover, .vs-white-button.selected {
+  background: transparent url(../assets/img/btn_choice_select.png) no-repeat 0 0;
+}
+
+.vs-white-button.vs-button-small:hover, .vs-white-button.vs-button-small.selected {
+  background: transparent url(../assets/img/btn_choice_small_select.png) no-repeat 0 0;
+}
+
+.vs-start-button {
+  color: #fff;
+  font-size: 30px;
+  font-weight: 700;
+  width: 256px;
+  height: 78px;
+  line-height: 78px;
+  margin-top: -60px;
+  left: calc(50% - 256px/2);
+  background: transparent url(../assets/img/btn_start_default.png) no-repeat 0 0;
+}
+
+.vs-start-button:hover {
+  background: transparent url(../assets/img/btn_start_select.png) no-repeat 0 0;
+}
+
+.row {
+  display: grid;
+  grid-gap: 2rem;
+  grid-template-columns: repeat(6, auto);
+  justify-content: center;
+}
+
+.half-card {
+  width: 50%;
+  margin-top: 200px;
+  text-align: center;
+}
+
+.three-card {
+  width: 33.3%;
+  margin-top: 200px;
+  text-align: center;
+}
+
+.md-theme-default.md-card {
+  background-color: #fff;
+  border: #1AABA4 1px solid;
+  border-radius: 15px;
+}
+
+.md-boards-navigation { display: none; }
+
+
+
+.md-dialog-container {
+  font-size: 28px;
+}
+
+.md-dialog-container .md-dialog {
+  border-radius: 20px;
+}
+
+.md-dialog-actions {
+  justify-content: center;
+}
+
+.md-dialog-actions .md-button {
+  /* text-transform: uppercase !important; */
+  border: 1px solid #ccc;
+  background-color: #ececec;
+  color: #333 !important;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  box-shadow: 1px 1px #666;
+  padding: 0 20px;
+}
+
+.md-dialog-actions .md-button:hover {
+  background-color: #999;
+}

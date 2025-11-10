@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, Users, Settings, Trash2 } from "lucide-react";
+import { X, Users, Settings, Trash2, GraduationCap } from "lucide-react";
 import CustomAlertModal from './CustomAlertModal';
 import RoomInfoTab from './room/RoomInfoTab';
 import RoomMembersList from './room/RoomMembersList';
@@ -121,7 +121,50 @@ const RoomManagementModal = ({
     <RoomMembersList room={room} removeMember={removeMember} />
   );
 
+  const renderAILearningTab = () => (
+    <div className="space-y-4">
+      <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-6 rounded-xl border border-purple-200">
+        <div className="flex items-center gap-3 mb-4">
+          <GraduationCap size={28} className="text-purple-600" />
+          <h3 className="text-xl font-bold text-gray-800">AI 학습 시스템</h3>
+        </div>
+        <p className="text-gray-600 mb-6">
+          AI 기반 맞춤형 학습 문제를 생성하고 학습 통계를 확인할 수 있습니다.
+        </p>
 
+        <div className="grid grid-cols-2 gap-4">
+          <button
+            onClick={() => window.open('/nview/content/bingo/teacher/ai_demo_nview.html', '_blank', 'width=1400,height=900')}
+            className="px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 font-semibold shadow-lg transition-all transform hover:scale-105 flex flex-col items-center gap-2"
+          >
+            <GraduationCap size={24} />
+            <span>교사 페이지 열기</span>
+            <span className="text-xs opacity-90">문제 생성 및 관리</span>
+          </button>
+
+          <button
+            onClick={() => window.open('/nview/content/bingo/teacher/dashboard.html', '_blank', 'width=1400,height=900')}
+            className="px-6 py-4 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 font-semibold shadow-lg transition-all transform hover:scale-105 flex flex-col items-center gap-2"
+          >
+            <Settings size={24} />
+            <span>대시보드 열기</span>
+            <span className="text-xs opacity-90">학습 통계 확인</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <h4 className="font-semibold text-yellow-800 mb-2 flex items-center gap-2">
+          💡 사용 방법
+        </h4>
+        <ol className="text-sm text-yellow-700 space-y-1 ml-4 list-decimal">
+          <li>교사 페이지에서 학생별 AI 문제를 생성하고 전송합니다</li>
+          <li>학생들이 문제를 풀면 자동으로 채점됩니다</li>
+          <li>대시보드에서 학생별 학습 통계를 확인할 수 있습니다</li>
+        </ol>
+      </div>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -160,10 +203,20 @@ const RoomManagementModal = ({
           >
             <Users size={16} /> 멤버 관리 ({room.members?.length || 0})
           </button>
+          <button
+            onClick={() => setActiveTab("ai-learning")}
+            className={`flex-1 px-4 py-3 font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
+              activeTab === "ai-learning"
+                ? "border-b-2 border-purple-500 text-purple-600 bg-purple-50 shadow-inner"
+                : "text-gray-500 hover:text-purple-600 hover:bg-slate-50"
+            }`}
+          >
+            <GraduationCap size={16} /> AI 학습
+          </button>
         </div>
 
         <div className="p-6 overflow-y-auto bg-white">
-          {activeTab === "info" ? renderInfoTab() : renderMembersTab()}
+          {activeTab === "info" ? renderInfoTab() : activeTab === "members" ? renderMembersTab() : renderAILearningTab()}
         </div>
 
         <div className="border-t p-4 flex justify-between items-center bg-slate-50">

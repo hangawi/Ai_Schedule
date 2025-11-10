@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko" translate="no">
+
+<head>
+  <meta charset="utf-8">
+  <meta content="on" http-equiv="cleartype">
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <meta content="yes" name="mobile-web-app-capable">
+  <meta content="yes" name="apple-mobile-web-app-status-bar-style">
+  <meta content="black" name="apple-mobile-web-app-status-bar-style">
+
+  <title>Who Am I</title>
+
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+  <link rel="stylesheet" href="./css/notosanskr.css">
+  <link rel="stylesheet" href="./css/material_icon.css">
+
+  <link rel="stylesheet" type="text/css" href="./vue-material/vue-material.css">
+  <link rel="stylesheet" type="text/css" href="./vuetify/vuetify.min.css">
+
+  <script src='./js/store.legacy.min.js'></script>
+  <script src="./js/xml2json.min.js"></script>
+
+  <script src="./js/jquery.js"></script>
+  <script src="./js/jquery.scrollTo.min.js"></script>
+
+  <script src="./js/vue.min.js"></script>
+  <script src="./js/vuex.min.js"></script>
+  <script src="./vue-material/vue-material.js"></script>
+  <script src="./vuetify/vuetify.min.js"></script>
+  <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+
+  <script src="/content/mathalive_lib/mathinterface.js"></script>
+</head>
+
+<body class='app vs-main-bg'>
+  <div id="loader">
+    <md-spinner :md-size="150" md-indeterminate></md-spinner>
+  </div>
+  <div id="main" class="hide">
+    
+    <div class="app-viewport" id="vs-top">
+      <md-switch class="md-primary vs-main-color vs-position-change" labelPosition="left" v-model="bgm" value="1">BGM
+      </md-switch>
+    </div>
+
+    <div id="app" class="index">
+
+      <div class="vs-box md-layout">
+        <div id="profileClick" class="md-layout-item vs-tac w-half cursor-pointer animate__animated"  @click="profileClick">
+          <md-button id="userProfile" class="vs-white-button question-medal m-0 p-0" note="1">
+            <div class="imgArea"><img id="qImg" src="" /></div>
+            <p id="qName"></p>
+          </md-button>
+          <img class="question-box" src="./assets/img/questioner_box.png" />
+        </div>
+        
+        <div class="md-layout-item vs-tac w-half">
+          <div id="buzzerUser">
+            <div class="imgArea"><img id="bImg" src="./assets/img/questioner_medal_image.png" /></div>
+            <p id="bName"></p>
+          </div>
+          <md-button id="buzzerClick" class="vs-white-button m-0 p-0 animate__animated mt-m-200" note="6" @click="buzzerClick"><img src="./assets/img/btn_buzzer_off.png" /></md-button>
+        </div>
+      </div>
+      
+      <md-button class="vs-list-button vs-radius-40" @click="toHome"></md-button>
+      <img id="effect_ani" />
+    </div>
+    <audio id='vs-effect' src=''></audio>
+  </div>
+
+  <link rel="stylesheet" href="./css/application.css">
+  <link rel="stylesheet" href="./css/t_board.css">
+
+  <script src="./js/application.js"></script>
+  <script src="./js/t_board.js"></script>
+</body>
+
+</html>

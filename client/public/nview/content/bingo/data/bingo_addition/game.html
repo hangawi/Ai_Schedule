@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko" translate="no">
+
+<head>
+  <meta charset="utf-8">
+  <meta content="on" http-equiv="cleartype">
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <meta content="yes" name="mobile-web-app-capable">
+  <meta content="yes" name="apple-mobile-web-app-status-bar-style">
+  <meta content="black" name="apple-mobile-web-app-status-bar-style">
+
+  <title>Bingo!</title>
+
+  <!-- <link rel="stylesheet" href="./css/google_material_icons.css"> -->
+  <!-- <link rel="stylesheet" href="./css/notosanskr.css"> -->
+  <!-- <link rel="stylesheet" href="./css/material_icon.css"> -->
+
+  <link rel="stylesheet" type="text/css" href="./vue-material/vue-material.css">
+  <link rel="stylesheet" type="text/css" href="./vuetify/vuetify.min.css">
+
+  <script defer src='./js/store.legacy.min.js'></script>
+  <script defer src="./js/xml2json.min.js"></script>
+
+  <script defer src="./js/jquery.js"></script>
+  <!-- <script defer src="./js/jquery.scrollTo.min.js"></script> -->
+
+  <script defer src="./js/vue.min.js"></script>
+  <script defer src="./js/vuex.min.js"></script>
+  <script defer src="./vue-material/vue-material.js"></script>
+  <script defer src="./vuetify/vuetify.min.js"></script>
+  <script defer src="./js/lottie-player.js"></script>
+
+  <script defer src="/content/mathalive_lib/mathinterface.js"></script>
+</head>
+
+<body class="app vs-main-bg">
+  <div id="loader">
+    <md-spinner :md-size="150" md-indeterminate></md-spinner>
+  </div>
+
+  <div id="main" class="hide">
+    <div class="app-viewport" id="vs-top"></div>
+
+    <div id="app">
+      <article class="main_container">
+        <div id="bingo" user="user_1" ref="user_1">
+          <div id="main-bingo" class="bingo_container">
+            <div class="bingo" :seq="idx" v-bind:id="'bingo_'+number" v-for="(number, idx) in bingoBoard"
+              :ref="'bingo_'+number" v-bind:key="idx" v-on:click="fnClick(idx, number)">
+              {{number}}
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <div id='lottie'><img src='' /> </div>
+    </div>
+    <audio id='vs-bgm' loop src=''></audio>
+    <audio id='vs-effect' src=''></audio>
+  </div>
+
+  <link rel="stylesheet" href="./css/application.css">
+  <link rel="stylesheet" href="./css/game.css">
+
+  <script defer src="./js/application.js"></script>
+  <script defer src="./js/game.js"></script>
+</body>
+
+</html>

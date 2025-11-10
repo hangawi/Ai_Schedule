@@ -1,0 +1,3048 @@
+@charset "UTF-8";
+@font-face {
+    font-family: NotoSans-Black;
+    src: url(/content/mathalive_lib/font/NotoSansCJKkr-Black-en.woff) format("woff");
+}
+
+@font-face {
+    font-family: NotoSans;
+    src: url(/content/mathalive_lib/font/NotoSansCJK-Medium-en.woff) format("woff");
+}
+
+@font-face {
+    font-family: Maplestory-Bold;
+    font-weight: bold;
+    src: url(/content/mathalive_lib/font/Maplestory-Bold.woff) format("woff");
+}
+
+@font-face {
+    font-family: Maplestory-Light;
+    font-weight: bold;
+    src: url(/content/mathalive_lib/font/Maplestory-Light.woff) format("woff");
+}
+
+/* 
+  21-06-24 최순철 수학셀 김민정CP님이 요청
+  Xelf 저작 결과물에 폰트 네임이 KR 이 붙어서 나오게 되어 있어서 추가
+*/
+@font-face {
+    font-family: NotoSansKR-Light;
+    src: url(/content/mathalive_lib/font/NotoSansKR-Light.woff) format("woff");
+}
+
+@font-face {
+    font-family: NotoSansKR-Regular;
+    src: url(/content/mathalive_lib/font/NotoSansKR-Regular.woff) format("woff");
+}
+
+@font-face {
+    font-family: NotoSansKR-Medium;
+    src: url(/content/mathalive_lib/font/NotoSansKR-Medium.woff) format("woff");
+}
+
+@font-face {
+    font-family: NotoSansKR-Bold;
+    src: url(/content/mathalive_lib/font/NotoSansKR-Bold.woff) format("woff");
+}
+
+/* 
+  21-07-02 최순철 기오정CP님과 변경
+*/
+@font-face {
+    font-family: NotoSansB_bold;
+    font-weight: bold;
+    src: url(/content/mathalive_lib/font/NotoSans-Bold.woff) format("woff");
+}
+
+@font-face {
+    font-family: NotoSans_bold;
+    font-weight: bold;
+    src: url(/content/mathalive_lib/font/NotoSansKR-Bold.woff) format("woff");
+}
+
+@font-face {
+    font-family: NotoSansB_light;
+    font-weight: lighter;
+    src: url(/content/mathalive_lib/font/NotoSans-Light.woff) format("woff");
+}
+
+@font-face {
+    font-family: NotoSans_light;
+    font-weight: lighter;
+    src: url(/content/mathalive_lib/font/NotoSansKR-Light.woff) format("woff");
+}
+
+@font-face {
+    font-family: NotoSansB-Regular;
+    src: url(/content/mathalive_lib/font/NotoSans-Regular.woff) format("woff");
+}
+
+@font-face {
+    font-family: NotoSans-Regular;
+    src: url(/content/mathalive_lib/font/NotoSansKR-Regular.woff) format("woff");
+}
+
+@charset "UTF-8";
+#common_navi_left {
+    left: 0;
+    position: absolute;
+    display: table;
+    width: auto;
+    top: 0px;
+    height: 100%;
+    pointer-events: none;
+    transition: left 0.5s, right 0.5s;
+    /* transition-property: left right; */
+    z-index: 20;
+}
+
+#common_navi_left > div {
+    width: auto;
+    height: 100%;
+    display: table-cell;
+    vertical-align: middle;
+    pointer-events: none;
+}
+
+#common_navi_left > div > div {
+    position: relative;
+    width: auto;
+    height: auto;
+    vertical-align: middle;
+    pointer-events: auto;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+#common_navi_left.off {
+    left: -66px;
+}
+
+#common_navi_left.off button.left {
+    pointer-events: none;
+}
+
+#common_navi_left.off button.right {
+    pointer-events: none;
+}
+
+#common_navi_left button.left {
+    display: block;
+    margin-top: -20px;
+    margin-bottom: 0;
+    touch-action: none;
+    padding: 0px;
+    border: none;
+    background-color: transparent;
+    outline: none;
+    background-image: url("/content/mathalive_lib/images/page_left_L.png");
+    background-repeat: no-repeat;
+    width: 80px;
+    height: 94px;
+    pointer-events: unset;
+    cursor: pointer;
+}
+
+#common_navi_left button.left:disabled {
+    background-image: url("/content/mathalive_lib/images/page_left_L_dis.png");
+    pointer-events: none;
+    cursor: auto;
+}
+
+#common_navi_left button.left.down {
+    background-image: url("/content/mathalive_lib/images/page_left_L.png");
+}
+
+#common_navi_left button.left:before {
+    position: absolute;
+    pointer-events: none;
+    width: 0px;
+    height: 0px;
+    visibility: hidden;
+    overflow: hidden;
+    z-index: -1;
+    content: url("/content/mathalive_lib/images/page_left_L.png") url("/content/mathalive_lib/images/page_left_L.png") url("/content/mathalive_lib/images/page_left_L_dis.png");
+}
+
+#common_navi_left button.right {
+    display: block;
+    margin-top: 0;
+    margin-bottom: 0;
+    pointer-events: auto;
+    touch-action: none;
+    padding: 0px;
+    border: none;
+    background-color: transparent;
+    outline: none;
+    background-image: url("/content/mathalive_lib/images/page_right_L.png");
+    background-repeat: no-repeat;
+    width: 80px;
+    height: 94px;
+    pointer-events: unset;
+    cursor: pointer;
+}
+
+#common_navi_left button.right:disabled {
+    background-image: url("/content/mathalive_lib/images/page_right_L_dis.png");
+    pointer-events: none;
+    cursor: auto;
+}
+
+#common_navi_left button.right.down {
+    background-image: url("/content/mathalive_lib/images/page_right_L.png");
+}
+
+#common_navi_left button.right:before {
+    position: absolute;
+    pointer-events: none;
+    width: 0px;
+    height: 0px;
+    visibility: hidden;
+    overflow: hidden;
+    z-index: -1;
+    content: url("/content/mathalive_lib/images/page_right_L.png") url("/content/mathalive_lib/images/page_right_L.png") url("/content/mathalive_lib/images/page_right_L_dis.png");
+}
+
+#common_navi_right {
+    right: 0;
+    position: absolute;
+    display: table;
+    width: auto;
+    top: 0px;
+    height: 100%;
+    pointer-events: none;
+    transition: left 0.5s, right 0.5s;
+    /* transition-property: left right; */
+    z-index: 20;
+}
+
+#common_navi_right > div {
+    width: auto;
+    height: 100%;
+    display: table-cell;
+    vertical-align: middle;
+    pointer-events: none;
+}
+
+#common_navi_right > div > div {
+    position: relative;
+    width: auto;
+    height: auto;
+    vertical-align: middle;
+    pointer-events: auto;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+#common_navi_right.off {
+    right: -66px;
+}
+
+#common_navi_right.off button.left {
+    pointer-events: none;
+}
+
+#common_navi_right.off button.right {
+    pointer-events: none;
+}
+
+#common_navi_right button.left {
+    display: block;
+    margin-top: -20px;
+    margin-bottom: 0;
+    touch-action: none;
+    padding: 0px;
+    border: none;
+    background-color: transparent;
+    outline: none;
+    background-image: url("/content/mathalive_lib/images/page_left_R.png");
+    background-repeat: no-repeat;
+    width: 74px;
+    height: 94px;
+    pointer-events: unset;
+    cursor: pointer;
+}
+
+#common_navi_right button.left:disabled {
+    background-image: url("/content/mathalive_lib/images/page_left_R_dis.png");
+    pointer-events: none;
+    cursor: auto;
+}
+
+#common_navi_right button.left.down {
+    background-image: url("/content/mathalive_lib/images/page_left_R.png");
+}
+
+#common_navi_right button.left:before {
+    position: absolute;
+    pointer-events: none;
+    width: 0px;
+    height: 0px;
+    visibility: hidden;
+    overflow: hidden;
+    z-index: -1;
+    content: url("/content/mathalive_lib/images/page_left_R.png") url("/content/mathalive_lib/images/page_left_R.png") url("/content/mathalive_lib/images/page_left_R_dis.png");
+}
+
+#common_navi_right button.right {
+    display: block;
+    margin-top: 0;
+    margin-bottom: 0;
+    pointer-events: auto;
+    touch-action: none;
+    padding: 0px;
+    border: none;
+    background-color: transparent;
+    outline: none;
+    background-image: url("/content/mathalive_lib/images/page_right_R.png");
+    background-repeat: no-repeat;
+    width: 74px;
+    height: 94px;
+    pointer-events: unset;
+    cursor: pointer;
+}
+
+#common_navi_right button.right:disabled {
+    background-image: url("/content/mathalive_lib/images/page_right_R_dis.png");
+    pointer-events: none;
+    cursor: auto;
+}
+
+#common_navi_right button.right.down {
+    background-image: url("/content/mathalive_lib/images/page_right_R.png");
+}
+
+#common_navi_right button.right:before {
+    position: absolute;
+    pointer-events: none;
+    width: 0px;
+    height: 0px;
+    visibility: hidden;
+    overflow: hidden;
+    z-index: -1;
+    content: url("/content/mathalive_lib/images/page_right_R.png") url("/content/mathalive_lib/images/page_right_R.png") url("/content/mathalive_lib/images/page_right_R_dis.png");
+}
+
+@keyframes arrowMove {
+    from {
+        opacity: 0.2;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+#common_navi_left,
+#common_navi_right {
+    z-index: 102;
+}
+
+.fix-activity .btn_heart {
+    z-index: 0 !important;
+}
+
+body {
+    background-color: transparent;
+}
+
+#wrap > .content-container {
+    width: 1280px;
+    height: 800px;
+    overflow: hidden;
+    position: absolute;
+}
+
+#wrap > .content-container .content-wrapper {
+    position: relative;
+    white-space: nowrap;
+    width: auto;
+    height: 800px;
+    transition: left 0.3s;
+    transition-timing-function: ease-in;
+}
+
+#wrap > .content-container .content-wrapper > div {
+    position: relative;
+    display: inline-block;
+    white-space: unset;
+    width: 1280px;
+    height: 800px;
+    overflow: hidden;
+}
+
+#wrap > .content-container .content-wrapper .sub-container .sub-wrapper {
+    position: relative;
+    white-space: nowrap;
+    width: auto;
+    height: 800px;
+    transition: left 0.3s;
+    transition-timing-function: ease-in;
+}
+
+#wrap > .content-container .content-wrapper .sub-container .sub-wrapper > div {
+    position: relative;
+    display: inline-block;
+    white-space: unset;
+    width: 1280px;
+    height: 800px;
+    overflow: hidden;
+}
+
+#wrap > .content-container.hide {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#wrap .video-direction {
+    position: absolute;
+    left: 0px;
+    width: 100%;
+    top: 0px;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+#wrap .video-direction > div.direction {
+    position: absolute;
+    transform: translateY(100px);
+    transition: transform 0.5s ease-out, opacity 0.5s;
+    opacity: 0;
+}
+
+#wrap .video-direction.on > div.direction {
+    transform: translateY(0px);
+    opacity: 1;
+}
+
+#wrap .video-direction .direction_top_menu {
+    position: fixed;
+    top: 18px;
+    left: 20px;
+    width: 40px;
+    height: 31px;
+    border: 0;
+    background: url("/content/mathalive_lib/images/ico_video_top_menu.png");
+    z-index: 100;
+}
+
+#wrap .video-direction .direction_left_menu {
+    display: none;
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 30;
+}
+
+#wrap .video-direction .direction_left_menu.show {
+    display: block;
+}
+
+#wrap .video-direction .direction_left_menu .innerbox {
+    width: 354px;
+    height: 100%;
+    background-color: #394ec0;
+}
+
+#wrap .video-direction .direction_left_menu .innerbox .close {
+    padding: 43px 25px 0 0;
+    text-align: right;
+}
+
+#wrap .video-direction .direction_left_menu .innerbox .close .btn_close {
+    width: 30px;
+    height: 31px;
+    border: 0;
+    background: url("/content/mathalive_lib/images/ico_video_menu_close.png");
+}
+
+#wrap .video-direction .direction_left_menu .innerbox ul {
+    padding: 40px 0 0 30px;
+}
+
+#wrap .video-direction .direction_left_menu .innerbox ul li {
+    margin-bottom: 38px;
+    padding-left: 80px;
+    height: 42px;
+    line-height: 42px;
+    font-family: "Maplestory-Bold";
+    color: #fff;
+    font-size: 28px;
+    background-repeat: no-repeat;
+    cursor: pointer;
+}
+
+#wrap .video-direction .direction_left_menu .innerbox ul li:nth-of-type(1) {
+    background-image: url("/content/mathalive_lib/images/ico_video_menu_lesson.png");
+}
+
+#wrap .video-direction .direction_left_menu .innerbox ul li:nth-of-type(2) {
+    background-image: url("/content/mathalive_lib/images/ico_video_menu_endclass.png");
+}
+
+#wrap .video-direction .direction_left_menu .innerbox ul li:nth-of-type(3) {
+    background-image: url("/content/mathalive_lib/images/ico_video_menu_logout.png");
+}
+
+#wrap .video-direction .concept_name {
+    position: absolute;
+    left: 80px;
+    top: 19px;
+    font-size: 28px;
+    color: #fff;
+    font-family: "Maplestory-Bold";
+    z-index: 10;
+}
+
+#wrap .video-direction .video video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1280px;
+    height: 800px;
+}
+
+#wrap .video-direction .progress_dot {
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: 67px;
+    padding: 25px 10px 0  0;
+    text-align: center;
+    z-index: 10;
+}
+
+#wrap .video-direction .progress_dot span {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    margin: 0 5px;
+    border-radius: 100%;
+    background-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+}
+
+#wrap .video-direction .progress_dot span.on {
+    background-color: #f5e942;
+}
+
+#wrap .video-direction .text {
+    font-family: "maplestory-bold";
+    white-space: normal;
+    /* 210520 2�� ���� �߰� */
+}
+
+#wrap .video-direction .text .t1 {
+    font-size: 35px;
+    color: #fff;
+    height: 39px;
+}
+
+#wrap .video-direction .text .t2 {
+    margin-top: 6px;
+    font-size: 81px;
+    color: #f5e942;
+    word-break: keep-all;
+    /* 210520 2�� ���� �߰� */
+}
+
+#wrap .video-direction.hide > div.direction {
+    visibility: hidden;
+}
+
+#wrap .video-direction.loaded > video {
+    opacity: 1;
+}
+
+#wrap .video-direction .course .title, #wrap .video-direction .course .concept {
+    position: absolute;
+    width: 200px;
+    height: 100px;
+    padding-top: 17px;
+    border: 2px solid #ccc;
+    background: #fff;
+    border-radius: 50%;
+    box-sizing: border-box;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    font-size: 1.6em;
+    font-weight: bold;
+    color: #999;
+}
+
+#wrap .video-direction .course .concept span.tit {
+    display: block;
+    width: 100%;
+    float: none;
+    color: royalblue;
+}
+
+#wrap .video-direction .course .title {
+    top: 110px;
+    left: 30%;
+    color: #000;
+    background-color: rgba(255, 255, 255, 0.5);
+}
+
+#wrap .video-direction .course .c1 {
+    left: 55%;
+    top: 110px;
+    border-color: royalblue;
+}
+
+#wrap .video-direction .course .c2 {
+    left: 75%;
+    top: 40%;
+    border-color: royalblue;
+}
+
+#wrap .video-direction .course .c3 {
+    left: 60%;
+    top: 70%;
+    border-color: coral;
+}
+
+#wrap .video-direction .course .black {
+    color: #000;
+}
+
+#wrap .video-direction .course .type2 {
+    padding: 20px 40px 30px;
+}
+
+#wrap .video-direction .course .type2 .small-title {
+    left: 40px;
+    top: -25px;
+    color: #ffff;
+}
+
+#wrap .video-direction .course.independent .type2 .small-title {
+    top: -10px;
+    color: #999;
+}
+
+#wrap .video-direction > div.text {
+    position: absolute;
+    left: 82px;
+    top: 180px;
+}
+
+#wrap .video-direction > div.text .t2 {
+    color: #ff6c00;
+}
+
+#wrap .video-direction > div.lesson {
+    position: absolute;
+    left: 30px;
+    top: 20px;
+    font-size: 40px;
+    color: #fff;
+}
+
+#wrap .t_activity {
+    background: #fff;
+}
+
+#wrap .t_activity .maheader {
+    position: absolute;
+    top: 0;
+    font-family: NotoSansB-Regular;
+    width: 100%;
+    height: 67px;
+    padding: 18px 45px 7px;
+    background: rgba(0, 0, 0, 0.3);
+    box-sizing: border-box;
+    z-index: 50;
+}
+
+#wrap .t_activity .maheader .btn_menu {
+    float: left;
+    width: 40px;
+    height: 31px;
+    border: 0;
+    background: url("/content/mathalive_lib/images/ico_menu.png");
+}
+
+#wrap .t_activity .maheader .user {
+    float: left;
+    margin: -10px 0 0 26px;
+}
+
+#wrap .t_activity .maheader .user img {
+    width: 46px;
+    height: 46px;
+    border-radius: 100%;
+    border: 2px solid #fff;
+    vertical-align: middle;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
+}
+
+#wrap .t_activity .maheader .user .name {
+    font-family: "maplestory-bold";
+    color: #fff;
+    font-size: 22px;
+    margin-left: 10px;
+    vertical-align: middle;
+}
+
+#wrap .t_activity .maheader .live_guage {
+    position: absolute;
+    right: 20px;
+    top: 0;
+    width: 260px;
+    height: 68px;
+}
+
+#wrap .t_activity .maheader .live_guage.twinkle:after {
+    content: "";
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: url("/content/mathalive_lib/images/bg_liveguage_twinkle.png") no-repeat;
+}
+
+#wrap .t_activity .maheader .live_guage .heart {
+    position: absolute;
+    left: 16px;
+    top: 7px;
+    width: 62px;
+    height: 56px;
+    background: url("/content/mathalive_lib/images/ico_greenheart.png");
+    z-index: 1;
+}
+
+#wrap .t_activity .maheader .live_guage .bar_wrap {
+    position: absolute;
+    left: 59px;
+    top: 22px;
+    width: 145px;
+    height: 26px;
+    padding: 2px 3px 2px 0;
+    border-radius: 0 15px 15px 0;
+    background: #fff;
+}
+
+#wrap .t_activity .maheader .live_guage .bar_wrap .bar {
+    height: 100%;
+    border-radius: 0 10px 10px 0;
+    background: linear-gradient(90deg, #adda40 0%, #47db1a 100%);
+}
+
+#wrap .t_activity .maheader .live_guage .bar_wrap .num {
+    position: absolute;
+    right: -50px;
+    top: 50%;
+    font-size: 20px;
+    color: #fff;
+    font-family: "maplestory-bold";
+    transform: translateY(-50%);
+}
+
+#wrap .t_activity .maheader .live_guage .bar_wrap .num.overmax {
+    color: #ffb400;
+    font-size: 24px;
+}
+
+#wrap .t_activity .maheader .live_guage .bar_wrap .num.overmax:before {
+    content: attr(data-value);
+    position: absolute;
+    -webkit-text-stroke: 0.2em #fff;
+    left: 0;
+    z-index: -1;
+}
+
+#wrap .t_activity .maheader .btn-out {
+    float: left;
+    display: block;
+    width: 28px;
+    height: 28px;
+    background: url("/content/mathalive_lib/images/ico_btnback.png") no-repeat center;
+    background-size: contain;
+    border: 0;
+    outline: none;
+    cursor: pointer;
+}
+
+#wrap .t_activity .maheader .pulldown {
+    position: relative;
+    float: left;
+    width: 250px;
+    height: 37px;
+    margin: -4px 0 0 24px;
+    background-color: #69b707;
+    line-height: 34px;
+    font-size: 19px;
+    color: #fff;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+#wrap .t_activity .maheader .pulldown .tit {
+    padding-left: 22px;
+}
+
+#wrap .t_activity .maheader .pulldown .btn_arrow {
+    position: absolute;
+    right: 10px;
+    top: 5px;
+    width: 30px;
+    height: 30px;
+    border: 0;
+    background: url("/content/mathalive_lib/images/arr_pulldown_hdr.png") no-repeat center;
+    outline: none;
+}
+
+#wrap .t_activity .maheader .pulldown_content {
+    display: none;
+    position: absolute;
+    top: 57px;
+    left: 98px;
+    width: 250px;
+    height: 400px;
+    padding: 20px;
+    z-index: 100;
+    background-color: #fff;
+    box-sizing: border-box;
+    border-radius: 10px;
+}
+
+#wrap .t_activity .maheader .pulldown_content.on {
+    display: block;
+}
+
+#wrap .t_activity .maheader .pulldown_content > div {
+    position: relative;
+    overflow-y: hidden;
+    width: 210px;
+    height: 360px;
+}
+
+#wrap .t_activity .maheader .pulldown_content > div .swiper-container {
+    width: 210px;
+    height: 360px;
+}
+
+#wrap .t_activity .maheader .pulldown_content > div .swiper-container .swiper-slide {
+    height: auto;
+}
+
+#wrap .t_activity .maheader .pulldown_content > div .swiper-container .swiper-scrollbar {
+    width: 7px;
+    background-color: transparent;
+    right: 1px;
+}
+
+#wrap .t_activity .maheader .pulldown_content > div .swiper-container .swiper-scrollbar .swiper-scrollbar-drag {
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+#wrap .t_activity .maheader .pulldown_content > div .swiper-container .tit {
+    position: relative;
+    margin-top: 10px;
+    line-height: 34px;
+    font-size: 17px;
+    font-weight: bold;
+}
+
+#wrap .t_activity .maheader .pulldown_content > div .swiper-container .tit:first-child {
+    margin-top: 0px;
+}
+
+#wrap .t_activity .maheader .pulldown_content > div .swiper-container .tit_sub {
+    position: relative;
+    font-size: 16px;
+    line-height: 32px;
+    color: #666;
+    padding-left: 25px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#wrap .t_activity .maheader .pulldown_content > div .swiper-container .tit_sub.on,
+#wrap .t_activity .maheader .pulldown_content > div .swiper-container .tit_sub:hover {
+    background-color: #ebf7d9;
+}
+
+#wrap .t_activity .maheader .class_name {
+    float: left;
+    height: 38px;
+    line-height: 35px;
+    padding: 0;
+    margin-left: 20px;
+    margin-top: -4px;
+    border-radius: 30px;
+    color: #fff;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+#wrap .t_activity .maheader .class_name > span {
+    padding-left: 24px;
+}
+
+#wrap .t_activity .maheader .class_name > span:first-child {
+    padding-left: 0;
+}
+
+#wrap .t_activity .maheader .class_name > span.now {
+    color: #fff007;
+}
+
+#wrap .t_activity .maheader .concept_library {
+    position: absolute;
+    right: 17px;
+    top: 11px;
+    width: 119px;
+    height: 51px;
+    padding: 7px 0 0 47px;
+    color: #fff;
+    box-sizing: border-box;
+    border-radius: 10px;
+    font-size: 14px;
+    background: #60ac00 url("/content/mathalive_lib/images/ico_concept_library.png") no-repeat 10px center;
+    cursor: pointer;
+}
+
+#wrap .t_activity .t_sendshare {
+    height: 100%;
+    background: #f1b465;
+    /* presenter */
+}
+
+#wrap .t_activity .t_sendshare.selection {
+    background-color: #f9ce77;
+}
+
+#wrap .t_activity .t_sendshare .top_header {
+    position: relative;
+    height: 67px;
+    background-color: #e46334;
+}
+
+#wrap .t_activity .t_sendshare .top_header .btn_menu {
+    float: left;
+    width: 40px;
+    height: 31px;
+    margin: 18px 0 0 20px;
+    border: 0;
+    background: url("/content/mathalive_lib/images/ico_video_top_menu.png");
+}
+
+#wrap .t_activity .t_sendshare .top_header .presenter {
+    float: left;
+    width: 160px;
+    height: 44px;
+    line-height: 44px;
+    margin: 10px 0 0 20px;
+    padding-left: 44px;
+    border-radius: 40px;
+    font-size: 20px;
+    color: #fff;
+    opacity: 0.3;
+    font-family: "maplestory-bold";
+    background: #c2542c url("/content/mathalive_lib/images/ico_presenter.png") no-repeat 6px center;
+}
+
+#wrap .t_activity .t_sendshare .top_header .presenter.complete {
+    opacity: 1;
+    cursor: pointer;
+}
+
+#wrap .t_activity .t_sendshare .top_header .select_list {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 224px;
+    height: 50px;
+    padding: 5px 6px;
+    border-radius: 10px;
+    background-color: rgba(0, 0, 0, 0.15);
+    box-sizing: border-box;
+    transform: translate(-50%, -50%);
+}
+
+#wrap .t_activity .t_sendshare .top_header .select_list button {
+    min-width: 49px;
+    height: 40px;
+    border: 0;
+    padding-left: 6px;
+    margin-left: 4px;
+    background-color: transparent;
+    border-radius: 7px;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+#wrap .t_activity .t_sendshare .top_header .select_list button:first-child {
+    margin-left: 0;
+}
+
+#wrap .t_activity .t_sendshare .top_header .select_list button span {
+    display: block;
+    float: left;
+    width: 18px;
+    height: 14px;
+    margin-left: 1px;
+    border-radius: 2px;
+    background: #453328;
+    opacity: .3;
+}
+
+#wrap .t_activity .t_sendshare .top_header .select_list button span:first-child {
+    margin-left: 0;
+}
+
+#wrap .t_activity .t_sendshare .top_header .select_list button.on {
+    background-color: #eb8e53;
+}
+
+#wrap .t_activity .t_sendshare .top_header .select_list button.on span {
+    opacity: 1;
+    background-color: #934425;
+}
+
+#wrap .t_activity .t_sendshare .top_header .select_list button.list_02 {
+    width: 68px;
+}
+
+#wrap .t_activity .t_sendshare .top_header .select_list button.list_03 {
+    width: 87px;
+}
+
+#wrap .t_activity .t_sendshare .top_header .msg_text {
+    position: absolute;
+    right: 30px;
+    top: 50%;
+    font-family: "maplestory-light";
+    font-size: 17px;
+    font-style: italic;
+    color: #fff;
+    transform: translateY(-50%);
+}
+
+#wrap .t_activity .t_sendshare .openhiding {
+    height: 44px;
+    margin-top: 36px;
+    padding-right: 106px;
+}
+
+#wrap .t_activity .t_sendshare .openhiding .strategy {
+    float: left;
+    margin-left: 72px;
+}
+
+#wrap .t_activity .t_sendshare .openhiding .strategy button {
+    position: relative;
+    width: 120px;
+    height: 30px;
+    margin-right: 20px;
+    background-color: transparent;
+    border: 0;
+    font-size: 20px;
+    font-family: "maplestory-bold" !important;
+    color: #bb8c54;
+}
+
+#wrap .t_activity .t_sendshare .openhiding .strategy button:after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -5px;
+    width: 100%;
+    height: 4px;
+    background-color: #bb8c54;
+    border-radius: 4px;
+}
+
+#wrap .t_activity .t_sendshare .openhiding .strategy button.on {
+    color: #574134;
+}
+
+#wrap .t_activity .t_sendshare .openhiding .strategy button.on:after {
+    background-color: #574134;
+}
+
+#wrap .t_activity .t_sendshare .openhiding .inner {
+    height: 44px;
+    float: right;
+    border-radius: 44px;
+    background: #c2542c;
+}
+
+#wrap .t_activity .t_sendshare .openhiding .inner button {
+    line-height: 44px;
+    padding: 0 15px;
+    border-radius: 44px;
+    border: 0;
+    color: #9a4121;
+    font-size: 20px;
+    font-family: "maplestory-bold" !important;
+    background-color: transparent;
+}
+
+#wrap .t_activity .t_sendshare .openhiding .inner button.on {
+    color: #fff;
+    background-color: #eb8e53;
+}
+
+#wrap .t_activity .t_sendshare .content {
+    overflow-y: auto;
+    height: 633px;
+    padding: 0 0 0 70px;
+    margin: 20px 60px 0 0;
+}
+
+#wrap .t_activity .t_sendshare .content::-webkit-scrollbar {
+    width: 9px;
+}
+
+#wrap .t_activity .t_sendshare .content::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 10px;
+}
+
+#wrap .t_activity .t_sendshare .content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 10px;
+}
+
+#wrap .t_activity .t_sendshare .content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.6);
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset {
+    width: 844px;
+    margin: 0 auto 20px;
+    border-radius: 25px;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset:after {
+    content: "";
+    display: block;
+    clear: both;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt {
+    float: left;
+    position: relative;
+    width: 412px;
+    height: 296px;
+    margin-bottom: 20px;
+    background-color: #f9ce77;
+    border-radius: 15px;
+    overflow: hidden;
+    font-family: "mapleStory-bold";
+    transition: 0.6s;
+    transform-style: preserve-3d;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .defaultImg_m,
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .defaultImg_f {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .defaultImg_m {
+    background-color: #2cd1c3;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .defaultImg_f {
+    background-color: #ffa1a7;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .new_icon {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    /*background: rgba(0,0,0,.15) resolve('mathalive_lib/images/ico_new.png') no-repeat left top;*/
+    background: url("/content/mathalive_lib/images/ico_new.png") no-repeat left top;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .front {
+    display: none;
+    position: absolute;
+    width: 100%;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .front .defaultImg_m,
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .front .defaultImg_f {
+    width: 90px;
+    height: 90px;
+    margin: 86px auto 0;
+    border-radius: 50%;
+    font-size: 32px;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt:nth-child(2n) {
+    margin-left: 20px;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt.user {
+    text-align: center;
+    transform: rotateY(180deg);
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt.user img {
+    width: 90px;
+    height: 90px;
+    margin-top: 86px;
+    border-radius: 50%;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt.user .name {
+    margin-top: 15px;
+    font-size: 26px;
+    font-family: "mapleStory-light";
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt.user .front {
+    display: block;
+    transform: rotateY(180deg);
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt.user .back {
+    display: none;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt img {
+    width: 100%;
+    height: 295px;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt.left {
+    float: left;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt.right {
+    float: right;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .title {
+    position: absolute;
+    width: 100%;
+    height: 40px;
+    line-height: 40px;
+    bottom: 0;
+    background-color: #bf5f25;
+    color: #fff;
+    text-align: center;
+    font-size: 18px;
+    font-family: "maplestory-light";
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .title.user .img {
+    position: absolute;
+    left: 10px;
+    top: -28px;
+    width: 60px;
+    height: 60px;
+    margin-right: 30px;
+    background-color: #bf5f25;
+    border-radius: 100%;
+    padding: 3px;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .title.user .img img {
+    width: 100%;
+    height: 100%;
+    border-radius: 100%;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .title.user .defaultImg_m,
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .title.user .defaultImg_f {
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    border-radius: 100%;
+    border: 3px solid #bf5f25;
+    box-sizing: border-box;
+    left: 10px;
+    top: -28px;
+    font-size: 25px;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .not_submitted {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6) url("/content/mathalive_lib/images/ico_sendshare_circlepen.png") no-repeat center;
+    z-index: 1;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .ico_star {
+    position: absolute;
+    left: 20px;
+    bottom: 20px;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .ico_star span {
+    display: inline-block;
+    width: 23px;
+    height: 21px;
+    background: url("/content/mathalive_lib/images/ico_thumb_star.png");
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .btn_retry {
+    position: absolute;
+    right: 9px;
+    bottom: 9px;
+    width: 53px;
+    height: 53px;
+    border: 0;
+    background: url("/content/mathalive_lib/images/ico_thumb_retry.png");
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .btn_check {
+    position: absolute;
+    right: 9px;
+    bottom: 9px;
+    width: 53px;
+    height: 53px;
+    border: 0;
+    background: url("/content/mathalive_lib/images/ico_thumb_check.png");
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt.light {
+    background-color: #fff;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt.light .title {
+    background-color: #e5722d;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt.light .title .num {
+    background-color: #d75304;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .live_bubble {
+    width: 68px;
+    height: 41px;
+    background: url("/content/mathalive_lib/images/live_bubble_bg.png");
+    padding-left: 15px;
+    position: absolute;
+    top: -23px;
+    right: 0;
+    font-size: 14px;
+    color: #fff;
+    line-height: 34px;
+}
+
+#wrap .t_activity .t_sendshare .content .thumbset .thumb_cnt .live_bubble::before {
+    content: '';
+    width: 15px;
+    height: 12px;
+    background: url("/content/mathalive_lib/images/ico_livebubble_heart.png");
+    position: absolute;
+    top: 11px;
+    left: 12px;
+}
+
+#wrap .t_activity .t_sendshare .content.r3 {
+    width: 1136px;
+    padding-bottom: 20px;
+    margin: 20px auto 0;
+    padding: 0;
+}
+
+#wrap .t_activity .t_sendshare .content.r3 .thumbset {
+    width: 100%;
+}
+
+#wrap .t_activity .t_sendshare .content.r3 .thumbset .thumb_cnt {
+    width: 356px;
+    height: 255px;
+    margin-left: 20px;
+}
+
+#wrap .t_activity .t_sendshare .content.r3 .thumbset .thumb_cnt:nth-child(3n+1) {
+    margin-left: 0;
+}
+
+#wrap .t_activity .t_sendshare .content.r3 .thumbset .thumb_cnt img {
+    height: 223px;
+}
+
+#wrap .t_activity .t_sendshare .content.r3 .thumbset .thumb_cnt .not_submitted {
+    background-size: 90px auto;
+}
+
+#wrap .t_activity .t_sendshare .content.r3 .thumbset .thumb_cnt .front .defaultImg_m,
+#wrap .t_activity .t_sendshare .content.r3 .thumbset .thumb_cnt .front .defaultImg_f {
+    width: 80px;
+    height: 80px;
+}
+
+#wrap .t_activity .t_sendshare .content.r3 .thumbset .thumb_cnt .title {
+    height: 42px;
+    line-height: 42px;
+    font-size: 22px;
+}
+
+#wrap .t_activity .t_sendshare .content.r3 .thumbset .thumb_cnt .title.user .img {
+    width: 48px;
+    height: 48px;
+    left: 6px;
+    top: -7px;
+    margin-right: 20px;
+}
+
+#wrap .t_activity .t_sendshare .content.r3 .thumbset .thumb_cnt .title.user .defaultImg_m,
+#wrap .t_activity .t_sendshare .content.r3 .thumbset .thumb_cnt .title.user .defaultImg_f {
+    width: 48px;
+    height: 48px;
+    left: 6px;
+    top: -7px;
+    font-size: 21px;
+}
+
+#wrap .t_activity .t_sendshare .content.r3 .thumbset .thumb_cnt.user img {
+    width: 80px;
+    height: 80px;
+}
+
+#wrap .t_activity .t_sendshare .content.r3 .thumbset .thumb_cnt.user .name {
+    font-size: 22px;
+    margin-top: 16px;
+}
+
+#wrap .t_activity .t_sendshare .content.r4 {
+    width: 1136px;
+    height: 633px;
+    padding: 0 10px 0 0;
+    margin: 20px auto 0;
+}
+
+#wrap .t_activity .t_sendshare .content.r4 .thumbset {
+    width: 1108px;
+    margin: 0;
+}
+
+#wrap .t_activity .t_sendshare .content.r4 .thumbset .thumb_cnt {
+    width: 262px;
+    height: 193px;
+    margin-left: 20px;
+    margin-bottom: 20px;
+}
+
+#wrap .t_activity .t_sendshare .content.r4 .thumbset .thumb_cnt:nth-child(4n+1) {
+    margin-left: 0;
+}
+
+#wrap .t_activity .t_sendshare .content.r4 .thumbset .thumb_cnt .front .defaultImg_m,
+#wrap .t_activity .t_sendshare .content.r4 .thumbset .thumb_cnt .front .defaultImg_f {
+    width: 70px;
+    height: 70px;
+    margin-top: 43px;
+}
+
+#wrap .t_activity .t_sendshare .content.r4 .thumbset .thumb_cnt img {
+    height: 192px;
+}
+
+#wrap .t_activity .t_sendshare .content.r4 .thumbset .thumb_cnt .not_submitted {
+    background-size: 90px auto;
+}
+
+#wrap .t_activity .t_sendshare .content.r4 .thumbset .thumb_cnt:first-child {
+    margin-left: 0;
+}
+
+#wrap .t_activity .t_sendshare .content.r4 .thumbset .thumb_cnt .title {
+    height: 30px;
+    line-height: 30px;
+    font-size: 16px;
+}
+
+#wrap .t_activity .t_sendshare .content.r4 .thumbset .thumb_cnt .title.user .img {
+    width: 42px;
+    height: 42px;
+    left: 5px;
+    top: -17px;
+}
+
+#wrap .t_activity .t_sendshare .content.r4 .thumbset .thumb_cnt .title.user .defaultImg_m,
+#wrap .t_activity .t_sendshare .content.r4 .thumbset .thumb_cnt .title.user .defaultImg_f {
+    width: 42px;
+    height: 42px;
+    left: 5px;
+    top: -17px;
+    font-size: 18px;
+}
+
+#wrap .t_activity .t_sendshare .content.r4 .thumbset .thumb_cnt.user img {
+    width: 70px;
+    height: 70px;
+    margin-top: 43px;
+}
+
+#wrap .t_activity .t_sendshare .content.r4 .thumbset .thumb_cnt.user .name {
+    font-size: 22px;
+    margin-top: 12px;
+}
+
+#wrap .t_activity .t_sendshare .content.selection {
+    margin-top: 80px;
+}
+
+#wrap .t_activity .t_sendshare .content.selection .profile {
+    text-align: center;
+}
+
+#wrap .t_activity .t_sendshare .content.selection .profile .t1 {
+    font-size: 20px;
+    color: #4d2212;
+    font-family: "maplestory-bold";
+}
+
+#wrap .t_activity .t_sendshare .content.selection .profile .t2 {
+    margin-top: 18px;
+    font-size: 15px;
+    color: #a07945;
+    font-style: italic;
+    font-family: "maplestory-light";
+}
+
+#wrap .t_activity .t_sendshare .content.selection .btn_set {
+    margin-top: 50px;
+    text-align: center;
+}
+
+#wrap .t_activity .t_sendshare .content.selection .btn_set button {
+    position: relative;
+    width: 240px;
+    height: 240px;
+    border: 0;
+    margin: 0 40px;
+    background: url("/content/mathalive_lib/images/bg_sendshare_btn_off.png");
+}
+
+#wrap .t_activity .t_sendshare .content.selection .btn_set button:hover {
+    background: url("/content/mathalive_lib/images/bg_sendshare_btn_on.png");
+}
+
+#wrap .t_activity .t_sendshare .content.selection .btn_set button span {
+    position: absolute;
+    display: block;
+    width: 100%;
+    height: 80px;
+    line-height: 80px;
+    font-size: 37px;
+    bottom: 0;
+    color: #fff;
+    text-align: center;
+    font-family: "maplestory-bold";
+}
+
+#wrap .t_activity .t_sendshare .presenter {
+    position: absolute;
+    left: 0;
+    /* 런처에서 보여 주는 햄버거 버튼으로 인해 위치 이동  */
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.75);
+    z-index: 11;
+}
+
+#wrap .t_activity .t_sendshare .presenter.btn {
+    left: 64px;
+    top: 4px;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content {
+    z-index: 20;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 940px;
+    height: 490px;
+    background-color: #f9ce77;
+    border-radius: 50px;
+    transform: translate(-50%, -50%);
+    font-family: "maplestory-light";
+    text-align: center;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content h3 {
+    line-height: 1;
+    margin-top: 50px;
+    font-size: 30px;
+    font-family: "maplestory-bold";
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content .btn_close {
+    position: absolute;
+    right: 20px;
+    top: 20px;
+    width: 50px;
+    height: 50px;
+    border: 0;
+    border-radius: 100%;
+    background: #f1b465 url("/content/mathalive_lib/images/ico_video_menu_close.png") no-repeat center;
+    background-size: 22px;
+    z-index: 10;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul {
+    padding: 40px 50px 0;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul li {
+    position: relative;
+    display: inline-block;
+    width: 25%;
+    font-size: 26px;
+    color: #2c2c2c;
+    opacity: .5;
+    /*&.heart{
+							&:after{
+								content: "";
+								position: absolute;
+								left: 50%;
+								top:-45px;
+								width:45px;
+								height:45px;
+								background: resolve('mathalive_lib/images/ico_student_select.gif');
+								transform: translateX(-50%);
+							}
+						}*/
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul li .ico_heart {
+    position: absolute;
+    left: 50%;
+    top: -45px;
+    width: 45px;
+    height: 45px;
+    background: url("/content/mathalive_lib/images/ico_student_select.gif");
+    transform: translateX(-50%);
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul li .img {
+    display: inline-block;
+    position: relative;
+    width: 180px;
+    height: 180px;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul li .img > div {
+    width: 100%;
+    height: 100%;
+    line-height: 180px;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul li .img > div img {
+    width: 180px;
+    height: 180px;
+    border-radius: 100%;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul li .img > div:after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 180px;
+    height: 180px;
+    border-radius: 100%;
+    box-shadow: 10px 10px 20px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul li .img > div .defaultImg_m,
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul li .img > div .defaultImg_f {
+    width: 100%;
+    height: 100%;
+    border-radius: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 50px;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul li .img > div .defaultImg_m > div {
+    background-color: #2cd1c3;
+    width: 100%;
+    height: 100%;
+    border-radius: 100%;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul li .img > div .defaultImg_f > div {
+    background-color: #ffa1a7;
+    width: 100%;
+    height: 100%;
+    border-radius: 100%;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul li p {
+    margin-top: 20px;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul li.on {
+    opacity: 1;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul li.on .img:after {
+    border: 8px solid #e46334;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul li.random {
+    opacity: 0.5;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul li.click::before {
+    content: "";
+    position: absolute;
+    right: -8px;
+    top: -10px;
+    width: 70px;
+    height: 47px;
+    background: url("/content/mathalive_lib/images/ico_cloud_click.png");
+    z-index: 10;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content ul:after {
+    content: "";
+    display: block;
+    clear: both;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content .btn_control {
+    margin-top: 35px;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content .btn_control button {
+    width: 184px;
+    height: 60px;
+    line-height: 60px;
+    margin: 0 6px;
+    border: 0;
+    border-radius: 30px;
+    color: #fff;
+    font-size: 21px;
+    font-family: "maplestory-light" !important;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content .btn_control button.btn_01 {
+    background-color: #9a989a;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content .btn_control button.btn_02 {
+    background-color: #e46334;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content .timesetting_wrap .timebox {
+    position: relative;
+    width: 360px;
+    height: 180px;
+    margin: 65px auto;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content .timesetting_wrap .timebox .time {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 180px;
+    height: 180px;
+    line-height: 180px;
+    border-radius: 100%;
+    color: #2c2c2c;
+    font-size: 140px;
+    background-color: rgba(255, 255, 255, 0.5);
+    transform: translate(-50%, -50%);
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content .timesetting_wrap .timebox .btn_time {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 70px;
+    height: 70px;
+    border-radius: 100%;
+    border: 0;
+    transform: translateY(-50%);
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content .timesetting_wrap .timebox .btn_time.minus {
+    background: #ff8472 url("/content/mathalive_lib/images/ico_minus.png") no-repeat center;
+}
+
+#wrap .t_activity .t_sendshare .presenter .presenter_content .timesetting_wrap .timebox .btn_time.plus {
+    left: auto;
+    right: 0;
+    background: #3bbdab url("/content/mathalive_lib/images/ico_plus_big.png") no-repeat center;
+}
+
+#wrap .t_activity .t_sendshare .result_popup {
+    position: absolute;
+    left: 0px;
+    width: 100%;
+    top: 0px;
+    height: 100%;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0;
+    transform: scale(0.2, 0.2);
+    transition: transform 0.3s, opacity 0.3s;
+    width: 100%;
+    height: 100%;
+    z-index: 20;
+    /* popup 은 z-index 20 으로 */
+    position: absolute;
+    top: 0;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+#wrap .t_activity .t_sendshare .result_popup.open {
+    pointer-events: unset;
+    z-index: 100;
+    opacity: 1;
+    transform: scale(1, 1);
+    transition: transform 0.3s cubic-bezier(0.405, 0.42, 0.135, 1.2);
+}
+
+#wrap .t_activity .t_sendshare .result_popup.closing {
+    pointer-events: unset;
+    z-index: 100;
+    opacity: 0;
+    transform: scale(0.2, 0.2);
+    transition: transform 0.3s, opacity 0.3s;
+}
+
+#wrap .t_activity .t_sendshare .result_popup.closed {
+    display: none;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader {
+    position: absolute;
+    top: 0;
+    font-family: NotoSansB-Regular;
+    width: 100%;
+    height: 67px;
+    padding: 18px 45px 7px;
+    /*background: rgba(0,0,0,.3);*/
+    background-color: #ff9e2b;
+    /* Math Journal */
+    box-sizing: border-box;
+    z-index: 50;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader.type01 {
+    background-color: #ff9e2b;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader.type02 {
+    background-color: #f1a9b7;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader.type03 {
+    background-color: #72abd7;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader.type04 {
+    background-color: #022441;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader.type05 {
+    background-color: #c3eaba;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .btn_menu {
+    float: left;
+    width: 40px;
+    height: 31px;
+    border: 0;
+    background: url("/content/mathalive_lib/images/ico_menu.png");
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .user {
+    float: left;
+    margin: -10px 0 0 26px;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .user img {
+    width: 46px;
+    height: 46px;
+    border-radius: 100%;
+    border: 2px solid #fff;
+    vertical-align: middle;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .user .name {
+    font-family: "maplestory-bold";
+    color: #fff;
+    font-size: 22px;
+    margin-left: 10px;
+    vertical-align: middle;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .user .defaultImg_m,
+#wrap .t_activity .t_sendshare .result_popup .maheader .user .defaultImg_f {
+    width: 46px;
+    height: 46px;
+    border-radius: 100%;
+    vertical-align: middle;
+    display: inline-block;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .user .defaultImg_m div,
+#wrap .t_activity .t_sendshare .result_popup .maheader .user .defaultImg_f div {
+    font-size: 20px;
+    font-family: "Maplestory-Bold";
+    color: #fff;
+    width: 46px;
+    height: 46px;
+    line-height: 46px;
+    text-align: center;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .user .defaultImg_m {
+    background-color: #2cd1c3;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .user .defaultImg_f {
+    background-color: #ffa1a7;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .left_menu {
+    display: none;
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 265px;
+    height: 345px;
+    z-index: 90;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .left_menu.show {
+    display: block;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .left_menu .innerbox {
+    height: 100%;
+    border-radius: 0 30px 30px 30px;
+    background-color: #3cbdab;
+    box-shadow: 0 3px 7px rgba(0, 0, 0, 0.16);
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .left_menu .innerbox .close {
+    text-align: right;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .left_menu .innerbox .close .btn_close {
+    position: absolute;
+    right: 15px;
+    top: 8px;
+    width: 50px;
+    height: 50px;
+    border: 0;
+    background: url("/content/mathalive_lib/images/ico_video_menu_close.png") no-repeat center;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .left_menu .innerbox ul {
+    padding: 78px 0 0 0;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .left_menu .innerbox ul li {
+    height: 81px;
+    line-height: 81px;
+    text-align: center;
+    font-family: "Maplestory-Bold";
+    color: #fff;
+    font-size: 28px;
+    background: url("/content/mathalive_lib/images/bg_left_menu_line.png") no-repeat center top;
+    cursor: pointer;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .left_menu .innerbox ul li:first-child {
+    background: none;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .live_guage {
+    position: absolute;
+    right: 20px;
+    top: 0;
+    width: 260px;
+    height: 68px;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .live_guage.twinkle:after {
+    content: "";
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: url("/content/mathalive_lib/images/bg_liveguage_twinkle.gif") no-repeat;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .live_guage .heart {
+    position: absolute;
+    left: 16px;
+    top: 7px;
+    width: 62px;
+    height: 56px;
+    background: url("/content/mathalive_lib/images/ico_greenheart.png");
+    z-index: 1;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .live_guage .bar_wrap {
+    position: absolute;
+    left: 59px;
+    top: 22px;
+    width: 145px;
+    height: 26px;
+    padding: 2px 3px 2px 0;
+    border-radius: 0 15px 15px 0;
+    background: #fff;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .live_guage .bar_wrap .bar {
+    max-width: 100%;
+    height: 100%;
+    border-radius: 0 10px 10px 0;
+    background: linear-gradient(90deg, #adda40 0%, #47db1a 100%);
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .live_guage .bar_wrap .num {
+    position: absolute;
+    right: -50px;
+    top: 50%;
+    font-size: 20px;
+    color: #fff;
+    font-family: "maplestory-bold";
+    transform: translateY(-50%);
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .live_guage .bar_wrap .num.overmax {
+    color: #ffb400;
+    font-size: 24px;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .live_guage .bar_wrap .num.overmax:before {
+    content: attr(data-value);
+    position: absolute;
+    -webkit-text-stroke: 0.2em #fff;
+    left: 0;
+    z-index: -1;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .maheader .typeName {
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-family: "maplestory-bold";
+    font-size: 30px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .progress_dot {
+    position: absolute;
+    right: 50%;
+    top: 10%;
+    transform: translateX(50%);
+    height: 67px;
+    padding: 25px 10px 0  0;
+    text-align: center;
+    z-index: 21;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .progress_dot span {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    margin: 0 5px;
+    border-radius: 100%;
+    background-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+}
+
+#wrap .t_activity .t_sendshare .result_popup .progress_dot span.on {
+    background-color: #f5e942;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .images_container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .images_container .swiper-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .images_container .swiper-container .swiper-slide {
+    height: auto;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .images_container .swiper-container .swiper-scrollbar {
+    width: 7px;
+    background-color: transparent;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .images_container .swiper-container .swiper-scrollbar .swiper-scrollbar-drag {
+    background-color: rgba(255, 255, 255, 0.6);
+}
+
+#wrap .t_activity .t_sendshare .result_popup .images_container .swiper-container .submitimg {
+    width: 100%;
+    height: 100%;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_left,
+#wrap .t_activity .t_sendshare .result_popup .navi_right {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    z-index: 51;
+    /*.left,
+				.right {
+					&:disabled {
+						display: block !important;
+					}	
+				}*/
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_left .left,
+#wrap .t_activity .t_sendshare .result_popup .navi_right .left {
+    margin-top: -20px;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_left {
+    left: 0;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_left .left {
+    touch-action: none;
+    padding: 0px;
+    border: none;
+    background-color: transparent;
+    outline: none;
+    background-image: url("/content/mathalive_lib/images/page_left_L.png");
+    background-repeat: no-repeat;
+    width: 80px;
+    height: 94px;
+    pointer-events: unset;
+    cursor: pointer;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_left .left:disabled {
+    background-image: url("/content/mathalive_lib/images/page_left_L_dis.png");
+    pointer-events: none;
+    cursor: auto;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_left .left.down {
+    background-image: url("/content/mathalive_lib/images/page_left_L.png");
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_left .left:before {
+    position: absolute;
+    pointer-events: none;
+    width: 0px;
+    height: 0px;
+    visibility: hidden;
+    overflow: hidden;
+    z-index: -1;
+    content: url("/content/mathalive_lib/images/page_left_L.png") url("/content/mathalive_lib/images/page_left_L.png") url("/content/mathalive_lib/images/page_left_L_dis.png");
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_left .right {
+    touch-action: none;
+    padding: 0px;
+    border: none;
+    background-color: transparent;
+    outline: none;
+    background-image: url("/content/mathalive_lib/images/page_right_L.png");
+    background-repeat: no-repeat;
+    width: 80px;
+    height: 94px;
+    pointer-events: unset;
+    cursor: pointer;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_left .right:disabled {
+    background-image: url("/content/mathalive_lib/images/page_right_L_dis.png");
+    pointer-events: none;
+    cursor: auto;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_left .right.down {
+    background-image: url("/content/mathalive_lib/images/page_right_L.png");
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_left .right:before {
+    position: absolute;
+    pointer-events: none;
+    width: 0px;
+    height: 0px;
+    visibility: hidden;
+    overflow: hidden;
+    z-index: -1;
+    content: url("/content/mathalive_lib/images/page_right_L.png") url("/content/mathalive_lib/images/page_right_L.png") url("/content/mathalive_lib/images/page_right_L_dis.png");
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_right {
+    right: 0;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_right .left {
+    touch-action: none;
+    padding: 0px;
+    border: none;
+    background-color: transparent;
+    outline: none;
+    background-image: url("/content/mathalive_lib/images/page_left_R.png");
+    background-repeat: no-repeat;
+    width: 74px;
+    height: 94px;
+    pointer-events: unset;
+    cursor: pointer;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_right .left:disabled {
+    background-image: url("/content/mathalive_lib/images/page_left_R_dis.png");
+    pointer-events: none;
+    cursor: auto;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_right .left.down {
+    background-image: url("/content/mathalive_lib/images/page_left_R.png");
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_right .left:before {
+    position: absolute;
+    pointer-events: none;
+    width: 0px;
+    height: 0px;
+    visibility: hidden;
+    overflow: hidden;
+    z-index: -1;
+    content: url("/content/mathalive_lib/images/page_left_R.png") url("/content/mathalive_lib/images/page_left_R.png") url("/content/mathalive_lib/images/page_left_R_dis.png");
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_right .right {
+    touch-action: none;
+    padding: 0px;
+    border: none;
+    background-color: transparent;
+    outline: none;
+    background-image: url("/content/mathalive_lib/images/page_right_R.png");
+    background-repeat: no-repeat;
+    width: 74px;
+    height: 94px;
+    pointer-events: unset;
+    cursor: pointer;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_right .right:disabled {
+    background-image: url("/content/mathalive_lib/images/page_right_R_dis.png");
+    pointer-events: none;
+    cursor: auto;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_right .right.down {
+    background-image: url("/content/mathalive_lib/images/page_right_R.png");
+}
+
+#wrap .t_activity .t_sendshare .result_popup .navi_right .right:before {
+    position: absolute;
+    pointer-events: none;
+    width: 0px;
+    height: 0px;
+    visibility: hidden;
+    overflow: hidden;
+    z-index: -1;
+    content: url("/content/mathalive_lib/images/page_right_R.png") url("/content/mathalive_lib/images/page_right_R.png") url("/content/mathalive_lib/images/page_right_R_dis.png");
+}
+
+#wrap .t_activity .t_sendshare .result_popup .control_page {
+    position: absolute;
+    z-index: 51;
+    left: 50%;
+    bottom: 26px;
+    width: 200px;
+    height: 74px;
+    border-radius: 40px;
+    transform: translateX(-50%);
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.15);
+    background-color: rgba(0, 0, 0, 0.18);
+    opacity: 1;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .control_page button {
+    position: absolute;
+    top: 16px;
+    width: 42px;
+    height: 42px;
+    border: 0;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-color: transparent;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .control_page button.btn_left {
+    left: 21px;
+    background-image: url("/content/mathalive_lib/images/ico_control_page_arr_left.png");
+}
+
+#wrap .t_activity .t_sendshare .result_popup .control_page button.btn_menu {
+    left: 50%;
+    transform: translateX(-50%);
+    background-image: url("/content/mathalive_lib/images/ico_control_page_menu.png");
+}
+
+#wrap .t_activity .t_sendshare .result_popup .control_page button.btn_right {
+    right: 21px;
+    background-image: url("/content/mathalive_lib/images/ico_control_page_arr_right.png");
+}
+
+#wrap .t_activity .t_sendshare .result_popup .control_page button.off {
+    opacity: 0.6;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .btn_container {
+    position: absolute;
+    z-index: 51;
+    bottom: 26px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+#wrap .t_activity .t_sendshare .result_popup .btn_container button {
+    width: 184px;
+    height: 60px;
+    line-height: 60px;
+    margin: 0 6px;
+    border: 0;
+    border-radius: 30px;
+    color: #fff;
+    font-size: 21px;
+    font-family: "maplestory-light" !important;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .btn_container button.btn_01 {
+    background-color: #9a989a;
+}
+
+#wrap .t_activity .t_sendshare .result_popup .btn_container button.btn_02 {
+    background-color: #e46334;
+}
+
+#wrap .t_activity .activityContent {
+    position: absolute;
+    left: 0px;
+    width: 100%;
+    top: 0px;
+    height: 100%;
+}
+
+#wrap .t_activity .activityContent .pagination {
+    position: absolute;
+    top: 28px;
+    right: 30px;
+    text-align: center;
+    z-index: 1;
+}
+
+#wrap .t_activity .activityContent .pagination span {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    margin: 0 10px;
+    border-radius: 100%;
+    background-color: rgba(0, 0, 0, 0.15);
+    box-shadow: 0 2px 3px rgba(0, 0, 0, 0.3);
+}
+
+#wrap .t_activity .activityContent .pagination span.on {
+    width: 36px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+}
+
+#wrap .t_activity .activityContent .pagination span.pointer {
+    cursor: pointer;
+}
+
+#wrap .t_activity .activityContent .contentWrap {
+    height: 800px;
+    margin: 0;
+    text-align: center;
+}
+
+#wrap .t_activity .activityContent .contentWrap > iframe {
+    width: 100%;
+    height: 100%;
+}
+
+#wrap .t_activity .activityContent .topHeader .pointer {
+    cursor: pointer;
+}
+
+#wrap .t_activity .progressWrap {
+    /* 210518 수정 */
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    height: 104px;
+}
+
+#wrap .t_activity .progressWrap .btn_progress {
+    touch-action: none;
+    padding: 0px;
+    border: none;
+    background-color: transparent;
+    outline: none;
+    background-image: url("/content/mathalive_lib/images/btn_stop_quiz.png");
+    background-repeat: no-repeat;
+    width: 105px;
+    height: 104px;
+    pointer-events: unset;
+    cursor: pointer;
+    text-align: center;
+}
+
+#wrap .t_activity .progressWrap .btn_progress:disabled {
+    background-image: url("/content/mathalive_lib/images/btn_stop_quiz_dis.png");
+    pointer-events: none;
+    cursor: auto;
+}
+
+#wrap .t_activity .progressWrap .btn_progress.down {
+    background-image: url("/content/mathalive_lib/images/btn_stop_quiz.png");
+}
+
+#wrap .t_activity .progressWrap .btn_progress:before {
+    position: absolute;
+    pointer-events: none;
+    width: 0px;
+    height: 0px;
+    visibility: hidden;
+    overflow: hidden;
+    z-index: -1;
+    content: url("/content/mathalive_lib/images/btn_stop_quiz.png") url("/content/mathalive_lib/images/btn_stop_quiz.png") url("/content/mathalive_lib/images/btn_stop_quiz_dis.png");
+}
+
+#wrap .t_activity .progressWrap .btn_progress span {
+    font-size: 15px;
+    color: #fff;
+    line-height: 1;
+    position: relative;
+    top: 10px;
+    left: -3px;
+    font-family: "Maplestory-Bold";
+}
+
+#wrap .t_activity .progressWrap .btn_progress:disabled span {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+#wrap .t_activity .progressWrap .msg {
+    position: absolute;
+    opacity: 0;
+    left: 100px;
+    text-align: center;
+}
+
+#wrap .t_activity .progressWrap .msg span {
+    position: absolute;
+    width: 30px;
+    height: 44px;
+    background: url("/content/mathalive_lib/images/msg_rst_twinkle.png") no-repeat center;
+    background-size: contain;
+}
+
+#wrap .t_activity .progressWrap .msg span:nth-child(1) {
+    left: 35px;
+    top: 23px;
+    width: 10px;
+    height: 15px;
+    background-size: contain;
+    animation: star01 .2s alternate infinite;
+}
+
+#wrap .t_activity .progressWrap .msg span:nth-child(2) {
+    left: 43px;
+    top: 8px;
+    width: 10px;
+    height: 15px;
+    background-size: contain;
+    animation: star01 .23s alternate infinite;
+}
+
+#wrap .t_activity .progressWrap .msg span:nth-child(3) {
+    left: 128px;
+    top: 7px;
+    width: 10px;
+    height: 15px;
+    background-size: contain;
+    animation: star01 .25s alternate infinite;
+}
+
+#wrap .t_activity .progressWrap .msg span:nth-child(4) {
+    left: 132px;
+    top: 35px;
+    width: 10px;
+    height: 15px;
+    animation: star01 .23s alternate infinite;
+}
+
+#wrap .t_activity .progressWrap .msg span:nth-child(5) {
+    left: 140px;
+    top: 20px;
+    width: 10px;
+    height: 20px;
+    background-size: contain;
+    animation: star01 .37s alternate infinite;
+}
+
+#wrap .t_activity .progressWrap .msg span:nth-child(6) {
+    left: 116px;
+    top: 7px;
+    width: 9px;
+    height: 15px;
+    animation: star01 .26s alternate infinite;
+}
+
+#wrap .t_activity .progressWrap .msg span:nth-child(7) {
+    left: 116px;
+    top: 48px;
+    width: 9px;
+    height: 15px;
+    background-size: contain;
+    animation: star01 .28s alternate infinite;
+}
+
+#wrap .t_activity .progressWrap .msg span:nth-child(8) {
+    left: 373px;
+    top: 68px;
+    width: 25px;
+    height: 36px;
+    background-size: contain;
+    animation: star01 .2s alternate infinite;
+}
+
+#wrap .t_activity .progressWrap.end {
+    /* 제출 종료 후 */
+}
+
+#wrap .t_activity .progressWrap.end .btn_progress {
+    /*width:290px;
+				height:104px; 
+				210521 삭제*/
+    background: url("/content/mathalive_lib/images/btn_re_quiz.png") no-repeat right top;
+}
+
+#wrap .t_activity .progressWrap.end .msg {
+    left: auto;
+    right: 100px;
+    /* 210521 위치 수정 */
+    top: 20px;
+    width: 190px;
+    height: 60px;
+    line-height: 60px;
+    font-size: 25px;
+    font-family: "maplestory-bold";
+    color: #fff;
+    border-radius: 30px;
+    background: rgba(0, 0, 0, 0.25);
+    transition: .5s all;
+    opacity: 1;
+}
+
+#wrap .t_activity .progressWrap.end .msg.hide {
+    opacity: 0;
+}
+
+@keyframes star01 {
+    from {
+        transform: scale(0.2);
+    }
+    to {
+        transform: scale(1);
+    }
+}
+
+#wrap .t_activity .alert_popup {
+    position: absolute;
+    left: 0px;
+    width: 100%;
+    top: 0px;
+    height: 100%;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0;
+    transform: scale(0.2, 0.2);
+    transition: transform 0.3s, opacity 0.3s;
+}
+
+#wrap .t_activity .alert_popup.open {
+    pointer-events: unset;
+    z-index: 10001;
+    opacity: 1;
+    transform: scale(1, 1);
+    transition: transform 0.3s cubic-bezier(0.405, 0.42, 0.135, 1.2);
+}
+
+#wrap .t_activity .alert_popup.closing {
+    pointer-events: unset;
+    z-index: 10001;
+    opacity: 0;
+    transform: scale(0.2, 0.2);
+    transition: transform 0.3s, opacity 0.3s;
+}
+
+#wrap .t_activity .alert_popup.closed {
+    display: none;
+}
+
+#wrap .t_activity .alert_popup .pop_box {
+    width: 310px;
+    height: 282px;
+    background: #fff;
+    border-radius: 30px;
+    box-shadow: 0px 3px 7px 0px rgba(0, 0, 0, 0.16);
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 32px;
+}
+
+#wrap .t_activity .alert_popup .pop_box .ico_alert {
+    width: 110px;
+    height: 110px;
+    background: url("/content/mathalive_lib/images/ico_alert.png");
+    display: inline-block;
+}
+
+#wrap .t_activity .alert_popup .pop_box .text {
+    font-size: 16px;
+    line-height: 1;
+    font-family: "Maplestory-Light";
+    margin-top: 20px;
+    text-align: center;
+}
+
+#wrap .t_activity .alert_popup .pop_box .text.long {
+    font-size: 14px;
+    margin-top: 10px;
+}
+
+#wrap .t_activity .alert_popup .pop_box .text.middle {
+    font-size: 14px;
+    margin-top: 25px;
+}
+
+#wrap .t_activity .alert_popup .pop_box .btns {
+    position: absolute;
+    bottom: 20px;
+    left: 30px;
+    right: 30px;
+    display: flex;
+    justify-content: center;
+}
+
+#wrap .t_activity .alert_popup .pop_box .btns button {
+    width: 120px;
+    height: 38px;
+    border-radius: 19px;
+    border: none;
+    outline: none;
+    font-family: "Maplestory-Light";
+}
+
+#wrap .t_activity .alert_popup .pop_box .btns button.btn_cancel {
+    background-color: #a6a6a6;
+}
+
+#wrap .t_activity .alert_popup .pop_box .btns button.btn_ok {
+    margin-left: 10px;
+    background-color: #eb6f7b;
+}
+
+#wrap .t_activity .alert_popup .pop_box .btns button span {
+    font-family: "Maplestory-Light";
+    font-size: 16px;
+    color: #fff;
+}
+
+#wrap .t_activity .btn_heart {
+    touch-action: none;
+    padding: 0px;
+    border: none;
+    background-color: transparent;
+    outline: none;
+    background-image: url("/content/mathalive_lib/images/send_heart.png");
+    background-repeat: no-repeat;
+    width: 105px;
+    height: 104px;
+    cursor: pointer;
+    pointer-events: unset;
+    position: absolute;
+    bottom: 94px;
+    right: 0;
+    z-index: 101;
+    /* send & share 보다 1 높게*/
+}
+
+#wrap .t_activity .btn_heart.on {
+    background-image: url("/content/mathalive_lib/images/send_heart_on.png");
+}
+
+#wrap .t_activity .btn_heart:before {
+    position: absolute;
+    pointer-events: none;
+    width: 0px;
+    height: 0px;
+    visibility: hidden;
+    overflow: hidden;
+    z-index: -1;
+    content: url("/content/mathalive_lib/images/send_heart.png") url("/content/mathalive_lib/images/send_heart_on.png");
+}
+
+#wrap .t_activity .t_sendshare {
+    position: fixed;
+    width: 100%;
+    z-index: 100;
+}
+
+#wrap .t_activity .progressWrap {
+    z-index: 101;
+}
+
+#wrap .t_activity .fel_topad {
+    z-index: 102;
+}
+
+#wrap .btn-back {
+    float: left;
+    width: 50px;
+    height: 50px;
+    margin: 28px 0 0 10px;
+    background: url("/content/mathalive_lib/MA/activity/teacher/images/ico_back.png");
+    background-size: cover;
+    border: 0;
+}
+
+#wrap .fel_topad {
+    position: absolute;
+    z-index: 11;
+    touch-action: none;
+    bottom: 15px;
+    right: 15px;
+    width: 80px;
+    height: 80px;
+    border-radius: 100%;
+    border: 0;
+    background-color: rgba(0, 0, 0, 0.3);
+    box-shadow: 4px 4px 15px rgba(0, 0, 0, 0.15);
+    /*
+	.revise {
+		position: absolute;
+		top: -50px;
+		left: 3px;
+		display: inline-block;
+		width: 79px;
+		height: 74px;
+		line-height: 55px;
+		padding-left: 8px;
+		font-size: 20px;
+		font-family: "maplestory-bold";
+		text-align: left;
+		color: #ea7145;
+		background: resolve('mathalive_lib/images/bg_bubble.png') no-repeat;
+
+		&:after {
+			content: "!";
+			position: absolute;
+			left: 50%;
+			top: 100%;
+			font-size: 50px;
+			transform: translate(-90%, -65%);
+			opacity: 0;
+			transition: all 1s;
+		}
+
+		&.on {
+			&:after {
+				top: 50%;
+				opacity: 0.4;
+			}
+		}
+	}*/
+}
+
+#wrap .fel_topad:before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 27px;
+    height: 31px;
+    background: url("/content/mathalive_lib/images/fel_arr_up.png") no-repeat center;
+    transform: translate(-50%, -25%) rotate(180deg);
+    animation-name: arrowMove;
+    animation-direction: alternate;
+    animation-duration: .4s;
+    animation-iteration-count: infinite;
+    animation-timing-function: linear;
+    animation-delay: .1s;
+}
+
+#wrap .fel_topad:after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 27px;
+    height: 31px;
+    background: url("/content/mathalive_lib/images/fel_arr_up.png") no-repeat center;
+    transform: translate(-50%, -70%) rotate(180deg);
+    animation-name: arrowMove;
+    animation-direction: alternate;
+    animation-duration: .4s;
+    animation-iteration-count: infinite;
+    animation-timing-function: linear;
+}
+
+#wrap .fel_topad .revise {
+    position: absolute;
+    top: 12px;
+    left: -96px;
+    display: inline-block;
+    width: 96px;
+    height: 74px;
+    line-height: 55px;
+    padding-left: 8px;
+    font-size: 20px;
+    font-family: "maplestory-bold";
+    text-align: left;
+    color: #ea7145;
+    background: url("/content/mathalive_lib/images/img_revise.png") no-repeat;
+}
+
+#wrap .fel_topad .revise.on:after {
+    top: 50%;
+    opacity: 0.4;
+}
+
+#wrap .hidden {
+    display: none;
+}
+
+#wrap .fix-activity .progressWrap,
+#wrap .fix-activity + .navi-wrap {
+    display: none;
+}
+
+@charset "UTF-8";
+html, body {
+    padding: 0px;
+    margin: 0px;
+    user-select: none;
+    border: 0px;
+    backface-visibility: hidden;
+    user-select: none;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+    font-family: NotoSans !important;
+    -webkit-font-smoothing: none;
+    font-size: 12px;
+    overflow: hidden;
+    image-rendering: -webkit-optimize-contrast;
+    text-rendering: optimizeSpeed;
+}
+
+body, h1, h2, h3, h4, input, button {
+    /*font-family:Helvetica,Arial,"����",Dotum,sans-serif;*/
+    font-size: 12px;
+}
+
+body, div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, form, fieldset, p, button, input {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, p {
+    word-break: break-all;
+    word-wrap: break-word;
+}
+
+img, fieldset, iframe {
+    border: 0 none;
+}
+
+button {
+    outline: none;
+    cursor: pointer;
+    font-family: NotoSans !important;
+    -webkit-font-smoothing: none;
+}
+
+img {
+    padding: 0px;
+    margin: 0px;
+    user-select: none;
+    border: 0px;
+    outline: 0px solid transparent;
+}
+
+div, p {
+    padding: 0px;
+    margin: 0px;
+}
+
+li {
+    list-style: none;
+}
+
+#common_audio {
+    position: absolute;
+    left: 0px;
+    right: 0px;
+}
+
+#ding_audio {
+    position: absolute;
+    left: 0px;
+    right: 0px;
+}
+
+#dingend_audio {
+    position: absolute;
+    left: 0px;
+    right: 0px;
+}
+
+#wrap {
+    width: 1280px;
+    height: 800px;
+    margin: auto;
+    overflow: hidden;
+    position: relative;
+}
+
+.bg_svg {
+    position: absolute;
+    left: 0px;
+    width: 100%;
+    top: 0px;
+    height: 100%;
+}
+
+.swiper-scrollbar.white {
+    background: rgba(0, 0, 0, 0);
+    width: 7px;
+}
+
+.swiper-scrollbar.white .swiper-scrollbar-drag {
+    width: 7px;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 10px;
+}
+
+.swiper-scrollbar.black {
+    background: rgba(0, 0, 0, 0);
+    width: 7px;
+}
+
+.swiper-scrollbar.black .swiper-scrollbar-drag {
+    width: 7px;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 10px;
+}
+
+/*
+.common_back{
+	background-size: 100% 100%;
+	@include btn_down_dis(
+		resolve('mathalive_lib/images/btn_back.png'), 
+		resolve('mathalive_lib/images/btn_back_down.png'),
+		'',
+		width('mathalive_lib/images/btn_back.png'),
+		height('mathalive_lib/images/btn_back.png')
+	);
+	&.down{
+		transform: scale(1.1, 1.1);
+	}
+}
+*/
+.swiper-container-horizontal > .swiper-pagination-bullets .swiper-pagination-bullet {
+    margin: 0 16px;
+}
+
+.swiper-pagination-bullet {
+    width: 15px;
+    height: 15px;
+    background-color: #fff;
+    opacity: 0.3;
+}
+
+.swiper-pagination-bullet-active {
+    opacity: 1;
+    background: #47F6E9;
+    box-shadow: 0px 5px 5px rgba(0, 0, 0, 0.3);
+}
+
+#preload_hidden {
+    position: absolute;
+    pointer-events: none;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    overflow: hidden;
+}
+
+#preload_hidden .helvetica {
+    font-family: HelveticaRounded;
+}
+
+#preload_hidden .helveticastd {
+    font-family: HelveticaRoundedLTStd;
+}
+
+.clear:after {
+    content: "";
+    display: block;
+    clear: both;
+}
+
+.none {
+    display: none;
+}
+

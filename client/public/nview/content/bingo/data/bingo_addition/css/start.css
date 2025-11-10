@@ -1,0 +1,187 @@
+#app {
+  display: grid;
+}
+
+#vs-top-menu {
+  height: 100px;
+  background-color: transparent;
+  float: right;
+}
+
+#vs-top-menu .md-button {
+  width: 65px;
+  min-width: 65px;
+  height: 65px;
+  min-height: 65px;
+  background: url(../assets/img/btnClose.png) no-repeat 0 0;
+  padding: 0;
+  text-indent: -9999em;
+}
+
+body.md-theme-default.vs-main-bg {
+  background-color: transparent;
+}
+
+.vs-main-bg {
+  background-color: #184372;
+}
+
+.vs-who-box-bg {
+  background-color: #769FC0;
+}
+
+.vs-box {
+  width: 850px;
+  height: 540px;
+  margin: 0 215px 10px 215px;
+  background-color: #FBCD5C;
+  border-radius: 40px;
+  display: block;
+  position: relative;
+}
+
+.vs-index-title {
+  /* float: left; */
+  /* position: fixed; */
+  margin-top: 50px;
+  text-align: center;
+  width: 100%;
+  height: 100px;
+  font-size: 60px;
+  font-weight: 700;
+  color: #2d2d2d;
+}
+
+.vs-with-line-list {
+  background: transparent url(../assets/img/select_line.png) no-repeat 50% 100%;
+  width: 100%;
+  height: 110px;
+  margin: 30px 0 20px 0;
+  padding: 0 60px 0 100px;
+}
+
+.vs-white-button {
+  color: #fff;
+  font-size: 30px;
+  font-weight: 700;
+  /* width: 250px; */
+  height: 73px;
+  line-height: 78px;
+  /* background: transparent url(../assets/img/btn_choice_default.png) no-repeat 0 0; */
+}
+/* 
+.vs-white-button:hover, .vs-white-button.selected {
+  background: transparent url(../assets/img/btn_choice_select.png) no-repeat 0 0;
+} */
+
+.vs-start-button {
+  color: #fff;
+  font-size: 30px;
+  font-weight: 700;
+  width: 256px;
+  height: 78px;
+  line-height: 78px;
+  margin-top: 25px;
+  left: calc(50% - 256px/2);
+  background: transparent url(../assets/img/btn_box_default.png) no-repeat 0 0;
+}
+
+.vs-start-button:hover {
+  background: transparent url(../assets/img/btn_box_select.png) no-repeat 0 0;
+}
+
+.vs-wide-button {
+  color: #fff;
+  font-size: 30px;
+  font-weight: 700;
+  width: 250px;
+  height: 73px;
+  line-height: 65px;
+  padding: 0;
+  margin: 0;
+  background: transparent url(../assets/img/btn_level_default.png) no-repeat 0 0;
+}
+.vs-wide-button:hover, .vs-wide-button.selected {
+  background: transparent url(../assets/img/btn_level_select.png) no-repeat 0 0;
+}
+
+.vs-short-button {
+  color: #fff;
+  font-size: 30px;
+  font-weight: 700;
+  width: 160px;
+  height: 72px;
+  line-height: 65px;
+  padding: 0;
+  margin: 0;
+  background: transparent url(../assets/img/btn_grid_default.png) no-repeat 0 0;
+}
+.vs-short-button:hover, .vs-short-button.selected {
+  background: transparent url(../assets/img/btn_grid_select.png) no-repeat 0 0;
+}
+
+.vs-with-line-list > button {
+  padding: 0;
+  margin: 0 10px;
+}
+
+.row {
+  display: grid;
+  grid-gap: 2rem;
+  grid-template-columns: repeat(6, auto);
+  justify-content: center;
+}
+
+.half-card {
+  width: 50%;
+  margin-top: 200px;
+  text-align: center;
+}
+
+.md-theme-default.md-card {
+  background-color: #fff;
+  border: #1AABA4 1px solid;
+  border-radius: 15px;
+}
+
+.md-boards-navigation { display: none; }
+
+
+.md-button:hover:not([disabled]):not(.md-raised) { background-color: transparent !important; }
+
+.vs-tar { text-align: right !important; }
+.vs-tal { text-align: left !important; }
+.vs-tac { text-align: center !important; }
+
+.md-dialog-container {
+  font-size: 28px;
+}
+
+.md-dialog-container .md-dialog {
+  border-radius: 20px;
+}
+
+.md-dialog-container .md-dialog .md-dialog-content {
+  color: #333;
+}
+
+.md-dialog-actions {
+  justify-content: center;
+}
+
+.md-dialog-actions .md-button {
+  /* text-transform: uppercase !important; */
+  border: 1px solid #ccc;
+  background-color: #ececec;
+  color: #333 !important;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  box-shadow: 1px 1px #666;
+  padding: 0 20px;
+}
+
+.md-dialog-actions .md-button:hover {
+  background-color: #999;
+}
+
+.md-button { text-transform: none !important; }

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ko" translate="no">
+
+<head>
+  <meta charset="utf-8">
+  <meta content="on" http-equiv="cleartype">
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <meta content="yes" name="mobile-web-app-capable">
+  <meta content="yes" name="apple-mobile-web-app-status-bar-style">
+  <meta content="black" name="apple-mobile-web-app-status-bar-style">
+
+  <title>Vocabulary</title>
+
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+  <link rel="stylesheet" href="./css/notosanskr.css">
+  <link rel="stylesheet" href="./css/material_icon.css">
+
+  <link rel="stylesheet" type="text/css" href="./vue-material/vue-material.css">
+  <link rel="stylesheet" type="text/css" href="./vuetify/vuetify.min.css">
+
+  <script src='./js/store.legacy.min.js'></script>
+  <script src="./js/xml2json.min.js"></script>
+
+  <script src="./js/jquery.js"></script>
+  <script src="./js/jquery.scrollTo.min.js"></script>
+
+  <script src="./js/vue.min.js"></script>
+  <script src="./vue-material/vue-material.js"></script>
+  <script src="./vuetify/vuetify.min.js"></script>
+
+  <script src="/content/mathalive_lib/mathinterface.js"></script>
+
+</head>
+
+<body class='high_school'>
+  <div id="loader">
+    <md-spinner :md-size="150" md-indeterminate></md-spinner>
+  </div>
+  <div id="main" class='hide'>
+    
+    <div class="app-viewport" id="vs-top">
+      <md-toolbar id="vs-top-menu">
+        <h1 class="vs-tal vs-top-title" v-on:click='linkToHome()'>
+        </h1>
+      </md-toolbar>
+    </div>
+    
+    <div id='vs-top-control'>
+
+      <div id="paginate">
+
+      </div>
+    </div>
+    
+    <div id="app" @mousemove="circleMove" @touchmove.passive="circleMove">
+      <div class='main'>
+        <div class="vs-text vs-tac vs-fs-30 vs-normal-text none-select">Drag over the word that goes best with the hint.</div>
+        <md-boards class="md-primary" :md-controls="true" :md-swipeable="false" v-on:click="navClick">
+          <md-board v-for="(word, index) in wordData" :key="word.index" v-bind:id="'slide' + index" class="word-card"
+            v-on:click="navClick">
+            <div class="md-layout">
+              <div class="md-layout-item full-card">
+                <md-card>
+                  <md-card-content>
+                    <img class="none-select vs-image" @click="openDialog('bigImage', word.img)" v-bind:src="word.img" />
+                    <div class="vs-definition"><p v-html="word.definition"></p></div>
+                  </md-card-content>
+                </md-card>
+              </div>
+            </div>
+            <div v-bind:id="'circle_'+index+'_1'" class="circle-drag circle-1 vs-text" v-bind:correct="word.correct" :style="coordinates_1" @touchstart="circleDown" @mousedown="circleDown" @touchend="circleUp" @mouseup="circleUp" v-html="word.word_1">One</div>
+            <div v-bind:id="'circle_'+index+'_2'" class="circle-drag circle-2 vs-text" v-bind:correct="word.correct" :style="coordinates_2" @touchstart="circleDown" @mousedown="circleDown" @touchend="circleUp" @mouseup="circleUp" v-html="word.word_2">Two</div>
+            <div v-bind:id="'circle_'+index+'_3'" class="circle-drag circle-3 vs-text" v-bind:correct="word.correct" :style="coordinates_3" @touchstart="circleDown" @mousedown="circleDown" @touchend="circleUp" @mouseup="circleUp" v-html="word.word_3">Three</div>
+          </md-board>
+        </md-boards>
+      </div>
+      
+
+      
+      <div class='vs-card-prev'>
+        <md-button class="vs-btn-next" v-on:click="nextCard"></md-button>
+        <md-button class="vs-btn-prev" v-on:click="prevCard"></md-button>
+      </div>
+      
+      <div class='vs-card-next'>
+        <md-button class="vs-btn-next" v-on:click="nextCard"></md-button>
+        <md-button class="vs-btn-prev" v-on:click="prevCard"></md-button>
+      </div>
+    </div>
+
+    <md-dialog ref="bigImage" class="border-radius">
+      <div class="md-layout">
+        <div class="md-layout-item modal-img" @click="closeDialog('bigImage')">
+          <img src="" />
+        </div>
+      </div>
+      <md-button class="" @click="closeDialog('bigImage')"><md-icon class="md-size-2x">close</md-icon></md-button>
+    </md-dialog>
+
+    <audio id='vs-bgm' loop src=''></audio>
+    <audio id='vs-effect' src=''></audio>
+  </div>
+
+  <div id="feedback">
+    <img class="feedback_img" id="feedback_correct" src="./assets/img/img_great.png">
+    <img class="feedback_img" id="feedback_wrong" src="./assets/img/img_sorry.png">
+    <img id='particle' src='' />
+  </div>
+
+  <link rel="stylesheet" href="./css/application.css">
+
+  <script src="./js/application.js"></script>
+  <script src="./js/s_quiz.js"></script>
+  <link rel="stylesheet" href="./css/s_quiz.css">
+</body>
+
+</html>

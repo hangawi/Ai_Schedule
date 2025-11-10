@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko" translate="no">
+<head>
+  <meta charset="utf-8">
+  <meta content="on" http-equiv="cleartype">
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <meta content="yes" name="mobile-web-app-capable">
+  <meta content="yes" name="apple-mobile-web-app-status-bar-style">
+  <meta content="black" name="apple-mobile-web-app-status-bar-style">
+
+  <title>Vocabullary</title>
+
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="./css/notosanskr.css">
+  <link rel="stylesheet" href="./css/material_icon.css">
+
+  <link rel="stylesheet" type="text/css" href="./vue-material/vue-material.css">
+
+  <script src="./js/jquery.js"></script>
+  <script src="./js/jquery.scrollTo.min.js"></script>
+  
+  <script src='./js/store.legacy.min.js'></script>
+  <script src="./js/xml2json.min.js"></script>
+
+  <script src="./js/vue.min.js"></script>
+  <script src="./vue-material/vue-material.js"></script>
+
+  <script src="/content/mathalive_lib/mathinterface.js"></script>
+</head>
+<body class='app'>
+  <div id="loader">
+    <md-spinner :md-size="150" md-indeterminate></md-spinner>
+  </div>
+  <div id="main" class="hide">
+    
+    <div class="app-viewport" id="vs-top">
+      <md-toolbar  id="vs-top-menu">
+        <h1 class="vs-tal vs-top-title" style="flex: 2">Grade 5</h1>
+        
+        <md-button class="" @click="exitBook()">
+          <md-icon class="md-size-2x">close</md-icon>
+        </md-button>
+      </md-toolbar>
+    </div>
+
+    <div id="app" class="index">
+      <div class="row vs-tac">
+        <div v-for="(lesson, index) in lessons"  class="lesson-list-item vs-lesson-select col-lg-4 col-xl-4" v-if="lesson.length > 0">
+          <md-card>
+            <md-card-content>
+              <div class='icon' v-html="lesson.icon"></div>
+              <div class='lesson_name' v-html="lesson.name"></div>
+            </md-card-content>
+          </md-card>
+          <md-card-actions v-if="lesson.topics > 0">
+            <input type='checkbox' v-bind:id='"toggle_"+index' class='toggle'/>
+            <label class='show-menu' v-bind:class='"counts_"+lesson.topics' v-bind:for='"toggle_"+index'>
+              <div class='topicBtn'>
+                <i class="toggleBtn menuBtn">menu</i>
+                <i class="toggleBtn closeBtn">close</i>
+              </div>
+              <div class="topicBtn" v-bind:class='"btnTopic_"+topic' v-for="(topic, idx) in lesson.elem">
+                <button v-on:click="openTopic(index, topic)">{{topic}}</button>
+              </div>
+            </label>
+          </md-card-actions>
+        </div>
+      </div>
+    </div>
+    <audio id='vs-effect' src=''></audio>
+  </div>
+
+  <link rel="stylesheet" href="./css/application.css">
+  <link rel="stylesheet" href="./css/start.css">
+
+  <script src="./js/application.js"></script>
+  <script src="./js/start.js"></script>
+</body>
+</html>
