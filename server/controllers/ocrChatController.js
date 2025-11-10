@@ -453,7 +453,7 @@ exports.filterSchedulesByChat = async (req, res) => {
 
     // Gemini AI 호출 (여러 모델 시도)
     const modelNames = [
-      'gemini-2.0-flash-exp',
+      'gemini-2.0-flash',
       'gemini-2.0-flash',
       'gemini-1.5-flash-002',
       'gemini-1.5-flash'

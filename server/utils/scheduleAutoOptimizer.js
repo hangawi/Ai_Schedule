@@ -67,7 +67,7 @@ async function filterSchedulesByGrade(schedules, studentGrade) {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     const prompt = `
 당신은 학년별 수업 적합성을 판단하는 전문가입니다.
@@ -135,7 +135,7 @@ ${schedules.map((s, idx) => `${idx}. ${s.title} (gradeLevel: ${s.gradeLevel || '
 // Phase 2: LLM 기반 스케줄 배치 카테고리 판단 (한 번에 여러 스케줄 처리)
 async function categorizeSchedulesBatch(schedules, imageTitle) {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     // 스케줄 목록을 텍스트로 변환
     const scheduleList = schedules.map((s, idx) =>

@@ -8,7 +8,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
  */
 async function analyzeFixedScheduleIntent(userInput, availableClasses = []) {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     // 수업 목록 문자열 생성 - 강사 이름 포함
     const classList = availableClasses.length > 0
