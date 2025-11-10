@@ -81,6 +81,7 @@ const ScheduleOptimizationModal = ({
   const [hoveredImageIndex, setHoveredImageIndex] = useState(null); // hover된 이미지 인덱스
   const [selectedImageForOriginal, setSelectedImageForOriginal] = useState(null); // 원본 시간표 모달용
   const [currentFixedSchedules, setCurrentFixedSchedules] = useState(fixedSchedules || []); // 고정 일정 목록
+  const [customSchedulesForLegend, setCustomSchedulesForLegend] = useState([]); // ⭐ 커스텀 일정 범례용
   const [conflictState, setConflictState] = useState(null); // 충돌 상태 { pendingFixed, conflicts }
   const chatEndRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -522,6 +523,15 @@ const ScheduleOptimizationModal = ({
         updatedCombinations[currentIndex] = fixedResult.optimizedSchedule;
         setModifiedCombinations(updatedCombinations);
         setCurrentFixedSchedules(fixedResult.fixedSchedules);
+
+        // ⭐ 커스텀 일정 범례 업데이트 (기존 것과 병합)
+        if (fixedResult.customSchedules) {
+          // 기존 커스텀 일정과 새로운 커스텀 일정 병합 (중복 제거)
+          const existingIndices = new Set(customSchedulesForLegend.map(c => c.sourceImageIndex));
+          const newCustoms = fixedResult.customSchedules.filter(c => !existingIndices.has(c.sourceImageIndex));
+          setCustomSchedulesForLegend([...customSchedulesForLegend, ...newCustoms]);
+          console.log('🎨 커스텀 일정 범례 업데이트:', customSchedulesForLegend.length, '→', customSchedulesForLegend.length + newCustoms.length, '개');
+        }
 
         console.log('✅ 시간표 업데이트 완료');
 
@@ -1495,7 +1505,69 @@ const ScheduleOptimizationModal = ({
         overflow: 'hidden'
       }}>
         {/* 채팅 헤더 */}
+        <div className="px-4 py-3 bg-white border-b border-gray-200">
+          <h3 className="text-sm font-bold text-gray-800 mb-2">📚 업로드된 시간표</h3>
 
+          {/* 이미지별 범례 */}
+          <div className="flex flex-wrap gap-2">
+            {schedulesByImage?.map((imageData, idx) => {
+              const color = getColorForImageIndex(idx);
+              const isHovered = hoveredImageIndex === idx;
+
+              return (
+                <button
+                  key={`img-${idx}`}
+                  onClick={() => setSelectedImageForOriginal(imageData)}
+                  onMouseEnter={() => setHoveredImageIndex(idx)}
+                  onMouseLeave={() => setHoveredImageIndex(null)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    isHovered ? 'shadow-md scale-105' : 'shadow-sm'
+                  }`}
+                  style={{
+                    backgroundColor: isHovered ? color.bg : '#ffffff',
+                    border: `2px solid ${color.border}`,
+                    color: color.text
+                  }}
+                >
+                  <div
+                    className="w-3 h-3 rounded-sm"
+                    style={{ backgroundColor: color.border }}
+                  />
+                  <span>{imageData.academyName || `이미지 ${idx + 1}`}</span>
+                </button>
+              );
+            })}
+
+            {/* ⭐ 커스텀 일정 범례 */}
+            {customSchedulesForLegend.map((customData) => {
+              const color = getColorForImageIndex(customData.sourceImageIndex);
+              const isHovered = hoveredImageIndex === customData.sourceImageIndex;
+
+              return (
+                <button
+                  key={`custom-${customData.sourceImageIndex}`}
+                  onClick={() => setSelectedImageForOriginal(customData)}
+                  onMouseEnter={() => setHoveredImageIndex(customData.sourceImageIndex)}
+                  onMouseLeave={() => setHoveredImageIndex(null)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    isHovered ? 'shadow-md scale-105' : 'shadow-sm'
+                  }`}
+                  style={{
+                    backgroundColor: isHovered ? color.bg : '#ffffff',
+                    border: `2px solid ${color.border}`,
+                    color: color.text
+                  }}
+                >
+                  <div
+                    className="w-3 h-3 rounded-sm"
+                    style={{ backgroundColor: color.border }}
+                  />
+                  <span>{customData.title} 📌</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {/* 채팅 메시지 영역 - 스크롤 가능 */}
         <div

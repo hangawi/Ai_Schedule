@@ -140,6 +140,20 @@ router.post('/fixed-intent', async (req, res) => {
 
       userMessage += `\n\n✨ AI가 고정 일정을 포함한 최적 시간표를 다시 생성했습니다!`;
 
+      // 커스텀 일정들을 범례용으로 별도 추출
+      const customSchedules = allFixedSchedules
+        .filter(f => f.type === 'custom')
+        .map(custom => ({
+          title: custom.academyName || custom.title,
+          sourceImageIndex: custom.sourceImageIndex,
+          schedules: [custom]
+        }));
+
+      console.log('📌 customSchedules 생성:', customSchedules.length, '개');
+      customSchedules.forEach(c => {
+        console.log(`  - ${c.title} (sourceImageIndex: ${c.sourceImageIndex})`);
+      });
+
       return res.json({
         ...result,
         message: userMessage,
@@ -147,6 +161,7 @@ router.post('/fixed-intent', async (req, res) => {
         optimizedSchedule: optimizedSchedule,
         optimizedCombinations: [optimizedSchedule], // 배열로 감싸기
         fixedSchedules: allFixedSchedules,
+        customSchedules: customSchedules, // ⭐ 범례용 커스텀 일정
         removedFixedSchedules: removedFixedSchedules,
         stats: {
           total: optimizedSchedule.length,
