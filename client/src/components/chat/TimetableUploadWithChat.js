@@ -41,6 +41,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
   const [overallTitle, setOverallTitle] = useState('업로드된 시간표'); // 전체 시간표 제목
   const [filteredSchedules, setFilteredSchedules] = useState(null);
   const [fixedSchedules, setFixedSchedules] = useState([]); // 고정 일정 (최우선)
+  const [customSchedulesForLegend, setCustomSchedulesForLegend] = useState([]); // ⭐ 커스텀 일정 범례용
   const [showOptimizationModal, setShowOptimizationModal] = useState(false);
   const [slideDirection, setSlideDirection] = useState('left'); // 'left' or 'right'
 
@@ -345,6 +346,8 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
       console.log('🔍 intent:', fixedData.intent);
       console.log('✅ success:', fixedData.success);
       console.log('🎬 action:', fixedData.action);
+      console.log('🎨 customSchedules:', fixedData.customSchedules);
+      console.log('🎨 customSchedules 개수:', fixedData.customSchedules?.length || 0);
 
       // 고정 일정 관련 요청이면 처리하고 리턴
       if (fixedData.intent && fixedData.intent !== 'none') {
@@ -393,6 +396,20 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
           setFixedSchedules(newFixedSchedules);
         }
 
+        // ⭐ 커스텀 일정 범례 업데이트 (fixedData에서)
+        if (fixedData.customSchedules && fixedData.customSchedules.length > 0) {
+          console.log('🎨 [fixedData] 커스텀 일정 범례 업데이트:', fixedData.customSchedules.length, '개');
+          fixedData.customSchedules.forEach(c => {
+            console.log(`  - ${c.title} (sourceImageIndex: ${c.sourceImageIndex})`);
+          });
+          setCustomSchedulesForLegend(prev => {
+            // 중복 제거하면서 병합
+            const existingIndices = new Set(prev.map(c => c.sourceImageIndex));
+            const newCustoms = fixedData.customSchedules.filter(c => !existingIndices.has(c.sourceImageIndex));
+            return [...prev, ...newCustoms];
+          });
+        }
+
         // 봇 응답 추가
         const botMessage = {
           id: Date.now() + 1,
@@ -410,6 +427,10 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
           console.log('📷 전달할 이미지:', schedulesByImage?.length, '개');
 
           // 재최적화 API 호출
+          // ⭐ 첫 고정 일정 추가면 원본, 이후에는 최적화된 결과 사용
+          const currentOptimizedSchedules = filteredSchedules || extractedSchedules;
+          console.log('🔍 사용할 스케줄:', currentOptimizedSchedules.length, '개 (filteredSchedules 사용 여부:', !!filteredSchedules, ')');
+
           const reoptimizeResponse = await fetch(`${API_BASE_URL}/api/schedule/optimize`, {
             method: 'POST',
             headers: {
@@ -417,7 +438,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
               'x-auth-token': token
             },
             body: JSON.stringify({
-              schedules: originalSchedule || extractedSchedules,
+              schedules: currentOptimizedSchedules, // ⭐ 최적화된 결과 사용
               schedulesByImage: schedulesByImage,
               fixedSchedules: newFixedSchedules // 새로 업데이트된 고정 일정
             })
@@ -428,6 +449,8 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
           console.log('🔍 success:', reoptimizeData.success);
           console.log('🔍 optimizedSchedules 타입:', typeof reoptimizeData.optimizedSchedules);
           console.log('🔍 optimizedSchedules 길이:', reoptimizeData.optimizedSchedules?.length);
+          console.log('🎨 customSchedules:', reoptimizeData.customSchedules);
+          console.log('🎨 customSchedules 개수:', reoptimizeData.customSchedules?.length || 0);
 
           if (reoptimizeData.success && Array.isArray(reoptimizeData.optimizedSchedules)) {
             console.log('✅ 재최적화 완료:', reoptimizeData.optimizedSchedules.length, '개');
@@ -435,6 +458,24 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
             const kpopSchedules = reoptimizeData.optimizedSchedules.filter(s => s.title?.includes('KPOP'));
             console.log('  → KPOP 스케줄:', kpopSchedules.length, '개', kpopSchedules);
             setFilteredSchedules(reoptimizeData.optimizedSchedules);
+
+            // ⭐ 커스텀 일정 범례 업데이트 (reoptimizeData에서)
+            if (reoptimizeData.customSchedules && reoptimizeData.customSchedules.length > 0) {
+              console.log('🎨 [reoptimizeData] 커스텀 일정 범례 업데이트:', reoptimizeData.customSchedules.length, '개');
+              reoptimizeData.customSchedules.forEach(c => {
+                console.log(`  - ${c.title} (sourceImageIndex: ${c.sourceImageIndex})`);
+              });
+              setCustomSchedulesForLegend(prev => {
+                // 중복 제거하면서 병합
+                const existingIndices = new Set(prev.map(c => c.sourceImageIndex));
+                const newCustoms = reoptimizeData.customSchedules.filter(c => !existingIndices.has(c.sourceImageIndex));
+                if (newCustoms.length > 0) {
+                  console.log(`  → ${newCustoms.length}개 새로 추가됨`);
+                  return [...prev, ...newCustoms];
+                }
+                return prev;
+              });
+            }
 
             // 모달 띄우기
             setSlideDirection('left');
@@ -799,6 +840,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                     initialSchedules={filteredSchedules}
                     schedulesByImage={schedulesByImage}
                     fixedSchedules={fixedSchedules}
+                    customSchedulesForLegend={customSchedulesForLegend}
                     overallTitle={overallTitle}
                     onClose={null}
                     onSchedulesApplied={handleSchedulesApplied}

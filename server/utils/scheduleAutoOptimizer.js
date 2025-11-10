@@ -355,6 +355,7 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
     const originalAllSchedules = [...allSchedules]; // 현재 최적화된 스케줄 (30개)
     const removedSchedules = []; // 제거된 스케줄 저장
 
+    // ⭐ 겹치는 스케줄은 전체 제거 (하나의 세트로 취급)
     allSchedules = allSchedules.filter(schedule => {
       // 고정 일정의 원본인지 확인 (자기 자신은 제거 안 함)
       const isFixedOriginal = selectedSchedules.some(fixed => {
@@ -367,7 +368,6 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
 
       if (isFixedOriginal) {
         console.log(`  ⏭️ 건너뜀 (고정 일정 원본): ${schedule.title} (${schedule.days} ${schedule.startTime}-${schedule.endTime})`);
-        // ⭐ removedSchedules에 추가하지 않음 - 이건 원래 있던 것이므로 후보 스케줄 풀에서 제외하면 안됨
         return false; // 고정 일정 원본은 제거 (selectedSchedules에 이미 추가됨)
       }
 

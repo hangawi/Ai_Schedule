@@ -60,10 +60,29 @@ router.post('/optimize', auth, async (req, res) => {
       fixedSchedules || []
     );
 
+    // ⭐ 고정 일정 중 커스텀 일정 범례 생성
+    const customSchedules = [];
+    if (fixedSchedules && fixedSchedules.length > 0) {
+      const customFixed = fixedSchedules.filter(f => f.type === 'custom');
+      if (customFixed.length > 0) {
+        console.log('🎨 커스텀 고정 일정 범례 생성:', customFixed.length, '개');
+        customFixed.forEach(custom => {
+          customSchedules.push({
+            fileName: `커스텀 일정`,
+            sourceImageIndex: custom.sourceImageIndex,
+            title: custom.title,
+            isCustom: true
+          });
+          console.log(`  - ${custom.title} (sourceImageIndex: ${custom.sourceImageIndex})`);
+        });
+      }
+    }
+
     // result가 { optimizedSchedules: [...] } 형태로 반환되므로 그대로 사용
     res.json({
       success: true,
-      optimizedSchedules: result.optimizedSchedules || result
+      optimizedSchedules: result.optimizedSchedules || result,
+      customSchedules: customSchedules.length > 0 ? customSchedules : undefined
     });
   } catch (error) {
     console.error('❌ 재최적화 오류:', error);
@@ -705,7 +724,7 @@ function filterScheduleByCode(message, currentSchedule) {
  */
 router.post('/chat', auth, async (req, res) => {
   try {
-    const { message, currentSchedule, originalSchedule, scheduleHistory, lastAiResponse, redoStack, fixedSchedules, schedulesByImage } = req.body;
+    const { message, currentSchedule, originalSchedule, scheduleHistory, lastAiResponse, redoStack, fixedSchedules, schedulesByImage, existingCustomSchedules } = req.body;
 
     console.log('\n💬 채팅 요청:', message);
     console.log('📚 히스토리:', scheduleHistory ? scheduleHistory.length + '단계' : '없음');
@@ -784,7 +803,7 @@ router.post('/chat', auth, async (req, res) => {
     const prompt = generatePrompt(message, currentSchedule, conflicts, contextToUse);
 
     // 여러 모델명 시도
-    const modelNames = ['gemini-2.0-flash-exp', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    const modelNames = ['gemini-2.0-flash', 'gemini-1.5-flash'];
 
     let aiResponse = null;
 
@@ -1240,12 +1259,119 @@ router.post('/chat', auth, async (req, res) => {
       }
     }
 
+    // ⭐ 새로 추가된 일정의 범례 생성 및 인덱스 할당 (action이 'add'일 때만)
+    let customSchedules = [];
+    if (parsed.action === 'add') {
+      console.log('\n🎨 새 일정 범례 생성 시작');
+      console.log('  - 기존 커스텀 일정:', existingCustomSchedules?.length || 0, '개');
+
+      // 새로 추가된 항목들 (AI가 반환한 새 항목들)
+      const newItems = parsed.schedule.slice(currentSchedule.length); // 기존 스케줄 이후 항목들
+
+      if (newItems.length > 0) {
+        // 기존 schedulesByImage에 있는 과목명들과 인덱스 매핑
+        const existingTitleToIndex = new Map();
+        if (schedulesByImage && Array.isArray(schedulesByImage)) {
+          schedulesByImage.forEach((img, idx) => {
+            if (img.schedules && Array.isArray(img.schedules)) {
+              img.schedules.forEach(s => {
+                if (s.title && !existingTitleToIndex.has(s.title)) {
+                  existingTitleToIndex.set(s.title, idx);
+                }
+              });
+            }
+          });
+        }
+
+        // ⭐ 기존 커스텀 일정의 제목들과 인덱스 매핑 (같은 제목이면 재사용)
+        if (existingCustomSchedules && Array.isArray(existingCustomSchedules)) {
+          existingCustomSchedules.forEach(custom => {
+            if (custom.title && !existingTitleToIndex.has(custom.title)) {
+              existingTitleToIndex.set(custom.title, custom.sourceImageIndex);
+              console.log(`  - 기존 커스텀: ${custom.title} (인덱스 ${custom.sourceImageIndex} 재사용)`);
+            }
+          });
+        }
+
+        // 새로 추가된 항목 중 기존에 없던 과목들
+        const newTitles = new Set();
+        console.log('  - 새로 추가된 항목들:');
+        newItems.forEach(item => {
+          console.log(`    * ${item.title} (기존에 있음? ${existingTitleToIndex.has(item.title)})`);
+          if (item.title && !existingTitleToIndex.has(item.title)) {
+            newTitles.add(item.title);
+          }
+        });
+        console.log(`  - 기존에 없던 과목: ${Array.from(newTitles).join(', ') || '없음'}`);
+
+        if (newTitles.size > 0) {
+          console.log(`  - 완전히 새로운 과목 발견: ${Array.from(newTitles).join(', ')}`);
+
+          // 새 이미지 인덱스 할당 (기존 이미지 개수부터 시작)
+          const existingImageCount = schedulesByImage ? schedulesByImage.length : 0;
+          let newImageIndex = existingImageCount;
+
+          // 🔥 기존 커스텀 일정 중 최대 인덱스 찾기
+          if (existingCustomSchedules && existingCustomSchedules.length > 0) {
+            const maxCustomIndex = Math.max(...existingCustomSchedules.map(c => c.sourceImageIndex));
+            newImageIndex = Math.max(newImageIndex, maxCustomIndex + 1);
+            console.log(`  - 기존 커스텀 최대 인덱스: ${maxCustomIndex}, 새 시작 인덱스: ${newImageIndex}`);
+          }
+
+          const titleToNewIndex = new Map();
+          Array.from(newTitles).forEach(title => {
+            customSchedules.push({
+              fileName: `커스텀 일정 ${newImageIndex + 1}`,
+              sourceImageIndex: newImageIndex,
+              title: title,
+              isCustom: true
+            });
+            titleToNewIndex.set(title, newImageIndex);
+            console.log(`  - 범례 추가: ${title} (인덱스 ${newImageIndex})`);
+            newImageIndex++;
+          });
+
+          // ⭐ 새로 추가된 일정에 sourceImageIndex 할당
+          newItems.forEach(item => {
+            if (item.title) {
+              if (titleToNewIndex.has(item.title)) {
+                item.sourceImageIndex = titleToNewIndex.get(item.title);
+                console.log(`  - ${item.title}에 새 인덱스 ${item.sourceImageIndex} 할당`);
+              } else if (existingTitleToIndex.has(item.title)) {
+                item.sourceImageIndex = existingTitleToIndex.get(item.title);
+                console.log(`  - ${item.title}에 기존 인덱스 ${item.sourceImageIndex} 할당 (재사용)`);
+              }
+            }
+          });
+        } else {
+          console.log('  - 모든 과목이 이미 범례에 존재');
+
+          // 기존 과목이지만 sourceImageIndex 할당
+          newItems.forEach(item => {
+            if (item.title && existingTitleToIndex.has(item.title)) {
+              item.sourceImageIndex = existingTitleToIndex.get(item.title);
+            }
+          });
+        }
+      }
+    }
+
+    console.log('\n📤 응답 전송:');
+    console.log('  - action:', parsed.action);
+    console.log('  - customSchedules:', customSchedules.length, '개');
+    if (customSchedules.length > 0) {
+      customSchedules.forEach(c => {
+        console.log(`    * ${c.title} (인덱스 ${c.sourceImageIndex})`);
+      });
+    }
+
     res.json({
       success: true,
       understood: parsed.understood,
       action: parsed.action,
       schedule: finalSchedule,
-      explanation: parsed.explanation
+      explanation: parsed.explanation,
+      customSchedules: customSchedules.length > 0 ? customSchedules : undefined
     });
 
   } catch (error) {

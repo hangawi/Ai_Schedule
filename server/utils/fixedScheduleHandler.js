@@ -263,12 +263,31 @@ function convertToFixedSchedule(schedule, type = 'pinned-class') {
 
 /**
  * 개인 일정을 고정 스케줄로 변환
+ * @param {Object} customData - 추가할 커스텀 일정 데이터
+ * @param {Array} existingFixedSchedules - 기존 고정 일정 배열 (같은 제목 확인용)
  */
-function createCustomFixedSchedule(customData, existingCustomCount = 0) {
-  // 커스텀 일정마다 고유한 sourceImageIndex 부여
-  // 기존 이미지는 0부터 시작하므로, 커스텀은 1000 + existingCustomCount부터 시작
-  const customImageIndex = 1000 + existingCustomCount;
-  
+function createCustomFixedSchedule(customData, existingFixedSchedules = []) {
+  // ⭐ 같은 제목의 커스텀 일정이 이미 있으면 그 인덱스 재사용
+  const existingCustom = existingFixedSchedules.find(
+    f => f.type === 'custom' && f.title === customData.title
+  );
+
+  let customImageIndex;
+  if (existingCustom) {
+    // 같은 제목이면 같은 인덱스 재사용
+    customImageIndex = existingCustom.sourceImageIndex;
+    console.log(`♻️ 같은 제목 발견: "${customData.title}" → 인덱스 ${customImageIndex} 재사용`);
+  } else {
+    // 새로운 제목이면 새 인덱스 할당
+    const existingCustomCount = existingFixedSchedules.filter(f => f.type === 'custom').length;
+    const existingIndices = existingFixedSchedules
+      .filter(f => f.type === 'custom')
+      .map(f => f.sourceImageIndex);
+    const maxIndex = existingIndices.length > 0 ? Math.max(...existingIndices) : 999;
+    customImageIndex = Math.max(1000 + existingCustomCount, maxIndex + 1);
+    console.log(`🆕 새로운 제목: "${customData.title}" → 인덱스 ${customImageIndex} 할당`);
+  }
+
   return {
     id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     type: 'custom',
@@ -278,7 +297,7 @@ function createCustomFixedSchedule(customData, existingCustomCount = 0) {
     endTime: customData.endTime,
     priority: 0, // 최우선
     userFixed: true,
-    sourceImageIndex: customImageIndex, // ⭐ 범례용 고유 인덱스
+    sourceImageIndex: customImageIndex, // ⭐ 범례용 고유 인덱스 (같은 제목이면 재사용)
     academyName: customData.title, // 범례에 표시될 이름
     color: customData.color || '#FF6B6B'
   };
@@ -370,9 +389,8 @@ async function handleFixedScheduleRequest(userInput, currentSchedules, fixedSche
     }
 
     case 'add_custom': {
-      // 기존 커스텀 일정 개수 세기
-      const existingCustomCount = fixedSchedules.filter(f => f.type === 'custom').length;
-      const newFixed = createCustomFixedSchedule(intent.schedule, existingCustomCount);
+      // 기존 고정 일정 배열 전달 (같은 제목 확인용)
+      const newFixed = createCustomFixedSchedule(intent.schedule, fixedSchedules);
 
       return {
         success: true,
