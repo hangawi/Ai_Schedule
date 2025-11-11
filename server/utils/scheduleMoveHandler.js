@@ -45,6 +45,11 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
   const pattern2 = /([월화수목금토일]요?일?)\s*(?:에?\s*있?는?\s*)?([가-힣a-zA-Z0-9]+)\s*을?\s*([월화수목금토일]요?일?)\s*(?:로|으로)?\s*(?:이동|옮겨|수정|변경|바꿔)/;
   const match2 = !match1 ? message.match(pattern2) : null;
 
+  // 패턴 3: "오후 3시에 있는 구몬을 토요일 11시로 이동" (원본 시간 명시)
+  // (원본 시간) (제목) (목표 요일) (목표 시간)
+  const pattern3 = /(?:오전|오후)?\s*(\d{1,2})시\s*(?:에?\s*있?는?\s*)?([가-힣a-zA-Z0-9]+)\s*을?\s*([월화수목금토일]요?일?)\s*(?:오전|오후)?\s*(\d{1,2})시/;
+  const match3 = !match1 && !match2 ? message.match(pattern3) : null;
+
   // 제목 정규화 함수 (generic term → 실제 검색용)
   const normalizeTitle = (title) => {
     const genericToSearch = {
@@ -419,6 +424,170 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
         schedule: updatedSchedule,
         fixedSchedules: updatedFixedSchedules,
         explanation: `✅ ${title}을 ${sourceDayKor}에서 ${targetDayKorean}요일 ${targetTime}로 이동했어요! 😊`,
+        movedSchedule: newSchedule
+      }
+    };
+  }
+
+  // 패턴 3: "오후 3시에 있는 구몬을 토요일 11시로 이동" (원본 시간 명시)
+  if (match3) {
+    const sourceHour = parseInt(match3[1]);
+    let title = match3[2].trim();
+    const targetDayKor = match3[3];
+    const targetHour = parseInt(match3[4]);
+
+    // 제목에서 불필요한 단어 제거
+    title = title.replace(/^(에|있는|잇는)\s*/g, '').trim();
+
+    const targetDay = Object.entries(dayMap).find(([k]) => targetDayKor.includes(k))?.[1];
+
+    // 원본 시간 정규화
+    const isSourcePM = message.match(/오후\s*\d+시.*있는/);
+    let normalizedSourceHour = sourceHour;
+    if (isSourcePM && sourceHour < 12) {
+      normalizedSourceHour = sourceHour + 12;
+    }
+    const sourceTime = `${normalizedSourceHour.toString().padStart(2, '0')}:00`;
+
+    // 목표 시간 정규화
+    const isTargetPM = message.match(new RegExp(`${targetDayKor}.*오후\\s*${targetHour}시`));
+    let normalizedTargetHour = targetHour;
+    if (isTargetPM && targetHour < 12) {
+      normalizedTargetHour = targetHour + 12;
+    }
+    const targetTime = `${normalizedTargetHour.toString().padStart(2, '0')}:00`;
+
+    console.log(`📋 패턴3 매칭 (원본 시간 명시):`);
+    console.log(`  - 원본 시간: ${sourceTime}`);
+    console.log(`  - 제목: ${title}`);
+    console.log(`  - 목표: ${targetDayKor} (${targetDay}) ${targetTime}`);
+
+    // 제목 정규화 (generic terms 처리)
+    const titleVariations = normalizeTitle(title);
+    console.log(`  - 제목 검색 변형: [${titleVariations.join(', ')}]`);
+
+    // ⭐ 시간으로 필터링 (여러 개 중에서 특정 시간 선택)
+    console.log('\n🔍 원본 일정 찾기 (시간 기준)...');
+
+    // 1. 현재 스케줄에서 찾기 (제목 + 시간으로 필터)
+    console.log(`\n  📋 현재 스케줄 검색 (${currentSchedule.length}개):`);
+    let foundSchedules = currentSchedule.filter(s => {
+      const titleMatch = titleVariations.some(variation => s.title?.includes(variation));
+      const timeMatch = s.startTime === sourceTime;
+
+      console.log(`    - ${s.title} (${s.startTime}-${s.endTime}): title=${titleMatch}, time=${timeMatch}`);
+      return titleMatch && timeMatch;
+    });
+
+    // 2. 고정 일정에서 찾기
+    let foundFixedSchedules = [];
+    if (foundSchedules.length === 0 && fixedSchedules) {
+      console.log(`\n  📌 고정 일정 검색 (${fixedSchedules.length}개):`);
+      foundFixedSchedules = fixedSchedules.filter(f => {
+        const titleMatch = titleVariations.some(variation => f.title?.includes(variation));
+        const timeMatch = f.startTime === sourceTime;
+
+        console.log(`    - ${f.title} (${f.startTime}-${f.endTime}): title=${titleMatch}, time=${timeMatch}`);
+        return titleMatch && timeMatch;
+      });
+
+      if (foundFixedSchedules.length > 0) {
+        console.log(`✅ 고정 일정에서 ${foundFixedSchedules.length}개 발견`);
+        foundSchedules = foundFixedSchedules.map(f => f.originalSchedule || f);
+      }
+    }
+
+    if (foundSchedules.length === 0) {
+      console.log(`❌ "${title}" 일정을 ${sourceTime}에 찾을 수 없음`);
+      return {
+        isMoveRequest: true,
+        result: {
+          success: false,
+          understood: `${sourceTime} ${title}을 ${targetDayKor} ${targetTime}로 이동 시도`,
+          action: 'move_failed',
+          schedule: currentSchedule,
+          explanation: `${sourceTime}에 "${title}" 일정을 찾을 수 없어요. 😅`
+        }
+      };
+    }
+
+    // 여러 개면 에러 (시간까지 명시했는데도 여러 개면 이상함)
+    if (foundSchedules.length > 1) {
+      console.log(`⚠️ "${title}" 일정이 ${sourceTime}에 ${foundSchedules.length}개 있음 - 첫 번째 선택`);
+    }
+
+    const foundSchedule = foundSchedules[0];
+    const foundFixed = foundFixedSchedules.length > 0 ? foundFixedSchedules[0] : null;
+    console.log('✅ 원본 일정 발견:', foundSchedule.title, foundSchedule.startTime);
+
+    // 이동 처리
+    console.log('\n🔄 일정 이동 처리 중...');
+
+    // 요일 코드 변환
+    const dayKoreanMap = { 'MON': '월', 'TUE': '화', 'WED': '수', 'THU': '목', 'FRI': '금', 'SAT': '토', 'SUN': '일' };
+    const targetDayKorean = dayKoreanMap[targetDay] || targetDay;
+
+    // 1단계: 원본 삭제
+    let updatedSchedule = currentSchedule.filter(s => {
+      const titleMatch = s.title === foundSchedule.title;
+      const timeMatch = s.startTime === foundSchedule.startTime;
+      const shouldDelete = titleMatch && timeMatch;
+
+      if (shouldDelete) {
+        console.log(`  ✂️ 삭제: ${s.title} (${s.startTime})`);
+      }
+      return !shouldDelete;
+    });
+
+    // 2단계: 고정 일정이면 고정 일정도 업데이트
+    let updatedFixedSchedules = fixedSchedules;
+    let wasFixed = false;
+    if (foundFixed) {
+      wasFixed = true;
+      updatedFixedSchedules = fixedSchedules.filter(f => !(f.id === foundFixed.id));
+      console.log(`  🔓 고정 일정 해제: ${foundFixed.title}`);
+    }
+
+    // 3단계: 새 일정 추가
+    const duration = foundSchedule.endTime
+      ? calculateDuration(foundSchedule.startTime, foundSchedule.endTime)
+      : 60;
+    const newEndTime = addMinutesToTime(targetTime, duration);
+
+    const newSchedule = {
+      ...foundSchedule,
+      days: [targetDayKorean],
+      startTime: targetTime,
+      endTime: newEndTime,
+      type: wasFixed ? 'custom' : foundSchedule.type,
+      sourceImageIndex: foundSchedule.sourceImageIndex
+    };
+
+    console.log(`  ➕ 추가: ${newSchedule.title} (${targetDayKorean} ${newSchedule.startTime}-${newSchedule.endTime})`);
+    updatedSchedule.push(newSchedule);
+
+    // 4단계: 새로 추가한 일정을 고정 일정으로 등록 (원래 고정이었다면)
+    if (wasFixed) {
+      const newFixed = {
+        ...foundFixed,
+        days: [targetDayKorean],
+        startTime: targetTime,
+        endTime: newEndTime,
+        id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      };
+      updatedFixedSchedules.push(newFixed);
+      console.log(`  🔒 새 고정 일정 등록: ${newFixed.title} (${targetDayKorean} ${targetTime})`);
+    }
+
+    return {
+      isMoveRequest: true,
+      result: {
+        success: true,
+        understood: `${sourceTime} ${title}을 ${targetDayKor} ${targetTime}로 이동`,
+        action: 'move',
+        schedule: updatedSchedule,
+        fixedSchedules: updatedFixedSchedules,
+        explanation: `✅ ${title} (${sourceTime})을 ${targetDayKorean}요일 ${targetTime}로 이동했어요! 😊`,
         movedSchedule: newSchedule
       }
     };

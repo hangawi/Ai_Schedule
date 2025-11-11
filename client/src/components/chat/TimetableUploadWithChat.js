@@ -350,18 +350,32 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
       console.log('🎨 customSchedules 개수:', fixedData.customSchedules?.length || 0);
 
       // 고정 일정 관련 요청이면 처리하고 리턴
-      // ⭐ optimizedSchedule이 있으면 고정 일정 API가 처리한 것
-      if ((fixedData.intent && fixedData.intent !== 'none') || fixedData.optimizedSchedule) {
+      // ⭐ optimizedSchedule이 있거나, action이 있거나, intent가 있으면 고정 일정 API가 처리한 것
+      if ((fixedData.intent && fixedData.intent !== 'none') || fixedData.optimizedSchedule || fixedData.action) {
         console.log('✨ 고정 일정 처리 시작 - 채팅 API 호출 안 함!');
         console.log('🚫 아래 채팅 API로 안 갑니다!!');
         // 고정 일정 관련 요청임 (성공 여부와 무관하게)
+
+        // ⭐ 여러 개 발견 시 사용자 선택 요청 (action: 'move_multiple_found')
+        if (fixedData.action === 'move_multiple_found' && fixedData.options) {
+          console.log('🔍 여러 일정 발견 - 사용자 선택 요청');
+          const botMessage = {
+            id: Date.now() + 1,
+            sender: 'bot',
+            text: fixedData.explanation || fixedData.message || '여러 일정이 발견되었습니다.',
+            timestamp: new Date()
+          };
+          setChatHistory(prev => [...prev, botMessage]);
+          setIsFilteringChat(false);
+          return;
+        }
 
         // 실패한 경우 메시지만 표시하고 종료
         if (!fixedData.success || (!fixedData.action && !fixedData.optimizedSchedule)) {
           const botMessage = {
             id: Date.now() + 1,
             sender: 'bot',
-            text: fixedData.message || '고정 일정 처리에 실패했습니다.',
+            text: fixedData.message || fixedData.explanation || '고정 일정 처리에 실패했습니다.',
             timestamp: new Date()
           };
           setChatHistory(prev => [...prev, botMessage]);
