@@ -965,13 +965,19 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                 </button>
                 <button
                   onClick={() => {
+                    console.log('🔘 취소 버튼 클릭 - 중복 무시하고 모든 이미지 사용');
+
+                    // 모달 닫기
                     setShowDuplicateModal(false);
                     setDuplicateInfo(null);
-                    setIsProcessing(false);
+
+                    // 중복 체크 건너뛰고 모든 이미지로 OCR 처리
+                    console.log('🔄 중복 무시하고 OCR 처리 시작 (전체 이미지:', selectedImages.length, '개)');
+                    handleProcessImages(true);
                   }}
                   className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
                 >
-                  취소
+                  중복 무시하고 계속
                 </button>
               </div>
             </div>
