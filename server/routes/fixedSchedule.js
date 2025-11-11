@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { handleFixedScheduleRequest } = require('../utils/fixedScheduleHandler');
+const { handleScheduleMoveRequest } = require('../utils/scheduleMoveHandler');
 const {
   reoptimizeWithFixedSchedules,
   checkFixedScheduleConflicts
@@ -17,6 +18,37 @@ router.post('/fixed-intent', async (req, res) => {
     console.log('\n🔥 요청:', message);
     console.log('현재:', currentSchedules?.length, '개');
     console.log('이미지:', schedulesByImage?.length, '개');
+
+    // ⭐ 먼저 일정 이동 요청인지 확인
+    const moveResult = handleScheduleMoveRequest(message, currentSchedules, fixedSchedules || []);
+    if (moveResult.isMoveRequest && moveResult.result) {
+      console.log('✅ 일정 이동 요청 처리 완료');
+
+      // 이동 성공 시 재최적화
+      if (moveResult.result.success) {
+        console.log('\n🤖 AI 재최적화 시작...');
+        const { optimizeSchedules } = require('../utils/scheduleAutoOptimizer');
+
+        const aiResult = await optimizeSchedules(
+          moveResult.result.schedule,
+          schedulesByImage || [],
+          moveResult.result.fixedSchedules || []
+        );
+
+        console.log('✅ AI 재최적화 완료:', aiResult.optimizedSchedules?.length, '개');
+
+        return res.json({
+          success: true,
+          message: moveResult.result.explanation + '\n\n✨ AI가 최적 시간표를 다시 생성했습니다!',
+          optimizedSchedule: aiResult.optimizedSchedules || aiResult,
+          optimizedCombinations: [aiResult.optimizedSchedules || aiResult],
+          fixedSchedules: moveResult.result.fixedSchedules
+        });
+      } else {
+        // 이동 실패
+        return res.json(moveResult.result);
+      }
+    }
 
     // ⭐ 고정 일정 "찾기"는 원본 전체에서, "재최적화"는 현재 시간표 기준으로
     // schedulesByImage: 원본 전체 스케줄 (고정 일정 찾기용)

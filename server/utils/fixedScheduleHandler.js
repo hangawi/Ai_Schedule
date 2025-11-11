@@ -267,11 +267,22 @@ function convertToFixedSchedule(schedule, type = 'pinned-class') {
 function isSpecificTitle(title) {
   const genericTerms = [
     '일정', '약속', '새로운', '개인', '기타', '할일',
-    'schedule', 'todo', 'event', '미정', '기록'
+    'schedule', 'todo', 'event', '미정', '기록', '시간'
   ];
 
-  // 일반적인 용어가 포함되어 있으면 불명확
-  const titleLower = title.toLowerCase();
+  // 일반적인 용어가 포함되어 있거나 제목이 비어있으면 불명확
+  if (!title || title.trim().length === 0) {
+    return false;
+  }
+
+  const titleLower = title.toLowerCase().trim();
+
+  // 정확히 일치하는 경우 불명확
+  if (genericTerms.includes(titleLower)) {
+    return false;
+  }
+
+  // 포함되어 있는 경우도 불명확
   return !genericTerms.some(term => titleLower.includes(term));
 }
 
