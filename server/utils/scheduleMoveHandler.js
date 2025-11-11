@@ -93,9 +93,9 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
     const titleVariations = normalizeTitle(title);
     console.log(`  - 제목 검색 변형: [${titleVariations.join(', ')}]`);
 
-    // 1. 현재 스케줄에서 찾기
+    // 1. 현재 스케줄에서 찾기 (⭐ find → filter로 변경, 여러 개 찾기)
     console.log(`\n  📋 현재 스케줄 검색 (${currentSchedule.length}개):`);
-    let foundSchedule = currentSchedule.find(s => {
+    let foundSchedules = currentSchedule.filter(s => {
       const titleMatch = titleVariations.some(variation => s.title?.includes(variation));
       const daysArray = Array.isArray(s.days) ? s.days : [s.days];
       const dayMatch = daysArray.includes(sourceDay) || daysArray.includes(sourceDayKorean);
@@ -104,11 +104,11 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
       return titleMatch && dayMatch;
     });
 
-    // 2. 고정 일정에서 찾기
-    let foundFixed = null;
-    if (!foundSchedule && fixedSchedules) {
+    // 2. 고정 일정에서도 찾기
+    let foundFixedSchedules = [];
+    if (foundSchedules.length === 0 && fixedSchedules) {
       console.log(`\n  📌 고정 일정 검색 (${fixedSchedules.length}개):`);
-      foundFixed = fixedSchedules.find(f => {
+      foundFixedSchedules = fixedSchedules.filter(f => {
         const titleMatch = titleVariations.some(variation => f.title?.includes(variation));
         const daysArray = Array.isArray(f.days) ? f.days : [f.days];
         const dayMatch = daysArray.includes(sourceDay) || daysArray.includes(sourceDayKorean);
@@ -117,13 +117,14 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
         return titleMatch && dayMatch;
       });
 
-      if (foundFixed) {
-        console.log('✅ 고정 일정에서 발견:', foundFixed.title);
-        foundSchedule = foundFixed.originalSchedule || foundFixed;
+      if (foundFixedSchedules.length > 0) {
+        console.log(`✅ 고정 일정에서 ${foundFixedSchedules.length}개 발견`);
+        foundSchedules = foundFixedSchedules.map(f => f.originalSchedule || f);
       }
     }
 
-    if (!foundSchedule) {
+    // ⭐ 매칭된 일정이 없으면 에러
+    if (foundSchedules.length === 0) {
       console.log(`❌ "${title}" 일정을 ${sourceDayKor}에서 찾을 수 없음`);
       return {
         isMoveRequest: true,
@@ -137,6 +138,29 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
       };
     }
 
+    // ⭐ 매칭된 일정이 여러 개면 사용자에게 선택 요청
+    if (foundSchedules.length > 1) {
+      console.log(`⚠️ "${title}" 일정이 ${sourceDayKor}에 ${foundSchedules.length}개 있음 - 사용자 선택 필요`);
+
+      const optionsList = foundSchedules.map((s, idx) =>
+        `${idx + 1}. ${s.title} (${s.startTime}-${s.endTime})`
+      ).join('\n');
+
+      return {
+        isMoveRequest: true,
+        result: {
+          success: false,
+          understood: `${sourceDayKor} ${title}을 ${targetDayKor} ${targetHour}시로 이동 시도`,
+          action: 'move_multiple_found',
+          schedule: currentSchedule,
+          options: foundSchedules,
+          explanation: `${sourceDayKor}에 "${title}" 일정이 여러 개 있어요. 어떤 일정을 이동할까요? 🤔\n\n${optionsList}\n\n예: "2번 일정을 ${targetDayKor} ${targetHour}시로 이동"`
+        }
+      };
+    }
+
+    const foundSchedule = foundSchedules[0];
+    const foundFixed = foundFixedSchedules.length > 0 ? foundFixedSchedules[0] : null;
     console.log('✅ 원본 일정 발견:', foundSchedule.title, foundSchedule.startTime);
 
     // 삭제 + 추가 처리
@@ -248,9 +272,9 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
     const titleVariations = normalizeTitle(title);
     console.log(`  - 제목 검색 변형: [${titleVariations.join(', ')}]`);
 
-    // 1. 현재 스케줄에서 찾기
+    // 1. 현재 스케줄에서 찾기 (⭐ find → filter로 변경, 여러 개 찾기)
     console.log(`\n  📋 현재 스케줄 검색 (${currentSchedule.length}개):`);
-    let foundSchedule = currentSchedule.find(s => {
+    let foundSchedules = currentSchedule.filter(s => {
       const titleMatch = titleVariations.some(variation => s.title?.includes(variation));
       const daysArray = Array.isArray(s.days) ? s.days : [s.days];
       const dayMatch = daysArray.includes(sourceDay) || daysArray.includes(sourceDayKorean);
@@ -259,11 +283,11 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
       return titleMatch && dayMatch;
     });
 
-    // 2. 고정 일정에서 찾기
-    let foundFixed = null;
-    if (!foundSchedule && fixedSchedules) {
+    // 2. 고정 일정에서도 찾기
+    let foundFixedSchedules = [];
+    if (foundSchedules.length === 0 && fixedSchedules) {
       console.log(`\n  📌 고정 일정 검색 (${fixedSchedules.length}개):`);
-      foundFixed = fixedSchedules.find(f => {
+      foundFixedSchedules = fixedSchedules.filter(f => {
         const titleMatch = titleVariations.some(variation => f.title?.includes(variation));
         const daysArray = Array.isArray(f.days) ? f.days : [f.days];
         const dayMatch = daysArray.includes(sourceDay) || daysArray.includes(sourceDayKorean);
@@ -272,13 +296,14 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
         return titleMatch && dayMatch;
       });
 
-      if (foundFixed) {
-        console.log('✅ 고정 일정에서 발견:', foundFixed.title);
-        foundSchedule = foundFixed.originalSchedule || foundFixed;
+      if (foundFixedSchedules.length > 0) {
+        console.log(`✅ 고정 일정에서 ${foundFixedSchedules.length}개 발견`);
+        foundSchedules = foundFixedSchedules.map(f => f.originalSchedule || f);
       }
     }
 
-    if (!foundSchedule) {
+    // ⭐ 매칭된 일정이 없으면 에러
+    if (foundSchedules.length === 0) {
       console.log(`❌ "${title}" 일정을 ${sourceDayKor}에서 찾을 수 없음`);
       return {
         isMoveRequest: true,
@@ -292,6 +317,29 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
       };
     }
 
+    // ⭐ 매칭된 일정이 여러 개면 사용자에게 선택 요청
+    if (foundSchedules.length > 1) {
+      console.log(`⚠️ "${title}" 일정이 ${sourceDayKor}에 ${foundSchedules.length}개 있음 - 사용자 선택 필요`);
+
+      const optionsList = foundSchedules.map((s, idx) =>
+        `${idx + 1}. ${s.title} (${s.startTime}-${s.endTime})`
+      ).join('\n');
+
+      return {
+        isMoveRequest: true,
+        result: {
+          success: false,
+          understood: `${sourceDayKor} ${title}을 ${targetDayKor}로 이동 시도`,
+          action: 'move_multiple_found',
+          schedule: currentSchedule,
+          options: foundSchedules,
+          explanation: `${sourceDayKor}에 "${title}" 일정이 여러 개 있어요. 어떤 일정을 이동할까요? 🤔\n\n${optionsList}\n\n예: "2번 일정을 ${targetDayKor}로 이동"`
+        }
+      };
+    }
+
+    const foundSchedule = foundSchedules[0];
+    const foundFixed = foundFixedSchedules.length > 0 ? foundFixedSchedules[0] : null;
     console.log('✅ 원본 일정 발견:', foundSchedule.title, foundSchedule.startTime);
 
     // 원본 시간 유지

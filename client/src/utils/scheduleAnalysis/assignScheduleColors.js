@@ -47,6 +47,76 @@ const COLOR_PALETTE = [
     border: 'rgb(99, 102, 241)', // indigo-500
     text: 'rgb(67, 56, 202)', // indigo-700
     label: '남색'
+  },
+  {
+    name: 'red',
+    bg: 'rgba(239, 68, 68, 0.1)', // red-500 10%
+    border: 'rgb(239, 68, 68)', // red-500
+    text: 'rgb(185, 28, 28)', // red-700
+    label: '빨간색'
+  },
+  {
+    name: 'teal',
+    bg: 'rgba(20, 184, 166, 0.1)', // teal-500 10%
+    border: 'rgb(20, 184, 166)', // teal-500
+    text: 'rgb(15, 118, 110)', // teal-700
+    label: '청록색'
+  },
+  {
+    name: 'yellow',
+    bg: 'rgba(234, 179, 8, 0.15)', // yellow-500 15% (더 진하게)
+    border: 'rgb(202, 138, 4)', // yellow-600 (더 진하게)
+    text: 'rgb(133, 77, 14)', // yellow-800
+    label: '노란색'
+  },
+  {
+    name: 'cyan',
+    bg: 'rgba(6, 182, 212, 0.1)', // cyan-500 10%
+    border: 'rgb(6, 182, 212)', // cyan-500
+    text: 'rgb(14, 116, 144)', // cyan-700
+    label: '하늘색'
+  },
+  {
+    name: 'rose',
+    bg: 'rgba(244, 63, 94, 0.1)', // rose-500 10%
+    border: 'rgb(244, 63, 94)', // rose-500
+    text: 'rgb(190, 18, 60)', // rose-700
+    label: '장미색'
+  },
+  {
+    name: 'lime',
+    bg: 'rgba(132, 204, 22, 0.1)', // lime-500 10%
+    border: 'rgb(132, 204, 22)', // lime-500
+    text: 'rgb(77, 124, 15)', // lime-700
+    label: '연두색'
+  },
+  {
+    name: 'amber',
+    bg: 'rgba(245, 158, 11, 0.1)', // amber-500 10%
+    border: 'rgb(245, 158, 11)', // amber-500
+    text: 'rgb(180, 83, 9)', // amber-700
+    label: '황갈색'
+  },
+  {
+    name: 'emerald',
+    bg: 'rgba(16, 185, 129, 0.1)', // emerald-500 10%
+    border: 'rgb(16, 185, 129)', // emerald-500
+    text: 'rgb(4, 120, 87)', // emerald-700
+    label: '에메랄드'
+  },
+  {
+    name: 'violet',
+    bg: 'rgba(139, 92, 246, 0.1)', // violet-500 10%
+    border: 'rgb(139, 92, 246)', // violet-500
+    text: 'rgb(91, 33, 182)', // violet-700
+    label: '제비꽃색'
+  },
+  {
+    name: 'fuchsia',
+    bg: 'rgba(217, 70, 239, 0.1)', // fuchsia-500 10%
+    border: 'rgb(217, 70, 239)', // fuchsia-500
+    text: 'rgb(162, 28, 175)', // fuchsia-700
+    label: '자주색'
   }
 ];
 
