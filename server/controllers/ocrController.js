@@ -256,6 +256,29 @@ exports.analyzeScheduleImages = async (req, res) => {
           console.log(`📊 [${i + 1}/${req.files.length}] ${parsedSchedules.schedules?.length || 0}개의 시간표 발견`);
           if (parsedSchedules.schedules?.length > 0) {
             console.log(`📋 첫 번째 시간표:`, JSON.stringify(parsedSchedules.schedules[0], null, 2));
+
+            // ⭐ gradeLevel 로깅 추가
+            console.log(`🎓 학년부 분포:`);
+            const gradeLevelCounts = {};
+            parsedSchedules.schedules.forEach(s => {
+              const grade = s.gradeLevel || 'null';
+              gradeLevelCounts[grade] = (gradeLevelCounts[grade] || 0) + 1;
+            });
+            Object.entries(gradeLevelCounts).forEach(([grade, count]) => {
+              console.log(`   - ${grade}: ${count}개`);
+            });
+
+            // ⭐ 학년부별 샘플 출력
+            const uniqueGrades = [...new Set(parsedSchedules.schedules.map(s => s.gradeLevel).filter(Boolean))];
+            if (uniqueGrades.length > 0) {
+              console.log(`📝 학년부별 샘플:`);
+              uniqueGrades.forEach(grade => {
+                const sample = parsedSchedules.schedules.find(s => s.gradeLevel === grade);
+                if (sample) {
+                  console.log(`   - ${grade}: ${sample.title} (${sample.days?.join(',') || '?'} ${sample.startTime}-${sample.endTime})`);
+                }
+              });
+            }
           }
         } catch (parseError) {
           console.error(`❌ [${i + 1}/${req.files.length}] JSON 파싱 실패:`, parseError.message);

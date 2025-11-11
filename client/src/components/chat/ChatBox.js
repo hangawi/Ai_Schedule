@@ -712,6 +712,131 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
     // 마지막 봇 메시지 확인 (시간표 예시 보기 처리)
     const lastBotMessage = messages.filter(m => m.sender === 'bot').pop();
 
+    // "다시 짜줘" 명령 처리 (서버로 보내지 않고 여기서 처리)
+    const userInputLower = inputText.trim().toLowerCase();
+    if ((userInputLower.includes('다시') && (userInputLower.includes('짜') || userInputLower.includes('생성') || userInputLower.includes('조합'))) ||
+        userInputLower.includes('재생성') ||
+        userInputLower.includes('다른 조합') ||
+        userInputLower.includes('다른거')) {
+
+      // 사용자 메시지 먼저 추가
+      const userMessage = {
+        id: Date.now(),
+        text: inputText,
+        sender: 'user',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, userMessage]);
+      setInputText('');
+
+      if (extractedScheduleData) {
+        // 기존 스케줄 데이터로 다른 조합 생성
+        const allSchedules = extractedScheduleData.allSchedulesBeforeFilter || extractedScheduleData.schedules || [];
+
+        // 충돌 감지 함수
+        const hasConflict = (schedule1, schedule2) => {
+          // 같은 요일이 있는지 확인
+          const commonDays = schedule1.days?.filter(day => schedule2.days?.includes(day));
+          if (!commonDays || commonDays.length === 0) return false;
+
+          // 시간 중복 확인
+          const parseTime = (timeStr) => {
+            if (!timeStr) return null;
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 60 + minutes;
+          };
+
+          const start1 = parseTime(schedule1.startTime);
+          const end1 = parseTime(schedule1.endTime);
+          const start2 = parseTime(schedule2.startTime);
+          const end2 = parseTime(schedule2.endTime);
+
+          if (!start1 || !end1 || !start2 || !end2) return false;
+
+          // 시간 겹침 체크
+          return start1 < end2 && end1 > start2;
+        };
+
+        // 충돌 없는 조합 생성
+        const generateNonConflictingCombination = (schedules) => {
+          const shuffled = [...schedules].sort(() => Math.random() - 0.5);
+          const result = [];
+
+          for (const schedule of shuffled) {
+            let conflict = false;
+            for (const selected of result) {
+              if (hasConflict(schedule, selected)) {
+                conflict = true;
+                break;
+              }
+            }
+            if (!conflict) {
+              result.push(schedule);
+            }
+          }
+
+          return result;
+        };
+
+        // 여러 조합 생성 (최대 5개)
+        const combinations = [];
+        const maxAttempts = 20;
+        const maxCombinations = 5;
+
+        for (let i = 0; i < maxAttempts && combinations.length < maxCombinations; i++) {
+          const combo = generateNonConflictingCombination(allSchedules);
+
+          // 이미 같은 조합이 있는지 확인
+          const isDuplicate = combinations.some(existing => {
+            if (existing.length !== combo.length) return false;
+            const existingIds = existing.map(s => `${s.title}_${s.startTime}_${s.days?.join('')}`).sort().join('|');
+            const comboIds = combo.map(s => `${s.title}_${s.startTime}_${s.days?.join('')}`).sort().join('|');
+            return existingIds === comboIds;
+          });
+
+          if (!isDuplicate && combo.length > 0) {
+            combinations.push(combo);
+          }
+        }
+
+        // 최소 1개 이상의 조합 보장
+        if (combinations.length === 0) {
+          combinations.push(allSchedules);
+        }
+
+        // 조합들을 스케줄 개수가 많은 순으로 정렬
+        combinations.sort((a, b) => b.length - a.length);
+
+        // extractedScheduleData 업데이트
+        const updatedData = {
+          ...extractedScheduleData,
+          optimalCombinations: combinations,
+          schedules: combinations[0]
+        };
+
+        setExtractedScheduleData(updatedData);
+        setShowScheduleModal(true);
+
+        const botMessage = {
+          id: Date.now() + 1,
+          text: `새로운 조합 ${combinations.length}개를 생성했습니다! 충돌 없는 최적 시간표를 확인해보세요 📅✨`,
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, botMessage]);
+        return;
+      } else {
+        const botMessage = {
+          id: Date.now() + 1,
+          text: '먼저 시간표 이미지를 업로드해주세요! 그래야 다시 생성할 수 있어요 📸',
+          sender: 'bot',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, botMessage]);
+        return;
+      }
+    }
+
     if (lastBotMessage?._nextStep === 'show_schedule_examples') {
       const userResponse = inputText.trim().toLowerCase();
 

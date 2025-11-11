@@ -537,7 +537,28 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
 
   // 0-2. Phase 1: 학년부 감지 및 필터링
   const studentGrade = detectStudentGrade(allSchedules, schedulesByImage);
-  if (studentGrade) {
+
+  // ⭐ 학원 시간표 감지: 한 이미지에 여러 학년부가 있으면 학원 시간표로 판단
+  const isAcademySchedule = schedulesByImage.some(imageInfo => {
+    const imageSchedules = allSchedules.filter(s => s.sourceImage === imageInfo.fileName);
+    const uniqueGradeLevels = new Set(
+      imageSchedules
+        .map(s => s.gradeLevel)
+        .filter(g => g && g !== 'null')
+    );
+
+    // 한 이미지에 2개 이상의 학년부가 있으면 학원 시간표
+    const hasMultipleGrades = uniqueGradeLevels.size >= 2;
+
+    if (hasMultipleGrades) {
+      console.log(`🏫 학원 시간표 감지: ${imageInfo.imageTitle || imageInfo.fileName} (학년부: ${Array.from(uniqueGradeLevels).join(', ')})`);
+    }
+
+    return hasMultipleGrades;
+  });
+
+  // ⭐ 학원 시간표면 학년부 필터링 스킵!
+  if (studentGrade && !isAcademySchedule) {
     console.log(`\n🎓 Phase 1: 학년부 필터링 시작 (학생: ${studentGrade})`);
     console.log(`🔍 [DEBUG] 필터링 전 스케줄 개수: ${allSchedules.length}`);
     allSchedules = await filterSchedulesByGrade(allSchedules, studentGrade);
@@ -548,6 +569,8 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
     allSchedules.slice(0, 10).forEach((s, idx) => {
       console.log(`  ${idx}. ${s.title} (${s.sourceImage}) - gradeLevel: "${s.gradeLevel || 'null'}"`);
     });
+  } else if (isAcademySchedule) {
+    console.log('\n⏭️ Phase 1: 학원 시간표 감지 - 학년부 필터링 스킵 (여러 학년부가 섞여 있음)');
   }
 
   // 1. 이미지별로 그룹화

@@ -51,10 +51,10 @@ function calculateSimilarity(hash1, hash2) {
  * @param {Buffer} newImageBuffer - 새로 업로드된 이미지 버퍼
  * @param {string} newImageFilename - 새 이미지 파일명
  * @param {Array<{buffer: Buffer, hash: string, filename: string}>} existingImages - 기존 이미지들
- * @param {number} threshold - 중복 판단 임계값 (기본 95%)
+ * @param {number} threshold - 중복 판단 임계값 (기본 98% - 거의 동일한 이미지만 중복으로 판단)
  * @returns {Promise<{isDuplicate: boolean, duplicateWith: string|null, similarity: number}>}
  */
-async function detectDuplicate(newImageBuffer, newImageFilename, existingImages, threshold = 95) {
+async function detectDuplicate(newImageBuffer, newImageFilename, existingImages, threshold = 98) {
   try {
     // 새 이미지의 해시 계산
     const newHash = await calculateImageHash(newImageBuffer);
