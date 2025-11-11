@@ -733,6 +733,39 @@ router.post('/chat', auth, async (req, res) => {
     console.log('📌 고정 일정:', fixedSchedules?.length || 0, '개');
     console.log('🖼️ 이미지별 스케줄:', schedulesByImage?.length || 0, '개');
 
+    // ⭐ 먼저 일정 이동 요청인지 확인
+    const { handleScheduleMoveRequest } = require('../utils/scheduleMoveHandler');
+    const moveResult = handleScheduleMoveRequest(message, currentSchedule, fixedSchedules || []);
+    if (moveResult.isMoveRequest && moveResult.result) {
+      console.log('✅ 일정 이동 요청 처리 완료');
+
+      if (moveResult.result.success) {
+        // 이동 성공 시 재최적화
+        console.log('\n🔄 고정 일정 있음 → 최종 재최적화 실행');
+        const { optimizeSchedules } = require('../utils/scheduleAutoOptimizer');
+
+        const aiResult = await optimizeSchedules(
+          moveResult.result.schedule,
+          schedulesByImage || [],
+          moveResult.result.fixedSchedules || fixedSchedules || []
+        );
+
+        console.log('✅ AI 재최적화 완료:', aiResult.optimizedSchedules?.length, '개');
+
+        return res.json({
+          success: true,
+          understood: moveResult.result.understood,
+          action: 'move',
+          schedule: aiResult.optimizedSchedules || aiResult,
+          explanation: moveResult.result.explanation + '\n\n✨ 고정 일정을 반영해서 시간표를 다시 최적화했어요!',
+          fixedSchedules: moveResult.result.fixedSchedules
+        });
+      } else {
+        // 이동 실패
+        return res.json(moveResult.result);
+      }
+    }
+
     // Redo (되돌리기 취소) 키워드 감지
     const redoKeywords = ['되돌리기 취소', '취소 취소', 'redo', '다시 실행', '되살려'];
     const isRedo = redoKeywords.some(keyword => message.includes(keyword));
@@ -749,17 +782,19 @@ router.post('/chat', auth, async (req, res) => {
       });
     }
 
+    // 되돌리기 요청
+    const undoKeywords = ['되돌려', '돌려', '취소', 'undo'];
+    const isUndo = undoKeywords.some(keyword => message.includes(keyword));
+
     // "방금전" 키워드 감지 (한 단계 이전)
     const stepBackKeywords = ['방금전', '방금', '바로 전', '직전', '한 단계 전', '아까'];
     const isStepBack = stepBackKeywords.some(keyword => message.includes(keyword));
 
     // "맨 처음", "원본", "롤백" 키워드 감지 (맨 처음으로)
-    const fullUndoKeywords = ['맨 처음', '맨처음', '원본', '롤백', '처음', '초기', 'reset'];
+    const fullUndoKeywords = ['맨 처음', '맨처음', '원본', '롤백', '처음', '초기', 'reset', '시간표 롤백'];
     const isFullUndo = fullUndoKeywords.some(keyword => message.includes(keyword));
 
-    // 되돌리기 요청
-    const undoKeywords = ['되돌려', '돌려', '취소', 'undo'];
-    const isUndo = undoKeywords.some(keyword => message.includes(keyword));
+    console.log('🔍 롤백 키워드 체크:', { message, isFullUndo, isUndo, isStepBack });
 
     if (isUndo || isStepBack || isFullUndo) {
       // 1. "방금전" = 한 단계 이전

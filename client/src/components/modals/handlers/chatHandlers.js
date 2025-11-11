@@ -14,7 +14,10 @@ export const handleChatSubmit = async (
   dayMap,
   gradeLevelMap,
   parseTime,
-  chatMessages  // 추가: 대화 히스토리
+  chatMessages,  // 대화 히스토리
+  fixedSchedules,  // 고정 일정
+  setFixedSchedules,  // 고정 일정 업데이트
+  schedulesByImage  // 이미지별 스케줄
 ) => {
   e.preventDefault();
   if (!chatInput.trim()) return;
@@ -64,7 +67,9 @@ export const handleChatSubmit = async (
         message: input,
         currentSchedule: modifiedCombinations[currentIndex],
         originalSchedule: originalSchedule || modifiedCombinations[currentIndex],
-        lastAiResponse: lastAiResponse  // 직전 AI 응답 전달
+        lastAiResponse: lastAiResponse,  // 직전 AI 응답 전달
+        fixedSchedules: fixedSchedules || [],  // 고정 일정
+        schedulesByImage: schedulesByImage || []  // 이미지별 스케줄
       })
     });
 
@@ -79,6 +84,12 @@ export const handleChatSubmit = async (
       const updatedCombinations = [...modifiedCombinations];
       updatedCombinations[currentIndex] = data.schedule;
       setModifiedCombinations(updatedCombinations);
+
+      // 고정 일정 업데이트 (서버에서 fixedSchedules를 반환하면)
+      if (data.fixedSchedules && setFixedSchedules) {
+        console.log('📌 고정 일정 업데이트:', data.fixedSchedules.length, '개');
+        setFixedSchedules(data.fixedSchedules);
+      }
 
       // explanation에서 JSON 형식 완전 제거
       let cleanExplanation = data.explanation;

@@ -350,13 +350,14 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
       console.log('🎨 customSchedules 개수:', fixedData.customSchedules?.length || 0);
 
       // 고정 일정 관련 요청이면 처리하고 리턴
-      if (fixedData.intent && fixedData.intent !== 'none') {
+      // ⭐ optimizedSchedule이 있으면 고정 일정 API가 처리한 것
+      if ((fixedData.intent && fixedData.intent !== 'none') || fixedData.optimizedSchedule) {
         console.log('✨ 고정 일정 처리 시작 - 채팅 API 호출 안 함!');
         console.log('🚫 아래 채팅 API로 안 갑니다!!');
         // 고정 일정 관련 요청임 (성공 여부와 무관하게)
 
         // 실패한 경우 메시지만 표시하고 종료
-        if (!fixedData.success || !fixedData.action) {
+        if (!fixedData.success || (!fixedData.action && !fixedData.optimizedSchedule)) {
           const botMessage = {
             id: Date.now() + 1,
             sender: 'bot',
@@ -418,6 +419,28 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
           timestamp: new Date()
         };
         setChatHistory(prev => [...prev, botMessage]);
+
+        // ⭐ 일정 이동 처리 (이미 최적화됨)
+        if (fixedData.optimizedSchedule) {
+          console.log('🔄 일정 이동 완료 - 최적화된 시간표 업데이트');
+          console.log('📊 새 스케줄:', fixedData.optimizedSchedule.length, '개');
+          setFilteredSchedules(fixedData.optimizedSchedule);
+
+          // 고정 일정 업데이트
+          if (fixedData.fixedSchedules) {
+            console.log('📌 고정 일정 업데이트:', fixedData.fixedSchedules.length, '개');
+            setFixedSchedules(fixedData.fixedSchedules);
+          }
+
+          // 모달 띄우기
+          setSlideDirection('left');
+          setTimeout(() => {
+            setShowOptimizationModal(true);
+          }, 50);
+
+          setIsFilteringChat(false);
+          return;
+        }
 
         // ⭐ 고정 일정 추가/삭제 시 즉시 재최적화 실행
         if (fixedData.action === 'add' || fixedData.action === 'remove') {

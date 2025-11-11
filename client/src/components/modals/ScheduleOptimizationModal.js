@@ -754,6 +754,23 @@ const ScheduleOptimizationModal = ({
           // 고정 일정 초기화
           setCurrentFixedSchedules([]);
           console.log('✅ 고정 일정도 함께 초기화');
+        } else if (data.action === 'move') {
+          // 일정 이동
+          console.log('🔄 MOVE 액션: 일정 이동');
+          // 현재 상태를 히스토리에 저장
+          setScheduleHistory(prev => [...prev, modifiedCombinations[currentIndex]]);
+          // 새 작업 시 redo 스택 클리어
+          setRedoStack([]);
+
+          const updatedCombinations = [...modifiedCombinations];
+          updatedCombinations[currentIndex] = data.schedule;
+          setModifiedCombinations(updatedCombinations);
+
+          // 고정 일정 업데이트 (서버에서 fixedSchedules를 반환하면)
+          if (data.fixedSchedules) {
+            console.log('📌 고정 일정 업데이트:', data.fixedSchedules.length, '개');
+            setCurrentFixedSchedules(data.fixedSchedules);
+          }
         } else if (data.action === 'question') {
           // 추천/질문 응답 - 시간표는 변경하지 않음
           console.log('💡 추천 응답 - 시간표 변경 없음');
