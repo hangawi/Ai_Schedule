@@ -623,40 +623,89 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
     }
     // ⭐ 학원이면 제목+시간대별로 옵션 분리 (상호 배타적!)
     else {
-      // 각 스케줄을 개별 옵션으로 처리 (같은 제목이어도 시간이 다르면 다른 옵션)
-      const options = schedulesWithCategory.map(schedule => {
+      // ⭐ "주N회" 그룹별로 옵션 그룹화
+      const frequencyGroups = new Map(); // 'weekly_5', 'weekly_3', etc.
+      const otherOptions = []; // 주N회가 아닌 일반 옵션들
+
+      schedulesWithCategory.forEach(schedule => {
+        const title = schedule.title || 'unnamed';
+
+        // 주N회 패턴 감지
+        const weeklyMatch = title.match(/주\s*([1-5])회/);
+
+        if (weeklyMatch) {
+          const frequency = weeklyMatch[1]; // '5', '3', etc.
+          const groupKey = `weekly_${frequency}`;
+
+          if (!frequencyGroups.has(groupKey)) {
+            frequencyGroups.set(groupKey, {
+              frequency: parseInt(frequency),
+              schedules: []
+            });
+          }
+
+          frequencyGroups.get(groupKey).schedules.push(schedule);
+        } else {
+          // 주N회가 아닌 스케줄은 개별 옵션으로
+          otherOptions.push(schedule);
+        }
+      });
+
+      const options = [];
+
+      // 주N회 그룹을 옵션으로 변환 (각 그룹 = 1개 옵션, 그 안에 여러 시간대)
+      for (const [groupKey, group] of frequencyGroups.entries()) {
+        const freq = group.frequency;
+        let optionPriority = 100;
+
+        // 주5회 > 주4회 > 주3회 > 주2회 > 주1회
+        if (freq === 5) optionPriority = 1;
+        else if (freq === 4) optionPriority = 2;
+        else if (freq === 3) optionPriority = 3;
+        else if (freq === 2) optionPriority = 4;
+        else if (freq === 1) optionPriority = 5;
+
+        // 각 시간대를 별도 옵션으로 추가 (같은 주N회 내에서 선택)
+        group.schedules.forEach(schedule => {
+          const timeRange = `${schedule.startTime}-${schedule.endTime}`;
+          const daysStr = (schedule.days || []).join(',');
+
+          options.push({
+            name: `${schedule.title} (${daysStr} ${timeRange})`,
+            schedules: [schedule],
+            optionPriority,
+            frequencyGroup: groupKey  // ⭐ 같은 그룹 표시
+          });
+        });
+      }
+
+      // 주N회가 아닌 일반 옵션들 추가
+      otherOptions.forEach(schedule => {
         const timeRange = `${schedule.startTime}-${schedule.endTime}`;
         const daysStr = (schedule.days || []).join(',');
         const title = schedule.title || 'unnamed';
 
-        // 옵션 우선순위 계산
-        let optionPriority = 100; // 기본값
+        let optionPriority = 100;
 
-        // 1순위: 학년부가 명시된 옵션 (중등부, 초등부, 고등부)
+        // 학년부 우선순위
         if (schedule.gradeLevel && (
           title.includes('중등부') || title.includes('초등부') || title.includes('고등부')
         )) {
-          optionPriority = 0; // 최우선
+          optionPriority = 0;
         }
-        // 2순위: 주5회 > 주4회 > 주3회 > 주2회 > 주1회
-        else if (title.includes('주5회') || title.includes('주 5회')) optionPriority = 1;
-        else if (title.includes('주4회') || title.includes('주 4회')) optionPriority = 2;
-        else if (title.includes('주3회') || title.includes('주 3회')) optionPriority = 3;
-        else if (title.includes('주2회') || title.includes('주 2회')) optionPriority = 4;
-        else if (title.includes('주1회') || title.includes('주 1회')) optionPriority = 5;
-        // 3순위: O, X 같은 기호나 수업준비는 최하위
+        // O, X 최하위
         else if (title === 'O' || title === 'X' || title === '0' || title.includes('수업준비')) {
-          optionPriority = 999; // 최하위
+          optionPriority = 999;
         }
 
-        return {
+        options.push({
           name: `${title} (${daysStr} ${timeRange})`,
           schedules: [schedule],
-          optionPriority  // 옵션 내 우선순위
-        };
+          optionPriority
+        });
       });
 
-      // 옵션을 우선순위로 정렬 (주5회가 먼저 시도됨)
+      // 옵션을 우선순위로 정렬 (주5회가 먼저, 같은 주N회 내에서는 순서 유지)
       options.sort((a, b) => a.optionPriority - b.optionPriority);
 
       imageOptions.push({
@@ -669,8 +718,14 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
       });
 
       console.log(`📚 [${imageCategory}] ${imageTitle} - ${options.length}개 옵션 (상호 배타적):`);
+      if (frequencyGroups.size > 0) {
+        console.log(`   📊 주N회 그룹: ${frequencyGroups.size}개`);
+        for (const [groupKey, group] of frequencyGroups.entries()) {
+          console.log(`      - ${groupKey}: ${group.schedules.length}개 시간대 옵션`);
+        }
+      }
       options.forEach(opt => {
-        console.log(`   옵션: ${opt.name} (${opt.schedules.length}개 수업)`);
+        console.log(`   옵션: ${opt.name}${opt.frequencyGroup ? ` [${opt.frequencyGroup}]` : ''}`);
       });
     }
   }
@@ -760,13 +815,20 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
     } else {
       // 학원: 여러 옵션 중 **하나만** 선택 (같은 수업의 다른 시간대는 상호 배타적)
       const selectedOptions = [];
+      const selectedFrequencyGroups = new Set(); // 이미 선택된 주N회 그룹 추적
 
-      // ⭐ 수정: 첫 번째로 겹치지 않는 옵션 하나만 선택
+      // ⭐ 주N회 그룹별로 하나만 선택, 우선순위 순서대로
       for (const option of imageOpt.options) {
+        // 같은 frequencyGroup이 이미 선택되었으면 건너뜀
+        if (option.frequencyGroup && selectedFrequencyGroups.has(option.frequencyGroup)) {
+          console.log(`   ⏭️ "${option.name}" - 같은 그룹 [${option.frequencyGroup}] 이미 선택됨`);
+          continue;
+        }
+
         const hasConflict = imageHasOverlap(option.schedules, selectedSchedules);
 
         if (!hasConflict) {
-          console.log(`✅ [${imageOpt.category}] ${imageOpt.imageTitle} - "${option.name}" 선택 (${option.schedules.length}개)`);
+          console.log(`✅ [${imageOpt.category}] ${imageOpt.imageTitle} - "${option.name}" 선택 (${option.schedules.length}개)${option.frequencyGroup ? ` [${option.frequencyGroup}]` : ''}`);
 
           const timeSlots = option.schedules.map(s =>
             `${s.days?.join(',') || '?'} ${s.startTime}-${s.endTime}`
@@ -776,8 +838,16 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
           selectedSchedules.push(...option.schedules);
           selectedOptions.push(option);
 
-          // ⭐ 중요: 하나만 선택하고 중단!
-          console.log(`   🛑 학원 옵션 선택 완료 - 나머지 옵션 건너뜀`);
+          // 이 주N회 그룹을 선택했다고 표시 (같은 그룹의 다른 시간대는 건너뜀)
+          if (option.frequencyGroup) {
+            selectedFrequencyGroups.add(option.frequencyGroup);
+            console.log(`   🔒 [${option.frequencyGroup}] 그룹 선택 완료`);
+          }
+
+          // ⭐ 주N회가 아니거나, 모든 frequencyGroup을 시도한 경우 중단
+          // (주N회가 있는 경우, 다른 주N회 그룹도 시도해야 함)
+          // 하지만 하나의 이미지에서 하나의 옵션만 선택하므로 여기서 break
+          console.log(`   🛑 이 이미지에서 옵션 선택 완료`);
           break;
         } else {
           console.log(`   ⏭️ "${option.name}" - 시간 겹침으로 건너뜀`);
