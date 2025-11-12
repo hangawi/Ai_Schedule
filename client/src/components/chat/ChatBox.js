@@ -138,6 +138,20 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
             const targetDate = new Date(thisWeekMonday);
             targetDate.setDate(thisWeekMonday.getDate() + daysFromMonday);
 
+            // 시간 형식 검증
+            if (!schedule.startTime || !schedule.endTime ||
+                !schedule.startTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/) ||
+                !schedule.endTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)) {
+              console.error('❌ 잘못된 시간 형식:', schedule);
+              return;
+            }
+
+            // targetDate 유효성 검사
+            if (isNaN(targetDate.getTime())) {
+              console.error('❌ 잘못된 날짜:', targetDate, 'thisWeekMonday:', thisWeekMonday, 'daysFromMonday:', daysFromMonday);
+              return;
+            }
+
             maxId++;
             const converted = {
               id: maxId,
@@ -156,6 +170,15 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
           });
         } else {
           // 전체 달 옵션 (반복)
+
+          // 시간 형식 검증
+          if (!schedule.startTime || !schedule.endTime ||
+              !schedule.startTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/) ||
+              !schedule.endTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)) {
+            console.error('❌ 잘못된 시간 형식:', schedule);
+            return;
+          }
+
           maxId++;
           const converted = {
             id: maxId,
@@ -226,8 +249,10 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
 
       return { success: true, count: newPersonalTimes.length };
     } catch (error) {
-      console.error('시간표 추가 에러:', error);
-      return { success: false, error: error.message };
+      console.error('❌ 시간표 추가 에러:', error);
+      console.error('  - 에러 메시지:', error.message);
+      console.error('  - 스택 트레이스:', error.stack);
+      return { success: false, error: error.message || '알 수 없는 오류가 발생했습니다' };
     }
   };
 
