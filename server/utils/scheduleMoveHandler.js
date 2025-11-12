@@ -37,17 +37,18 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
 
   // 패턴 1: "금요일 구몬을 토요일 2시로 옮겨"
   // (원본 요일) (제목) (목표 요일) (목표 시간)
-  // "에 있는", "에있는", "있는" 등을 제목에서 제외
-  const pattern1 = /([월화수목금토일]요?일?)\s*(?:에?\s*있?는?\s*)?([가-힣a-zA-Z0-9]+)\s*을?\s*([월화수목금토일]요?일?)\s*(?:오전|오후)?\s*(\d{1,2})시/;
+  // ⭐ 요일 전체 매칭: "월요일", "화요일" 등을 완전히 매칭
+  // ⭐ "에 있는" 뒤의 제목 추출
+  const pattern1 = /(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)\s*(?:오전|오후)?\s*\d*시?\s*에\s*있는\s*([가-힣a-zA-Z0-9\s]+?)\s*(을|를)?\s*(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)\s*(?:오전|오후)?\s*(\d{1,2})시/;
   const match1 = message.match(pattern1);
 
   // 패턴 2: "금요일 구몬을 토요일로 옮겨" (시간 없음 - 원본 시간 유지)
-  const pattern2 = /([월화수목금토일]요?일?)\s*(?:에?\s*있?는?\s*)?([가-힣a-zA-Z0-9]+)\s*을?\s*([월화수목금토일]요?일?)\s*(?:로|으로)?\s*(?:이동|옮겨|수정|변경|바꿔)/;
+  const pattern2 = /(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)\s*(?:에\s*있는\s*)?([가-힣a-zA-Z0-9\s]+?)\s*(을|를)?\s*(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)\s*(?:로|으로)?\s*(?:이동|옮겨|수정|변경|바꿔)/;
   const match2 = !match1 ? message.match(pattern2) : null;
 
   // 패턴 3: "오후 3시에 있는 구몬을 토요일 11시로 이동" (원본 시간 명시)
   // (원본 시간) (제목) (목표 요일) (목표 시간)
-  const pattern3 = /(?:오전|오후)?\s*(\d{1,2})시\s*(?:에?\s*있?는?\s*)?([가-힣a-zA-Z0-9]+)\s*을?\s*([월화수목금토일]요?일?)\s*(?:오전|오후)?\s*(\d{1,2})시/;
+  const pattern3 = /(?:오전|오후)?\s*(\d{1,2})시\s*에\s*있는\s*([가-힣a-zA-Z0-9\s]+?)\s*(을|를)?\s*(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)\s*(?:오전|오후)?\s*(\d{1,2})시/;
   const match3 = !match1 && !match2 ? message.match(pattern3) : null;
 
   // 제목 정규화 함수 (generic term → 실제 검색용)
@@ -63,11 +64,12 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
   if (match1) {
     const sourceDayKor = match1[1];
     let title = match1[2].trim();
-    const targetDayKor = match1[3];
-    const targetHour = parseInt(match1[4]);
+    // match1[3]은 "을/를" (optional)
+    const targetDayKor = match1[4];
+    const targetHour = parseInt(match1[5]);
 
-    // 제목에서 불필요한 단어 제거 ("에", "있는", "잇는" 등)
-    title = title.replace(/^(에|있는|잇는)\s*/g, '').trim();
+    // 제목 정리 (이미 "에 있는" 뒤의 텍스트만 추출됨)
+    title = title.trim();
 
     const sourceDay = Object.entries(dayMap).find(([k]) => sourceDayKor.includes(k))?.[1];
     const targetDay = Object.entries(dayMap).find(([k]) => targetDayKor.includes(k))?.[1];
@@ -251,10 +253,11 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
   if (match2) {
     const sourceDayKor = match2[1];
     let title = match2[2].trim();
-    const targetDayKor = match2[3];
+    // match2[3]은 "을/를" (optional)
+    const targetDayKor = match2[4];
 
-    // 제목에서 불필요한 단어 제거
-    title = title.replace(/^(에|있는|잇는)\s*/g, '').trim();
+    // 제목 정리
+    title = title.trim();
 
     const sourceDay = Object.entries(dayMap).find(([k]) => sourceDayKor.includes(k))?.[1];
     const targetDay = Object.entries(dayMap).find(([k]) => targetDayKor.includes(k))?.[1];
@@ -433,11 +436,12 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
   if (match3) {
     const sourceHour = parseInt(match3[1]);
     let title = match3[2].trim();
-    const targetDayKor = match3[3];
-    const targetHour = parseInt(match3[4]);
+    // match3[3]은 "을/를" (optional)
+    const targetDayKor = match3[4];
+    const targetHour = parseInt(match3[5]);
 
-    // 제목에서 불필요한 단어 제거
-    title = title.replace(/^(에|있는|잇는)\s*/g, '').trim();
+    // 제목 정리 (이미 "에 있는" 뒤의 텍스트만 추출됨)
+    title = title.trim();
 
     const targetDay = Object.entries(dayMap).find(([k]) => targetDayKor.includes(k))?.[1];
 
