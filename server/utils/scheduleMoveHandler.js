@@ -139,7 +139,17 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
 
       if (foundFixedSchedules.length > 0) {
         console.log(`✅ 고정 일정에서 ${foundFixedSchedules.length}개 발견`);
-        foundSchedules = foundFixedSchedules.map(f => f.originalSchedule || f);
+        // ⭐ 고정 일정 자체를 사용 (originalSchedule이 없을 수 있음)
+        foundSchedules = foundFixedSchedules.map(f => ({
+          ...f,
+          // originalSchedule이 있으면 그것의 메타데이터 사용, 없으면 고정 일정 자체 사용
+          ...(f.originalSchedule || {}),
+          // 하지만 시간/요일/제목은 현재 고정 일정 값 사용
+          title: f.title,
+          days: f.days,
+          startTime: f.startTime,
+          endTime: f.endTime
+        }));
       }
     }
 
@@ -306,7 +316,17 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
 
       if (foundFixedSchedules.length > 0) {
         console.log(`✅ 고정 일정에서 ${foundFixedSchedules.length}개 발견`);
-        foundSchedules = foundFixedSchedules.map(f => f.originalSchedule || f);
+        // ⭐ 고정 일정 자체를 사용 (originalSchedule이 없을 수 있음)
+        foundSchedules = foundFixedSchedules.map(f => ({
+          ...f,
+          // originalSchedule이 있으면 그것의 메타데이터 사용, 없으면 고정 일정 자체 사용
+          ...(f.originalSchedule || {}),
+          // 하지만 시간/요일/제목은 현재 고정 일정 값 사용
+          title: f.title,
+          days: f.days,
+          startTime: f.startTime,
+          endTime: f.endTime
+        }));
       }
     }
 
@@ -497,7 +517,17 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
 
       if (foundFixedSchedules.length > 0) {
         console.log(`✅ 고정 일정에서 ${foundFixedSchedules.length}개 발견`);
-        foundSchedules = foundFixedSchedules.map(f => f.originalSchedule || f);
+        // ⭐ 고정 일정 자체를 사용 (originalSchedule이 없을 수 있음)
+        foundSchedules = foundFixedSchedules.map(f => ({
+          ...f,
+          // originalSchedule이 있으면 그것의 메타데이터 사용, 없으면 고정 일정 자체 사용
+          ...(f.originalSchedule || {}),
+          // 하지만 시간/요일/제목은 현재 고정 일정 값 사용
+          title: f.title,
+          days: f.days,
+          startTime: f.startTime,
+          endTime: f.endTime
+        }));
       }
     }
 
