@@ -101,9 +101,15 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
       const newPersonalTimes = [];
 
       schedules.forEach((schedule, idx) => {
-        console.log('🔍 원본 schedule:', schedule);
+        console.log(`\n🔍 [${idx + 1}/${schedules.length}] 원본 schedule:`, {
+          title: schedule.title,
+          days: schedule.days,
+          daysType: Array.isArray(schedule.days) ? 'array' : typeof schedule.days,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime
+        });
 
-        if (!schedule.days || schedule.days.length === 0) {
+        if (!schedule.days || (Array.isArray(schedule.days) && schedule.days.length === 0)) {
           console.warn('⚠️ 요일 정보 없음:', schedule);
           return; // 요일 정보가 없으면 스킵
         }
@@ -115,10 +121,31 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
 
         const dayMap = {
           'MON': 1, 'TUE': 2, 'WED': 3, 'THU': 4,
-          'FRI': 5, 'SAT': 6, 'SUN': 7
+          'FRI': 5, 'SAT': 6, 'SUN': 7,
+          // 한글 요일 매핑 (고정 일정용)
+          '월': 1, '화': 2, '수': 3, '목': 4,
+          '금': 5, '토': 6, '일': 7
         };
 
-        const mappedDays = schedule.days.map(day => dayMap[day] || day).filter(d => d);
+        // days가 문자열일 수 있으므로 배열로 변환
+        const daysArray = Array.isArray(schedule.days) ? schedule.days : [schedule.days];
+
+        console.log('  📅 daysArray:', daysArray);
+
+        const mappedDays = daysArray.map(day => {
+          // day가 배열일 수도 있으므로 확인
+          if (Array.isArray(day)) {
+            return day.map(d => dayMap[d] || d).filter(d => d);
+          }
+          return dayMap[day] || day;
+        }).flat().filter(d => d && typeof d === 'number');
+
+        console.log('  ✅ mappedDays:', mappedDays);
+
+        if (mappedDays.length === 0) {
+          console.error('❌ 매핑된 요일이 없음. 원본 days:', schedule.days);
+          return;
+        }
 
         // 이번 주만 옵션일 경우 각 요일별로 이번 주 날짜 계산
         if (applyScope === 'week') {

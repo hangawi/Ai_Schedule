@@ -299,16 +299,46 @@ const ScheduleOptimizationModal = ({
   };
 
   const handleSelectSchedule = () => {
-    console.log('🔍 선택된 combination:', currentCombination, '범위:', applyScope);
+    console.log('🔍 선택된 combination:', currentCombination?.length, '개', '범위:', applyScope);
+    console.log('📌 고정 일정:', currentFixedSchedules?.length, '개');
+
+    // ⭐ 고정 일정을 포함한 전체 스케줄 생성
+    // 고정 일정은 originalSchedule 메타데이터를 가지고 있으므로, 이를 평탄화해서 포함
+    const fixedSchedulesFlat = (currentFixedSchedules || []).map(fixed => {
+      // originalSchedule이 있으면 그것을 사용, 없으면 fixed 자체 사용
+      const base = fixed.originalSchedule || fixed;
+      return {
+        ...base,
+        // 현재 고정 일정의 값으로 덮어씌우기 (이동된 경우 반영)
+        title: fixed.title,
+        days: fixed.days,
+        startTime: fixed.startTime,
+        endTime: fixed.endTime
+      };
+    });
+
+    console.log('📦 고정 일정 평탄화:', fixedSchedulesFlat.length, '개');
+    fixedSchedulesFlat.forEach(f => console.log(`  - ${f.title} (${f.days} ${f.startTime}-${f.endTime})`));
+
+    // currentCombination에 고정 일정이 이미 포함되어 있는지 확인
+    const combinationTitles = new Set(currentCombination.map(s => `${s.title}_${s.startTime}_${s.days}`));
+    const fixedToAdd = fixedSchedulesFlat.filter(f =>
+      !combinationTitles.has(`${f.title}_${f.startTime}_${f.days}`)
+    );
+
+    console.log('➕ 추가할 고정 일정:', fixedToAdd.length, '개');
+
+    const fullSchedule = [...currentCombination, ...fixedToAdd];
+    console.log('✅ 전체 스케줄:', fullSchedule.length, '개');
 
     // 기존 콜백 (기존 시간표 최적화 플로우)
     if (onSelect) {
-      onSelect(currentCombination, applyScope);
+      onSelect(fullSchedule, applyScope);
     }
 
     // 새로운 콜백 (OCR 채팅 필터링 플로우)
     if (onSchedulesApplied) {
-      onSchedulesApplied(currentCombination, applyScope);
+      onSchedulesApplied(fullSchedule, applyScope);
     }
 
     // onClose가 함수인지 확인 후 호출
