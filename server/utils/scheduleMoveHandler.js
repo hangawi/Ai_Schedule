@@ -35,20 +35,23 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
     '일요일': 'SUN', '일': 'SUN'
   };
 
-  // 패턴 1: "금요일 구몬을 토요일 2시로 옮겨"
-  // (원본 요일) (제목) (목표 요일) (목표 시간)
+  // 패턴 1: "월요일 오후 3시에 있는 눈높이를 토요일 2시로 옮겨"
+  // (원본 요일) (원본 시간) (제목) (목표 요일) (목표 시간)
   // ⭐ 요일 전체 매칭: "월요일", "화요일" 등을 완전히 매칭
-  // ⭐ "에 있는" 뒤의 제목 추출
-  const pattern1 = /(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)\s*(?:오전|오후)?\s*\d*시?\s*에\s*있는\s*([가-힣a-zA-Z0-9\s]+?)\s*(을|를)?\s*(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)\s*(?:오전|오후)?\s*(\d{1,2})시/;
+  // ⭐ 원본 시간 포함하여 매칭
+  // ⭐ "있는" 또는 "잇는" (오타) 모두 매칭
+  const pattern1 = /(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)\s*(?:오전|오후)?\s*(\d{1,2})시\s*에\s*(?:있|잇)는\s*([가-힣a-zA-Z0-9\s]+?)\s*(을|를)?\s*(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)\s*(?:오전|오후)?\s*(\d{1,2})시/;
   const match1 = message.match(pattern1);
 
   // 패턴 2: "금요일 구몬을 토요일로 옮겨" (시간 없음 - 원본 시간 유지)
-  const pattern2 = /(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)\s*(?:에\s*있는\s*)?([가-힣a-zA-Z0-9\s]+?)\s*(을|를)?\s*(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)\s*(?:로|으로)?\s*(?:이동|옮겨|수정|변경|바꿔)/;
+  // ⭐ "있는" 또는 "잇는" (오타) 모두 매칭
+  const pattern2 = /(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)\s*(?:에\s*(?:있|잇)는\s*)?([가-힣a-zA-Z0-9\s]+?)\s*(을|를)?\s*(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)\s*(?:로|으로)?\s*(?:이동|옮겨|수정|변경|바꿔)/;
   const match2 = !match1 ? message.match(pattern2) : null;
 
   // 패턴 3: "오후 3시에 있는 구몬을 토요일 11시로 이동" (원본 시간 명시)
   // (원본 시간) (제목) (목표 요일) (목표 시간)
-  const pattern3 = /(?:오전|오후)?\s*(\d{1,2})시\s*에\s*있는\s*([가-힣a-zA-Z0-9\s]+?)\s*(을|를)?\s*(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)\s*(?:오전|오후)?\s*(\d{1,2})시/;
+  // ⭐ "있는" 또는 "잇는" (오타) 모두 매칭
+  const pattern3 = /(?:오전|오후)?\s*(\d{1,2})시\s*에\s*(?:있|잇)는\s*([가-힣a-zA-Z0-9\s]+?)\s*(을|를)?\s*(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)\s*(?:오전|오후)?\s*(\d{1,2})시/;
   const match3 = !match1 && !match2 ? message.match(pattern3) : null;
 
   // 제목 정규화 함수 (generic term → 실제 검색용)
@@ -63,52 +66,61 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
 
   if (match1) {
     const sourceDayKor = match1[1];
-    let title = match1[2].trim();
-    // match1[3]은 "을/를" (optional)
-    const targetDayKor = match1[4];
-    const targetHour = parseInt(match1[5]);
+    const sourceHour = parseInt(match1[2]);
+    let title = match1[3].trim();
+    // match1[4]는 "을/를" (optional)
+    const targetDayKor = match1[5];
+    const targetHour = parseInt(match1[6]);
 
-    // 제목 정리 (이미 "에 있는" 뒤의 텍스트만 추출됨)
+    // 제목 정리
     title = title.trim();
 
     const sourceDay = Object.entries(dayMap).find(([k]) => sourceDayKor.includes(k))?.[1];
     const targetDay = Object.entries(dayMap).find(([k]) => targetDayKor.includes(k))?.[1];
 
-    console.log(`📋 패턴 매칭:`);
-    console.log(`  - 원본: ${sourceDayKor} (${sourceDay})`);
-    console.log(`  - 제목: ${title}`);
-    console.log(`  - 목표: ${targetDayKor} (${targetDay}) ${targetHour}시`);
-
-    // 시간 정규화 (오후 처리)
-    let normalizedHour = targetHour;
-    if (message.includes('오후') && targetHour < 12) {
-      normalizedHour = targetHour + 12;
+    // 원본 시간 정규화 (오전/오후)
+    const isSourcePM = message.match(new RegExp(`${sourceDayKor}.*오후\\s*${sourceHour}시`));
+    let normalizedSourceHour = sourceHour;
+    if (isSourcePM && sourceHour < 12) {
+      normalizedSourceHour = sourceHour + 12;
     }
-    const targetTime = `${normalizedHour.toString().padStart(2, '0')}:00`;
+    const sourceTime = `${normalizedSourceHour.toString().padStart(2, '0')}:00`;
 
-    // 원본 일정 찾기 (고정 일정 포함)
-    console.log('\n🔍 원본 일정 찾기...');
-    console.log(`  - 조건: 제목="${title}", 요일=${sourceDay}`);
+    // 목표 시간 정규화 (오전/오후)
+    const isTargetPM = message.match(new RegExp(`${targetDayKor}.*오후\\s*${targetHour}시`));
+    let normalizedTargetHour = targetHour;
+    if (isTargetPM && targetHour < 12) {
+      normalizedTargetHour = targetHour + 12;
+    }
+    const targetTime = `${normalizedTargetHour.toString().padStart(2, '0')}:00`;
+
+    console.log(`📋 패턴1 매칭 (요일+시간+제목):`);
+    console.log(`  - 원본: ${sourceDayKor} (${sourceDay}) ${sourceTime}`);
+    console.log(`  - 제목: ${title}`);
+    console.log(`  - 목표: ${targetDayKor} (${targetDay}) ${targetTime}`);
+
+    // 원본 일정 찾기 (시간 기준 - 정확한 매칭)
+    console.log('\n🔍 원본 일정 찾기 (시간 기준)...');
+    console.log(`  - 조건: 제목="${title}", 요일=${sourceDay}, 시간=${sourceTime}`);
 
     // 요일 코드 변환 (영어 <-> 한글)
     const dayKoreanMap = { 'MON': '월', 'TUE': '화', 'WED': '수', 'THU': '목', 'FRI': '금', 'SAT': '토', 'SUN': '일' };
     const sourceDayKorean = dayKoreanMap[sourceDay] || sourceDay;
 
-    console.log(`  - 검색 요일: ${sourceDay} (한글: ${sourceDayKorean})`);
-
     // 제목 정규화 (generic terms 처리)
     const titleVariations = normalizeTitle(title);
     console.log(`  - 제목 검색 변형: [${titleVariations.join(', ')}]`);
 
-    // 1. 현재 스케줄에서 찾기 (⭐ find → filter로 변경, 여러 개 찾기)
+    // 1. 현재 스케줄에서 찾기 (제목 + 요일 + 시간으로 필터)
     console.log(`\n  📋 현재 스케줄 검색 (${currentSchedule.length}개):`);
     let foundSchedules = currentSchedule.filter(s => {
       const titleMatch = titleVariations.some(variation => s.title?.includes(variation));
       const daysArray = Array.isArray(s.days) ? s.days : [s.days];
       const dayMatch = daysArray.includes(sourceDay) || daysArray.includes(sourceDayKorean);
+      const timeMatch = s.startTime === sourceTime;
 
-      console.log(`    - ${s.title} (${daysArray.join(',')}): title=${titleMatch}, day=${dayMatch}`);
-      return titleMatch && dayMatch;
+      console.log(`    - ${s.title} (${daysArray.join(',')} ${s.startTime}): title=${titleMatch}, day=${dayMatch}, time=${timeMatch}`);
+      return titleMatch && dayMatch && timeMatch;
     });
 
     // 2. 고정 일정에서도 찾기
@@ -119,9 +131,10 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
         const titleMatch = titleVariations.some(variation => f.title?.includes(variation));
         const daysArray = Array.isArray(f.days) ? f.days : [f.days];
         const dayMatch = daysArray.includes(sourceDay) || daysArray.includes(sourceDayKorean);
+        const timeMatch = f.startTime === sourceTime;
 
-        console.log(`    - ${f.title} (${daysArray.join(',')}): title=${titleMatch}, day=${dayMatch}`);
-        return titleMatch && dayMatch;
+        console.log(`    - ${f.title} (${daysArray.join(',')} ${f.startTime}): title=${titleMatch}, day=${dayMatch}, time=${timeMatch}`);
+        return titleMatch && dayMatch && timeMatch;
       });
 
       if (foundFixedSchedules.length > 0) {
@@ -132,43 +145,36 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
 
     // ⭐ 매칭된 일정이 없으면 에러
     if (foundSchedules.length === 0) {
-      console.log(`❌ "${title}" 일정을 ${sourceDayKor}에서 찾을 수 없음`);
+      console.log(`❌ "${title}" 일정을 ${sourceDayKor} ${sourceTime}에서 찾을 수 없음`);
       return {
         isMoveRequest: true,
         result: {
           success: false,
-          understood: `${sourceDayKor} ${title}을 ${targetDayKor} ${targetHour}시로 이동 시도`,
+          understood: `${sourceDayKor} ${sourceTime} ${title}을 ${targetDayKor} ${targetTime}로 이동 시도`,
           action: 'move_failed',
           schedule: currentSchedule,
-          explanation: `${sourceDayKor}에 "${title}" 일정을 찾을 수 없어요. 😅\n\n현재 ${sourceDayKor} 일정:\n${getCurrentDaySchedules(currentSchedule, sourceDay, fixedSchedules)}`
+          explanation: `${sourceDayKor} ${sourceTime}에 "${title}" 일정을 찾을 수 없어요. 😅\n\n현재 ${sourceDayKor} 일정:\n${getCurrentDaySchedules(currentSchedule, sourceDay, fixedSchedules)}`
         }
       };
     }
 
-    // ⭐ 매칭된 일정이 여러 개면 사용자에게 선택 요청
+    // 시간까지 명시했으면 정확히 1개만 매칭되어야 함 (여러 개면 첫 번째 선택)
     if (foundSchedules.length > 1) {
-      console.log(`⚠️ "${title}" 일정이 ${sourceDayKor}에 ${foundSchedules.length}개 있음 - 사용자 선택 필요`);
-
-      const optionsList = foundSchedules.map((s, idx) =>
-        `${idx + 1}. ${s.title} (${s.startTime}-${s.endTime})`
-      ).join('\n');
-
-      return {
-        isMoveRequest: true,
-        result: {
-          success: false,
-          understood: `${sourceDayKor} ${title}을 ${targetDayKor} ${targetHour}시로 이동 시도`,
-          action: 'move_multiple_found',
-          schedule: currentSchedule,
-          options: foundSchedules,
-          explanation: `${sourceDayKor}에 "${title}" 일정이 여러 개 있어요. 어떤 일정을 이동할까요? 🤔\n\n${optionsList}\n\n예: "2번 일정을 ${targetDayKor} ${targetHour}시로 이동"`
-        }
-      };
+      console.log(`⚠️ "${title}" 일정이 ${sourceDayKor} ${sourceTime}에 ${foundSchedules.length}개 있음 - 첫 번째 선택`);
     }
 
     const foundSchedule = foundSchedules[0];
     const foundFixed = foundFixedSchedules.length > 0 ? foundFixedSchedules[0] : null;
-    console.log('✅ 원본 일정 발견:', foundSchedule.title, foundSchedule.startTime);
+    console.log('✅ 원본 일정 발견:', foundSchedule.title, foundSchedule.startTime, '-', foundSchedule.endTime);
+
+    // Duration 계산
+    const duration = foundSchedule.endTime
+      ? calculateDuration(foundSchedule.startTime, foundSchedule.endTime)
+      : 60;
+    console.log(`  - Duration: ${duration}분 (${foundSchedule.startTime} ~ ${foundSchedule.endTime})`);
+
+    const newEndTime = addMinutesToTime(targetTime, duration);
+    console.log(`  - 새 시간: ${targetTime} ~ ${newEndTime}`);
 
     // 삭제 + 추가 처리
     console.log('\n🔄 일정 이동 처리 중...');
@@ -199,13 +205,7 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
       console.log(`  🔓 고정 일정 해제: ${foundFixed.title}`);
     }
 
-    // 3단계: 새 일정 추가 (종료 시간은 원본과 동일한 duration 유지)
-    const duration = foundSchedule.endTime
-      ? calculateDuration(foundSchedule.startTime, foundSchedule.endTime)
-      : 60; // 기본 1시간
-
-    const newEndTime = addMinutesToTime(targetTime, duration);
-
+    // 3단계: 새 일정 추가 (duration은 이미 계산됨)
     // 목표 요일을 한글로 변환 (고정 일정은 한글로 저장됨)
     const targetDayKorean = dayKoreanMap[targetDay] || targetDay;
 
