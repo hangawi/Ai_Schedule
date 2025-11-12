@@ -311,7 +311,10 @@ const ScheduleOptimizationModal = ({
       onSchedulesApplied(currentCombination, applyScope);
     }
 
-    onClose();
+    // onClose가 함수인지 확인 후 호출
+    if (onClose && typeof onClose === 'function') {
+      onClose();
+    }
   };
 
   // 충돌 해결 핸들러
