@@ -204,6 +204,111 @@ router.post('/fixed-intent', async (req, res) => {
       });
     }
 
+    // 고정 일정 수정 (modify) 처리
+    if (result.success && result.action === 'modify' && result.targetSchedule) {
+      console.log('\n🔧 고정 일정 수정 모드');
+      console.log('  - 대상:', result.targetSchedule.title, result.targetSchedule.startTime);
+      console.log('  - 새 시간:', result.newSchedule.days, result.newSchedule.startTime);
+
+      const existingFixed = fixedSchedules || [];
+
+      // 기존 고정 일정에서 대상 제거
+      const updatedFixed = existingFixed.filter(f => f.id !== result.targetSchedule.id);
+
+      // 새로운 시간으로 수정된 고정 일정 생성
+      const modifiedFixed = {
+        ...result.targetSchedule,
+        days: result.newSchedule.days,
+        startTime: result.newSchedule.startTime,
+        endTime: result.newSchedule.endTime || result.targetSchedule.endTime
+      };
+
+      const allFixedSchedules = [...updatedFixed, modifiedFixed];
+
+      console.log('  - 전체 고정 일정:', allFixedSchedules.length, '개');
+
+      // AI 재최적화
+      const { optimizeSchedules } = require('../utils/scheduleAutoOptimizer');
+
+      const fixedOriginals = allFixedSchedules.map(fixed => {
+        if (fixed.originalSchedule) return fixed.originalSchedule;
+        const found = allSchedulesForSearch.find(s =>
+          s.title === fixed.title &&
+          s.startTime === fixed.startTime &&
+          s.endTime === fixed.endTime
+        );
+        return found || fixed;
+      });
+
+      const schedulesForReoptimization = [...currentSchedules, ...fixedOriginals];
+
+      const aiResult = await optimizeSchedules(
+        schedulesForReoptimization,
+        schedulesByImage || [],
+        allFixedSchedules
+      );
+
+      const optimizedSchedule = aiResult.optimizedSchedules || [];
+
+      return res.json({
+        success: true,
+        intent: result.intent,
+        optimizedSchedule,
+        fixedSchedules: allFixedSchedules,
+        message: result.message,
+        stats: {
+          total: optimizedSchedule.length,
+          fixed: allFixedSchedules.length
+        }
+      });
+    }
+
+    // 고정 일정 삭제 (remove) 처리
+    if (result.success && result.action === 'remove' && result.scheduleIds) {
+      console.log('\n🗑️ 고정 일정 삭제 모드');
+      console.log('  - 삭제할 ID:', result.scheduleIds);
+
+      const existingFixed = fixedSchedules || [];
+      const updatedFixed = existingFixed.filter(f => !result.scheduleIds.includes(f.id));
+
+      console.log('  - 남은 고정 일정:', updatedFixed.length, '개');
+
+      // AI 재최적화
+      const { optimizeSchedules } = require('../utils/scheduleAutoOptimizer');
+
+      const fixedOriginals = updatedFixed.map(fixed => {
+        if (fixed.originalSchedule) return fixed.originalSchedule;
+        const found = allSchedulesForSearch.find(s =>
+          s.title === fixed.title &&
+          s.startTime === fixed.startTime &&
+          s.endTime === fixed.endTime
+        );
+        return found || fixed;
+      });
+
+      const schedulesForReoptimization = [...currentSchedules, ...fixedOriginals];
+
+      const aiResult = await optimizeSchedules(
+        schedulesForReoptimization,
+        schedulesByImage || [],
+        updatedFixed
+      );
+
+      const optimizedSchedule = aiResult.optimizedSchedules || [];
+
+      return res.json({
+        success: true,
+        intent: result.intent,
+        optimizedSchedule,
+        fixedSchedules: updatedFixed,
+        message: result.message,
+        stats: {
+          total: optimizedSchedule.length,
+          fixed: updatedFixed.length
+        }
+      });
+    }
+
     res.json(result);
   } catch (error) {
     console.error('❌ 고정 일정 처리 오류:', error);

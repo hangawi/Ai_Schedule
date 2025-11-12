@@ -292,23 +292,39 @@ function isSpecificTitle(title) {
  * @param {Array} existingFixedSchedules - 기존 고정 일정 배열 (같은 제목 확인용)
  */
 function createCustomFixedSchedule(customData, existingFixedSchedules = []) {
-  // ⭐ 제목이 명확한지 확인
-  const isSpecific = isSpecificTitle(customData.title);
-  const displayTitle = isSpecific ? customData.title : '기타';
+  // ⭐ 항상 원본 제목 사용 (사용자 요구사항: "밥" = "밥약속" 같은 제목도 그대로 표시)
+  const displayTitle = customData.title;
 
-  console.log(`📝 제목 분류: "${customData.title}" → ${isSpecific ? '명확 (개별 범례)' : '불명확 (기타로 통합)'}`);
+  console.log(`📝 커스텀 일정 생성: "${customData.title}"`);
 
-  // ⭐ 같은 제목의 커스텀 일정이 이미 있으면 그 인덱스 재사용
-  // 불명확한 제목들은 모두 "기타"로 통합
+  // ⭐ 기본 제목 추출 (예: "밥 약속" → "밥", "눈높이 일정" → "눈높이", "밥약속" → "밥")
+  const extractBaseTitle = (title) => {
+    if (!title) return title;
+    // 1. 공백 포함 접미사 제거: "밥 약속" → "밥"
+    // 2. 공백 없는 접미사 제거: "밥약속" → "밥"
+    return title
+      .replace(/\s+(약속|일정|시간|타임)$/g, '')  // 공백 있는 경우
+      .replace(/(약속|일정|시간|타임)$/g, '')    // 공백 없는 경우
+      .trim();
+  };
+
+  const baseTitle = extractBaseTitle(customData.title);
+
+  // ⭐ 같은 기본 제목의 커스텀 일정이 이미 있으면 그 인덱스 재사용
   const existingCustom = existingFixedSchedules.find(
-    f => f.type === 'custom' && (isSpecific ? f.title === customData.title : f.title === '기타' || !isSpecificTitle(f.title))
+    f => f.type === 'custom' && extractBaseTitle(f.title) === baseTitle
   );
+
+  console.log(`  - 기본 제목: "${baseTitle}" (원본: "${customData.title}")`);
+  if (existingCustom) {
+    console.log(`  - 같은 기본 제목 발견: "${existingCustom.title}"`);
+  }
 
   let customImageIndex;
   if (existingCustom) {
     // 같은 제목이면 같은 인덱스 재사용
     customImageIndex = existingCustom.sourceImageIndex;
-    console.log(`♻️ 같은 범주 발견: "${displayTitle}" → 인덱스 ${customImageIndex} 재사용`);
+    console.log(`♻️ 같은 제목 발견: "${displayTitle}" → 인덱스 ${customImageIndex} 재사용`);
   } else {
     // 새로운 제목이면 새 인덱스 할당
     const existingCustomCount = existingFixedSchedules.filter(f => f.type === 'custom').length;
@@ -317,29 +333,26 @@ function createCustomFixedSchedule(customData, existingFixedSchedules = []) {
       .map(f => f.sourceImageIndex);
     const maxIndex = existingIndices.length > 0 ? Math.max(...existingIndices) : 999;
 
-    // ⭐ "기타"는 특별한 인덱스 9999 사용
-    if (!isSpecific) {
-      customImageIndex = 9999;
-      console.log(`🆕 기타 일정: "${customData.title}" → 고정 인덱스 9999 할당`);
-    } else {
-      customImageIndex = Math.max(1000 + existingCustomCount, maxIndex + 1);
-      console.log(`🆕 새로운 제목: "${customData.title}" → 인덱스 ${customImageIndex} 할당`);
-    }
+    customImageIndex = Math.max(1000 + existingCustomCount, maxIndex + 1);
+    console.log(`🆕 새로운 커스텀 일정: "${customData.title}" → 인덱스 ${customImageIndex} 할당`);
   }
 
   return {
     id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     type: 'custom',
-    title: displayTitle, // ⭐ 범례에 표시될 제목 (명확하면 원본, 불명확하면 "기타")
-    originalTitle: customData.title, // 원본 제목 보존
+    title: baseTitle, // ⭐ 시간표에는 기본 제목 표시 (밥약속 → 밥)
+    originalTitle: customData.title, // 원본 제목 보존 (밥약속)
+    baseTitle: baseTitle, // ⭐ 기본 제목 (약속/일정 제거)
     days: customData.days || [],
     startTime: customData.startTime,
     endTime: customData.endTime,
     priority: 0, // 최우선
     userFixed: true,
-    isGeneric: !isSpecific, // ⭐ 기타 여부 플래그
+    isGeneric: false, // ⭐ 항상 개별 범례로 표시
     sourceImageIndex: customImageIndex, // ⭐ 범례용 고유 인덱스 (색상은 클라이언트에서 인덱스별 자동 할당)
-    academyName: displayTitle // 범례에 표시될 이름
+    academyName: baseTitle, // 범례에 표시될 이름 (기본 제목)
+    category: baseTitle, // ⭐ 범례 카테고리 (기본 제목)
+    sourceImage: 'custom-schedule' // ⭐ 범례를 위한 sourceImage
   };
 }
 
@@ -442,10 +455,24 @@ async function handleFixedScheduleRequest(userInput, currentSchedules, fixedSche
     }
 
     case 'remove_fixed': {
-      // 키워드로 고정 일정 찾기
-      const toRemove = fixedSchedules.filter(fixed =>
+      // 키워드로 고정 일정 찾기 + 요일/시간 필터링
+      let toRemove = fixedSchedules.filter(fixed =>
         fixed.title.includes(intent.keyword)
       );
+
+      // 요일 필터링
+      if (intent.day && toRemove.length > 0) {
+        toRemove = toRemove.filter(fixed =>
+          fixed.days && fixed.days.includes(intent.day)
+        );
+      }
+
+      // 시간 필터링
+      if (intent.time && toRemove.length > 0) {
+        toRemove = toRemove.filter(fixed =>
+          fixed.startTime === intent.time
+        );
+      }
 
       if (toRemove.length === 0) {
         return {
@@ -455,12 +482,107 @@ async function handleFixedScheduleRequest(userInput, currentSchedules, fixedSche
         };
       }
 
+      // 여러 개 있으면 선택 옵션 제공
+      if (toRemove.length > 1) {
+        return {
+          success: false,
+          intent: 'remove_fixed',
+          needsUserChoice: true,
+          options: toRemove,
+          message: `"${intent.keyword}" 일정이 여러 개 있어요. 어떤 일정을 삭제할까요? 🤔\n\n${toRemove.map((s, idx) => {
+            const daysStr = Array.isArray(s.days) ? s.days.join(', ') : s.days;
+            return `${idx + 1}. ${s.title} (${daysStr} ${s.startTime}-${s.endTime})`;
+          }).join('\n')}\n\n예: "${toRemove.length}번 일정 삭제"`
+        };
+      }
+
       return {
         success: true,
         intent: 'remove_fixed',
         action: 'remove',
         scheduleIds: toRemove.map(s => s.id),
         message: intent.explanation || `"${intent.keyword}" 고정 일정을 삭제했습니다!`
+      };
+    }
+
+    case 'modify_fixed': {
+      // 검색 조건으로 고정 일정 찾기
+      const { search, newSchedule } = intent;
+
+      // 옵션 번호가 지정된 경우 (예: "2번 일정")
+      if (search.optionNumber !== null && search.optionNumber !== undefined) {
+        const targetIndex = search.optionNumber - 1;
+        if (targetIndex >= 0 && targetIndex < fixedSchedules.length) {
+          const targetSchedule = fixedSchedules[targetIndex];
+
+          return {
+            success: true,
+            intent: 'modify_fixed',
+            action: 'modify',
+            targetSchedule,
+            newSchedule,
+            message: `${targetSchedule.title} 일정을 ${newSchedule.days?.join(',')} ${newSchedule.startTime}로 이동합니다!`
+          };
+        } else {
+          return {
+            success: false,
+            intent: 'modify_fixed',
+            message: `${search.optionNumber}번 일정을 찾을 수 없어요! 현재 고정 일정은 ${fixedSchedules.length}개입니다.`
+          };
+        }
+      }
+
+      // 키워드로 검색
+      let candidates = fixedSchedules.filter(fixed =>
+        fixed.title.includes(search.keyword)
+      );
+
+      // 요일 필터링
+      if (search.day && candidates.length > 0) {
+        candidates = candidates.filter(fixed =>
+          fixed.days && fixed.days.includes(search.day)
+        );
+      }
+
+      // 시간 필터링
+      if (search.time && candidates.length > 0) {
+        candidates = candidates.filter(fixed =>
+          fixed.startTime === search.time
+        );
+      }
+
+      if (candidates.length === 0) {
+        const dayInfo = search.day ? ` ${search.day}` : '';
+        const timeInfo = search.time ? ` ${search.time}` : '';
+        return {
+          success: false,
+          intent: 'modify_fixed',
+          message: `${dayInfo}${timeInfo}에 "${search.keyword}" 일정을 찾을 수 없어요! 🤔\n\n현재${dayInfo} 일정:\n${fixedSchedules.filter(f => !search.day || f.days?.includes(search.day)).map(f => `• ${f.title} (${f.startTime}-${f.endTime})`).join('\n') || '(일정 없음)'}`
+        };
+      }
+
+      // 여러 개 있으면 선택 옵션 제공
+      if (candidates.length > 1) {
+        return {
+          success: false,
+          intent: 'modify_fixed',
+          needsUserChoice: true,
+          options: candidates,
+          newSchedule: newSchedule, // 새 스케줄 정보도 함께 전달
+          message: `"${search.keyword}" 일정이 여러 개 있어요. 어떤 일정을 이동할까요? 🤔\n\n${candidates.map((s, idx) => {
+            const daysStr = Array.isArray(s.days) ? s.days.join(', ') : s.days;
+            return `${idx + 1}. ${s.title} (${daysStr} ${s.startTime}-${s.endTime})`;
+          }).join('\n')}\n\n예: "${candidates.length}번 일정을 ${newSchedule.days?.join(',')} ${newSchedule.startTime}로 이동"`
+        };
+      }
+
+      return {
+        success: true,
+        intent: 'modify_fixed',
+        action: 'modify',
+        targetSchedule: candidates[0],
+        newSchedule,
+        message: intent.explanation || `${candidates[0].title} 일정을 ${newSchedule.days?.join(',')} ${newSchedule.startTime}로 이동합니다!`
       };
     }
 

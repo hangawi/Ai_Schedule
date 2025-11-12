@@ -488,38 +488,88 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
         return notRemoved && notInFinal;
       });
 
-      // ⭐ 같은 이미지 출처 우선 정렬 (제거된 스케줄과 같은 학원 우선)
+      // ⭐ 주차 수 추출 헬퍼 (예: "주 5회" → 5, "주3회" → 3)
+      const extractWeeklyCount = (title) => {
+        if (!title) return 0;
+        const match = title.match(/주\s*(\d+)\s*회/);
+        return match ? parseInt(match[1]) : 0;
+      };
+
+      // ⭐ 제거된 스케줄의 academyName 추출 (같은 학원의 다른 옵션 찾기)
+      const removedAcademyNames = new Set(
+        removedSchedules
+          .map(s => s.academyName || s.title?.replace(/주\s*\d+\s*회/, '').trim())
+          .filter(Boolean)
+      );
+
+      console.log(`🔍 제거된 학원: ${Array.from(removedAcademyNames).join(', ')}`);
+
+      // ⭐ 같은 학원의 다른 옵션 우선 정렬
+      // 우선순위: 1) 같은 출처 > 2) 주차 수 많은 것 (주5회 > 주3회 > 주2회 > 주1회)
       candidateSchedules.sort((a, b) => {
         const aIsSameSource = removedImageSources.has(a.sourceImage);
         const bIsSameSource = removedImageSources.has(b.sourceImage);
+
+        // 1순위: 같은 출처
         if (aIsSameSource && !bIsSameSource) return -1;
         if (!aIsSameSource && bIsSameSource) return 1;
+
+        // 2순위: 같은 출처 내에서는 주차 수가 많은 것 우선
+        if (aIsSameSource && bIsSameSource) {
+          const aAcademy = a.academyName || a.title?.replace(/주\s*\d+\s*회/, '').trim();
+          const bAcademy = b.academyName || b.title?.replace(/주\s*\d+\s*회/, '').trim();
+
+          // 같은 학원이면 주차 수로 비교
+          if (aAcademy === bAcademy) {
+            const aWeekly = extractWeeklyCount(a.title);
+            const bWeekly = extractWeeklyCount(b.title);
+            return bWeekly - aWeekly; // 내림차순 (많은 게 먼저)
+          }
+        }
+
         return 0;
       });
 
       console.log(`🔍 후보 스케줄: ${candidateSchedules.length}개`);
       console.log(`  📊 전체 풀: ${fullSchedulePool.length}, 제거된 키: ${removedKeys.size}, 최종 키: ${finalKeys.size}`);
       if (candidateSchedules.length > 0) {
-        console.log(`  🎯 우선순위 top 3:`);
-        candidateSchedules.slice(0, 3).forEach((s, i) => {
+        console.log(`  🎯 우선순위 top 10 (주차 수 우선 정렬 적용):`);
+        candidateSchedules.slice(0, 10).forEach((s, i) => {
           const isSameSource = removedImageSources.has(s.sourceImage);
-          console.log(`    ${i + 1}. ${s.title} (${s.days} ${s.startTime}-${s.endTime}) ${isSameSource ? '✅ 같은 출처' : '❌ 다른 출처'}`);
+          const weeklyCount = extractWeeklyCount(s.title);
+          const academy = s.academyName || s.title?.replace(/주\s*\d+\s*회/, '').trim();
+          console.log(`    ${i + 1}. ${s.title} (${s.days} ${s.startTime}-${s.endTime}) ${isSameSource ? '✅ 같은 출처' : '❌ 다른 출처'} [주${weeklyCount}회, ${academy}]`);
         });
       }
 
       // 겹치지 않는 스케줄 추가
       let added = 0;
+      const addedAcademies = new Set(); // ⭐ 같은 학원의 여러 옵션 중복 방지
+
       for (const candidate of candidateSchedules) {
         if (added >= needed) break;
+
+        // ⭐ 같은 학원 중복 체크 (같은 학원의 다른 옵션 하나만 선택)
+        const academy = candidate.academyName || candidate.title?.replace(/주\s*\d+\s*회/, '').trim();
+
+        // 이미 같은 학원의 다른 옵션이 추가되었는지 확인
+        if (academy && addedAcademies.has(academy)) {
+          console.log(`  ⏭️ 건너뜀: ${candidate.title} (같은 학원 "${academy}"의 다른 옵션이 이미 선택됨)`);
+          continue;
+        }
 
         if (!hasOverlapWith(candidate, finalSchedules)) {
           finalSchedules.push(candidate);
           added++;
-          console.log(`  ➕ 추가: ${candidate.title} (${candidate.days} ${candidate.startTime}-${candidate.endTime})`);
+          if (academy) {
+            addedAcademies.add(academy);
+          }
+          const weeklyCount = extractWeeklyCount(candidate.title);
+          console.log(`  ➕ 추가: ${candidate.title} (${candidate.days} ${candidate.startTime}-${candidate.endTime}) [주${weeklyCount}회, ${academy}]`);
         }
       }
 
-      console.log(`✅ ${added}개 스케줄 추가 완료`);
+      console.log(`✅ ${added}개 스케줄 추가 완료 (${addedAcademies.size}개 학원)`);
     }
 
     console.log(`📊 최종 스케줄: ${finalSchedules.length}개 (고정: ${selectedSchedules.length}, 일반: ${finalSchedules.length - selectedSchedules.length})`);
