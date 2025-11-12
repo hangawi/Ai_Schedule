@@ -207,7 +207,7 @@ router.post('/fixed-intent', async (req, res) => {
     // 고정 일정 수정 (modify) 처리
     if (result.success && result.action === 'modify' && result.targetSchedule) {
       console.log('\n🔧 고정 일정 수정 모드');
-      console.log('  - 대상:', result.targetSchedule.title, result.targetSchedule.startTime);
+      console.log('  - 대상:', result.targetSchedule.title, result.targetSchedule.startTime, '-', result.targetSchedule.endTime);
       console.log('  - 새 시간:', result.newSchedule.days, result.newSchedule.startTime);
 
       const existingFixed = fixedSchedules || [];
@@ -215,12 +215,33 @@ router.post('/fixed-intent', async (req, res) => {
       // 기존 고정 일정에서 대상 제거
       const updatedFixed = existingFixed.filter(f => f.id !== result.targetSchedule.id);
 
+      // Duration 계산 (원본 일정의 길이 유지)
+      const calculateDuration = (startTime, endTime) => {
+        const [startHour, startMin] = startTime.split(':').map(Number);
+        const [endHour, endMin] = endTime.split(':').map(Number);
+        return (endHour * 60 + endMin) - (startHour * 60 + startMin);
+      };
+
+      const addMinutesToTime = (timeStr, minutes) => {
+        const [hour, min] = timeStr.split(':').map(Number);
+        const totalMinutes = hour * 60 + min + minutes;
+        const newHour = Math.floor(totalMinutes / 60) % 24;
+        const newMin = totalMinutes % 60;
+        return `${newHour.toString().padStart(2, '0')}:${newMin.toString().padStart(2, '0')}`;
+      };
+
+      const duration = calculateDuration(result.targetSchedule.startTime, result.targetSchedule.endTime);
+      const calculatedEndTime = addMinutesToTime(result.newSchedule.startTime, duration);
+
+      console.log('  - Duration:', duration, '분');
+      console.log('  - 계산된 종료 시간:', calculatedEndTime);
+
       // 새로운 시간으로 수정된 고정 일정 생성
       const modifiedFixed = {
         ...result.targetSchedule,
         days: result.newSchedule.days,
         startTime: result.newSchedule.startTime,
-        endTime: result.newSchedule.endTime || result.targetSchedule.endTime
+        endTime: result.newSchedule.endTime || calculatedEndTime // ⭐ duration 유지
       };
 
       const allFixedSchedules = [...updatedFixed, modifiedFixed];
