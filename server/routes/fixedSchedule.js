@@ -317,15 +317,30 @@ router.post('/fixed-intent', async (req, res) => {
 
       const optimizedSchedule = aiResult.optimizedSchedules || [];
 
+      // 삭제된 일정의 제목 확인 후 범례 제거
+      const deletedSchedules = existingFixed.filter(f => result.scheduleIds.includes(f.id));
+      const deletedTitles = deletedSchedules.map(s => s.title);
+      console.log('🗑️ 삭제된 제목:', deletedTitles);
+
+      const allRemainingSchedules = [...optimizedSchedule, ...updatedFixed];
+      console.log('📋 남은 일정 제목:', allRemainingSchedules.map(s => s.title));
+
+      const titlesToRemoveFromLegend = deletedTitles.filter(title =>
+        !allRemainingSchedules.some(s => s.title === title)
+      );
+      console.log('✅ 범례에서 제거할 제목:', titlesToRemoveFromLegend);
+
       return res.json({
         success: true,
         intent: result.intent,
         optimizedSchedule,
         fixedSchedules: updatedFixed,
+        titlesToRemoveFromLegend,
         message: result.message,
         stats: {
           total: optimizedSchedule.length,
-          fixed: updatedFixed.length
+          fixed: updatedFixed.length,
+          removed: result.scheduleIds.length
         }
       });
     }

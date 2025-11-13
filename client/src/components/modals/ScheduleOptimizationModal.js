@@ -22,32 +22,13 @@ const ScheduleOptimizationModal = ({
   overallTitle = '업로드된 시간표' // 새로 추가: 전체 제목
 }) => {
   // 🔍 Props 디버깅
-  console.log('📦 ScheduleOptimizationModal Props:', {
-    combinations,
-    combinationsType: combinations ? (Array.isArray(combinations) ? 'array' : typeof combinations) : 'undefined',
-    combinationsLength: combinations?.length,
-    initialSchedules,
-    initialSchedulesType: initialSchedules ? (Array.isArray(initialSchedules) ? 'array' : typeof initialSchedules) : 'undefined',
-    initialSchedulesLength: initialSchedules?.length,
-    hasOnSelect: !!onSelect,
-    hasOnClose: !!onClose,
-    hasOnSchedulesApplied: !!onSchedulesApplied
-  });
 
   // combinations 또는 initialSchedules를 배열로 변환
   const initialCombinations = React.useMemo(() => {
-    console.log('🔍 useMemo 실행:', {
-      hasCombinations: !!combinations,
-      combinationsLength: combinations?.length,
-      hasInitialSchedules: !!initialSchedules,
-      initialSchedulesLength: initialSchedules?.length
-    });
-
     if (combinations && Array.isArray(combinations) && combinations.length > 0) {
       // combinations가 유효한 경우
       const isValid = combinations.every(c => Array.isArray(c));
       if (isValid) {
-        console.log('✅ combinations 사용:', combinations.length, '개 조합');
         return combinations;
       } else {
         console.warn('⚠️ combinations가 잘못된 형식');
@@ -55,7 +36,6 @@ const ScheduleOptimizationModal = ({
     }
 
     if (initialSchedules && Array.isArray(initialSchedules) && initialSchedules.length > 0) {
-      console.log('✅ initialSchedules 사용:', initialSchedules.length, '개 스케줄');
       return [initialSchedules]; // 단일 배열을 combinations 형식으로 감싸기
     }
 
@@ -96,17 +76,12 @@ const ScheduleOptimizationModal = ({
 
   // fixedSchedules prop 변경 시 currentFixedSchedules 동기화
   useEffect(() => {
-    console.log('🔄 fixedSchedules prop 변경 감지:', fixedSchedules?.length, '개');
     setCurrentFixedSchedules(fixedSchedules || []);
   }, [fixedSchedules]);
 
   // customSchedulesForLegend prop 변경 시 동기화
   useEffect(() => {
     if (customSchedulesForLegendProp && customSchedulesForLegendProp.length > 0) {
-      console.log('🔄 customSchedulesForLegend prop 변경 감지:', customSchedulesForLegendProp.length, '개');
-      customSchedulesForLegendProp.forEach(c => {
-        console.log(`  - ${c.title} (sourceImageIndex: ${c.sourceImageIndex})`);
-      });
       setCustomSchedulesForLegend(customSchedulesForLegendProp);
     }
   }, [customSchedulesForLegendProp]);
@@ -148,24 +123,16 @@ const ScheduleOptimizationModal = ({
   }
 
   // 디버그: 조합 확인
-  if (currentIndex === 0) {
-    console.log('📦 Total combinations:', modifiedCombinations.length);
-    console.log('📦 Combination 0 has', currentCombination?.length, 'schedules');
-  }
 
   const weeklySchedule = formatWeeklySchedule(currentCombination);
 
   // ScheduleGridSelector를 위해 personalTimes 형식으로 변환
   let personalTimes;
   try {
-    console.log('🔄 personalTimes 생성 시작, currentCombination:', currentCombination?.length, '개');
-
     // hover된 이미지가 있으면 해당 이미지의 스케줄만 필터링
     const schedulesToShow = hoveredImageIndex !== null
       ? currentCombination.filter(schedule => schedule.sourceImageIndex === hoveredImageIndex)
       : currentCombination;
-
-    console.log(`🎯 표시할 스케줄: ${schedulesToShow.length}개 (hover: ${hoveredImageIndex !== null ? `이미지${hoveredImageIndex}` : '전체'})`);
 
     personalTimes = schedulesToShow.map((schedule, index) => {
       if (!schedule) {
@@ -194,9 +161,6 @@ const ScheduleOptimizationModal = ({
       if (schedule.sourceImageIndex !== undefined) {
         const colorInfo = getColorForImageIndex(schedule.sourceImageIndex);
         scheduleColor = colorInfo.border; // 색상 팔레트에서 border 색상 사용
-        console.log(`🎨 ${schedule.title}: 이미지${schedule.sourceImageIndex} → ${colorInfo.label} (${scheduleColor})`);
-      } else {
-        console.log(`⚠️ ${schedule.title}: sourceImageIndex 없음 → 기본 색상`);
       }
 
       return {
@@ -215,28 +179,11 @@ const ScheduleOptimizationModal = ({
       };
     }).filter(item => item !== null);
 
-    console.log('✅ personalTimes 생성 완료:', personalTimes?.length, '개');
-
-    // 🔍 김다희 강사 확인
-    const daheeInPersonalTimes = personalTimes.filter(p => p.title?.includes('김다희'));
-    if (daheeInPersonalTimes.length > 0) {
-      console.log('⚠️⚠️⚠️ personalTimes에 김다희 강사 있음:', daheeInPersonalTimes.map(p =>
-        `${p.title} (${p.startTime}-${p.endTime})`
-      ));
-    } else {
-      console.log('✅ personalTimes에 김다희 강사 없음');
-    }
   } catch (error) {
     console.error('❌ personalTimes 생성 중 에러:', error);
     console.error('currentCombination:', currentCombination);
     return null;
   }
-
-  // 월요일 15:00 확인
-  const mon15Personal = personalTimes.filter(p =>
-    p.days.includes(1) && p.startTime === '15:00'
-  );
-  console.log('🔍 personalTimes에서 월 15:00:', mon15Personal.map(p => `${p.title} days=${p.days} ${p.startTime}`));
 
   // 시간표 데이터에서 최소/최대 시간 추출
   const getTimeRange = () => {
@@ -262,8 +209,6 @@ const ScheduleOptimizationModal = ({
     // 실제 시간표에 맞춰 동적 조정 (제한 없음)
     if (minHour === 24) minHour = 9; // 시간 정보가 없으면 기본 9시
     if (maxHour === 0) maxHour = 18; // 시간 정보가 없으면 기본 18시
-
-    console.log('⏰ 시간 범위:', { start: minHour, end: maxHour });
 
     return { start: minHour, end: maxHour };
   };
@@ -299,9 +244,6 @@ const ScheduleOptimizationModal = ({
   };
 
   const handleSelectSchedule = () => {
-    console.log('🔍 선택된 combination:', currentCombination?.length, '개', '범위:', applyScope);
-    console.log('📌 고정 일정:', currentFixedSchedules?.length, '개');
-
     // ⭐ 고정 일정을 포함한 전체 스케줄 생성
     // 고정 일정은 originalSchedule 메타데이터를 가지고 있으므로, 이를 평탄화해서 포함
     const fixedSchedulesFlat = (currentFixedSchedules || []).map(fixed => {
@@ -317,19 +259,13 @@ const ScheduleOptimizationModal = ({
       };
     });
 
-    console.log('📦 고정 일정 평탄화:', fixedSchedulesFlat.length, '개');
-    fixedSchedulesFlat.forEach(f => console.log(`  - ${f.title} (${f.days} ${f.startTime}-${f.endTime})`));
-
     // currentCombination에 고정 일정이 이미 포함되어 있는지 확인
     const combinationTitles = new Set(currentCombination.map(s => `${s.title}_${s.startTime}_${s.days}`));
     const fixedToAdd = fixedSchedulesFlat.filter(f =>
       !combinationTitles.has(`${f.title}_${f.startTime}_${f.days}`)
     );
 
-    console.log('➕ 추가할 고정 일정:', fixedToAdd.length, '개');
-
     const fullSchedule = [...currentCombination, ...fixedToAdd];
-    console.log('✅ 전체 스케줄:', fullSchedule.length, '개');
 
     // 기존 콜백 (기존 시간표 최적화 플로우)
     if (onSelect) {
@@ -488,10 +424,6 @@ const ScheduleOptimizationModal = ({
     // 고정 일정 처리 우선 시도
     try {
       console.log('🔍 고정 일정 처리 시도:', input);
-      console.log('📋 currentSchedules:', modifiedCombinations[currentIndex]?.length, '개');
-      console.log('📋 주니어 찾기:', modifiedCombinations[currentIndex]?.filter(s => s.title?.includes('주니어')).map(s => s.title));
-      console.log('📋 현재 고정 일정 (currentFixedSchedules):', currentFixedSchedules?.length, '개');
-      console.log('📋 원본 고정 일정 (fixedSchedules prop):', fixedSchedules?.length, '개');
 
       const fixedResult = await addFixedSchedule(
         input,
@@ -501,23 +433,23 @@ const ScheduleOptimizationModal = ({
       );
 
       console.log('📦 고정 일정 API 응답:', fixedResult);
+      console.log('  - intent:', fixedResult.intent);
       console.log('  - hasConflict:', fixedResult.hasConflict);
       console.log('  - optimizedSchedule:', fixedResult.optimizedSchedule?.length, '개');
       console.log('  - fixedSchedules:', fixedResult.fixedSchedules?.length, '개');
+      console.log('  - titlesToRemoveFromLegend:', fixedResult.titlesToRemoveFromLegend);
 
       clearInterval(progressInterval);
       setChatMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId));
 
       // 고정 일정 관련 요청이 아니면 기존 채팅 API로 폴백
       if (!fixedResult.success && fixedResult.intent === 'none') {
-        console.log('⏭️ 고정 일정 아님 → 기존 채팅 API로 폴백');
         // 여기서 기존 채팅 API 호출하도록 throw
         throw new Error('NOT_FIXED_SCHEDULE');
       }
 
       // 사용자 선택이 필요한 경우 (여러 개 매칭)
       if (fixedResult.needsUserChoice) {
-        console.log('❓ 사용자 선택 필요:', fixedResult.options?.length, '개 옵션');
 
         const botMessage = {
           id: Date.now() + 2,
@@ -555,15 +487,9 @@ const ScheduleOptimizationModal = ({
       }
 
       // 충돌 없음 → 시간표 업데이트
+      console.log('✅ optimizedSchedule 있음, 시간표 업데이트 시작');
       if (fixedResult.optimizedSchedule) {
-        console.log('\n🔄 시간표 업데이트 시작:');
-        console.log('  - 현재 조합 인덱스:', currentIndex);
-        console.log('  - 기존 스케줄 개수:', modifiedCombinations[currentIndex]?.length);
-        console.log('  - 새 스케줄 개수:', fixedResult.optimizedSchedule.length);
-        console.log('  - 새 스케줄 첫 3개:', fixedResult.optimizedSchedule.slice(0, 3).map(s =>
-          `${s.title} (${s.days} ${s.startTime}-${s.endTime})`
-        ));
-
+        console.log('✅ if 블록 진입');
         const updatedCombinations = [...modifiedCombinations];
         updatedCombinations[currentIndex] = fixedResult.optimizedSchedule;
         setModifiedCombinations(updatedCombinations);
@@ -575,19 +501,14 @@ const ScheduleOptimizationModal = ({
           const existingIndices = new Set(customSchedulesForLegend.map(c => c.sourceImageIndex));
           const newCustoms = fixedResult.customSchedules.filter(c => !existingIndices.has(c.sourceImageIndex));
           setCustomSchedulesForLegend([...customSchedulesForLegend, ...newCustoms]);
-          console.log('🎨 커스텀 일정 범례 업데이트:', customSchedulesForLegend.length, '→', customSchedulesForLegend.length + newCustoms.length, '개');
         }
 
-        console.log('✅ 시간표 업데이트 완료');
-
-        // 🔍 업데이트된 스케줄에 김다희가 있는지 확인
-        const hasDaheeAfterUpdate = fixedResult.optimizedSchedule.some(s => s.title?.includes('김다희'));
-        console.log('  - 🔍 업데이트 후 김다희 포함 여부:', hasDaheeAfterUpdate);
-        if (hasDaheeAfterUpdate) {
-          const daheeSchedules = fixedResult.optimizedSchedule.filter(s => s.title?.includes('김다희'));
-          console.log('  - ⚠️⚠️⚠️ 김다희 강사 스케줄:', daheeSchedules.map(s =>
-            `${s.title} (${s.days} ${s.startTime}-${s.endTime})`
-          ));
+        // ⭐ 삭제된 일정의 범례 제거 (해당 제목이 더 이상 존재하지 않을 때만)
+        if (fixedResult.titlesToRemoveFromLegend && fixedResult.titlesToRemoveFromLegend.length > 0) {
+          console.log('🗑️ 범례에서 제거:', fixedResult.titlesToRemoveFromLegend);
+          setCustomSchedulesForLegend(prev =>
+            prev.filter(c => !fixedResult.titlesToRemoveFromLegend.includes(c.title))
+          );
         }
 
         const botMessage = {
@@ -598,7 +519,6 @@ const ScheduleOptimizationModal = ({
         };
 
         setChatMessages(prev => [...prev, botMessage]);
-        console.log('🛑 고정 일정 처리 완료 - 함수 종료');
         return;
       }
 
@@ -611,12 +531,10 @@ const ScheduleOptimizationModal = ({
       };
 
       setChatMessages(prev => [...prev, botMessage]);
-      console.log('🛑 고정 일정 처리 완료 (기타) - 함수 종료');
       return;
     } catch (error) {
       // 고정 일정 아닌 경우 기존 채팅 API로 폴백
       if (error.message === 'NOT_FIXED_SCHEDULE') {
-        console.log('📨 기존 채팅 API 호출 (NOT_FIXED_SCHEDULE)');
       } else {
         console.error('🚨 고정 일정 API 에러:', error.message);
         console.error('❌ 고정 일정 처리 오류:', error);
@@ -637,9 +555,6 @@ const ScheduleOptimizationModal = ({
     // 기존 AI 채팅 API로 폴백
     try {
       const token = localStorage.getItem('token');
-      console.log('🔑 토큰 확인:', token ? '있음' : '없음');
-      console.log('📋 원본 스케줄:', originalSchedule ? `${originalSchedule.length}개` : '없음');
-      console.log('📋 현재 스케줄:', modifiedCombinations[currentIndex].length, '개');
 
       // 직전 봇 응답 찾기 (대화 컨텍스트 유지)
       const lastBotMessage = chatMessages
@@ -647,7 +562,6 @@ const ScheduleOptimizationModal = ({
         .reverse()
         .find(msg => msg.sender === 'bot' && !msg.text.includes('💭'));
       const lastAiResponse = lastBotMessage ? lastBotMessage.text : null;
-      console.log('🤖 직전 AI 응답:', lastAiResponse ? `있음 (${lastAiResponse.substring(0, 50)}...)` : '없음');
 
       const response = await fetch('http://localhost:5000/api/schedule/chat', {
         method: 'POST',
@@ -669,8 +583,6 @@ const ScheduleOptimizationModal = ({
       });
 
       const data = await response.json();
-
-      console.log('📥 AI:', data.action, '|', modifiedCombinations[currentIndex].length, '→', data.schedule?.length || 0);
 
       // 진행률 인터벌 정리
       clearInterval(progressInterval);
