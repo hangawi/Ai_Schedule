@@ -23,24 +23,10 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
       setMessages(negotiation.messages || []);
       setCurrentNegotiation(negotiation);
 
-      // 💡 협의 정보 상세 로그
-      console.log('[협의 모달] 협의 정보:', {
-        _id: negotiation._id,
-        weekStartDate: negotiation.weekStartDate,
-        status: negotiation.status,
-        type: negotiation.type,
-        멤버수: negotiation.conflictingMembers?.length
-      });
-
       // 💡 모든 멤버의 응답 상태 로그
-      console.log('[협의 모달] 모든 멤버 응답 상태:');
       negotiation.conflictingMembers?.forEach((cm, idx) => {
         const cmUserId = typeof cm.user === 'object' ? (cm.user._id || cm.user.id) : cm.user;
         const cmName = cm.user?.firstName || cm.user?.name || '이름없음';
-        console.log(`  멤버 ${idx + 1}: ${cmName} (${cmUserId?.toString().substring(0, 8)})`, {
-          response: cm.response,
-          chosenSlot: cm.chosenSlot
-        });
       });
 
       // 현재 유저의 chosenSlot 복원 (서버에서 가져옴)
@@ -52,10 +38,8 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
       );
 
       if (currentUserMember && currentUserMember.chosenSlot) {
-        console.log('[useEffect] chosenSlot 복원:', currentUserMember.chosenSlot);
         setOriginalTimeSlot(currentUserMember.chosenSlot);
       } else {
-        console.log('[useEffect] chosenSlot 없음');
       }
     }
   }, [negotiation, currentUser, roomId]);
@@ -93,13 +77,6 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
     try {
       const payload = { response };
 
-      console.log('[NegotiationModal] handleResponse 호출:', {
-        response,
-        chosenSlot,
-        originalTimeSlot,
-        negotiationType: activeNegotiation.type
-      });
-
       if (response === 'yield') {
         payload.yieldOption = selectedYieldOption;
         if (selectedYieldOption === 'alternative_time' && alternativeSlots.length === 0) {
@@ -112,15 +89,12 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
         // originalTimeSlot이 있으면 그것을 전달 (time_slot_choice에서 선택한 원래 시간)
         if (originalTimeSlot) {
           payload.chosenSlot = originalTimeSlot;
-          console.log('[yield] originalTimeSlot 전달:', originalTimeSlot);
         }
       } else if (response === 'claim') {
         // originalTimeSlot이 있으면 그것을 전달 (time_slot_choice에서 선택한 원래 시간)
         if (originalTimeSlot) {
           payload.chosenSlot = originalTimeSlot;
-          console.log('[claim] originalTimeSlot 전달:', originalTimeSlot);
         } else {
-          console.log('[claim] originalTimeSlot 없음!');
         }
       } else if (response === 'choose_slot') {
         if (!chosenSlot) {
@@ -132,11 +106,7 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
         payload.chosenSlot = chosenSlot;
         // time_slot_choice에서 선택한 시간을 originalTimeSlot에 저장
         setOriginalTimeSlot(chosenSlot);
-        console.log('[choose_slot] chosenSlot 전달 및 저장:', chosenSlot);
       }
-
-      console.log('[NegotiationModal] 최종 payload:', payload);
-
       const result = await coordinationService.respondToNegotiation(roomId, negotiation._id, payload);
 
       // 즉시 협의 데이터 업데이트 (UI가 바로 변경됨)
@@ -157,7 +127,6 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
         }, 1500);
       } else if (result.negotiation.type !== negotiation.type) {
         // 타입이 변경된 경우 (time_slot_choice -> full_conflict, partial_conflict -> full_conflict)
-        console.log('[협의 타입 변경]', negotiation.type, '->', result.negotiation.type);
         // 선택 초기화하여 새로운 타입의 옵션을 표시
         setChosenSlot(null);
         setSelectedYieldOption('carry_over');
@@ -177,8 +146,6 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
         );
 
         if (currentUserMember && currentUserMember.response !== 'pending') {
-          // 모달을 닫지 않고 즉시 응답 완료 상태로 UI 업데이트
-          console.log('[응답 완료] UI가 즉시 응답 완료 상태로 변경됨');
           // currentNegotiation이 이미 업데이트되어 UI가 자동으로 변경됨
         }
       }
@@ -400,8 +367,6 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
                           if (activeNegotiation.memberSpecificTimeSlots && currentUser?.id) {
                             const userSpecificSlots = activeNegotiation.memberSpecificTimeSlots[currentUser.id];
                             if (userSpecificSlots && userSpecificSlots.length > 0) {
-                              console.log('[시간대 필터링] 현재 유저:', currentUser.id.substring(0,8));
-                              console.log('[시간대 필터링] 유저별 가능 시간:', userSpecificSlots);
                               slotsToShow = userSpecificSlots;
                             }
                           }
@@ -529,10 +494,7 @@ const NegotiationModal = ({ isOpen, onClose, negotiation, currentUser, roomId, o
 
                                     // B. 💡 백엔드가 이미 할당 시간 단위로 분할해서 보냈으므로 그대로 사용
                                     let otherPreferredSlots = [];
-                                    console.log('[대체시간] memberSpecificTimeSlots:', activeNegotiation.memberSpecificTimeSlots);
-                                    console.log('[대체시간] currentUser.id:', currentUser.id);
                                     const memberSlots = (activeNegotiation.memberSpecificTimeSlots && activeNegotiation.memberSpecificTimeSlots[currentUser.id]) || [];
-                                    console.log('[대체시간] memberSlots:', memberSlots);
                                     if (memberSlots.length > 0) {
                                         memberSlots.forEach(slot => {
                                             const slotDateStr = getSlotDateString(slot);

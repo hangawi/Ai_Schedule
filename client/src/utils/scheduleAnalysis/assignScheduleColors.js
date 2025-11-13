@@ -127,8 +127,6 @@ function assignColorsToImages(schedulesByImage) {
   return schedulesByImage.map((imageData, index) => {
     const color = COLOR_PALETTE[index % COLOR_PALETTE.length];
 
-    console.log(`🎨 이미지 ${index + 1}: ${color.label} 할당`);
-
     return {
       ...imageData,
       color: color,

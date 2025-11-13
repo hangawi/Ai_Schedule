@@ -18,14 +18,11 @@ export const handleOpenOptimizer = async (
 ) => {
   // 원본 시간표 저장 (AI 최적화 전)
   if (!originalSchedule) {
-    console.log('💾 원본 시간표 저장:', currentCombination.length, '개 항목');
     setOriginalSchedule(JSON.parse(JSON.stringify(currentCombination)));
   }
 
   // 충돌 감지
   const conflicts = detectConflicts(currentCombination);
-
-  console.log('🤖 AI 자동 최적화 시작:', conflicts.length, '건의 충돌');
 
   // 충돌이 없으면
   if (conflicts.length === 0) {
@@ -120,7 +117,6 @@ export const handleOpenOptimizer = async (
     }, 300); // 1000ms → 300ms로 단축
   } catch (error) {
     clearInterval(progressInterval);
-    console.error('AI 자동 최적화 실패:', error);
 
     // 처리 중 메시지 제거
     setChatMessages(prev => prev.filter(msg => msg.id !== processingMessageId));

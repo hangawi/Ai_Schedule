@@ -46,9 +46,6 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
     try {
       // 기존 스케줄 가져오기
       const userSchedule = await userService.getUserSchedule();
-
-      console.log('🔍 원본 personalTimes:', userSchedule.personalTimes);
-
       const existingPersonalTimes = (userSchedule.personalTimes || [])
         .filter(pt => {
           // startTime과 endTime이 제대로 있는지 확인
@@ -57,10 +54,6 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
                                 typeof pt.endTime === 'string' &&
                                 pt.startTime.trim() !== '' &&
                                 pt.endTime.trim() !== '';
-
-          if (!hasValidTimes) {
-            console.warn('⚠️ 유효하지 않은 personalTime 제외:', pt);
-          }
 
           return hasValidTimes;
         })
@@ -91,31 +84,18 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
             color: pt.color || '#9333ea'
           };
         });
-
-      // 시간표를 personalTimes 형식으로 변환
-      console.log('📝 변환할 스케줄:', schedules, '범위:', applyScope);
-
       // 가장 큰 id 값 찾기
       let maxId = Math.max(0, ...existingPersonalTimes.map(pt => pt.id || 0));
 
       const newPersonalTimes = [];
 
       schedules.forEach((schedule, idx) => {
-        console.log(`\n🔍 [${idx + 1}/${schedules.length}] 원본 schedule:`, {
-          title: schedule.title,
-          days: schedule.days,
-          daysType: Array.isArray(schedule.days) ? 'array' : typeof schedule.days,
-          startTime: schedule.startTime,
-          endTime: schedule.endTime
-        });
 
         if (!schedule.days || (Array.isArray(schedule.days) && schedule.days.length === 0)) {
-          console.warn('⚠️ 요일 정보 없음:', schedule);
           return; // 요일 정보가 없으면 스킵
         }
 
         if (!schedule.startTime || !schedule.endTime) {
-          console.error('❌ startTime 또는 endTime 없음:', schedule);
           return;
         }
 
@@ -130,8 +110,6 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
         // days가 문자열일 수 있으므로 배열로 변환
         const daysArray = Array.isArray(schedule.days) ? schedule.days : [schedule.days];
 
-        console.log('  📅 daysArray:', daysArray);
-
         const mappedDays = daysArray.map(day => {
           // day가 배열일 수도 있으므로 확인
           if (Array.isArray(day)) {
@@ -140,10 +118,7 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
           return dayMap[day] || day;
         }).flat().filter(d => d && typeof d === 'number');
 
-        console.log('  ✅ mappedDays:', mappedDays);
-
         if (mappedDays.length === 0) {
-          console.error('❌ 매핑된 요일이 없음. 원본 days:', schedule.days);
           return;
         }
 
@@ -169,13 +144,11 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
             if (!schedule.startTime || !schedule.endTime ||
                 !schedule.startTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/) ||
                 !schedule.endTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)) {
-              console.error('❌ 잘못된 시간 형식:', schedule);
               return;
             }
 
             // targetDate 유효성 검사
             if (isNaN(targetDate.getTime())) {
-              console.error('❌ 잘못된 날짜:', targetDate, 'thisWeekMonday:', thisWeekMonday, 'daysFromMonday:', daysFromMonday);
               return;
             }
 
@@ -192,7 +165,6 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
               color: '#9333ea'
             };
 
-            console.log('✅ 변환된 personalTime (이번 주):', converted);
             newPersonalTimes.push(converted);
           });
         } else {
@@ -202,7 +174,6 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
           if (!schedule.startTime || !schedule.endTime ||
               !schedule.startTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/) ||
               !schedule.endTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)) {
-            console.error('❌ 잘못된 시간 형식:', schedule);
             return;
           }
 
@@ -217,26 +188,15 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
             isRecurring: true,
             color: '#9333ea'
           };
-
-          console.log('✅ 변환된 personalTime (반복):', converted);
           newPersonalTimes.push(converted);
         }
       });
-
-      console.log('📦 전체 newPersonalTimes:', newPersonalTimes);
-      console.log('📦 기존 existingPersonalTimes:', existingPersonalTimes);
-
       // 기존 일정과 합치기 (유효한 것만)
       const validExistingTimes = existingPersonalTimes.filter(pt =>
         pt.startTime && pt.endTime &&
         pt.startTime !== 'null' && pt.endTime !== 'null'
       );
-
-      console.log(`📦 유효한 기존 일정: ${validExistingTimes.length}개`);
-
       const updatedPersonalTimes = [...validExistingTimes, ...newPersonalTimes];
-
-      console.log('📦 최종 updatedPersonalTimes (첫 5개):', updatedPersonalTimes.slice(0, 5));
 
       // 최종 검증 - 모든 항목이 startTime과 endTime을 가지고 있는지 확인
       const validatedPersonalTimes = updatedPersonalTimes.filter(pt => {
@@ -245,25 +205,16 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
                        pt.endTime.match(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/);
 
         if (!isValid) {
-          console.error('❌ 유효하지 않은 항목 제외:', pt);
         }
 
         return isValid;
       });
-
-      console.log(`💾 서버에 저장 중... 검증 전: ${updatedPersonalTimes.length}개, 검증 후: ${validatedPersonalTimes.length}개`);
 
       // 서버에 저장
       const result = await userService.updateUserSchedule({
         ...userSchedule,
         personalTimes: validatedPersonalTimes
       });
-      console.log('💾 저장 완료:', result);
-
-      console.log(`✅ ${newPersonalTimes.length}개의 시간표를 캘린더에 추가했습니다!`);
-
-      // 캘린더 새로고침
-      console.log('🔄 캘린더 새로고침 호출:', onEventUpdate ? 'OK' : 'onEventUpdate 없음');
       if (onEventUpdate) {
         onEventUpdate();
       }
@@ -272,13 +223,9 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
       window.dispatchEvent(new CustomEvent('calendarUpdate', {
         detail: { type: 'schedule_added', context: 'profile' }
       }));
-      console.log('📅 calendarUpdate 이벤트 발생!');
 
       return { success: true, count: newPersonalTimes.length };
     } catch (error) {
-      console.error('❌ 시간표 추가 에러:', error);
-      console.error('  - 에러 메시지:', error.message);
-      console.error('  - 스택 트레이스:', error.stack);
       return { success: false, error: error.message || '알 수 없는 오류가 발생했습니다' };
     }
   };
@@ -433,7 +380,6 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
           setMessages(prev => [...prev, deleteResultMessage]);
 
           if(deleteResult.success === false) {
-            console.error("Deletion failed, aborting reschedule.");
             return;
           }
 
@@ -481,10 +427,8 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
                 }));
 
               updatedEvents = [...exceptions, ...personalTimes];
-              console.log('🔍 [ChatBox] 최신 일정 목록:', updatedEvents.length, '개');
             }
           } catch (error) {
-            console.error('최신 일정 가져오기 실패:', error);
             updatedEvents = pendingEvent.allExistingEvents || [];
           }
 
@@ -629,14 +573,12 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
 
   // Corrected handleTimeSelection
   const handleTimeSelection = async (selectedTime, pendingEvent, conflictingEvent, action, nextStep) => {
-    console.log('[ChatBox] handleTimeSelection called:', { action, nextStep, currentTab, conflictingEvent });
 
     try {
       const loadingMessage = { id: Date.now(), text: '일정을 확정하고 있습니다...', sender: 'bot', timestamp: new Date(), isLoading: true };
       setMessages(prev => [...prev, loadingMessage]);
 
       if (currentTab === 'profile' || currentTab === 'events') {
-        console.log('[ChatBox] Profile/Events tab condition check:', { action, nextStep, currentTab });
         if (action === 'reschedule' || nextStep === 'select_reschedule_time_profile' || nextStep === 'select_reschedule_time_events') {
           // 기존 일정을 선택한 시간에 추가
           const conflictingEventTitle = conflictingEvent?.title || '기존 일정';

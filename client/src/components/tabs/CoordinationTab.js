@@ -79,7 +79,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         setSentRequests(result.requests);
       }
     } catch (error) {
-      console.error('Failed to load sent requests:', error);
     }
   }, [user?.id]);
 
@@ -303,7 +302,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       showAlert(`방장 개인시간이 성공적으로 동기화되었습니다! (${syncedExceptions.length}개 항목)`);
 
     } catch (err) {
-      console.error('방장 개인시간 동기화 실패:', err);
       showAlert(`개인시간 동기화에 실패했습니다: ${err.message}`);
     }
   };
@@ -369,7 +367,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         setReceivedRequests(result.requests);
       }
     } catch (error) {
-      console.error('Failed to load received requests:', error);
     }
   }, [user?.id]);
 
@@ -509,12 +506,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
   // Handle opening negotiation modal
   const handleOpenNegotiation = useCallback((negotiationData) => {
-    console.log('[협의 열기] 선택한 협의:', {
-      _id: negotiationData._id,
-      weekStartDate: negotiationData.weekStartDate,
-      weekIndex: negotiationData.weekIndex,
-      date: negotiationData.slotInfo?.date
-    });
 
     // 💡 다른 협의에 이미 응답했는지 확인
     // 💡 같은 주의 협의만 필터링 (weekStartDate가 같은 협의끼리만 상호 배타적)
@@ -526,10 +517,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       if (negotiationData.weekStartDate && nego.weekStartDate) {
         // weekStartDate가 다르면 다른 주차이므로 제외
         if (nego.weekStartDate !== negotiationData.weekStartDate) {
-          console.log('[협의 필터링] 다른 주차 협의 제외:', {
-            current: negotiationData.weekStartDate,
-            other: nego.weekStartDate
-          });
           return false;
         }
       }
@@ -540,8 +527,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         return cmUserId === user?.id || cmUserId?.toString() === user?.id?.toString();
       });
     });
-
-    console.log('[협의 체크] 같은 주의 다른 협의:', otherActiveNegotiations.length, '개');
 
     const hasRespondedToOther = otherActiveNegotiations.some(nego => {
       const memberInOtherNego = nego.conflictingMembers?.find(cm => {
@@ -693,7 +678,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         showAlert
       );
     } catch (error) {
-      console.error('❌ Failed to handle request:', error);
+
     }
   };
   
@@ -786,7 +771,6 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
       if (error.isDuplicate || error.message.includes('동일한 요청이 이미 존재합니다')) {
         showAlert('이미 이 시간대에 대한 자리 요청을 보냈습니다. 기존 요청이 처리될 때까지 기다려주세요.');
       } else {
-        console.error('Request failed:', error);
         showAlert(`요청 전송에 실패했습니다: ${error.message}`, 'error');
       }
 

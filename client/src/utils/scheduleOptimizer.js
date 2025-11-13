@@ -167,7 +167,6 @@ export const generateOptimizationQuestions = (schedules, conflicts) => {
  */
 export const optimizeScheduleWithGPT = async (schedules, conflicts, userAnswers) => {
   try {
-    console.log('🤖 GPT 기반 스케줄 최적화 시작...');
 
     const response = await fetch(`${API_BASE_URL}/api/schedule/optimize`, {
       method: 'POST',
@@ -187,7 +186,6 @@ export const optimizeScheduleWithGPT = async (schedules, conflicts, userAnswers)
     }
 
     const data = await response.json();
-    console.log('✅ 최적화 완료:', data);
 
     return {
       optimizedSchedule: data.optimizedSchedule,
@@ -196,7 +194,6 @@ export const optimizeScheduleWithGPT = async (schedules, conflicts, userAnswers)
       conflictsResolved: data.conflictsResolved
     };
   } catch (error) {
-    console.error('❌ 스케줄 최적화 에러:', error);
     throw error;
   }
 };

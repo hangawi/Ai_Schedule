@@ -42,7 +42,6 @@ const PersonalInfoEdit = () => {
         birthdate: data.birthdate || ''
       });
     } catch (error) {
-      console.error('개인정보 조회 실패:', error);
       setMessage({ type: 'error', text: '개인정보를 불러오는데 실패했습니다.' });
     } finally {
       setIsLoading(false);
@@ -73,7 +72,6 @@ const PersonalInfoEdit = () => {
         setMessage({ type: '', text: '' });
       }, 3000);
     } catch (error) {
-      console.error('개인정보 저장 실패:', error);
       setMessage({ type: 'error', text: '개인정보 저장에 실패했습니다.' });
     } finally {
       setIsSaving(false);

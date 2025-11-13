@@ -14,37 +14,20 @@ import { safeDateToISOString } from './dateUtils';
  * @returns {boolean} - Whether swap request exists
  */
 export const hasExistingSwapRequest = (requests, currentUser, date, time, targetUserId) => {
-  console.log('hasExistingSwapRequest called with:', {
-    requestsCount: requests?.length || 0,
-    currentUser: currentUser?.id,
-    date: date?.toDateString ? date.toDateString() : date,
-    time,
-    targetUserId
-  });
+  
 
   if (!requests || !currentUser || !date || !time || !targetUserId) {
-    console.log('Missing required parameters');
     return false;
   }
 
   // Ensure date is valid
   const inputDate = new Date(date);
   if (isNaN(inputDate.getTime())) {
-    console.log('Invalid date');
     return false;
   }
 
   const result = requests.some(request => {
     const requesterId = request.requester?.id || request.requester?._id || request.requester;
-
-    console.log('Checking request:', {
-      requestId: request._id,
-      requesterId,
-      currentUserId: currentUser?.id,
-      requestStatus: request.status,
-      requestType: request.type,
-      requestTimeSlot: request.timeSlot
-    });
 
     // Check if this request is from the current user
     const isCurrentUserRequest = requesterId === currentUser?.id ||
@@ -52,17 +35,14 @@ export const hasExistingSwapRequest = (requests, currentUser, date, time, target
                                  requesterId?.toString() === currentUser?.id?.toString() ||
                                  requesterId?.toString() === currentUser?._id?.toString();
     if (!isCurrentUserRequest) {
-      console.log('Not current user request');
       return false;
     }
 
     // Check request status and type
     if (request.status !== 'pending') {
-      console.log('Request not pending');
       return false;
     }
     if (!(request.type === 'slot_swap' || request.type === 'time_request')) {
-      console.log('Request not correct type');
       return false;
     }
 
@@ -71,36 +51,22 @@ export const hasExistingSwapRequest = (requests, currentUser, date, time, target
       const requestTargetUserId = request.targetUser?._id || request.targetUser?.id || request.targetUser;
       const normalizedTargetUserId = targetUserId?._id || targetUserId?.id || targetUserId;
 
-      console.log('Target user comparison:', {
-        requestTargetUserId,
-        normalizedTargetUserId,
-        originalTargetUserId: targetUserId,
-        stringMatch: requestTargetUserId?.toString() === normalizedTargetUserId?.toString()
-      });
-
       if (requestTargetUserId?.toString() !== normalizedTargetUserId?.toString()) {
-        console.log('Target user mismatch');
         return false;
       }
     }
 
     // Safely handle request date
     if (!request.timeSlot?.date) {
-      console.log('No timeSlot date');
       return false;
     }
     const requestDate = new Date(request.timeSlot.date);
     if (isNaN(requestDate.getTime())) {
-      console.log('Invalid request date');
       return false;
     }
 
     // Check if dates match
     if (requestDate.toISOString().split('T')[0] !== inputDate.toISOString().split('T')[0]) {
-      console.log('Date mismatch:', {
-        requestDate: requestDate.toISOString().split('T')[0],
-        inputDate: inputDate.toISOString().split('T')[0]
-      });
       return false;
     }
 
@@ -113,21 +79,10 @@ export const hasExistingSwapRequest = (requests, currentUser, date, time, target
     const requestEndMinutes = requestEndHour * 60 + requestEndMinute;
     const clickedMinutes = clickedHour * 60 + clickedMinute;
 
-    console.log('Time overlap check:', {
-      requestTime: `${request.timeSlot.startTime}-${request.timeSlot.endTime}`,
-      clickedTime: time,
-      requestStartMinutes,
-      requestEndMinutes,
-      clickedMinutes
-    });
-
     // Check if clicked time falls within the existing request time range
     const overlaps = clickedMinutes >= requestStartMinutes && clickedMinutes < requestEndMinutes;
-    console.log('Time overlaps:', overlaps);
     return overlaps;
   });
-
-  console.log('hasExistingSwapRequest result:', result);
   return result;
 };
 

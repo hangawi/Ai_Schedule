@@ -35,20 +35,6 @@ const WeekView = ({
     const dayOfWeek = date.getDay(); // 0=일요일, 1=월요일, ...
     const dateStr = date.toISOString().split('T')[0];
 
-    // 디버깅용 로그 (월요일 13:00만 출력)
-    if (dayOfWeek === 1 && time === '13:00') {
-      console.log('🔍 getOwnerOriginalScheduleInfo 호출:', {
-        time,
-        dayOfWeek,
-        dateStr,
-        ownerOriginalSchedule: {
-          hasDefaultSchedule: !!ownerOriginalSchedule.defaultSchedule,
-          defaultScheduleLength: ownerOriginalSchedule.defaultSchedule?.length,
-          defaultSchedule: ownerOriginalSchedule.defaultSchedule
-        }
-      });
-    }
-
     // scheduleExceptions 확인 (특정 날짜 일정)
     const exceptionSlot = ownerOriginalSchedule.scheduleExceptions?.find(e => {
       if (e.specificDate !== dateStr) return false;
@@ -80,18 +66,6 @@ const WeekView = ({
           const startMinutes = timeToMinutes(p.startTime);
           const endMinutes = timeToMinutes(p.endTime);
 
-          // console.log('🔍 personalTime 체크 (반복):', {
-          //   personal: p,
-          //   dayOfWeek,
-          //   convertedDays,
-          //   startMinutes,
-          //   endMinutes,
-          //   timeMinutes,
-          //   isMatch: (endMinutes <= startMinutes) ?
-          //     (timeMinutes >= startMinutes || timeMinutes < endMinutes) :
-          //     (timeMinutes >= startMinutes && timeMinutes < endMinutes)
-          // });
-
           // 자정을 넘나드는 시간 처리
           if (endMinutes <= startMinutes) {
             return timeMinutes >= startMinutes || timeMinutes < endMinutes;
@@ -110,16 +84,6 @@ const WeekView = ({
         if (specificDate.toDateString() === currentDate.toDateString()) {
           const startMinutes = timeToMinutes(p.startTime);
           const endMinutes = timeToMinutes(p.endTime);
-
-          // console.log('🔍 personalTime 체크 (특정날짜):', {
-          //   personal: p,
-          //   specificDate: p.specificDate,
-          //   dateStr,
-          //   startMinutes,
-          //   endMinutes,
-          //   timeMinutes,
-          //   isMatch: timeMinutes >= startMinutes && timeMinutes < endMinutes
-          // });
 
           return timeMinutes >= startMinutes && timeMinutes < endMinutes;
         }
@@ -146,19 +110,6 @@ const WeekView = ({
 
       const isInRange = timeMinutes >= startMinutes && timeMinutes < endMinutes;
 
-      // 디버깅용 로그 (월요일 13:00만 출력)
-      if (dayOfWeek === 1 && time === '13:00') {
-        console.log('🔍 선호시간 체크:', {
-          time,
-          dayOfWeek,
-          sched: { dayOfWeek: sched.dayOfWeek, priority: sched.priority, startTime: sched.startTime, endTime: sched.endTime },
-          startMinutes,
-          endMinutes,
-          timeMinutes,
-          isInRange,
-          defaultScheduleLength: ownerOriginalSchedule.defaultSchedule?.length
-        });
-      }
 
       return isInRange;
     });
@@ -174,16 +125,6 @@ const WeekView = ({
 
       return timeMinutes >= startMinutes && timeMinutes < endMinutes;
     });
-
-    // 디버깅용 로그 (월요일 13:00)
-    if (dayOfWeek === 1 && time === '13:00') {
-      console.log('🔍 최종 판단:', {
-        time,
-        hasPreferredTime,
-        hasPreferredExceptionTime,
-        willShowAsNonPreferred: !hasPreferredTime && !hasPreferredExceptionTime
-      });
-    }
 
     // 선호시간도 없고 예외일정도 없고 개인시간도 없는 경우 → 불가능한 시간으로 표시
     if (!hasPreferredTime && !hasPreferredExceptionTime) {

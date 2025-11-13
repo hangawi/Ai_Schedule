@@ -30,8 +30,8 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
         const scheduleWithSpecificDate = allDefaultSchedule.filter(slot => slot.specificDate);
         const scheduleWithoutSpecificDate = allDefaultSchedule.filter(slot => !slot.specificDate);
 
-        // specificDate가 없는 것만 주간 반복 일정으로 사용 (평일만)
-        const weekdaySchedule = scheduleWithoutSpecificDate.filter(slot => slot.dayOfWeek >= 1 && slot.dayOfWeek <= 5);
+        // specificDate가 없는 것만 주간 반복 일정으로 사용 (일~토 모두 포함)
+        const weekdaySchedule = scheduleWithoutSpecificDate;
 
         // specificDate가 있는 것은 exceptions로 변환
         const convertedExceptions = scheduleWithSpecificDate.map(s => ({
@@ -63,7 +63,6 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
         }, 50);
 
       } catch (err) {
-        console.error('Failed to fetch member schedule:', err);
         setError(`조원 일정을 불러오는데 실패했습니다: ${err.message}`);
       } finally {
         setIsLoading(false);
@@ -85,7 +84,7 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
         }
       }}
     >
-      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white p-4 rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-bold text-gray-800">{memberName}님의 시간표</h3>
         </div>
@@ -109,7 +108,7 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
             </div>
 
             {(memberSchedule.length > 0 || memberExceptions.length > 0 || memberPersonalTimes.length > 0) ? (
-              <div className="overflow-auto max-h-[60vh]">
+              <div className="overflow-auto max-h-[55vh]">
                 <ScheduleGridSelector
                   key={renderKey}
                   schedule={memberSchedule}
@@ -118,6 +117,7 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
                   readOnly={true}
                   enableMonthView={true}
                   showViewControls={true}
+                  defaultShowMerged={true}
                 />
               </div>
             ) : (

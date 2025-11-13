@@ -112,13 +112,6 @@ export const generateAIPrompt = (command, context = {}) => {
    // 현재 로컬 시간을 그대로 사용 (이미 시스템이 한국 시간대이므로)
    const now = new Date();
 
-   console.log('🔍 [generateAIPrompt] 현재 시간 정보:', {
-      localNow: now.toString(),
-      formatToday: formatDate(now),
-      formatTomorrow: formatDate(addDays(now, 1)),
-      todayDayOfWeek: now.getDay() // 0=일요일, 1=월요일, 2=화요일...
-   });
-
    // 탭별 컨텍스트 정보 추가
    let contextInfo = '';
    if (context.context) {
@@ -501,12 +494,6 @@ export const checkScheduleConflict = (newStartDateTime, newEndDateTime, existing
    const newStart = new Date(newStartDateTime);
    const newEnd = new Date(newEndDateTime);
 
-   console.log('🔍 [checkScheduleConflict] 시작:', {
-      newStart: newStart.toString(),
-      newEnd: newEnd.toString(),
-      existingEventsCount: existingEvents.length
-   });
-
    const conflicts = existingEvents.filter((event, idx) => {
       let eventStart, eventEnd;
 
@@ -531,22 +518,7 @@ export const checkScheduleConflict = (newStartDateTime, newEndDateTime, existing
       // 충돌 확인: 새 일정의 시작이 기존 일정 종료 전이고, 새 일정의 종료가 기존 일정 시작 후
       const hasConflict = newStart < eventEnd && newEnd > eventStart;
 
-      console.log(`🔍 [checkScheduleConflict] Event ${idx}: "${event.title || event.summary}"`, {
-         eventStart: eventStart.toString(),
-         eventEnd: eventEnd.toString(),
-         comparison: {
-            'newStart < eventEnd': `${newStart.getTime()} < ${eventEnd.getTime()} = ${newStart < eventEnd}`,
-            'newEnd > eventStart': `${newEnd.getTime()} > ${eventStart.getTime()} = ${newEnd > eventStart}`,
-            hasConflict
-         }
-      });
-
       return hasConflict;
-   });
-
-   console.log('🔍 [checkScheduleConflict] 결과:', {
-      conflictsFound: conflicts.length,
-      conflictTitles: conflicts.map(c => c.title || c.summary)
    });
 
    return {
@@ -559,8 +531,6 @@ export const checkScheduleConflict = (newStartDateTime, newEndDateTime, existing
 export const findAvailableTimeSlots = (targetDate, events, duration = 60, requestedTimeHour = null) => {
    const date = new Date(targetDate);
    const dateStr = formatDate(date);
-
-   console.log('🔍 [빈시간찾기] 시작:', { targetDate, duration, requestedTimeHour });
 
    // 해당 날짜의 이벤트만 필터링
    const dayEvents = events.filter(event => {
@@ -577,8 +547,6 @@ export const findAvailableTimeSlots = (targetDate, events, duration = 60, reques
       }
       return formatDate(eventStart) === dateStr;
    });
-
-   console.log(`🔍 [빈시간찾기] ${dateStr} 날짜의 이벤트 ${dayEvents.length}개 발견`);
 
    // 이벤트를 시간순으로 정렬
    dayEvents.sort((a, b) => {
@@ -616,7 +584,6 @@ export const findAvailableTimeSlots = (targetDate, events, duration = 60, reques
          start = new Date(`${event.date}T${event.time}:00+09:00`);
          end = new Date(start.getTime() + duration * 60 * 1000);
       }
-      console.log(`   ${idx+1}. "${event.summary || event.title || '제목없음'}" ${start.getHours()}:${start.getMinutes().toString().padStart(2,'0')} - ${end.getHours()}:${end.getMinutes().toString().padStart(2,'0')}`);
    });
 
    const availableSlots = [];
@@ -645,8 +612,6 @@ export const findAvailableTimeSlots = (targetDate, events, duration = 60, reques
       // 현재 시간부터 다음 이벤트 시작까지가 duration 이상이면 빈 시간
       const availableDuration = (eventStartHour - currentHour) * 60; // 분 단위
 
-      console.log(`   ⏰ ${currentHour.toFixed(1)}시 ~ ${eventStartHour.toFixed(1)}시 = ${availableDuration.toFixed(0)}분 (필요: ${duration}분)`);
-
       if (availableDuration >= duration) {
          const slotEndHour = currentHour + (duration / 60);
          const slot = {
@@ -657,17 +622,14 @@ export const findAvailableTimeSlots = (targetDate, events, duration = 60, reques
             slotStartHour: currentHour
          };
          availableSlots.push(slot);
-         console.log(`   ✅ 빈시간 추가: ${slot.start} - ${slot.end}`);
       }
 
       // 이벤트 종료 후 버퍼 시간 추가 (이동/휴식 시간 고려)
       currentHour = eventEndHour + (bufferMinutes / 60);
-      console.log(`   ➡️ 다음 체크 시작: ${currentHour.toFixed(1)}시 (${bufferMinutes}분 버퍼)`);
    }
 
    // 마지막 이벤트 이후부터 workEnd까지
    const remainingDuration = (workEnd - currentHour) * 60;
-   console.log(`   ⏰ ${currentHour.toFixed(1)}시 ~ ${workEnd}시 = ${remainingDuration.toFixed(0)}분 (필요: ${duration}분)`);
 
    if (remainingDuration >= duration) {
       const slotEndHour = currentHour + (duration / 60);
@@ -679,20 +641,16 @@ export const findAvailableTimeSlots = (targetDate, events, duration = 60, reques
          slotStartHour: currentHour
       };
       availableSlots.push(slot);
-      console.log(`   ✅ 마지막 빈시간 추가: ${slot.start} - ${slot.end}`);
    }
 
-   console.log(`🔍 [빈시간찾기] 총 ${availableSlots.length}개 발견`);
 
    // 요청한 시간이 있으면 그 시간에 가까운 순서로 정렬
    if (requestedTimeHour !== null) {
-      console.log(`🔍 [빈시간찾기] ${requestedTimeHour}시 기준 정렬`);
       availableSlots.sort((a, b) => {
          const distanceA = Math.abs(a.slotStartHour - requestedTimeHour);
          const distanceB = Math.abs(b.slotStartHour - requestedTimeHour);
          return distanceA - distanceB;
       });
-      console.log('   정렬 결과:', availableSlots.map(s => `${s.start}(거리:${Math.abs(s.slotStartHour - requestedTimeHour).toFixed(1)}시간)`).join(', '));
    }
 
    return availableSlots;

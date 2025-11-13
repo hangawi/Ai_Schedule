@@ -279,7 +279,6 @@ export const inferClassDuration = (schedule, gradeLevel, index = 0) => {
   if (startTime) {
     const converted = convertAmPmTo24Hour(startTime);
     if (converted) {
-      console.log(`🕐 시간 변환: "${originalStartTime}" → "${converted}"`);
       startTime = converted;
     }
   }
@@ -290,7 +289,6 @@ export const inferClassDuration = (schedule, gradeLevel, index = 0) => {
     const periodConverted = convertPeriodToTime(schedule.description);
     startTime = ampmConverted || periodConverted;
     if (startTime) {
-      console.log(`🕐 description에서 시간 추출: "${schedule.description}" → "${startTime}"`);
     }
   }
 
@@ -298,7 +296,6 @@ export const inferClassDuration = (schedule, gradeLevel, index = 0) => {
   if (!startTime && schedule.title) {
     const converted = convertAmPmTo24Hour(schedule.title);
     if (converted) {
-      console.log(`🕐 title에서 시간 추출: "${schedule.title}" → "${converted}"`);
       startTime = converted;
     }
   }
@@ -307,7 +304,6 @@ export const inferClassDuration = (schedule, gradeLevel, index = 0) => {
   if (!startTime) {
     const defaultStartHour = 9 + index; // 9시, 10시, 11시...
     startTime = `${String(defaultStartHour).padStart(2, '0')}:00`;
-    console.warn(`⚠️ "${schedule.title}"에 시간 정보 없음. 기본 시간 할당: ${startTime}`);
   }
 
   // 이미 endTime이 있으면 그대로 반환
@@ -413,7 +409,6 @@ export const generateOptimalCombinations = (schedules, maxCombinations = 5) => {
 
     // 무한 루프 방지
     if (iterationCount > MAX_ITERATIONS) {
-      console.warn('⚠️ 조합 생성 반복 횟수 초과. 일부 조합만 반환합니다.');
       return;
     }
 
@@ -488,7 +483,6 @@ export const formatWeeklySchedule = (schedules) => {
 
   // 안전 장치: schedules가 없거나 배열이 아니면 빈 객체 반환
   if (!schedules || !Array.isArray(schedules)) {
-    console.warn('⚠️ formatWeeklySchedule: schedules가 유효하지 않음:', schedules);
     return weeklySchedule;
   }
 
@@ -568,7 +562,6 @@ export const performOCR = async (imageFile) => {
     const data = await response.json();
     return data.text || '';
   } catch (error) {
-    console.error('OCR 에러:', error);
     throw error;
   }
 };
@@ -592,18 +585,13 @@ export const analyzeScheduleImages = async (imageFiles, birthdate, progressCallb
     formData.append('birthdate', birthdate);
   }
 
-  console.log('🔍 [analyzeScheduleImages] skipDuplicateCheck 파라미터:', skipDuplicateCheck, `(타입: ${typeof skipDuplicateCheck})`);
-
   if (skipDuplicateCheck) {
-    console.log('✅ FormData에 skipDuplicateCheck=true 추가');
     formData.append('skipDuplicateCheck', 'true');
   } else {
-    console.log('⏭️ skipDuplicateCheck=false이므로 FormData에 추가하지 않음');
   }
 
   // ⭐ 새로운 업로드 세션 시작 (이전 이미지 기록 초기화)
   if (clearSession) {
-    console.log('🔄 clearSession=true - 이전 이미지 기록 초기화');
     formData.append('clearSession', 'true');
   }
 
@@ -612,7 +600,6 @@ export const analyzeScheduleImages = async (imageFiles, birthdate, progressCallb
   let progressInterval = null;
 
   try {
-    console.log('📡 백엔드로 요청 전송 중...');
     if (progressCallback) progressCallback(15);
 
     // 진행률 시뮬레이션 (서버 응답 대기 중)
@@ -641,16 +628,13 @@ export const analyzeScheduleImages = async (imageFiles, birthdate, progressCallb
     progressInterval = null;
     clearTimeout(timeoutId);
 
-    console.log('📥 응답 수신:', response.status, response.statusText);
     if (progressCallback) progressCallback(85);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ 서버 에러:', errorText);
       throw new Error(`시간표 분석 실패: ${response.status}`);
     }
 
-    console.log('🔄 JSON 파싱 중...');
     if (progressCallback) progressCallback(90);
 
     // JSON 파싱도 타임아웃 추가
@@ -663,7 +647,6 @@ export const analyzeScheduleImages = async (imageFiles, birthdate, progressCallb
       parseTimeout
     ]);
 
-    console.log('✅ 데이터 파싱 완료:', data);
     if (progressCallback) progressCallback(95);
     return data; // 전체 데이터 반환 (allSchedules, schedulesByImage 포함)
   } catch (error) {
@@ -673,10 +656,8 @@ export const analyzeScheduleImages = async (imageFiles, birthdate, progressCallb
     }
 
     if (error.name === 'AbortError') {
-      console.error('❌ 요청 타임아웃 (180초 초과)');
       throw new Error('이미지 분석 시간이 너무 오래 걸립니다 (3분 초과). 이미지 개수를 줄이거나 이미지 크기를 줄여주세요.');
     }
-    console.error('❌ 시간표 분석 에러:', error);
     throw error;
   }
 };
@@ -754,18 +735,12 @@ export const extractSchedulesFromImages = async (imageFiles, progressCallback, b
   // 진행률 보고
   if (progressCallback) progressCallback(10);
 
-  console.log('🔄 [extractSchedulesFromImages] skipDuplicateCheck:', skipDuplicateCheck);
 
   // 백엔드 API를 사용하여 구조화된 시간표 데이터 가져오기 (10% → 95%)
   const apiResponse = await analyzeScheduleImages(imageFiles, birthdate, progressCallback, skipDuplicateCheck);
 
-  console.log('🔍 [ocrUtils] 서버 응답 전체:', apiResponse);
-  console.log('🔍 [ocrUtils] hasDuplicates:', apiResponse.hasDuplicates);
-  console.log('🔍 [ocrUtils] duplicates:', apiResponse.duplicates);
-
   // 중복 감지 시 즉시 반환
   if (apiResponse.hasDuplicates) {
-    console.log('⚠️ [ocrUtils] 중복 감지됨! 즉시 반환');
     return apiResponse; // 중복 정보 그대로 반환
   }
 
@@ -774,15 +749,6 @@ export const extractSchedulesFromImages = async (imageFiles, progressCallback, b
   const schedulesByImage = apiResponse.schedulesByImage || [];
   const baseSchedules = apiResponse.baseSchedules || [];
   const overallTitle = apiResponse.overallTitle || '업로드된 시간표';
-
-  console.log('📥 서버 응답:', {
-    optimizedSchedules: apiResponse.optimizedSchedules?.length || 0,
-    allSchedules: apiResponse.allSchedules?.length || 0,
-    사용할스케줄: rawSchedules.length,
-    schedulesByImage: schedulesByImage.length,
-    baseSchedules: baseSchedules.length,
-    overallTitle
-  });
 
   // ⭐ gradeLevel이 null인 경우 imageTitle/overallTitle에서 추론
   const inferGradeLevel = (title) => {
@@ -810,9 +776,7 @@ export const extractSchedulesFromImages = async (imageFiles, progressCallback, b
     if (!schedule.gradeLevel || schedule.gradeLevel === 'null') {
       const inferredGrade = inferGradeLevel(schedule.imageTitle || overallTitle);
       if (inferredGrade) {
-        schedule.gradeLevel = inferredGrade;
-        console.log(`🔧 gradeLevel 보정: "${schedule.title}" → ${inferredGrade} (출처: ${schedule.imageTitle || overallTitle})`);
-      }
+        schedule.gradeLevel = inferredGrade; }
     }
   });
 
@@ -820,7 +784,6 @@ export const extractSchedulesFromImages = async (imageFiles, progressCallback, b
 
   // ⭐ 최적화된 스케줄이면 추가 처리 없이 바로 사용
   if (apiResponse.optimizedSchedules) {
-    console.log('✅ 최적화된 스케줄 사용 - 추가 처리 건너뛰기');
 
     // 충돌 감지 (참고용)
     const conflicts = detectConflicts(rawSchedules);
@@ -1051,13 +1014,10 @@ export const extractSchedulesFromImages = async (imageFiles, progressCallback, b
 
   if (progressCallback) progressCallback(90);
 
-  console.log('📊 최종 스케줄 개수:', schedulesWithSplit.length);
-
   // 월요일 15:00 시간대 확인
   const mon15 = schedulesWithSplit.filter(s =>
     s.days?.includes('MON') && s.startTime === '15:00'
   );
-  console.log('🔍 월요일 15:00 스케줄:', mon15.map(s => `${s.title} days=${s.days} ${s.startTime}-${s.endTime}`));
 
   if (progressCallback) progressCallback(100);
 

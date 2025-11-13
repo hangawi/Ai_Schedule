@@ -63,10 +63,7 @@ const ScheduleGridSelector = ({
   initialTimeRange = null,
   defaultShowMerged = true
 }) => {
-  console.log('🎯 ScheduleGridSelector 렌더링됨!', {
-    personalTimesLength: personalTimes?.length,
-    viewMode: 'initial'
-  });
+  
   const [currentDate, setCurrentDate] = useState(new Date());
   const [weekDates, setWeekDates] = useState([]);
   const [viewMode, setViewMode] = useState('week'); // 'week', 'month'
@@ -82,6 +79,7 @@ const ScheduleGridSelector = ({
     const sunday = getSundayOfCurrentWeek(currentDate);
     const dates = [];
     const dayNamesKorean = ['일', '월', '화', '수', '목', '금', '토'];
+
     for (let i = 0; i < 7; i++) {
       const date = new Date(sunday);
       date.setDate(sunday.getDate() + i);
@@ -141,7 +139,6 @@ const ScheduleGridSelector = ({
         );
 
         if (isDuplicate) {
-          console.log(`⏭️ 고정 일정 "${fixed.title}" 이미 존재 - 건너뜀`);
           return;
         }
 
@@ -150,17 +147,7 @@ const ScheduleGridSelector = ({
         if (fixed.sourceImageIndex !== undefined) {
           const colorInfo = getColorForImageIndex(fixed.sourceImageIndex);
           scheduleColor = colorInfo.border; // 색상 팔레트에서 border 색상 사용
-          console.log(`🎨 고정 일정 "${fixed.title}": 이미지${fixed.sourceImageIndex} → ${colorInfo.label} (${scheduleColor})`);
-        }
-
-        console.log('🔧 고정 일정 추가:', {
-          title: fixed.title,
-          sourceImageIndex: fixed.sourceImageIndex,
-          color할당전: fixed.color,
-          color할당후: scheduleColor,
-          days원본: fixed.days,
-          days변환후: mappedDays
-        });
+          }
 
         combined.push({
           ...fixed,
@@ -171,24 +158,10 @@ const ScheduleGridSelector = ({
         });
       });
     }
-
-    console.log('📌 합쳐진 일정:', combined.length, '개 (고정:', fixedSchedules?.length || 0, ')');
-
     // 🔍 김다희 강사 확인
     const daheeSchedules = combined.filter(s => s.title?.includes('김다희'));
-    if (daheeSchedules.length > 0) {
-      console.log('⚠️ 김다희 강사 발견:', daheeSchedules.map(s =>
-        `${s.title} (${s.days} ${s.startTime}-${s.endTime})`
-      ));
-    }
-
     // 🔍 공연반 확인
     const gongSchedules = combined.filter(s => s.title?.includes('공연반'));
-    if (gongSchedules.length > 0) {
-      console.log('✅ 공연반 발견:', gongSchedules.map(s =>
-        `${s.title} (${s.days} ${s.startTime}-${s.endTime})`
-      ));
-    }
 
     return combined;
   }, [personalTimes, fixedSchedules]);
@@ -205,25 +178,25 @@ const ScheduleGridSelector = ({
         const endHour = minute > 0 ? hour + 1 : hour;
         if (endHour > maxEndHour) {
           maxEndHour = endHour;
-          console.log(`🕐 최대 시간 업데이트: ${p.endTime} → ${endHour}시까지 표시`);
         }
       }
     });
 
     // 최소 18시까지는 표시
     maxEndHour = Math.max(18, maxEndHour);
-    console.log(`📊 최종 시간 범위: ${timeRange.start}시 ~ ${maxEndHour}시`);
-
     if (!showFullDay && maxEndHour > timeRange.end) {
       setTimeRange(prev => ({ ...prev, end: maxEndHour }));
     }
   }, [allPersonalTimes, showFullDay]);
 
   const getCurrentTimeSlots = () => {
-    const slots = generateTimeSlots(timeRange.start, timeRange.end);
-    console.log(`⏰ 현재 타임슬롯: ${timeRange.start}시 ~ ${timeRange.end}시 (${slots.length}개 슬롯)`);
-    console.log(`   마지막 슬롯: ${slots[slots.length - 1]}`);
-    return slots;
+    if (showFullDay) {
+      // 24시간 모드: 00:00 ~ 24:00
+      return generateTimeSlots(0, 24);
+    } else {
+      // 기본 모드: timeRange 사용 (9~18시 또는 일정에 맞춰 조정)
+      return generateTimeSlots(timeRange.start, timeRange.end);
+    }
   };
 
   const getBlocksForDay = (date, dayOfWeek) => {
@@ -270,6 +243,26 @@ const ScheduleGridSelector = ({
                 // 개인시간의 days 배열이 있는지 확인
                 const personalDays = p.days || [];
 
+                // ⭐ specificDate가 있으면 해당 날짜의 요일에 표시
+                if (p.specificDate && personalDays.length === 0) {
+                  const dateObj = new Date(p.specificDate);
+                  const dateDay = dateObj.getDay();
+
+                  if (dateDay !== dayOfWeek) {
+                    return false; // 요일이 다르면 필터링
+                  }
+
+                  // 요일이 맞으면 시간대 체크
+                  const startMinutes = timeToMinutes(p.startTime);
+                  const endMinutes = timeToMinutes(p.endTime);
+
+                  if (endMinutes <= startMinutes) {
+                    return timeMinutes >= startMinutes || timeMinutes < endMinutes;
+                  } else {
+                    return timeMinutes >= startMinutes && timeMinutes < endMinutes;
+                  }
+                }
+
                 // 디버깅: 월요일 15:00 확인
                 if (dayOfWeek === 1 && time === '15:00') {
                     const startMinutes = timeToMinutes(p.startTime);
@@ -277,30 +270,8 @@ const ScheduleGridSelector = ({
                     const matches = personalDays.map(day => day === 7 ? 0 : day).includes(dayOfWeek) &&
                                   timeMinutes >= startMinutes && timeMinutes < endMinutes;
                     if (matches) {
-                        console.log('✅ 월 15:00 매칭:', p.title, p.days, `${p.startTime}-${p.endTime}`);
                     }
                 }
-
-                // 디버그 로그 제거
-                if (false && timeMinutes === timeToMinutes(allPossibleSlots[0]) && dayOfWeek === 0) {
-                    console.log('Personal time debug for dayOfWeek', dayOfWeek, ':', {
-                        personalTimes: allPersonalTimes.length,
-                        allPersonalTimes: allPersonalTimes,
-                        time,
-                        timeMinutes,
-                        sampleCheck: allPersonalTimes.map(p => ({
-                            title: p.title,
-                            days: p.days,
-                            includes: p.days?.includes(dayOfWeek),
-                            startTime: p.startTime,
-                            endTime: p.endTime,
-                            startMinutes: timeToMinutes(p.startTime),
-                            endMinutes: timeToMinutes(p.endTime),
-                            isRecurring: p.isRecurring
-                        }))
-                    });
-                }
-
                 // 반복 개인시간인 경우에만 처리
                 if (p.isRecurring !== false && personalDays.length > 0) {
                     // 데이터베이스 요일 시스템 (1=월요일, 2=화요일, ..., 7=일요일)을
@@ -391,7 +362,9 @@ const ScheduleGridSelector = ({
                     type: events.length > 1 ? 'multiple' : events[0].type,
                     events: events,
                     startTime: time,
-                    duration: 10
+                    duration: 10,
+                    // 단일 이벤트일 경우 속성 복사 (title, priority 등)
+                    ...(events.length === 1 ? events[0] : {})
                 };
             }
         }
@@ -572,26 +545,88 @@ const ScheduleGridSelector = ({
   };
 
   const renderMergedWeekView = () => {
-    console.log('📅 renderMergedWeekView 호출됨');
-    console.log('📊 사용할 데이터:', {
-      allPersonalTimes: allPersonalTimes?.length,
-      고정일정포함여부: allPersonalTimes?.some(p => p.isFixed),
-      주니어B개수: allPersonalTimes?.filter(p => p.title?.includes('주니어B')).length
-    });
 
-    // 새로운 접근: personalTimes를 직접 사용하여 각 요일별 일정 추출 + 같은 제목끼리 병합
-    const getDaySchedules = (dayOfWeek) => {
-      const filteredSchedules = allPersonalTimes.filter(p => {
+    // 새로운 접근: personalTimes와 schedule를 합쳐서 각 요일별 일정 추출 + 같은 제목끼리 병합
+    const getDaySchedules = (dayOfWeek, targetDate) => {
+      console.log(`🔍 [병합모드] getDaySchedules 호출 - 요일=${dayOfWeek}, targetDate=`, targetDate);
+
+      // 1. personalTimes에서 해당 요일 필터링 + 색상 추가
+      const personalFiltered = allPersonalTimes.filter(p => {
         const personalDays = p.days || [];
-        const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
-        return p.isRecurring !== false && convertedDays.includes(dayOfWeek);
-      });
+
+        // ⭐ specificDate가 있으면 정확한 날짜로 비교 (병합모드는 날짜별로 독립적으로 호출됨)
+        if (p.specificDate && personalDays.length === 0) {
+          if (targetDate) {
+            // targetDate와 정확히 비교
+            const scheduleDate = new Date(p.specificDate);
+            const targetDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+            const scheduleDateStr = `${scheduleDate.getFullYear()}-${String(scheduleDate.getMonth() + 1).padStart(2, '0')}-${String(scheduleDate.getDate()).padStart(2, '0')}`;
+            const isMatch = targetDateStr === scheduleDateStr;
+            console.log(`  📅 [병합모드 specificDate] targetDate=${targetDateStr}, scheduleDate=${scheduleDateStr}, 매칭=${isMatch}, 제목=${p.title || p.subjectName}`);
+            return isMatch;
+          } else {
+            // targetDate가 없으면 요일만 비교 (fallback)
+            const dateObj = new Date(p.specificDate);
+            const dateDay = dateObj.getDay();
+            return dateDay === dayOfWeek;
+          }
+        }
+
+        // days 배열이 비어있으면서 specificDate도 없으면 모든 요일에 표시 (기본값)
+        if (personalDays.length === 0 && p.isRecurring !== false) {
+          return true; // 모든 요일에 표시
+        }
+
+        // days 배열이 JavaScript 형식인지 DB 형식인지 모르므로 둘 다 확인
+        const matchesJS = p.isRecurring !== false && personalDays.includes(dayOfWeek); // JS 형식 (0=일, 1=월, ...)
+        const matchesDB = p.isRecurring !== false && personalDays.map(day => day === 7 ? 0 : day).includes(dayOfWeek); // DB 형식 변환
+
+        const matches = matchesJS || matchesDB;
+
+        return matches;
+      }).map(p => ({
+        ...p,
+        // 개인시간에 색상이 없으면 회색 계열 색상 할당
+        color: p.color || '#6b7280'
+      }));
+
+      // 2. schedule (defaultSchedule)에서 해당 요일 필터링 - 선호도를 색상으로 표시
+      const priorityColorMap = {
+        'bg-blue-600': '#2563eb',  // 선호 (priority 3)
+        'bg-blue-400': '#60a5fa',  // 보통 (priority 2)
+        'bg-blue-200': '#bfdbfe'   // 조정 가능 (priority 1)
+      };
+      const scheduleFiltered = schedule.filter(s => s.dayOfWeek === dayOfWeek).map(s => ({
+        ...s,
+        title: s.title || `${priorityConfig[s.priority]?.label || '일정'}`,
+        color: priorityColorMap[priorityConfig[s.priority]?.color] || '#60a5fa',
+        days: [dayOfWeek === 0 ? 7 : dayOfWeek], // JavaScript 요일 → DB 요일
+        isRecurring: true
+      }));
+
+      // 3. exceptions (선호시간 with specificDate)에서 해당 날짜 필터링
+      const exceptionsFiltered = exceptions.filter(e => {
+        if (e.specificDate && targetDate) {
+          const exceptionDate = new Date(e.specificDate);
+          const targetDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+          const exceptionDateStr = `${exceptionDate.getFullYear()}-${String(exceptionDate.getMonth() + 1).padStart(2, '0')}-${String(exceptionDate.getDate()).padStart(2, '0')}`;
+          const isMatch = targetDateStr === exceptionDateStr;
+          console.log(`  📅 [병합모드 exceptions] targetDate=${targetDateStr}, exceptionDate=${exceptionDateStr}, 매칭=${isMatch}, 제목=${e.title}`);
+          return isMatch;
+        }
+        return false;
+      }).map(e => ({
+        ...e,
+        color: priorityColorMap[priorityConfig[e.priority]?.color] || '#2563eb'
+      }));
+
+      // 4. 세 배열 합치기
+      const filteredSchedules = [...personalFiltered, ...scheduleFiltered, ...exceptionsFiltered];
+
+      console.log(`  ✅ [병합모드] 필터링 결과 - personalFiltered=${personalFiltered.length}개, scheduleFiltered=${scheduleFiltered.length}개, exceptionsFiltered=${exceptionsFiltered.length}개, 합계=${filteredSchedules.length}개`);
 
       // 디버깅: 이고은 원장 일정 확인
       const debugSchedules = filteredSchedules.filter(s => s.title?.includes('이고은') || s.instructor?.includes('이고은'));
-      if (debugSchedules.length > 0) {
-        console.log(`🔍 [요일 ${dayOfWeek}] 이고은 원장 일정:`, debugSchedules.map(s => `${s.startTime}-${s.endTime}`));
-      }
 
       // 같은 제목끼리 그룹화 (sourceImageIndex도 포함하여 서로 다른 이미지의 같은 제목은 병합 안함)
       const groupedByTitle = {};
@@ -634,10 +669,6 @@ const ScheduleGridSelector = ({
                 const conflict = (otherStart < nextStartMinutes && otherEnd > currentEndMinutes) ||
                        (otherStart >= currentEndMinutes && otherStart < nextStartMinutes);
 
-                if (conflict) {
-                  console.log(`🚫 [요일 ${dayOfWeek}] 병합 중단: ${current.title} (${current.startTime}-${current.endTime}) + ${next.title} (${next.startTime}-${next.endTime}) 사이에 ${other.title} (${other.startTime}-${other.endTime}) 있음`);
-                }
-
                 return conflict;
               }
               return false;
@@ -662,14 +693,11 @@ const ScheduleGridSelector = ({
 
       // 디버깅: 병합 후 이고은 원장 일정 확인
       const debugMerged = mergedSchedules.filter(s => s.title?.includes('이고은') || s.instructor?.includes('이고은'));
-      if (debugMerged.length > 0) {
-        console.log(`✅ [요일 ${dayOfWeek}] 병합 후 이고은 원장:`, debugMerged.map(s => `${s.startTime}-${s.endTime}`));
-      }
-
       return mergedSchedules;
     };
 
     const timeSlots = getCurrentTimeSlots();
+    console.log(`⏰ [병합모드] 시간 범위: ${timeRange.start}시 ~ ${timeRange.end}시, timeSlots 개수: ${timeSlots.length}개, showFullDay=${showFullDay}`);
 
     // 시간 슬롯별 위치 계산을 위한 헬퍼 함수
     const getTimeSlotIndex = (time) => {
@@ -714,7 +742,7 @@ const ScheduleGridSelector = ({
 
             {/* 각 날짜별 독립적 컬럼 */}
             {weekDates.slice(0, 7).map((dateInfo, dayIndex) => {
-              const daySchedules = getDaySchedules(dateInfo.dayOfWeek);
+              const daySchedules = getDaySchedules(dateInfo.dayOfWeek, dateInfo.fullDate);
               const totalHeight = timeSlots.length * 16; // 전체 컬럼 높이 (h-4 = 16px)
 
               // 각 일정을 세그먼트로 분할 (겹치는 구간별로)
@@ -849,7 +877,7 @@ const ScheduleGridSelector = ({
                                   )}
                                   {/* 3. 반이름(강사명) */}
                                   <div className="font-semibold text-[10px] whitespace-nowrap overflow-hidden text-ellipsis">
-                                    {seg.schedule.title}
+                                    {seg.schedule.title || seg.schedule.subjectName || seg.schedule.academyName || '일정'}
                                     {seg.schedule.instructor && <span className="text-[9px]">({seg.schedule.instructor})</span>}
                                     {seg.schedule.floor && <span className="text-[8px] ml-1">({seg.schedule.floor}층)</span>}
                                   </div>
@@ -861,7 +889,7 @@ const ScheduleGridSelector = ({
                                 <>
                                   {/* 1. 과목명 (없으면 강사명) */}
                                   <div className="font-semibold text-[11px] whitespace-nowrap overflow-hidden text-ellipsis">
-                                    {seg.schedule.subjectName || seg.schedule.title}
+                                    {seg.schedule.subjectName || seg.schedule.title || seg.schedule.academyName || '일정'}
                                   </div>
                                   {/* 2. 시간 */}
                                   <div className="text-[10px] mt-1 whitespace-nowrap overflow-hidden text-ellipsis">{seg.schedule.startTime}~{seg.schedule.endTime}</div>
@@ -883,7 +911,6 @@ const ScheduleGridSelector = ({
   };
 
   const renderDetailedWeekView = () => {
-    console.log('📅 renderDetailedWeekView 호출됨');
     const timeSlots = getCurrentTimeSlots();
     const maxHeight = timeSlots.length > 54 ? '60vh' : '70vh'; // 9시간(54슬롯) 넘으면 높이 제한
 
@@ -963,7 +990,8 @@ const ScheduleGridSelector = ({
                                 const personalColor = personalSlot.color || '#f87171';
                                 slotClass = 'hover:opacity-90';
                                 customStyle = { backgroundColor: personalColor };
-                                content = <span className="text-xs text-white truncate px-1 font-medium" title={`개인시간: ${personalSlot.title}`}>{personalSlot.title}</span>;
+                                const displayTitle = personalSlot.title || personalSlot.subjectName || personalSlot.academyName || '일정';
+                                content = <span className="text-xs text-white truncate px-1 font-medium" title={`개인시간: ${displayTitle}`}>{displayTitle}</span>;
                             } else if (recurringSlot) {
                                 slotClass = `${priorityConfig[recurringSlot.priority]?.color || 'bg-blue-400'} hover:opacity-90`;
                                 content = <span className="text-xs text-white truncate px-1 font-medium" title={priorityConfig[recurringSlot.priority]?.label}>{priorityConfig[recurringSlot.priority]?.label}</span>;
@@ -1015,8 +1043,9 @@ const ScheduleGridSelector = ({
       const hasException = exceptions.some(e => e.specificDate === dateStr);
       const hasPersonal = allPersonalTimes.some(p => {
         const personalDays = p.days || [];
+        const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
         const isRecurring = p.isRecurring !== false;
-        return isRecurring && personalDays.includes(dayOfWeek);
+        return isRecurring && convertedDays.includes(dayOfWeek);
       });
 
       currentWeek.push({
@@ -1081,17 +1110,17 @@ const ScheduleGridSelector = ({
                 <div className="space-y-1">
                   {day.hasSchedule && (
                     <div className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded truncate">
-                      기본 일정
+                      선호 일정
                     </div>
                   )}
                   {day.hasException && (
                     <div className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded truncate">
-                      예외 일정
+                      선호 일정
                     </div>
                   )}
                   {day.hasPersonal && (
-                    <div className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded truncate">
-                      개인 시간
+                    <div className="text-xs px-2 py-1 bg-gray-100 text-gray-800 rounded truncate">
+                      개인 일정
                     </div>
                   )}
                 </div>
@@ -1148,13 +1177,27 @@ const ScheduleGridSelector = ({
                     const startMin = timeToMinutes(block.startTime);
                     const endMin = timeToMinutes(block.endTime);
 
-                    // 디버깅: 월요일 15:00 블록 확인
-                    if (dayData.dayOfWeek === 1 && block.startTime === '15:00') {
-                      console.log('🔍 [병합모드] 월 15:00 블록:', block);
-                    }
-
                     multipleSchedules = allPersonalTimes.filter(p => {
                       const personalDays = p.days || [];
+
+                      // ⭐ specificDate가 있으면 해당 날짜의 요일에 표시
+                      if (p.specificDate && personalDays.length === 0) {
+                        const dateObj = new Date(p.specificDate);
+                        const dateDay = dateObj.getDay();
+
+                        if (dateDay !== dayData.dayOfWeek) {
+                          return false; // 요일이 다르면 필터링
+                        }
+
+                        // 요일이 맞으면 시간대가 겹치는지 확인
+                        const pStart = timeToMinutes(p.startTime);
+                        const pEnd = timeToMinutes(p.endTime);
+
+                        return (pStart >= startMin && pStart < endMin) ||
+                               (pEnd > startMin && pEnd <= endMin) ||
+                               (pStart <= startMin && pEnd >= endMin);
+                      }
+
                       const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
 
                       if (p.isRecurring !== false && convertedDays.includes(dayData.dayOfWeek)) {
@@ -1168,12 +1211,6 @@ const ScheduleGridSelector = ({
                       }
                       return false;
                     });
-
-                    // 디버깅: 월요일 15:00 필터 결과
-                    if (dayData.dayOfWeek === 1 && block.startTime === '15:00') {
-                      console.log('🔍 [병합모드] 월 15:00 multipleSchedules:', multipleSchedules.length);
-                      console.log('  schedules:', multipleSchedules.map(p => `${p.title}(${p.startTime}-${p.endTime})`));
-                    }
                   }
 
                   if (block.type === 'schedule') {
@@ -1185,14 +1222,15 @@ const ScheduleGridSelector = ({
                     textColor = 'text-white';
                     content = `${block.title} (${block.duration}분)`;
                   } else if (block.type === 'personal') {
-                    // personalTime에 color가 있으면 사용, 없으면 보라색
-                    const personalColor = multipleSchedules[0]?.color || '#9333ea';
+                    // personalTime에 color가 있으면 사용, 없으면 회색
+                    const personalColor = multipleSchedules[0]?.color || '#6b7280';
                     bgColor = personalColor; // inline style로 사용
                     textColor = 'text-white';
                     if (multipleSchedules.length > 1) {
-                      content = multipleSchedules.map(p => p.title).join(' / ');
+                      content = multipleSchedules.map(p => p.title || p.subjectName || p.academyName || '일정').join(' / ');
                     } else {
-                      content = `${block.title} (${block.duration}분)`;
+                      const displayTitle = block.title || block.subjectName || block.academyName || '일정';
+                      content = `${displayTitle} (${block.duration}분)`;
                     }
                   } else {
                     content = `빈 시간 (${block.duration}분)`;
@@ -1222,9 +1260,9 @@ const ScheduleGridSelector = ({
                             <div
                               key={idx}
                               className="flex-1 text-white text-sm px-3 py-2 rounded-lg text-center"
-                              style={{ backgroundColor: p.color || '#9333ea' }}
+                              style={{ backgroundColor: p.color || '#6b7280' }}
                             >
-                              {p.title}
+                              {p.title || p.subjectName || p.academyName || '일정'}
                             </div>
                           ))}
                         </div>
@@ -1269,6 +1307,27 @@ const ScheduleGridSelector = ({
                   // 같은 시간대의 모든 personalTimes 찾기
                   const personalSlots = allPersonalTimes.filter(p => {
                     const personalDays = p.days || [];
+
+                    // ⭐ specificDate가 있으면 해당 날짜의 요일에 표시
+                    if (p.specificDate && personalDays.length === 0) {
+                      const dateObj = new Date(p.specificDate);
+                      const dateDay = dateObj.getDay();
+
+                      if (dateDay !== dayData.dayOfWeek) {
+                        return false; // 요일이 다르면 필터링
+                      }
+
+                      // 요일이 맞으면 시간대 체크
+                      const startMinutes = timeToMinutes(p.startTime);
+                      const endMinutes = timeToMinutes(p.endTime);
+
+                      if (endMinutes <= startMinutes) {
+                        return timeMinutes >= startMinutes || timeMinutes < endMinutes;
+                      } else {
+                        return timeMinutes >= startMinutes && timeMinutes < endMinutes;
+                      }
+                    }
+
                     if (p.isRecurring !== false && personalDays.length > 0) {
                       const convertedDays = personalDays.map(day => {
                         return day === 7 ? 0 : day;
@@ -1286,13 +1345,6 @@ const ScheduleGridSelector = ({
                     }
                     return false;
                   });
-
-                  // 디버깅: 월요일 15시대 확인
-                  if (dayData.dayOfWeek === 1 && time >= '15:00' && time < '15:10') {
-                    console.log(`🔍 월 ${time} → personalSlots:`, personalSlots.length, 'hasMultiple:', personalSlots.length > 1);
-                    console.log('  slots:', personalSlots.map(p => `${p.title}(${p.startTime}-${p.endTime})`));
-                  }
-
                   let bgColor = 'bg-white';
                   let textColor = 'text-gray-900';
                   let content = '빈 시간';
@@ -1303,14 +1355,14 @@ const ScheduleGridSelector = ({
                     textColor = 'text-white';
                     content = exceptionSlot.title;
                   } else if (personalSlots.length > 0) {
-                    // personalTime에 color가 있으면 사용
-                    bgColor = personalSlots[0].color || '#9333ea';
+                    // personalTime에 color가 있으면 사용, 없으면 회색
+                    bgColor = personalSlots[0].color || '#6b7280';
                     textColor = 'text-white';
                     if (personalSlots.length > 1) {
                       hasMultiple = true;
-                      content = personalSlots.map(p => p.title).join('\n');
+                      content = personalSlots.map(p => p.title || p.subjectName || p.academyName || '일정').join('\n');
                     } else {
-                      content = personalSlots[0].title;
+                      content = personalSlots[0].title || personalSlots[0].subjectName || personalSlots[0].academyName || '일정';
                     }
                   } else if (recurringSlot) {
                     bgColor = priorityConfig[recurringSlot.priority]?.color || 'bg-blue-400';
@@ -1334,9 +1386,9 @@ const ScheduleGridSelector = ({
                             <div
                               key={idx}
                               className="flex-1 text-white text-xs px-2 py-1 rounded text-center"
-                              style={{ backgroundColor: p.color || '#9333ea' }}
+                              style={{ backgroundColor: p.color || '#6b7280' }}
                             >
-                              {p.title}
+                              {p.title || p.subjectName || p.academyName || '일정'}
                             </div>
                           ))}
                         </div>
@@ -1353,9 +1405,6 @@ const ScheduleGridSelector = ({
       </div>
     );
   };
-
-  console.log('🎨 렌더링 결정:', { viewMode, showMerged, showViewControls });
-
   return (
     <div className="bg-white p-4 rounded-lg shadow-md mb-6">
       {showViewControls && renderViewControls()}

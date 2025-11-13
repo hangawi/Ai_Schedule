@@ -68,7 +68,6 @@ const TimetableUploadBox = ({ onSchedulesExtracted, onClose }) => {
     setProgress({ current: 0, total: selectedImages.length, message: '준비 중...' });
 
     try {
-      console.log('🔄 시간표 처리 시작...', selectedImages.length, '개 이미지');
 
       // 사용자 프로필에서 생년월일 가져오기
       setProgress({ current: 0, total: selectedImages.length, message: '사용자 정보 확인 중...' });
@@ -80,11 +79,6 @@ const TimetableUploadBox = ({ onSchedulesExtracted, onClose }) => {
         setIsProcessing(false);
         return;
       }
-
-      console.log('✅ 사용자 프로필 확인 완료. 생년월일:', birthdate);
-
-      // OCR 처리 (타임아웃 추가)
-      console.log('🤖 OCR 처리 중... (최대 5분 소요될 수 있습니다)');
       const totalImages = selectedImages.length;
       setProgress({ current: 0, total: 100, message: `이미지 ${totalImages}개 분석 시작...` });
 
@@ -128,8 +122,6 @@ const TimetableUploadBox = ({ onSchedulesExtracted, onClose }) => {
 
       clearInterval(progressInterval);
       setProgress({ current: 100, total: 100, message: '✅ 분석 완료!' });
-
-      console.log('✅ OCR 처리 완료!', result);
       setExtractedData(result);
 
       // 나이 필터링으로 0개가 된 경우 처리
@@ -153,7 +145,6 @@ const TimetableUploadBox = ({ onSchedulesExtracted, onClose }) => {
       }
 
     } catch (err) {
-      console.error('시간표 처리 에러:', err);
       setError('시간표 처리 중 오류가 발생했습니다: ' + err.message);
     } finally {
       setIsProcessing(false);
