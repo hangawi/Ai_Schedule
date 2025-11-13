@@ -37,7 +37,6 @@ class TravelScheduler {
      * Main function to run the travel-based scheduling simulation.
      */
     runTravelSchedule(members, owner, options) {
-        console.log('\n--- Running Travel-Based Schedule Simulation ---');
 
         const { minHoursPerWeek = 3, currentWeek } = options;
         const minSlotsPerWeek = minHoursPerWeek * 2;
@@ -89,7 +88,6 @@ class TravelScheduler {
             });
 
             if (!nearestMember) {
-                console.log('No more reachable members.');
                 break;
             }
 

@@ -35,7 +35,6 @@ exports.getEvents = async (req, res) => {
          },
       });
    } catch (err) {
-      console.error('❌ 이벤트 조회 실패:', err.message);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -56,7 +55,6 @@ exports.getEventsByRange = async (req, res) => {
 
       res.json(events);
    } catch (err) {
-      console.error('❌ 기간별 이벤트 조회 실패:', err.message);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -79,7 +77,6 @@ exports.getConflictingEvents = async (req, res) => {
     
     res.json(conflicts);
   } catch (err) {
-    console.error('❌ 충돌 일정 조회 실패:', err.message);
     res.status(500).json({ msg: 'Server error' });
   }
 };
@@ -123,7 +120,6 @@ exports.findEventByDetails = async (req, res) => {
 
       res.json({ eventId: event._id });
    } catch (err) {
-      console.error('❌ 이벤트 상세 정보로 조회 실패:', err.message);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -145,7 +141,6 @@ exports.getEventById = async (req, res) => {
 
       res.json(event);
    } catch (err) {
-      console.error('❌ 이벤트 상세 조회 실패:', err.message);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -252,7 +247,6 @@ exports.createEvent = async (req, res) => {
 
       res.status(201).json(responseObject);
    } catch (err) {
-      console.error('❌ 이벤트 생성 실패:', err.message);
       res.status(500).json({ msg: 'Server error', error: err.message });
    }
 };
@@ -294,7 +288,6 @@ exports.updateEvent = async (req, res) => {
 
       res.json(updatedEvent);
    } catch (err) {
-      console.error('❌ 이벤트 업데이트 실패 (최종 수정):', err.message);
       if (err.name === 'ValidationError') {
          return res.status(400).json({ msg: `Validation failed: ${err.message}` });
       }
@@ -323,7 +316,6 @@ exports.updateEventStatus = async (req, res) => {
 
       res.json(event);
    } catch (err) {
-      console.error('❌ 이벤트 상태 변경 실패:', err.message);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -349,7 +341,6 @@ exports.setPriority = async (req, res) => {
 
       res.json(event);
    } catch (err) {
-      console.error('❌ 이벤트 우선순위 설정 실패:', err.message);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -376,7 +367,6 @@ exports.addParticipant = async (req, res) => {
 
       res.json(updatedEvent);
    } catch (err) {
-      console.error('❌ 참석자 추가 실패:', err.message);
       res.status(400).json({ msg: err.message });
    }
 };
@@ -404,7 +394,6 @@ exports.updateParticipantStatus = async (req, res) => {
 
       res.json(updatedEvent);
    } catch (err) {
-      console.error('❌ 참석자 상태 업데이트 실패:', err.message);
       res.status(400).json({ msg: err.message });
    }
 };
@@ -438,7 +427,6 @@ exports.removeParticipant = async (req, res) => {
 
       res.json(updatedEvent);
    } catch (err) {
-      console.error('❌ 참석자 제거 실패:', err.message);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -463,7 +451,6 @@ exports.deleteEvent = async (req, res) => {
          deletedEvent: { id: deletedEvent._id, title: deletedEvent.title },
       });
    } catch (err) {
-      console.error('❌ 이벤트 삭제 실패:', err.message);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -504,7 +491,6 @@ exports.duplicateEvent = async (req, res) => {
 
       res.status(201).json(duplicatedEvent);
    } catch (err) {
-      console.error('❌ 이벤트 복제 실패:', err.message);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -599,7 +585,6 @@ exports.recommendAlternativeTime = async (req, res) => {
          pendingEvent
       });
    } catch (err) {
-      console.error('❌ 대체 시간 추천 실패:', err.message);
       res.status(500).json({ msg: 'Server error', error: err.message });
    }
 };
@@ -681,7 +666,6 @@ exports.recommendRescheduleTime = async (req, res) => {
          }
       });
    } catch (err) {
-      console.error('❌ 재조정 시간 추천 실패:', err.message);
       res.status(500).json({ msg: 'Server error', error: err.message });
    }
 };
@@ -740,7 +724,6 @@ exports.confirmReschedule = async (req, res) => {
          }
       });
    } catch (err) {
-      console.error('❌ 일정 재조정 확정 실패:', err.message);
       res.status(500).json({ msg: 'Server error', error: err.message });
    }
 };

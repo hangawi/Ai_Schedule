@@ -27,7 +27,6 @@ const updateAccessToken = async (user) => {
     await user.save();
     return oauth2Client;
   } catch (error) {
-    console.error('Access Token 갱신 실패:', error.message);
     throw new Error('Access Token 갱신에 실패했습니다. 다시 로그인해주세요.');
   }
 };
@@ -64,7 +63,6 @@ exports.getCalendarEvents = async (req, res) => {
     res.json(events);
 
   } catch (error) {
-    console.error('캘린더 이벤트 가져오기 오류:', error);
     res.status(500).json({ msg: '캘린더 이벤트를 가져오는 데 실패했습니다.' });
   }
 };
@@ -109,7 +107,6 @@ exports.createGoogleCalendarEvent = async (req, res) => {
     res.status(201).json(response.data);
 
   } catch (error) {
-    console.error('Google 캘린더 이벤트 생성 오류:', error);
     res.status(500).json({ msg: 'Google 캘린더 이벤트를 생성하는 데 실패했습니다.' });
   }
 };
@@ -140,7 +137,6 @@ exports.deleteGoogleCalendarEvent = async (req, res) => {
     res.status(204).json({ msg: '이벤트가 성공적으로 삭제되었습니다.' });
 
   } catch (error) {
-    console.error('Google 캘린더 이벤트 삭제 오류:', error.message, error.stack);
     res.status(500).json({ msg: 'Google 캘린더 이벤트를 삭제하는 데 실패했습니다.', error: error.message });
   }
 };
@@ -192,9 +188,7 @@ exports.updateGoogleCalendarEvent = async (req, res) => {
     res.status(200).json(response.data);
 
   } catch (error) {
-    console.error('Google 캘린더 이벤트 업데이트 오류:', error);
     if (error.response && error.response.data && error.response.data.error && error.response.data.error.errors) {
-      console.error('Google API 상세 오류:', error.response.data.error.errors);
     }
     res.status(500).json({ msg: 'Google 캘린더 이벤트를 업데이트하는 데 실패했습니다.', error: error.message });
   }
@@ -319,8 +313,6 @@ exports.analyzeImage = async (req, res) => {
     const text = response.text();
 
     try {
-      // JSON 응답에서 스케줄 정보 추출
-      console.log('Gemini 원본 응답:', text);
 
       // ```json으로 감싸진 JSON 블록 찾기
       let jsonString = '';
@@ -343,8 +335,6 @@ exports.analyzeImage = async (req, res) => {
         // 마지막 쉼표 제거
         jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
 
-        console.log('정제된 JSON 문자열:', jsonString);
-
         const scheduleData = JSON.parse(jsonString);
 
         if (scheduleData.schedules && scheduleData.schedules.length > 0) {
@@ -365,8 +355,6 @@ exports.analyzeImage = async (req, res) => {
         throw new Error('JSON 형식을 찾을 수 없음');
       }
     } catch (parseError) {
-      console.error('JSON 파싱 오류:', parseError);
-      console.error('원본 응답:', text);
 
       // JSON 파싱 실패 시 텍스트 응답 처리
       return res.json({
@@ -376,7 +364,6 @@ exports.analyzeImage = async (req, res) => {
     }
 
   } catch (error) {
-    console.error('이미지 분석 오류:', error);
     res.status(500).json({
       success: false,
       message: '이미지 분석 중 오류가 발생했습니다: ' + error.message

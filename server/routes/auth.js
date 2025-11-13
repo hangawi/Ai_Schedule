@@ -63,7 +63,6 @@ const checkValidation = (req, res, next) => {
 
 // 요청 로깅 미들웨어
 const logRequest = (endpoint) => (req, res, next) => {
-  console.debug(`🌐 ${endpoint} 요청`);
   next();
 };
 
@@ -97,12 +96,6 @@ router.get('/health', (req, res) => {
 
 // 에러 처리 미들웨어
 router.use((err, req, res, next) => {
-  console.error('❌ Auth 라우터 에러:', {
-    message: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-    path: req.path,
-    method: req.method
-  });
 
   if (err.name === 'JsonWebTokenError') {
     return res.status(401).json({ success: false, msg: '유효하지 않은 토큰입니다.', error: 'INVALID_TOKEN' });

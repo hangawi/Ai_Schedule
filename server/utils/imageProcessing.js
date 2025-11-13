@@ -41,7 +41,6 @@ async function filterDuplicateImages(files, existingImages, detectDuplicate, thr
     const duplicateCheck = await detectDuplicate(file.buffer, file.originalname, allImagesToCompare, threshold);
 
     if (duplicateCheck.isDuplicate) {
-      console.log(`🗑️ 중복 제거: ${file.originalname} ≈ ${duplicateCheck.duplicateWith} (${duplicateCheck.similarity}%)`);
       indicesToRemove.push(i);
       removedDuplicates.push({
         filename: file.originalname,
@@ -60,7 +59,6 @@ async function filterDuplicateImages(files, existingImages, detectDuplicate, thr
 
   // 중복되지 않은 파일만 처리 목록에 포함
   const filesToProcess = files.filter((_, index) => !indicesToRemove.includes(index));
-  console.log(`✅ ${files.length}개 → ${filesToProcess.length}개로 감소 (${removedDuplicates.length}개 제거)`);
 
   return {
     filesToProcess,
@@ -78,22 +76,17 @@ async function filterDuplicateImages(files, existingImages, detectDuplicate, thr
  * @returns {Object|null} 중복이 있으면 { hasDuplicates, duplicates, totalImages }, 없으면 null
  */
 async function checkDuplicates(files, existingImages, detectDuplicate, threshold = 95) {
-  console.log('🔍 중복 이미지 감지 중...');
-  console.log(`📦 기존 이미지 저장소: ${existingImages.length}개`);
 
   const duplicates = [];
   const currentBatchImages = [];
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    console.log(`🔍 [${i + 1}/${files.length}] ${file.originalname} 중복 체크...`);
 
     const allImagesToCompare = [...existingImages, ...currentBatchImages];
     const duplicateCheck = await detectDuplicate(file.buffer, file.originalname, allImagesToCompare, threshold);
-    console.log(`   → 유사도: ${duplicateCheck.similarity || 0}%, 중복: ${duplicateCheck.isDuplicate ? 'YES' : 'NO'}`);
 
     if (duplicateCheck.isDuplicate) {
-      console.log(`⚠️ 중복 발견: ${file.originalname} ≈ ${duplicateCheck.duplicateWith} (${duplicateCheck.similarity}%)`);
       duplicates.push({
         filename: file.originalname,
         duplicateWith: duplicateCheck.duplicateWith,
@@ -110,7 +103,6 @@ async function checkDuplicates(files, existingImages, detectDuplicate, threshold
   }
 
   if (duplicates.length > 0) {
-    console.log(`⚠️ ${duplicates.length}개 중복 발견 - 사용자 확인 대기`);
     return {
       hasDuplicates: true,
       duplicates: duplicates,
@@ -118,8 +110,6 @@ async function checkDuplicates(files, existingImages, detectDuplicate, threshold
       message: '중복된 이미지가 발견되었습니다. 처리 방법을 선택해주세요.'
     };
   }
-
-  console.log('✅ 중복 없음');
   return null;
 }
 

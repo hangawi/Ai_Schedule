@@ -25,7 +25,6 @@ function applyCondition(schedules, condition, allSchedules) {
       // 특정 이미지의 스케줄 선택 (추가)
       if (condition.mode === 'all') {
         const imageSchedules = allSchedules.filter(s => s.sourceImageIndex === condition.value);
-        console.log(`  → imageIndex ${condition.value} 전체: ${imageSchedules.length}개`);
         return [...new Set([...schedules, ...imageSchedules])]; // 중복 제거하며 합침
       }
       return schedules;
@@ -33,8 +32,6 @@ function applyCondition(schedules, condition, allSchedules) {
     case 'titleMatch':
       // 제목 키워드 매칭 (추가)
       const { keywords, matchAll, imageIndex } = condition;
-
-      console.log(`  🔍 titleMatch: [${keywords?.join(', ')}], 검색 대상=${allSchedules.length}개`);
 
       let matchCount = 0;
       let filtered = allSchedules.filter(s => {
@@ -61,18 +58,12 @@ function applyCondition(schedules, condition, allSchedules) {
             const titleMatch = titleLower.includes(kwLower);
             const instructorMatch = instructorLower.includes(kwLower);
 
-            // 디버깅: 첫 3개만 출력
-            if (matchCount < 3) {
-              console.log(`    🔎 "${kw}" in "${s.title}" (idx=${s.sourceImageIndex}): title=${titleMatch}, instructor=${instructorMatch}`);
-            }
-
             return titleMatch || instructorMatch;
           });
         }
 
         if (match) {
           matchCount++;
-          console.log(`    ✓ "${s.title}" (강사: ${s.instructor || '없음'}, imageIndex=${s.sourceImageIndex})`);
         }
 
         return match;
@@ -80,20 +71,14 @@ function applyCondition(schedules, condition, allSchedules) {
 
       // 매칭 실패시 샘플 출력
       if (filtered.length === 0 && allSchedules.length > 0) {
-        console.log(`  ⚠️ 매칭 없음! 전체 제목 샘플:`);
         const uniqueTitles = [...new Set(allSchedules.map(s => s.title))].slice(0, 15);
-        console.log(`    제목들: ${uniqueTitles.join(', ')}`);
       }
-
-      console.log(`  → titleMatch [${keywords?.join(', ')}]: ${filtered.length}개`);
       return [...new Set([...schedules, ...filtered])]; // 중복 제거하며 합침
 
     case 'timeRange':
       // 시간대 필터링
       // applyToKeywords가 있으면 해당 키워드 포함된 것만 필터링
       if (condition.applyToKeywords && Array.isArray(condition.applyToKeywords)) {
-        console.log(`  📌 applyToKeywords 모드: [${condition.applyToKeywords.join(', ')}] 키워드 포함된 것만 시간 필터 적용`);
-
         // 대상과 비대상 분리
         const targetSchedules = schedules.filter(s => {
           const titleLower = (s.title || '').toLowerCase();
@@ -103,10 +88,6 @@ function applyCondition(schedules, condition, allSchedules) {
             const kwLower = kw.toLowerCase();
             return titleLower.includes(kwLower) || instructorLower.includes(kwLower);
           });
-
-          if (matches) {
-            console.log(`    ✓ 대상: ${s.title} (${s.startTime}-${s.endTime})`);
-          }
           return matches;
         });
         const otherSchedules = schedules.filter(s => {
@@ -121,37 +102,26 @@ function applyCondition(schedules, condition, allSchedules) {
           return !matches;
         });
 
-        console.log(`  📊 대상: ${targetSchedules.length}개, 비대상: ${otherSchedules.length}개`);
-
         // 대상에만 시간 조건 적용
         const filteredTargets = targetSchedules.filter(s => {
           if (condition.startAfter && s.startTime < condition.startAfter) {
-            console.log(`    ✗ 제외 (시간): ${s.title} ${s.startTime} < ${condition.startAfter}`);
             return false;
           }
           if (condition.endBefore && s.startTime >= condition.endBefore) {
-            console.log(`    ✗ 제외 (시간): ${s.title} ${s.startTime} >= ${condition.endBefore}`);
             return false;
           }
-          console.log(`    ✓ 통과: ${s.title} (${s.startTime}-${s.endTime})`);
           return true;
         });
 
-        console.log(`  → timeRange [키워드 매칭] (${condition.startAfter || 'start'} ~ ${condition.endBefore || 'end'}): ${filteredTargets.length}개 (원본 ${targetSchedules.length}개)`);
-        console.log(`  🎯 최종 반환: ${otherSchedules.length}개(비대상) + ${filteredTargets.length}개(필터된 대상) = ${otherSchedules.length + filteredTargets.length}개`);
         return [...otherSchedules, ...filteredTargets];
       } else if (condition.applyTo) {
         const applyToLower = condition.applyTo.toLowerCase();
 
-        console.log(`  📌 applyTo 모드: "${condition.applyTo}" 키워드 포함된 것만 시간 필터 적용`);
 
         // 대상과 비대상 분리
         const targetSchedules = schedules.filter(s => {
           const titleLower = (s.title || '').toLowerCase();
           const matches = titleLower.includes(applyToLower);
-          if (matches) {
-            console.log(`    ✓ 대상: ${s.title} (${s.startTime}-${s.endTime})`);
-          }
           return matches;
         });
         const otherSchedules = schedules.filter(s => {
@@ -159,28 +129,19 @@ function applyCondition(schedules, condition, allSchedules) {
           return !titleLower.includes(applyToLower);
         });
 
-        console.log(`  📊 대상: ${targetSchedules.length}개, 비대상: ${otherSchedules.length}개`);
-
         // 대상에만 시간 조건 적용
         const filteredTargets = targetSchedules.filter(s => {
           if (condition.imageIndex !== undefined && s.sourceImageIndex !== condition.imageIndex) {
-            console.log(`    ✗ 제외 (imageIndex): ${s.title}`);
             return false;
           }
           if (condition.startAfter && s.startTime < condition.startAfter) {
-            console.log(`    ✗ 제외 (시간): ${s.title} ${s.startTime} < ${condition.startAfter}`);
             return false;
           }
           if (condition.endBefore && s.startTime >= condition.endBefore) {
-            console.log(`    ✗ 제외 (시간): ${s.title} ${s.startTime} >= ${condition.endBefore}`);
             return false;
           }
-          console.log(`    ✓ 통과: ${s.title} (${s.startTime}-${s.endTime})`);
           return true;
         });
-
-        console.log(`  → timeRange [${condition.applyTo}만] (${condition.startAfter || 'start'} ~ ${condition.endBefore || 'end'}): ${filteredTargets.length}개 (원본 ${targetSchedules.length}개)`);
-        console.log(`  🎯 최종 반환: ${otherSchedules.length}개(비대상) + ${filteredTargets.length}개(필터된 대상) = ${otherSchedules.length + filteredTargets.length}개`);
         return [...otherSchedules, ...filteredTargets];
       } else if (condition.imageIndex !== undefined) {
         // imageIndex가 있으면 해당 이미지만 필터링 (filter 모드)
@@ -192,9 +153,6 @@ function applyCondition(schedules, condition, allSchedules) {
           if (condition.endBefore && s.startTime >= condition.endBefore) return false;
           return true;
         });
-
-        console.log(`  → timeRange [imageIndex ${condition.imageIndex}만] (${condition.startAfter || 'start'} ~ ${condition.endBefore || 'end'}): ${filteredTargets.length}개 (원본 ${targetSchedules.length}개)`);
-        console.log(`  🎯 최종 반환: ${otherSchedules.length}개(다른 이미지) + ${filteredTargets.length}개(필터된 대상) = ${otherSchedules.length + filteredTargets.length}개`);
         return [...otherSchedules, ...filteredTargets];
       } else {
         // imageIndex도 applyTo도 없으면 selection 방식
@@ -203,7 +161,6 @@ function applyCondition(schedules, condition, allSchedules) {
           if (condition.endBefore && s.startTime >= condition.endBefore) return false;
           return true;
         });
-        console.log(`  → timeRange (${condition.startAfter || 'start'} ~ ${condition.endBefore || 'end'}): ${timeFiltered.length}개`);
         return [...new Set([...schedules, ...timeFiltered])]; // 중복 제거하며 합침
       }
 
@@ -225,8 +182,7 @@ function applyCondition(schedules, condition, allSchedules) {
       const expandedDaysArray = Array.from(expandedDays);
 
       if (condition.applyToKeywords && Array.isArray(condition.applyToKeywords)) {
-        console.log(`  📌 dayFilter with applyToKeywords: [${condition.applyToKeywords.join(', ')}], days: [${condition.days.join(', ')}] (확장: [${expandedDaysArray.join(', ')}])`);
-
+        
         // 대상과 비대상 분리
         const targetSchedules = schedules.filter(s => {
           const titleLower = (s.title || '').toLowerCase();
@@ -236,10 +192,6 @@ function applyCondition(schedules, condition, allSchedules) {
             const kwLower = kw.toLowerCase();
             return titleLower.includes(kwLower) || instructorLower.includes(kwLower);
           });
-
-          if (matches) {
-            console.log(`    ✓ 대상: ${s.title} (${s.days?.join(',')}) → days 필터 적용`);
-          }
           return matches;
         });
 
@@ -259,14 +211,8 @@ function applyCondition(schedules, condition, allSchedules) {
         const filteredTargets = targetSchedules.filter(s => {
           if (!s.days || !Array.isArray(s.days)) return false;
           const hasMatchingDay = s.days.some(day => expandedDaysArray.includes(day));
-          if (!hasMatchingDay) {
-            console.log(`    ✗ 제외: ${s.title} (${s.days?.join(',')})`);
-          }
           return hasMatchingDay;
         });
-
-        console.log(`  → dayFilter [키워드 매칭] [${condition.days.join(',')}]: ${filteredTargets.length}개 (원본 ${targetSchedules.length}개)`);
-        console.log(`  🎯 최종 반환: ${otherSchedules.length}개(비대상) + ${filteredTargets.length}개(필터된 대상) = ${otherSchedules.length + filteredTargets.length}개`);
         return [...otherSchedules, ...filteredTargets];
       } else {
         // 전체에 요일 필터 적용 (영어/한글 모두 지원)
@@ -279,8 +225,7 @@ function applyCondition(schedules, condition, allSchedules) {
     case 'floorFilter':
       // 층 필터링
       if (condition.applyToKeywords && Array.isArray(condition.applyToKeywords)) {
-        console.log(`  📌 floorFilter with applyToKeywords: [${condition.applyToKeywords.join(', ')}], floors: [${condition.floors.join(', ')}]`);
-
+        
         // 대상과 비대상 분리
         const targetSchedules = schedules.filter(s => {
           const titleLower = (s.title || '').toLowerCase();
@@ -290,10 +235,6 @@ function applyCondition(schedules, condition, allSchedules) {
             const kwLower = kw.toLowerCase();
             return titleLower.includes(kwLower) || instructorLower.includes(kwLower);
           });
-
-          if (matches) {
-            console.log(`    ✓ 대상: ${s.title} (floor=${s.floor}) → floor 필터 적용`);
-          }
           return matches;
         });
 
@@ -317,14 +258,9 @@ function applyCondition(schedules, condition, allSchedules) {
             const sFloorLower = (s.floor || '').toLowerCase();
             return sFloorLower.includes(floorLower) || floorLower.includes(sFloorLower);
           });
-          if (!hasMatchingFloor) {
-            console.log(`    ✗ 제외: ${s.title} (floor=${s.floor})`);
-          }
           return hasMatchingFloor;
         });
 
-        console.log(`  → floorFilter [키워드 매칭] [${condition.floors.join(',')}]: ${filteredTargets.length}개 (원본 ${targetSchedules.length}개)`);
-        console.log(`  🎯 최종 반환: ${otherSchedules.length}개(비대상) + ${filteredTargets.length}개(필터된 대상) = ${otherSchedules.length + filteredTargets.length}개`);
         return [...otherSchedules, ...filteredTargets];
       } else {
         // 전체에 층 필터 적용
@@ -372,7 +308,6 @@ function applyCondition(schedules, condition, allSchedules) {
 
         // 이미 삭제 대상으로 표시된 수업은 스킵
         if (deletedTitles.has(schedule.title)) {
-          console.log(`  → 이미 삭제 대상: ${schedule.title}`);
           return;
         }
 
@@ -392,7 +327,6 @@ function applyCondition(schedules, condition, allSchedules) {
             if (overlaps) {
               hasOverlap = true;
               deletedTitles.add(schedule.title); // 이 수업 이름 전부 삭제 대상
-              console.log(`  → 겹침 발견 및 "${schedule.title}" 전체 삭제 대상 등록: ${commonDays.join(',')} ${schedule.startTime}-${schedule.endTime} ⚔️ ${kept.title}`);
               break;
             }
           }
@@ -405,13 +339,9 @@ function applyCondition(schedules, condition, allSchedules) {
 
       // 삭제 대상 title을 가진 스케줄 전부 제거
       const finalSchedules = keptSchedules.filter(s => !deletedTitles.has(s.title));
-
-      console.log(`  → removeOverlaps: ${schedules.length}개 → ${finalSchedules.length}개`);
-      console.log(`  → 삭제된 수업: ${Array.from(deletedTitles).join(', ')}`);
       return finalSchedules;
 
     default:
-      console.warn('⚠️ 알 수 없는 조건 타입:', type);
       return schedules;
   }
 }
@@ -423,11 +353,6 @@ function applyCondition(schedules, condition, allSchedules) {
 exports.filterSchedulesByChat = async (req, res) => {
   try {
     const { chatMessage, extractedSchedules, schedulesByImage, imageDescription, baseSchedules } = req.body;
-
-    console.log('📩 OCR 채팅 필터링 요청:', chatMessage);
-    console.log('📊 추출된 스케줄 개수:', extractedSchedules?.length || 0);
-    console.log('📸 이미지별 스케줄:', schedulesByImage?.length || 0, '개 이미지');
-    console.log('📚 기본 베이스 스케줄:', baseSchedules?.length || 0, '개');
 
     // 입력 검증
     if (!chatMessage || !chatMessage.trim()) {
@@ -446,7 +371,6 @@ exports.filterSchedulesByChat = async (req, res) => {
 
     // 디버깅: 추출된 스케줄의 제목들 확인
     const uniqueTitles = [...new Set(extractedSchedules.map(s => s.title))];
-    console.log('📚 추출된 스케줄 제목들:', uniqueTitles.join(', '));
 
     // 프롬프트 생성
     const prompt = generateOcrChatPrompt(chatMessage, extractedSchedules, schedulesByImage, imageDescription);
@@ -464,7 +388,6 @@ exports.filterSchedulesByChat = async (req, res) => {
 
     for (const modelName of modelNames) {
       try {
-        console.log(`🤖 ${modelName} 모델로 시도 중...`);
         const model = genAI.getGenerativeModel({
           model: modelName,
           generationConfig: {
@@ -476,10 +399,8 @@ exports.filterSchedulesByChat = async (req, res) => {
         const result = await model.generateContent(prompt);
         const response = await result.response;
         aiResponse = response.text();
-        console.log(`✅ ${modelName} 모델 성공!`);
         break;
       } catch (error) {
-        console.log(`❌ ${modelName} 실패: ${error.message}`);
         lastError = error;
         continue;
       }
@@ -488,12 +409,6 @@ exports.filterSchedulesByChat = async (req, res) => {
     if (!aiResponse) {
       throw lastError || new Error('모든 모델 시도 실패');
     }
-
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🤖 RAW AI RESPONSE:');
-    console.log(aiResponse);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
     // JSON 파싱
     let parsed = null;
 
@@ -513,8 +428,6 @@ exports.filterSchedulesByChat = async (req, res) => {
         }
       }
     } catch (parseError) {
-      console.error('❌ JSON 파싱 실패:', parseError);
-      console.log('원본 응답:', aiResponse);
 
       return res.status(500).json({
         success: false,
@@ -542,12 +455,10 @@ exports.filterSchedulesByChat = async (req, res) => {
     // 조건 기반 필터링 실행
     if (parsed.action === 'filter' || parsed.action === 'recommend') {
       if (!parsed.conditions || !Array.isArray(parsed.conditions)) {
-        console.error('❌ AI가 조건을 반환하지 않음:', parsed);
         parsed.action = 'question';
         parsed.filteredSchedules = [];
         parsed.explanation = '필터링 조건을 이해하지 못했습니다. 다시 시도해주세요.';
       } else {
-        console.log('🔍 AI가 반환한 조건:', JSON.stringify(parsed.conditions, null, 2));
 
         // 조건에 따라 실제 필터링 수행
         // 선택 조건(imageIndex, titleMatch, timeRange)이 있으면 빈 배열에서 시작
@@ -556,34 +467,18 @@ exports.filterSchedulesByChat = async (req, res) => {
         const hasSelectionCondition = parsed.conditions.some(c => selectionConditions.includes(c.type));
 
         let filteredSchedules = hasSelectionCondition ? [] : extractedSchedules;
-        console.log(`🔄 초기 스케줄: ${filteredSchedules.length}개 (${hasSelectionCondition ? '선택 모드' : '필터링 모드'})`);
 
         for (const condition of parsed.conditions) {
-          console.log(`\n🔄 조건 적용 중: ${condition.type}`, JSON.stringify(condition));
-          console.log(`  이전 스케줄: ${filteredSchedules.length}개`);
           filteredSchedules = applyCondition(filteredSchedules, condition, extractedSchedules);
-          console.log(`  적용 후: ${filteredSchedules.length}개`);
         }
-
-        console.log(`\n✅ 필터링 완료: ${extractedSchedules.length} → ${filteredSchedules.length}개`);
 
         // 기본 베이스 스케줄 자동 추가 (학교 시간표 등)
         // ⚠️ 단, "~만" 키워드가 있으면 baseSchedules 추가 안 함!
         const hasOnlyKeyword = chatMessage.includes('만') || chatMessage.includes('만요') || chatMessage.includes('만할');
         const shouldIncludeBase = !hasOnlyKeyword && baseSchedules && Array.isArray(baseSchedules) && baseSchedules.length > 0;
 
-        if (hasOnlyKeyword) {
-          console.log('🚫 "만" 키워드 감지 → baseSchedules 추가 안 함 (선택된 항목만!)');
-        }
 
         if (shouldIncludeBase) {
-          console.log('📚 baseSchedules 샘플:', baseSchedules.slice(0, 3).map(s => ({
-            title: s.title,
-            days: s.days,
-            sourceImageIndex: s.sourceImageIndex,
-            startTime: s.startTime
-          })));
-
           // 한글 요일을 영어 코드로 변환
           const dayMap = {
             '월': 'MON', '화': 'TUE', '수': 'WED', '목': 'THU',
@@ -606,9 +501,6 @@ exports.filterSchedulesByChat = async (req, res) => {
               filteredLunchExists.add(normalizedDays || 'any');
             }
           });
-
-          console.log('🔍 중복 체크 ID 샘플:', Array.from(filteredIds).slice(0, 3));
-          console.log('🍱 기존 점심시간 요일:', Array.from(filteredLunchExists));
 
           // 기본 베이스 중에서 아직 포함되지 않은 것만 추가
           let addedCount = 0;
@@ -639,14 +531,6 @@ exports.filterSchedulesByChat = async (req, res) => {
               addedCount++;
             }
           });
-
-          console.log(`📚 baseSchedules 중복 제거: ${baseSchedules.length}개 중 ${addedCount}개만 추가됨 (${baseSchedules.length - addedCount}개는 이미 포함)${skippedLunch > 0 ? `, 점심시간 ${skippedLunch}개 스킵` : ''}`);
-          console.log(`📚 기본 베이스 포함 완료: 총 ${filteredSchedules.length}개`);
-          console.log('📚 최종 filteredSchedules 샘플 (변환 후):', filteredSchedules.slice(-3).map(s => ({
-            title: s.title,
-            days: s.days,
-            sourceImageIndex: s.sourceImageIndex
-          })));
         }
 
         parsed.filteredSchedules = filteredSchedules;
@@ -662,7 +546,6 @@ exports.filterSchedulesByChat = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ OCR 채팅 필터링 에러:', error);
     res.status(500).json({
       success: false,
       error: 'OCR 채팅 필터링 실패',
@@ -684,10 +567,6 @@ exports.conversationalRecommend = async (req, res) => {
       conversationHistory = [],
       userProfile = {}
     } = req.body;
-
-    console.log('💬 대화형 추천 요청:', chatMessage);
-    console.log('👤 사용자 프로필:', userProfile);
-    console.log('📜 대화 히스토리:', conversationHistory.length, '개');
 
     // 입력 검증
     if (!chatMessage || !chatMessage.trim()) {
@@ -723,10 +602,8 @@ exports.conversationalRecommend = async (req, res) => {
         const result = await model.generateContent(prompt);
         const response = await result.response;
         aiResponse = response.text();
-        console.log(`✅ ${modelName} 모델 성공!`);
         break;
       } catch (error) {
-        console.log(`❌ ${modelName} 실패: ${error.message}`);
         lastError = error;
         continue;
       }
@@ -735,11 +612,6 @@ exports.conversationalRecommend = async (req, res) => {
     if (!aiResponse) {
       throw lastError || new Error('모든 모델 시도 실패');
     }
-
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🤖 대화형 AI 응답:');
-    console.log(aiResponse);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     // JSON 파싱
     let parsed = null;
@@ -757,7 +629,6 @@ exports.conversationalRecommend = async (req, res) => {
         }
       }
     } catch (parseError) {
-      console.error('JSON 파싱 실패:', parseError);
       return res.json({
         success: false,
         error: 'AI 응답 파싱 실패',
@@ -789,7 +660,6 @@ exports.conversationalRecommend = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ 대화형 추천 에러:', error);
     res.status(500).json({
       success: false,
       error: '대화형 추천 실패',

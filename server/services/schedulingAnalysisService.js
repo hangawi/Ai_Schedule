@@ -94,7 +94,6 @@ Important Instructions:
          .trim();
       return JSON.parse(jsonText);
    } catch (error) {
-      console.error('Error calling Gemini API:', error);
       throw new Error('Failed to analyze schedules with AI.');
    }
 }

@@ -85,9 +85,6 @@ class SchedulingAlgorithm {
     }
 
     const { minHoursPerWeek = 3, numWeeks = 2, currentWeek, ownerPreferences = {}, roomSettings = {}, fullRangeStart, fullRangeEnd } = options;
-
-    console.log(`\n🚀 [자동배정] 주당 ${minHoursPerWeek}시간 × ${numWeeks}주`);
-
     // 💡 numWeeks > 1이면 주별로 나눠서 실행
     if (numWeeks > 1) {
       return this._runMultiWeekSchedule(members, owner, roomTimeSlots, options, deferredAssignments);
@@ -115,11 +112,9 @@ class SchedulingAlgorithm {
     if (currentWeek) {
       // 클라이언트에서 이미 월요일로 계산된 날짜를 보냄
       startDate = new Date(currentWeek);
-      console.log(`📅 [타임테이블 시작일] 클라이언트에서 받은 날짜: ${startDate.toISOString().split('T')[0]} (${['일','월','화','수','목','금','토'][startDate.getUTCDay()]}요일)`);
     } else {
       // 기본값: 2025년 9월 16일 월요일
       startDate = new Date('2025-09-16T00:00:00.000Z');
-      console.log(`📅 [타임테이블 시작일] 기본값 사용: ${startDate.toISOString().split('T')[0]}`);
     }
 
 
@@ -135,7 +130,6 @@ class SchedulingAlgorithm {
 
     // 💡 기존 협의 슬롯을 assignments에 로드 (이미 배정받은 멤버는 제외하기 위해)
     if (roomTimeSlots && roomTimeSlots.length > 0) {
-      console.log(`📥 [기존 슬롯 로드] ${roomTimeSlots.length}개 슬롯 로드 중...`);
       roomTimeSlots.forEach(slot => {
         const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
         if (slotUserId === ownerId) return; // 방장 제외
@@ -152,7 +146,6 @@ class SchedulingAlgorithm {
       });
 
       // 로드 후 현황 출력
-      console.log(`📊 [기존 슬롯 로드 완료] 멤버별 현황:`);
       Object.keys(assignments).forEach(memberId => {
         const assignedSlots = assignments[memberId].slots.length;
         const requiredSlots = memberRequiredSlots[memberId] || 2;
@@ -163,19 +156,14 @@ class SchedulingAlgorithm {
     this._assignDeferredAssignments(timetable, assignments, deferredAssignments);
 
     // Phase 1: Identify conflicts BEFORE assignment (대체 시간 고려)
-    // console.log('\n📍 [PHASE 1] 충돌 감지 시작');
     const { conflicts, memberAvailableSlots } = this._identifyConflictsBeforeAssignment(timetable, ownerId, memberRequiredSlots);
     const conflictingSlots = conflicts;
     const negotiationBlocks = this._mergeConsecutiveConflicts(conflictingSlots, timetable);
-    // console.log(`✅ ${negotiationBlocks.length}개 협의 블록 생성됨`);
 
     // Phase 2: Assign undisputed slots in two passes to minimize negotiations.
-    // First pass for high-priority slots to secure the best times.
-    // console.log('\n📍 [PHASE 2.1] High-Priority Undisputed Assignment (Priority >= 3)');
     this._assignUndisputedSlots(timetable, assignments, 3, memberRequiredSlots, conflictingSlots);
 
     // Second pass for low-priority slots to fill remaining needs and avoid conflicts.
-    // console.log('\n📍 [PHASE 2.2] Low-Priority Undisputed Assignment (Priority >= 1)');
     this._assignUndisputedSlots(timetable, assignments, 1, memberRequiredSlots, conflictingSlots);
 
     // Phase 4: Explicit Conflict Resolution by Owner Taking Slot (with preferences)
@@ -229,14 +217,6 @@ class SchedulingAlgorithm {
     // Use the conflicts identified before assignment
     const negotiations = [];
     const autoAssignments = []; // 자동 배정할 항목들 (협의 생성 후 처리)
-
-    // console.log('\n📍 [PHASE 4] 협의 생성');
-    // console.log(`🔍 현재 할당 현황:`);
-    // Object.keys(assignments).forEach(memberId => {
-    //   const requiredSlots = memberRequiredSlots[memberId] || 0;
-    //   const assignedSlots = assignments[memberId]?.assignedHours || 0;
-    //   console.log(`   ${memberId.substring(0,8)}: ${assignedSlots}/${requiredSlots}슬롯`);
-    // });
 
     for (const block of negotiationBlocks) {
       const dayMap = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday' };
@@ -349,8 +329,6 @@ class SchedulingAlgorithm {
         const canAccommodateAll = totalNeeded <= totalSlots;
 
         if (!canAccommodateAll) {
-          // 블록이 모든 멤버를 수용할 수 없음 → 협의 생성으로 바로 진행
-          // console.log(`   🚨 블록 용량 부족 (필요: ${totalNeeded}슬롯 > 가용: ${totalSlots}슬롯) → 협의 생성`);
         } else {
           // 블록이 충분히 큼 → 공평성 체크
           const sortedByAssigned = [...unsatisfiedMembers].sort((a, b) => {
@@ -388,17 +366,9 @@ class SchedulingAlgorithm {
 
             continue; // 다음 블록으로
           } else {
-            // console.log(`   ⚠️ 공평성 차이 작음 (${leastHours} vs ${secondLeastHours}, 차이 ${secondLeastHours - leastHours}슬롯) → 협의 생성`);
           }
         }
       }
-
-      // 공평성으로 해결 안될 시 협의 생성
-      // console.log(`   🚨 협의 생성: ${unsatisfiedMembers.length}명 미충족 (공평성으로 해결 불가)`);
-      // 💡 block.conflictingMembers는 이미 250줄에서 필터링되었으므로 다시 설정할 필요 없음
-
-      // 협의 타입 판단 (미충족 멤버들만)
-      // totalNeeded는 이미 위에서 계산됨 (272-275줄)
       if (totalNeeded === 0) {
         totalNeeded = unsatisfiedMembers.reduce((sum, m) => sum + m.neededSlots, 0);
       }
@@ -409,22 +379,10 @@ class SchedulingAlgorithm {
       let negotiationType = 'full_conflict';
       let availableTimeSlots = [];
       let memberTimeSlotOptions = {}; // 💡 스코프 외부로 이동
-
-      // 💡 새로운 로직: 충돌이 발생하면 항상 먼저 시간 선택(time_slot_choice)으로 시작
-      // 멤버들이 각자 시간을 선택하고, 겹치면 full_conflict로 전환됨 (협의 해결 로직에서 처리)
-
-      // 💡 모든 멤버가 원래 같은 시간 필요하고, 충돌 블록에서 2개 이상의 옵션을 만들 수 있으면
-      // (예: 8슬롯에서 6슬롯씩 선택 → 13~16, 14~17 가능)
       if (allNeedSameOriginalAmount) {
         // 협의 타입 판단을 위해 원래 필요한 슬롯 사용
         const originalNeededPerMember = unsatisfiedMembers[0].originallyNeededSlots;
-        // console.log(`   [협의 판단] 원래 필요 슬롯: ${originalNeededPerMember}, 총 필요: ${totalNeeded}, 총 슬롯: ${totalSlots}`);
-
-        // 💡 슬라이딩 윈도우로 가능한 옵션 수 계산
-        // 예: 8슬롯에서 6슬롯씩 선택 → 0~5, 1~6, 2~7 = 3개 옵션
-        // 예: 8슬롯에서 3슬롯씩 선택 → 0~2, 1~3, 2~4, 3~5, 4~6, 5~7 = 6개 옵션
         const numberOfOptions = totalSlots - originalNeededPerMember + 1;
-        // console.log(`   [협의 판단] 슬라이딩 윈도우 옵션 수: ${numberOfOptions} (총 ${totalSlots}슬롯에서 ${originalNeededPerMember}슬롯씩)`);
 
         if (numberOfOptions >= 2) {
           // 2개 이상의 선택지가 있으면 time_slot_choice
@@ -509,12 +467,9 @@ class SchedulingAlgorithm {
               // 범위의 시작점부터 할당 시간 단위로 슬라이딩
               const rangeStartMinutes = range[0];
               const rangeEndMinutes = range[range.length - 1] + 30; // 마지막 슬롯의 끝 시간
-              // console.log(`         [슬라이딩] 범위: ${Math.floor(rangeStartMinutes/60)}:${rangeStartMinutes%60} ~ ${Math.floor(rangeEndMinutes/60)}:${rangeEndMinutes%60}, 필요시간: ${requiredDuration}분`);
-
               // 💡 1시간 단위로 슬라이딩 (더 많은 옵션 생성)
               for (let startMinutes = rangeStartMinutes; startMinutes + requiredDuration <= rangeEndMinutes; startMinutes += 60) {
-                // console.log(`         [슬라이딩 체크] 시작: ${Math.floor(startMinutes/60)}:${(startMinutes%60).toString().padStart(2,'0')}, 끝: ${Math.floor((startMinutes+requiredDuration)/60)}:${((startMinutes+requiredDuration)%60).toString().padStart(2,'0')}`);
-
+                
                 // 💡 정시(00분)가 아니면 건너뛰기
                 if (startMinutes % 60 !== 0) {
                   continue;
@@ -527,13 +482,11 @@ class SchedulingAlgorithm {
                 for (let checkMin = startMinutes; checkMin < endMinutes; checkMin += 30) {
                   if (!range.includes(checkMin)) {
                     isValidRange = false;
-                    // console.log(`         [슬라이딩 제외] ${Math.floor(checkMin/60)}:${(checkMin%60).toString().padStart(2,'0')} 슬롯이 범위에 없음`);
                     break;
                   }
                 }
 
                 if (isValidRange) {
-                  // console.log(`         [슬라이딩 옵션 생성] ${Math.floor(startMinutes/60)}:${(startMinutes%60).toString().padStart(2,'0')} ~ ${Math.floor(endMinutes/60)}:${(endMinutes%60).toString().padStart(2,'0')}`);
 
                   const optionStartH = Math.floor(startMinutes / 60);
                   const optionStartM = startMinutes % 60;
@@ -556,7 +509,6 @@ class SchedulingAlgorithm {
             }
 
             memberTimeSlotOptions[memberId] = memberOptions;
-            // console.log(`      ${memberId.substring(0,8)}: ${memberOptions.length}개 옵션 (${memberOptions.map(o => `${o.startTime}-${o.endTime}`).join(', ')})`);
           }
 
           // 💡 모든 멤버가 최소 1개 이상의 옵션을 가지는지 확인
@@ -564,15 +516,12 @@ class SchedulingAlgorithm {
             memberTimeSlotOptions[member.memberId] && memberTimeSlotOptions[member.memberId].length > 0
           );
 
-          // console.log(`   [옵션 확인] 모든 멤버가 옵션 보유: ${allMembersHaveOptions}`);
 
           if (!allMembersHaveOptions) {
             // 💡 어떤 멤버가 선택할 수 있는 옵션이 없으면 full_conflict (양보/주장)
-            // console.log(`   ⚠️ 일부 멤버 옵션 없음 → full_conflict`);
             negotiationType = 'full_conflict';
             availableTimeSlots = [];
           } else {
-            // console.log(`   ✅ time_slot_choice로 진행`);
 
             // 💡 모든 멤버가 공통으로 선택 가능한 시간대를 availableTimeSlots에 저장
             // (각 멤버의 옵션을 합집합으로 생성 - 프론트엔드에서 각 멤버별로 필터링됨)
@@ -654,7 +603,6 @@ class SchedulingAlgorithm {
             }
 
             memberTimeSlotOptions[memberId] = memberOptions;
-            console.log(`      [full_conflict] ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션 (이번 주)`, memberOptions);
           }
         }
       }
@@ -693,16 +641,12 @@ class SchedulingAlgorithm {
       negotiations.push(negotiation);
     }
 
-    console.log(`\n✅ 최종 협의: ${negotiations.length}개`);
-
     // 방장을 assignments에서 제거 (혹시라도 포함되었을 경우)
     if (assignments[ownerId]) {
-      console.warn(`⚠️ [경고] assignments에서 방장(${ownerId}) 제거`);
       delete assignments[ownerId];
     }
 
     // 💡 자동 배정 처리 (협의 생성 후)
-    console.log(`\n📍 [PHASE 5] 자동 배정: ${autoAssignments.length}개`);
 
     for (const autoAssign of autoAssignments) {
       const { memberId, dateObj, dayString, startTime, endTime, neededSlots, totalSlots } = autoAssign;
@@ -712,8 +656,6 @@ class SchedulingAlgorithm {
       const minutesToAssign = slotsToAssign * 30;
       const startMinutes = startH * 60 + startM;
       const endMinutes = startMinutes + minutesToAssign;
-
-      console.log(`   ${memberId.substring(0,8)}: ${dayString} ${startTime}-${endTime} (${slotsToAssign}슬롯)`);
 
       for (let currentMin = startMinutes; currentMin < endMinutes; currentMin += 30) {
         const slotStart = `${Math.floor(currentMin/60).toString().padStart(2,'0')}:${(currentMin%60).toString().padStart(2,'0')}`;
@@ -734,9 +676,6 @@ class SchedulingAlgorithm {
         });
       }
     }
-
-    console.log(`✅ 최종 결과: 조원 ${Object.keys(assignments).length}명 | 협의 ${negotiations.length}개 | 자동배정 ${autoAssignments.length}개`);
-
     return {
       assignments,
       unassignedMembersInfo,
@@ -796,27 +735,18 @@ class SchedulingAlgorithm {
         memberDayPrioritySlots[a.memberId][dayKey]++;
       });
     }
-
-    console.log('   멤버별 가용 슬롯:', memberAvailableSlots);
-    console.log('   멤버별 단독 슬롯:', memberExclusiveSlots);
-    console.log('   💡 멤버별 요일+우선순위별 슬롯:', JSON.stringify(memberDayPrioritySlots, null, 2));
-
     // 🔍 월요일 슬롯 확인
     const mondaySlots = Object.keys(timetable).filter(k => k.includes('2025-10-06'));
-    console.log(`   월요일 슬롯 개수: ${mondaySlots.length}개`);
     mondaySlots.forEach(key => {
       const slot = timetable[key];
       const nonOwner = (slot.available || []).filter(a => a.memberId !== ownerId);
-      console.log(`      ${key}: ${nonOwner.length}명 가용 - ${nonOwner.map(a => `${a.memberId.substring(0,8)}(우선순위${a.priority})`).join(', ')}`);
     });
 
     // 🔍 수요일 슬롯 확인
     const wednesdaySlots = Object.keys(timetable).filter(k => k.includes('2025-10-08'));
-    console.log(`   수요일 슬롯 개수: ${wednesdaySlots.length}개`);
     wednesdaySlots.forEach(key => {
       const slot = timetable[key];
       const nonOwner = (slot.available || []).filter(a => a.memberId !== ownerId);
-      console.log(`      ${key}: ${nonOwner.length}명 가용 - ${nonOwner.map(a => `${a.memberId.substring(0,8)}(우선순위${a.priority})`).join(', ')}`);
     });
 
     for (const key in timetable) {
@@ -831,7 +761,6 @@ class SchedulingAlgorithm {
         const maxPriority = Math.max(...nonOwnerAvailable.map(a => a.priority || 2));
         const highestPriorityMembers = nonOwnerAvailable.filter(a => (a.priority || 2) === maxPriority);
 
-        console.log(`   🔍 슬롯 ${key}: maxPriority=${maxPriority}, 최고우선순위 멤버 ${highestPriorityMembers.length}명 (${highestPriorityMembers.map(m => m.memberId.substring(0,8)).join(', ')})`);
 
         // 💡 최고 우선순위 멤버가 2명 이상일 때만 협의 발생
         if (highestPriorityMembers.length >= 2) {
@@ -840,17 +769,12 @@ class SchedulingAlgorithm {
             availableMembers: highestPriorityMembers.map(a => a.memberId),
             priority: maxPriority
           });
-          console.log(`      ✅ 협의 추가됨`);
         } else {
-          console.log(`      ⏭️ 협의 제외 (최고우선순위 1명)`);
         }
         // 최고 우선순위 멤버가 1명이면 자동 배정 (협의 불필요)
       }
     }
-
-    console.log(`   충돌 감지: ${conflicts.length}개`);
     conflicts.forEach(c => {
-      console.log(`      ${c.slotKey}: ${c.availableMembers.map(m => m.substring(0,8)).join(', ')} (우선순위: ${c.priority})`);
     });
     return { conflicts, memberAvailableSlots };
   }
@@ -877,19 +801,13 @@ class SchedulingAlgorithm {
     const ownerRangeStart = fullRangeStart ? new Date(fullRangeStart) : startDate;
     const ownerRangeEnd = fullRangeEnd ? new Date(fullRangeEnd) : endDate;
 
-    console.log(`📅 [타임테이블 범위] ${startDate.toISOString().split('T')[0]} ~ ${endDate.toISOString().split('T')[0]} (${numWeeks}주, ${numWeeks * 7}일)`);
     if (fullRangeStart && fullRangeEnd) {
-      console.log(`   💡 [방장 가용시간 범위] ${ownerRangeStart.toISOString().split('T')[0]} ~ ${ownerRangeEnd.toISOString().split('T')[0]} (전체 범위)`);
     }
 
     const ownerId = owner._id.toString();
 
-    console.log('📅 [타임테이블] 방장의 선호시간표를 기반으로 가용 시간대 생성');
-    console.log(`📅 [타임테이블] 처리할 조원 수: ${members.length}명`);
-
     // 방장의 선호시간표 출력
     if (owner.defaultSchedule && owner.defaultSchedule.length > 0) {
-      console.log(`📅 [방장 선호시간] ${owner.defaultSchedule.length}개 시간대:`);
       owner.defaultSchedule.forEach(sched => {
         const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
       });
@@ -919,7 +837,6 @@ class SchedulingAlgorithm {
           // 💡 전체 범위(ownerRangeStart ~ ownerRangeEnd)에서 찾기
           const currentDate = new Date(ownerRangeStart);
           const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-          console.log(`   🔍 [방장 특정날짜→요일변환] ${specificDate}의 ${dayNames[dayOfWeek]}요일 ${startTime}-${endTime} 처리 중...`);
           let matchedDates = [];
 
           while (currentDate < ownerRangeEnd) {
@@ -936,12 +853,10 @@ class SchedulingAlgorithm {
             currentDate.setUTCDate(currentDate.getUTCDate() + 1);
           }
 
-          console.log(`      ✅ ${dayNames[dayOfWeek]}요일 ${matchedDates.length}일 찾음: ${matchedDates.join(', ')}`);
         } else {
           // 반복 요일인 경우에도 전체 범위 사용
           const currentDate = new Date(ownerRangeStart);
           const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-          console.log(`   🔍 [방장 반복시간] ${dayNames[dayOfWeek]}요일 ${startTime}-${endTime} 처리 중...`);
           let matchedDates = [];
 
           while (currentDate < ownerRangeEnd) {
@@ -958,12 +873,9 @@ class SchedulingAlgorithm {
             currentDate.setUTCDate(currentDate.getUTCDate() + 1);
           }
 
-          console.log(`      ✅ ${dayNames[dayOfWeek]}요일 ${matchedDates.length}일 찾음: ${matchedDates.join(', ')}`);
         }
       });
     }
-
-    console.log(`📅 [방장] 가능한 시간대: ${ownerAvailableSlots.size}개 슬롯`);
 
     // 💡 Step 2: 조원들의 개인 시간표를 추가 (방장 가능 시간대와 겹치는 것만)
     members.forEach(member => {
@@ -1078,7 +990,6 @@ class SchedulingAlgorithm {
           }
         });
       } else {
-        console.log(`⚠️ [조원] ${userId.substring(0,8)}: defaultSchedule가 없거나 비어있음 - 이 멤버는 타임테이블에서 제외됨`);
       }
 
       // 개인시간(personalTimes) 처리 - 이 시간대는 제외해야 함
@@ -1119,18 +1030,11 @@ class SchedulingAlgorithm {
     });
 
     const totalSlots = Object.keys(timetable).length;
-    console.log(`[개인시간표] 총 ${totalSlots}개 시간대 생성 (개인 시간표 기준)`);
 
     // 타임테이블 샘플 출력 (정렬해서)
     if (totalSlots > 0) {
       const sortedKeys = Object.keys(timetable).sort();
       const sampleKeys = sortedKeys.slice(0, 10);
-      console.log(`[타임테이블샘플] 처음 10개 슬롯 (정렬됨):`, sampleKeys.map(key => {
-        const slot = timetable[key];
-        return `${key} (${slot.available.length}명)`;
-      }).join(', '));
-    } else {
-      console.warn('⚠️ [타임테이블] 생성된 슬롯이 0개입니다! 조원들의 defaultSchedule을 확인하세요.');
     }
 
     return timetable;
@@ -1175,9 +1079,6 @@ class SchedulingAlgorithm {
     const endDate = new Date(startDate);
     endDate.setUTCDate(startDate.getUTCDate() + (numWeeks * 7));
 
-    // 사용자가 실제로 제출한 시간표만으로 timetable 구성
-    console.log(`[타임테이블] 사용자 제출 슬롯 ${roomTimeSlots.length}개 처리 시작`);
-
     // 사용자별로 슬롯을 그룹화하여 중복 처리 방지
     const userSlots = {};
     roomTimeSlots.forEach(slot => {
@@ -1187,7 +1088,6 @@ class SchedulingAlgorithm {
       } else if (slot.user) {
         userId = slot.user.toString();
       } else {
-        console.warn('[타임테이블] 유효하지 않은 사용자:', slot);
         return;
       }
 
@@ -1201,7 +1101,6 @@ class SchedulingAlgorithm {
     Object.keys(userSlots).forEach(userId => {
       const member = members.find(m => (m.user._id || m.user).toString() === userId);
       if (!member) {
-        console.warn(`[타임테이블] 멤버를 찾을 수 없음: ${userId}`);
         return;
       }
 
@@ -1216,7 +1115,6 @@ class SchedulingAlgorithm {
         const endDateStr = endDate.toISOString().split('T')[0];
 
         if (slotDateStr < startDateStr || slotDateStr >= endDateStr) {
-          console.log(`[타임테이블] 윈도우 외부 슬롯 스킵: ${slotDateStr}`);
           return;
         }
 
@@ -1244,13 +1142,9 @@ class SchedulingAlgorithm {
             priority: priority,
             isOwner: false
           });
-          console.log(`[타임테이블] 슬롯 추가: ${key} - 멤버: ${userId}, 우선순위: ${priority}`);
         }
       });
     });
-
-    console.log(`[타임테이블] 총 ${Object.keys(timetable).length}개 시간대 생성 (사용자 제출 기준)`);
-
     return timetable;
   }
 
@@ -1351,7 +1245,6 @@ class SchedulingAlgorithm {
 
             if (hasConflictOnSameDate) {
               isAlone = false; // 같은 날짜에 충돌이 있으면 단독 조건 무효화
-              console.log(`      ⚠️ 단독 슬롯이지만 같은 날짜(${currentDate})에 다른 충돌이 있어 차단`);
             }
           }
 
@@ -1395,11 +1288,6 @@ class SchedulingAlgorithm {
                                             highestCount1 === 1 && highestCount2 === 1 &&
                                             !hasConflictOnSameDate; // 같은 날짜에 충돌이 없는지만 확인
               }
-              
-              // 💡 디버그 로그
-              console.log(`      🔍 우선순위 우위 체크: ${key1} + ${key2} → ${memberId.substring(0,8)}`);
-              console.log(`         경쟁자 수: ${originalContenders1}, ${originalContenders2}`);
-              console.log(`         hasClearPriorityAdvantage=${hasClearPriorityAdvantage}`);
             }
           }
 
@@ -1423,7 +1311,6 @@ class SchedulingAlgorithm {
               if (minutes2 - minutes1 === 30) {
                 // [4차 수정] reason을 'hasClearPriorityAdvantage'에 우선순위를 두어 결정
                 const finalReason = hasClearPriorityAdvantage ? 'hasClearPriorityAdvantage' : 'isAlone';
-                console.log(`      ✅ Phase 2 할당: ${key1} + ${key2} → ${memberId.substring(0,8)} (${hasClearPriorityAdvantage ? '우선순위 우위' : '단독'})`);
                 return { block: [key1, key2], reason: finalReason };
               }
             }
@@ -1452,7 +1339,6 @@ class SchedulingAlgorithm {
           const result = findOneHourBlock(memberId, conflictingSlots, false); // 디버그 모드 비활성화
 
           if (result) {
-            console.log(`      ✅ [Phase 3] ${memberId.substring(0,8)} 블록 발견: ${result.block[0]}`);
 
             // 💡 [수정] 협의 멤버라도 다른 요일에 단독 슬롯이 있으면 배정 (협의 최소화)
             const isConflictingMember = conflictingMembers.has(memberId);
@@ -1469,14 +1355,10 @@ class SchedulingAlgorithm {
                 conflictDates.add(conflictDate);
               });
 
-              console.log(`      📍 ${memberId.substring(0,8)} 충돌날짜: ${Array.from(conflictDates).join(', ')}, 현재블록: ${blockDate}`);
-
               // 현재 블록이 충돌 날짜와 다른 요일이면 배정 허용
               if (!conflictDates.has(blockDate)) {
-                console.log(`      ✅ 충돌멤버이지만 다른 날짜 → 배정 허용`);
                 // 협의 멤버이지만 다른 요일에 배정 가능
               } else {
-                console.log(`      ❌ 충돌 날짜와 동일 → Phase 4로 넘김`);
                 // 같은 날짜에 충돌이 있으므로 Phase 4로 넘김
                 continue;
               }
@@ -1548,7 +1430,6 @@ class SchedulingAlgorithm {
           // 두 슬롯 모두 해당 멤버가 사용 가능한지 확인
           if (avail1 && avail2) {
             attemptCount++;
-            if (debugMode) console.log(`         🔍 시도 ${attemptCount}: ${key1} + ${key2}`);
 
             // 💡 해당 멤버가 최고 우선순위인지 확인
             const allAvail1 = slot1.available.filter(a => a.priority >= priority && !a.isOwner);
@@ -1559,9 +1440,6 @@ class SchedulingAlgorithm {
 
             const isHighestPriority1 = avail1.priority === maxPriority1;
             const isHighestPriority2 = avail2.priority === maxPriority2;
-
-            if (debugMode) console.log(`            멤버우선순위: ${avail1.priority}, 최고우선순위1: ${maxPriority1}, 최고우선순위2: ${maxPriority2}`);
-
             // 💡 최고 우선순위가 아니면 건너뜀
             if (!isHighestPriority1 || !isHighestPriority2) {
               if (debugMode) console.log(`            ❌ 최고 우선순위 아님`);
@@ -1572,8 +1450,6 @@ class SchedulingAlgorithm {
             const highestCount1 = allAvail1.filter(a => a.priority === maxPriority1).length;
             const highestCount2 = allAvail2.filter(a => a.priority === maxPriority2).length;
 
-            if (debugMode) console.log(`            최고우선순위 멤버 수: slot1=${highestCount1}, slot2=${highestCount2}`);
-
             if (highestCount1 > 1 || highestCount2 > 1) {
               if (debugMode) console.log(`            ❌ 최고 우선순위 멤버가 2명 이상 (충돌)`);
               continue;
@@ -1582,19 +1458,10 @@ class SchedulingAlgorithm {
             // 💡 협의 멤버인 경우 Phase 3 할당 정책 체크
             const isConflictingMember = conflictingMembers.has(memberId);
             if (isConflictingMember) {
-              if (debugMode) {
-                console.log(`            협의멤버 체크 중... (memberId: ${memberId})`);
-                console.log(`            전체 협의멤버 목록: ${Array.from(conflictingMembers).join(', ')}`);
-              }
 
               // 💡 이 멤버가 연루된 충돌 목록 찾기
               const memberConflicts = conflicts.filter(c => c.availableMembers.includes(memberId));
               const conflictSlotKeys = new Set(memberConflicts.map(c => c.slotKey));
-
-              if (debugMode) {
-                console.log(`            이 멤버가 연루된 충돌 슬롯: ${Array.from(conflictSlotKeys).join(', ')}`);
-                console.log(`            현재 시도 블록: [${key1}, ${key2}]`);
-              }
 
               // 💡 현재 블록의 두 슬롯 중 하나라도 충돌 슬롯이면 무조건 Phase 3 차단
               const isBlockInConflict = conflictSlotKeys.has(key1) || conflictSlotKeys.has(key2);
@@ -1616,10 +1483,6 @@ class SchedulingAlgorithm {
                 });
               });
 
-              if (debugMode) {
-                console.log(`            이 멤버와 충돌하는 다른 멤버들: ${Array.from(coConflictingMembers).join(', ')}`);
-              }
-
               // 현재 블록에 충돌 멤버가 있는지 확인
               const slot1 = timetable[key1];
               const slot2 = timetable[key2];
@@ -1637,10 +1500,6 @@ class SchedulingAlgorithm {
               const hasCoConflictSamePriority2 = avail2InBlock.some(a =>
                 coConflictingMembers.has(a.memberId) && a.priority === member2Priority
               );
-
-              if (debugMode) {
-                console.log(`            현재 블록에 같은 우선순위 충돌 멤버? slot1=${hasCoConflictSamePriority1}, slot2=${hasCoConflictSamePriority2}`);
-              }
 
               // 💡 같은 우선순위 충돌 멤버가 있으면 무조건 차단
               if (hasCoConflictSamePriority1 || hasCoConflictSamePriority2) {
@@ -1684,16 +1543,12 @@ class SchedulingAlgorithm {
                 // 💡 이 블록의 우선순위 계산 (두 슬롯의 평균)
                 const blockPriority = (avail1.priority + avail2.priority) / 2;
 
-                if (debugMode) console.log(`            ✅ 블록 찾음! 우선순위=${blockPriority}`);
-
                 // 💡 더 높은 우선순위 블록이면 교체
                 if (blockPriority > bestBlockPriority) {
                   bestBlock = [key1, key2];
                   bestBlockPriority = blockPriority;
-                  if (debugMode) console.log(`            🏆 최고 우선순위 블록 갱신!`);
                 }
               } else {
-                if (debugMode) console.log(`            ❌ 시간 연속 아님 (차이: ${minutes2 - minutes1}분)`);
               }
             }
           }
@@ -1701,10 +1556,8 @@ class SchedulingAlgorithm {
       }
 
       if (bestBlock) {
-        if (debugMode) console.log(`         ✅✅ 최종 선택: ${bestBlock[0]} + ${bestBlock[1]} (우선순위: ${bestBlockPriority})`);
         return bestBlock;
       }
-
       if (debugMode) console.log(`         ❌ 총 ${attemptCount}개 시도, 블록 못 찾음`);
       return null;
     };
@@ -1739,14 +1592,9 @@ class SchedulingAlgorithm {
       if (membersToAssign.length === 0) {
         break; // All members have their minimum hours
       }
-
-      console.log(`   💡 [반복 ${iterationCount + 1}] 할당 필요한 멤버: ${membersToAssign.map(id => `${id.substring(0,8)}(${assignments[id].assignedHours}슬롯)`).join(', ')}`);
-
       // Iterate through the needy members and try to assign ONE HOUR BLOCK to the most needy one
       for (const memberId of membersToAssign) {
         const requiredSlots = memberRequiredSlots[memberId] || assignments[memberId]?.requiredSlots || 18;
-
-        console.log(`      🔍 ${memberId.substring(0,8)} 시도 중 (현재: ${assignments[memberId].assignedHours}/${requiredSlots}슬롯)`);
 
         // 💡 1시간 블록 찾기 (충돌 슬롯 제외, 최고 우선순위만)
         // 협의 멤버라도 단독 최고 우선순위면 가능
@@ -1756,18 +1604,12 @@ class SchedulingAlgorithm {
           this._assignSlot(timetable, assignments, block[1], memberId);
           changed = true;
           iterationCount++;
-          console.log(`      ✅ 반복 ${iterationCount}: ${block[0]} + ${block[1]} → ${memberId.substring(0,8)} (1시간 블록)`);
-          // After assigning one block, break from the for-loop and restart the while-loop
+           // After assigning one block, break from the for-loop and restart the while-loop
           // This re-evaluates who is the most "needy" member for the next assignment
           break;
         } else {
-          console.log(`      ⏭️ ${memberId.substring(0,8)}: 1시간 블록 없음`);
         }
       }
-    }
-
-    if (iterationCount > 0) {
-      console.log(`   총 ${iterationCount}개 블록 (${iterationCount * 2}개 슬롯) 할당됨`);
     }
   }
 
@@ -1878,7 +1720,6 @@ class SchedulingAlgorithm {
     const startTimeRaw = key.substring(lastDashIndex + 1);
 
     if (!timetable[key]) {
-      console.error(`❌ timetable[${key}]가 존재하지 않습니다!`);
       return;
     }
 
@@ -1897,14 +1738,12 @@ class SchedulingAlgorithm {
     const slotDayOfWeek = timetable[key].dayOfWeek;
 
     if (!slotDate || !slotDayOfWeek) {
-      console.error(`❌ ${key} - date 또는 dayOfWeek가 없습니다!`);
       return;
     }
 
     const dayString = dayMap[slotDayOfWeek];
 
     if (!dayString) {
-      console.warn("⚠️ Invalid dayString for slotDayOfWeek:", slotDayOfWeek);
       return;
     }
 
@@ -1931,7 +1770,6 @@ class SchedulingAlgorithm {
     };
 
     if (!slotData.date || !slotData.day || !slotData.startTime || !slotData.endTime) {
-      console.error(`❌ 슬롯 데이터 검증 실패!`, { key, memberId });
       return;
     }
 
@@ -1985,7 +1823,6 @@ class SchedulingAlgorithm {
     // ❌ 이 함수는 사용하지 않음
     // 방장은 자동배정에 참여하지 않음
     // 방장의 선호시간표는 조원들이 사용 가능한 시간대를 나타낼 뿐
-    console.log('ℹ️ [방장] 방장은 자동배정에서 제외됨');
     return;
   }
 
@@ -2121,10 +1958,6 @@ class SchedulingAlgorithm {
         slots: []
       };
     });
-
-    console.log(`\n📅 [다중 주 배정] ${numWeeks}주에 걸쳐 각 주마다 ${minHoursPerWeek}시간씩 배정`);
-    console.log(`   📍 전체 범위: ${startDate.toISOString().split('T')[0]} ~ ${endDate.toISOString().split('T')[0]}`);
-
     // 각 주마다 반복
     for (let weekIndex = 0; weekIndex < numWeeks; weekIndex++) {
       const weekStartDate = new Date(startDate);
@@ -2164,12 +1997,7 @@ class SchedulingAlgorithm {
         }));
         allNegotiations.push(...weekNegotiations);
       }
-
-      console.log(`   ✅ ${weekIndex + 1}주차 완료: ${Object.values(result.assignments).reduce((sum, a) => sum + a.slots.length, 0)}개 슬롯 배정`);
     }
-
-    console.log(`\n✅ [다중 주 배정 완료] 총 ${allNegotiations.length}개 협의, ${Object.values(allAssignments).reduce((sum, a) => sum + a.slots.length, 0)}개 슬롯`);
-
     return {
       assignments: allAssignments,
       negotiations: allNegotiations,
@@ -2180,94 +2008,3 @@ class SchedulingAlgorithm {
 }
 
 module.exports = new SchedulingAlgorithm();
-
-// --- DEBUGGING UTILITY ---
-/*
-class SchedulingAlgorithm {
-  debug(roomTimeSlots, options) {
-    const { minHoursPerWeek = 3, numWeeks = 2, currentWeek } = options;
-    const startDate = currentWeek ? new Date(currentWeek) : new Date();
-    
-    const timetable = this._createTimetable(roomTimeSlots, startDate, numWeeks);
-
-    const availableSlots = Object.entries(timetable)
-      .filter(([key, slot]) => slot.available.length > 0)
-      .reduce((acc, [key, slot]) => {
-        acc[key] = slot;
-        return acc;
-      }, {});
-
-    return {
-      receivedOptions: options,
-      receivedRoomTimeSlots: roomTimeSlots,
-      generatedTimetableWithAvailability: availableSlots,
-    };
-  }
-  _runMultiWeekSchedule(members, owner, roomTimeSlots, options, deferredAssignments) {
-    const { minHoursPerWeek, numWeeks, currentWeek, ownerPreferences, roomSettings } = options;
-
-    const startDate = currentWeek ? new Date(currentWeek) : new Date();
-    const allAssignments = {};
-    const allNegotiations = [];
-    const allSlots = [];
-
-    // 각 멤버별로 assignments 초기화
-    const ownerId = owner._id.toString();
-    const nonOwnerMembers = members.filter(m => m.user._id.toString() !== ownerId);
-    nonOwnerMembers.forEach(m => {
-      const memberId = m.user._id.toString();
-      allAssignments[memberId] = {
-        memberId,
-        assignedHours: 0,
-        requiredSlots: minHoursPerWeek * 2, // 주당 필요 슬롯
-        slots: []
-      };
-    });
-
-    console.log(`\n📅 [다중 주 배정] ${numWeeks}주에 걸쳐 각 주마다 ${minHoursPerWeek}시간씩 배정`);
-
-    // 각 주마다 반복
-    for (let weekIndex = 0; weekIndex < numWeeks; weekIndex++) {
-      const weekStartDate = new Date(startDate);
-      weekStartDate.setUTCDate(startDate.getUTCDate() + (weekIndex * 7));
-
-      console.log(`\n✅ [${weekIndex + 1}주차] ${weekStartDate.toISOString().split('T')[0]} 시작`);
-
-      // 이번 주만 배정 (numWeeks = 1)
-      const weekOptions = {
-        ...options,
-        numWeeks: 1,
-        currentWeek: weekStartDate
-      };
-
-      // 기존 슬롯 제외하고 배정
-      const result = this.runAutoSchedule(members, owner, allSlots, weekOptions, deferredAssignments);
-
-      // 결과 병합
-      Object.keys(result.assignments).forEach(memberId => {
-        const weekAssignment = result.assignments[memberId];
-        if (allAssignments[memberId]) {
-          allAssignments[memberId].assignedHours += weekAssignment.assignedHours;
-          allAssignments[memberId].slots.push(...weekAssignment.slots);
-        }
-      });
-
-      // 협의 병합
-      if (result.negotiations && result.negotiations.length > 0) {
-        allNegotiations.push(...result.negotiations);
-      }
-
-      console.log(`   ✅ ${weekIndex + 1}주차 완료: ${Object.values(result.assignments).reduce((sum, a) => sum + a.slots.length, 0)}개 슬롯 배정`);
-    }
-
-    console.log(`\n✅ [다중 주 배정 완료] 총 ${allNegotiations.length}개 협의, ${Object.values(allAssignments).reduce((sum, a) => sum + a.slots.length, 0)}개 슬롯`);
-
-    return {
-      assignments: allAssignments,
-      negotiations: allNegotiations,
-      carryOverAssignments: [],
-      unassignedMembersInfo: []
-    };
-  }
-}
-*/

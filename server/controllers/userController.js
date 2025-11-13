@@ -5,7 +5,6 @@ exports.getMe = async (req, res) => {
     // Get user info logic
     res.json({ msg: 'User info' });
   } catch (err) {
-    console.error(err.message);
     res.status(500).send('Server error');
   }
 };
@@ -15,7 +14,6 @@ exports.updateMe = async (req, res) => {
     // Update user info logic
     res.json({ msg: 'User info updated' });
   } catch (err) {
-    console.error(err.message);
     res.status(500).send('Server error');
   }
 };
@@ -25,7 +23,6 @@ exports.connectCalendar = async (req, res) => {
     // Connect calendar service logic (OAuth 2.0)
     res.json({ msg: 'Calendar connected' });
   } catch (err) {
-    console.error(err.message);
     res.status(500).send('Server error');
   }
 };
@@ -40,19 +37,12 @@ exports.getUserSchedule = async (req, res) => {
       return res.status(404).json({ msg: 'User not found' });
     }
 
-    console.log('🔍 [userController] 스케줄 조회:', {
-      userId: req.user.id,
-      personalTimesCount: user.personalTimes ? user.personalTimes.length : 0,
-      personalTimesSample: user.personalTimes ? user.personalTimes.slice(0, 3) : []
-    });
-
     res.json({
       defaultSchedule: user.defaultSchedule,
       scheduleExceptions: user.scheduleExceptions,
       personalTimes: user.personalTimes || []
     });
   } catch (err) {
-    console.error(err.message);
     res.status(500).send('Server Error');
   }
 };
@@ -68,13 +58,6 @@ exports.updateUserSchedule = async (req, res) => {
     if (!user) {
       return res.status(404).json({ msg: 'User not found' });
     }
-
-    console.log('🔍 [userController] 업데이트 요청:', {
-      userId: req.user.id,
-      existingPersonalTimesCount: user.personalTimes ? user.personalTimes.length : 0,
-      newPersonalTimesCount: personalTimes ? personalTimes.length : 0,
-      requestPersonalTimes: personalTimes
-    });
 
     if (defaultSchedule) {
       user.defaultSchedule = defaultSchedule.map(slot => ({
@@ -126,12 +109,6 @@ exports.updateUserSchedule = async (req, res) => {
 
     const updatedUser = user;
 
-    console.log('🔍 [userController] 업데이트 완료:', {
-      userId: req.user.id,
-      finalPersonalTimesCount: updatedUser.personalTimes ? updatedUser.personalTimes.length : 0,
-      finalPersonalTimesSample: updatedUser.personalTimes ? updatedUser.personalTimes.slice(0, 3) : []
-    });
-
     res.json({
       msg: 'Schedule updated successfully',
       defaultSchedule: updatedUser.defaultSchedule,
@@ -139,9 +116,6 @@ exports.updateUserSchedule = async (req, res) => {
       personalTimes: updatedUser.personalTimes
     });
   } catch (err) {
-    console.error('❌ [userController] 스케줄 업데이트 에러:', err);
-    console.error('에러 상세:', err.message);
-    console.error('에러 스택:', err.stack);
 
     // Mongoose validation 에러인 경우
     if (err.name === 'ValidationError') {
@@ -179,7 +153,6 @@ exports.getUserScheduleById = async (req, res) => {
       name: user.name
     });
   } catch (err) {
-    console.error(err.message);
     res.status(500).send('Server Error');
   }
 };
@@ -190,16 +163,12 @@ exports.getUserScheduleById = async (req, res) => {
 exports.getUserProfileById = async (req, res) => {
   try {
     const { userId } = req.params;
-    console.log('프로필 조회 요청:', userId);
 
     const user = await User.findById(userId).select('name firstName lastName email phone address addressDetail addressLat addressLng occupation birthdate');
 
     if (!user) {
-      console.log('사용자 없음:', userId);
       return res.status(404).json({ msg: 'User not found' });
     }
-
-    console.log('프로필 조회 성공:', user.name);
 
     res.json({
       name: user.name,
@@ -215,7 +184,6 @@ exports.getUserProfileById = async (req, res) => {
       birthdate: user.birthdate
     });
   } catch (err) {
-    console.error('프로필 조회 오류:', err.message);
     res.status(500).send('Server Error');
   }
 };

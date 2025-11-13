@@ -60,11 +60,6 @@ function mergeConsecutiveSchedules(schedules) {
         }
       }
 
-      // 병합 결과 생성
-      if (toMerge.length > 1) {
-        console.log(`  🔗 병합: ${day} ${current.title} ${current.startTime}-${endTime} (${toMerge.length}개 블록)`);
-      }
-
       const mergedSchedule = { ...current };
       mergedSchedule.endTime = endTime;
       mergedSchedule.days = [day];
@@ -101,9 +96,6 @@ function mergeConsecutiveSchedules(schedules) {
 
   // Map에서 배열로 변환
   scheduleMap.forEach(schedule => finalMerged.push(schedule));
-
-  console.log(`  📊 병합 전: ${schedules.length}개 → 병합 후: ${finalMerged.length}개`);
-
   return finalMerged;
 }
 

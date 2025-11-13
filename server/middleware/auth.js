@@ -8,7 +8,6 @@ module.exports = function (req, res, next) {
   // Check if token exists
   if (!token) {
     // Log authentication failure for security monitoring
-    console.error('Authentication failed: No token provided');
     return res.status(401).json({ 
       success: false,
       msg: 'No token, authorization denied',
@@ -26,7 +25,6 @@ module.exports = function (req, res, next) {
     const secret = process.env.JWT_SECRET;
     
     if (!secret) {
-      console.error('JWT secret key not configured');
       return res.status(500).json({ 
         success: false,
         msg: 'Server configuration error',
@@ -48,7 +46,6 @@ module.exports = function (req, res, next) {
     next();
   } catch (err) {
     // Log authentication failure for security monitoring
-    console.error('Authentication failed - Token verification error:', err.name, err.message);
     
     let errorMsg = 'Token is not valid';
     let errorCode = 'INVALID_TOKEN';

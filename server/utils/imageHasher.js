@@ -18,7 +18,6 @@ async function calculateImageHash(imageBuffer) {
     const hash = await imghash.hash(processedBuffer);
     return hash;
   } catch (error) {
-    console.error('❌ 이미지 해시 계산 실패:', error);
     throw error;
   }
 }
@@ -63,14 +62,11 @@ async function detectDuplicate(newImageBuffer, newImageFilename, existingImages,
     for (const existing of existingImages) {
       // ⚠️ 같은 파일명이면 건너뛰기 (자기 자신과 비교 방지)
       if (existing.filename === newImageFilename) {
-        console.log(`⏭️ 스킵: ${existing.filename} (자기 자신)`);
         continue;
       }
 
       const existingHash = existing.hash || await calculateImageHash(existing.buffer);
       const similarity = calculateSimilarity(newHash, existingHash);
-
-      console.log(`🔍 비교: ${existing.filename} - 유사도 ${similarity}%`);
 
       if (similarity >= threshold) {
         return {
@@ -89,7 +85,6 @@ async function detectDuplicate(newImageBuffer, newImageFilename, existingImages,
       newHash: newHash
     };
   } catch (error) {
-    console.error('❌ 중복 감지 실패:', error);
     throw error;
   }
 }

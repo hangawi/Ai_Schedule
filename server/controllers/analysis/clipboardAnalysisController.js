@@ -11,20 +11,15 @@ exports.analyzeClipboardText = async (req, res) => {
             message: '분석할 텍스트가 필요합니다.'
          });
       }
-
-      console.log('클립보드 텍스트 분석 시작:', text);
-
       // Gemini API 키 확인
       const API_KEY = process.env.GEMINI_API_KEY;
       if (!API_KEY || API_KEY.trim().length === 0) {
-         console.error('GEMINI_API_KEY 환경변수가 설정되지 않음');
          // 폴백: 키워드 기반 분석 - text 변수가 스코프에 있어야 함
          return analyzeWithKeywords(text, res);
       }
 
       // API 키 형식 기본 검증 (Google API 키는 보통 39자)
       if (API_KEY.length < 30) {
-         console.error('GEMINI_API_KEY가 너무 짧음 - 유효하지 않은 키일 가능성');
          return analyzeWithKeywords(text, res);
       }
 
@@ -139,15 +134,11 @@ exports.analyzeClipboardText = async (req, res) => {
       const response = await result.response;
       const text_response = response.text();
       
-      console.log('Gemini API 응답:', text_response);
-      
       let parsedResult;
       try {
          const cleanedText = text_response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
          parsedResult = JSON.parse(cleanedText);
       } catch (parseError) {
-         console.error('JSON 파싱 에러:', parseError.message);
-         console.error('원본 응답:', text_response);
          // 폴백: 키워드 기반 분석
          return analyzeWithKeywords(text, res);
       }
@@ -166,12 +157,10 @@ exports.analyzeClipboardText = async (req, res) => {
          suspiciousPatterns.forEach(pattern => {
             if (pattern.test(text)) {
                suspiciousFound = true;
-               console.log('서버 사이드 검증: 이상한 패턴 감지:', pattern.toString());
             }
          });
          
          if (suspiciousFound) {
-            console.log('Gemini는 통과했지만 서버에서 이상한 텍스트로 판정');
             parsedResult = {
                isScheduleRelated: false,
                confidence: 0,
@@ -187,13 +176,11 @@ exports.analyzeClipboardText = async (req, res) => {
       });
 
    } catch (error) {
-      console.error('클립보드 분석 에러:', error.message);
       
       // API 키 관련 오류 체크
       if (error.message.includes('API key not valid') || 
           error.message.includes('API_KEY_INVALID') ||
           error.message.includes('invalid API key')) {
-         console.log('Gemini API 키가 유효하지 않음, 키워드 기반 분석으로 폴백');
       }
       
       // Gemini API 호출 실패시 폴백
@@ -204,7 +191,6 @@ exports.analyzeClipboardText = async (req, res) => {
 
 // 키워드 기반 폴백 분석 함수 (더 정확한 검증 추가)
 function analyzeWithKeywords(text, res) {
-   console.log('키워드 기반 폴백 분석 실행');
    
    const currentDate = new Date();
    const currentYear = currentDate.getFullYear();
@@ -231,7 +217,6 @@ function analyzeWithKeywords(text, res) {
    
    // 이상한 텍스트면 바로 거부
    if (suspiciousScore > 0.5) {
-      console.log('이상한 텍스트 패턴 감지, 일정 인식 거부');
       return res.json({
          success: true,
          data: {

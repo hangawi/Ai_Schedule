@@ -48,7 +48,6 @@ const Room = require('../models/room');
 
         res.json(room);
      } catch (error) {
-        console.error('Error submitting time slots:', error);
         res.status(500).json({ msg: 'Server error' });
      }
   };
@@ -80,7 +79,6 @@ exports.removeTimeSlot = async (req, res) => {
 
       res.json(room);
    } catch (error) {
-      console.error('Error removing time slot:', error);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -135,7 +133,6 @@ exports.assignTimeSlot = async (req, res) => {
 
       res.json(room);
    } catch (error) {
-      console.error('Error assigning time slot:', error);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -195,7 +192,6 @@ exports.findCommonSlots = async (req, res) => {
 
       res.json(result);
    } catch (error) {
-      console.error('Error finding common slots:', error);
       res.status(500).json({ msg: 'Server error while finding common slots' });
    }
 };
@@ -241,15 +237,12 @@ exports.resetCarryOverTimes = async (req, res) => {
       const updatedRoom = await Room.findById(roomId)
          .populate('owner', 'firstName lastName email')
          .populate('members.user', 'firstName lastName email');
-
-      console.log(`Reset ${resetCount} member carryover times`);
       res.json({
          resetCount,
          message: `${resetCount}명의 멤버 이월시간이 초기화되었습니다.`,
          room: updatedRoom,
       });
    } catch (error) {
-      console.error('Error resetting carryover times:', error);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -259,9 +252,6 @@ exports.resetCarryOverTimes = async (req, res) => {
 // @access  Private (Owner only)
 exports.resetCompletedTimes = async (req, res) => {
    try {
-      console.log('resetCompletedTimes called with roomId:', req.params.roomId);
-      console.log('User ID:', req.user?.id);
-
       const { roomId } = req.params;
       const room = await Room.findById(roomId);
 
@@ -274,13 +264,9 @@ exports.resetCompletedTimes = async (req, res) => {
       }
 
       let resetCount = 0;
-      console.log('Room members count:', room.members.length);
 
       // Reset completed times only
       room.members.forEach((member, index) => {
-         console.log(
-            `Member ${index}: totalProgressTime = ${member.totalProgressTime}`,
-         );
 
          // totalProgressTime 초기화 (이월시간은 제외)
          if (member.totalProgressTime > 0) {
@@ -294,13 +280,10 @@ exports.resetCompletedTimes = async (req, res) => {
                action: 'reset',
                previousValue: prevValue,
             });
-            console.log(`Reset totalProgressTime for member ${index} from ${prevValue} to 0`);
          }
       });
 
       await room.save();
-      console.log('Room saved successfully');
-      console.log('Total members reset:', resetCount);
 
       // Return updated room with populated fields
       const updatedRoom = await Room.findById(roomId)
@@ -313,7 +296,6 @@ exports.resetCompletedTimes = async (req, res) => {
          room: updatedRoom,
       });
    } catch (error) {
-      console.error('Error resetting completed/carryOver times:', error);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -323,8 +305,6 @@ exports.resetCompletedTimes = async (req, res) => {
 // @access  Private (Owner only)
 exports.resetCarryOverTimes = async (req, res) => {
    try {
-      console.log('resetCarryOverTimes called with roomId:', req.params.roomId);
-      console.log('User ID:', req.user?.id);
 
       const { roomId } = req.params;
       const room = await Room.findById(roomId);
@@ -338,13 +318,9 @@ exports.resetCarryOverTimes = async (req, res) => {
       }
 
       let resetCount = 0;
-      console.log('Room members count:', room.members.length);
 
       // Reset carryover times only
       room.members.forEach((member, index) => {
-         console.log(
-            `Member ${index}: carryOver = ${member.carryOver}`,
-         );
 
          // carryOver 초기화 (완료시간은 제외)
          if (member.carryOver > 0) {
@@ -359,13 +335,10 @@ exports.resetCarryOverTimes = async (req, res) => {
                reason: 'admin_reset',
                timestamp: new Date()
             });
-            console.log(`Reset carryOver for member ${index} from ${prevValue} to 0`);
          }
       });
 
       await room.save();
-      console.log('Room saved successfully');
-      console.log('Total members reset:', resetCount);
 
       // Return updated room with populated fields
       const updatedRoom = await Room.findById(roomId)
@@ -378,7 +351,6 @@ exports.resetCarryOverTimes = async (req, res) => {
          room: updatedRoom,
       });
    } catch (error) {
-      console.error('Error resetting carryover times:', error);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -477,7 +449,6 @@ exports.resetAllMemberStats = async (req, res) => {
       });
 
    } catch (error) {
-      console.error('Error resetting all member stats:', error);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -516,7 +487,6 @@ exports.clearAllCarryOverHistories = async (req, res) => {
       });
 
    } catch (error) {
-      console.error('Error clearing all carry-over histories:', error);
       res.status(500).json({ msg: 'Server error' });
    }
 };

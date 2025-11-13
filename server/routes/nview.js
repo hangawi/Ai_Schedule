@@ -141,7 +141,6 @@ ${diffText} 난이도의 사물 추리 문제를 1개 생성해주세요.
         throw new Error('JSON 형식을 찾을 수 없습니다');
       }
     } catch (parseError) {
-      console.error('JSON 파싱 오류:', parseError);
       throw new Error('AI 응답을 파싱할 수 없습니다');
     }
 
@@ -160,7 +159,6 @@ ${diffText} 난이도의 사물 추리 문제를 1개 생성해주세요.
 
     res.json(questionWithMetadata);
   } catch (error) {
-    console.error('Error generating question:', error);
 
     // Fallback 문제
     const { game_type = 'bingo', studentId, difficulty = 'medium', type = 'addition' } = req.body;
@@ -284,14 +282,6 @@ router.post('/submit-answer', (req, res) => {
   const question = questions.get(studentId);
   const correct = String(answer).trim().toLowerCase() === String(question.answer).trim().toLowerCase();
 
-  console.log(`📝 ${studentId} 답안 제출:`, {
-    question: question.question,
-    type: question.type,
-    difficulty: question.difficulty,
-    game_type: question.game_type,
-    correct
-  });
-
   const result = {
     studentId,
     answer,
@@ -314,8 +304,6 @@ router.post('/submit-answer', (req, res) => {
     timeSpent: timeSpent || 0,
     timestamp: new Date()
   });
-
-  console.log(`✅ ${studentId} 학습 이력 저장 완료. 총 ${learningHistory.get(studentId).length}개 문제`);
 
   res.json({ success: true, correct, correctAnswer: question.answer });
 });
@@ -479,7 +467,6 @@ ${incorrectQuestions.map((q, i) => `${i+1}. ${q.questionData.question} (정답: 
     const result = await model.generateContent(analysisPrompt);
     aiAnalysis = result.response.text();
   } catch (error) {
-    console.error('AI 분석 오류:', error);
 
     // Fallback 분석 메시지 생성
     let analysisText = '📊 학습 분석 (데모 모드)\n\n';
@@ -606,7 +593,6 @@ ${diffText} 난이도의 ${typeText} 문제를 1개 생성해주세요.
         throw new Error('JSON 형식을 찾을 수 없습니다');
       }
     } catch (parseError) {
-      console.error('JSON 파싱 오류:', parseError);
       throw new Error('AI 응답을 파싱할 수 없습니다');
     }
 
@@ -634,7 +620,6 @@ ${diffText} 난이도의 ${typeText} 문제를 1개 생성해주세요.
     });
 
   } catch (error) {
-    console.error('Error generating personalized question:', error);
 
     // Fallback 처리
     const { studentId, difficulty = 'medium', game_type = 'bingo' } = req.body;
@@ -857,15 +842,6 @@ router.get('/dashboard/:studentId', (req, res) => {
   // 학습 연속일 계산
   const streak = calculateStreak(history);
 
-  console.log(`📊 ${studentId} 대시보드 조회:`, {
-    전체기록: history.length,
-    기간필터: filteredHistory.length,
-    총문제수: totalQuestions,
-    정답수: correctAnswers,
-    정답률: accuracy,
-    총학습시간: totalTime
-  });
-
   res.json({
     studentId,
     hasData: true,
@@ -928,14 +904,10 @@ router.get('/dashboard/trends/:studentId', (req, res) => {
 router.get('/dashboard/ranking', (req, res) => {
   const { period = 'all' } = req.query;
 
-  console.log(`🏆 랭킹 조회 요청 (period: ${period})`);
-  console.log(`📊 학습 이력 보유 학생 수: ${learningHistory.size}`);
-
   const rankings = [];
 
   // 모든 학생의 데이터 수집
   for (const [studentId, history] of learningHistory.entries()) {
-    console.log(`  - ${studentId}: ${history.length}개 문제`);
     if (history.length === 0) continue;
 
     // 기간별 필터링
@@ -978,8 +950,6 @@ router.get('/dashboard/ranking', (req, res) => {
     rank.rank = index + 1;
   });
 
-  console.log(`✅ 랭킹 ${rankings.length}개 생성 완료:`, rankings.map(r => `${r.studentName}(${r.score}점)`).join(', '));
-
   res.json({
     period,
     rankings,
@@ -999,7 +969,6 @@ router.post('/generate-daily-questions', async (req, res) => {
     // 이미 오늘 문제가 생성되었는지 확인
     const existing = dailyQuestions.get(studentId);
     if (existing && isToday(existing.date)) {
-      console.log(`${studentId}: 오늘 이미 문제가 생성됨`);
       return res.json({
         success: true,
         studentId,
@@ -1169,7 +1138,6 @@ ${diffText} 난이도의 ${typeText} 문제를 1개 생성해주세요.
     });
 
   } catch (error) {
-    console.error('오늘의 문제 생성 오류:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1223,13 +1191,6 @@ router.post('/submit-daily-answer', (req, res) => {
   };
 
   dailyAnswers.get(studentId).push(answerData);
-
-  console.log(`📝 ${studentId} 오늘의 문제 ${questionIndex + 1} 제출:`, {
-    question: question.question,
-    type: question.type,
-    difficulty: question.difficulty,
-    correct
-  });
 
   // 학습 이력에도 저장
   if (!learningHistory.has(studentId)) {

@@ -356,7 +356,6 @@ RoomSchema.pre('save', function(next) {
     }
     next();
   } catch (error) {
-    console.error('Error in room pre-save hook:', error);
     next(error);
   }
 });
