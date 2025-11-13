@@ -425,6 +425,14 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
           });
         }
 
+        // ⭐ 삭제된 일정의 범례 제거
+        if (fixedData.titlesToRemoveFromLegend && fixedData.titlesToRemoveFromLegend.length > 0) {
+          console.log('🗑️ 범례에서 제거:', fixedData.titlesToRemoveFromLegend);
+          setCustomSchedulesForLegend(prev =>
+            prev.filter(c => !fixedData.titlesToRemoveFromLegend.includes(c.title))
+          );
+        }
+
         // 봇 응답 추가
         const botMessage = {
           id: Date.now() + 1,
