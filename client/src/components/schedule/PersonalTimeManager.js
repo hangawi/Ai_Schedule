@@ -162,17 +162,8 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
   }, [newPersonalTime, personalTimes, setPersonalTimes, showAlert, editingId, onAutoSave]);
 
   const handleRemovePersonalTime = useCallback(async (id) => {
-    console.log('🔍 [PersonalTimeManager] 개인시간 삭제 시도:', {
-      id,
-      currentCount: personalTimes.length,
-      personalTimesToDelete: personalTimes.find(pt => pt.id === id)
-    });
 
     const updatedPersonalTimes = personalTimes.filter(pt => pt.id !== id);
-    console.log('🔍 [PersonalTimeManager] 삭제 후 개인시간 목록:', {
-      newCount: updatedPersonalTimes.length,
-      remainingItems: updatedPersonalTimes.map(pt => ({ id: pt.id, title: pt.title }))
-    });
 
     // State를 즉시 업데이트 - 이것이 핵심! 하나만 삭제되어야 함
     setPersonalTimes(updatedPersonalTimes);
@@ -193,21 +184,17 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
     // 편집 모드가 아닐 때만 자동 저장
     if (!isEditing && onAutoSave) {
       try {
-        console.log('🔍 [PersonalTimeManager] 삭제 후 자동 저장 시작');
 
         // React state 업데이트가 완료될 때까지 대기
         setTimeout(async () => {
           try {
             await onAutoSave();
-            console.log('🔍 [PersonalTimeManager] 삭제 후 자동 저장 완료');
           } catch (error) {
-            console.error('🔍 [PersonalTimeManager] 삭제 후 자동 저장 실패:', error);
             // 저장 실패 시 상태 복원하지 않음 (UI 일관성 유지)
             showAlert('저장에 실패했습니다. 다시 시도해주세요.', '오류');
           }
         }, 100);
       } catch (error) {
-        console.error('🔍 [PersonalTimeManager] 삭제 후 저장 실패:', error);
       }
     }
 

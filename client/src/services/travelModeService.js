@@ -58,7 +58,6 @@ class TravelModeService {
               resolve(result);
             } else {
               // ZERO_RESULTS는 에러가 아니라 경로가 없는 경우이므로, fallback 처리
-              console.warn(`Google Directions API returned status: ${status}. Falling back to estimation.`);
               resolve({ fallback: true, status: status });
             }
           }
@@ -80,7 +79,6 @@ class TravelModeService {
         fallback: false                          // 성공적으로 API 사용
       };
     } catch (error) {
-      console.error('이동 시간 계산 중 예외 발생:', error);
       // 예외 발생 시에도 대략적인 계산으로 fallback
       return this.estimateTravelTime(origin, destination, mode);
     }
@@ -182,7 +180,6 @@ class TravelModeService {
             shortestIndex = i;
           }
         } catch (error) {
-          console.error('경로 계산 실패:', error);
         }
       }
 

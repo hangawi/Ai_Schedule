@@ -31,8 +31,6 @@ const ScheduleOptimizerModal = ({ schedules, onClose, onOptimized }) => {
     const generatedQuestions = generateOptimizationQuestions(schedules, detectedConflicts);
     setQuestions(generatedQuestions);
 
-    console.log('📊 충돌 감지:', detectedConflicts.length, '건');
-    console.log('❓ 생성된 질문:', generatedQuestions.length, '개');
   }, [schedules]);
 
   const handleStart = () => {
@@ -86,7 +84,6 @@ const ScheduleOptimizerModal = ({ schedules, onClose, onOptimized }) => {
       setOptimizedResult(result);
       setStep('result');
     } catch (error) {
-      console.error('최적화 실패:', error);
       alert('스케줄 최적화에 실패했습니다. 다시 시도해주세요.');
       setStep('questions');
     } finally {

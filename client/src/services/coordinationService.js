@@ -51,7 +51,6 @@ export const coordinationService = {
     
     if (!response.ok) {
       const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
-      console.error('createRoom error response:', errData);
 
       // 구체적인 에러 메시지 구성
       let errorMessage = errData.msg || 'Failed to create room';
@@ -91,7 +90,6 @@ export const coordinationService = {
 
   // 방 수정
   async updateRoom(roomId, updateData) {
-    console.log('coordinationService.updateRoom called with:', { roomId, updateData });
     const token = getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}`, {
       method: 'PUT',
@@ -101,17 +99,12 @@ export const coordinationService = {
       },
       body: JSON.stringify(updateData),
     });
-
-    console.log('updateRoom response status:', response.status);
-
     if (!response.ok) {
       const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
-      console.error('updateRoom error response:', errData);
       throw new Error(errData.msg || errData.error || 'Failed to update room');
     }
 
     const result = await response.json();
-    console.log('updateRoom success result:', result);
     return result;
   },
 

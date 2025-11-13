@@ -32,18 +32,9 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
   useEffect(() => {
     const loadOwnerSchedule = async () => {
       try {
-        console.log('🔍 RoomCreationModal - 방장 일정 데이터 로드 시작');
         const scheduleData = await userService.getUserSchedule();
-        console.log('🔍 RoomCreationModal - 로드된 일정 데이터:', {
-          hasDefaultSchedule: !!(scheduleData.defaultSchedule),
-          hasScheduleExceptions: !!(scheduleData.scheduleExceptions),
-          hasPersonalTimes: !!(scheduleData.personalTimes),
-          personalTimesCount: scheduleData.personalTimes?.length || 0,
-          personalTimesData: scheduleData.personalTimes
-        });
         setOwnerProfileSchedule(scheduleData);
       } catch (err) {
-        console.error('방장 일정 데이터 로드 실패:', err);
       }
     };
 
@@ -62,57 +53,20 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
 
   useEffect(() => {
     if (syncOwnerSchedule && ownerProfileSchedule) {
-      console.log('🔍 방장 시간표 연동 시작:', {
-        hasDefaultSchedule: !!(ownerProfileSchedule.defaultSchedule),
-        defaultScheduleCount: ownerProfileSchedule.defaultSchedule?.length || 0,
-        hasScheduleExceptions: !!(ownerProfileSchedule.scheduleExceptions),
-        scheduleExceptionsCount: ownerProfileSchedule.scheduleExceptions?.length || 0,
-        hasPersonalTimes: !!(ownerProfileSchedule.personalTimes),
-        personalTimesCount: ownerProfileSchedule.personalTimes?.length || 0,
-        personalTimesData: ownerProfileSchedule.personalTimes
-      });
-
       const syncedExceptions = [];
 
       // ❌ defaultSchedule (선호시간)은 금지시간으로 추가하지 않음
       // 선호시간은 자동배정 시 조원들이 사용할 수 있는 시간이므로 제외
-      console.log('✅ defaultSchedule (선호시간)은 금지시간에서 제외됨 (자동배정에 사용 가능)');
 
       // scheduleExceptions을 날짜/제목별로 그룹화하여 병합 처리
       const exceptionGroups = {};
       (ownerProfileSchedule.scheduleExceptions || []).forEach(exception => {
-        console.log('🔍 처리 중인 scheduleException:', {
-          title: exception.title,
-          startTime: exception.startTime,
-          endTime: exception.endTime,
-          startTimeType: typeof exception.startTime,
-          endTimeType: typeof exception.endTime,
-          rawStartTime: exception.startTime,
-          rawEndTime: exception.endTime
-        });
 
         const startDate = new Date(exception.startTime);
         const endDate = new Date(exception.endTime);
         const dateKey = startDate.toLocaleDateString('ko-KR'); // 2025. 9. 30. 형태
         const title = exception.title || '일정';
         const groupKey = `${dateKey}-${title}`;
-
-        console.log('🔍 Date 객체로 변환 결과:', {
-          originalStartTime: exception.startTime,
-          originalEndTime: exception.endTime,
-          startDateObject: startDate,
-          endDateObject: endDate,
-          dateKey: dateKey,
-          startHours: startDate.getHours(),
-          startMinutes: startDate.getMinutes(),
-          endHours: endDate.getHours(),
-          endMinutes: endDate.getMinutes(),
-          startToISOString: startDate.toISOString(),
-          startToLocaleString: startDate.toLocaleString('ko-KR'),
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        });
-
-
 
         if (!exceptionGroups[groupKey]) {
           exceptionGroups[groupKey] = {
@@ -166,15 +120,6 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
 
         // 병합된 시간대들을 roomException으로 변환
         mergedTimeRanges.forEach(range => {
-          console.log('🔍 roomException 생성 전 시간 체크:', {
-            rangeStartTime: range.startTime,
-            rangeEndTime: range.endTime,
-            startHours: range.startTime.getHours(),
-            startMinutes: range.startTime.getMinutes(),
-            endHours: range.endTime.getHours(),
-            endMinutes: range.endTime.getMinutes(),
-            originalException: range.originalException
-          });
 
           // 시간 변환 시 올바른 형식으로 변환 (HH:MM)
           const startTimeStr = `${String(range.startTime.getHours()).padStart(2, '0')}:${String(range.startTime.getMinutes()).padStart(2, '0')}`;
@@ -190,32 +135,11 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
             isSynced: true
           };
 
-          console.log('✅ 최종 생성된 scheduleException roomException:', {
-            original: range.originalException,
-            created: roomException
-          });
-
           syncedExceptions.push(roomException);
         });
       });
 
-      // personalTimes을 roomExceptions으로 변환
-      console.log('🔍 전체 개인시간 데이터 (길이:', ownerProfileSchedule.personalTimes?.length, '):', ownerProfileSchedule.personalTimes);
-
-      if (!ownerProfileSchedule.personalTimes || ownerProfileSchedule.personalTimes.length === 0) {
-        console.log('⚠️ 개인시간이 없거나 빈 배열입니다!');
-      }
-
       (ownerProfileSchedule.personalTimes || []).forEach((personalTime, index) => {
-        console.log(`🔍 개인시간 ${index} 처리:`, {
-          title: personalTime.title,
-          startTime: personalTime.startTime,
-          endTime: personalTime.endTime,
-          days: personalTime.days,
-          isRecurring: personalTime.isRecurring,
-          type: personalTime.type,
-          raw: personalTime
-        });
 
         // 반복 개인시간인 경우에만 처리
         if (personalTime.isRecurring !== false && personalTime.days && personalTime.days.length > 0) {
@@ -231,9 +155,6 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
             const endMinutes = endHour * 60 + endMin;
 
             if (endMinutes <= startMinutes) {
-              // 자정을 넘나드는 시간 (예: 23:00~07:00)
-              console.log(`🔍 자정 넘나드는 개인시간 분할: ${personalTime.startTime}~${personalTime.endTime}`);
-
               // 밤 부분 (예: 23:00~23:50)
               const nightException = {
                 type: 'daily_recurring',
@@ -255,10 +176,6 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
                 isPersonalTime: true,
                 isSynced: true
               };
-
-              console.log('✅ 자정 넘나드는 개인시간 - 밤 부분:', nightException);
-              console.log('✅ 자정 넘나드는 개인시간 - 새벽 부분:', morningException);
-
               syncedExceptions.push(nightException);
               syncedExceptions.push(morningException);
             } else {
@@ -272,34 +189,20 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
                 isPersonalTime: true,
                 isSynced: true
               };
-
-              console.log('✅ 일반 개인시간 roomException 생성:', {
-                original: { startTime: personalTime.startTime, endTime: personalTime.endTime },
-                created: personalException
-              });
               syncedExceptions.push(personalException);
             }
           });
         } else {
-          console.log('⚠️ 개인시간 건너뜀 - 반복 설정이 아니거나 요일이 없음');
         }
       });
-
-      console.log(`🔍 최종 생성된 syncedExceptions (총 ${syncedExceptions.length}개):`, syncedExceptions);
-
       // 14:40 관련 예외 확인
       const suspicious = syncedExceptions.filter(ex =>
         ex.startTime?.includes('14:4') ||
         ex.endTime?.includes('15:0') ||
         ex.name?.includes('14:4')
       );
-      if (suspicious.length > 0) {
-        console.log('⚠️ 14:40 관련 의심스러운 예외 발견:', suspicious);
-      }
-
       setSettings(prevSettings => {
         const existingNonSynced = prevSettings.roomExceptions.filter(ex => !ex.isSynced);
-        console.log('🔍 기존 비동기 roomExceptions:', existingNonSynced);
 
         // 14:40 관련 기존 예외 확인
         const suspiciousExisting = existingNonSynced.filter(ex =>
@@ -307,12 +210,8 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
           ex.endTime?.includes('15:0') ||
           ex.name?.includes('14:4')
         );
-        if (suspiciousExisting.length > 0) {
-          console.log('⚠️ 기존 roomExceptions에서 14:40 관련 발견:', suspiciousExisting);
-        }
 
         const finalExceptions = [...existingNonSynced, ...syncedExceptions];
-        console.log('🔍 최종 roomExceptions (총 ' + finalExceptions.length + '개):', finalExceptions);
 
         return {
           ...prevSettings,
@@ -344,7 +243,6 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
       }
     };
 
-    console.log('RoomCreationModal: Sending room data:', JSON.stringify(roomData, null, 2));
     onCreateRoom(roomData);
   };
 

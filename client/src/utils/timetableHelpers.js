@@ -141,18 +141,6 @@ export const getRoomExceptionInfo = (date, time, roomSettings) => {
 
       // 14:40 문제 디버깅용 로깅
       if (time === '14:40' || time === '15:00') {
-        console.log('🔍 getRoomExceptionInfo - 14:40/15:00 시간대 체크:', {
-          time,
-          date: date.toISOString(),
-          exception: ex,
-          exStartDate: exStartDate.toISOString(),
-          exEndDate: exEndDate.toISOString(),
-          slotDateTime: slotDateTime.toISOString(),
-          slotEndTime: slotEndTime.toISOString(),
-          isMatch: (slotDateTime < exEndDate && slotEndTime > exStartDate),
-          localStartTime: exStartDate.toLocaleString('ko-KR'),
-          localEndTime: exEndDate.toLocaleString('ko-KR')
-        });
       }
 
       return (slotDateTime < exEndDate && slotEndTime > exStartDate);

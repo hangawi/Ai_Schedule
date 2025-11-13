@@ -88,17 +88,6 @@ const CalendarView = ({
         personalTimeCount,
         totalCount: scheduleCount + exceptionCount + personalTimeCount
       });
-
-      // 2025-10-01에 개인시간이 있는지 디버깅
-      if (date.getFullYear() === 2025 && date.getMonth() === 9 && date.getDate() === 1) {
-        console.log('🔍 [CalendarView] 2025-10-01 달력 생성:', {
-          date: date.toString(),
-          dayOfWeek: date.getDay(),
-          hasPersonalTime: hasPersonalTime,
-          isCurrentMonth: isCurrentMonth,
-          arrayIndex: i
-        });
-      }
     }
 
     setCalendarDates(dates);
@@ -271,15 +260,6 @@ const CalendarView = ({
       if (pt.isRecurring === false && pt.specificDate) {
         // YYYY-MM-DD 형식의 문자열을 직접 비교 (시간대 문제 방지)
         const isMatch = pt.specificDate === dateStr;
-        if (isMatch) {
-          console.log('🔍 [CalendarView] 개인시간 날짜 매치:', {
-            ptSpecificDate: pt.specificDate,
-            dateStr: dateStr,
-            dateObj: date.toString(),
-            dayOfWeek: dayOfWeek,
-            ptTitle: pt.title
-          });
-        }
         return isMatch;
       }
 

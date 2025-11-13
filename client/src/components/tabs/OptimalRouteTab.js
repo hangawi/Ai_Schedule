@@ -29,7 +29,6 @@ const OptimalRouteTab = () => {
           }]);
         }
       } catch (error) {
-        console.error('사용자 정보 가져오기 실패:', error);
       }
     };
     fetchCurrentUser();
@@ -139,7 +138,6 @@ const OptimalRouteTab = () => {
                   steps: route.steps
                 });
               } catch (error) {
-                console.error('경로 계산 실패:', error);
               }
             }
 
@@ -171,7 +169,6 @@ const OptimalRouteTab = () => {
         setLoading(false);
       });
     } catch (error) {
-      console.error('경로 계산 중 오류:', error);
       alert('경로 계산에 실패했습니다.');
       setLoading(false);
     }

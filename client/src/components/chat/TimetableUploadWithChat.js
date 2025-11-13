@@ -107,7 +107,6 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
 
   // OCR 처리
   const handleProcessImages = async (skipDuplicateCheck = false) => {
-    console.log('🎯 [handleProcessImages] 호출됨 - skipDuplicateCheck:', skipDuplicateCheck, `(타입: ${typeof skipDuplicateCheck})`);
 
     if (selectedImages.length === 0) {
       setError('최소 1개 이상의 이미지를 선택해주세요.');
@@ -119,7 +118,6 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
     setProgress({ current: 0, total: selectedImages.length, message: '준비 중...' });
 
     try {
-      console.log('🔄 OCR 처리 시작...', selectedImages.length, '개 이미지');
 
       // OCR 처리
       setProgress({ current: 0, total: 100, message: `이미지 ${selectedImages.length}개 분석 중...` });
@@ -127,32 +125,16 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
       const result = await extractSchedulesFromImages(selectedImages, (progressPercent) => {
         setProgress({ current: progressPercent, total: 100, message: `분석 중... ${progressPercent}%` });
       }, null, skipDuplicateCheck);
-
-      console.log('✅ 서버 응답:', result);
-
       // 🔍 중복 감지 처리
       if (result.hasDuplicates && result.duplicates && result.duplicates.length > 0) {
-        console.log('⚠️ 중복 이미지 발견:', result.duplicates);
         setDuplicateInfo(result);
         setShowDuplicateModal(true);
         setIsProcessing(false);
         return; // OCR 처리 중단
       }
 
-      console.log('✅ OCR 완료. 추출된 스케줄:', result.schedules.length, '개');
-
       // ⭐ 최적화된 스케줄 사용
       const schedulesToUse = result.optimizedSchedules || result.schedules;
-      console.log('🎯 사용할 스케줄:', schedulesToUse.length, '개 (최적화 여부:', !!result.optimizedSchedules, ')');
-      console.log('📋 전체 스케줄:', result.allSchedules?.length || 0, '개');
-      console.log('🔍 스케줄 상세 (처음 3개):');
-      schedulesToUse.slice(0, 3).forEach((s, i) => {
-        console.log(`  ${i+1}. ${s.title} - days:`, s.days, `(타입: ${Array.isArray(s.days) ? 'array' : typeof s.days}) - ${s.startTime}-${s.endTime}`);
-      });
-
-      if (result.optimizationAnalysis) {
-        console.log('📊 최적화 분석:', result.optimizationAnalysis);
-      }
 
       setExtractedSchedules(schedulesToUse);
 
@@ -167,19 +149,14 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
         const imageSchedules = schedulesToUse.filter(s => s.sourceImage === img.fileName);
         const hasSchedules = imageSchedules.length > 0;
         if (!hasSchedules) {
-          console.log(`⚠️ 범례 제외: ${img.title || img.fileName} - 나이 제한으로 스케줄 없음`);
         }
         return hasSchedules;
       });
-
-      console.log('🖼️ 선택된 이미지:', selectedImageNames);
-      console.log(`📸 필터링 전: ${filteredSchedulesByImage.length}개 → 필터링 후: ${imagesWithSchedules.length}개`);
 
       filteredSchedulesByImage = imagesWithSchedules;
 
       // ⭐ sourceImageIndex 재할당 (필터링으로 인한 색상 인덱스 불일치 방지)
       const reindexedSchedulesByImage = filteredSchedulesByImage.map((img, newIndex) => {
-        console.log(`🎨 색상 인덱스 재할당: ${img.fileName} (원본 ${img.schedules[0]?.sourceImageIndex || '?'}) → 새 인덱스 ${newIndex}`);
         return {
           ...img,
           schedules: img.schedules.map(schedule => ({
@@ -206,12 +183,10 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
       // ⭐ 원본 전체 시간표 저장 (OCR 추출된 모든 스케줄)
       if (!originalSchedule && result.allSchedules) {
         setOriginalSchedule(JSON.parse(JSON.stringify(result.allSchedules)));
-        console.log('💾 원본 전체 시간표 저장:', result.allSchedules.length, '개');
       }
 
       // 기본 베이스 스케줄 저장 (서버에서 분석된 것)
       if (result.baseSchedules && result.baseSchedules.length > 0) {
-        console.log('📚 기본 베이스 스케줄:', result.baseSchedules.length, '개');
         setBaseSchedules(result.baseSchedules);
       }
 
@@ -219,12 +194,9 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
       if (reindexedSchedulesByImage.length > 0) {
         const titles = reindexedSchedulesByImage.map(img => img.title || img.fileName).filter(Boolean);
         const newOverallTitle = titles.join(' + ') || '업로드된 시간표';
-        console.log('📋 전체 제목 (필터링 후):', newOverallTitle);
         setOverallTitle(newOverallTitle);
       }
 
-      // ⭐ 최적화된 스케줄을 바로 시간표에 표시 (재할당된 인덱스 사용!)
-      console.log('🎯 최적화된 스케줄을 시간표에 표시합니다...');
       setFilteredSchedules(reindexedSchedulesToUse);  // ⭐ 수정!
 
       setProgress({ current: 100, total: 100, message: 'OCR 분석 완료!' });
@@ -293,7 +265,6 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
       setChatHistory([botMessage]);
 
     } catch (err) {
-      console.error('❌ OCR 처리 실패:', err);
       setError(err.message || 'OCR 처리 중 오류가 발생했습니다.');
     } finally {
       setIsProcessing(false);
@@ -342,23 +313,13 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
       });
 
       const fixedData = await fixedScheduleResponse.json();
-      console.log('🎯🎯🎯 [v2.0 UPDATED] 고정 일정 응답:', fixedData);
-      console.log('🔍 intent:', fixedData.intent);
-      console.log('✅ success:', fixedData.success);
-      console.log('🎬 action:', fixedData.action);
-      console.log('🎨 customSchedules:', fixedData.customSchedules);
-      console.log('🎨 customSchedules 개수:', fixedData.customSchedules?.length || 0);
-
       // 고정 일정 관련 요청이면 처리하고 리턴
       // ⭐ optimizedSchedule이 있거나, action이 있거나, intent가 있으면 고정 일정 API가 처리한 것
       if ((fixedData.intent && fixedData.intent !== 'none') || fixedData.optimizedSchedule || fixedData.action) {
-        console.log('✨ 고정 일정 처리 시작 - 채팅 API 호출 안 함!');
-        console.log('🚫 아래 채팅 API로 안 갑니다!!');
         // 고정 일정 관련 요청임 (성공 여부와 무관하게)
 
         // ⭐ 여러 개 발견 시 사용자 선택 요청 (action: 'move_multiple_found')
         if (fixedData.action === 'move_multiple_found' && fixedData.options) {
-          console.log('🔍 여러 일정 발견 - 사용자 선택 요청');
           const botMessage = {
             id: Date.now() + 1,
             sender: 'bot',
@@ -398,14 +359,12 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
           });
 
           if (newSchedules.length === 0) {
-            console.log('⚠️ 이미 같은 고정 일정이 존재합니다');
             setIsFilteringChat(false);
             return;
           }
 
           newFixedSchedules = [...fixedSchedules, ...newSchedules];
           setFixedSchedules(newFixedSchedules);
-          console.log('✅ 고정 일정 추가:', newSchedules.length, '개 (전체:', newFixedSchedules.length, '개)');
         } else if (fixedData.action === 'remove') {
           newFixedSchedules = fixedSchedules.filter(s => !fixedData.scheduleIds.includes(s.id));
           setFixedSchedules(newFixedSchedules);
@@ -413,10 +372,6 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
 
         // ⭐ 커스텀 일정 범례 업데이트 (fixedData에서)
         if (fixedData.customSchedules && fixedData.customSchedules.length > 0) {
-          console.log('🎨 [fixedData] 커스텀 일정 범례 업데이트:', fixedData.customSchedules.length, '개');
-          fixedData.customSchedules.forEach(c => {
-            console.log(`  - ${c.title} (sourceImageIndex: ${c.sourceImageIndex})`);
-          });
           setCustomSchedulesForLegend(prev => {
             // 중복 제거하면서 병합
             const existingIndices = new Set(prev.map(c => c.sourceImageIndex));
@@ -427,7 +382,6 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
 
         // ⭐ 삭제된 일정의 범례 제거
         if (fixedData.titlesToRemoveFromLegend && fixedData.titlesToRemoveFromLegend.length > 0) {
-          console.log('🗑️ 범례에서 제거:', fixedData.titlesToRemoveFromLegend);
           setCustomSchedulesForLegend(prev =>
             prev.filter(c => !fixedData.titlesToRemoveFromLegend.includes(c.title))
           );
@@ -444,13 +398,10 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
 
         // ⭐ 일정 이동 처리 (이미 최적화됨)
         if (fixedData.optimizedSchedule) {
-          console.log('🔄 일정 이동 완료 - 최적화된 시간표 업데이트');
-          console.log('📊 새 스케줄:', fixedData.optimizedSchedule.length, '개');
           setFilteredSchedules(fixedData.optimizedSchedule);
 
           // 고정 일정 업데이트
           if (fixedData.fixedSchedules) {
-            console.log('📌 고정 일정 업데이트:', fixedData.fixedSchedules.length, '개');
             setFixedSchedules(fixedData.fixedSchedules);
           }
 
@@ -466,15 +417,9 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
 
         // ⭐ 고정 일정 추가/삭제 시 즉시 재최적화 실행
         if (fixedData.action === 'add' || fixedData.action === 'remove') {
-          console.log('🔄 고정 일정 변경 감지 - 자동 재최적화 시작');
-          console.log('📌 전달할 고정 일정:', newFixedSchedules);
-          console.log('📊 전달할 스케줄:', (originalSchedule || extractedSchedules)?.length, '개');
-          console.log('📷 전달할 이미지:', schedulesByImage?.length, '개');
-
           // 재최적화 API 호출
           // ⭐ 첫 고정 일정 추가면 원본, 이후에는 최적화된 결과 사용
           const currentOptimizedSchedules = filteredSchedules || extractedSchedules;
-          console.log('🔍 사용할 스케줄:', currentOptimizedSchedules.length, '개 (filteredSchedules 사용 여부:', !!filteredSchedules, ')');
 
           const reoptimizeResponse = await fetch(`${API_BASE_URL}/api/schedule/optimize`, {
             method: 'POST',
@@ -490,32 +435,18 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
           });
 
           const reoptimizeData = await reoptimizeResponse.json();
-          console.log('📥📥📥 [v2.0] 서버 응답:', reoptimizeData);
-          console.log('🔍 success:', reoptimizeData.success);
-          console.log('🔍 optimizedSchedules 타입:', typeof reoptimizeData.optimizedSchedules);
-          console.log('🔍 optimizedSchedules 길이:', reoptimizeData.optimizedSchedules?.length);
-          console.log('🎨 customSchedules:', reoptimizeData.customSchedules);
-          console.log('🎨 customSchedules 개수:', reoptimizeData.customSchedules?.length || 0);
 
           if (reoptimizeData.success && Array.isArray(reoptimizeData.optimizedSchedules)) {
-            console.log('✅ 재최적화 완료:', reoptimizeData.optimizedSchedules.length, '개');
-            console.log('🎯 고정 일정이 포함되어 있는지 확인:');
             const kpopSchedules = reoptimizeData.optimizedSchedules.filter(s => s.title?.includes('KPOP'));
-            console.log('  → KPOP 스케줄:', kpopSchedules.length, '개', kpopSchedules);
             setFilteredSchedules(reoptimizeData.optimizedSchedules);
 
             // ⭐ 커스텀 일정 범례 업데이트 (reoptimizeData에서)
             if (reoptimizeData.customSchedules && reoptimizeData.customSchedules.length > 0) {
-              console.log('🎨 [reoptimizeData] 커스텀 일정 범례 업데이트:', reoptimizeData.customSchedules.length, '개');
-              reoptimizeData.customSchedules.forEach(c => {
-                console.log(`  - ${c.title} (sourceImageIndex: ${c.sourceImageIndex})`);
-              });
               setCustomSchedulesForLegend(prev => {
                 // 중복 제거하면서 병합
                 const existingIndices = new Set(prev.map(c => c.sourceImageIndex));
                 const newCustoms = reoptimizeData.customSchedules.filter(c => !existingIndices.has(c.sourceImageIndex));
                 if (newCustoms.length > 0) {
-                  console.log(`  → ${newCustoms.length}개 새로 추가됨`);
                   return [...prev, ...newCustoms];
                 }
                 return prev;
@@ -550,15 +481,6 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
         .find(msg => msg.sender === 'bot' && !msg.text.includes('💭'));
       const lastAiResponse = lastBotMessage ? lastBotMessage.text : null;
 
-      console.log('📤 /api/schedule/chat 호출:', {
-        message: currentMessage,
-        currentScheduleCount: extractedSchedules?.length,
-        originalScheduleCount: originalSchedule?.length,
-        historyLength: scheduleHistory.length,
-        redoStackLength: redoStack.length,
-        lastAiResponse: lastAiResponse ? '있음' : '없음'
-      });
-
       // ⭐ 통합 API 호출 (/api/schedule/chat)
       const response = await fetch(`${API_BASE_URL}/api/schedule/chat`, {
         method: 'POST',
@@ -579,8 +501,6 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
       });
 
       const data = await response.json();
-
-      console.log('📥 서버 응답:', data.action, '|', extractedSchedules.length, '→', data.schedule?.length || 0);
 
       if (!data.success) {
         throw new Error(data.error || '처리 실패');
@@ -604,50 +524,15 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
         setRedoStack(prev => [...prev, extractedSchedules]);
         setScheduleHistory(prev => prev.slice(0, -1));
       } else if (data.action === 'undo') {
-        console.log('🔄 [UNDO] 원본 시간표 복원 시작');
         setExtractedSchedules(data.schedule);
         setFilteredSchedules(data.schedule);
         setScheduleHistory([]);
         setFixedSchedules([]); // 고정 일정도 초기화
         setCustomSchedulesForLegend([]); // ⭐ 커스텀 범례도 초기화
-        console.log('✅ 롤백 완료: 고정 일정 + 커스텀 범례 초기화');
       } else if (data.action === 'question') {
-        console.log('💡 추천 응답 - 시간표 변경 없음');
+
       }
 
-      // 🔄 대화형 추천 응답 처리 (기존 코드 유지)
-      if (false && data.intent) {  // 비활성화
-        console.log('🤖 대화형 추천 응답:', data.intent);
-
-        // 대화 히스토리 및 사용자 프로필 업데이트
-        if (data.conversationHistory) {
-          setConversationHistory(data.conversationHistory);
-        }
-        if (data.userProfile) {
-          setUserProfile(data.userProfile);
-          console.log('👤 사용자 프로필 업데이트:', data.userProfile);
-        }
-
-        const botMessage = {
-          id: Date.now() + 1,
-          sender: 'bot',
-          text: data.explanation || data.nextQuestion || '알 수 없는 응답입니다.',
-          timestamp: new Date()
-        };
-        setChatHistory(prev => [...prev, botMessage]);
-
-        // intent가 "recommend"이면 추천된 시간표 표시
-        if (data.intent === 'recommend' && data.recommendedSchedule && data.recommendedSchedule.length > 0) {
-          console.log('📋 추천된 스케줄:', data.recommendedSchedule.length, '개');
-          setFilteredSchedules(data.recommendedSchedule);
-
-          // 모달 띄우기
-          setSlideDirection('left');
-          setTimeout(() => {
-            setShowOptimizationModal(true);
-          }, 50);
-        }
-      }
       // 🔎 필터링 응답 처리
       else {
         const botMessage = {
@@ -660,34 +545,17 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
 
         // action === "filter"면 바로 모달 띄우기
         if (data.action === 'filter' && data.filteredSchedules && data.filteredSchedules.length > 0) {
-        console.log('📋 필터링된 스케줄:', data.filteredSchedules.length, '개');
-        console.log('첫 번째 스케줄:', data.filteredSchedules[0]);
-        console.log('마지막 스케줄:', data.filteredSchedules[data.filteredSchedules.length - 1]);
-
-        // 모든 필터링된 스케줄 출력
-        console.log('📋 필터링된 모든 스케줄:');
-        data.filteredSchedules.forEach((schedule, idx) => {
-          console.log(`  [${idx}] ${schedule.title} - days: ${schedule.days ? JSON.stringify(schedule.days) : 'NONE'} - ${schedule.startTime}-${schedule.endTime} - sourceImageIndex: ${schedule.sourceImageIndex}`);
-        });
 
         // days 필드 검증
         const schedulesWithoutDays = data.filteredSchedules.filter(s => !s.days || s.days.length === 0);
-        if (schedulesWithoutDays.length > 0) {
-          console.warn('⚠️ days가 없는 스케줄:', schedulesWithoutDays);
-        }
-
-        console.log('🔄 filteredSchedules 업데이트:', data.filteredSchedules.length, '개');
-        console.log('첫 3개 수업:', data.filteredSchedules.slice(0, 3).map(s => s.title));
         setFilteredSchedules(data.filteredSchedules);
 
         // 모달 띄우기 (왼쪽으로 슬라이드)
         setSlideDirection('left');
         setTimeout(() => {
-          console.log('✅ 모달 열기 - 현재 filteredSchedules:', filteredSchedules?.length);
           setShowOptimizationModal(true);
         }, 50);
       } else if (data.action === 'filter' && (!data.filteredSchedules || data.filteredSchedules.length === 0)) {
-        console.warn('⚠️ 필터링된 스케줄이 없습니다');
         const warningMessage = {
           id: Date.now() + 2,
           sender: 'bot',
@@ -699,7 +567,6 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
     }
 
     } catch (err) {
-      console.error('❌ 채팅 필터링 실패:', err);
 
       const errorMessage = {
         id: Date.now() + 1,
@@ -716,7 +583,6 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
 
   // 모달에서 최종 적용
   const handleSchedulesApplied = (appliedSchedules, applyScope = 'month') => {
-    console.log('✅ 시간표 적용 완료:', appliedSchedules.length, '개', '범위:', applyScope);
     setShowOptimizationModal(false);
 
     // 부모 컴포넌트에 전달 - 올바른 형식으로
@@ -979,18 +845,13 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
               <div className="flex gap-3">
                 <button
                   onClick={() => {
-                    console.log('🔘 중복 제거하고 계속 버튼 클릭');
-                    console.log('🗑️ 중복 이미지 제거 중:', duplicateInfo.duplicates);
 
                     // 중복된 이미지의 인덱스 추출
                     const duplicateIndices = duplicateInfo.duplicates.map(dup => dup.index);
-                    console.log('📋 제거할 인덱스:', duplicateIndices);
 
                     // 중복되지 않은 이미지만 필터링
                     const filteredImages = selectedImages.filter((_, index) => !duplicateIndices.includes(index));
                     const filteredPreviews = imagePreviews.filter((_, index) => !duplicateIndices.includes(index));
-
-                    console.log(`✅ ${selectedImages.length}개 → ${filteredImages.length}개로 감소`);
 
                     // 상태 업데이트
                     setSelectedImages(filteredImages);
@@ -1001,7 +862,6 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                     setDuplicateInfo(null);
 
                     // 중복 체크 건너뛰고 OCR 처리
-                    console.log('🔄 중복 제거 후 OCR 처리 시작');
                     handleProcessImages(true);
                   }}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -1010,14 +870,12 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                 </button>
                 <button
                   onClick={() => {
-                    console.log('🔘 취소 버튼 클릭 - 중복 무시하고 모든 이미지 사용');
 
                     // 모달 닫기
                     setShowDuplicateModal(false);
                     setDuplicateInfo(null);
 
                     // 중복 체크 건너뛰고 모든 이미지로 OCR 처리
-                    console.log('🔄 중복 무시하고 OCR 처리 시작 (전체 이미지:', selectedImages.length, '개)');
                     handleProcessImages(true);
                   }}
                   className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"

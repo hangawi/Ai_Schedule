@@ -56,25 +56,13 @@ const ProfileTab = ({ onEditingChange }) => {
   // 방장인 방들의 설정을 업데이트하는 함수
   const updateOwnerRoomsSettings = async (ownerScheduleData) => {
     try {
-      console.log('🔍 ProfileTab - 방장 방 설정 업데이트 시작:', {
-        hasDefaultSchedule: !!(ownerScheduleData.defaultSchedule),
-        defaultScheduleCount: ownerScheduleData.defaultSchedule?.length || 0,
-        hasScheduleExceptions: !!(ownerScheduleData.scheduleExceptions),
-        scheduleExceptionsCount: ownerScheduleData.scheduleExceptions?.length || 0,
-        hasPersonalTimes: !!(ownerScheduleData.personalTimes),
-        personalTimesCount: ownerScheduleData.personalTimes?.length || 0,
-        personalTimesData: ownerScheduleData.personalTimes
-      });
 
       // 내가 방장인 방 목록 가져오기
       const myRooms = await coordinationService.fetchMyRooms();
-      console.log('🔍 ProfileTab - fetchMyRooms 결과:', myRooms);
 
       // myRooms 구조: {owned: Array, joined: Array}
       const ownedRooms = myRooms?.owned || [];
       const ownerRooms = ownedRooms; // owned 배열이 이미 방장인 방들
-
-      console.log(`🔍 방장인 방 개수: ${ownerRooms.length}`);
 
       // 요일 매핑 (0: 일, 1: 월, ..., 6: 토)
       const dayOfWeekMap = {
@@ -186,9 +174,6 @@ const ProfileTab = ({ onEditingChange }) => {
                 const endMinutes = endHour * 60 + endMin;
 
                 if (endMinutes <= startMinutes) {
-                  // 자정을 넘나드는 시간 (예: 23:00~07:00)
-                  console.log(`🔍 ProfileTab - 자정 넘나드는 개인시간 분할: ${personalTime.startTime}~${personalTime.endTime}`);
-
                   // 밤 부분 (예: 23:00~23:50)
                   syncedExceptions.push({
                     type: 'daily_recurring',
@@ -232,28 +217,17 @@ const ProfileTab = ({ onEditingChange }) => {
             roomExceptions: [...nonSyncedExceptions, ...syncedExceptions]
           };
 
-          console.log(`🔍 방 "${room.name}" 업데이트 시도 - syncedExceptions:`, {
-            count: syncedExceptions.length,
-            exceptions: syncedExceptions.map(ex => ({ name: ex.name, type: ex.type, dayOfWeek: ex.dayOfWeek }))
-          });
-
           await coordinationService.updateRoom(room._id, {
             settings: updatedSettings
           });
-
-          console.log(`✅ 방 "${room.name}" 설정이 업데이트되었습니다. (${syncedExceptions.length}개의 방장 시간표 예외 추가)`);
-
         } catch (roomErr) {
-          console.error(`방 "${room.name}" 업데이트 실패:`, roomErr);
         }
       }
 
       if (ownerRooms.length > 0) {
-        console.log(`총 ${ownerRooms.length}개의 방장 방 설정이 업데이트되었습니다.`);
       }
 
     } catch (err) {
-      console.error('방장 방 설정 업데이트 중 오류:', err);
     }
   };
 
@@ -289,46 +263,39 @@ const ProfileTab = ({ onEditingChange }) => {
   // calendarUpdate 이벤트 수신하여 스케줄 새로고침
   useEffect(() => {
     const handleCalendarUpdate = async (event) => {
-      console.log('📅 [ProfileTab] calendarUpdate 이벤트 수신:', event.detail);
 
       // 범위 삭제인 경우
       if (event.detail && event.detail.type === 'delete_range') {
-        console.log('🗑️ [ProfileTab] 범위 삭제 감지, 전체 새로고침');
         fetchSchedule();
         return;
       }
 
       // 단일 일정 삭제인 경우
       if (event.detail && event.detail.type === 'delete' && event.detail.context === 'profile') {
-        console.log('🗑️ [ProfileTab] 일정 삭제 감지, 전체 새로고침');
         fetchSchedule();
         return;
       }
 
       // 시간표 추가인 경우
       if (event.detail && event.detail.type === 'schedule_added' && event.detail.context === 'profile') {
-        console.log('📚 [ProfileTab] 시간표 추가 감지, 전체 새로고침');
         fetchSchedule();
         return;
       }
 
       // 반복 일정 추가인 경우
       if (event.detail && event.detail.isRecurring && event.detail.context === 'profile') {
-        console.log('🔁 [ProfileTab] 반복 일정 추가 감지, 전체 새로고침');
         fetchSchedule();
         return;
       }
 
       // 충돌 해결 후 일정 추가인 경우 (간단한 새로고침)
       if (event.detail && event.detail.type === 'add' && event.detail.context === 'profile' && !event.detail.chatResponse) {
-        console.log('➕ [ProfileTab] 일정 추가 감지, 전체 새로고침');
         fetchSchedule();
         return;
       }
 
       // 일정 수정인 경우
       if (event.detail && event.detail.type === 'edit' && event.detail.context === 'profile') {
-        console.log('✏️ [ProfileTab] 일정 수정 감지, 전체 새로고침');
         fetchSchedule();
         return;
       }
@@ -461,8 +428,6 @@ const ProfileTab = ({ onEditingChange }) => {
     );
 
     try {
-        console.log('💾 [저장] defaultSchedule:', scheduleToSave.length, '개 | exceptions:', exceptionsToSave.length, '개');
-
         await userService.updateUserSchedule({
           defaultSchedule: scheduleToSave,
           scheduleExceptions: exceptionsToSave,
@@ -473,15 +438,6 @@ const ProfileTab = ({ onEditingChange }) => {
 
         // 저장 후 서버에서 최신 데이터 동기화
         const freshData = await userService.getUserSchedule();
-
-        console.log('🔍 [ProfileTab] 서버에서 받은 최신 데이터:', {
-          defaultScheduleCount: freshData.defaultSchedule?.length || 0,
-          defaultScheduleSample: freshData.defaultSchedule?.slice(0, 3),
-          defaultScheduleWithSpecificDate: freshData.defaultSchedule?.filter(s => s.specificDate).slice(0, 3),
-          exceptionsCount: freshData.scheduleExceptions?.length || 0,
-          personalTimesCount: freshData.personalTimes?.length || 0,
-          personalTimesSample: freshData.personalTimes?.slice(0, 2)
-        });
 
         // UI 깜박임 방지: 데이터가 실제로 변경된 경우만 상태 업데이트
         if (JSON.stringify(freshData.defaultSchedule || []) !== JSON.stringify(defaultSchedule)) {
@@ -577,9 +533,6 @@ const ProfileTab = ({ onEditingChange }) => {
           return { title, type, startTime, endTime, days, isRecurring, id, specificDate, color };
         }
       );
-
-      console.log('💾 [자동저장] defaultSchedule:', scheduleToSave.length, '개 | exceptions:', exceptionsToSave.length, '개');
-
       await userService.updateUserSchedule({
         defaultSchedule: scheduleToSave,
         scheduleExceptions: exceptionsToSave,
@@ -587,7 +540,6 @@ const ProfileTab = ({ onEditingChange }) => {
       });
 
     } catch (err) {
-      console.error('🔍 [ProfileTab] autoSave 실패:', err);
     }
   };
 

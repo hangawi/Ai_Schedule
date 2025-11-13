@@ -16,7 +16,6 @@ const MemberStatsModal = ({ isOpen, onClose, member, isOwner, currentRoom, onRef
         }
         onClose(); // Close modal on success
       } catch (error) {
-        console.error('Error clearing carry-over history:', error);
         alert(`오류가 발생했습니다: ${error.message}`);
       }
     }
@@ -24,28 +23,19 @@ const MemberStatsModal = ({ isOpen, onClose, member, isOwner, currentRoom, onRef
 
   // 💡 currentRoom이 있으면 최신 멤버 데이터를 가져옴 (이월시간 업데이트 반영)
   let latestMember = member;
-  console.log('[MemberStatsModal] member prop:', member);
-  console.log('[MemberStatsModal] currentRoom:', currentRoom);
-
   if (currentRoom && currentRoom.members) {
     const memberUserId = (member.user?._id || member.user?.id || member.user);
-    console.log('[MemberStatsModal] 찾는 멤버 ID:', memberUserId);
 
     const foundMember = currentRoom.members.find(m => {
       const mUserId = (m.user?._id || m.user?.id || m.user);
-      console.log('[MemberStatsModal] 비교 중:', mUserId, '===', memberUserId);
       return mUserId?.toString() === memberUserId?.toString();
     });
 
     if (foundMember) {
-      console.log('[MemberStatsModal] 최신 멤버 찾음:', foundMember);
-      console.log('[MemberStatsModal] 이월시간:', foundMember.carryOver);
       latestMember = foundMember;
     } else {
-      console.log('[MemberStatsModal] 최신 멤버 못 찾음, 기존 member 사용');
     }
   } else {
-    console.log('[MemberStatsModal] currentRoom 없음');
   }
 
   const memberData = latestMember.user || latestMember;

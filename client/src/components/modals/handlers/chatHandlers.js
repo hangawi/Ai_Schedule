@@ -46,16 +46,11 @@ export const handleChatSubmit = async (
   // AI에게 자연어 요청 보내기
   try {
     const token = localStorage.getItem('token');
-    console.log('🔑 토큰 확인:', token ? '있음' : '없음');
-    console.log('📋 원본 스케줄:', originalSchedule ? `${originalSchedule.length}개` : '없음');
-    console.log('📋 현재 스케줄:', modifiedCombinations[currentIndex].length, '개');
-
     // 직전 봇 응답 찾기 (대화 컨텍스트 유지)
     const lastBotMessage = chatMessages
       ? [...chatMessages].reverse().find(msg => msg.sender === 'bot' && msg.text !== '💭 답변을 생각하고 있어요...')
       : null;
     const lastAiResponse = lastBotMessage ? lastBotMessage.text : null;
-    console.log('🤖 직전 AI 응답:', lastAiResponse ? '있음' : '없음');
 
     const response = await fetch('http://localhost:5000/api/schedule/chat', {
       method: 'POST',
@@ -74,7 +69,6 @@ export const handleChatSubmit = async (
     });
 
     const data = await response.json();
-    console.log('📥 AI 응답:', data);
 
     // 생각 중 메시지 제거
     setChatMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId));
@@ -87,7 +81,6 @@ export const handleChatSubmit = async (
 
       // 고정 일정 업데이트 (서버에서 fixedSchedules를 반환하면)
       if (data.fixedSchedules && setFixedSchedules) {
-        console.log('📌 고정 일정 업데이트:', data.fixedSchedules.length, '개');
         setFixedSchedules(data.fixedSchedules);
       }
 
@@ -140,7 +133,6 @@ export const handleChatSubmit = async (
       return { handled: true };
     }
   } catch (error) {
-    console.error('AI 채팅 에러:', error);
     // 생각 중 메시지 제거
     setChatMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId));
   }

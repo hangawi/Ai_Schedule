@@ -58,7 +58,6 @@ const MemberItem = ({
         calculateMapDirections(ownerData, memberData2);
       }
     } catch (error) {
-      console.error('주소 가져오기 오류:', error);
       showAlert('주소를 가져오는데 실패했습니다.', 'error');
     }
   };
@@ -97,7 +96,6 @@ const MemberItem = ({
             if (status === window.google.maps.DirectionsStatus.OK) {
               setDirectionsResponse(result);
             } else {
-              console.error(`Google Transit Directions failed: ${status}`);
               setPolylinePath([origin, destination]); // Fallback to straight line
             }
           }
@@ -130,7 +128,6 @@ const MemberItem = ({
         const data = await response.json();
 
         if (!response.ok) {
-          console.error('Kakao API error:', data);
           if (data.code === -404) {
             showAlert(`${mode === 'WALKING' ? '도보' : '자전거'} 경로를 찾을 수 없습니다. 거리가 너무 멀거나, 경로가 존재하지 않을 수 있습니다.`, 'error');
             setPolylinePath(null); // Ensure no line is drawn
@@ -157,16 +154,13 @@ const MemberItem = ({
           if (path.length > 0) {
             setPolylinePath(path);
           } else {
-            console.error('Kakao API returned a route with no path.');
             setPolylinePath([origin, destination]);
           }
         } else {
-          console.error('Kakao API did not return any routes. Result:', data);
           setPolylinePath([origin, destination]); // Fallback to straight line
         }
       }
     } catch (error) {
-      console.error('지도 경로 계산 오류:', error);
       setPolylinePath([origin, destination]); // Fallback to straight line
     }
   };
@@ -194,14 +188,6 @@ const MemberItem = ({
       const directionsService = new window.google.maps.DirectionsService();
       const origin = { lat: parseFloat(owner.addressLat), lng: parseFloat(owner.addressLng) };
       const destination = { lat: parseFloat(member.addressLat), lng: parseFloat(member.addressLng) };
-
-      console.log('경로 계산 좌표:', {
-        origin,
-        destination,
-        ownerAddress: owner.address,
-        memberAddress: member.address
-      });
-
       const results = [];
 
       // 1. 대중교통 - Google Maps로 시도
@@ -232,7 +218,6 @@ const MemberItem = ({
           steps: route.steps
         });
       } catch (err) {
-        console.log('대중교통 경로 없음:', err);
       }
 
       // 2. 자동차, 도보, 자전거 - 카카오맵 API 사용
@@ -273,14 +258,11 @@ const MemberItem = ({
             steps: null
           });
         } catch (err) {
-          console.log(`${mode.label} 경로 계산 오류:`, err);
         }
       }
-
-      console.log('최종 경로 정보:', results);
       setRouteInfo(results);
     } catch (error) {
-      console.error('경로 계산 오류:', error);
+    
     } finally {
       setLoadingRoute(false);
     }

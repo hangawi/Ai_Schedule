@@ -57,7 +57,7 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
         }
       };
     } catch (error) {
-      console.error('Google Maps Autocomplete 초기화 실패:', error);
+      
     }
   }, [isLoaded, onChange]);
 

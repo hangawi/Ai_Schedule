@@ -30,16 +30,12 @@ const ScheduleOptimizationModal = ({
       const isValid = combinations.every(c => Array.isArray(c));
       if (isValid) {
         return combinations;
-      } else {
-        console.warn('⚠️ combinations가 잘못된 형식');
-      }
+      } 
     }
 
     if (initialSchedules && Array.isArray(initialSchedules) && initialSchedules.length > 0) {
       return [initialSchedules]; // 단일 배열을 combinations 형식으로 감싸기
     }
-
-    console.warn('⚠️ 유효한 데이터가 없어 빈 배열 반환');
     return [[]]; // 기본값
   }, [combinations, initialSchedules]);
 
@@ -118,7 +114,6 @@ const ScheduleOptimizationModal = ({
 
   // currentCombination이 undefined이거나 배열이 아닌 경우 체크
   if (!currentCombination || !Array.isArray(currentCombination)) {
-    console.error('❌ currentCombination is invalid:', currentCombination);
     return null;
   }
 
@@ -136,12 +131,10 @@ const ScheduleOptimizationModal = ({
 
     personalTimes = schedulesToShow.map((schedule, index) => {
       if (!schedule) {
-        console.warn(`⚠️ schedule[${index}]가 null/undefined`);
         return null;
       }
 
       if (!schedule.days || schedule.days.length === 0) {
-        console.warn(`⚠️ schedule[${index}] (${schedule.title})에 days가 없음`);
         return null;
       }
 
@@ -180,8 +173,6 @@ const ScheduleOptimizationModal = ({
     }).filter(item => item !== null);
 
   } catch (error) {
-    console.error('❌ personalTimes 생성 중 에러:', error);
-    console.error('currentCombination:', currentCombination);
     return null;
   }
 
@@ -319,8 +310,6 @@ const ScheduleOptimizationModal = ({
         setChatMessages(prev => [...prev, botMessage]);
       }
     } catch (error) {
-      console.error('❌ 충돌 해결 오류:', error);
-
       const errorMessage = {
         id: Date.now(),
         text: '충돌 해결 중 오류가 발생했습니다. 다시 시도해주세요.',
@@ -334,7 +323,6 @@ const ScheduleOptimizationModal = ({
 
   // 옵션 선택 핸들러
   const handleOptionSelection = async (selectedSchedule) => {
-    console.log('✅ 사용자가 선택한 옵션:', selectedSchedule);
 
     try {
       const allSchedules = schedulesByImage?.flatMap(img => img.schedules || []) || modifiedCombinations[currentIndex];
@@ -345,11 +333,6 @@ const ScheduleOptimizationModal = ({
         allSchedules,
         schedulesByImage
       );
-
-      console.log('📦 옵션 선택 API 응답:', result);
-      console.log('  - optimizedSchedule:', result.optimizedSchedule?.length, '개');
-      console.log('  - fixedSchedules:', result.fixedSchedules?.length, '개');
-
       if (result.success) {
         // 시간표 업데이트
         const updatedCombinations = [...modifiedCombinations];
@@ -368,7 +351,6 @@ const ScheduleOptimizationModal = ({
         setChatMessages(prev => [...prev, botMessage]);
       }
     } catch (error) {
-      console.error('옵션 선택 오류:', error);
       const errorMessage = {
         id: Date.now(),
         text: '❌ 옵션 선택 중 오류가 발생했습니다.',
@@ -423,7 +405,6 @@ const ScheduleOptimizationModal = ({
 
     // 고정 일정 처리 우선 시도
     try {
-      console.log('🔍 고정 일정 처리 시도:', input);
 
       const fixedResult = await addFixedSchedule(
         input,
@@ -431,13 +412,6 @@ const ScheduleOptimizationModal = ({
         schedulesByImage,
         currentFixedSchedules
       );
-
-      console.log('📦 고정 일정 API 응답:', fixedResult);
-      console.log('  - intent:', fixedResult.intent);
-      console.log('  - hasConflict:', fixedResult.hasConflict);
-      console.log('  - optimizedSchedule:', fixedResult.optimizedSchedule?.length, '개');
-      console.log('  - fixedSchedules:', fixedResult.fixedSchedules?.length, '개');
-      console.log('  - titlesToRemoveFromLegend:', fixedResult.titlesToRemoveFromLegend);
 
       clearInterval(progressInterval);
       setChatMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId));
@@ -466,7 +440,6 @@ const ScheduleOptimizationModal = ({
 
       // 충돌 발생 시 사용자에게 선택 옵션 제시
       if (fixedResult.hasConflict) {
-        console.warn('⚠️ 충돌 발생:', fixedResult.conflicts);
 
         setConflictState({
           pendingFixed: fixedResult.pendingFixed,
@@ -487,9 +460,7 @@ const ScheduleOptimizationModal = ({
       }
 
       // 충돌 없음 → 시간표 업데이트
-      console.log('✅ optimizedSchedule 있음, 시간표 업데이트 시작');
       if (fixedResult.optimizedSchedule) {
-        console.log('✅ if 블록 진입');
         const updatedCombinations = [...modifiedCombinations];
         updatedCombinations[currentIndex] = fixedResult.optimizedSchedule;
         setModifiedCombinations(updatedCombinations);
@@ -505,7 +476,6 @@ const ScheduleOptimizationModal = ({
 
         // ⭐ 삭제된 일정의 범례 제거 (해당 제목이 더 이상 존재하지 않을 때만)
         if (fixedResult.titlesToRemoveFromLegend && fixedResult.titlesToRemoveFromLegend.length > 0) {
-          console.log('🗑️ 범례에서 제거:', fixedResult.titlesToRemoveFromLegend);
           setCustomSchedulesForLegend(prev =>
             prev.filter(c => !fixedResult.titlesToRemoveFromLegend.includes(c.title))
           );
@@ -536,8 +506,6 @@ const ScheduleOptimizationModal = ({
       // 고정 일정 아닌 경우 기존 채팅 API로 폴백
       if (error.message === 'NOT_FIXED_SCHEDULE') {
       } else {
-        console.error('🚨 고정 일정 API 에러:', error.message);
-        console.error('❌ 고정 일정 처리 오류:', error);
         clearInterval(progressInterval);
         setChatMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId));
 
@@ -611,8 +579,6 @@ const ScheduleOptimizationModal = ({
           updatedCombinations[currentIndex] = data.schedule;
           setModifiedCombinations(updatedCombinations);
 
-          // ⭐ 삭제 후 사용 중인 커스텀 일정만 범례에 유지
-          console.log('🔄 삭제 액션 → 사용 중인 커스텀 범례만 유지');
           const usedCustomTitles = new Set();
           data.schedule.forEach(item => {
             if (item.sourceImageIndex >= (schedulesByImage?.length || 0)) {
@@ -620,10 +586,7 @@ const ScheduleOptimizationModal = ({
             }
           });
           setCustomSchedulesForLegend(prev => prev.filter(c => usedCustomTitles.has(c.title)));
-          console.log('  - 유지된 커스텀 일정:', Array.from(usedCustomTitles));
         } else if (data.action === 'add') {
-          // 일정 추가
-          console.log('✅ ADD 액션: 시간표 업데이트');
           // 현재 상태를 히스토리에 저장 (실행 전)
           setScheduleHistory(prev => [...prev, modifiedCombinations[currentIndex]]);
           // 새 작업 시 redo 스택 클리어
@@ -635,18 +598,14 @@ const ScheduleOptimizationModal = ({
 
           // ⭐ 커스텀 일정 범례 업데이트 (제목 기준으로 중복 제거)
           if (data.customSchedules && data.customSchedules.length > 0) {
-            console.log('🎨 [ADD] 서버에서 받은 customSchedules:', data.customSchedules.length, '개');
-            data.customSchedules.forEach(c => console.log(`  - ${c.title} (인덱스 ${c.sourceImageIndex})`));
 
             const existingTitles = new Set(customSchedulesForLegend.map(c => c.title));
             const newCustoms = data.customSchedules.filter(c => !existingTitles.has(c.title));
 
             if (newCustoms.length > 0) {
               setCustomSchedulesForLegend([...customSchedulesForLegend, ...newCustoms]);
-              console.log('🎨 범례 추가:', newCustoms.length, '개');
-              newCustoms.forEach(c => console.log(`  ✅ 추가: ${c.title} (인덱스 ${c.sourceImageIndex})`));
             } else {
-              console.log('🎨 같은 제목의 범례가 이미 존재 - 추가 안함');
+
             }
           }
         } else if (data.action === 'redo') {
@@ -670,8 +629,6 @@ const ScheduleOptimizationModal = ({
           // 히스토리에서 마지막 항목 제거
           setScheduleHistory(prev => prev.slice(0, -1));
 
-          // ⭐ 되돌린 시간표에서 실제 사용 중인 커스텀 일정만 범례에 유지
-          console.log('🔄 한 단계 되돌리기 → 사용 중인 커스텀 범례만 유지');
           const usedCustomTitles = new Set();
           data.schedule.forEach(item => {
             if (item.sourceImageIndex >= (schedulesByImage?.length || 0)) {
@@ -680,7 +637,6 @@ const ScheduleOptimizationModal = ({
             }
           });
           setCustomSchedulesForLegend(prev => prev.filter(c => usedCustomTitles.has(c.title)));
-          console.log('  - 유지된 커스텀 일정:', Array.from(usedCustomTitles));
         } else if (data.action === 'undo') {
           // 맨 처음 원본으로 되돌리기
           const updatedCombinations = [...modifiedCombinations];
@@ -690,18 +646,10 @@ const ScheduleOptimizationModal = ({
           // 히스토리 초기화
           setScheduleHistory([]);
 
-          // ⭐ 커스텀 일정 범례도 초기화 (원본에는 커스텀 일정 없음)
-          console.log('🔄 [UNDO] 원본 시간표 복원 → 커스텀 범례 초기화');
-          console.log('  - 기존 범례:', customSchedulesForLegend.length, '개');
-          customSchedulesForLegend.forEach(c => console.log(`    * ${c.title} (인덱스 ${c.sourceImageIndex})`));
           setCustomSchedulesForLegend([]);
-          console.log('  - 범례 초기화 완료');
           // 고정 일정 초기화
           setCurrentFixedSchedules([]);
-          console.log('✅ 고정 일정도 함께 초기화');
         } else if (data.action === 'move') {
-          // 일정 이동
-          console.log('🔄 MOVE 액션: 일정 이동');
           // 현재 상태를 히스토리에 저장
           setScheduleHistory(prev => [...prev, modifiedCombinations[currentIndex]]);
           // 새 작업 시 redo 스택 클리어
@@ -713,12 +661,9 @@ const ScheduleOptimizationModal = ({
 
           // 고정 일정 업데이트 (서버에서 fixedSchedules를 반환하면)
           if (data.fixedSchedules) {
-            console.log('📌 고정 일정 업데이트:', data.fixedSchedules.length, '개');
             setCurrentFixedSchedules(data.fixedSchedules);
           }
         } else if (data.action === 'question') {
-          // 추천/질문 응답 - 시간표는 변경하지 않음
-          console.log('💡 추천 응답 - 시간표 변경 없음');
         }
 
         // AI 응답 메시지
@@ -732,7 +677,6 @@ const ScheduleOptimizationModal = ({
         return;
       }
     } catch (error) {
-      console.error('AI 채팅 에러:', error);
       // 진행률 인터벌 정리
       clearInterval(progressInterval);
       // 생각 중 메시지 제거
@@ -1209,14 +1153,11 @@ const ScheduleOptimizationModal = ({
   const handleOpenOptimizer = async () => {
     // 원본 시간표 저장 (AI 최적화 전)
     if (!originalSchedule) {
-      console.log('💾 원본 시간표 저장:', currentCombination.length, '개 항목');
       setOriginalSchedule(JSON.parse(JSON.stringify(currentCombination)));
     }
 
     // 충돌 감지
     const conflicts = detectConflicts(currentCombination);
-
-    console.log('🤖 AI 자동 최적화 시작:', conflicts.length, '건의 충돌');
 
     // 충돌이 없으면
     if (conflicts.length === 0) {
@@ -1311,7 +1252,6 @@ const ScheduleOptimizationModal = ({
       }, 300); // 1000ms → 300ms로 단축
     } catch (error) {
       clearInterval(progressInterval);
-      console.error('AI 자동 최적화 실패:', error);
 
       // 처리 중 메시지 제거
       setChatMessages(prev => prev.filter(msg => msg.id !== processingMessageId));
@@ -1442,7 +1382,6 @@ const ScheduleOptimizationModal = ({
                   );
                 })}
                 {customSchedulesForLegend && customSchedulesForLegend.length > 0 && customSchedulesForLegend.map((customData) => {
-                  console.log('🎨 [범례 렌더링] customData:', customData);
                   const color = getColorForImageIndex(customData.sourceImageIndex);
                   const isHovered = hoveredImageIndex === customData.sourceImageIndex;
                   return (
@@ -1584,14 +1523,11 @@ const ScheduleOptimizationModal = ({
 
             {/* ⭐ 커스텀 일정 범례 */}
             {(() => {
-              console.log('🎨 [렌더링] customSchedulesForLegend:', customSchedulesForLegend);
-              console.log('🎨 [렌더링] customSchedulesForLegend 개수:', customSchedulesForLegend?.length || 0);
               return null;
             })()}
             {customSchedulesForLegend.map((customData) => {
               const color = getColorForImageIndex(customData.sourceImageIndex);
               const isHovered = hoveredImageIndex === customData.sourceImageIndex;
-              console.log(`🎨 [렌더링] ${customData.title} 범례 버튼 생성 중... (색상:`, color, ')');
 
               return (
                 <button

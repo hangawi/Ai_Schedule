@@ -143,7 +143,6 @@ class TravelScheduleCalculator {
             return [...travelSlots10min, ...activitySlots10min];
 
         } catch (error) {
-            console.error(`Failed to calculate travel time for member ${memberLocation.name}:`, error);
             return this.unmergeBlock(mergedSlot);
         }
     };

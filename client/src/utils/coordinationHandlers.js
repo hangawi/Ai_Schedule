@@ -11,8 +11,6 @@ import { days, getDayIndex, calculateEndTime } from './coordinationUtils';
 export const handleAutoResolveNegotiations = async (currentRoom, fetchRoomDetails, showAlert) => {
   if (!currentRoom?._id) return;
 
-  console.log('Auto-resolving negotiations for room:', currentRoom._id);
-
   try {
     const result = await coordinationService.autoResolveTimeoutNegotiations(currentRoom._id, 24);
 
@@ -52,8 +50,6 @@ export const handleForceResolveNegotiation = async (currentRoom, negotiationId, 
 export const handleResetCarryOverTimes = async (currentRoom, fetchRoomDetails, setCurrentRoom, showAlert) => {
   if (!currentRoom?._id) return;
 
-  console.log('Resetting carryover times for room:', currentRoom._id);
-
   try {
     const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
     const token = localStorage.getItem('token');
@@ -80,7 +76,6 @@ export const handleResetCarryOverTimes = async (currentRoom, fetchRoomDetails, s
       await fetchRoomDetails(currentRoom._id);
     }
   } catch (error) {
-    console.error('Carryover reset failed:', error);
     showAlert(`이월시간 초기화 실패: ${error.message}`);
   }
 };
@@ -90,8 +85,6 @@ export const handleResetCarryOverTimes = async (currentRoom, fetchRoomDetails, s
  */
 export const handleResetCompletedTimes = async (currentRoom, fetchRoomDetails, setCurrentRoom, showAlert) => {
   if (!currentRoom?._id) return;
-
-  console.log('Resetting completed times for room:', currentRoom._id);
 
   try {
     const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
@@ -129,8 +122,6 @@ export const handleResetCompletedTimes = async (currentRoom, fetchRoomDetails, s
 export const handleClearAllNegotiations = async (currentRoom, fetchRoomDetails, setCurrentRoom, showAlert) => {
   if (!currentRoom?._id) return;
 
-  console.log('Clearing all negotiations for room:', currentRoom._id);
-
   try {
     const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
     const token = localStorage.getItem('token');
@@ -157,7 +148,6 @@ export const handleClearAllNegotiations = async (currentRoom, fetchRoomDetails, 
       await fetchRoomDetails(currentRoom._id);
     }
   } catch (error) {
-    console.error('Clear negotiations failed:', error);
     showAlert(`협의 삭제 실패: ${error.message}`);
   }
 };
@@ -238,55 +228,24 @@ export const handleRunAutoSchedule = async (
 
     // 시작일은 첫째 주 월요일
     uiCurrentWeek = firstMonday;
-
-    console.log(`${year}년 ${month + 1}월 전체 (${numWeeks}주) 배정`);
-    console.log(`  시작일: ${firstMonday.toISOString().split('T')[0]} (첫째주 월요일), 종료일: ${lastSunday.toISOString().split('T')[0]} (마지막주 일요일) (총 ${totalDays}일)`);
-
     const finalOptions = {
       ...scheduleOptions,
       currentWeek: uiCurrentWeek,
       numWeeks,
       travelMode // Add travelMode to options
     };
-
-    console.log('\n====================================');
-    console.log(`🎯 [${viewMode.toUpperCase()} 모드] 자동배정 시작`);
-    console.log('====================================');
-    console.log('📊 배정 설정:', {
-      viewMode: viewMode,
-      minHoursPerWeek: scheduleOptions.minHoursPerWeek,
-      numWeeks: numWeeks,
-      currentWeekStartDate: currentDateObj.toISOString(),
-      calculatedCurrentWeek: uiCurrentWeek.toISOString(),
-      ownerFocusTime: scheduleOptions.ownerFocusTime
-    });
-
     const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = await coordinationService.runAutoSchedule(currentRoom._id, finalOptions);
-
-    console.log('✅ 자동배정 완료');
-    console.log('📋 반환된 방 정보:', {
-      timeSlots개수: updatedRoom.timeSlots?.length || 0,
-      members개수: updatedRoom.members?.length || 0,
-      negotiations개수: updatedRoom.negotiations?.length || 0
-    });
 
     // 배정된 슬롯들의 상세 정보 출력
     if (updatedRoom.timeSlots && updatedRoom.timeSlots.length > 0) {
-      console.log('\n🔍 배정된 슬롯 상세 정보:');
       updatedRoom.timeSlots.forEach((slot, index) => {
         const user = slot.user;
         const userName = user && typeof user === 'object'
           ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.firstName || '이름없음'
           : '미populate';
         const userId = user?._id || user;
-        console.log(`  [${index + 1}] ${slot.day} ${new Date(slot.date).toLocaleDateString()} ${slot.startTime}-${slot.endTime}`);
-        console.log(`      사용자: ${userName} (ID: ${userId})`);
-        console.log(`      user 타입: ${typeof user}, user._id: ${user?._id}, firstName: ${user?.firstName}, lastName: ${user?.lastName}`);
-        console.log(`      subject: ${slot.subject}`);
       });
     }
-
-    console.log('====================================\n');
 
     if (newUnassignedMembersInfo) {
       setUnassignedMembersInfo(newUnassignedMembersInfo);
@@ -326,7 +285,6 @@ export const handleRunAutoSchedule = async (
       showAlert('자동 시간 배정이 완료되었습니다. 모든 시간이 성공적으로 할당되었습니다.');
     }
   } catch (error) {
-    console.error('Auto-schedule failed:', error);
     setScheduleError(error.message);
     showAlert(`자동 배정 실패: ${error.message}`);
   } finally {
@@ -386,39 +344,26 @@ export const handleRequestWithUpdate = async (
   showAlert
 ) => {
   try {
-    console.log('🔄 Calling handleRequest...');
     await handleRequest(requestId, action);
-    console.log('✅ handleRequest completed');
 
     showAlert(`요청을 ${action === 'approved' ? '승인' : '거절'}했습니다.`);
 
     // To ensure the UI is fully updated, we'll refresh all relevant data sources.
     if (currentRoom?._id) {
-      console.log('🔄 Fetching room details for:', currentRoom._id);
       await fetchRoomDetails(currentRoom._id);
-      console.log('✅ fetchRoomDetails completed');
 
       // 상태 업데이트가 완전히 반영되도록 작은 딜레이 추가
       await new Promise(resolve => setTimeout(resolve, 100));
     }
-
-    console.log('🔄 Loading received requests...');
     await loadReceivedRequests();
-    console.log('✅ loadReceivedRequests completed');
 
-    console.log('🔄 Loading sent requests...');
     await loadSentRequests();
-    console.log('✅ loadSentRequests completed');
 
-    console.log('🔄 Loading room exchange counts...');
     await loadRoomExchangeCounts();
-    console.log('✅ loadRoomExchangeCounts completed');
 
-    console.log('🔄 Calling onRefreshExchangeCount...');
     onRefreshExchangeCount();
-    console.log('✅ onRefreshExchangeCount completed');
+
   } catch (error) {
-    console.error('Failed to handle request:', error);
     showAlert(`요청 처리에 실패했습니다: ${error.message || '알 수 없는 오류'}`);
   }
 };

@@ -48,11 +48,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                 const eventIdToDelete = message.eventId;
                 let eventTitle = '일정';
                 let foundAndSpliced = false;
-
-                console.log('[DELETE] Looking for event ID:', eventIdToDelete);
-                console.log('[DELETE] personalTimes:', scheduleData.personalTimes?.map(p => ({id: p.id, _id: p._id, title: p.title})));
-                console.log('[DELETE] scheduleExceptions:', scheduleData.scheduleExceptions?.map(s => ({id: s.id, _id: s._id, title: s.title})));
-
                 // personalTimes에서 찾기
                 if (scheduleData.personalTimes && scheduleData.personalTimes.length > 0) {
                    const findIndex = scheduleData.personalTimes.findIndex(pt =>
@@ -61,7 +56,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
 
                    if (findIndex !== -1) {
                        eventTitle = scheduleData.personalTimes[findIndex].title;
-                       console.log('[DELETE] Found in personalTimes at index', findIndex);
                        scheduleData.personalTimes.splice(findIndex, 1);
                        foundAndSpliced = true;
                    }
@@ -75,14 +69,12 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
 
                    if (findIndex !== -1) {
                        eventTitle = scheduleData.scheduleExceptions[findIndex].title;
-                       console.log('[DELETE] Found in scheduleExceptions at index', findIndex);
                        scheduleData.scheduleExceptions.splice(findIndex, 1);
                        foundAndSpliced = true;
                    }
                 }
 
                 if (!foundAndSpliced) {
-                   console.error('[DELETE] Event not found!');
                    return { success: false, message: '삭제할 일정을 찾지 못했습니다.' };
                 }
 
@@ -125,7 +117,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                 };
             }
          } catch (error) {
-            console.error('[Direct Delete] Error:', error);
             return { success: false, message: `삭제 중 오류 발생: ${error.message}` };
          }
       }
@@ -165,9 +156,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
          const text = response.text();
          const chatResponse = parseAIResponse(text);
 
-         console.log('🔍 [useChat] AI 원본 응답:', text);
-         console.log('🔍 [useChat] 파싱된 chatResponse:', chatResponse);
-
          // 잘못된 JSON 형식 감지 및 수정
          if (!chatResponse.intent && (chatResponse.date || chatResponse.deleted)) {
             return { success: false, message: 'AI 응답 형식이 올바르지 않습니다. 다시 시도해주세요.' };
@@ -185,7 +173,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             }
 
             try {
-               console.log('🔁 [반복일정] 처리 시작:', chatResponse);
 
                let successCount = 0;
                let failCount = 0;
@@ -232,11 +219,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                            })
                      ];
 
-                     console.log(`🔍 [충돌체크] ${date} 날짜의 기존 일정:`, existingEvents.length, '개');
-                     if (existingEvents.length > 0) {
-                        console.log('   상세:', existingEvents.map(e => `${e.title} ${new Date(e.startTime).toLocaleString('ko-KR')}`));
-                     }
-
                      // 1단계: 정확히 동일한 일정이 이미 있는지 체크 (중복 방지)
                      const exactDuplicate = existingEvents.find(evt => {
                         const evtStart = new Date(evt.startTime);
@@ -247,7 +229,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                      });
 
                      if (exactDuplicate) {
-                        console.log(`⚠️ [중복 방지] ${date}에 동일한 일정이 이미 존재함:`, exactDuplicate.title);
                         conflictDates.push({
                            date,
                            conflictWith: '동일한 일정이 이미 존재합니다',
@@ -340,7 +321,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   } else if (!response.ok) {
                      const errorData = await response.json().catch(() => ({}));
                      errors.push(`프로필 스케줄 업데이트 실패: ${errorData.msg || response.statusText}`);
-                     console.error('❌ 반복일정 추가 실패:', errorData);
                   }
 
                   if (conflictDates.length > 0) {
@@ -520,7 +500,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   };
                }
             } catch (error) {
-               console.error('🔁 [반복일정] 오류:', error);
                return {
                   success: false,
                   message: `반복 일정 추가 중 오류가 발생했습니다: ${error.message}`, 
@@ -534,8 +513,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                const token = localStorage.getItem('token');
                const startDate = new Date(chatResponse.startDate + 'T00:00:00+09:00');
                const endDate = new Date(chatResponse.endDate + 'T23:59:59+09:00');
-
-               console.log('🗑️ [범위삭제] 시작:', { startDate, endDate, context });
 
                let deleteCount = 0;
 
@@ -601,7 +578,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                               deleteCount++;
                            } 
                         } catch (err) {
-                           console.error('삭제 실패:', err);
                         }
                      }
 
@@ -620,7 +596,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   data: chatResponse
                };
             } catch (error) {
-               console.error('🗑️ [범위삭제] 오류:', error);
                return {
                   success: false,
                   message: `일정 삭제 중 오류가 발생했습니다: ${error.message}`, 
@@ -696,43 +671,15 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                         }));
 
                      events = [...exceptions, ...personalTimes];
-
-                     console.log('🔍 [충돌체크] 프로필 탭 - 해당 날짜 일정:', {
-                        targetDate,
-                        eventsCount: events.length,
-                        events: events.map(e => ({ title: e.title, startTime: e.startTime, endTime: e.endTime }))
-                     });
+                     
                   } else if (context.tabType === 'local') {
                      events = eventsData.events || eventsData;
                   } else {
                      events = eventsData;
                   }
 
-                  // 충돌 체크 전 상세 로깅
-                  console.log('🔍 [충돌체크] 입력값:', {
-                     newStart: chatResponse.startDateTime,
-                     newEnd: chatResponse.endDateTime,
-                     newStartParsed: new Date(chatResponse.startDateTime).toString(),
-                     newEndParsed: new Date(chatResponse.endDateTime).toString()
-                  });
-
-                  console.log('🔍 [충돌체크] 비교할 이벤트들:', events.map((e, idx) => ({
-                     index: idx,
-                     title: e.title,
-                     startTime: e.startTime,
-                     endTime: e.endTime,
-                     startTimeParsed: e.startTime ? new Date(e.startTime).toString() : 'N/A',
-                     endTimeParsed: e.endTime ? new Date(e.endTime).toString() : 'N/A'
-                  })));
-
                   const conflictCheck = checkScheduleConflict(chatResponse.startDateTime, chatResponse.endDateTime, events);
 
-                  console.log('🔍 [충돌체크] 결과:', {
-                     pendingEvent: chatResponse.title,
-                     pendingTime: `${chatResponse.startDateTime} ~ ${chatResponse.endDateTime}`,
-                     hasConflict: conflictCheck.hasConflict,
-                     conflictsWith: conflictCheck.conflicts?.map(c => ({ title: c.title || c.summary, start: c.startTime || c.start?.dateTime }))
-                  });
 
                   if (conflictCheck.hasConflict) {
                      const conflictTitle = conflictCheck.conflicts[0]?.summary || conflictCheck.conflicts[0]?.title || '일정';
@@ -773,7 +720,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   }
                }
             } catch (conflictError) {
-               console.error('충돌 확인 중 오류:', conflictError);
             }
 
             const eventData = {
@@ -983,7 +929,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             } else {
                const targetDate = new Date(chatResponse.startDateTime);
                matchingEvents = events.filter(event => {
-                  console.log("--- [DELETE] Checking Event ---", event ? {title: event.title, id: event.id, specificDate: event.specificDate} : "NULL EVENT");
                   if (!event) return false;
 
                   let eventDate;
@@ -994,40 +939,34 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                         eventTitle = event.title;
                         if (event.specificDate) {
                            const eventSpecificDate = new Date(event.specificDate + 'T00:00:00+09:00');
-                           console.log(`[DELETE] PersonalTime with specificDate: ${event.specificDate}`);
                            if (eventSpecificDate.toDateString() === targetDate.toDateString()) {
                               eventDate = targetDate;
                            } else {
-                              console.log(`[DELETE] Date mismatch: EventDate=${eventSpecificDate.toDateString()}, TargetDate=${targetDate.toDateString()}`);
                               return false;
                            }
                         } else {
                            const dayOfWeek = targetDate.getDay() === 0 ? 7 : targetDate.getDay();
-                           console.log(`[DELETE] Recurring PersonalTime: EventDays=${event.days}, TargetDay=${dayOfWeek}`);
                            if (!event.days || !event.days.includes(dayOfWeek)) {
-                               console.log(`[DELETE] Filtered out: Recurring day mismatch. EventDays=${event.days}, TargetDay=${dayOfWeek}`);
                                return false;
                            }
                            eventDate = targetDate;
                         }
                      } else {
-                        if (!event.startTime) { console.log('[DELETE] Filtered out: ScheduleException without startTime.'); return false; }
+                        if (!event.startTime) { return false; }
                         eventDate = new Date(event.startTime);
                         eventTitle = event.title;
-                        console.log(`[DELETE] ScheduleException: ${eventTitle} at ${eventDate}`);
                      }
                   } else if (context.tabType === 'local') {
-                     if (!event.startTime) { console.log('[DELETE] Filtered out: Local event without startTime.'); return false; }
+                     if (!event.startTime) { return false; }
                      eventDate = new Date(event.startTime);
                      eventTitle = event.title;
                   } else {
-                     if (!event.start) { console.log('[DELETE] Filtered out: Google event without start.'); return false; }
+                     if (!event.start) {  return false; }
                      eventDate = new Date(event.start.dateTime || event.start.date);
                      eventTitle = event.summary;
                   }
 
                   if (!eventDate) {
-                     console.log("[DELETE] Filtered out: eventDate could not be determined.");
                      return false;
                   }
 
@@ -1042,13 +981,10 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   }
 
                   const isMatch = isSameDay && titleMatch;
-                  console.log(`[DELETE] Final Check for event '${eventTitle}': isSameDay=${isSameDay}, titleMatch=${titleMatch} (AITitle='${chatResponse.title}') -> isMatch=${isMatch}`);
                   return isMatch;
                });
             }
 
-
-            console.log(`[DELETE] Found ${matchingEvents.length} matching events.`);
             if (matchingEvents.length === 0) {
                return { success: false, message: '해당 일정을 찾을 수 없어요.' };
             }
@@ -1183,8 +1119,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             // 일정 수정 처리
             const token = localStorage.getItem('token');
 
-            console.log('🔍 [EDIT] 수정 요청:', chatResponse);
-
             if (!chatResponse.originalTitle || !chatResponse.originalDate) {
                return { success: false, message: '수정할 일정의 제목과 날짜가 필요합니다.' };
             }
@@ -1222,12 +1156,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   const personalTimes = (eventsData.personalTimes || []).filter(pt => pt.specificDate === chatResponse.originalDate);
                   events = [...exceptions, ...personalTimes.map(pt => ({ ...pt, isPersonalTime: true }))];
 
-                  console.log('🔍 [EDIT] 프로필 탭 일정 조회:', {
-                     originalDate: chatResponse.originalDate,
-                     exceptionsCount: exceptions.length,
-                     personalTimesCount: personalTimes.length,
-                     personalTimes: personalTimes.map(pt => ({ id: pt.id, title: pt.title, specificDate: pt.specificDate }))
-                  });
                } else if (context.tabType === 'local') {
                   events = eventsData.events || eventsData;
                } else {
@@ -1264,16 +1192,9 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                });
 
                if (!eventToEdit) {
-                  console.log('❌ [EDIT] 일정을 찾을 수 없음:', {
-                     originalTitle: chatResponse.originalTitle,
-                     originalDate: chatResponse.originalDate,
-                     eventsChecked: events.map(e => ({ title: e.title, specificDate: e.specificDate, isPersonalTime: e.isPersonalTime }))
-                  });
+
                   return { success: false, message: `"${chatResponse.originalTitle}" 일정을 찾을 수 없어요.` };
                }
-
-               console.log('✅ [EDIT] 수정할 일정 찾음:', eventToEdit);
-
                // 2. 일정 수정 수행 (각 탭별로 다르게)
                if (context.context === 'profile' && context.tabType === 'local') {
                   // 프로필 탭 - 로컬 일정 수정
@@ -1351,8 +1272,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   }
 
                   const responseData = await updateResponse.json();
-                  console.log('✅ [EDIT] 서버 응답:', responseData);
-                  console.log('✅ [EDIT] 서버 응답 personalTimes:', responseData.personalTimes);
 
                   window.dispatchEvent(new CustomEvent('calendarUpdate', {
                      detail: {
@@ -1474,7 +1393,6 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                }
 
             } catch (error) {
-               console.error('일정 수정 오류:', error);
                return { success: false, message: `일정 수정 중 오류가 발생했습니다: ${error.message}` };
             }
          }

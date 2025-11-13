@@ -10,9 +10,6 @@ import { getColorForImageIndex } from '../../utils/scheduleAnalysis/assignSchedu
  */
 const OriginalScheduleModal = ({ imageData, imageIndex, onClose }) => {
   if (!imageData) return null;
-
-  console.log('📋 원본 시간표 모달:', imageData);
-
   // 원본 스케줄을 personalTimes 형식으로 변환
   const personalTimes = imageData.schedules.map((schedule, index) => {
     const dayMap = {
@@ -43,9 +40,6 @@ const OriginalScheduleModal = ({ imageData, imageIndex, onClose }) => {
       isRecurring: true
     };
   }).filter(item => item.days && item.days.length > 0);
-
-  console.log('✅ personalTimes 생성 완료:', personalTimes.length, '개');
-
   // 시간 범위 계산 - 전체 시간 포함하도록 수정
   const timeToMinutes = (time) => {
     const [h, m] = time.split(':').map(Number);
@@ -74,9 +68,6 @@ const OriginalScheduleModal = ({ imageData, imageIndex, onClose }) => {
   }
 
   const timeRange = { start: startHour, end: endHour };
-
-  console.log('⏰ 시간 범위 (숫자):', timeRange, '/ 수업 수:', personalTimes.length);
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-8" onClick={onClose}>
       <div
