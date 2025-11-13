@@ -52,7 +52,6 @@ function extractAcademyType(schedules) {
 function generateImageTitle(schedules, extractedTitle = null) {
   // AI가 추출한 제목이 있으면 우선 사용
   if (extractedTitle && extractedTitle.trim()) {
-    console.log(`✅ AI 추출 제목 사용: "${extractedTitle}"`);
     return extractedTitle.trim();
   }
 
@@ -131,9 +130,6 @@ function generateTitlesForImages(schedulesByImage) {
     .map((imageData, index) => {
       // AI 추출 제목을 우선 사용, 없으면 키워드 기반 추론
       const title = generateImageTitle(imageData.schedules, imageData.imageTitle);
-
-      console.log(`📝 이미지 ${index + 1} (${imageData.fileName}): "${title}"`);
-
       return {
         ...imageData,
         title: title // 이미지별 제목
@@ -142,14 +138,12 @@ function generateTitlesForImages(schedulesByImage) {
     // ⭐ 빈 스케줄 이미지 필터링 (인덱스 오류 방지)
     .filter(imageData => {
       if (!imageData.schedules || imageData.schedules.length === 0) {
-        console.warn(`⚠️ 빈 시간표 제외: ${imageData.fileName}`);
         return false;
       }
       return true;
     });
 
   const overallTitle = generateOverallTitle(results);
-  console.log(`📋 전체 제목: "${overallTitle}"`);
 
   return {
     schedulesByImage: results,

@@ -17,11 +17,6 @@ router.post('/optimize', auth, async (req, res) => {
   try {
     const { schedules, schedulesByImage, fixedSchedules } = req.body;
 
-    console.log('📊 스케줄 재최적화 요청 받음');
-    console.log('- 전체 스케줄:', schedules?.length, '개');
-    console.log('- 이미지별 스케줄:', schedulesByImage?.length, '개');
-    console.log('- 고정 일정:', fixedSchedules?.length || 0, '개');
-
     // ⭐ 고정 일정이 있으면, schedules에 없어도 원본에서 찾아서 추가
     let allSchedulesForOptimization = schedules || [];
 
@@ -45,12 +40,9 @@ router.post('/optimize', auth, async (req, res) => {
           s.endTime === fixedOrig.endTime
         );
         if (!exists) {
-          console.log(`  ➕ 고정 일정 원본 추가: ${fixedOrig.title} (${fixedOrig.days} ${fixedOrig.startTime}-${fixedOrig.endTime})`);
           allSchedulesForOptimization.push(fixedOrig);
         }
       });
-
-      console.log('  - 최종 입력:', allSchedulesForOptimization.length, '개 (고정 원본 포함)');
     }
 
     // 새로운 최적화 로직 사용
@@ -65,7 +57,6 @@ router.post('/optimize', auth, async (req, res) => {
     if (fixedSchedules && fixedSchedules.length > 0) {
       const customFixed = fixedSchedules.filter(f => f.type === 'custom');
       if (customFixed.length > 0) {
-        console.log('🎨 커스텀 고정 일정 범례 생성:', customFixed.length, '개');
         customFixed.forEach(custom => {
           customSchedules.push({
             fileName: `커스텀 일정`,
@@ -73,7 +64,6 @@ router.post('/optimize', auth, async (req, res) => {
             title: custom.title,
             isCustom: true
           });
-          console.log(`  - ${custom.title} (sourceImageIndex: ${custom.sourceImageIndex})`);
         });
       }
     }
@@ -85,7 +75,6 @@ router.post('/optimize', auth, async (req, res) => {
       customSchedules: customSchedules.length > 0 ? customSchedules : undefined
     });
   } catch (error) {
-    console.error('❌ 재최적화 오류:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -100,11 +89,6 @@ router.post('/optimize', auth, async (req, res) => {
 router.post('/optimize-legacy', auth, async (req, res) => {
   try {
     const { schedules, conflicts, userPreferences } = req.body;
-
-    console.log('📊 스케줄 최적화 요청 받음');
-    console.log('- 전체 스케줄:', schedules.length, '개');
-    console.log('- 충돌:', conflicts.length, '건');
-    console.log('- 사용자 선호도:', userPreferences);
 
     // 프롬프트 생성
     const prompt = generateOptimizationPrompt(schedules, conflicts, userPreferences);
@@ -126,15 +110,12 @@ router.post('/optimize-legacy', auth, async (req, res) => {
 
     for (const modelName of modelNames) {
       try {
-        console.log(`🤖 ${modelName} 모델로 시도 중...`);
         const model = genAI.getGenerativeModel({ model: modelName });
         const result = await model.generateContent(prompt);
         const response = await result.response;
         aiResponse = response.text();
-        console.log(`✅ ${modelName} 모델 성공!`);
         break;
       } catch (error) {
-        console.log(`❌ ${modelName} 실패: ${error.message}`);
         lastError = error;
         continue;
       }
@@ -144,17 +125,12 @@ router.post('/optimize-legacy', auth, async (req, res) => {
       throw lastError || new Error('모든 모델 시도 실패');
     }
 
-    console.log('✅ AI 응답 받음');
-
     // AI 응답 파싱
     const parsedResult = parseAIResponse(aiResponse, schedules);
 
     // 검증: 너무 많이 삭제된 경우 경고
     const deletionRate = (schedules.length - parsedResult.schedule.length) / schedules.length;
     if (deletionRate > 0.5) {
-      console.warn(`⚠️ 경고: ${Math.round(deletionRate * 100)}% 삭제됨 (${schedules.length} → ${parsedResult.schedule.length})`);
-      console.warn('원본 스케줄 반환');
-
       return res.json({
         success: true,
         optimizedSchedule: schedules,
@@ -173,7 +149,6 @@ router.post('/optimize-legacy', auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ 스케줄 최적화 에러:', error);
     res.status(500).json({
       success: false,
       error: '스케줄 최적화에 실패했습니다',
@@ -258,8 +233,6 @@ function parseAIResponse(aiResponse, originalSchedules) {
       statistics: calculateStatistics(parsed.schedule || [])
     };
   } catch (error) {
-    console.error('AI 응답 파싱 실패:', error);
-    console.log('원본 응답:', aiResponse);
 
     // 파싱 실패 시 기본 응답
     return {
@@ -425,11 +398,8 @@ function parseTimeText(text) {
  * 코드 기반 스케줄 필터링 (AI 의존하지 않음)
  */
 function filterScheduleByCode(message, currentSchedule) {
-  console.log('\n🔍 [필터 시작] 메시지:', message);
-  console.log('📋 현재 스케줄:', currentSchedule.length, '개');
   currentSchedule.forEach((item, idx) => {
     const daysStr = Array.isArray(item.days) ? item.days.join(',') : item.days;
-    console.log(`  ${idx + 1}. ${item.title} (${daysStr}) ${item.startTime}-${item.endTime}`);
   });
 
   // 1. "수요일 공연반까지만" 패턴 (까지만 = 그 이후 삭제)
@@ -439,18 +409,11 @@ function filterScheduleByCode(message, currentSchedule) {
     const dayCode = parseDayName(untilMatch[1]);
     const untilTitle = untilMatch[2].trim();
 
-    console.log(`\n🎯 [코드 필터] "${untilMatch[1]} ${untilTitle}까지만" 패턴 감지`);
-    console.log(`   → ${dayCode}의 "${untilTitle}" 이후 수업들만 삭제`);
-
     // 해당 요일의 시간표를 시간순으로 정렬
     const daySchedules = currentSchedule
       .filter(item => item.days?.includes(dayCode))
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-    console.log(`\n  ${dayCode} 시간표 (${daySchedules.length}개):`);
-    daySchedules.forEach((s, i) => {
-      console.log(`    ${i + 1}. ${s.title} ${s.startTime}-${s.endTime}`);
-    });
 
     // "까지만" 기준 찾기
     const untilIndex = daySchedules.findIndex(item =>
@@ -458,34 +421,26 @@ function filterScheduleByCode(message, currentSchedule) {
     );
 
     if (untilIndex === -1) {
-      console.log(`\n  ❌ "${untilTitle}" 수업을 찾을 수 없음`);
       return { filtered: false };
     }
 
     const untilTime = daySchedules[untilIndex].endTime;
-    console.log(`\n  ✂️ ${untilTitle} 종료 시간: ${untilTime}`);
-    console.log(`  → 이 시간 이후 ${dayCode} 수업들 삭제`);
 
     const filtered = currentSchedule.filter(item => {
       const isTargetDay = item.days?.includes(dayCode);
 
       if (!isTargetDay) {
-        console.log(`  ✅ 유지: ${item.title} (다른 요일)`);
         return true; // 다른 요일은 유지
       }
 
       const isAfter = item.startTime > untilTime;
 
       if (isAfter) {
-        console.log(`  ✂️ 삭제: ${item.title} (${item.startTime} > ${untilTime})`);
         return false;
       } else {
-        console.log(`  ✅ 유지: ${item.title} (${item.startTime} <= ${untilTime})`);
         return true;
       }
     });
-
-    console.log(`\n✅ 필터링 완료: ${currentSchedule.length - filtered.length}개 삭제`);
 
     return {
       filtered: true,
@@ -502,14 +457,10 @@ function filterScheduleByCode(message, currentSchedule) {
     const untilHour = parseInt(timeUntilMatch[2]);
     const untilTime = `${untilHour.toString().padStart(2, '0')}:00`;
 
-    console.log(`\n🎯 [코드 필터] "${timeUntilMatch[1]} ${untilHour}시까지만" 패턴 감지`);
-    console.log(`   → ${dayCode}의 ${untilTime} 이후 수업들만 삭제`);
-
     const filtered = currentSchedule.filter(item => {
       const isTargetDay = item.days?.includes(dayCode);
 
       if (!isTargetDay) {
-        console.log(`  ✅ 유지: ${item.title} (다른 요일)`);
         return true; // 다른 요일은 유지
       }
 
@@ -518,15 +469,11 @@ function filterScheduleByCode(message, currentSchedule) {
       const isAfter = startHour >= untilHour;
 
       if (isAfter) {
-        console.log(`  ✂️ 삭제: ${item.title} (${item.startTime} >= ${untilTime})`);
         return false;
       } else {
-        console.log(`  ✅ 유지: ${item.title} (${item.startTime} < ${untilTime})`);
         return true;
       }
     });
-
-    console.log(`\n✅ 필터링 완료: ${currentSchedule.length - filtered.length}개 삭제`);
 
     return {
       filtered: true,
@@ -542,23 +489,13 @@ function filterScheduleByCode(message, currentSchedule) {
     const dayCode = parseDayName(keepOnlyMatch[1]);
     const keepTitle = keepOnlyMatch[2].trim();
 
-    console.log(`\n🎯 [코드 필터] "${keepOnlyMatch[1]} ${keepTitle}만" 패턴 감지`);
-    console.log(`   → ${dayCode}의 "${keepTitle}"만 남기고 나머지 삭제`);
-
     const filtered = currentSchedule.filter(item => {
       const matchesDay = item.days?.includes(dayCode);
       const matchesTitle = item.title?.toLowerCase().includes(keepTitle.toLowerCase());
       const keep = matchesDay && matchesTitle;
 
-      console.log(`\n  검사: ${item.title} (${item.days?.join(',')})`);
-      console.log(`    - days 포함 ${dayCode}? ${matchesDay}`);
-      console.log(`    - title 포함 "${keepTitle}"? ${matchesTitle}`);
-      console.log(`    - 결과: ${keep ? '✅ 유지' : '✂️ 삭제'}`);
-
       return keep;
     });
-
-    console.log(`\n✅ 필터링 완료: ${filtered.length}개 남음 (${currentSchedule.length - filtered.length}개 삭제)`);
 
     return {
       filtered: true,
@@ -574,26 +511,15 @@ function filterScheduleByCode(message, currentSchedule) {
     const dayCode = parseDayName(dayDeleteMatch[1]);
     const keyword = dayDeleteMatch[2].trim();
 
-    console.log(`\n🎯 [코드 필터] "${dayDeleteMatch[1]} ${keyword} 삭제" 패턴 감지`);
-    console.log(`   → ${dayCode}에서 "${keyword}" 포함된 수업만 삭제`);
-
     const filtered = currentSchedule.filter(item => {
       const matchesDay = item.days?.includes(dayCode);
       const matchesTitle = item.title?.toLowerCase().includes(keyword.toLowerCase());
       const shouldDelete = matchesDay && matchesTitle;
 
-      console.log(`\n  검사: ${item.title} (${item.days?.join(',')})`);
-      console.log(`    - days 포함 ${dayCode}? ${matchesDay}`);
-      console.log(`    - title 포함 "${keyword}"? ${matchesTitle}`);
-      console.log(`    - 결과: ${shouldDelete ? '✂️ 삭제' : '✅ 유지'}`);
-
       return !shouldDelete;
     });
 
-    console.log(`\n✅ 필터링 완료: ${currentSchedule.length - filtered.length}개 삭제`);
-
     if (filtered.length === currentSchedule.length) {
-      console.warn(`\n⚠️ 아무것도 삭제 안됨 - "${keyword}" 수업을 못 찾음`);
       return {
         filtered: true,
         schedule: currentSchedule,
@@ -617,9 +543,6 @@ function filterScheduleByCode(message, currentSchedule) {
     const targetHour = parseInt(dayTimeDeleteMatch[2]);
     const keyword = dayTimeDeleteMatch[3].trim();
 
-    console.log(`\n🎯 [코드 필터] "${dayTimeDeleteMatch[1]} ${targetHour}시 ${keyword} 삭제" 패턴 감지`);
-    console.log(`   → ${dayCode} + ${targetHour}시 + "${keyword}" 조건 모두 만족하는 것만 삭제`);
-
     const filtered = currentSchedule.filter(item => {
       const matchesDay = item.days?.includes(dayCode);
       const startHour = parseInt(item.startTime?.split(':')[0] || '0');
@@ -627,19 +550,10 @@ function filterScheduleByCode(message, currentSchedule) {
       const matchesTitle = item.title?.toLowerCase().includes(keyword.toLowerCase());
       const shouldDelete = matchesDay && matchesTime && matchesTitle;
 
-      console.log(`\n  검사: ${item.title} (${item.days?.join(',')}) ${item.startTime}`);
-      console.log(`    - days 포함 ${dayCode}? ${matchesDay}`);
-      console.log(`    - startTime ${targetHour}시? ${matchesTime}`);
-      console.log(`    - title 포함 "${keyword}"? ${matchesTitle}`);
-      console.log(`    - 결과: ${shouldDelete ? '✂️ 삭제' : '✅ 유지'}`);
-
       return !shouldDelete;
     });
 
-    console.log(`\n✅ 필터링 완료: ${currentSchedule.length - filtered.length}개 삭제`);
-
     if (filtered.length === currentSchedule.length) {
-      console.warn(`\n⚠️ 아무것도 삭제 안됨 - 조건에 맞는 수업 없음`);
       return {
         filtered: true,
         schedule: currentSchedule,
@@ -661,19 +575,11 @@ function filterScheduleByCode(message, currentSchedule) {
   if (keywordDeleteMatch && !message.includes('만')) {
     const keyword = keywordDeleteMatch[1];
 
-    console.log(`\n🎯 [코드 필터] "${keyword} 삭제" 패턴 감지`);
-
     const filtered = currentSchedule.filter(item => {
       const matchesTitle = item.title?.toLowerCase().includes(keyword.toLowerCase());
 
-      console.log(`\n  검사: ${item.title}`);
-      console.log(`    - title 포함 "${keyword}"? ${matchesTitle}`);
-      console.log(`    - 결과: ${matchesTitle ? '✂️ 삭제' : '✅ 유지'}`);
-
       return !matchesTitle;
     });
-
-    console.log(`\n✅ 필터링 완료: ${currentSchedule.length - filtered.length}개 삭제`);
 
     return {
       filtered: true,
@@ -689,21 +595,13 @@ function filterScheduleByCode(message, currentSchedule) {
     const targetHour = parseInt(timeDeleteMatch[1]);
     const targetTime = `${targetHour.toString().padStart(2, '0')}:00`;
 
-    console.log(`\n🎯 [코드 필터] "${targetHour}시 겹치는 삭제" 패턴 감지`);
-
     const filtered = currentSchedule.filter(item => {
       const startHour = parseInt(item.startTime?.split(':')[0] || '0');
       const endHour = parseInt(item.endTime?.split(':')[0] || '0');
       const overlaps = startHour <= targetHour && targetHour < endHour;
 
-      console.log(`\n  검사: ${item.title} (${item.startTime}-${item.endTime})`);
-      console.log(`    - ${targetHour}시와 겹침? ${overlaps}`);
-      console.log(`    - 결과: ${overlaps ? '✂️ 삭제' : '✅ 유지'}`);
-
       return !overlaps;
     });
-
-    console.log(`\n✅ 필터링 완료: ${currentSchedule.length - filtered.length}개 삭제`);
 
     return {
       filtered: true,
@@ -712,8 +610,6 @@ function filterScheduleByCode(message, currentSchedule) {
       explanation: `${targetHour}시에 겹치는 수업들을 삭제했어요! 😊`
     };
   }
-
-  console.log('\nℹ️ 코드 필터 패턴 없음 - AI 호출 필요');
   // 필터링 안됨 - AI에게 맡김
   return { filtered: false };
 }
@@ -726,22 +622,13 @@ router.post('/chat', auth, async (req, res) => {
   try {
     const { message, currentSchedule, originalSchedule, scheduleHistory, lastAiResponse, redoStack, fixedSchedules, schedulesByImage, existingCustomSchedules } = req.body;
 
-    console.log('\n💬 채팅 요청:', message);
-    console.log('📚 히스토리:', scheduleHistory ? scheduleHistory.length + '단계' : '없음');
-    console.log('🔄 Redo 스택:', redoStack ? redoStack.length + '개' : '없음');
-    console.log('🤖 직전 AI 응답:', lastAiResponse ? '있음' : '없음');
-    console.log('📌 고정 일정:', fixedSchedules?.length || 0, '개');
-    console.log('🖼️ 이미지별 스케줄:', schedulesByImage?.length || 0, '개');
-
     // ⭐ 먼저 일정 이동 요청인지 확인
     const { handleScheduleMoveRequest } = require('../utils/scheduleMoveHandler');
     const moveResult = handleScheduleMoveRequest(message, currentSchedule, fixedSchedules || []);
     if (moveResult.isMoveRequest && moveResult.result) {
-      console.log('✅ 일정 이동 요청 처리 완료');
 
       if (moveResult.result.success) {
         // 이동 성공 시 재최적화
-        console.log('\n🔄 고정 일정 있음 → 최종 재최적화 실행');
         const { optimizeSchedules } = require('../utils/scheduleAutoOptimizer');
 
         const aiResult = await optimizeSchedules(
@@ -749,8 +636,6 @@ router.post('/chat', auth, async (req, res) => {
           schedulesByImage || [],
           moveResult.result.fixedSchedules || fixedSchedules || []
         );
-
-        console.log('✅ AI 재최적화 완료:', aiResult.optimizedSchedules?.length, '개');
 
         return res.json({
           success: true,
@@ -772,7 +657,6 @@ router.post('/chat', auth, async (req, res) => {
 
     if (isRedo && redoStack && redoStack.length > 0) {
       const redoSchedule = redoStack[redoStack.length - 1];
-      console.log('✅ Redo: 되돌리기 취소');
       return res.json({
         success: true,
         understood: '되돌리기 취소',
@@ -794,13 +678,10 @@ router.post('/chat', auth, async (req, res) => {
     const fullUndoKeywords = ['맨 처음', '맨처음', '원본', '롤백', '처음', '초기', 'reset', '시간표 롤백'];
     const isFullUndo = fullUndoKeywords.some(keyword => message.includes(keyword));
 
-    console.log('🔍 롤백 키워드 체크:', { message, isFullUndo, isUndo, isStepBack });
-
     if (isUndo || isStepBack || isFullUndo) {
       // 1. "방금전" = 한 단계 이전
       if (isStepBack && scheduleHistory && scheduleHistory.length > 0) {
         const previousSchedule = scheduleHistory[scheduleHistory.length - 1];
-        console.log('✅ 한 단계 이전으로 되돌리기:', scheduleHistory.length - 1, '단계');
         return res.json({
           success: true,
           understood: '한 단계 이전 시간표로 되돌리기',
@@ -811,7 +692,6 @@ router.post('/chat', auth, async (req, res) => {
       }
 
       // 2. "맨 처음" 또는 히스토리 없음 = 원본으로
-      console.log('✅ 원본 스케줄로 복원');
       return res.json({
         success: true,
         understood: '원본 시간표로 되돌리기',
@@ -820,13 +700,8 @@ router.post('/chat', auth, async (req, res) => {
         explanation: '네, 원래 시간표로 되돌려드렸어요! 😊 AI 최적화 전 상태로 복원됐습니다.'
       });
     }
-
-    // 코드 기반 필터링 비활성화 - AI가 모든 것을 처리하도록
-    console.log('🤖 AI에게 모든 처리 위임')
-
     // 겹치는 수업 자동 감지
     const conflicts = detectConflicts(currentSchedule);
-    console.log(`🔍 겹치는 수업: ${conflicts.length}건`);
 
     // 확인 응답 체크 (ㅇㅇ, 응, 웅 등)
     const confirmationKeywords = ['ㅇㅇ', '응', '웅', '그래', '해줘', 'ㅇ', 'ㅇㄱ', '오케이', 'ok'];
@@ -834,7 +709,6 @@ router.post('/chat', auth, async (req, res) => {
 
     // 프롬프트 생성 - 확인 응답일 때만 직전 AI 응답 포함
     const contextToUse = isConfirmation ? lastAiResponse : null;
-    console.log('📝 맥락 사용:', contextToUse ? '직전 응답 포함 (확인 응답)' : '새로운 명령 (맥락 없음)');
     const prompt = generatePrompt(message, currentSchedule, conflicts, contextToUse);
 
     // 여러 모델명 시도
@@ -856,7 +730,6 @@ router.post('/chat', auth, async (req, res) => {
         aiResponse = response.text();
         break;
       } catch (error) {
-        console.error(`${modelName} 에러:`, error.message);
         continue;
       }
     }
@@ -864,12 +737,6 @@ router.post('/chat', auth, async (req, res) => {
     if (!aiResponse) {
       throw new Error('AI 응답 실패');
     }
-
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🤖 RAW AI RESPONSE:');
-    console.log(aiResponse);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
     // JSON 파싱 (여러 형식 시도)
     let parsed = null;
 
@@ -898,10 +765,6 @@ router.post('/chat', auth, async (req, res) => {
         }
       }
     } catch (parseError) {
-      console.error('JSON 파싱 실패:', parseError);
-      console.log('원본 응답 길이:', aiResponse.length, '자');
-      console.log('원본 응답 (앞 500자):', aiResponse.substring(0, 500));
-      console.log('원본 응답 (뒤 500자):', aiResponse.substring(aiResponse.length - 500));
 
       // 파싱 실패 시 원본 스케줄 반환
       return res.json({
@@ -915,12 +778,8 @@ router.post('/chat', auth, async (req, res) => {
 
     // 인덱스 기반 삭제 처리
     if (parsed.deleteIndices && Array.isArray(parsed.deleteIndices)) {
-      console.log('🔢 인덱스 기반 삭제:', parsed.deleteIndices);
       parsed.schedule = currentSchedule.filter((_, idx) => !parsed.deleteIndices.includes(idx + 1));
-      console.log(`✅ ${currentSchedule.length}개 → ${parsed.schedule.length}개 (${currentSchedule.length - parsed.schedule.length}개 삭제)`);
     }
-
-    console.log('✅ 처리 완료:', parsed.action, '|', currentSchedule.length, '→', parsed.schedule?.length || 0);
 
     // ⚠️ explanation에서 JSON 제거 (AI가 실수로 JSON을 포함시킨 경우)
     if (parsed.explanation && typeof parsed.explanation === 'string') {
@@ -948,21 +807,8 @@ router.post('/chat', auth, async (req, res) => {
       parsed.explanation = cleanExplanation;
     }
 
-    // ⚠️ DEBUG: 첫 3개 스케줄 비교
-    console.log('\n🔍 SCHEDULE COMPARISON:');
-    console.log('📋 ORIGINAL (첫 3개):');
-    currentSchedule.slice(0, 3).forEach((item, idx) => {
-      console.log(`  ${idx + 1}. title="${item.title}", type="${item.type}", days=${JSON.stringify(item.days)}`);
-    });
-    console.log('\n📋 AI PARSED (첫 3개):');
-    (parsed.schedule || []).slice(0, 3).forEach((item, idx) => {
-      console.log(`  ${idx + 1}. title="${item.title}", type="${item.type}", days=${JSON.stringify(item.days)}`);
-    });
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
     // 🚨 "ㅇㅇ" 확인 응답 검증 및 보정
     if (isConfirmation && lastAiResponse) {
-      console.log('🚨 확인 응답 감지 - 검증 시작');
 
       // 요일 변환 맵
       const dayNameMap = {
@@ -975,7 +821,6 @@ router.post('/chat', auth, async (req, res) => {
       for (const [dayName, dayCode] of Object.entries(dayNameMap)) {
         if (lastAiResponse.includes(dayName)) {
           contextDay = dayCode;
-          console.log(`📅 대화 맥락 요일 감지: ${dayName} (${dayCode})`);
           break;
         }
       }
@@ -985,7 +830,6 @@ router.post('/chat', auth, async (req, res) => {
       const allDeleteSections = lastAiResponse.match(/\[삭제 예정[^\]]*\]([\s\S]*?)(?=\[유지됨|삭제해드릴까요|$)/g);
       if (allDeleteSections && allDeleteSections.length > 0) {
         const deleteSection = allDeleteSections.join('\n');
-        console.log(`📝 삭제 예정 섹션 (${allDeleteSections.length}개):\n`, deleteSection);
 
         // title과 startTime 추출
         const deleteTargets = [];
@@ -1024,10 +868,7 @@ router.post('/chat', auth, async (req, res) => {
             }
           }
         });
-
-        console.log('🎯 삭제 대상:', deleteTargets.length, '개');
         deleteTargets.slice(0, 5).forEach((t, i) => {
-          console.log(`  ${i + 1}. ${t.day || '모든요일'} ${t.title} (${t.startTime})`);
         });
 
         // 원본 스케줄에서 매칭 (title, startTime, day)
@@ -1050,11 +891,6 @@ router.post('/chat', auth, async (req, res) => {
         });
 
         const deletedCount = currentSchedule.length - correctedSchedule.length;
-        console.log(`✅ 보정 완료: ${deletedCount}개 삭제 (목록: ${deleteTargets.length}개)`);
-
-        if (deletedCount !== deleteTargets.length) {
-          console.warn(`⚠️ 개수 불일치: 삭제 ${deletedCount} vs 목록 ${deleteTargets.length}`);
-        }
 
         // 보정된 스케줄로 교체
         parsed.schedule = correctedSchedule;
@@ -1063,7 +899,6 @@ router.post('/chat', auth, async (req, res) => {
 
     // 스케줄이 비어있거나 잘못된 경우 체크
     if (!parsed.schedule || !Array.isArray(parsed.schedule)) {
-      console.error('❌ AI가 잘못된 schedule 반환:', parsed.schedule);
       return res.json({
         success: true,
         understood: parsed.understood,
@@ -1077,7 +912,6 @@ router.post('/chat', auth, async (req, res) => {
     if (parsed.schedule.length === 0 && currentSchedule.length > 0) {
       if (parsed.action === 'question') {
         // question일 때는 빈 배열이 정상 - 원본 유지
-        console.log('✅ question 응답 - 빈 배열 정상 (원본 유지)');
         return res.json({
           success: true,
           understood: parsed.understood,
@@ -1086,10 +920,6 @@ router.post('/chat', auth, async (req, res) => {
           explanation: parsed.explanation
         });
       } else {
-        // delete인데 빈 배열이면 문제
-        console.error('❌ AI가 delete인데 빈 배열 반환 - 원본 반환');
-        console.error('   액션:', parsed.action);
-        console.error('   설명:', parsed.explanation);
 
         return res.json({
           success: true,
@@ -1103,9 +933,6 @@ router.post('/chat', auth, async (req, res) => {
 
     // ⚠️⚠️⚠️ add 액션 처리: AI가 새 항목만 반환하므로 기존 스케줄과 합치기 ⚠️⚠️⚠️
     if (parsed.action === 'add') {
-      console.log('\n🔍 ADD 액션 처리:');
-      console.log(`AI 반환: ${parsed.schedule.length}개 항목`);
-      console.log(`기존 스케줄: ${currentSchedule.length}개`);
 
       // AI가 새 항목만 반환 (1개 또는 몇 개)
       const newItems = parsed.schedule;
@@ -1113,12 +940,8 @@ router.post('/chat', auth, async (req, res) => {
       // 기존 스케줄과 합치기
       const mergedSchedule = [...currentSchedule, ...newItems];
       parsed.schedule = mergedSchedule;
-
-      console.log(`합친 결과: ${mergedSchedule.length}개`);
-      console.log('\n✂️ 추가된 항목:');
       newItems.slice(0, 10).forEach((item, i) => {
         const dayDisplay = item.days?.join(',') || 'undefined';
-        console.log(`  ${i + 1}. ${item.title} (${dayDisplay} ${item.startTime}-${item.endTime})`);
       });
     }
 
@@ -1132,13 +955,8 @@ router.post('/chat', auth, async (req, res) => {
         )
       );
 
-      console.log('\n🔍 실제 삭제 검증:');
-      console.log(`원본: ${currentSchedule.length}개 → AI 결과: ${parsed.schedule.length}개`);
-      console.log(`실제 삭제: ${deletedItems.length}개`);
-
       // 🚨 [유지됨] 검증: lastAiResponse에 [유지됨]이 있으면 체크
       if (lastAiResponse && lastAiResponse.includes('[유지됨')) {
-        console.log('\n🔍 [유지됨] 검증 시작...');
 
         // [유지됨] 섹션 추출 (여러 개일 수 있음)
         const maintainSections = lastAiResponse.match(/\[유지됨[^\]]*\]([\s\S]*?)(?=\[|삭제해드릴까요\?|$)/g);
@@ -1159,8 +977,6 @@ router.post('/chat', auth, async (req, res) => {
             }
           });
 
-          console.log('📋 [유지됨] 항목:', shouldBeMaintained);
-
           // 삭제된 항목 중 [유지됨]에 있는 것 찾기
           const wronglyDeleted = deletedItems.filter(item =>
             shouldBeMaintained.some(maintainTitle =>
@@ -1169,14 +985,10 @@ router.post('/chat', auth, async (req, res) => {
           );
 
           if (wronglyDeleted.length > 0) {
-            console.error('\n🚨🚨🚨 심각한 오류: [유지됨] 항목이 삭제됨!');
             wronglyDeleted.forEach(item => {
               const daysStr = Array.isArray(item.days) ? item.days.join(',') : item.days;
-              console.error(`  ❌ ${item.title} (${daysStr} ${item.startTime}-${item.endTime})`);
             });
 
-            // 잘못 삭제된 항목을 복원
-            console.log('🔧 잘못 삭제된 항목 복원 중...');
             parsed.schedule = [...parsed.schedule, ...wronglyDeleted];
 
             // 설명 업데이트
@@ -1193,10 +1005,8 @@ router.post('/chat', auth, async (req, res) => {
       }
 
       if (deletedItems.length > 0) {
-        console.log('\n✂️ 실제 삭제된 항목:');
         deletedItems.forEach((item, idx) => {
           const daysStr = Array.isArray(item.days) ? item.days.join(',') : item.days;
-          console.log(`  ${idx + 1}. ${item.title} (${daysStr} ${item.startTime}-${item.endTime})`);
         });
 
         // explanation에서 실제 삭제 항목 확인
@@ -1204,10 +1014,8 @@ router.post('/chat', auth, async (req, res) => {
         const notMentioned = deletedItems.filter(item => !explanation.includes(item.title));
 
         if (notMentioned.length > 0) {
-          console.warn('\n⚠️ 경고: AI가 일부 삭제 항목을 설명에 누락!');
           notMentioned.forEach(item => {
             const daysStr = Array.isArray(item.days) ? item.days.join(',') : item.days;
-            console.warn(`  - ${item.title} (${daysStr})`);
           });
 
           // 실제 삭제 내역으로 설명 교체
@@ -1226,8 +1034,6 @@ router.post('/chat', auth, async (req, res) => {
     // 80% 이상 삭제된 경우 경고
     const deletionRate = (currentSchedule.length - parsed.schedule.length) / currentSchedule.length;
     if (deletionRate > 0.8 && parsed.action !== 'delete') {
-      console.warn(`⚠️ 비정상적 삭제: ${Math.round(deletionRate * 100)}% 삭제됨 (${currentSchedule.length} → ${parsed.schedule.length})`);
-      console.warn('   액션이 delete가 아닌데 대량 삭제됨 - 원본 반환');
 
       return res.json({
         success: true,
@@ -1241,9 +1047,6 @@ router.post('/chat', auth, async (req, res) => {
     // ⭐ 고정 일정이 있으면 최종적으로 optimizeSchedules 호출해서 겹침 제거
     let finalSchedule = parsed.schedule;
     if (fixedSchedules && fixedSchedules.length > 0) {
-      console.log('\n🔄 고정 일정 있음 → 최종 재최적화 실행');
-      console.log('  - AI 결과:', parsed.schedule.length, '개');
-      console.log('  - 고정 일정:', fixedSchedules.length, '개');
 
       // AI가 반환한 스케줄 + 고정 일정 원본으로 재최적화
       const allSchedulesForSearch = schedulesByImage?.flatMap(img => img.schedules || []) || [];
@@ -1266,12 +1069,9 @@ router.post('/chat', auth, async (req, res) => {
           s.endTime === fixedOrig.endTime
         );
         if (!exists) {
-          console.log(`  ➕ 고정 일정 원본 추가: ${fixedOrig.title} (${fixedOrig.days} ${fixedOrig.startTime}-${fixedOrig.endTime})`);
           schedulesForReoptimization.push(fixedOrig);
         }
       });
-
-      console.log('  - 재최적화 입력:', schedulesForReoptimization.length, '개');
 
       // optimizeSchedules 호출 (Phase 0 겹침 제거 포함)
       const optimizedResult = await optimizeSchedules(
@@ -1281,24 +1081,17 @@ router.post('/chat', auth, async (req, res) => {
       );
 
       finalSchedule = optimizedResult.optimizedSchedules || optimizedResult;
-      console.log('  - 재최적화 결과:', finalSchedule.length, '개');
 
       // 🔍 김다희 강사가 있는지 확인
       const hasDahee = finalSchedule.some(s => s.title?.includes('김다희'));
-      console.log('  - 🔍 최종 스케줄에 김다희 강사 포함 여부:', hasDahee);
       if (hasDahee) {
         const daheeSchedules = finalSchedule.filter(s => s.title?.includes('김다희'));
-        console.log('  - ⚠️ 김다희 강사 스케줄:', daheeSchedules.map(s =>
-          `${s.title} (${s.days} ${s.startTime}-${s.endTime})`
-        ));
       }
     }
 
     // ⭐ 새로 추가된 일정의 범례 생성 및 인덱스 할당 (action이 'add'일 때만)
     let customSchedules = [];
     if (parsed.action === 'add') {
-      console.log('\n🎨 새 일정 범례 생성 시작');
-      console.log('  - 기존 커스텀 일정:', existingCustomSchedules?.length || 0, '개');
 
       // 새로 추가된 항목들 (AI가 반환한 새 항목들)
       const newItems = parsed.schedule.slice(currentSchedule.length); // 기존 스케줄 이후 항목들
@@ -1323,24 +1116,19 @@ router.post('/chat', auth, async (req, res) => {
           existingCustomSchedules.forEach(custom => {
             if (custom.title && !existingTitleToIndex.has(custom.title)) {
               existingTitleToIndex.set(custom.title, custom.sourceImageIndex);
-              console.log(`  - 기존 커스텀: ${custom.title} (인덱스 ${custom.sourceImageIndex} 재사용)`);
             }
           });
         }
 
         // 새로 추가된 항목 중 기존에 없던 과목들
         const newTitles = new Set();
-        console.log('  - 새로 추가된 항목들:');
         newItems.forEach(item => {
-          console.log(`    * ${item.title} (기존에 있음? ${existingTitleToIndex.has(item.title)})`);
           if (item.title && !existingTitleToIndex.has(item.title)) {
             newTitles.add(item.title);
           }
         });
-        console.log(`  - 기존에 없던 과목: ${Array.from(newTitles).join(', ') || '없음'}`);
 
         if (newTitles.size > 0) {
-          console.log(`  - 완전히 새로운 과목 발견: ${Array.from(newTitles).join(', ')}`);
 
           // 새 이미지 인덱스 할당 (기존 이미지 개수부터 시작)
           const existingImageCount = schedulesByImage ? schedulesByImage.length : 0;
@@ -1350,7 +1138,6 @@ router.post('/chat', auth, async (req, res) => {
           if (existingCustomSchedules && existingCustomSchedules.length > 0) {
             const maxCustomIndex = Math.max(...existingCustomSchedules.map(c => c.sourceImageIndex));
             newImageIndex = Math.max(newImageIndex, maxCustomIndex + 1);
-            console.log(`  - 기존 커스텀 최대 인덱스: ${maxCustomIndex}, 새 시작 인덱스: ${newImageIndex}`);
           }
 
           // ⭐ 제목 분류 함수 (fixedScheduleHandler와 동일)
@@ -1377,7 +1164,6 @@ router.post('/chat', auth, async (req, res) => {
               isCustom: true,
               isGeneric: true
             });
-            console.log(`  - 범례 추가: 기타 (인덱스 9999)`);
           }
 
           Array.from(newTitles).forEach(title => {
@@ -1386,7 +1172,6 @@ router.post('/chat', auth, async (req, res) => {
             if (!isSpecific) {
               // 불명확한 제목은 "기타"로 통합
               titleToNewIndex.set(title, 9999);
-              console.log(`  - "${title}" → 기타로 통합 (인덱스 9999)`);
             } else {
               // 명확한 제목은 개별 인덱스
               customSchedules.push({
@@ -1396,7 +1181,6 @@ router.post('/chat', auth, async (req, res) => {
                 isCustom: true
               });
               titleToNewIndex.set(title, newImageIndex);
-              console.log(`  - 범례 추가: ${title} (인덱스 ${newImageIndex})`);
               newImageIndex++;
             }
           });
@@ -1406,15 +1190,12 @@ router.post('/chat', auth, async (req, res) => {
             if (item.title) {
               if (titleToNewIndex.has(item.title)) {
                 item.sourceImageIndex = titleToNewIndex.get(item.title);
-                console.log(`  - ${item.title}에 새 인덱스 ${item.sourceImageIndex} 할당`);
               } else if (existingTitleToIndex.has(item.title)) {
                 item.sourceImageIndex = existingTitleToIndex.get(item.title);
-                console.log(`  - ${item.title}에 기존 인덱스 ${item.sourceImageIndex} 할당 (재사용)`);
               }
             }
           });
         } else {
-          console.log('  - 모든 과목이 이미 범례에 존재');
 
           // 기존 과목이지만 sourceImageIndex 할당
           newItems.forEach(item => {
@@ -1425,16 +1206,6 @@ router.post('/chat', auth, async (req, res) => {
         }
       }
     }
-
-    console.log('\n📤 응답 전송:');
-    console.log('  - action:', parsed.action);
-    console.log('  - customSchedules:', customSchedules.length, '개');
-    if (customSchedules.length > 0) {
-      customSchedules.forEach(c => {
-        console.log(`    * ${c.title} (인덱스 ${c.sourceImageIndex})`);
-      });
-    }
-
     res.json({
       success: true,
       understood: parsed.understood,
@@ -1445,7 +1216,6 @@ router.post('/chat', auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ 채팅 처리 에러:', error);
     res.status(500).json({
       success: false,
       error: '채팅 처리 실패',

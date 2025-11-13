@@ -54,10 +54,6 @@ exports.createRoom = async (req, res) => {
 
       res.status(201).json(room);
    } catch (error) {
-      console.error('Backend createRoom: error:', error);
-      console.error('Error stack:', error.stack);
-      console.error('Error name:', error.name);
-      console.error('Error message:', error.message);
 
       // Mongoose validation error
       if (error.name === 'ValidationError') {
@@ -126,8 +122,6 @@ exports.updateRoom = async (req, res) => {
 
       res.json(room);
    } catch (error) {
-      console.error('Error updating room:', error);
-      console.error('Error stack:', error.stack);
       res.status(500).json({ msg: 'Server error', error: error.message });
    }
 };
@@ -151,7 +145,6 @@ exports.deleteRoom = async (req, res) => {
       await Room.findByIdAndDelete(req.params.roomId);
       res.json({ msg: '방이 삭제되었습니다.' });
    } catch (error) {
-      console.error('Error deleting room:', error);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -206,7 +199,6 @@ exports.joinRoom = async (req, res) => {
 
       res.json(room);
    } catch (error) {
-      console.error('Error joining room:', error);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -237,7 +229,6 @@ exports.getRoomDetails = async (req, res) => {
       for (const negotiation of room.negotiations) {
          if (negotiation.status === 'active' &&
              (!negotiation.memberSpecificTimeSlots || Object.keys(negotiation.memberSpecificTimeSlots).length === 0)) {
-            console.log(`[getRoomDetails] 협의 ${negotiation._id}에 memberSpecificTimeSlots 생성`);
             negotiation.memberSpecificTimeSlots = {};
 
             const dayString = negotiation.slotInfo.day;
@@ -325,7 +316,6 @@ exports.getRoomDetails = async (req, res) => {
                      }
                   }
 
-                  console.log(`      [getRoomDetails] ${memberId.substring(0,8)}: ${memberOptions.length}개 대체 시간 옵션`);
                   negotiation.memberSpecificTimeSlots[memberId] = memberOptions;
                } else {
                   negotiation.memberSpecificTimeSlots[memberId] = [];
@@ -337,7 +327,6 @@ exports.getRoomDetails = async (req, res) => {
 
       if (needsSave) {
          await room.save();
-         console.log('[getRoomDetails] memberSpecificTimeSlots 저장 완료');
       }
 
       // timeSlots의 user._id를 user.id로 변환 (클라이언트 호환성)
@@ -353,7 +342,6 @@ exports.getRoomDetails = async (req, res) => {
 
       res.json(roomObj);
    } catch (error) {
-      console.error('Error fetching room details:', error);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -387,7 +375,6 @@ exports.getMyRooms = async (req, res) => {
          joined: joinedRooms.map(formatRoom),
       });
    } catch (error) {
-      console.error('Error fetching user rooms:', error);
       res.status(500).json({ msg: 'Server error' });
    }
 };
@@ -422,7 +409,6 @@ exports.getRoomExchangeCounts = async (req, res) => {
 
       res.json({ success: true, roomCounts });
    } catch (error) {
-      console.error('Error fetching room exchange counts:', error);
       res.status(500).json({ success: false, msg: 'Server error' });
    }
 };

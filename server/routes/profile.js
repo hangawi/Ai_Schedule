@@ -28,7 +28,6 @@ router.get('/', auth, async (req, res) => {
 
     res.json(profile);
   } catch (err) {
-    console.error('프로필 조회 에러:', err.message);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 });
@@ -72,7 +71,6 @@ router.put('/', auth, async (req, res) => {
 
     res.json(profile);
   } catch (err) {
-    console.error('프로필 업데이트 에러:', err.message);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 });

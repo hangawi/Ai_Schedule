@@ -151,8 +151,6 @@ ${systemPrompt}
     const response = await result.response;
     const text_response = response.text();
 
-    console.log('Gemini 원본 응답:', text_response);
-
     // JSON 파싱
     let jsonString = '';
     const jsonBlockMatch = text_response.match(/```json\s*([\s\S]*?)\s*```/);
@@ -195,7 +193,6 @@ ${systemPrompt}
     res.json(parsedIntent);
 
   } catch (error) {
-    console.error('Intent parsing error:', error);
     res.status(500).json({
       success: false,
       message: '의도 파싱 중 오류가 발생했습니다.',
@@ -295,7 +292,6 @@ exports.processVoiceCommand = async (req, res) => {
     return exports.parseIntent(req, res);
 
   } catch (error) {
-    console.error('Voice command processing error:', error);
     res.status(500).json({
       success: false,
       message: '음성 명령 처리 중 오류가 발생했습니다.',

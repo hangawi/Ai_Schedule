@@ -8,7 +8,6 @@ const axios = require('axios');
 router.post('/directions/car', async (req, res) => {
   try {
     const { origin, destination } = req.body;
-    console.log('Car route request:', origin, destination);
 
     const response = await axios.get('https://apis-navi.kakaomobility.com/v1/directions', {
       params: {
@@ -20,11 +19,8 @@ router.post('/directions/car', async (req, res) => {
         'Authorization': `KakaoAK ${process.env.KAKAO_REST_API_KEY}`
       }
     });
-
-    console.log('Kakao car response:', JSON.stringify(response.data, null, 2));
     res.json(response.data);
   } catch (error) {
-    console.error('Kakao car directions error:', error.response?.data || error.message);
     res.status(500).json({ error: 'Failed to get car directions', details: error.response?.data || error.message });
   }
 });
@@ -35,7 +31,6 @@ router.post('/directions/car', async (req, res) => {
 router.post('/directions/walk', async (req, res) => {
   try {
     const { origin, destination } = req.body;
-    console.log('Walk route request:', origin, destination);
 
     const response = await axios.post('https://apis.openapi.sk.com/tmap/routes/pedestrian', {
       startX: origin.lng.toString(),
@@ -52,10 +47,8 @@ router.post('/directions/walk', async (req, res) => {
       }
     });
 
-    console.log('TMap walk response:', JSON.stringify(response.data, null, 2));
     res.json(response.data);
   } catch (error) {
-    console.error('TMap walk directions error:', error.response?.data || error.message);
     res.status(500).json({ error: 'Failed to get walk directions', details: error.response?.data || error.message });
   }
 });

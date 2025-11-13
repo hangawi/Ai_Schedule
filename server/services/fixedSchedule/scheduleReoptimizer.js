@@ -51,17 +51,11 @@ function findConflictingSchedules(fixedSchedule, allSchedules) {
  * @returns {Object} 재최적화 결과
  */
 function reoptimizeWithFixedSchedules(allSchedules, fixedSchedules = [], newFixedSchedule = null) {
-  console.log('\n🔄 시간표 재최적화 시작');
-  console.log(`  - 전체 수업: ${allSchedules.length}개`);
-  console.log(`  - 기존 고정: ${fixedSchedules.length}개`);
-  console.log(`  - 신규 고정: ${newFixedSchedule ? 1 : 0}개`);
 
   // 전체 고정 일정 목록
   const allFixed = newFixedSchedule
     ? [...fixedSchedules, newFixedSchedule]
     : fixedSchedules;
-
-  console.log(`  - 총 고정: ${allFixed.length}개`);
 
   // 1. 고정 일정과 겹치는 수업 찾기
   const conflicts = [];
@@ -83,26 +77,16 @@ function reoptimizeWithFixedSchedules(allSchedules, fixedSchedules = [], newFixe
     }
   });
 
-  console.log(`  - 충돌 발견: ${conflictingScheduleIds.size}개 수업`);
-
   // 2. 충돌 없는 수업만 필터링
   const availableSchedules = allSchedules.filter(schedule => {
     const id = `${schedule.title}-${schedule.startTime}-${schedule.endTime}-${schedule.days?.join(',')}`;
     return !conflictingScheduleIds.has(id);
   });
 
-  console.log(`  - 사용 가능: ${availableSchedules.length}개 수업`);
-
   // 3. 고정 일정 + 충돌 없는 수업 = 최종 시간표
   const optimizedSchedule = [
     ...allFixed.map(f => {
       const baseSchedule = f.originalSchedule || f;
-      console.log(`  [고정 일정] ${baseSchedule.title}:`, {
-        hasAcademyName: !!baseSchedule.academyName,
-        hasSubjectName: !!baseSchedule.subjectName,
-        academyName: baseSchedule.academyName,
-        subjectName: baseSchedule.subjectName
-      });
 
       return {
         ...baseSchedule,
@@ -112,8 +96,6 @@ function reoptimizeWithFixedSchedules(allSchedules, fixedSchedules = [], newFixe
     }),
     ...availableSchedules
   ];
-
-  console.log(`  - 최종 시간표: ${optimizedSchedule.length}개 (고정 ${allFixed.length} + 일반 ${availableSchedules.length})`);
 
   return {
     success: true,

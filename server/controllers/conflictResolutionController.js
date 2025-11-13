@@ -61,7 +61,6 @@ exports.detectConflict = async (req, res) => {
          message: '해당 시간에 일정을 추가할 수 있습니다.',
       });
    } catch (err) {
-      console.error('❌ 충돌 감지 실패:', err.message);
       res.status(500).json({ msg: 'Server error', error: err.message });
    }
 };
@@ -159,7 +158,6 @@ exports.recommendAlternativeTime = async (req, res) => {
          pendingEvent
       });
    } catch (err) {
-      console.error('❌ 대체 시간 추천 실패:', err.message);
       res.status(500).json({ msg: 'Server error', error: err.message });
    }
 };
@@ -241,7 +239,6 @@ exports.recommendRescheduleTime = async (req, res) => {
          }
       });
    } catch (err) {
-      console.error('❌ 재조정 시간 추천 실패:', err.message);
       res.status(500).json({ msg: 'Server error', error: err.message });
    }
 };
@@ -267,7 +264,6 @@ exports.deleteConflictingEvent = async (req, res) => {
          message: `${eventTitle} 일정을 삭제했어요!`
       });
    } catch (err) {
-      console.error('❌ 일정 삭제 실패:', err.message);
       res.status(500).json({ msg: 'Server error', error: err.message });
    }
 };
@@ -305,7 +301,6 @@ exports.confirmAlternativeTime = async (req, res) => {
          }
       });
    } catch (err) {
-      console.error('❌ 대체 시간 확정 실패:', err.message);
       res.status(500).json({ msg: 'Server error', error: err.message });
    }
 };
@@ -364,7 +359,6 @@ exports.confirmReschedule = async (req, res) => {
          }
       });
    } catch (err) {
-      console.error('❌ 일정 재조정 확정 실패:', err.message);
       res.status(500).json({ msg: 'Server error', error: err.message });
    }
 };

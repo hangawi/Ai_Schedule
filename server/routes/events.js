@@ -195,7 +195,6 @@ router.post('/confirm-reschedule', auth, eventController.confirmReschedule);
 
 // 에러 처리 미들웨어
 router.use((err, req, res, next) => {
-  console.error('❌ Events 라우터 에러:', err);
   
   if (err.name === 'ValidationError') {
     return res.status(400).json({

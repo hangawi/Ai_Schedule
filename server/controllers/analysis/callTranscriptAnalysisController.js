@@ -23,7 +23,6 @@ exports.analyzeCallTranscript = async (req, res) => {
 
       // API 키 형식 기본 검증 (Google API 키는 보통 39자)
       if (API_KEY.length < 30) {
-         console.error('GEMINI_API_KEY가 너무 짧음 - 유효하지 않은 키일 가능성');
          return res.status(500).json({
             success: false,
             message: 'Gemini API 키 형식이 올바르지 않습니다.'
@@ -132,7 +131,6 @@ exports.analyzeCallTranscript = async (req, res) => {
           break; // Success, exit loop
         } catch (error) {
           attempts++;
-          console.error(`Attempt ${attempts} failed:`, error.message);
           if (attempts >= maxAttempts) {
             // Rethrow the error if max attempts are reached
             throw error;
@@ -183,13 +181,11 @@ exports.analyzeCallTranscript = async (req, res) => {
       });
 
    } catch (error) {
-      console.error('통화 내용 분석 에러:', error.message);
       
       // API 키 관련 오류 체크
       if (error.message.includes('API key not valid') || 
           error.message.includes('API_KEY_INVALID') ||
           error.message.includes('invalid API key')) {
-         console.log('Gemini API 키가 유효하지 않음');
          return res.status(500).json({
             success: false,
             message: 'AI 분석 서비스에 문제가 있습니다. Gemini API 키를 확인해주세요.',

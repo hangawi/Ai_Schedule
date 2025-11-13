@@ -69,12 +69,6 @@ function detectBaseScheduleFromImages(schedulesByImage) {
       }))
     };
   });
-
-  console.log('🔍 기본 베이스 감지 결과:');
-  results.forEach(r => {
-    console.log(`  이미지 ${r.imageIndex + 1} (${r.fileName}): ${r.isBaseSchedule ? '✅ 기본 베이스' : '⭕ 선택 시간표'} (학교 과목 ${r.schoolRatio}%)`);
-  });
-
   return results;
 }
 
@@ -89,8 +83,6 @@ function extractBaseSchedules(analysisResults) {
       baseSchedules.push(...result.schedules);
     }
   });
-
-  console.log(`📚 기본 베이스 스케줄: ${baseSchedules.length}개 추출`);
   return baseSchedules;
 }
 
@@ -105,8 +97,6 @@ function extractOptionalSchedules(analysisResults) {
       optionalSchedules.push(...result.schedules);
     }
   });
-
-  console.log(`🎯 선택 가능 스케줄: ${optionalSchedules.length}개 추출`);
   return optionalSchedules;
 }
 

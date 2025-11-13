@@ -31,11 +31,6 @@ const generateToken = (payload, expiresIn = '24h') => {
     
     return token;
   } catch (error) {
-    console.error('❌ JWT 토큰 생성 실패:', {
-      errorName: error.name,
-      errorMessage: error.message,
-      payload: payload
-    });
     throw error;
   }
 };
@@ -62,12 +57,6 @@ const verifyToken = (token) => {
     
     return decoded;
   } catch (error) {
-    console.error('❌ JWT 토큰 검증 실패:', {
-      errorName: error.name,
-      errorMessage: error.message,
-      tokenLength: token ? token.length : 0,
-      tokenPreview: token ? token.substring(0, 20) + '...' : 'N/A'
-    });
 
     // JWT 에러 타입별 메시지 개선
     if (error.name === 'JsonWebTokenError') {
@@ -93,10 +82,6 @@ const decodeToken = (token) => {
     
     return decoded;
   } catch (error) {
-    console.error('❌ JWT 토큰 디코딩 실패:', {
-      errorMessage: error.message,
-      tokenLength: token ? token.length : 0
-    });
     throw error;
   }
 };
@@ -107,7 +92,6 @@ const extractUserId = (token) => {
     const decoded = verifyToken(token);
     return decoded.user.id;
   } catch (error) {
-    console.error('❌ 사용자 ID 추출 실패:', error.message);
     throw error;
   }
 };
@@ -121,7 +105,6 @@ const getTokenExpiration = (token) => {
     }
     return null;
   } catch (error) {
-    console.error('❌ 토큰 만료 시간 확인 실패:', error.message);
     return null;
   }
 };
@@ -138,7 +121,6 @@ const isTokenExpiringSoon = (token, minutesThreshold = 30) => {
     
     return minutesUntilExpiry <= minutesThreshold;
   } catch (error) {
-    console.error('❌ 토큰 만료 임박 확인 실패:', error.message);
     return false;
   }
 };

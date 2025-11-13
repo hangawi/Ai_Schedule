@@ -25,16 +25,13 @@ async function analyzeFixedScheduleIntent(userInput, availableClasses = []) {
     // JSON 파싱
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.warn('❌ JSON 파싱 실패:', text);
       return { intent: 'none' };
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
-    console.log('✅ 고정 일정 인텐트 분석:', parsed);
 
     return parsed;
   } catch (error) {
-    console.error('❌ 고정 일정 인텐트 분석 실패:', error);
     return { intent: 'none' };
   }
 }
@@ -82,7 +79,6 @@ function extractTimeFromInput(userInput) {
       }
 
       const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-      console.log(`🕐 사용자 입력에서 시간 추출: "${userInput}" → ${timeStr}`);
       return timeStr;
     }
   }
@@ -102,8 +98,6 @@ function findClassByName(schedules, className, userInput = '') {
     .trim();
   const normalized = cleaned.toLowerCase().replace(/\s+/g, '');
 
-  console.log('🔍 검색:', `"${className}" → "${normalized}"`);
-
   // 강사 이름과 수업명 분리 시도
   // 예: "린아 KPOP" → instructor: "린아", title: "kpop"
   const parts = cleaned.toLowerCase().split(/\s+/);
@@ -118,7 +112,6 @@ function findClassByName(schedules, className, userInput = '') {
     if (hasWeeklyPattern) {
       // 주X회 패턴 → 전체를 수업명으로
       searchTitle = normalized;
-      console.log(`주X회 패턴 감지 → 전체를 수업명으로: "${searchTitle}"`);
     } else {
       // 마지막 단어를 수업명으로, 나머지를 강사명으로 시도
       const lastPart = parts[parts.length - 1];
@@ -128,7 +121,6 @@ function findClassByName(schedules, className, userInput = '') {
       if (firstParts.match(/^[가-힣]{2,3}$/)) {
         searchInstructor = firstParts;
         searchTitle = lastPart;
-        console.log(`강사+수업 패턴: "${searchInstructor}" + "${searchTitle}"`);
       } else {
         // 그 외에는 전체를 수업명으로
         searchTitle = normalized;
@@ -138,22 +130,9 @@ function findClassByName(schedules, className, userInput = '') {
     searchTitle = normalized;
   }
 
-  console.log('분리:', searchInstructor ? `강사="${searchInstructor}" 수업="${searchTitle}"` : `수업="${searchTitle}"`);
-
   const found = schedules.filter(schedule => {
     const title = (schedule.title || '').toLowerCase().replace(/\s+/g, '');
     const instructor = (schedule.instructor || '').toLowerCase().replace(/\s+/g, '').replace(/t$/i, '');
-
-    // 색상 필드 확인
-    if (schedule.title?.includes('주니어B')) {
-      console.log(`  📝 주니어B 스케줄 필드:`, {
-        title: schedule.title,
-        color: schedule.color,
-        hasColor: !!schedule.color,
-        allKeys: Object.keys(schedule)
-      });
-    }
-
     let matches = false;
 
     if (searchInstructor && searchTitle) {
@@ -175,40 +154,29 @@ function findClassByName(schedules, className, userInput = '') {
 
       matches = case1 || case2 || case3;
 
-      if (matches) {
-        console.log(`    → 매칭 이유: case1=${case1}, case2=${case2}, case3=${case3}`);
-      }
     } else if (searchTitle) {
       // 수업명만 있으면 제목만 매칭 (instructor 유무 상관없이)
       const titleMatch = title.includes(searchTitle) || searchTitle.includes(title);
 
       matches = titleMatch;
     }
-
-    console.log(`  ${schedule.title} (${schedule.instructor || 'N/A'}) [${schedule.days} ${schedule.startTime}-${schedule.endTime}] ${matches ? '✅' : '❌'}`);
-
     return matches;
   });
 
-  console.log(`매칭 결과: ${found.length}개`);
-
   // 여러 개 발견된 경우 → 시간 기반 선택 또는 사용자에게 물어보기
   if (found.length > 1) {
-    console.log(`⚠️ 동일한 수업이 ${found.length}개 발견됨`);
 
     // 사용자 입력에서 시간 추출
     const userTime = extractTimeFromInput(userInput);
 
     if (userTime) {
       // 시간이 명시됨 → 가장 가까운 시간 선택
-      console.log(`🕐 시간 명시됨: ${userTime} → 가장 가까운 시간표 선택`);
 
       let closestSchedule = found[0];
       let minDiff = getTimeDifference(userTime, found[0].startTime);
 
       found.forEach(schedule => {
         const diff = getTimeDifference(userTime, schedule.startTime);
-        console.log(`  - ${schedule.title} ${schedule.startTime}: 차이 ${diff}분`);
 
         if (diff < minDiff) {
           minDiff = diff;
@@ -216,16 +184,12 @@ function findClassByName(schedules, className, userInput = '') {
         }
       });
 
-      console.log(`✅ 가장 가까운 시간표 선택: ${closestSchedule.title} ${closestSchedule.startTime} (차이: ${minDiff}분)\n`);
       return [closestSchedule];
     } else {
       // 시간 없음 → 사용자에게 물어보기
-      console.log(`❓ 시간 명시 없음 → 사용자에게 선택 요청\n`);
       return { needsUserChoice: true, options: found };
     }
   }
-
-  console.log('');
   return found.length > 0 ? found : null;
 }
 
@@ -233,14 +197,6 @@ function findClassByName(schedules, className, userInput = '') {
  * 시간표 수업을 고정 스케줄로 변환
  */
 function convertToFixedSchedule(schedule, type = 'pinned-class') {
-  console.log('🔄 convertToFixedSchedule:', {
-    title: schedule.title,
-    hasAcademyName: !!schedule.academyName,
-    hasSubjectName: !!schedule.subjectName,
-    academyName: schedule.academyName,
-    subjectName: schedule.subjectName,
-    color: schedule.color
-  });
 
   return {
     id: `${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -295,8 +251,6 @@ function createCustomFixedSchedule(customData, existingFixedSchedules = []) {
   // ⭐ 항상 원본 제목 사용 (사용자 요구사항: "밥" = "밥약속" 같은 제목도 그대로 표시)
   const displayTitle = customData.title;
 
-  console.log(`📝 커스텀 일정 생성: "${customData.title}"`);
-
   // ⭐ 기본 제목 추출 (예: "밥 약속" → "밥", "눈높이 일정" → "눈높이", "밥약속" → "밥")
   const extractBaseTitle = (title) => {
     if (!title) return title;
@@ -315,16 +269,10 @@ function createCustomFixedSchedule(customData, existingFixedSchedules = []) {
     f => f.type === 'custom' && extractBaseTitle(f.title) === baseTitle
   );
 
-  console.log(`  - 기본 제목: "${baseTitle}" (원본: "${customData.title}")`);
-  if (existingCustom) {
-    console.log(`  - 같은 기본 제목 발견: "${existingCustom.title}"`);
-  }
-
   let customImageIndex;
   if (existingCustom) {
     // 같은 제목이면 같은 인덱스 재사용
     customImageIndex = existingCustom.sourceImageIndex;
-    console.log(`♻️ 같은 제목 발견: "${displayTitle}" → 인덱스 ${customImageIndex} 재사용`);
   } else {
     // 새로운 제목이면 새 인덱스 할당
     const existingCustomCount = existingFixedSchedules.filter(f => f.type === 'custom').length;
@@ -334,7 +282,6 @@ function createCustomFixedSchedule(customData, existingFixedSchedules = []) {
     const maxIndex = existingIndices.length > 0 ? Math.max(...existingIndices) : 999;
 
     customImageIndex = Math.max(1000 + existingCustomCount, maxIndex + 1);
-    console.log(`🆕 새로운 커스텀 일정: "${customData.title}" → 인덱스 ${customImageIndex} 할당`);
   }
 
   return {
@@ -395,11 +342,6 @@ async function handleFixedScheduleRequest(userInput, currentSchedules, fixedSche
       // 단일 또는 시간 기반 선택된 결과
       const foundClasses = Array.isArray(foundResult) ? foundResult : [foundResult];
 
-      // 이미 고정되어 있는지 확인 (title, instructor, startTime, endTime 모두 확인)
-      console.log('🔍 중복 체크:');
-      console.log('  - fixedSchedules:', fixedSchedules?.length, '개');
-      console.log('  - foundClasses:', foundClasses?.length, '개');
-
       const alreadyPinned = fixedSchedules.some(fixed => {
         if (fixed.type !== 'pinned-class') return false;
 
@@ -409,17 +351,12 @@ async function handleFixedScheduleRequest(userInput, currentSchedules, fixedSche
             fc.startTime === fixed.startTime &&
             fc.endTime === fixed.endTime;
 
-          if (match) {
-            console.log(`  ⚠️ 중복 발견: ${fc.title} (${fc.instructor}) ${fc.startTime}-${fc.endTime}`);
-          }
 
           return match;
         });
 
         return isDuplicate;
       });
-
-      console.log('  - 중복 여부:', alreadyPinned);
 
       if (alreadyPinned) {
         return {

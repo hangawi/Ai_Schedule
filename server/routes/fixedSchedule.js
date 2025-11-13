@@ -14,19 +14,12 @@ const {
 router.post('/fixed-intent', async (req, res) => {
   try {
     const { message, currentSchedules, schedulesByImage, fixedSchedules } = req.body;
-
-    console.log('\n🔥 요청:', message);
-    console.log('현재:', currentSchedules?.length, '개');
-    console.log('이미지:', schedulesByImage?.length, '개');
-
     // ⭐ 먼저 일정 이동 요청인지 확인
     const moveResult = handleScheduleMoveRequest(message, currentSchedules, fixedSchedules || []);
     if (moveResult.isMoveRequest && moveResult.result) {
-      console.log('✅ 일정 이동 요청 처리 완료');
 
       // 이동 성공 시 재최적화
       if (moveResult.result.success) {
-        console.log('\n🤖 AI 재최적화 시작...');
         const { optimizeSchedules } = require('../utils/scheduleAutoOptimizer');
 
         const aiResult = await optimizeSchedules(
@@ -34,8 +27,6 @@ router.post('/fixed-intent', async (req, res) => {
           schedulesByImage || [],
           moveResult.result.fixedSchedules || []
         );
-
-        console.log('✅ AI 재최적화 완료:', aiResult.optimizedSchedules?.length, '개');
 
         return res.json({
           success: true,
@@ -56,12 +47,7 @@ router.post('/fixed-intent', async (req, res) => {
     const allSchedulesForSearch = schedulesByImage?.flatMap(img => img.schedules || []) || [];
     const allSchedules = allSchedulesForSearch; // 일단 검색은 원본에서
 
-    console.log('사용할 스케줄 (검색용 - 원본):', allSchedules.length, '개');
-
     const kpops = allSchedules.filter(s => s.title?.includes('KPOP') || s.title?.includes('주니어'));
-    console.log('KPOP/주니어:', kpops.map(s =>
-      `"${s.title}" (${s.instructor || 'N/A'}) ${s.days} ${s.startTime}-${s.endTime} academyName=${s.academyName || 'X'}`
-    ));
 
     const result = await handleFixedScheduleRequest(
       message,
@@ -69,14 +55,8 @@ router.post('/fixed-intent', async (req, res) => {
       fixedSchedules || []
     );
 
-    console.log('결과:', result.success ? '✅ SUCCESS' : '❌ FAIL');
-    console.log('메시지:', result.message);
-
     // 고정 일정 추가 성공 시, 기존 고정과 충돌 체크
     if (result.success && result.action === 'add' && result.schedules) {
-      console.log('고정된 스케줄:', result.schedules.map(s =>
-        `"${s.title}" ${s.days} ${s.startTime}-${s.endTime}`
-      ));
 
       const newFixed = result.schedules[0]; // 새로 추가된 고정 일정
       const existingFixed = fixedSchedules || [];
@@ -88,26 +68,13 @@ router.post('/fixed-intent', async (req, res) => {
       let removedFixedSchedules = [];
 
       if (conflictCheck.hasConflict) {
-        // 충돌 발생 → 자동으로 충돌하는 기존 고정 일정 제거
-        console.warn('⚠️ 기존 고정 일정과 충돌 발견:', conflictCheck.conflicts);
-        console.log('🔧 충돌하는 고정 일정을 자동으로 제거합니다...');
-
         const conflictIds = conflictCheck.conflicts.map(c => c.id);
         finalExistingFixed = existingFixed.filter(f => !conflictIds.includes(f.id));
         removedFixedSchedules = existingFixed.filter(f => conflictIds.includes(f.id));
-
-        console.log(`✅ 제거된 고정 일정: ${removedFixedSchedules.length}개`);
-        removedFixedSchedules.forEach(f => {
-          console.log(`   - ${f.title} (${f.days?.join(', ')} ${f.startTime}-${f.endTime})`);
-        });
       }
 
       // AI 재최적화 호출 (충돌하는 고정 일정 제외)
       const allFixedSchedules = [...finalExistingFixed, newFixed];
-
-      console.log('\n🤖 AI 재최적화 시작...');
-      console.log('  - 전체 고정 일정:', allFixedSchedules.length, '개');
-
       const { optimizeSchedules } = require('../utils/scheduleAutoOptimizer');
 
       // ⭐ 재최적화는 현재 시간표 + 고정 일정의 원본을 합쳐서 진행
@@ -126,10 +93,6 @@ router.post('/fixed-intent', async (req, res) => {
 
       // 현재 시간표 + 고정 일정 원본 합치기
       const schedulesForReoptimization = [...currentSchedules, ...fixedOriginals];
-
-      console.log('  - 재최적화 입력:', schedulesForReoptimization.length, '개');
-      console.log('    (현재:', currentSchedules.length, '+ 고정 원본:', fixedOriginals.length, ')');
-
       // 충돌 없는 스케줄로 AI 최적화 다시 실행
       const aiResult = await optimizeSchedules(
         schedulesForReoptimization, // 현재 시간표 + 고정 일정 원본
@@ -137,28 +100,11 @@ router.post('/fixed-intent', async (req, res) => {
         allFixedSchedules // 고정 일정들
       );
 
-      console.log(`✅ AI 재최적화 완료`);
-      console.log('  - optimizedSchedules:', aiResult.optimizedSchedules?.length, '개');
-
       // optimizeSchedules는 객체를 반환 (배열이 아님!)
       const optimizedSchedule = aiResult.optimizedSchedules || [];
 
-      console.log('\n📊 재최적화 결과 상세:');
-      console.log('  - optimizedSchedule:', optimizedSchedule.length, '개');
-      console.log('  - 고정 일정:', allFixedSchedules.length, '개');
-      console.log('  - 첫 5개 스케줄:', optimizedSchedule.slice(0, 5).map(s =>
-        `${s.title} (${s.days} ${s.startTime}-${s.endTime})`
-      ));
-
       // 🔍 김다희 강사가 있는지 확인
       const hasDahee = optimizedSchedule.some(s => s.title?.includes('김다희'));
-      console.log('  - 🔍 김다희 강사 포함 여부:', hasDahee);
-      if (hasDahee) {
-        const daheeSchedules = optimizedSchedule.filter(s => s.title?.includes('김다희'));
-        console.log('  - ⚠️ 김다희 강사 스케줄:', daheeSchedules.map(s =>
-          `${s.title} (${s.days} ${s.startTime}-${s.endTime})`
-        ));
-      }
 
       // 사용자 메시지 생성
       let userMessage = result.message;
@@ -181,11 +127,6 @@ router.post('/fixed-intent', async (req, res) => {
           schedules: [custom]
         }));
 
-      console.log('📌 customSchedules 생성:', customSchedules.length, '개');
-      customSchedules.forEach(c => {
-        console.log(`  - ${c.title} (sourceImageIndex: ${c.sourceImageIndex})`);
-      });
-
       return res.json({
         ...result,
         message: userMessage,
@@ -206,9 +147,6 @@ router.post('/fixed-intent', async (req, res) => {
 
     // 고정 일정 수정 (modify) 처리
     if (result.success && result.action === 'modify' && result.targetSchedule) {
-      console.log('\n🔧 고정 일정 수정 모드');
-      console.log('  - 대상:', result.targetSchedule.title, result.targetSchedule.startTime, '-', result.targetSchedule.endTime);
-      console.log('  - 새 시간:', result.newSchedule.days, result.newSchedule.startTime);
 
       const existingFixed = fixedSchedules || [];
 
@@ -233,9 +171,6 @@ router.post('/fixed-intent', async (req, res) => {
       const duration = calculateDuration(result.targetSchedule.startTime, result.targetSchedule.endTime);
       const calculatedEndTime = addMinutesToTime(result.newSchedule.startTime, duration);
 
-      console.log('  - Duration:', duration, '분');
-      console.log('  - 계산된 종료 시간:', calculatedEndTime);
-
       // 새로운 시간으로 수정된 고정 일정 생성
       const modifiedFixed = {
         ...result.targetSchedule,
@@ -246,7 +181,6 @@ router.post('/fixed-intent', async (req, res) => {
 
       const allFixedSchedules = [...updatedFixed, modifiedFixed];
 
-      console.log('  - 전체 고정 일정:', allFixedSchedules.length, '개');
 
       // AI 재최적화
       const { optimizeSchedules } = require('../utils/scheduleAutoOptimizer');
@@ -286,13 +220,9 @@ router.post('/fixed-intent', async (req, res) => {
 
     // 고정 일정 삭제 (remove) 처리
     if (result.success && result.action === 'remove' && result.scheduleIds) {
-      console.log('\n🗑️ 고정 일정 삭제 모드');
-      console.log('  - 삭제할 ID:', result.scheduleIds);
 
       const existingFixed = fixedSchedules || [];
       const updatedFixed = existingFixed.filter(f => !result.scheduleIds.includes(f.id));
-
-      console.log('  - 남은 고정 일정:', updatedFixed.length, '개');
 
       // AI 재최적화
       const { optimizeSchedules } = require('../utils/scheduleAutoOptimizer');
@@ -320,15 +250,12 @@ router.post('/fixed-intent', async (req, res) => {
       // 삭제된 일정의 제목 확인 후 범례 제거
       const deletedSchedules = existingFixed.filter(f => result.scheduleIds.includes(f.id));
       const deletedTitles = deletedSchedules.map(s => s.title);
-      console.log('🗑️ 삭제된 제목:', deletedTitles);
 
       const allRemainingSchedules = [...optimizedSchedule, ...updatedFixed];
-      console.log('📋 남은 일정 제목:', allRemainingSchedules.map(s => s.title));
 
       const titlesToRemoveFromLegend = deletedTitles.filter(title =>
         !allRemainingSchedules.some(s => s.title === title)
       );
-      console.log('✅ 범례에서 제거할 제목:', titlesToRemoveFromLegend);
 
       return res.json({
         success: true,
@@ -347,7 +274,6 @@ router.post('/fixed-intent', async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    console.error('❌ 고정 일정 처리 오류:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -363,16 +289,11 @@ router.post('/select-fixed-option', async (req, res) => {
   try {
     const { selectedSchedule, fixedSchedules, allSchedules, schedulesByImage } = req.body;
 
-    console.log('\n✅ 사용자 선택:', selectedSchedule.title, selectedSchedule.startTime);
-
     const { convertToFixedSchedule } = require('../utils/fixedScheduleHandler');
     const newFixed = convertToFixedSchedule(selectedSchedule);
 
     // 기존 고정 일정과 합치기
     const allFixedSchedules = [...(fixedSchedules || []), newFixed];
-
-    console.log('\n🤖 AI 재최적화 시작...');
-    console.log('  - 전체 고정 일정:', allFixedSchedules.length, '개');
 
     const { optimizeSchedules } = require('../utils/scheduleAutoOptimizer');
 
@@ -390,18 +311,12 @@ router.post('/select-fixed-option', async (req, res) => {
 
     const schedulesForReoptimization = [...allSchedules, ...fixedOriginals];
 
-    console.log('  - 재최적화 입력:', schedulesForReoptimization.length, '개');
-    console.log('    (현재:', allSchedules.length, '+ 고정 원본:', fixedOriginals.length, ')');
-
     // AI 최적화 실행
     const aiResult = await optimizeSchedules(
       schedulesForReoptimization,
       schedulesByImage || [],
       allFixedSchedules
     );
-
-    console.log(`✅ AI 재최적화 완료`);
-    console.log('  - optimizedSchedules:', aiResult.optimizedSchedules?.length, '개');
 
     const optimizedSchedule = aiResult.optimizedSchedules || [];
 
@@ -418,7 +333,6 @@ router.post('/select-fixed-option', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ 옵션 선택 오류:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -440,10 +354,6 @@ router.post('/resolve-fixed-conflict', async (req, res) => {
       existingFixedSchedules
     } = req.body;
 
-    console.log('\n🔧 충돌 해결:', resolution);
-    console.log('  신규:', pendingFixed?.title);
-    console.log('  기존:', conflictingFixed?.map(c => c.title).join(', '));
-
     let updatedFixed = [...existingFixedSchedules];
 
     if (resolution === 'keep_new') {
@@ -452,14 +362,11 @@ router.post('/resolve-fixed-conflict', async (req, res) => {
       updatedFixed = updatedFixed.filter(f => !conflictIds.has(f.id));
       updatedFixed.push(pendingFixed);
 
-      console.log('✅ 신규 유지, 기존 제거');
     } else if (resolution === 'keep_existing') {
       // 신규 추가 안 함, 기존 유지
-      console.log('✅ 기존 유지, 신규 취소');
     } else if (resolution === 'keep_both') {
       // 둘 다 유지 (겹침 허용)
       updatedFixed.push(pendingFixed);
-      console.log('⚠️ 둘 다 유지 (겹침 허용)');
     }
 
     // 시간표 재최적화
@@ -467,8 +374,6 @@ router.post('/resolve-fixed-conflict', async (req, res) => {
       allSchedules,
       updatedFixed
     );
-
-    console.log(`✅ 재최적화 완료: ${reoptResult.totalCount}개`);
 
     res.json({
       success: true,
@@ -487,7 +392,6 @@ router.post('/resolve-fixed-conflict', async (req, res) => {
           : '두 일정 모두 유지합니다. (겹침 허용)'
     });
   } catch (error) {
-    console.error('❌ 충돌 해결 오류:', error);
     res.status(500).json({
       success: false,
       error: error.message
