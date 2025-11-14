@@ -50,6 +50,7 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
         // Process personalTimes (personal blocked times)
         const personalTimes = data.personalTimes || [];
 
+
         // Separate schedule data for display
         setMemberSchedule(weekdaySchedule);
         setMemberExceptions(exceptions);
@@ -84,7 +85,7 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
         }
       }}
     >
-      <div className="bg-white p-4 rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-bold text-gray-800">{memberName}님의 시간표</h3>
         </div>
@@ -108,7 +109,7 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
             </div>
 
             {(memberSchedule.length > 0 || memberExceptions.length > 0 || memberPersonalTimes.length > 0) ? (
-              <div className="overflow-auto max-h-[55vh]">
+              <div className="overflow-auto" style={{ maxHeight: 'calc(90vh - 10px)' }}>
                 <ScheduleGridSelector
                   key={renderKey}
                   schedule={memberSchedule}
