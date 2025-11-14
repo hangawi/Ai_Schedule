@@ -39,7 +39,7 @@ const MemberStatsModal = ({ isOpen, onClose, member, isOwner, currentRoom, onRef
   }
 
   const memberData = latestMember.user || latestMember;
-  const memberName = memberData?.name || `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || '멤버';
+  const memberName = `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || '멤버';
 
   return (
     <div

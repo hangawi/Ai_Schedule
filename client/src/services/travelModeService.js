@@ -187,7 +187,7 @@ class TravelModeService {
         orderedMembers.push({
           ...nearestMember,
           travelInfo: shortestTravel,
-          travelFrom: currentLocation.name || currentLocation.firstName || '방장'
+          travelFrom: `${currentLocation.firstName || ''} ${currentLocation.lastName || ''}`.trim() || '방장'
         });
         unvisited.splice(shortestIndex, 1);
         currentLocation = nearestMember.user;
@@ -220,7 +220,7 @@ class TravelModeService {
         schedule.push({
           type: 'travel',
           from: member.travelFrom,
-          to: member.user.firstName || member.user.name,
+          to: `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim(),
           startTime: new Date(currentTime),
           duration: travelSlots,
           travelInfo: member.travelInfo
@@ -233,7 +233,7 @@ class TravelModeService {
         type: 'activity',
         member: member,
         memberId: member.user._id.toString(),
-        memberName: member.user.firstName || member.user.name,
+        memberName: `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim(),
         startTime: new Date(currentTime),
         duration: minSlotsPerMember
       });

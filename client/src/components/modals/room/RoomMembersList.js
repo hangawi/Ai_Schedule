@@ -17,7 +17,7 @@ const RoomMembersList = ({ room, removeMember }) => {
           `${userData.firstName} ${userData.lastName}`.trim() ||
           "이름 정보 없음";
         const displayEmail = userData.email || "이메일 정보 없음";
-        const displayInitial = (userData.firstName || userData.name || "U")
+        const displayInitial = (userData.firstName || "U")
           .charAt(0)
           .toUpperCase();
 
