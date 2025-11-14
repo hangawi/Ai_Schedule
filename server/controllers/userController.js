@@ -157,6 +157,85 @@ exports.getUserScheduleById = async (req, res) => {
   }
 };
 
+// @desc    Get logged in user's profile
+// @route   GET /api/users/profile
+// @access  Private
+exports.getUserProfile = async (req, res) => {
+  try {
+    console.log('[getUserProfile] Fetching profile for user:', req.user.id);
+    const user = await User.findById(req.user.id).select('firstName lastName email phone address addressDetail addressLat addressLng addressPlaceId occupation birthdate');
+
+    if (!user) {
+      console.log('[getUserProfile] User not found:', req.user.id);
+      return res.status(404).json({ msg: 'User not found' });
+    }
+
+    console.log('[getUserProfile] Returning profile:', { firstName: user.firstName, lastName: user.lastName });
+    res.json({
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      phone: user.phone,
+      address: user.address,
+      addressDetail: user.addressDetail,
+      addressLat: user.addressLat,
+      addressLng: user.addressLng,
+      addressPlaceId: user.addressPlaceId,
+      occupation: user.occupation,
+      birthdate: user.birthdate
+    });
+  } catch (err) {
+    console.error('[getUserProfile] Error:', err);
+    res.status(500).send('Server Error');
+  }
+};
+
+// @desc    Update logged in user's profile
+// @route   PUT /api/users/profile
+// @access  Private
+exports.updateUserProfile = async (req, res) => {
+  try {
+    const { firstName, lastName, phone, address, addressDetail, addressLat, addressLng, addressPlaceId, occupation, birthdate } = req.body;
+
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ msg: 'User not found' });
+    }
+
+    // Update fields
+    if (firstName !== undefined) user.firstName = firstName;
+    if (lastName !== undefined) user.lastName = lastName;
+    if (phone !== undefined) user.phone = phone;
+    if (address !== undefined) user.address = address;
+    if (addressDetail !== undefined) user.addressDetail = addressDetail;
+    if (addressLat !== undefined) user.addressLat = addressLat;
+    if (addressLng !== undefined) user.addressLng = addressLng;
+    if (addressPlaceId !== undefined) user.addressPlaceId = addressPlaceId;
+    if (occupation !== undefined) user.occupation = occupation;
+    if (birthdate !== undefined) user.birthdate = birthdate;
+
+    await user.save();
+
+    res.json({
+      msg: 'Profile updated successfully',
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      phone: user.phone,
+      address: user.address,
+      addressDetail: user.addressDetail,
+      addressLat: user.addressLat,
+      addressLng: user.addressLng,
+      addressPlaceId: user.addressPlaceId,
+      occupation: user.occupation,
+      birthdate: user.birthdate
+    });
+  } catch (err) {
+    res.status(500).send('Server Error');
+  }
+};
+
 // @desc    Get user profile by ID (주소 포함)
 // @route   GET /api/users/profile/:userId
 // @access  Private

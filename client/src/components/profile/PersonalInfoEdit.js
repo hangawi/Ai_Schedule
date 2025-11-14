@@ -6,7 +6,8 @@ import { User, Mail, Phone, MapPin, Briefcase, Calendar } from 'lucide-react';
 
 const PersonalInfoEdit = () => {
   const [userInfo, setUserInfo] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     email: '',
     phone: '',
     address: '',
@@ -28,9 +29,12 @@ const PersonalInfoEdit = () => {
   const fetchUserInfo = async () => {
     try {
       setIsLoading(true);
+      console.log('[PersonalInfoEdit] Fetching user profile...');
       const data = await userService.getUserProfile();
+      console.log('[PersonalInfoEdit] Received profile data:', data);
       setUserInfo({
-        name: data.name || '',
+        firstName: data.firstName || '',
+        lastName: data.lastName || '',
         email: data.email || '',
         phone: data.phone || '',
         address: data.address || '',
@@ -42,6 +46,7 @@ const PersonalInfoEdit = () => {
         birthdate: data.birthdate || ''
       });
     } catch (error) {
+      console.error('[PersonalInfoEdit] Error fetching profile:', error);
       setMessage({ type: 'error', text: '개인정보를 불러오는데 실패했습니다.' });
     } finally {
       setIsLoading(false);
@@ -63,15 +68,22 @@ const PersonalInfoEdit = () => {
       setIsSaving(true);
       setMessage({ type: '', text: '' });
 
-      await userService.updateUserProfile(userInfo);
+      console.log('[PersonalInfoEdit] Updating profile with:', userInfo);
+      const result = await userService.updateUserProfile(userInfo);
+      console.log('[PersonalInfoEdit] Update result:', result);
 
       setMessage({ type: 'success', text: '개인정보가 성공적으로 저장되었습니다!' });
+
+      // Dispatch custom event to refresh user data in header
+      console.log('[PersonalInfoEdit] Dispatching userProfileUpdated event');
+      window.dispatchEvent(new CustomEvent('userProfileUpdated'));
 
       // 3초 후 메시지 자동 제거
       setTimeout(() => {
         setMessage({ type: '', text: '' });
       }, 3000);
     } catch (error) {
+      console.error('[PersonalInfoEdit] Error updating profile:', error);
       setMessage({ type: 'error', text: '개인정보 저장에 실패했습니다.' });
     } finally {
       setIsSaving(false);
@@ -104,20 +116,36 @@ const PersonalInfoEdit = () => {
         {/* 왼쪽: 개인정보 입력 폼 */}
         <div className="bg-white rounded-lg shadow-md p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
-          {/* 이름 */}
-          <div>
-            <label className="flex items-center text-sm font-medium text-gray-700 mb-2">
-              <User size={16} className="mr-2" />
-              이름
-            </label>
-            <input
-              type="text"
-              name="name"
-              value={userInfo.name}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="이름을 입력하세요"
-            />
+          {/* 이름과 성 */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="flex items-center text-sm font-medium text-gray-700 mb-2">
+                <User size={16} className="mr-2" />
+                이름
+              </label>
+              <input
+                type="text"
+                name="firstName"
+                value={userInfo.firstName}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="이름"
+              />
+            </div>
+            <div>
+              <label className="flex items-center text-sm font-medium text-gray-700 mb-2">
+                <User size={16} className="mr-2" />
+                성
+              </label>
+              <input
+                type="text"
+                name="lastName"
+                value={userInfo.lastName}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="성"
+              />
+            </div>
           </div>
 
           {/* 이메일 */}

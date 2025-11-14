@@ -14,22 +14,25 @@ export const useAuth = () => {
          try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000);
-            
+
+            console.log('[useAuth] Fetching user data from /api/auth...');
             const response = await fetch(`${API_BASE_URL}/api/auth`, {
                headers: { 'x-auth-token': token },
                signal: controller.signal
             });
-            
+
             clearTimeout(timeoutId);
-            
+
             if (response.ok) {
                const userData = await response.json();
+               console.log('[useAuth] Received user data:', userData);
                setIsLoggedIn(true);
                setUser(userData);
                if (loginMethod) {
                 setLoginMethod(loginMethod);
                }
             } else {
+               console.error('[useAuth] Failed to fetch user data, status:', response.status);
                localStorage.removeItem('token');
                localStorage.removeItem('loginMethod');
                setIsLoggedIn(false);
@@ -37,7 +40,7 @@ export const useAuth = () => {
             }
          } catch (error) {
             if (error.name !== 'AbortError') {
-               // Error fetching user data - silently handle error
+               console.error('[useAuth] Error fetching user:', error);
             }
             localStorage.removeItem('token');
             localStorage.removeItem('loginMethod');
@@ -49,6 +52,18 @@ export const useAuth = () => {
 
    useEffect(() => {
       fetchUser();
+
+      // Listen for profile update events
+      const handleProfileUpdate = () => {
+         console.log('[useAuth] Received userProfileUpdated event, refetching user...');
+         fetchUser();
+      };
+
+      window.addEventListener('userProfileUpdated', handleProfileUpdate);
+
+      return () => {
+         window.removeEventListener('userProfileUpdated', handleProfileUpdate);
+      };
    }, [fetchUser]);
 
    const handleLoginSuccess = useCallback((userData, loginType) => {

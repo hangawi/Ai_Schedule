@@ -114,7 +114,11 @@ const ScheduleGridSelector = ({
 
   // ⭐ personalTimes와 fixedSchedules 합치기
   const allPersonalTimes = React.useMemo(() => {
-    const combined = [...(personalTimes || [])];
+    // personalTimes에 색상 추가 (없으면 보라색)
+    const combined = (personalTimes || []).map(p => ({
+      ...p,
+      color: p.color || '#8b5cf6'
+    }));
 
     // 고정 일정을 personalTime 형식으로 변환해서 추가
     if (fixedSchedules && fixedSchedules.length > 0) {
@@ -548,8 +552,6 @@ const ScheduleGridSelector = ({
 
     // 새로운 접근: personalTimes와 schedule를 합쳐서 각 요일별 일정 추출 + 같은 제목끼리 병합
     const getDaySchedules = (dayOfWeek, targetDate) => {
-      console.log(`🔍 [병합모드] getDaySchedules 호출 - 요일=${dayOfWeek}, targetDate=`, targetDate);
-
       // 1. personalTimes에서 해당 요일 필터링 + 색상 추가
       const personalFiltered = allPersonalTimes.filter(p => {
         const personalDays = p.days || [];
@@ -561,9 +563,7 @@ const ScheduleGridSelector = ({
             const scheduleDate = new Date(p.specificDate);
             const targetDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
             const scheduleDateStr = `${scheduleDate.getFullYear()}-${String(scheduleDate.getMonth() + 1).padStart(2, '0')}-${String(scheduleDate.getDate()).padStart(2, '0')}`;
-            const isMatch = targetDateStr === scheduleDateStr;
-            console.log(`  📅 [병합모드 specificDate] targetDate=${targetDateStr}, scheduleDate=${scheduleDateStr}, 매칭=${isMatch}, 제목=${p.title || p.subjectName}`);
-            return isMatch;
+            return targetDateStr === scheduleDateStr;
           } else {
             // targetDate가 없으면 요일만 비교 (fallback)
             const dateObj = new Date(p.specificDate);
@@ -586,8 +586,8 @@ const ScheduleGridSelector = ({
         return matches;
       }).map(p => ({
         ...p,
-        // 개인시간에 색상이 없으면 회색 계열 색상 할당
-        color: p.color || '#6b7280'
+        // 개인시간에 색상이 없으면 보라색 할당
+        color: p.color || '#8b5cf6'
       }));
 
       // 2. schedule (defaultSchedule)에서 해당 요일 필터링 - 선호도를 색상으로 표시
@@ -610,9 +610,7 @@ const ScheduleGridSelector = ({
           const exceptionDate = new Date(e.specificDate);
           const targetDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
           const exceptionDateStr = `${exceptionDate.getFullYear()}-${String(exceptionDate.getMonth() + 1).padStart(2, '0')}-${String(exceptionDate.getDate()).padStart(2, '0')}`;
-          const isMatch = targetDateStr === exceptionDateStr;
-          console.log(`  📅 [병합모드 exceptions] targetDate=${targetDateStr}, exceptionDate=${exceptionDateStr}, 매칭=${isMatch}, 제목=${e.title}`);
-          return isMatch;
+          return targetDateStr === exceptionDateStr;
         }
         return false;
       }).map(e => ({
@@ -622,8 +620,6 @@ const ScheduleGridSelector = ({
 
       // 4. 세 배열 합치기
       const filteredSchedules = [...personalFiltered, ...scheduleFiltered, ...exceptionsFiltered];
-
-      console.log(`  ✅ [병합모드] 필터링 결과 - personalFiltered=${personalFiltered.length}개, scheduleFiltered=${scheduleFiltered.length}개, exceptionsFiltered=${exceptionsFiltered.length}개, 합계=${filteredSchedules.length}개`);
 
       // 디버깅: 이고은 원장 일정 확인
       const debugSchedules = filteredSchedules.filter(s => s.title?.includes('이고은') || s.instructor?.includes('이고은'));
@@ -697,7 +693,6 @@ const ScheduleGridSelector = ({
     };
 
     const timeSlots = getCurrentTimeSlots();
-    console.log(`⏰ [병합모드] 시간 범위: ${timeRange.start}시 ~ ${timeRange.end}시, timeSlots 개수: ${timeSlots.length}개, showFullDay=${showFullDay}`);
 
     // 시간 슬롯별 위치 계산을 위한 헬퍼 함수
     const getTimeSlotIndex = (time) => {
@@ -726,7 +721,7 @@ const ScheduleGridSelector = ({
           ))}
         </div>
 
-        <div>
+        <div className="overflow-y-auto" style={{ maxHeight: '600px' }}>
           <div className="flex">
             {/* 시간 컬럼은 전체 시간대 표시 */}
             <div className="w-12 flex-shrink-0">
@@ -797,8 +792,31 @@ const ScheduleGridSelector = ({
                     const startIndex = getTimeSlotIndex(startTime);
                     const topPosition = startIndex * 16;
 
-                    // 스케줄의 색상 사용 (없으면 기본 빨간색)
-                    const bgColor = seg.schedule.color || '#f87171';
+                    // 스케줄의 색상 사용 (없으면 주황색)
+                    // Tailwind 클래스를 hex 색상으로 변환
+                    const tailwindToHex = {
+                      'bg-gray-100': '#f3f4f6', 'bg-gray-200': '#e5e7eb', 'bg-gray-300': '#d1d5db',
+                      'bg-gray-400': '#9ca3af', 'bg-gray-500': '#6b7280', 'bg-gray-600': '#4b5563',
+                      'bg-gray-700': '#374151', 'bg-gray-800': '#1f2937', 'bg-gray-900': '#111827',
+                      'bg-red-100': '#fee2e2', 'bg-red-200': '#fecaca', 'bg-red-300': '#fca5a5',
+                      'bg-red-400': '#f87171', 'bg-red-500': '#ef4444', 'bg-red-600': '#dc2626',
+                      'bg-orange-100': '#ffedd5', 'bg-orange-200': '#fed7aa', 'bg-orange-300': '#fdba74',
+                      'bg-orange-400': '#fb923c', 'bg-orange-500': '#f97316', 'bg-orange-600': '#ea580c',
+                      'bg-yellow-100': '#fef3c7', 'bg-yellow-200': '#fde68a', 'bg-yellow-300': '#fcd34d',
+                      'bg-yellow-400': '#fbbf24', 'bg-yellow-500': '#f59e0b', 'bg-yellow-600': '#d97706',
+                      'bg-green-100': '#d1fae5', 'bg-green-200': '#a7f3d0', 'bg-green-300': '#6ee7b7',
+                      'bg-green-400': '#34d399', 'bg-green-500': '#10b981', 'bg-green-600': '#059669',
+                      'bg-blue-100': '#dbeafe', 'bg-blue-200': '#bfdbfe', 'bg-blue-300': '#93c5fd',
+                      'bg-blue-400': '#60a5fa', 'bg-blue-500': '#3b82f6', 'bg-blue-600': '#2563eb',
+                      'bg-purple-100': '#e9d5ff', 'bg-purple-200': '#ddd6fe', 'bg-purple-300': '#c4b5fd',
+                      'bg-purple-400': '#a78bfa', 'bg-purple-500': '#8b5cf6', 'bg-purple-600': '#7c3aed',
+                      'bg-pink-100': '#fce7f3', 'bg-pink-200': '#fbcfe8', 'bg-pink-300': '#f9a8d4',
+                      'bg-pink-400': '#f472b6', 'bg-pink-500': '#ec4899', 'bg-pink-600': '#db2777'
+                    };
+
+                    let rawColor = seg.schedule.color || '#8b5cf6';
+                    const bgColor = tailwindToHex[rawColor] || rawColor;
+
                     const columnWidth = seg.overlapCount > 1 ? `${100 / seg.overlapCount}%` : '100%';
                     const leftPosition = seg.overlapCount > 1 ? `${(100 / seg.overlapCount) * seg.overlapIndex}%` : '0%';
 
@@ -959,6 +977,24 @@ const ScheduleGridSelector = ({
 
                             const personalSlot = allPersonalTimes.find(p => {
                                 const personalDays = p.days || [];
+
+                                // ⭐ specificDate가 있으면 정확한 날짜로 비교
+                                if (p.specificDate && personalDays.length === 0) {
+                                    if (p.specificDate === dateStr) {
+                                        const startMinutes = timeToMinutes(p.startTime);
+                                        const endMinutes = timeToMinutes(p.endTime);
+                                        const currentMinutes = timeToMinutes(time);
+
+                                        if (endMinutes <= startMinutes) {
+                                            return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+                                        } else {
+                                            return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+                                        }
+                                    }
+                                    return false;
+                                }
+
+                                // 반복 일정인 경우
                                 if (p.isRecurring !== false && personalDays.length > 0) {
                                     const convertedDays = personalDays.map(day => {
                                         return day === 7 ? 0 : day; // 7(일요일) -> 0, 나머지는 그대로
@@ -986,8 +1022,31 @@ const ScheduleGridSelector = ({
                                 slotClass = `${priorityConfig[exceptionSlot.priority]?.color || 'bg-blue-600'} hover:opacity-90`;
                                 content = <span className="text-xs text-white truncate px-1 font-medium" title={exceptionSlot.title}>{exceptionSlot.title}</span>;
                             } else if (personalSlot) {
-                                // personalSlot의 색상 사용
-                                const personalColor = personalSlot.color || '#f87171';
+                                // personalSlot의 색상 사용 (없으면 주황색)
+                                // Tailwind 클래스를 hex 색상으로 변환
+                                const tailwindToHex = {
+                                  'bg-gray-100': '#f3f4f6', 'bg-gray-200': '#e5e7eb', 'bg-gray-300': '#d1d5db',
+                                  'bg-gray-400': '#9ca3af', 'bg-gray-500': '#6b7280', 'bg-gray-600': '#4b5563',
+                                  'bg-gray-700': '#374151', 'bg-gray-800': '#1f2937', 'bg-gray-900': '#111827',
+                                  'bg-red-100': '#fee2e2', 'bg-red-200': '#fecaca', 'bg-red-300': '#fca5a5',
+                                  'bg-red-400': '#f87171', 'bg-red-500': '#ef4444', 'bg-red-600': '#dc2626',
+                                  'bg-orange-100': '#ffedd5', 'bg-orange-200': '#fed7aa', 'bg-orange-300': '#fdba74',
+                                  'bg-orange-400': '#fb923c', 'bg-orange-500': '#f97316', 'bg-orange-600': '#ea580c',
+                                  'bg-yellow-100': '#fef3c7', 'bg-yellow-200': '#fde68a', 'bg-yellow-300': '#fcd34d',
+                                  'bg-yellow-400': '#fbbf24', 'bg-yellow-500': '#f59e0b', 'bg-yellow-600': '#d97706',
+                                  'bg-green-100': '#d1fae5', 'bg-green-200': '#a7f3d0', 'bg-green-300': '#6ee7b7',
+                                  'bg-green-400': '#34d399', 'bg-green-500': '#10b981', 'bg-green-600': '#059669',
+                                  'bg-blue-100': '#dbeafe', 'bg-blue-200': '#bfdbfe', 'bg-blue-300': '#93c5fd',
+                                  'bg-blue-400': '#60a5fa', 'bg-blue-500': '#3b82f6', 'bg-blue-600': '#2563eb',
+                                  'bg-purple-100': '#e9d5ff', 'bg-purple-200': '#ddd6fe', 'bg-purple-300': '#c4b5fd',
+                                  'bg-purple-400': '#a78bfa', 'bg-purple-500': '#8b5cf6', 'bg-purple-600': '#7c3aed',
+                                  'bg-pink-100': '#fce7f3', 'bg-pink-200': '#fbcfe8', 'bg-pink-300': '#f9a8d4',
+                                  'bg-pink-400': '#f472b6', 'bg-pink-500': '#ec4899', 'bg-pink-600': '#db2777'
+                                };
+
+                                let rawColor = personalSlot.color || '#8b5cf6';
+                                const personalColor = tailwindToHex[rawColor] || rawColor;
+
                                 slotClass = 'hover:opacity-90';
                                 customStyle = { backgroundColor: personalColor };
                                 const displayTitle = personalSlot.title || personalSlot.subjectName || personalSlot.academyName || '일정';
@@ -1043,6 +1102,15 @@ const ScheduleGridSelector = ({
       const hasException = exceptions.some(e => e.specificDate === dateStr);
       const hasPersonal = allPersonalTimes.some(p => {
         const personalDays = p.days || [];
+
+        // ⭐ specificDate가 있으면 정확한 날짜로 비교
+        if (p.specificDate && personalDays.length === 0) {
+          const scheduleDate = new Date(p.specificDate);
+          const scheduleDateStr = `${scheduleDate.getFullYear()}-${String(scheduleDate.getMonth() + 1).padStart(2, '0')}-${String(scheduleDate.getDate()).padStart(2, '0')}`;
+          return dateStr === scheduleDateStr;
+        }
+
+        // 반복 일정인 경우 요일로 비교
         const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
         const isRecurring = p.isRecurring !== false;
         return isRecurring && convertedDays.includes(dayOfWeek);
@@ -1119,7 +1187,7 @@ const ScheduleGridSelector = ({
                     </div>
                   )}
                   {day.hasPersonal && (
-                    <div className="text-xs px-2 py-1 bg-gray-100 text-gray-800 rounded truncate">
+                    <div className="text-xs px-2 py-1 bg-purple-100 text-purple-800 rounded truncate">
                       개인 일정
                     </div>
                   )}
@@ -1222,8 +1290,29 @@ const ScheduleGridSelector = ({
                     textColor = 'text-white';
                     content = `${block.title} (${block.duration}분)`;
                   } else if (block.type === 'personal') {
-                    // personalTime에 color가 있으면 사용, 없으면 회색
-                    const personalColor = multipleSchedules[0]?.color || '#6b7280';
+                    // personalTime에 color가 있으면 사용, 없으면 주황색
+                    // Tailwind 클래스를 hex 색상으로 변환
+                    const tailwindToHex = {
+                      'bg-gray-100': '#f3f4f6', 'bg-gray-200': '#e5e7eb', 'bg-gray-300': '#d1d5db',
+                      'bg-gray-400': '#9ca3af', 'bg-gray-500': '#6b7280', 'bg-gray-600': '#4b5563',
+                      'bg-gray-700': '#374151', 'bg-gray-800': '#1f2937', 'bg-gray-900': '#111827',
+                      'bg-red-100': '#fee2e2', 'bg-red-200': '#fecaca', 'bg-red-300': '#fca5a5',
+                      'bg-red-400': '#f87171', 'bg-red-500': '#ef4444', 'bg-red-600': '#dc2626',
+                      'bg-orange-100': '#ffedd5', 'bg-orange-200': '#fed7aa', 'bg-orange-300': '#fdba74',
+                      'bg-orange-400': '#fb923c', 'bg-orange-500': '#f97316', 'bg-orange-600': '#ea580c',
+                      'bg-yellow-100': '#fef3c7', 'bg-yellow-200': '#fde68a', 'bg-yellow-300': '#fcd34d',
+                      'bg-yellow-400': '#fbbf24', 'bg-yellow-500': '#f59e0b', 'bg-yellow-600': '#d97706',
+                      'bg-green-100': '#d1fae5', 'bg-green-200': '#a7f3d0', 'bg-green-300': '#6ee7b7',
+                      'bg-green-400': '#34d399', 'bg-green-500': '#10b981', 'bg-green-600': '#059669',
+                      'bg-blue-100': '#dbeafe', 'bg-blue-200': '#bfdbfe', 'bg-blue-300': '#93c5fd',
+                      'bg-blue-400': '#60a5fa', 'bg-blue-500': '#3b82f6', 'bg-blue-600': '#2563eb',
+                      'bg-purple-100': '#e9d5ff', 'bg-purple-200': '#ddd6fe', 'bg-purple-300': '#c4b5fd',
+                      'bg-purple-400': '#a78bfa', 'bg-purple-500': '#8b5cf6', 'bg-purple-600': '#7c3aed',
+                      'bg-pink-100': '#fce7f3', 'bg-pink-200': '#fbcfe8', 'bg-pink-300': '#f9a8d4',
+                      'bg-pink-400': '#f472b6', 'bg-pink-500': '#ec4899', 'bg-pink-600': '#db2777'
+                    };
+                    let rawColor = multipleSchedules[0]?.color || '#8b5cf6';
+                    const personalColor = tailwindToHex[rawColor] || rawColor;
                     bgColor = personalColor; // inline style로 사용
                     textColor = 'text-white';
                     if (multipleSchedules.length > 1) {
@@ -1243,7 +1332,7 @@ const ScheduleGridSelector = ({
                     <div
                       key={index}
                       className={`p-3 rounded-lg ${multipleSchedules.length > 1 ? 'bg-gray-100' : (isHexColor ? '' : bgColor)}`}
-                      style={isHexColor && !multipleSchedules.length ? { backgroundColor: bgColor } : {}}
+                      style={isHexColor && multipleSchedules.length <= 1 ? { backgroundColor: bgColor } : {}}
                     >
                       <div className="flex justify-between items-center mb-2">
                         <span className={`text-sm font-medium ${multipleSchedules.length > 1 ? 'text-gray-700' : textColor}`}>
@@ -1256,15 +1345,29 @@ const ScheduleGridSelector = ({
                       </div>
                       {multipleSchedules.length > 1 ? (
                         <div className="flex gap-2">
-                          {multipleSchedules.map((p, idx) => (
-                            <div
-                              key={idx}
-                              className="flex-1 text-white text-sm px-3 py-2 rounded-lg text-center"
-                              style={{ backgroundColor: p.color || '#6b7280' }}
-                            >
-                              {p.title || p.subjectName || p.academyName || '일정'}
-                            </div>
-                          ))}
+                          {multipleSchedules.map((p, idx) => {
+                            // Tailwind 클래스를 hex 색상으로 변환
+                            const tailwindToHex = {
+                              'bg-gray-100': '#f3f4f6', 'bg-gray-200': '#e5e7eb', 'bg-gray-300': '#d1d5db',
+                              'bg-gray-400': '#9ca3af', 'bg-gray-500': '#6b7280', 'bg-gray-600': '#4b5563',
+                              'bg-red-100': '#fee2e2', 'bg-red-200': '#fecaca', 'bg-red-300': '#fca5a5',
+                              'bg-red-400': '#f87171', 'bg-red-500': '#ef4444', 'bg-red-600': '#dc2626',
+                              'bg-orange-100': '#ffedd5', 'bg-orange-500': '#f97316', 'bg-orange-600': '#ea580c',
+                              'bg-blue-100': '#dbeafe', 'bg-blue-400': '#60a5fa', 'bg-blue-600': '#2563eb'
+                            };
+                            let rawColor = p.color || '#8b5cf6';
+                            const finalColor = tailwindToHex[rawColor] || rawColor;
+
+                            return (
+                              <div
+                                key={idx}
+                                className="flex-1 text-white text-sm px-3 py-2 rounded-lg text-center"
+                                style={{ backgroundColor: finalColor }}
+                              >
+                                {p.title || p.subjectName || p.academyName || '일정'}
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
                         <div className={`text-sm mt-1 ${textColor}`}>
@@ -1355,8 +1458,29 @@ const ScheduleGridSelector = ({
                     textColor = 'text-white';
                     content = exceptionSlot.title;
                   } else if (personalSlots.length > 0) {
-                    // personalTime에 color가 있으면 사용, 없으면 회색
-                    bgColor = personalSlots[0].color || '#6b7280';
+                    // personalTime에 color가 있으면 사용, 없으면 주황색
+                    // Tailwind 클래스를 hex 색상으로 변환
+                    const tailwindToHex = {
+                      'bg-gray-100': '#f3f4f6', 'bg-gray-200': '#e5e7eb', 'bg-gray-300': '#d1d5db',
+                      'bg-gray-400': '#9ca3af', 'bg-gray-500': '#6b7280', 'bg-gray-600': '#4b5563',
+                      'bg-gray-700': '#374151', 'bg-gray-800': '#1f2937', 'bg-gray-900': '#111827',
+                      'bg-red-100': '#fee2e2', 'bg-red-200': '#fecaca', 'bg-red-300': '#fca5a5',
+                      'bg-red-400': '#f87171', 'bg-red-500': '#ef4444', 'bg-red-600': '#dc2626',
+                      'bg-orange-100': '#ffedd5', 'bg-orange-200': '#fed7aa', 'bg-orange-300': '#fdba74',
+                      'bg-orange-400': '#fb923c', 'bg-orange-500': '#f97316', 'bg-orange-600': '#ea580c',
+                      'bg-yellow-100': '#fef3c7', 'bg-yellow-200': '#fde68a', 'bg-yellow-300': '#fcd34d',
+                      'bg-yellow-400': '#fbbf24', 'bg-yellow-500': '#f59e0b', 'bg-yellow-600': '#d97706',
+                      'bg-green-100': '#d1fae5', 'bg-green-200': '#a7f3d0', 'bg-green-300': '#6ee7b7',
+                      'bg-green-400': '#34d399', 'bg-green-500': '#10b981', 'bg-green-600': '#059669',
+                      'bg-blue-100': '#dbeafe', 'bg-blue-200': '#bfdbfe', 'bg-blue-300': '#93c5fd',
+                      'bg-blue-400': '#60a5fa', 'bg-blue-500': '#3b82f6', 'bg-blue-600': '#2563eb',
+                      'bg-purple-100': '#e9d5ff', 'bg-purple-200': '#ddd6fe', 'bg-purple-300': '#c4b5fd',
+                      'bg-purple-400': '#a78bfa', 'bg-purple-500': '#8b5cf6', 'bg-purple-600': '#7c3aed',
+                      'bg-pink-100': '#fce7f3', 'bg-pink-200': '#fbcfe8', 'bg-pink-300': '#f9a8d4',
+                      'bg-pink-400': '#f472b6', 'bg-pink-500': '#ec4899', 'bg-pink-600': '#db2777'
+                    };
+                    let rawColor = personalSlots[0].color || '#8b5cf6';
+                    bgColor = tailwindToHex[rawColor] || rawColor;
                     textColor = 'text-white';
                     if (personalSlots.length > 1) {
                       hasMultiple = true;
@@ -1382,15 +1506,29 @@ const ScheduleGridSelector = ({
                       <span className={`text-sm font-medium ${!hasMultiple ? textColor : 'text-gray-700'}`}>{time}</span>
                       {hasMultiple ? (
                         <div className="flex gap-1 flex-1 ml-2">
-                          {personalSlots.map((p, idx) => (
-                            <div
-                              key={idx}
-                              className="flex-1 text-white text-xs px-2 py-1 rounded text-center"
-                              style={{ backgroundColor: p.color || '#6b7280' }}
-                            >
-                              {p.title || p.subjectName || p.academyName || '일정'}
-                            </div>
-                          ))}
+                          {personalSlots.map((p, idx) => {
+                            // Tailwind 클래스를 hex 색상으로 변환
+                            const tailwindToHex = {
+                              'bg-gray-100': '#f3f4f6', 'bg-gray-200': '#e5e7eb', 'bg-gray-300': '#d1d5db',
+                              'bg-gray-400': '#9ca3af', 'bg-gray-500': '#6b7280', 'bg-gray-600': '#4b5563',
+                              'bg-red-100': '#fee2e2', 'bg-red-200': '#fecaca', 'bg-red-300': '#fca5a5',
+                              'bg-red-400': '#f87171', 'bg-red-500': '#ef4444', 'bg-red-600': '#dc2626',
+                              'bg-orange-100': '#ffedd5', 'bg-orange-500': '#f97316', 'bg-orange-600': '#ea580c',
+                              'bg-blue-100': '#dbeafe', 'bg-blue-400': '#60a5fa', 'bg-blue-600': '#2563eb'
+                            };
+                            let rawColor = p.color || '#8b5cf6';
+                            const finalColor = tailwindToHex[rawColor] || rawColor;
+
+                            return (
+                              <div
+                                key={idx}
+                                className="flex-1 text-white text-xs px-2 py-1 rounded text-center"
+                                style={{ backgroundColor: finalColor }}
+                              >
+                                {p.title || p.subjectName || p.academyName || '일정'}
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
                         <span className={`text-sm ${textColor}`}>{content}</span>
