@@ -462,6 +462,15 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                   currentEvents: globalEvents
                });
 
+            case 'coordination':
+               // 조율방 탭 - 시간 변경 요청
+               const currentRoomId = localStorage.getItem('currentRoomId');
+               return await handleChatMessage(message, {
+                  context: 'coordination',
+                  roomId: currentRoomId,
+                  currentEvents: globalEvents
+               });
+
             default:
                // 기본값 - 일반 처리
                return await handleChatMessage(message, {

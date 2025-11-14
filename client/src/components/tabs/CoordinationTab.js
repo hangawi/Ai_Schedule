@@ -119,6 +119,19 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   useEffect(() => {
   }, [receivedRequests]);
 
+  // Listen for coordination updates (time swaps)
+  useEffect(() => {
+    const handleCoordinationUpdate = (event) => {
+      if (event.detail.type === 'timeSwap' && currentRoom && event.detail.roomId === currentRoom._id) {
+        // Refresh room details
+        fetchRoomDetails(currentRoom._id);
+      }
+    };
+
+    window.addEventListener('coordinationUpdate', handleCoordinationUpdate);
+    return () => window.removeEventListener('coordinationUpdate', handleCoordinationUpdate);
+  }, [currentRoom]);
+
   // 방장 개인시간 동기화 함수
   const syncOwnerPersonalTimes = async () => {
     if (!currentRoom || !isRoomOwner(user, currentRoom)) {

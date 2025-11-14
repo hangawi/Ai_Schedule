@@ -194,9 +194,13 @@ function App() {
       setShowBackgroundGuide(false);
    };
 
+   // API 키 디버깅
+   const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || 'AIzaSyD-vRy7OPDKSxKUy2w52LBkqfSj2lJCwdY';
+   console.log('Google Maps API Key:', GOOGLE_MAPS_API_KEY);
+
    return (
       <LoadScript
-         googleMapsApiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY}
+         googleMapsApiKey={GOOGLE_MAPS_API_KEY}
          libraries={libraries}
          language="ko"
       >

@@ -209,6 +209,24 @@ const WeekView = ({
         } else {
           slotType = 'owner';
           slotData = ownerInfo;
+
+          // 🔒 Phase 1: Visibility Control - 조원은 자기 배정만, 방장은 전체 보기 (병합 모드)
+          if (!isRoomOwner && slotData && currentUser) {
+            const currentUserId = currentUser.id || currentUser._id;
+            const slotUserId = slotData.userId || slotData.actualUserId;
+
+            // 다른 사람의 슬롯이면 "배정됨"으로 표시
+            if (slotUserId && slotUserId.toString() !== currentUserId.toString()) {
+              slotData = {
+                ...slotData,
+                name: '배정됨',
+                subject: '배정됨',
+                color: '#9CA3AF',
+                textColor: '#4B5563',
+                isOtherMemberSlot: true
+              };
+            }
+          }
         }
       }
       // 3순위: 선택된 슬롯 (blocked나 owner가 아닌 경우에만)
@@ -524,6 +542,24 @@ const WeekView = ({
               // non_preferred는 빈 슬롯에만 적용 (ownerInfo가 없고 blocked도 없을 때)
               else if (ownerOriginalInfo && ownerOriginalInfo.type === 'non_preferred' && !ownerInfo && !blockedInfo && !roomExceptionInfo) {
                 finalBlockedInfo = { ...ownerOriginalInfo, ownerScheduleType: ownerOriginalInfo.type };
+              }
+
+              // 🔒 Phase 1: Visibility Control - 조원은 자기 배정만, 방장은 전체 보기
+              if (!isRoomOwner && finalOwnerInfo && currentUser) {
+                const currentUserId = currentUser.id || currentUser._id;
+                const slotUserId = finalOwnerInfo.userId || finalOwnerInfo.actualUserId;
+
+                // 다른 사람의 슬롯이면 "배정됨"으로 표시
+                if (slotUserId && slotUserId.toString() !== currentUserId.toString()) {
+                  finalOwnerInfo = {
+                    ...finalOwnerInfo,
+                    name: '배정됨',
+                    subject: '배정됨',
+                    color: '#9CA3AF',
+                    textColor: '#4B5563',
+                    isOtherMemberSlot: true
+                  };
+                }
               }
 
               const isBlocked = !!(finalBlockedInfo || finalRoomExceptionInfo);
