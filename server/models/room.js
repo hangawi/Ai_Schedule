@@ -330,6 +330,12 @@ const RoomSchema = new mongoose.Schema({
         type: String,
         default: null
       }
+    },
+    minHoursPerWeek: {
+      type: Number,
+      default: 3,
+      min: 1,
+      max: 10
     }
   }
 }, {

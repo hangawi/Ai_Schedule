@@ -1,5 +1,6 @@
 const Room = require('../models/room');
 const User = require('../models/user');
+const schedulingAlgorithm = require('../services/schedulingAlgorithm');
 
 // @desc    Create a new coordination room
 // @route   POST /api/coordination/rooms
@@ -194,8 +195,195 @@ exports.joinRoom = async (req, res) => {
       });
       await room.save();
 
-      await room.populate('owner', 'firstName lastName email');
-      await room.populate('members.user', 'firstName lastName email');
+      // 🚀 Phase 2: 조원 입장 시 자동배정 트리거
+      // 방장이 한 번이라도 자동배정을 실행한 적이 있어야 함 (timeSlots 존재 여부로 확인)
+      const hasRunAutoScheduleBefore = room.timeSlots && room.timeSlots.length > 0;
+
+      console.log('🔍 Auto-schedule check:', {
+         hasRunAutoScheduleBefore,
+         timeSlotsCount: room.timeSlots?.length || 0,
+         newMember: req.user.id
+      });
+
+      // Populate with full schedule info for auto-scheduling
+      await room.populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes priority');
+      await room.populate('members.user', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes priority');
+
+      // Check if all members have schedule set before running auto-schedule
+      const allMembersHaveSchedule = room.members.every(m =>
+         m.user.defaultSchedule && m.user.defaultSchedule.length > 0
+      );
+      const ownerHasSchedule = room.owner.defaultSchedule && room.owner.defaultSchedule.length > 0;
+
+      console.log('🔍 Schedule check:', {
+         ownerHasSchedule,
+         allMembersHaveSchedule,
+         totalMembers: room.members.length,
+         membersWithSchedule: room.members.filter(m => m.user.defaultSchedule?.length > 0).length
+      });
+
+      // 방장이 이미 자동배정을 실행한 적이 있고, 모든 조건이 충족되면 자동 재배정
+      if (hasRunAutoScheduleBefore && ownerHasSchedule && allMembersHaveSchedule) {
+         console.log('✅ Running auto-schedule on member join...');
+         try {
+            // Run auto-schedule automatically when new member joins
+            const membersOnly = room.members.filter(m => {
+               const memberId = m.user._id ? m.user._id.toString() : m.user.toString();
+               const ownerId = room.owner._id ? room.owner._id.toString() : room.owner.toString();
+               return memberId !== ownerId;
+            });
+
+            const minHoursPerWeek = room.settings?.minHoursPerWeek || 3;
+            const numWeeks = 4;
+
+            // 🔧 Use the same week as the last auto-schedule run
+            // Find the earliest date from existing timeSlots (BEFORE filtering) to determine the start week
+            let startDate = new Date();
+            if (room.timeSlots && room.timeSlots.length > 0) {
+               const dates = room.timeSlots
+                  .map(slot => new Date(slot.date))
+                  .filter(d => !isNaN(d.getTime()));
+               if (dates.length > 0) {
+                  const earliestDate = new Date(Math.min(...dates));
+                  // Get Monday of that week
+                  const day = earliestDate.getUTCDay();
+                  const diff = earliestDate.getUTCDate() - day + (day === 0 ? -6 : 1);
+                  earliestDate.setUTCDate(diff);
+                  earliestDate.setUTCHours(0, 0, 0, 0);
+                  startDate = earliestDate;
+                  console.log('📅 Using existing schedule start date:', startDate.toISOString().split('T')[0]);
+               }
+            } else {
+               console.log('📅 No existing slots, using current date:', startDate.toISOString().split('T')[0]);
+            }
+
+            const ownerBlockedTimes = [];
+            const existingCarryOvers = [];
+
+            for (const member of room.members) {
+               if (member.carryOver > 0) {
+                  existingCarryOvers.push({
+                     memberId: member.user._id.toString(),
+                     neededHours: member.carryOver,
+                     priority: member.priority || 3,
+                     week: startDate
+                  });
+               }
+            }
+
+            // Clear previous auto-generated slots (keep manually assigned and negotiation slots)
+            room.timeSlots = room.timeSlots.filter(slot => {
+               // Keep manually assigned slots (no assignedBy)
+               if (!slot.assignedBy) return true;
+               // Keep negotiation-based slots
+               if (slot.subject && slot.subject.includes('협의')) return true;
+               // Remove auto-generated slots
+               return false;
+            });
+            room.negotiations = [];
+
+            console.log('🔍 Before runAutoSchedule:', {
+               membersOnlyCount: membersOnly.length,
+               membersOnlyIds: membersOnly.map(m => m.user._id || m.user),
+               ownerHasDefaultSchedule: !!(room.owner.defaultSchedule?.length),
+               ownerId: room.owner._id,
+               minHoursPerWeek,
+               numWeeks,
+               remainingTimeSlotsCount: room.timeSlots.length
+            });
+
+            const result = schedulingAlgorithm.runAutoSchedule(
+               membersOnly,
+               room.owner,
+               room.timeSlots,
+               {
+                  minHoursPerWeek,
+                  numWeeks,
+                  currentWeek: startDate,
+                  ownerPreferences: room.settings.ownerPreferences || {},
+                  roomSettings: {
+                     ...room.settings,
+                     ownerBlockedTimes: ownerBlockedTimes
+                  },
+               },
+               existingCarryOvers,
+            );
+
+            console.log('🔍 Auto-schedule result:', {
+               hasAssignments: !!result.assignments,
+               assignmentCount: result.assignments ? Object.keys(result.assignments).length : 0,
+               negotiationsCount: result.negotiations?.length || 0
+            });
+
+            // schedulingAlgorithm returns assignments, not timeSlots directly
+            // Process assignments and convert to timeSlots (same logic as coordinationController)
+            if (result.assignments) {
+               console.log('✅ Auto-schedule successful, processing assignments...');
+
+               // Update negotiations
+               room.negotiations = result.negotiations || [];
+
+               // Convert assignments to timeSlots
+               const addedSlots = new Set();
+               Object.values(result.assignments).forEach(assignment => {
+                  if (assignment.slots && assignment.slots.length > 0) {
+                     assignment.slots.forEach(slot => {
+                        // Validate required fields
+                        if (!slot.day || !slot.startTime || !slot.endTime || !slot.date) {
+                           return;
+                        }
+
+                        // Create unique key to prevent duplicates
+                        const slotKey = `${assignment.memberId}-${slot.day}-${slot.startTime}-${slot.endTime}-${new Date(slot.date).toISOString().split('T')[0]}`;
+
+                        if (!addedSlots.has(slotKey)) {
+                           const newSlot = {
+                              user: assignment.memberId,
+                              date: slot.date,
+                              startTime: slot.startTime,
+                              endTime: slot.endTime,
+                              day: slot.day,
+                              priority: 3,
+                              subject: '자동 배정',
+                              assignedBy: room.owner._id,  // Use owner ID, not string
+                              assignedAt: new Date(),
+                              status: 'confirmed',
+                           };
+
+                           room.timeSlots.push(newSlot);
+                           addedSlots.add(slotKey);
+                        }
+                     });
+                  }
+               });
+
+               console.log('✅ Added', room.timeSlots.length, 'time slots from auto-schedule');
+
+               await room.save();
+               console.log('✅ Room saved successfully after auto-schedule');
+            } else {
+               console.log('⚠️ No assignments returned from auto-schedule');
+            }
+         } catch (autoScheduleError) {
+            console.error('❌ Auto-schedule error on member join:', autoScheduleError);
+            console.error('Error stack:', autoScheduleError.stack);
+            // Don't fail the join if auto-schedule fails, just log it
+         }
+      } else {
+         console.log('⏭️ Skipping auto-schedule:', {
+            hasRunAutoScheduleBefore,
+            ownerHasSchedule,
+            allMembersHaveSchedule
+         });
+      }
+
+      // Re-populate with full schedule info for response (needed for frontend to show owner's schedule)
+      await room.populate('owner', '_id firstName lastName email defaultSchedule scheduleExceptions personalTimes address addressDetail addressLat addressLng');
+      await room.populate('members.user', '_id firstName lastName email defaultSchedule address addressDetail addressLat addressLng');
+      await room.populate('timeSlots.user', '_id firstName lastName email');
+      await room.populate('requests.requester', '_id firstName lastName email');
+      await room.populate('requests.targetUser', '_id firstName lastName email');
+      await room.populate('negotiations.conflictingMembers.user', '_id firstName lastName email');
 
       res.json(room);
    } catch (error) {

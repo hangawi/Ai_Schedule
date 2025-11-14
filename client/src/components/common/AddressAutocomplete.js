@@ -27,13 +27,13 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
     if (!isLoaded || !inputRef.current) return;
 
     try {
-      // Autocomplete 초기화
+      // Autocomplete 초기화 (기존 방식 유지 - 경고는 무시)
       autocompleteRef.current = new window.google.maps.places.Autocomplete(
         inputRef.current,
         {
           componentRestrictions: { country: 'kr' }, // 한국으로 제한
           fields: ['formatted_address', 'geometry', 'name', 'place_id'],
-          types: ['geocode'] // 주소만 (address는 다른 타입과 혼합 불가)
+          types: ['geocode'] // 주소만
         }
       );
 
@@ -42,6 +42,7 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
         const place = autocompleteRef.current.getPlace();
 
         if (place && place.formatted_address) {
+          setInputValue(place.formatted_address);
           onChange({
             address: place.formatted_address,
             lat: place.geometry?.location?.lat(),
@@ -57,19 +58,44 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
         }
       };
     } catch (error) {
-      
+      console.error('Autocomplete 초기화 오류:', error);
     }
   }, [isLoaded, onChange]);
 
   const handleInputChange = (e) => {
     setInputValue(e.target.value);
-    // 사용자가 직접 입력할 때, 위도/경도 정보는 아직 없으므로 주소 텍스트만 전달
+    // 사용자가 직접 입력할 때
     onChange({
       address: e.target.value,
       lat: null,
       lng: null,
       placeId: null
     });
+  };
+
+  const handleKeyDown = (e) => {
+    // 엔터키를 누르면 첫 번째 추천 항목을 자동으로 선택
+    if (e.key === 'Enter') {
+      e.preventDefault();
+
+      // Google Maps Autocomplete의 첫 번째 항목을 선택하기 위해
+      // PAC container에서 첫 번째 항목을 찾아 클릭 이벤트 트리거
+      setTimeout(() => {
+        const pacContainer = document.querySelector('.pac-container');
+        if (pacContainer) {
+          const firstItem = pacContainer.querySelector('.pac-item:first-child');
+          if (firstItem) {
+            // 첫 번째 항목에 마우스 다운 이벤트 트리거
+            const mouseDownEvent = new MouseEvent('mousedown', {
+              bubbles: true,
+              cancelable: true,
+              view: window
+            });
+            firstItem.dispatchEvent(mouseDownEvent);
+          }
+        }
+      }, 100);
+    }
   };
 
   return (
@@ -82,6 +108,7 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
         type="text"
         value={inputValue}
         onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
       />

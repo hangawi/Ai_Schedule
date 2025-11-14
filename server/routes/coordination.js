@@ -65,4 +65,8 @@ router.post('/rooms/:roomId/reset-all-stats', auth, timeSlotController.resetAllM
 // @access  Private (Owner)
 router.delete('/rooms/:roomId/all-carry-over-history', auth, timeSlotController.clearAllCarryOverHistories);
 
+// Smart exchange chatbot endpoints
+router.post('/rooms/:roomId/parse-exchange-request', auth, coordinationController.parseExchangeRequest);
+router.post('/rooms/:roomId/smart-exchange', auth, coordinationController.smartExchange);
+
 module.exports = router;
