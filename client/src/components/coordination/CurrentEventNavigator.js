@@ -47,7 +47,7 @@ const CurrentEventNavigator = ({ timeSlots = [], travelSlots = [], members = [] 
         const userId = currentActivity.user?._id || currentActivity.user;
         const member = members.find(m => (m.user?._id || m.user)?.toString() === userId?.toString());
         if (member && member.user) {
-          memberName = member.user.name || `${member.user.firstName} ${member.user.lastName}`.trim();
+          memberName = `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim() || '알 수 없는 사용자';
         }
         setCurrentEvent({ type: 'activity', text: `지금은 ${memberName}님의 일정입니다.` });
         return;

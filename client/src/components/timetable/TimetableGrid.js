@@ -651,7 +651,7 @@ const TimetableGrid = ({
                 })
                 .map(member => (
                   <option key={member._id || member.user?._id || member.id || member.user?.id} value={member._id || member.user?._id || member.id || member.user?.id}>
-                    {member.user?.name || member.name || `${member.user?.firstName || ''} ${member.user?.lastName || ''}`.trim()}
+                    {`${member.user?.firstName || ''} ${member.user?.lastName || ''}`.trim()}
                   </option>
                 ))}
             </select>

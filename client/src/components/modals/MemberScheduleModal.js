@@ -56,7 +56,7 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
         setMemberExceptions(exceptions);
         setMemberPersonalTimes(personalTimes);
 
-        setMemberName(`${data.firstName || ''} ${data.lastName || ''}`.trim() || data.name || '알 수 없음');
+        setMemberName(`${data.firstName || ''} ${data.lastName || ''}`.trim() || '알 수 없음');
         
         // Force re-render to ensure grid updates
         setTimeout(() => {

@@ -40,7 +40,7 @@ const AssignSlotModal = ({ onClose, onAssign, slotInfo, members }) => {
               <option value="">-- 조원을 선택하세요 --</option>
               {members.map(member => (
                 <option key={member.user._id || member._id} value={member.user._id || member._id}>
-                  {member.user.name || `${member.user.firstName} ${member.user.lastName}`.trim()}
+                  {`${member.user.firstName || ''} ${member.user.lastName || ''}`.trim()}
                 </option>
               ))}
             </select>

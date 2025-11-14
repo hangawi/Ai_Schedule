@@ -904,10 +904,10 @@ exports.getNegotiations = async (req, res) => {
       const userId = req.user.id;
 
       const room = await Room.findById(roomId)
-         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email name')
-         .populate('negotiations.participants', '_id firstName lastName email name')
-         .populate('negotiations.resolution.assignments.user', '_id firstName lastName email name')
-         .populate('owner', 'firstName lastName email name')
+         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email')
+         .populate('negotiations.participants', '_id firstName lastName email')
+         .populate('negotiations.resolution.assignments.user', '_id firstName lastName email')
+         .populate('owner', 'firstName lastName email')
          .populate('members.user', 'firstName lastName email defaultSchedule');
 
       if (!room) {
@@ -2190,7 +2190,7 @@ exports.getReceivedRequests = async (req, res) => {
 
       const rooms = await Room.find({
          $or: [{ owner: userId }, { 'members.user': userId }],
-      }).populate('requests.requester', 'firstName lastName email name');
+      }).populate('requests.requester', 'firstName lastName email');
 
       const receivedRequests = rooms.flatMap(room => {
          return room.requests.filter(req => {
@@ -2595,7 +2595,7 @@ exports.runAutoSchedule = async (req, res) => {
 
       const freshRoom = await Room.findById(roomId)
          .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes address addressDetail addressLat addressLng')
-         .populate('members.user', 'firstName lastName email name defaultSchedule address addressDetail addressLat addressLng')
+         .populate('members.user', 'firstName lastName email defaultSchedule address addressDetail addressLat addressLng')
          .populate('timeSlots.user', '_id firstName lastName email')
          .populate('requests.requester', 'firstName lastName email')
          .populate('requests.targetUser', 'firstName lastName email')

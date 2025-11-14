@@ -65,7 +65,7 @@ export const isRoomOwner = (user, currentRoom) => {
  * Get member display name
  */
 export const getMemberDisplayName = (memberData) => {
-  return memberData.name || `${memberData.firstName || ''} ${memberData.lastName || ''}`.trim() || '알 수 없음';
+  return `${memberData.firstName || ''} ${memberData.lastName || ''}`.trim() || '알 수 없음';
 };
 
 /**

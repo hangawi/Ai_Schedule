@@ -209,12 +209,12 @@ exports.joinRoom = async (req, res) => {
 exports.getRoomDetails = async (req, res) => {
    try {
       const room = await Room.findById(req.params.roomId)
-         .populate('owner', '_id firstName lastName email name defaultSchedule scheduleExceptions personalTimes address addressDetail addressLat addressLng')
-         .populate('members.user', '_id firstName lastName email name defaultSchedule address addressDetail addressLat addressLng')
-         .populate('timeSlots.user', '_id firstName lastName email name')
-         .populate('requests.requester', '_id firstName lastName email name')
-         .populate('requests.targetUser', '_id firstName lastName email name')
-         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email name');
+         .populate('owner', '_id firstName lastName email defaultSchedule scheduleExceptions personalTimes address addressDetail addressLat addressLng')
+         .populate('members.user', '_id firstName lastName email defaultSchedule address addressDetail addressLat addressLng')
+         .populate('timeSlots.user', '_id firstName lastName email')
+         .populate('requests.requester', '_id firstName lastName email')
+         .populate('requests.targetUser', '_id firstName lastName email')
+         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email');
 
       if (!room) {
          return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });

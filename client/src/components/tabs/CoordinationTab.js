@@ -857,7 +857,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
               <p className="text-gray-500 mt-1">{translateEnglishDays(currentRoom.description || '방 설명이 없습니다.')}</p>
               <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-600">
                 <div className="flex items-center"><strong className="mr-2">초대코드:</strong> <span className="font-mono bg-blue-50 text-blue-700 px-2 py-1 rounded">{currentRoom.inviteCode}</span></div>
-                <div className="flex items-center"><strong className="mr-2">방장:</strong> {isOwner ? (user.name || `${user.firstName} ${user.lastName}`) : (currentRoom.owner?.name || `${currentRoom.owner?.firstName || ''} ${currentRoom.owner?.lastName || ''}`.trim() || '알 수 없음')}</div>
+                <div className="flex items-center"><strong className="mr-2">방장:</strong> {isOwner ? `${user.firstName} ${user.lastName}` : `${currentRoom.owner?.firstName || ''} ${currentRoom.owner?.lastName || ''}`.trim() || '알 수 없음'}</div>
                 <div className="flex items-center"><strong className="mr-2">멤버:</strong> {currentRoom.memberCount || currentRoom.members?.length || 0} / {currentRoom.maxMembers}명</div>
               </div>
             </div>
@@ -982,7 +982,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                   .slice(0, showAllRequests['receivedPending'] ? undefined : 3)
                                   .map((request, index) => {
                                     const requesterData = request.requester;
-                                    const requesterName = requesterData?.name || `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
+                                    const requesterName = `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
                                     return (
                                       <div key={request._id || index} className="p-2 bg-blue-500 border border-blue-600 rounded-lg relative">
                                         <div className="flex justify-between items-center mb-1">
@@ -1052,7 +1052,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                     .slice(0, showAllRequests['receivedProcessed'] ? undefined : 3)
                                     .map((request, index) => {
                                       const requesterData = request.requester;
-                                      const requesterName = requesterData?.name || `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
+                                      const requesterName = `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
                                       return (
                                         <div key={request._id || index} className={`p-2 border rounded-lg ${
                                           request.status === 'approved' ? 'bg-green-50 border-green-200' :
@@ -1124,7 +1124,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                   .slice(0, showAllRequests['sentPending'] ? undefined : 3)
                                   .map((request, index) => {
                                     const targetUserData = request.targetUser;
-                                    const targetUserName = targetUserData?.name || `${targetUserData?.firstName || ''} ${targetUserData?.lastName || ''}`.trim() || '방장';
+                                    const targetUserName = `${targetUserData?.firstName || ''} ${targetUserData?.lastName || ''}`.trim() || '방장';
                                     return (
                                       <div key={request._id || index} className="p-2 bg-gray-50 border border-gray-200 rounded-lg relative">
                                         <div className="flex justify-between items-center mb-1">
@@ -1190,7 +1190,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                     .slice(0, showAllRequests['sentProcessed'] ? undefined : 3)
                                     .map((request, index) => {
                                       const targetUserData = request.targetUser;
-                                      const targetUserName = targetUserData?.name || `${targetUserData?.firstName || ''} ${targetUserData?.lastName || ''}`.trim() || '방장';
+                                      const targetUserName = `${targetUserData?.firstName || ''} ${targetUserData?.lastName || ''}`.trim() || '방장';
                                       return (
                                         <div key={request._id || index} className={`p-2 border rounded-lg ${
                                           request.status === 'approved' ? 'bg-green-50 border-green-200' :

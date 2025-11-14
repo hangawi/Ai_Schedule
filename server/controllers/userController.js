@@ -196,12 +196,17 @@ exports.getUserProfile = async (req, res) => {
 exports.updateUserProfile = async (req, res) => {
   try {
     const { firstName, lastName, phone, address, addressDetail, addressLat, addressLng, addressPlaceId, occupation, birthdate } = req.body;
+    console.log('[updateUserProfile] Update request for user:', req.user.id);
+    console.log('[updateUserProfile] Data received:', { firstName, lastName, phone, occupation });
 
     const user = await User.findById(req.user.id);
 
     if (!user) {
+      console.log('[updateUserProfile] User not found:', req.user.id);
       return res.status(404).json({ msg: 'User not found' });
     }
+
+    console.log('[updateUserProfile] Current values:', { firstName: user.firstName, lastName: user.lastName });
 
     // Update fields
     if (firstName !== undefined) user.firstName = firstName;
@@ -215,7 +220,9 @@ exports.updateUserProfile = async (req, res) => {
     if (occupation !== undefined) user.occupation = occupation;
     if (birthdate !== undefined) user.birthdate = birthdate;
 
+    console.log('[updateUserProfile] New values before save:', { firstName: user.firstName, lastName: user.lastName });
     await user.save();
+    console.log('[updateUserProfile] Profile updated successfully');
 
     res.json({
       msg: 'Profile updated successfully',
@@ -232,6 +239,7 @@ exports.updateUserProfile = async (req, res) => {
       birthdate: user.birthdate
     });
   } catch (err) {
+    console.error('[updateUserProfile] Error:', err);
     res.status(500).send('Server Error');
   }
 };

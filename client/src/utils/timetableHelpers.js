@@ -271,7 +271,7 @@ export const getSlotOwner = (date, time, timeSlots, members, currentUser, isRoom
 
     if (member) {
       const memberData = member.user || member;
-      const memberName = memberData.name || `${memberData.firstName || ''} ${memberData.lastName || ''}`.trim() || '알 수 없음';
+      const memberName = `${memberData.firstName || ''} ${memberData.lastName || ''}`.trim() || '알 수 없음';
       const actualUserId = member.user?._id || member.user?.id || member._id || member.id;
 
       return {
