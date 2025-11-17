@@ -336,4 +336,4 @@ EventSchema.methods.updateParticipantStatus = function(participantId, status, is
   return this.save();
 };
 
-module.exports = mongoose.model('Event', EventSchema);
+module.exports = mongoose.models.Event || mongoose.model('Event', EventSchema);

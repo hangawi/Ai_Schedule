@@ -393,4 +393,4 @@ RoomSchema.methods.getUserColor = function(userId) {
   return member ? member.color : null;
 };
 
-module.exports = mongoose.model('Room', RoomSchema);
+module.exports = mongoose.models.Room || mongoose.model('Room', RoomSchema);
