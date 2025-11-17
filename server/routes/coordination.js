@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const coordinationController = require('../controllers/coordinationController');
 const timeSlotController = require('../controllers/timeSlotController');
+const exchangeRequestController = require('../controllers/coordinationExchangeRequestController');
 const auth = require('../middleware/auth');
 
 // Room management
@@ -69,5 +70,10 @@ router.delete('/rooms/:roomId/all-carry-over-history', auth, timeSlotController.
 // Smart exchange chatbot endpoints
 router.post('/rooms/:roomId/parse-exchange-request', auth, coordinationController.parseExchangeRequest);
 router.post('/rooms/:roomId/smart-exchange', auth, coordinationController.smartExchange);
+
+// Exchange request endpoints (NEW)
+router.post('/rooms/:roomId/exchange-requests', auth, exchangeRequestController.createExchangeRequest);
+router.post('/rooms/:roomId/exchange-requests/:requestId/respond', auth, exchangeRequestController.respondToExchangeRequest);
+router.get('/exchange-requests/pending', auth, exchangeRequestController.getPendingExchangeRequests);
 
 module.exports = router;

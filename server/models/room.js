@@ -55,7 +55,7 @@ const RequestSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['time_request', 'time_change', 'time_swap', 'slot_swap', 'slot_release'],
+    enum: ['time_request', 'time_change', 'time_swap', 'slot_swap', 'slot_release', 'exchange_request'],
     required: true
   },
   timeSlot: {
@@ -70,6 +70,10 @@ const RequestSchema = new mongoose.Schema({
     ref: 'User',
     required: false
   },
+  // Exchange request specific fields
+  requesterSlots: [TimeSlotSchema], // A's current slots (block)
+  desiredDay: String, // e.g., 'wednesday'
+  desiredTime: String, // e.g., '14:00' (optional)
   message: String,
   status: {
     type: String,
@@ -90,7 +94,7 @@ const RequestSchema = new mongoose.Schema({
   response: {
     type: String
   }
-});
+});;
 
 const RoomSchema = new mongoose.Schema({
   name: {

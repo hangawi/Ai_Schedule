@@ -676,11 +676,12 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   // Alias for delete request button
   const handleDeleteRequest = handleCancelRequestCallback;
 
-  const handleRequestWithUpdateCallback = async (requestId, action) => {
+  const handleRequestWithUpdateCallback = async (requestId, action, request) => {
     try {
       await handleRequestWithUpdate(
         requestId,
         action,
+        request,
         handleRequest,
         currentRoom,
         fetchRoomDetails,
@@ -860,7 +861,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
   if (currentRoom) {
     const isOwner = isRoomOwner(user, currentRoom);
-    console.log('🔍 DEBUG - isOwner:', isOwner, 'user:', user?.id, 'room owner:', currentRoom?.owner?.id || currentRoom?.owner);
+    // console.log('🔍 DEBUG - isOwner:', isOwner, 'user:', user?.id, 'room owner:', currentRoom?.owner?.id || currentRoom?.owner);
 
     return (
       <div className="p-1">
@@ -1063,13 +1064,13 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                                         )}
                                         <div className="flex justify-end space-x-2 mt-2">
                                           <button
-                                            onClick={() => handleRequestWithUpdateCallback(request._id, 'approved')}
+                                            onClick={() => handleRequestWithUpdateCallback(request._id, 'approved', request)}
                                             className="px-3 py-1 text-xs bg-green-500 text-white rounded-md hover:bg-green-600"
                                           >
                                             승인
                                           </button>
                                           <button
-                                            onClick={() => handleRequestWithUpdateCallback(request._id, 'rejected')}
+                                            onClick={() => handleRequestWithUpdateCallback(request._id, 'rejected', request)}
                                             className="px-3 py-1 text-xs bg-red-500 text-white rounded-md hover:bg-red-600"
                                           >
                                             거절

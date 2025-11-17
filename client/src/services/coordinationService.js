@@ -246,12 +246,41 @@ export const coordinationService = {
     const response = await fetch(`${API_BASE_URL}/api/coordination/exchange-requests-count`, {
       headers: { 'x-auth-token': token },
     });
-    
+
     if (!response.ok) {
       const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
       throw new Error(errData.msg || 'Failed to get exchange requests count');
     }
-    
+
+    return await response.json();
+  },
+
+  // 교환 요청 응답 (승인/거절)
+  async respondToExchangeRequest(roomId, requestId, action) {
+    const token = getAuthToken();
+
+    // 'approved' → 'accept', 'rejected' → 'reject' 변환
+    const serverAction = action === 'approved' ? 'accept' : action === 'rejected' ? 'reject' : action;
+
+    console.log('📡 [coordinationService] Calling respondToExchangeRequest API');
+    console.log('   Room ID:', roomId);
+    console.log('   Request ID:', requestId);
+    console.log('   Action:', action, '→', serverAction);
+
+    const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/exchange-requests/${requestId}/respond`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-auth-token': token
+      },
+      body: JSON.stringify({ action: serverAction })
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || `Failed to ${action} exchange request`);
+    }
+
     return await response.json();
   },
 

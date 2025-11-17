@@ -12,6 +12,7 @@ const CoordinationChatBot = ({ roomId, currentUser, onExchangeRequest }) => {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingRequest, setPendingRequest] = useState(null); // 확인 대기 중인 요청 저장
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -50,6 +51,9 @@ const CoordinationChatBot = ({ roomId, currentUser, onExchangeRequest }) => {
 
       const { parsed, error } = response.data;
 
+      console.log('🔍 [ChatBot] Parsed response:', parsed);
+      console.log('🔍 [ChatBot] Current pendingRequest:', pendingRequest);
+
       if (error) {
         // Show error message
         setMessages(prev => [...prev, {
@@ -59,32 +63,57 @@ const CoordinationChatBot = ({ roomId, currentUser, onExchangeRequest }) => {
           timestamp: new Date()
         }]);
       } else {
-        // Show confirmation message
-        const confirmMessage = `${parsed.targetDay}${parsed.targetTime ? ` ${parsed.targetTime}` : ''}로 변경 요청을 보낼까요?`;
+        // Handle different response types
+        console.log('🔍 [ChatBot] Handling type:', parsed.type);
+        if (parsed.type === 'confirm') {
+          // User said "yes" - check if there's a pending request
+          console.log('✅ [ChatBot] Confirm received, pendingRequest:', pendingRequest);
+          if (pendingRequest) {
+            // Execute the pending time change request
+            console.log('✅ [ChatBot] Executing pending request:', pendingRequest);
+            handleConfirmExchange(pendingRequest);
+            setPendingRequest(null);
+          } else {
+            console.log('ℹ️ [ChatBot] No pending request, just acknowledging');
+            setMessages(prev => [...prev, {
+              id: Date.now(),
+              type: 'bot',
+              content: '네, 알겠습니다! 👍',
+              timestamp: new Date()
+            }]);
+          }
+        } else if (parsed.type === 'reject') {
+          // User said "no" - cancel pending request or just acknowledge
+          if (pendingRequest) {
+            setPendingRequest(null);
+            setMessages(prev => [...prev, {
+              id: Date.now(),
+              type: 'bot',
+              content: '알겠습니다. 시간 변경 요청이 취소되었습니다.',
+              timestamp: new Date()
+            }]);
+          } else {
+            setMessages(prev => [...prev, {
+              id: Date.now(),
+              type: 'bot',
+              content: '알겠습니다.',
+              timestamp: new Date()
+            }]);
+          }
+        } else if (parsed.type === 'time_change') {
+          // Save request and ask for confirmation (no buttons, just text)
+          console.log('✅ [ChatBot] Saving pending request:', parsed);
+          setPendingRequest(parsed);
+          const confirmMessage = `${parsed.targetDay}${parsed.targetTime ? ` ${parsed.targetTime}` : ''}로 변경하시겠습니까?`;
 
-        setMessages(prev => [...prev, {
-          id: Date.now(),
-          type: 'bot',
-          content: confirmMessage,
-          timestamp: new Date(),
-          actions: [
-            {
-              label: '네, 요청하기',
-              onClick: () => handleConfirmExchange(parsed)
-            },
-            {
-              label: '취소',
-              onClick: () => {
-                setMessages(prev => [...prev, {
-                  id: Date.now(),
-                  type: 'bot',
-                  content: '요청이 취소되었습니다.',
-                  timestamp: new Date()
-                }]);
-              }
-            }
-          ]
-        }]);
+          console.log('✅ [ChatBot] Showing confirmation message:', confirmMessage);
+          setMessages(prev => [...prev, {
+            id: Date.now(),
+            type: 'bot',
+            content: confirmMessage,
+            timestamp: new Date()
+          }]);
+        }
       }
     } catch (error) {
       console.error('Parse error:', error);
@@ -100,10 +129,12 @@ const CoordinationChatBot = ({ roomId, currentUser, onExchangeRequest }) => {
   };
 
   const handleConfirmExchange = async (parsed) => {
+    console.log('🚀 [ChatBot] handleConfirmExchange called with:', parsed);
     setIsLoading(true);
 
     try {
       // Call backend to create exchange request
+      console.log('📡 [ChatBot] Calling smart-exchange API...');
       const response = await axios.post(
         `${process.env.REACT_APP_API_URL}/api/coordination/rooms/${roomId}/smart-exchange`,
         parsed,

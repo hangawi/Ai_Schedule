@@ -200,34 +200,43 @@ export const handleRunAutoSchedule = async (
       ? currentWeekStartDate
       : new Date(currentWeekStartDate);
 
-    // 주간/월간 모드 관계없이 현재 보고 있는 주가 속한 월의 전체를 배정
-    const year = currentDateObj.getFullYear();
-    const month = currentDateObj.getMonth();
+    // 주간/월간 모드에 따라 배정 범위 결정
+    if (viewMode === 'week') {
+      // 주간 모드: 현재 주만 배정
+      numWeeks = 1;
+      uiCurrentWeek = currentDateObj;
+      console.log('📅 [Weekly Mode] Assigning only current week:', currentDateObj.toISOString().split('T')[0]);
+    } else {
+      // 월간 모드: 해당 월 전체 배정
+      const year = currentDateObj.getFullYear();
+      const month = currentDateObj.getMonth();
 
-    // 해당 월의 1일
-    const firstDayOfMonth = new Date(Date.UTC(year, month, 1));
+      // 해당 월의 1일
+      const firstDayOfMonth = new Date(Date.UTC(year, month, 1));
 
-    // 해당 월의 마지막 날
-    const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0));
+      // 해당 월의 마지막 날
+      const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0));
 
-    // 💡 첫째 주 월요일 찾기: 1일이 속한 주의 월요일 (이전 달일 수도 있음)
-    const firstDayOfWeek = firstDayOfMonth.getUTCDay(); // 0=일요일, 1=월요일, ...
-    const daysToMonday = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1; // 일요일이면 6일 전, 아니면 (요일-1)일 전
-    const firstMonday = new Date(firstDayOfMonth);
-    firstMonday.setUTCDate(firstDayOfMonth.getUTCDate() - daysToMonday);
+      // 💡 첫째 주 월요일 찾기: 1일이 속한 주의 월요일 (이전 달일 수도 있음)
+      const firstDayOfWeek = firstDayOfMonth.getUTCDay(); // 0=일요일, 1=월요일, ...
+      const daysToMonday = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1; // 일요일이면 6일 전, 아니면 (요일-1)일 전
+      const firstMonday = new Date(firstDayOfMonth);
+      firstMonday.setUTCDate(firstDayOfMonth.getUTCDate() - daysToMonday);
 
-    // 💡 마지막 주 일요일 찾기: 마지막 날이 속한 주의 일요일 (다음 달일 수도 있음)
-    const lastDayOfWeek = lastDayOfMonth.getUTCDay();
-    const daysToSunday = lastDayOfWeek === 0 ? 0 : 7 - lastDayOfWeek;
-    const lastSunday = new Date(lastDayOfMonth);
-    lastSunday.setUTCDate(lastDayOfMonth.getUTCDate() + daysToSunday);
+      // 💡 마지막 주 일요일 찾기: 마지막 날이 속한 주의 일요일 (다음 달일 수도 있음)
+      const lastDayOfWeek = lastDayOfMonth.getUTCDay();
+      const daysToSunday = lastDayOfWeek === 0 ? 0 : 7 - lastDayOfWeek;
+      const lastSunday = new Date(lastDayOfMonth);
+      lastSunday.setUTCDate(lastDayOfMonth.getUTCDate() + daysToSunday);
 
-    // 전체 기간 계산 (월요일~일요일 기준)
-    const totalDays = Math.ceil((lastSunday - firstMonday) / (1000 * 60 * 60 * 24)) + 1;
-    numWeeks = Math.ceil(totalDays / 7);
+      // 전체 기간 계산 (월요일~일요일 기준)
+      const totalDays = Math.ceil((lastSunday - firstMonday) / (1000 * 60 * 60 * 24)) + 1;
+      numWeeks = Math.ceil(totalDays / 7);
 
-    // 시작일은 첫째 주 월요일
-    uiCurrentWeek = firstMonday;
+      // 시작일은 첫째 주 월요일
+      uiCurrentWeek = firstMonday;
+      console.log('📅 [Monthly Mode] Assigning entire month:', numWeeks, 'weeks');
+    }
     const finalOptions = {
       ...scheduleOptions,
       currentWeek: uiCurrentWeek,
@@ -334,6 +343,7 @@ export const handleCancelRequest = async (
 export const handleRequestWithUpdate = async (
   requestId,
   action,
+  request,
   handleRequest,
   currentRoom,
   fetchRoomDetails,
@@ -344,7 +354,19 @@ export const handleRequestWithUpdate = async (
   showAlert
 ) => {
   try {
-    await handleRequest(requestId, action);
+    console.log('🔍 [handleRequestWithUpdate] Request type:', request?.type);
+    console.log('🔍 [handleRequestWithUpdate] Request ID:', requestId);
+    console.log('🔍 [handleRequestWithUpdate] Action:', action);
+
+    // exchange_request 타입은 별도의 API 사용
+    if (request?.type === 'exchange_request') {
+      console.log('✅ [handleRequestWithUpdate] Using exchange request API');
+      const { coordinationService } = await import('../services/coordinationService');
+      await coordinationService.respondToExchangeRequest(currentRoom._id, requestId, action);
+    } else {
+      console.log('✅ [handleRequestWithUpdate] Using regular request API');
+      await handleRequest(requestId, action);
+    }
 
     showAlert(`요청을 ${action === 'approved' ? '승인' : '거절'}했습니다.`);
 

@@ -75,6 +75,11 @@ exports.createRequest = async (req, res) => {
         const { requestId, action } = req.params;
         const { message } = req.body;
 
+        console.log('🎯 ========== HANDLE REQUEST ==========');
+        console.log('📋 Request ID:', requestId);
+        console.log('📋 Action:', action);
+        console.log('👤 User ID:', req.user.id);
+
         if (!['approved', 'rejected'].includes(action)) {
            return res.status(400).json({ msg: '유효하지 않은 액션입니다. approved 또는 rejected만 허용됩니다.' });
         }
@@ -120,8 +125,14 @@ exports.createRequest = async (req, res) => {
         request.respondedBy = req.user.id;
         request.response = message || '';
 
+        console.log('📊 Before processing - Total timeSlots:', room.timeSlots.length);
+
         if (action === 'approved') {
+           console.log('✅ Action is APPROVED - processing request...');
            const { type, timeSlot, targetUser, requester } = request;
+           console.log('📋 Request type:', type);
+           console.log('📋 TimeSlot:', timeSlot);
+           console.log('📋 Requester:', requester._id || requester);
 
            if (type === 'slot_release') {
               // Remove the slot from the requester
@@ -382,7 +393,10 @@ exports.createRequest = async (req, res) => {
            }
         }
 
+        console.log('📊 After processing - Total timeSlots:', room.timeSlots.length);
+        console.log('💾 Saving room changes...');
         await room.save();
+        console.log('✅ Room saved successfully!');
 
         const updatedRoom = await Room.findById(room._id)
            .populate('requests.requester', 'firstName lastName email')

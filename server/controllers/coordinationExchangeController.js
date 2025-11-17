@@ -47,27 +47,39 @@ exports.parseExchangeRequest = async (req, res) => {
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
 
       const prompt = `
-다음 메시지에서 시간 변경 요청을 파싱해주세요.
+다음 메시지의 의도를 파악해주세요.
 
 메시지: "${message}"
 
 다음 JSON 형식으로 응답해주세요:
 {
-  "targetDay": "요일 (월요일, 화요일, 수요일, 목요일, 금요일 중 하나)",
-  "targetTime": "시간 (HH:00 형식, 예: 14:00). 시간이 명시되지 않았으면 null"
+  "type": "응답 타입 (time_change, confirm, reject 중 하나)",
+  "targetDay": "요일 (type이 time_change일 때만, 예: 월요일, 화요일, 수요일, 목요일, 금요일)",
+  "targetTime": "시간 (HH:00 형식, 예: 14:00. 시간이 명시되지 않았으면 null. type이 time_change일 때만)"
 }
 
-규칙:
+**응답 타입 판단 규칙:**
+1. **time_change**: 시간 변경 요청 (예: "수요일로 바꿔줘", "목요일 2시로")
+2. **confirm**: 긍정/확인 응답
+   - 한국어: "네", "예", "응", "어", "웅", "ㅇㅇ", "ㅇ", "그래", "좋아", "오케이", "ok", "yes", "y"
+   - 조정 의사 표현: "조정해줘", "바꿔줘", "변경해줘"
+3. **reject**: 부정/거절 응답
+   - 한국어: "아니", "아니요", "아뇨", "싫어", "안돼", "안할래", "no", "n", "nope", "취소"
+
+**time_change 타입일 때 규칙:**
 1. 요일만 언급된 경우 targetTime은 null
 2. 요일과 시간이 모두 언급된 경우 둘 다 추출
-3. 요일이 명확하지 않으면 error를 반환
-4. 시간은 24시간 형식으로 변환 (예: "오후 2시" -> "14:00", "2시" -> "14:00")
+3. 시간은 24시간 형식으로 변환 (예: "오후 2시" -> "14:00", "2시" -> "14:00")
 
-예시:
-- "수요일로 바꿔줘" -> {"targetDay": "수요일", "targetTime": null}
-- "수요일 2시로 바꿔줘" -> {"targetDay": "수요일", "targetTime": "14:00"}
-- "목요일 오후 3시" -> {"targetDay": "목요일", "targetTime": "15:00"}
-- "금요일 9시" -> {"targetDay": "금요일", "targetTime": "09:00"}
+**예시:**
+- "수요일로 바꿔줘" -> {"type": "time_change", "targetDay": "수요일", "targetTime": null}
+- "수요일 2시로 바꿔줘" -> {"type": "time_change", "targetDay": "수요일", "targetTime": "14:00"}
+- "네" -> {"type": "confirm", "targetDay": null, "targetTime": null}
+- "ㅇㅇ" -> {"type": "confirm", "targetDay": null, "targetTime": null}
+- "어" -> {"type": "confirm", "targetDay": null, "targetTime": null}
+- "웅" -> {"type": "confirm", "targetDay": null, "targetTime": null}
+- "아니" -> {"type": "reject", "targetDay": null, "targetTime": null}
+- "취소" -> {"type": "reject", "targetDay": null, "targetTime": null}
 
 JSON만 반환하고 다른 텍스트는 포함하지 마세요.
 `;
@@ -90,21 +102,30 @@ JSON만 반환하고 다른 텍스트는 포함하지 마세요.
          });
       }
 
-      // Validate parsed data
-      const validDays = ['월요일', '화요일', '수요일', '목요일', '금요일'];
-      if (!parsed.targetDay || !validDays.includes(parsed.targetDay)) {
+      // Validate parsed data based on type
+      if (!parsed.type) {
          return res.status(400).json({
-            error: '요일을 명확히 말씀해주세요. (월요일~금요일)'
+            error: '메시지 타입을 파악할 수 없습니다.'
          });
       }
 
-      // Validate time format if provided
-      if (parsed.targetTime) {
-         const timeRegex = /^([0-1][0-9]|2[0-3]):00$/;
-         if (!timeRegex.test(parsed.targetTime)) {
+      // Validate time_change type
+      if (parsed.type === 'time_change') {
+         const validDays = ['월요일', '화요일', '수요일', '목요일', '금요일'];
+         if (!parsed.targetDay || !validDays.includes(parsed.targetDay)) {
             return res.status(400).json({
-               error: '시간 형식이 올바르지 않습니다. (예: 14:00)'
+               error: '요일을 명확히 말씀해주세요. (월요일~금요일)'
             });
+         }
+
+         // Validate time format if provided
+         if (parsed.targetTime) {
+            const timeRegex = /^([0-1][0-9]|2[0-3]):00$/;
+            if (!timeRegex.test(parsed.targetTime)) {
+               return res.status(400).json({
+                  error: '시간 형식이 올바르지 않습니다. (예: 14:00)'
+               });
+            }
          }
       }
 
@@ -180,11 +201,14 @@ exports.smartExchange = async (req, res) => {
       const targetDate = new Date(monday);
       targetDate.setUTCDate(monday.getUTCDate() + targetDayNumber - 1);
 
-      // Find ALL requester's current assignments
-      const requesterCurrentSlots = room.timeSlots.filter(slot =>
-         (slot.user._id || slot.user).toString() === req.user.id.toString() &&
-         slot.subject === '자동 배정'
-      );
+      // Find ALL requester's current assignments (including exchanged slots)
+      const requesterCurrentSlots = room.timeSlots.filter(slot => {
+         const slotUserId = (slot.user._id || slot.user).toString();
+         const isUserSlot = slotUserId === req.user.id.toString();
+         // Accept both '자동 배정' and '교환 결과'
+         const isValidSubject = slot.subject === '자동 배정' || slot.subject === '교환 결과';
+         return isUserSlot && isValidSubject;
+      });
 
       if (requesterCurrentSlots.length === 0) {
          return res.status(400).json({
@@ -253,7 +277,7 @@ exports.smartExchange = async (req, res) => {
       const thisWeekSunday = new Date(monday);
       thisWeekSunday.setUTCDate(thisWeekMonday.getUTCDate() + 6);
 
-      console.log(`📅 This week range: ${thisWeekMonday.toISOString().split('T')[0]} to ${thisWeekSunday.toISOString().split('T')[0]}`);
+      // console.log(`📅 This week range: ${thisWeekMonday.toISOString().split('T')[0]} to ${thisWeekSunday.toISOString().split('T')[0]}`);
 
       // Filter blocks that are in THIS WEEK
       const thisWeekBlocks = continuousBlocks.filter(block => {
@@ -261,38 +285,38 @@ exports.smartExchange = async (req, res) => {
          return blockDate >= thisWeekMonday && blockDate <= thisWeekSunday;
       });
 
-      console.log(`🔍 Block selection - Target day: ${targetDayEnglish}`);
-      console.log(`   Total blocks: ${continuousBlocks.length}`);
-      console.log(`   This week blocks: ${thisWeekBlocks.length}`);
+      // console.log(`🔍 Block selection - Target day: ${targetDayEnglish}`);
+      // console.log(`   Total blocks: ${continuousBlocks.length}`);
+      // console.log(`   This week blocks: ${thisWeekBlocks.length}`);
 
       // From this week's blocks, prefer blocks NOT on target day
       const thisWeekBlocksNotOnTargetDay = thisWeekBlocks.filter(block => block[0].day !== targetDayEnglish);
       const thisWeekBlocksOnTargetDay = thisWeekBlocks.filter(block => block[0].day === targetDayEnglish);
 
-      console.log(`   This week blocks NOT on ${targetDayEnglish}: ${thisWeekBlocksNotOnTargetDay.length}`);
-      console.log(`   This week blocks ON ${targetDayEnglish}: ${thisWeekBlocksOnTargetDay.length}`);
+      // console.log(`   This week blocks NOT on ${targetDayEnglish}: ${thisWeekBlocksNotOnTargetDay.length}`);
+      // console.log(`   This week blocks ON ${targetDayEnglish}: ${thisWeekBlocksOnTargetDay.length}`);
 
       if (thisWeekBlocksNotOnTargetDay.length > 0) {
          // Move block from other day to target day (within this week)
          selectedBlock = thisWeekBlocksNotOnTargetDay[0];
-         console.log(`✅ Selected THIS WEEK block from OTHER day: ${selectedBlock[0].day} ${selectedBlock[0].startTime}-${selectedBlock[selectedBlock.length - 1].endTime} (date: ${selectedBlock[0].date}) → ${targetDayEnglish}`);
+         // console.log(`✅ Selected THIS WEEK block from OTHER day: ${selectedBlock[0].day} ${selectedBlock[0].startTime}-${selectedBlock[selectedBlock.length - 1].endTime} (date: ${selectedBlock[0].date}) → ${targetDayEnglish}`);
       } else if (thisWeekBlocksOnTargetDay.length > 0) {
          // Only blocks on target day exist in this week - change time within same day
          selectedBlock = thisWeekBlocksOnTargetDay[0];
-         console.log(`✅ Selected THIS WEEK block on SAME day: ${selectedBlock[0].day} ${selectedBlock[0].startTime}-${selectedBlock[selectedBlock.length - 1].endTime} (date: ${selectedBlock[0].date}) (changing time within ${targetDayEnglish})`);
+         // console.log(`✅ Selected THIS WEEK block on SAME day: ${selectedBlock[0].day} ${selectedBlock[0].startTime}-${selectedBlock[selectedBlock.length - 1].endTime} (date: ${selectedBlock[0].date}) (changing time within ${targetDayEnglish})`);
       } else {
          // No blocks in this week - fallback to any block
-         console.log(`⚠️ No blocks found in this week, selecting from all blocks`);
+         // console.log(`⚠️ No blocks found in this week, selecting from all blocks`);
          const blocksNotOnTargetDay = continuousBlocks.filter(block => block[0].day !== targetDayEnglish);
          if (blocksNotOnTargetDay.length > 0) {
             selectedBlock = blocksNotOnTargetDay[0];
          } else {
             selectedBlock = continuousBlocks[0];
          }
-         console.log(`⚠️ Fallback: selecting block from ${selectedBlock[0].date}`);
+         // console.log(`⚠️ Fallback: selecting block from ${selectedBlock[0].date}`);
       }
 
-      console.log(`   Total blocks available: ${continuousBlocks.length}`);
+      // console.log(`   Total blocks available: ${continuousBlocks.length}`);
 
       const requesterCurrentSlot = selectedBlock[0]; // For compatibility with existing code
       const allSlotsInBlock = selectedBlock;
@@ -323,7 +347,7 @@ exports.smartExchange = async (req, res) => {
       // Find owner's schedule for target day
       const ownerTargetDaySchedules = ownerDefaultSchedule.filter(s => s.dayOfWeek === targetDayOfWeek);
 
-      console.log(`👑 Owner schedules for ${targetDay}:`, JSON.stringify(ownerTargetDaySchedules, null, 2));
+      // console.log(`👑 Owner schedules for ${targetDay}:`, JSON.stringify(ownerTargetDaySchedules, null, 2));
 
       if (ownerTargetDaySchedules.length === 0) {
          return res.status(400).json({
@@ -336,22 +360,22 @@ exports.smartExchange = async (req, res) => {
       const requesterUser = memberData.user;
       const requesterDefaultSchedule = requesterUser.defaultSchedule || [];
 
-      console.log('👤 Requester info:', {
-         id: requesterUser._id,
-         email: requesterUser.email,
-         name: `${requesterUser.firstName} ${requesterUser.lastName}`
-      });
-      console.log('🔍 Requester FULL defaultSchedule (all days):', JSON.stringify(requesterDefaultSchedule.map(s => ({
-         dayOfWeek: s.dayOfWeek,
-         day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][s.dayOfWeek],
-         startTime: s.startTime,
-         endTime: s.endTime
-      })), null, 2));
+      // console.log('👤 Requester info:', {
+      //    id: requesterUser._id,
+      //    email: requesterUser.email,
+      //    name: `${requesterUser.firstName} ${requesterUser.lastName}`
+      // });
+      // console.log('🔍 Requester FULL defaultSchedule (all days):', JSON.stringify(requesterDefaultSchedule.map(s => ({
+      //    dayOfWeek: s.dayOfWeek,
+      //    day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][s.dayOfWeek],
+      //    startTime: s.startTime,
+      //    endTime: s.endTime
+      // })), null, 2));
 
       // Find requester's schedule for target day
       const memberTargetDaySchedules = requesterDefaultSchedule.filter(s => s.dayOfWeek === targetDayOfWeek);
 
-      console.log(`📅 Member schedules for ${targetDay}:`, JSON.stringify(memberTargetDaySchedules, null, 2));
+      // console.log(`📅 Member schedules for ${targetDay}:`, JSON.stringify(memberTargetDaySchedules, null, 2));
 
       if (memberTargetDaySchedules.length === 0) {
          return res.status(400).json({
@@ -398,8 +422,8 @@ exports.smartExchange = async (req, res) => {
       const ownerMergedRanges = mergeSlots(ownerTargetDaySchedules);
       const memberMergedRanges = mergeSlots(memberTargetDaySchedules);
 
-      console.log(`👑 Owner merged ranges for ${targetDay}:`, ownerMergedRanges.map(r => `${r.startTime}-${r.endTime}`));
-      console.log(`📊 Member merged ranges for ${targetDay}:`, memberMergedRanges.map(r => `${r.startTime}-${r.endTime}`));
+      // console.log(`👑 Owner merged ranges for ${targetDay}:`, ownerMergedRanges.map(r => `${r.startTime}-${r.endTime}`));
+      // console.log(`📊 Member merged ranges for ${targetDay}:`, memberMergedRanges.map(r => `${r.startTime}-${r.endTime}`));
 
       // Find intersection (overlapping ranges)
       const overlappingRanges = [];
@@ -424,7 +448,7 @@ exports.smartExchange = async (req, res) => {
          }
       }
 
-      console.log(`🤝 Overlapping ranges (Owner ∩ Member):`, overlappingRanges.map(r => `${r.startTime}-${r.endTime}`));
+      // console.log(`🤝 Overlapping ranges (Owner ∩ Member):`, overlappingRanges.map(r => `${r.startTime}-${r.endTime}`));
 
       if (overlappingRanges.length === 0) {
          return res.status(400).json({
@@ -451,16 +475,16 @@ exports.smartExchange = async (req, res) => {
       const newStartMinutes = newStartH * 60 + newStartM;
       const newEndMinutes = newEndH * 60 + newEndM;
 
-      console.log(`🕐 New time range: ${finalNewStartTime}-${finalNewEndTime} (${newStartMinutes}-${newEndMinutes} minutes)`);
+      // console.log(`🕐 New time range: ${finalNewStartTime}-${finalNewEndTime} (${newStartMinutes}-${newEndMinutes} minutes)`);
 
       let isWithinOverlap = false;
       for (const range of overlappingRanges) {
-         console.log(`  📋 Checking overlap range: ${range.startTime}-${range.endTime} (${range.startMinutes}-${range.endMinutes} minutes)`);
-         console.log(`     ${newStartMinutes} >= ${range.startMinutes} && ${newEndMinutes} <= ${range.endMinutes} = ${newStartMinutes >= range.startMinutes && newEndMinutes <= range.endMinutes}`);
+         // console.log(`  📋 Checking overlap range: ${range.startTime}-${range.endTime} (${range.startMinutes}-${range.endMinutes} minutes)`);
+         // console.log(`     ${newStartMinutes} >= ${range.startMinutes} && ${newEndMinutes} <= ${range.endMinutes} = ${newStartMinutes >= range.startMinutes && newEndMinutes <= range.endMinutes}`);
 
          if (newStartMinutes >= range.startMinutes && newEndMinutes <= range.endMinutes) {
             isWithinOverlap = true;
-            console.log(`  ✅ Match found in overlapping range!`);
+            // console.log(`  ✅ Match found in overlapping range!`);
             break;
          }
       }
@@ -571,15 +595,59 @@ exports.smartExchange = async (req, res) => {
          });
       }
 
-      // Case 2: Target slot is occupied → Need to check if swap is possible
-      // For now, create a request (Phase 5 will handle notifications)
+      // Case 2: Target slot is occupied → Create exchange request
+      console.log('🔔 Target slot is occupied, creating exchange request...');
+
+      const occupiedUserId = (occupiedSlot.user._id || occupiedSlot.user).toString();
+      const requesterSlotIds = allSlotsInBlock.map(s => s._id.toString());
+
+      // Create exchange request
+      const exchangeRequest = {
+         requester: req.user.id,
+         type: 'exchange_request',
+         targetUser: occupiedUserId,
+         requesterSlots: allSlotsInBlock.map(s => ({
+            day: s.day,
+            date: s.date,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            subject: s.subject,
+            user: req.user.id
+         })),
+         targetSlot: {
+            day: occupiedSlot.day,
+            date: occupiedSlot.date,
+            startTime: occupiedSlot.startTime,
+            endTime: occupiedSlot.endTime,
+            subject: occupiedSlot.subject,
+            user: occupiedUserId
+         },
+         desiredDay: targetDay,
+         desiredTime: finalNewStartTime,
+         message: `${memberData.user.firstName}님이 ${targetDay} ${finalNewStartTime}로 시간 변경을 요청했습니다.`,
+         status: 'pending',
+         createdAt: new Date()
+      };
+
+      room.requests.push(exchangeRequest);
+      await room.save();
+
+      await room.populate('requests.requester', 'firstName lastName email');
+      await room.populate('requests.targetUser', 'firstName lastName email');
+
+      const createdRequest = room.requests[room.requests.length - 1];
+
+      console.log('✅ Exchange request created:', createdRequest._id);
+
       res.json({
          success: true,
-         message: `${targetDay}${targetTime ? ` ${targetTime}` : ''}는 다른 조원이 배정되어 있습니다. 요청을 전송합니다.`,
+         message: `${targetDay} ${finalNewStartTime}는 ${occupiedSlot.user.firstName}님이 사용 중입니다. 조정 요청을 전송했습니다.`,
          immediateSwap: false,
+         needsApproval: true,
          targetDay,
-         targetTime,
-         occupiedBy: occupiedSlot.user.firstName + ' ' + occupiedSlot.user.lastName
+         targetTime: finalNewStartTime,
+         occupiedBy: occupiedSlot.user.firstName + ' ' + occupiedSlot.user.lastName,
+         requestId: createdRequest._id
       });
 
    } catch (error) {

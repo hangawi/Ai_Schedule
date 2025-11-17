@@ -29,35 +29,54 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
 
             const { parsed } = await parseResponse.json();
 
-            // Call smart-exchange API directly
-            const exchangeResponse = await fetch(`${API_BASE_URL}/api/coordination/rooms/${context.roomId}/smart-exchange`, {
-               method: 'POST',
-               headers: {
-                  'Content-Type': 'application/json',
-                  'x-auth-token': token
-               },
-               body: JSON.stringify(parsed)
-            });
+            console.log('🔍 [useChat] Parsed response:', parsed);
+            console.log('🔍 [useChat] Context pendingRequest:', context.pendingRequest);
 
-            if (!exchangeResponse.ok) {
-               const errorData = await exchangeResponse.json();
-               return { success: false, message: errorData.message || '시간 변경에 실패했습니다.' };
+            // Handle different message types
+            if (parsed.type === 'time_change') {
+               // Execute immediately without confirmation
+               console.log('✅ [useChat] time_change detected, executing immediately');
+               console.log('🚀 [useChat] Executing request:', parsed);
+
+               // Call smart-exchange API directly
+               const exchangeResponse = await fetch(`${API_BASE_URL}/api/coordination/rooms/${context.roomId}/smart-exchange`, {
+                  method: 'POST',
+                  headers: {
+                     'Content-Type': 'application/json',
+                     'x-auth-token': token
+                  },
+                  body: JSON.stringify(parsed)
+               });
+
+               if (!exchangeResponse.ok) {
+                  const errorData = await exchangeResponse.json();
+                  return { success: false, message: errorData.message || '시간 변경에 실패했습니다.' };
+               }
+
+               const result = await exchangeResponse.json();
+
+               // Trigger calendar update if swap was successful
+               if (result.success && result.immediateSwap) {
+                  window.dispatchEvent(new CustomEvent('coordinationUpdate', {
+                     detail: { type: 'timeSwap', roomId: context.roomId }
+                  }));
+               }
+
+               return {
+                  success: true,
+                  message: result.message,
+                  immediateSwap: result.immediateSwap
+               };
+            } else if (parsed.type === 'confirm') {
+               // Legacy confirm handler (no longer used)
+               return { success: true, message: '네, 알겠습니다! 👍' };
+            } else if (parsed.type === 'reject') {
+               // Legacy reject handler (no longer used)
+               return { success: true, message: '알겠습니다.' };
             }
 
-            const result = await exchangeResponse.json();
-
-            // Trigger calendar update if swap was successful
-            if (result.success && result.immediateSwap) {
-               window.dispatchEvent(new CustomEvent('coordinationUpdate', {
-                  detail: { type: 'timeSwap', roomId: context.roomId }
-               }));
-            }
-
-            return {
-               success: true,
-               message: result.message,
-               immediateSwap: result.immediateSwap
-            };
+            // Fallback for unknown types
+            return { success: true, message: '요청을 처리했습니다.' };
 
          } catch (error) {
             return { success: false, message: `오류가 발생했습니다: ${error.message}` };

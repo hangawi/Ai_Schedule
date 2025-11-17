@@ -152,6 +152,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
    const [eventActions, setEventActions] = useState(null);
    const [areEventActionsReady, setAreEventActionsReady] = useState(false);
    const [isProfileEditing, setIsProfileEditing] = useState(false);
+   const [pendingRequest, setPendingRequest] = useState(null); // 챗봇 확인 대기 중인 시간 변경 요청
 
    // CustomAlert 상태
    const [alertModal, setAlertModal] = useState({
@@ -465,11 +466,23 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
             case 'coordination':
                // 조율방 탭 - 시간 변경 요청
                const currentRoomId = localStorage.getItem('currentRoomId');
-               return await handleChatMessage(message, {
+               const result = await handleChatMessage(message, {
                   context: 'coordination',
                   roomId: currentRoomId,
-                  currentEvents: globalEvents
+                  currentEvents: globalEvents,
+                  pendingRequest: pendingRequest
                });
+
+               // 응답 처리: pendingRequest 상태 업데이트
+               if (result.needsConfirmation && result.pendingRequest) {
+                  console.log('✅ [SchedulingSystem] Saving pending request:', result.pendingRequest);
+                  setPendingRequest(result.pendingRequest);
+               } else if (result.clearPending) {
+                  console.log('✅ [SchedulingSystem] Clearing pending request');
+                  setPendingRequest(null);
+               }
+
+               return result;
 
             default:
                // 기본값 - 일반 처리
