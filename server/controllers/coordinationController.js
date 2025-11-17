@@ -2269,6 +2269,63 @@ exports.removeMember = async (req, res) => {
   }
 };
 
+// @desc    Leave a coordination room (member self-exit)
+// @route   DELETE /api/coordination/rooms/:roomId/leave
+// @access  Private
+exports.leaveRoom = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const userId = req.user.id;
+
+    // 1. Find the room
+    const room = await Room.findById(roomId);
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    // 2. Check if user is the owner
+    if (room.owner.toString() === userId) {
+      return res.status(400).json({
+        msg: '방장은 방을 나갈 수 없습니다. 방을 삭제하거나 다른 조원에게 방장을 위임하세요.'
+      });
+    }
+
+    // 3. Check if user is a member
+    const initialMemberCount = room.members.length;
+    room.members = room.members.filter(member => member.user.toString() !== userId);
+
+    if (room.members.length === initialMemberCount) {
+      return res.status(404).json({ msg: '이 방의 조원이 아닙니다.' });
+    }
+
+    // 4. Remove all timeSlots associated with the leaving user
+    room.timeSlots = room.timeSlots.filter(slot =>
+      slot.userId?.toString() !== userId && slot.user?.toString() !== userId
+    );
+
+    // 5. Remove all requests associated with the leaving user
+    room.requests = room.requests.filter(request =>
+      request.requester?.toString() !== userId &&
+      request.targetUser?.toString() !== userId
+    );
+
+    // 6. Save room
+    await room.save();
+    await room.populate('owner', 'firstName lastName email');
+    await room.populate('members.user', 'firstName lastName email');
+
+    res.json({
+      msg: '방에서 성공적으로 나갔습니다.',
+      success: true,
+      room
+    });
+
+  } catch (error) {
+    console.error('Leave room error:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
 // @desc    Get count of pending exchange requests for the user
 // @route   GET /api/coordination/exchange-requests-count
 // @access  Private
@@ -2838,6 +2895,10 @@ exports.smartExchange = async (req, res) => {
       const { roomId } = req.params;
       const { targetDay, targetTime } = req.body;
 
+      console.log('🚀 ========== SMART EXCHANGE REQUEST ==========');
+      console.log('📝 Request params:', { roomId, targetDay, targetTime });
+      console.log('👤 Requester user ID:', req.user.id);
+
       // Verify room exists
       const room = await Room.findById(roomId)
          .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes')
@@ -2950,20 +3011,23 @@ exports.smartExchange = async (req, res) => {
          slotCount: block.length
       })));
 
-      // Select block to move (prefer blocks not on target day)
+      // Select block to move
+      // Strategy: Always select the MOST RECENT block (by assignedAt or date)
+      // This ensures we move the "latest" appointment, avoiding duplication
       let selectedBlock;
-      const blocksNotOnTargetDay = continuousBlocks.filter(block => block[0].day !== targetDayEnglish);
 
-      if (blocksNotOnTargetDay.length > 0) {
-         // Take the most recent block (largest date) not on target day
-         selectedBlock = blocksNotOnTargetDay.sort((a, b) =>
-            new Date(b[0].date) - new Date(a[0].date)
-         )[0];
-         console.log(`✅ Selected block from ${selectedBlock[0].day} (avoiding target day ${targetDayEnglish})`);
-      } else {
-         selectedBlock = continuousBlocks[0];
-         console.log(`⚠️ All blocks are on target day, selecting first one`);
-      }
+      // Sort all blocks by assignedAt (most recent first)
+      const sortedBlocks = continuousBlocks.sort((a, b) => {
+         const aAssignedAt = a[0].assignedAt || a[0].date;
+         const bAssignedAt = b[0].assignedAt || b[0].date;
+         return new Date(bAssignedAt) - new Date(aAssignedAt);
+      });
+
+      selectedBlock = sortedBlocks[0];
+
+      console.log(`✅ Selected most recent block: ${selectedBlock[0].day} ${selectedBlock[0].startTime}-${selectedBlock[selectedBlock.length - 1].endTime} (moving to ${targetDayEnglish})`);
+      console.log(`   Assigned at: ${selectedBlock[0].assignedAt}`);
+      console.log(`   Total blocks available: ${continuousBlocks.length}`);
 
       const requesterCurrentSlot = selectedBlock[0]; // For compatibility with existing code
       const allSlotsInBlock = selectedBlock;
@@ -3007,7 +3071,17 @@ exports.smartExchange = async (req, res) => {
       const requesterUser = memberData.user;
       const requesterDefaultSchedule = requesterUser.defaultSchedule || [];
 
-      console.log('🔍 Requester defaultSchedule:', JSON.stringify(requesterDefaultSchedule, null, 2));
+      console.log('👤 Requester info:', {
+         id: requesterUser._id,
+         email: requesterUser.email,
+         name: `${requesterUser.firstName} ${requesterUser.lastName}`
+      });
+      console.log('🔍 Requester FULL defaultSchedule (all days):', JSON.stringify(requesterDefaultSchedule.map(s => ({
+         dayOfWeek: s.dayOfWeek,
+         day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][s.dayOfWeek],
+         startTime: s.startTime,
+         endTime: s.endTime
+      })), null, 2));
 
       // Find requester's schedule for target day
       const memberTargetDaySchedules = requesterDefaultSchedule.filter(s => s.dayOfWeek === targetDayOfWeek);
@@ -3094,13 +3168,25 @@ exports.smartExchange = async (req, res) => {
          });
       }
 
+      // 🔧 If targetTime is not specified and moving to different day, use first overlap range start time
+      let finalNewStartTime = newStartTime;
+      let finalNewEndTime = newEndTime;
+
+      if (!targetTime && selectedBlock[0].day !== targetDayEnglish) {
+         // Moving to different day without specific time → use first overlap range start
+         const firstOverlapStart = overlappingRanges[0].startTime;
+         finalNewStartTime = firstOverlapStart;
+         finalNewEndTime = addHours(firstOverlapStart, totalHours);
+         console.log(`⚙️ No target time specified, using first overlap start: ${finalNewStartTime}`);
+      }
+
       // Check if the entire block fits within any overlapping range
-      const [newStartH, newStartM] = newStartTime.split(':').map(Number);
-      const [newEndH, newEndM] = newEndTime.split(':').map(Number);
+      const [newStartH, newStartM] = finalNewStartTime.split(':').map(Number);
+      const [newEndH, newEndM] = finalNewEndTime.split(':').map(Number);
       const newStartMinutes = newStartH * 60 + newStartM;
       const newEndMinutes = newEndH * 60 + newEndM;
 
-      console.log(`🕐 New time range: ${newStartTime}-${newEndTime} (${newStartMinutes}-${newEndMinutes} minutes)`);
+      console.log(`🕐 New time range: ${finalNewStartTime}-${finalNewEndTime} (${newStartMinutes}-${newEndMinutes} minutes)`);
 
       let isWithinOverlap = false;
       for (const range of overlappingRanges) {
@@ -3146,14 +3232,37 @@ exports.smartExchange = async (req, res) => {
 
          console.log('📅 New times:', { startTime: newStartTime, endTime: newEndTime, totalHours });
 
+         // Check if already at target position (same day and same time)
+         const currentBlockDate = new Date(allSlotsInBlock[0].date);
+         const isSameDay = currentBlockDate.toISOString().split('T')[0] === targetDate.toISOString().split('T')[0];
+         const isSameTime = blockStartTime === newStartTime && blockEndTime === newEndTime;
+
+         if (isSameDay && isSameTime) {
+            console.log('⚠️ Already at target position. No changes needed.');
+            return res.json({
+               success: true,
+               message: `이미 ${targetDay} ${newStartTime}-${newEndTime}에 배정되어 있습니다.`,
+               immediateSwap: true,
+               targetDay,
+               targetTime: newStartTime
+            });
+         }
+
          // Remove ALL slots in the block
          const slotIdsToRemove = allSlotsInBlock.map(slot => slot._id.toString());
+         console.log(`🗑️ Attempting to remove ${slotIdsToRemove.length} slots:`, slotIdsToRemove);
+         console.log(`📊 Total timeSlots before removal: ${room.timeSlots.length}`);
+
+         const beforeLength = room.timeSlots.length;
          room.timeSlots = room.timeSlots.filter(slot => !slotIdsToRemove.includes(slot._id.toString()));
-         console.log(`🗑️ Removed ${slotIdsToRemove.length} slots from block`);
+         const afterLength = room.timeSlots.length;
+
+         console.log(`🗑️ Removed ${beforeLength - afterLength} slots (expected ${slotIdsToRemove.length})`);
+         console.log(`📊 Total timeSlots after removal: ${afterLength}`);
 
          // Create new continuous slots at target time (same 30-min intervals)
          const newSlots = [];
-         let currentTime = newStartTime;
+         let currentTime = finalNewStartTime;
 
          for (let i = 0; i < allSlotsInBlock.length; i++) {
             const slotEndTime = addHours(currentTime, 0.5); // 30 minutes
@@ -3173,17 +3282,17 @@ exports.smartExchange = async (req, res) => {
          }
 
          room.timeSlots.push(...newSlots);
-         console.log(`✅ Created ${newSlots.length} new slots at ${newStartTime}-${newEndTime}`);
+         console.log(`✅ Created ${newSlots.length} new slots at ${finalNewStartTime}-${finalNewEndTime}`);
 
          await room.save();
          await room.populate('timeSlots.user', '_id firstName lastName email');
 
          return res.json({
             success: true,
-            message: `${targetDay} ${newStartTime}-${newEndTime}로 즉시 변경되었습니다!`,
+            message: `${targetDay} ${finalNewStartTime}-${finalNewEndTime}로 즉시 변경되었습니다!`,
             immediateSwap: true,
             targetDay,
-            targetTime: newStartTime
+            targetTime: finalNewStartTime
          });
       }
 

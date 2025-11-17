@@ -117,7 +117,7 @@ class TravelScheduler {
             }
 
             const appointmentSlots = 2; // 1-hour appointment
-            const foundSlot = this._findNextAvailableSlot(nearestMember, arrivalTime, appointmentSlots, schedule, options.roomSettings);
+            const foundSlot = this._findNextAvailableSlot(nearestMember, arrivalTime, appointmentSlots, schedule, options.roomSettings, ownerData);
 
             if (foundSlot) {
                 // 4. Assign the slot
@@ -161,7 +161,7 @@ class TravelScheduler {
     /**
      * Finds the next available slot for a member respecting their preferences.
      */
-    _findNextAvailableSlot(member, afterTime, durationSlots, schedule, roomSettings) {
+    _findNextAvailableSlot(member, afterTime, durationSlots, schedule, roomSettings, owner) {
         let searchTime = new Date(afterTime);
         const scheduleStartHour = roomSettings?.scheduleStart || 9;
         const scheduleEndHour = roomSettings?.scheduleEnd || 18;
@@ -173,7 +173,7 @@ class TravelScheduler {
             if (dayOfWeek > 0 && dayOfWeek < 6) {
                 const searchHour = searchTime.getHours();
                 if (searchHour >= scheduleStartHour && searchHour < scheduleEndHour) {
-                    const isAvailable = this._isSlotFree(member, searchTime, durationSlots, schedule);
+                    const isAvailable = this._isSlotFree(member, searchTime, durationSlots, schedule, owner);
                     if (isAvailable) {
                         const startTime = `${String(searchTime.getHours()).padStart(2, '0')}:${String(searchTime.getMinutes()).padStart(2, '0')}`;
                         const endTimeDate = new Date(searchTime.getTime() + durationSlots * 30 * 60000);
@@ -199,44 +199,82 @@ class TravelScheduler {
     /**
      * Checks if a given time slot is free for a member.
      */
-    _isSlotFree(member, startTime, durationSlots, schedule) {
+    _isSlotFree(member, startTime, durationSlots, schedule, owner) {
         const endTime = new Date(startTime.getTime() + durationSlots * 30 * 60000);
         const dayOfWeek = startTime.getDay();
 
-        // 1. Get and merge preferred time blocks
+        // Helper function to merge continuous time blocks
+        const mergeTimeBlocks = (schedules) => {
+            if (schedules.length === 0) return [];
+
+            const sorted = [...schedules].sort((a, b) => a.startTime.localeCompare(b.startTime));
+            const merged = [];
+            let currentBlock = { ...sorted[0] };
+
+            for (let i = 1; i < sorted.length; i++) {
+                const nextBlock = sorted[i];
+                if (nextBlock.startTime <= currentBlock.endTime) {
+                    currentBlock.endTime = nextBlock.endTime > currentBlock.endTime ? nextBlock.endTime : currentBlock.endTime;
+                } else {
+                    merged.push(currentBlock);
+                    currentBlock = { ...nextBlock };
+                }
+            }
+            merged.push(currentBlock);
+            return merged;
+        };
+
+        // 1. Get OWNER's preferred time blocks for this day
+        const ownerSchedules = owner.defaultSchedule
+            .filter(s => s.dayOfWeek === dayOfWeek)
+            .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+        if (ownerSchedules.length === 0) {
+            return false; // Owner has no preference for this day
+        }
+
+        // 2. Get MEMBER's preferred time blocks for this day
         const memberSchedules = member.user.defaultSchedule
             .filter(s => s.dayOfWeek === dayOfWeek)
             .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
         if (memberSchedules.length === 0) {
-            return false; // No preference for this day
+            return false; // Member has no preference for this day
         }
 
-        const mergedBlocks = [];
-        if (memberSchedules.length > 0) {
-            let currentBlock = { ...memberSchedules[0] };
-            for (let i = 1; i < memberSchedules.length; i++) {
-                const nextBlock = memberSchedules[i];
-                // If next block starts when or before current one ends, merge them
-                if (nextBlock.startTime <= currentBlock.endTime) {
-                    currentBlock.endTime = nextBlock.endTime > currentBlock.endTime ? nextBlock.endTime : currentBlock.endTime;
-                } else {
-                    mergedBlocks.push(currentBlock);
-                    currentBlock = { ...nextBlock };
+        // 3. Merge continuous blocks for both owner and member
+        const ownerMergedBlocks = mergeTimeBlocks(ownerSchedules);
+        const memberMergedBlocks = mergeTimeBlocks(memberSchedules);
+
+        // 4. Find overlapping time ranges (Owner ∩ Member)
+        const overlappingBlocks = [];
+        for (const ownerBlock of ownerMergedBlocks) {
+            for (const memberBlock of memberMergedBlocks) {
+                const overlapStart = ownerBlock.startTime > memberBlock.startTime ? ownerBlock.startTime : memberBlock.startTime;
+                const overlapEnd = ownerBlock.endTime < memberBlock.endTime ? ownerBlock.endTime : memberBlock.endTime;
+
+                if (overlapStart < overlapEnd) {
+                    overlappingBlocks.push({
+                        startTime: overlapStart,
+                        endTime: overlapEnd
+                    });
                 }
             }
-            mergedBlocks.push(currentBlock);
         }
 
-        // 2. Check if the appointment is contained within any merged block
+        if (overlappingBlocks.length === 0) {
+            return false; // No overlapping time between owner and member for this day
+        }
+
+        // 5. Check if the appointment is contained within any overlapping block
         let isInPreferredTime = false;
-        for (const pref of mergedBlocks) {
+        for (const pref of overlappingBlocks) {
             const [prefStartH, prefStartM] = pref.startTime.split(':').map(Number);
             const [prefEndH, prefEndM] = pref.endTime.split(':').map(Number);
-            
+
             const prefStartTime = new Date(startTime);
             prefStartTime.setHours(prefStartH, prefStartM, 0, 0);
-            
+
             const prefEndTime = new Date(startTime);
             prefEndTime.setHours(prefEndH, prefEndM, 0, 0);
 
@@ -247,7 +285,7 @@ class TravelScheduler {
         }
 
         if (!isInPreferredTime) {
-            return false; // Not within member's preferred time
+            return false; // Not within overlapping preferred time (Owner ∩ Member)
         }
 
         // 3. Check against already scheduled appointments (existing logic is fine)

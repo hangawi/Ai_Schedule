@@ -1,7 +1,7 @@
 import React from "react";
-import { UserMinus } from "lucide-react";
+import { UserMinus, LogOut } from "lucide-react";
 
-const RoomMembersList = ({ room, removeMember }) => {
+const RoomMembersList = ({ room, removeMember, leaveRoom, currentUserId }) => {
   return (
     <div className="space-y-2">
       {room.members?.map((member, index) => {
@@ -11,6 +11,7 @@ const RoomMembersList = ({ room, removeMember }) => {
         const memberId = userData.id;
         const ownerId = room.owner?.id;
         const isOwner = memberId?.toString() === ownerId?.toString();
+        const isCurrentUser = currentUserId && memberId?.toString() === currentUserId?.toString();
 
         const displayName =
           userData.fullName ||
@@ -37,17 +38,31 @@ const RoomMembersList = ({ room, removeMember }) => {
               </div>
             </div>
 
-            {/* 오른쪽: 제거버튼 + 역할 태그 */}
+            {/* 오른쪽: 제거버튼/방나가기버튼 + 역할 태그 */}
             <div className="flex items-center gap-2">
-              {!isOwner && (
+              {/* 방 나가기 버튼: 본인이면서 방장이 아닌 경우 */}
+              {isCurrentUser && !isOwner && leaveRoom && (
+                <button
+                  onClick={leaveRoom}
+                  className="px-3 py-1.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-medium text-sm flex items-center gap-1.5 transition-colors"
+                  title="방 나가기"
+                >
+                  <LogOut size={16} />
+                  방 나가기
+                </button>
+              )}
+
+              {/* 강퇴 버튼: 본인이 아니고 방장이 아닌 멤버에 대해 표시 (방장만 볼 수 있음) */}
+              {!isCurrentUser && !isOwner && removeMember && (
                 <button
                   onClick={() => removeMember(memberId)}
-                  className="text-gray-400 hover:text-red-600 p-1 rounded-full"
+                  className="text-gray-400 hover:text-red-600 p-1 rounded-full transition-colors"
                   title="멤버 제거"
                 >
                   <UserMinus size={18} />
                 </button>
               )}
+
               {isOwner ? (
                 <span className="px-3 py-1 text-xs font-bold leading-none text-blue-800 bg-blue-100 rounded-full">
                   방장

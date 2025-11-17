@@ -20,6 +20,7 @@ router.get('/rooms/:roomId', auth, coordinationController.getRoomDetails);
 
 // Member management
 router.delete('/rooms/:roomId/members/:memberId', auth, coordinationController.removeMember);
+router.delete('/rooms/:roomId/leave', auth, coordinationController.leaveRoom);
 
 // TimeSlot management
 router.post('/rooms/:roomId/slots', auth, coordinationController.submitTimeSlots);

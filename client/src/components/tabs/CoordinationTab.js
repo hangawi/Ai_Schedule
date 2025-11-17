@@ -860,6 +860,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
 
   if (currentRoom) {
     const isOwner = isRoomOwner(user, currentRoom);
+    console.log('🔍 DEBUG - isOwner:', isOwner, 'user:', user?.id, 'room owner:', currentRoom?.owner?.id || currentRoom?.owner);
 
     return (
       <div className="p-1">
@@ -917,6 +918,56 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
             >
               방 목록으로 돌아가기
             </button>
+            {!isOwner && (
+              <button
+                onClick={async () => {
+                  if (window.confirm("정말로 이 방을 나가시겠습니까? 배정된 모든 시간이 삭제됩니다.")) {
+                    try {
+                      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+                      const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${currentRoom._id}/leave`, {
+                        method: 'DELETE',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'x-auth-token': localStorage.getItem('token')
+                        }
+                      });
+
+                      if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.msg || 'Failed to leave room');
+                      }
+
+                      alert("방에서 나갔습니다.");
+                      setCurrentRoom(null);
+                      fetchMyRooms(); // Refresh room list
+
+                      // Add room list state to browser history
+                      window.history.pushState({
+                        tab: 'coordination',
+                        roomState: null
+                      }, '', '#coordination');
+
+                    } catch (error) {
+                      alert(`방 나가기 실패: ${error.message}`);
+                    }
+                  }
+                }}
+                style={{
+                  padding: '0.5rem 1.25rem',
+                  backgroundColor: '#f97316',
+                  color: 'white',
+                  borderRadius: '0.5rem',
+                  fontWeight: '500',
+                  boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#ea580c'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#f97316'}
+              >
+                방 나가기
+              </button>
+            )}
           </div>
         </div>
         <div className="flex flex-col lg:flex-row gap-4 w-full">

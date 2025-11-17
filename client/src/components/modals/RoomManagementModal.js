@@ -75,7 +75,7 @@ const RoomManagementModal = ({
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
-            'x-auth-token': localStorage.getItem('token') 
+            'x-auth-token': localStorage.getItem('token')
           }
         });
 
@@ -85,7 +85,7 @@ const RoomManagementModal = ({
         }
 
         const result = await response.json();
-        onRoomUpdated(result.room); 
+        onRoomUpdated(result.room);
 
         if (result.removedMember) {
           showAlert(`${result.removedMember.name}님이 방에서 강퇴되었습니다. 해당 멤버에게 알림이 전송되었습니다.`);
@@ -96,6 +96,51 @@ const RoomManagementModal = ({
         // Failed to remove member - silently handle error
         showAlert(`조원 제거 실패: ${error.message}`);
       }
+    }
+  };
+
+  const leaveRoom = async () => {
+    if (window.confirm("정말로 이 방을 나가시겠습니까? 배정된 모든 시간이 삭제됩니다.")) {
+      try {
+        const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+        const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${room._id}/leave`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-auth-token': localStorage.getItem('token')
+          }
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.msg || 'Failed to leave room');
+        }
+
+        const result = await response.json();
+        showAlert("방에서 나갔습니다.");
+
+        // Close modal and trigger room list refresh
+        setTimeout(() => {
+          onClose();
+          // Dispatch custom event to refresh room list
+          window.dispatchEvent(new CustomEvent('roomListChanged'));
+        }, 1500);
+
+      } catch (error) {
+        showAlert(`방 나가기 실패: ${error.message}`);
+      }
+    }
+  };
+
+  // Get current user ID from localStorage token
+  const getCurrentUserId = () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return null;
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.user?.id || payload.id;
+    } catch (error) {
+      return null;
     }
   };
 
@@ -116,7 +161,12 @@ const RoomManagementModal = ({
   );
 
   const renderMembersTab = () => (
-    <RoomMembersList room={room} removeMember={removeMember} />
+    <RoomMembersList
+      room={room}
+      removeMember={removeMember}
+      leaveRoom={leaveRoom}
+      currentUserId={getCurrentUserId()}
+    />
   );
 
   const renderAILearningTab = () => (
