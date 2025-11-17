@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "serena": {
+      "command": "C:\\Users\\예상\\.local\\bin\\uv.exe",
+      "args": [
+        "run",
+        "--directory",
+        "C:\\serena",
+        "serena-mcp-server"
+      ]
+    }
+  }
+}
