@@ -3012,21 +3012,53 @@ exports.smartExchange = async (req, res) => {
       })));
 
       // Select block to move
-      // Strategy: Always select the MOST RECENT block (by assignedAt or date)
-      // This ensures we move the "latest" appointment, avoiding duplication
+      // Strategy: Select block from THIS WEEK that is NOT on target day
       let selectedBlock;
 
-      // Sort all blocks by assignedAt (most recent first)
-      const sortedBlocks = continuousBlocks.sort((a, b) => {
-         const aAssignedAt = a[0].assignedAt || a[0].date;
-         const bAssignedAt = b[0].assignedAt || b[0].date;
-         return new Date(bAssignedAt) - new Date(aAssignedAt);
+      // Calculate this week's date range (Monday to Sunday)
+      const thisWeekMonday = new Date(monday);
+      const thisWeekSunday = new Date(monday);
+      thisWeekSunday.setUTCDate(thisWeekMonday.getUTCDate() + 6);
+
+      console.log(`📅 This week range: ${thisWeekMonday.toISOString().split('T')[0]} to ${thisWeekSunday.toISOString().split('T')[0]}`);
+
+      // Filter blocks that are in THIS WEEK
+      const thisWeekBlocks = continuousBlocks.filter(block => {
+         const blockDate = new Date(block[0].date);
+         return blockDate >= thisWeekMonday && blockDate <= thisWeekSunday;
       });
 
-      selectedBlock = sortedBlocks[0];
+      console.log(`🔍 Block selection - Target day: ${targetDayEnglish}`);
+      console.log(`   Total blocks: ${continuousBlocks.length}`);
+      console.log(`   This week blocks: ${thisWeekBlocks.length}`);
 
-      console.log(`✅ Selected most recent block: ${selectedBlock[0].day} ${selectedBlock[0].startTime}-${selectedBlock[selectedBlock.length - 1].endTime} (moving to ${targetDayEnglish})`);
-      console.log(`   Assigned at: ${selectedBlock[0].assignedAt}`);
+      // From this week's blocks, prefer blocks NOT on target day
+      const thisWeekBlocksNotOnTargetDay = thisWeekBlocks.filter(block => block[0].day !== targetDayEnglish);
+      const thisWeekBlocksOnTargetDay = thisWeekBlocks.filter(block => block[0].day === targetDayEnglish);
+
+      console.log(`   This week blocks NOT on ${targetDayEnglish}: ${thisWeekBlocksNotOnTargetDay.length}`);
+      console.log(`   This week blocks ON ${targetDayEnglish}: ${thisWeekBlocksOnTargetDay.length}`);
+
+      if (thisWeekBlocksNotOnTargetDay.length > 0) {
+         // Move block from other day to target day (within this week)
+         selectedBlock = thisWeekBlocksNotOnTargetDay[0];
+         console.log(`✅ Selected THIS WEEK block from OTHER day: ${selectedBlock[0].day} ${selectedBlock[0].startTime}-${selectedBlock[selectedBlock.length - 1].endTime} (date: ${selectedBlock[0].date}) → ${targetDayEnglish}`);
+      } else if (thisWeekBlocksOnTargetDay.length > 0) {
+         // Only blocks on target day exist in this week - change time within same day
+         selectedBlock = thisWeekBlocksOnTargetDay[0];
+         console.log(`✅ Selected THIS WEEK block on SAME day: ${selectedBlock[0].day} ${selectedBlock[0].startTime}-${selectedBlock[selectedBlock.length - 1].endTime} (date: ${selectedBlock[0].date}) (changing time within ${targetDayEnglish})`);
+      } else {
+         // No blocks in this week - fallback to any block
+         console.log(`⚠️ No blocks found in this week, selecting from all blocks`);
+         const blocksNotOnTargetDay = continuousBlocks.filter(block => block[0].day !== targetDayEnglish);
+         if (blocksNotOnTargetDay.length > 0) {
+            selectedBlock = blocksNotOnTargetDay[0];
+         } else {
+            selectedBlock = continuousBlocks[0];
+         }
+         console.log(`⚠️ Fallback: selecting block from ${selectedBlock[0].date}`);
+      }
+
       console.log(`   Total blocks available: ${continuousBlocks.length}`);
 
       const requesterCurrentSlot = selectedBlock[0]; // For compatibility with existing code
@@ -3201,9 +3233,11 @@ exports.smartExchange = async (req, res) => {
       }
 
       if (!isWithinOverlap) {
+         // Create a more helpful error message
+         const availableRanges = overlappingRanges.map(r => `${r.startTime}-${r.endTime}`).join(', ');
          return res.status(400).json({
             success: false,
-            message: `${targetDay} ${newStartTime}-${newEndTime}는 방장과 당신의 선호 시간이 겹치는 범위가 아닙니다. 겹치는 시간대로만 변경할 수 있습니다.`
+            message: `${targetDay} ${newStartTime}-${newEndTime}는 사용할 수 없습니다. 방장과 겹치는 가능한 시간: ${availableRanges}`
          });
       }
 
@@ -3254,7 +3288,15 @@ exports.smartExchange = async (req, res) => {
          console.log(`📊 Total timeSlots before removal: ${room.timeSlots.length}`);
 
          const beforeLength = room.timeSlots.length;
-         room.timeSlots = room.timeSlots.filter(slot => !slotIdsToRemove.includes(slot._id.toString()));
+
+         // Use Mongoose array methods to ensure changes are tracked
+         for (const slotId of slotIdsToRemove) {
+            const index = room.timeSlots.findIndex(slot => slot._id.toString() === slotId);
+            if (index !== -1) {
+               room.timeSlots.splice(index, 1);
+            }
+         }
+
          const afterLength = room.timeSlots.length;
 
          console.log(`🗑️ Removed ${beforeLength - afterLength} slots (expected ${slotIdsToRemove.length})`);
