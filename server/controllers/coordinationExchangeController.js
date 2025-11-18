@@ -668,11 +668,13 @@ async function handleDateChange(req, res, room, memberData, params) {
    
    console.log(`✅ Deleted ${slotIdsToRemove.length} slots. Remaining user slots: ${room.timeSlots.filter(s => (s.user._id || s.user).toString() === req.user.id.toString()).length}`);
 
-   // Create new slots
-   console.log(`➕ Creating ${requesterSlots.length} new slots at ${targetDateStr} ${newStartTime}-${newEndTime}`);
+   // Create new slots based on total duration, not source slot count
+   const totalMinutes = timeToMinutes(newEndTime) - timeToMinutes(newStartTime);
+   const numSlots = Math.ceil(totalMinutes / 30);
+   console.log(`➕ Creating ${numSlots} new slots at ${targetDateStr} ${newStartTime}-${newEndTime} (${totalMinutes} minutes)`);
    const newSlots = [];
    let currentTime = newStartTime;
-   for (let i = 0; i < requesterSlots.length; i++) {
+   for (let i = 0; i < numSlots; i++) {
       const slotEndTime = addHours(currentTime, 0.5);
       const newSlot = {
          user: req.user.id,
@@ -680,7 +682,7 @@ async function handleDateChange(req, res, room, memberData, params) {
          startTime: currentTime,
          endTime: slotEndTime,
          day: targetDayEnglish,
-         priority: requesterSlots[i].priority || 3,
+         priority: requesterSlots[0]?.priority || 3,
          subject: '자동 배정',
          assignedBy: room.owner._id,
          assignedAt: new Date(),
@@ -812,7 +814,7 @@ ${conversationContext}
 **time_change 세부 규칙:**
 1. **기본**: 요일만 언급하면 **이번주** (weekOffset=0)로 간주
    - "금요일로" → targetDay="금요일", weekOffset=0
-2. "다음주", "이번주" 등 목표 주 명시: weekOffset 사용 (이번주=0, 다음주=1, 다다음주=2)
+2. "다음주", "이번주", "저번주" 등 목표 주 명시: weekOffset 사용 (지지난주=-2, 저번주=-1, 이번주=0, 다음주=1, 다다음주=2)
 3. "저번주", "지지난주" 등 소스 주 명시: sourceWeekOffset 사용 (지지난주=-2, 저번주=-1, 이번주=0)
 4. **"오늘/어제/내일 일정" 소스 처리**: sourceWeekOffset=0, sourceDay=해당요일로 변환
 5. 소스 요일이 명시되면 sourceDay에 요일 추출 (예: "저번주 월요일" → sourceDay="월요일")
@@ -858,6 +860,8 @@ ${conversationContext}
 **time_change 예시 (타겟에 요일명 있음):**
 - "수요일로 바꿔줘" -> {"type": "time_change", "targetDay": "수요일", "weekOffset": 0}
 - "다음주 수요일로" -> {"type": "time_change", "targetDay": "수요일", "weekOffset": 1}
+- "저번주 수요일로" -> {"type": "time_change", "targetDay": "수요일", "weekOffset": -1}
+- "이번주 월요일 일정 저번주 수요일로" -> {"type": "time_change", "sourceWeekOffset": 0, "sourceDay": "월요일", "targetDay": "수요일", "weekOffset": -1}
 - "저번주 월요일 일정 수요일로" -> {"type": "time_change", "sourceWeekOffset": -1, "sourceDay": "월요일", "targetDay": "수요일", "weekOffset": 0}
 - "오늘 일정 금요일로" -> {"type": "time_change", "sourceWeekOffset": 0, "sourceDay": "${['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'][new Date().getDay()]}", "targetDay": "금요일", "weekOffset": 0}
 - "어제 일정 금요일 오전 9시로" -> {"type": "time_change", "sourceWeekOffset": 0, "sourceDay": "${['토요일', '일요일', '월요일', '화요일', '수요일', '목요일', '금요일'][new Date().getDay()]}", "targetDay": "금요일", "targetTime": "09:00", "weekOffset": 0}
@@ -1557,11 +1561,14 @@ exports.smartExchange = async (req, res) => {
          console.log(`🗑️ Removed ${beforeLength - afterLength} slots (expected ${slotIdsToRemove.length})`);
          console.log(`📊 Total timeSlots after removal: ${afterLength}`);
 
-         // Create new continuous slots at target time (same 30-min intervals)
+         // Create new continuous slots at target time based on total duration
+         const totalMinutes = (parseInt(finalNewEndTime.split(':')[0]) * 60 + parseInt(finalNewEndTime.split(':')[1])) - 
+                             (parseInt(finalNewStartTime.split(':')[0]) * 60 + parseInt(finalNewStartTime.split(':')[1]));
+         const numSlots = Math.ceil(totalMinutes / 30);
          const newSlots = [];
          let currentTime = finalNewStartTime;
 
-         for (let i = 0; i < allSlotsInBlock.length; i++) {
+         for (let i = 0; i < numSlots; i++) {
             const slotEndTime = addHours(currentTime, 0.5); // 30 minutes
             newSlots.push({
                user: req.user.id,
@@ -1569,7 +1576,7 @@ exports.smartExchange = async (req, res) => {
                startTime: currentTime,
                endTime: slotEndTime,
                day: targetDayEnglish,
-               priority: allSlotsInBlock[i].priority || 3,
+               priority: allSlotsInBlock[0]?.priority || 3,
                subject: '자동 배정',
                assignedBy: room.owner._id,
                assignedAt: new Date(),
