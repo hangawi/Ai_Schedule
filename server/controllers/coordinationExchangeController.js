@@ -300,13 +300,123 @@ async function handleDateChange(req, res, room, memberData, params) {
       });
 
       if (conflictingSlots.length > 0) {
-         console.log(`⚠️ Conflict with other users at target date/time - creating request`);
+         console.log(`⚠️ Conflict with other users at target date/time`);
 
+         // 🆕 시간을 지정하지 않은 경우: 자동으로 빈 시간에 배치
+         if (!targetTime) {
+            console.log(`🔄 No specific time requested - finding next available slot`);
+
+            // 해당 날짜의 모든 슬롯 가져오기 (다른 사용자 + 본인)
+            const allSlotsOnTargetDate = room.timeSlots.filter(slot => {
+               const slotDate = new Date(slot.date).toISOString().split('T')[0];
+               return slotDate === targetDateStr;
+            });
+
+            // 사용자의 선호시간대에서 빈 슬롯 찾기
+            const memberScheduleForDay = memberTargetDaySchedules;
+            const scheduleTimes = memberScheduleForDay.map(s => ({
+               start: timeToMinutes(s.startTime),
+               end: timeToMinutes(s.endTime)
+            })).sort((a, b) => a.start - b.start);
+
+            // 선호시간대를 병합
+            const mergedSchedule = [];
+            scheduleTimes.forEach(slot => {
+               if (mergedSchedule.length === 0 || slot.start > mergedSchedule[mergedSchedule.length - 1].end) {
+                  mergedSchedule.push({ ...slot });
+               } else {
+                  mergedSchedule[mergedSchedule.length - 1].end = Math.max(mergedSchedule[mergedSchedule.length - 1].end, slot.end);
+               }
+            });
+
+            // 각 선호시간 블록에서 빈 슬롯 찾기
+            let foundSlot = null;
+            for (const block of mergedSchedule) {
+               let currentStart = block.start;
+
+               while (currentStart + totalHours * 60 <= block.end) {
+                  const currentEnd = currentStart + totalHours * 60;
+
+                  // 이 시간대에 충돌이 있는지 확인
+                  const hasConflict = allSlotsOnTargetDate.some(slot => {
+                     const slotStart = timeToMinutes(slot.startTime);
+                     const slotEnd = timeToMinutes(slot.endTime);
+                     return currentStart < slotEnd && currentEnd > slotStart;
+                  });
+
+                  if (!hasConflict) {
+                     foundSlot = {
+                        start: currentStart,
+                        end: currentEnd
+                     };
+                     break;
+                  }
+
+                  currentStart += 30; // 30분씩 이동
+               }
+
+               if (foundSlot) break;
+            }
+
+            if (foundSlot) {
+               // 빈 슬롯을 찾았으면 자동 배치
+               const autoStartTime = `${String(Math.floor(foundSlot.start / 60)).padStart(2, '0')}:${String(foundSlot.start % 60).padStart(2, '0')}`;
+               const autoEndTime = `${String(Math.floor(foundSlot.end / 60)).padStart(2, '0')}:${String(foundSlot.end % 60).padStart(2, '0')}`;
+
+               console.log(`✅ Found available slot: ${autoStartTime}-${autoEndTime}`);
+
+               // 기존 슬롯 삭제
+               const slotIdsToRemove = requesterSlots.map(slot => slot._id.toString());
+               for (const slotId of slotIdsToRemove) {
+                  const index = room.timeSlots.findIndex(slot => slot._id.toString() === slotId);
+                  if (index !== -1) {
+                     room.timeSlots.splice(index, 1);
+                  }
+               }
+
+               // 새 슬롯 생성
+               let currentTime = autoStartTime;
+               for (let i = 0; i < requesterSlots.length; i++) {
+                  const slotEndTime = addHours(currentTime, 0.5);
+                  room.timeSlots.push({
+                     user: req.user.id,
+                     date: targetDate,
+                     startTime: currentTime,
+                     endTime: slotEndTime,
+                     day: targetDayEnglish,
+                     priority: requesterSlots[i].priority || 3,
+                     subject: '자동 배정',
+                     assignedBy: room.owner._id,
+                     assignedAt: new Date(),
+                     status: 'confirmed'
+                  });
+                  currentTime = slotEndTime;
+               }
+
+               await room.save();
+               await room.populate('timeSlots.user', '_id firstName lastName email');
+
+               return res.json({
+                  success: true,
+                  message: `${finalTargetMonth}월 ${targetDateNum}일 ${autoStartTime}-${autoEndTime}로 자동 배치되었습니다! (원래 시간대에 다른 일정이 있어서 가장 가까운 빈 시간으로 이동)`,
+                  immediateSwap: true,
+                  targetDay: targetDayEnglish,
+                  targetTime: autoStartTime
+               });
+            }
+            // 빈 슬롯을 못 찾으면 아래에서 요청 생성
+            console.log(`⚠️ No available slot found - creating request`);
+         }
+
+         // 시간을 지정한 경우 또는 빈 슬롯을 못 찾은 경우: 요청 생성
          // Get unique conflicting users
          const conflictingUserIds = [...new Set(conflictingSlots.map(s => {
             const userId = s.user._id || s.user;
             return userId.toString();
          }))];
+
+         // 첫 번째 충돌 슬롯의 실제 정보 사용
+         const firstConflictSlot = conflictingSlots[0];
 
          // Create time change request
          const request = {
@@ -322,18 +432,18 @@ async function handleDateChange(req, res, room, memberData, params) {
                priority: slot.priority,
                subject: slot.subject
             })),
-            targetSlot: {
-               user: conflictingUserIds[0], // 충돌 사용자의 슬롯
-               date: targetDate,
+            timeSlot: {
+               user: firstConflictSlot.user._id || firstConflictSlot.user,
+               date: firstConflictSlot.date,
                startTime: newStartTime,
                endTime: newEndTime,
                day: targetDayEnglish,
-               priority: memberData.priority || 3,
-               subject: '자동 배정'
+               priority: firstConflictSlot.priority,
+               subject: firstConflictSlot.subject
             },
             desiredDay: targetDayEnglish,
             desiredTime: newStartTime,
-            message: `${sourceDateStr} ${blockStartTime}-${blockEndTime}를 ${finalTargetMonth}월 ${targetDateNum}일 ${newStartTime}-${newEndTime}로 변경 요청`,
+            message: `${new Date(firstConflictSlot.date).toISOString().split('T')[0]} ${newStartTime}-${newEndTime}를 양보 요청`,
             status: 'pending',
             createdAt: new Date()
          };
@@ -391,6 +501,115 @@ async function handleDateChange(req, res, room, memberData, params) {
       );
 
       if (hasOverlap) {
+         // 🆕 시간을 지정하지 않은 경우: 자기 일정과 겹쳐도 자동 배치
+         if (!targetTime) {
+            console.log(`🔄 Self-conflict detected, no specific time requested - finding next available slot`);
+
+            // 해당 날짜의 모든 슬롯 가져오기
+            const allSlotsOnTargetDate = room.timeSlots.filter(slot => {
+               const slotDate = new Date(slot.date).toISOString().split('T')[0];
+               return slotDate === targetDateStr;
+            });
+
+            // 사용자의 선호시간대에서 빈 슬롯 찾기
+            const targetDayOfWeek = new Date(targetDateStr).getDay();
+            const memberScheduleForDay = member.user.defaultSchedule?.filter(s => s.dayOfWeek === targetDayOfWeek) || [];
+            
+            if (memberScheduleForDay.length > 0) {
+               const scheduleTimes = memberScheduleForDay.map(s => ({
+                  start: timeToMinutes(s.startTime),
+                  end: timeToMinutes(s.endTime)
+               }));
+
+               // 연속된 선호시간 블록으로 병합
+               scheduleTimes.sort((a, b) => a.start - b.start);
+               const mergedScheduleRanges = [];
+               scheduleTimes.forEach(t => {
+                  if (mergedScheduleRanges.length === 0 || t.start > mergedScheduleRanges[mergedScheduleRanges.length - 1].end) {
+                     mergedScheduleRanges.push({ ...t });
+                  } else {
+                     mergedScheduleRanges[mergedScheduleRanges.length - 1].end = Math.max(
+                        mergedScheduleRanges[mergedScheduleRanges.length - 1].end,
+                        t.end
+                     );
+                  }
+               });
+
+               // 빈 슬롯 찾기
+               let foundSlot = null;
+               for (const range of mergedScheduleRanges) {
+                  let currentStart = range.start;
+                  
+                  while (currentStart + requiredDuration <= range.end) {
+                     const currentEnd = currentStart + requiredDuration;
+                     
+                     // 이 시간대가 비어있는지 확인
+                     const hasConflictInRange = allSlotsOnTargetDate.some(slot => {
+                        const slotStart = timeToMinutes(slot.startTime);
+                        const slotEnd = timeToMinutes(slot.endTime);
+                        return (currentStart < slotEnd && currentEnd > slotStart);
+                     });
+
+                     if (!hasConflictInRange) {
+                        foundSlot = {
+                           start: currentStart,
+                           end: currentEnd,
+                           startTime: minutesToTime(currentStart),
+                           endTime: minutesToTime(currentEnd)
+                        };
+                        break;
+                     }
+                     currentStart += 10; // 10분 단위로 이동
+                  }
+                  if (foundSlot) break;
+               }
+
+               if (foundSlot) {
+                  // 기존 슬롯 삭제
+                  const slotIdsToRemove = requesterSlots.map(slot => slot._id.toString());
+                  for (const slotId of slotIdsToRemove) {
+                     const index = room.timeSlots.findIndex(slot => slot._id.toString() === slotId);
+                     if (index !== -1) {
+                        room.timeSlots.splice(index, 1);
+                     }
+                  }
+
+                  // 새 슬롯 생성
+                  let currentTime = foundSlot.start;
+                  const newSlots = [];
+                  while (currentTime < foundSlot.end) {
+                     const slotEndTime = Math.min(currentTime + 30, foundSlot.end);
+                     newSlots.push({
+                        user: req.user.id,
+                        date: new Date(targetDateStr + 'T00:00:00Z'),
+                        startTime: minutesToTime(currentTime),
+                        endTime: minutesToTime(slotEndTime),
+                        day: targetDayEnglish,
+                        priority: requesterSlots[0]?.priority || 3,
+                        subject: '자동 배정',
+                        assignedBy: room.owner._id,
+                        assignedAt: new Date(),
+                        status: 'confirmed'
+                     });
+                     currentTime = slotEndTime;
+                  }
+
+                  room.timeSlots.push(...newSlots);
+                  await room.save();
+                  await room.populate('timeSlots.user', '_id firstName lastName email');
+
+                  return res.json({
+                     success: true,
+                     message: `${finalTargetMonth}월 ${targetDateNum}일 ${foundSlot.startTime}-${foundSlot.endTime}로 자동 배치되었습니다! (원래 시간대에 다른 일정이 있어서 가장 가까운 빈 시간으로 이동)`,
+                     immediateSwap: true,
+                     targetDay: targetDayEnglish,
+                     targetTime: foundSlot.startTime
+                  });
+               }
+            }
+            // 빈 슬롯을 못 찾으면 아래에서 에러 반환
+         }
+
          // Merge overlapping and consecutive slots into continuous blocks
          const sortedSlots = [...existingSlotTimes].sort((a, b) => a.start - b.start);
          const mergedBlocks = [];
@@ -419,7 +638,8 @@ async function handleDateChange(req, res, room, memberData, params) {
 
          return res.status(400).json({
             success: false,
-            message: `${finalTargetMonth}월 ${targetDateNum}일 ${newStartTime}-${newEndTime} 시간대에 이미 일정이 있습니다.\n기존 일정: ${existingTimesStr}`
+            message: `${finalTargetMonth}월 ${targetDateNum}일 ${newStartTime}-${newEndTime} 시간대에 이미 일정이 있습니다.
+기존 일정: ${existingTimesStr}`
          });
       }
    }
@@ -564,6 +784,8 @@ ${conversationContext}
 - "내일 일정 **11월 둘째주 월요일**로" → time_change (타겟에 "월요일" 있음!)
 - "오늘 일정 **다음주 수요일**로" → time_change (타겟에 "수요일" 있음)
 - "어제 일정 **내일**로" → date_change (타겟에 요일명 없음, "내일"=날짜)
+- "어제 일정 **오늘**로" → date_change (타겟에 요일명 없음, "오늘"=날짜)
+- "어제 일정 **오늘 오전 9시**로" → date_change (타겟에 요일명 없음, "오늘"=날짜)
 - "저번주 월요일 일정 **15일**로" → date_change (타겟에 요일명 없음)
 
 ⚠️ 주의: 소스에 "내일/어제/저번주 월요일"이 있어도, 타겟에 요일명이 있으면 time_change!
@@ -647,8 +869,12 @@ ${conversationContext}
 - "11월 11일 일정 14일로" -> {"type": "date_change", "sourceMonth": 11, "sourceDay": 11, "targetMonth": 11, "targetDate": 14}
 - "오늘 일정 15일로" -> {"type": "date_change", "sourceMonth": null, "sourceDay": null, "targetMonth": ${new Date().getMonth() + 1}, "targetDate": 15}
 - "오늘 일정 내일로" -> {"type": "date_change", "sourceMonth": null, "sourceDay": null, "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate() + 1}}
+- "오늘 일정 어제로" -> {"type": "date_change", "sourceMonth": null, "sourceDay": null, "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate() - 1}}
+- "오늘 일정 어제 오전 9시로" -> {"type": "date_change", "sourceMonth": null, "sourceDay": null, "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate() - 1}, "targetTime": "09:00"}
 - "오늘 일정 내일 오후 3시로" -> {"type": "date_change", "sourceMonth": null, "sourceDay": null, "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate() + 1}, "targetTime": "15:00"}
 - "어제 일정 내일로" -> {"type": "date_change", "sourceMonth": ${new Date().getMonth() + 1}, "sourceDay": ${new Date().getDate() - 1}, "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate() + 1}}
+- "어제 일정 오늘로" -> {"type": "date_change", "sourceMonth": ${new Date().getMonth() + 1}, "sourceDay": ${new Date().getDate() - 1}, "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate()}}
+- "어제 일정 오늘 오전 9시로" -> {"type": "date_change", "sourceMonth": ${new Date().getMonth() + 1}, "sourceDay": ${new Date().getDate() - 1}, "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate()}, "targetTime": "09:00"}
 - "어제 일정 내일 오후 3시로" -> {"type": "date_change", "sourceMonth": ${new Date().getMonth() + 1}, "sourceDay": ${new Date().getDate() - 1}, "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate() + 1}, "targetTime": "15:00"}
 - "저번주 월요일 일정 내일로" -> {"type": "date_change", "sourceMonth": 11, "sourceDay": (저번주 월요일 날짜), "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate() + 1}}
 - "저번주 월요일 일정 어제로" -> {"type": "date_change", "sourceMonth": 11, "sourceDay": (저번주 월요일 날짜), "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate() - 1}}
@@ -1367,16 +1593,105 @@ exports.smartExchange = async (req, res) => {
          });
       }
 
-      // Case 2: Target slot is occupied → Create exchange request
-      console.log('🔔 Target slot is occupied, creating exchange request...');
+      // Case 2: Target slot is occupied
+      console.log('🔔 Target slot is occupied');
+
+      // 🆕 시간을 지정하지 않은 경우: 자동으로 빈 시간에 배치
+      if (!targetTime) {
+         console.log(`🔄 No specific time requested - finding next available slot for time_change`);
+
+         // 해당 날짜의 모든 슬롯 가져오기
+         const allSlotsOnTargetDate = room.timeSlots.filter(slot => {
+            const slotDate = new Date(slot.date).toISOString().split('T')[0];
+            return slotDate === targetDate.toISOString().split('T')[0];
+         });
+
+         // overlappingRanges에서 빈 슬롯 찾기
+         let foundSlot = null;
+         for (const range of overlappingRanges) {
+            let currentStart = range.startMinutes;
+
+            while (currentStart + (totalHours * 60) <= range.endMinutes) {
+               const currentEnd = currentStart + (totalHours * 60);
+
+               // 이 시간대에 충돌이 있는지 확인
+               const hasConflict = allSlotsOnTargetDate.some(slot => {
+                  const slotStart = newStartH * 60 + newStartM; // reuse from earlier
+                  const slotStartMin = parseInt(slot.startTime.split(':')[0]) * 60 + parseInt(slot.startTime.split(':')[1]);
+                  const slotEndMin = parseInt(slot.endTime.split(':')[0]) * 60 + parseInt(slot.endTime.split(':')[1]);
+                  return currentStart < slotEndMin && currentEnd > slotStartMin;
+               });
+
+               if (!hasConflict) {
+                  foundSlot = { start: currentStart, end: currentEnd };
+                  break;
+               }
+
+               currentStart += 30; // 30분씩 이동
+            }
+
+            if (foundSlot) break;
+         }
+
+         if (foundSlot) {
+            // 빈 슬롯을 찾았으면 자동 배치
+            const autoStartTime = `${String(Math.floor(foundSlot.start / 60)).padStart(2, '0')}:${String(foundSlot.start % 60).padStart(2, '0')}`;
+            const autoEndTime = `${String(Math.floor(foundSlot.end / 60)).padStart(2, '0')}:${String(foundSlot.end % 60).padStart(2, '0')}`;
+
+            console.log(`✅ Found available slot: ${autoStartTime}-${autoEndTime}`);
+
+            // 기존 슬롯 삭제
+            const slotIdsToRemove = allSlotsInBlock.map(slot => slot._id.toString());
+            for (const slotId of slotIdsToRemove) {
+               const index = room.timeSlots.findIndex(slot => slot._id.toString() === slotId);
+               if (index !== -1) {
+                  room.timeSlots.splice(index, 1);
+               }
+            }
+
+            // 새 슬롯 생성
+            let currentTime = autoStartTime;
+            for (let i = 0; i < allSlotsInBlock.length; i++) {
+               const slotEndTime = addHours(currentTime, 0.5);
+               room.timeSlots.push({
+                  user: req.user.id,
+                  date: targetDate,
+                  startTime: currentTime,
+                  endTime: slotEndTime,
+                  day: targetDayEnglish,
+                  priority: allSlotsInBlock[i].priority || 3,
+                  subject: '자동 배정',
+                  assignedBy: room.owner._id,
+                  assignedAt: new Date(),
+                  status: 'confirmed'
+               });
+               currentTime = slotEndTime;
+            }
+
+            await room.save();
+            await room.populate('timeSlots.user', '_id firstName lastName email');
+
+            return res.json({
+               success: true,
+               message: `${targetDay} ${autoStartTime}-${autoEndTime}로 자동 배치되었습니다! (원래 시간대에 다른 일정이 있어서 가장 가까운 빈 시간으로 이동)`,
+               immediateSwap: true,
+               targetDay,
+               targetTime: autoStartTime
+            });
+         }
+         // 빈 슬롯을 못 찾으면 아래에서 요청 생성
+         console.log(`⚠️ No available slot found - creating request`);
+      }
+
+      // 시간을 지정한 경우 또는 빈 슬롯을 못 찾은 경우: 양보 요청 생성
+      console.log('📝 Creating yield request...');
 
       const occupiedUserId = (occupiedSlot.user._id || occupiedSlot.user).toString();
-      const requesterSlotIds = allSlotsInBlock.map(s => s._id.toString());
 
-      // Create exchange request
-      const exchangeRequest = {
+      // Create yield request
+      const yieldRequest = {
          requester: req.user.id,
-         type: 'exchange_request',
+         type: 'time_change',
          targetUser: occupiedUserId,
          requesterSlots: allSlotsInBlock.map(s => ({
             day: s.day,
@@ -1386,22 +1701,22 @@ exports.smartExchange = async (req, res) => {
             subject: s.subject,
             user: req.user.id
          })),
-         targetSlot: {
-            day: occupiedSlot.day,
-            date: occupiedSlot.date,
-            startTime: occupiedSlot.startTime,
-            endTime: occupiedSlot.endTime,
-            subject: occupiedSlot.subject,
+         timeSlot: {
+            day: targetDayEnglish,
+            date: targetDate,
+            startTime: finalNewStartTime,
+            endTime: finalNewEndTime,
+            subject: allSlotsInBlock[0]?.subject || '자동 배정',
             user: occupiedUserId
          },
          desiredDay: targetDay,
          desiredTime: finalNewStartTime,
-         message: `${memberData.user.firstName}님이 ${targetDay} ${finalNewStartTime}로 시간 변경을 요청했습니다.`,
+         message: `${targetDate.toISOString().split('T')[0]} ${finalNewStartTime}-${finalNewEndTime}를 양보 요청`,
          status: 'pending',
          createdAt: new Date()
       };
 
-      room.requests.push(exchangeRequest);
+      room.requests.push(yieldRequest);
       await room.save();
 
       await room.populate('requests.requester', 'firstName lastName email');
@@ -1409,7 +1724,7 @@ exports.smartExchange = async (req, res) => {
 
       const createdRequest = room.requests[room.requests.length - 1];
 
-      console.log('✅ Exchange request created:', createdRequest._id);
+      console.log('✅ Yield request created:', createdRequest._id);
 
       res.json({
          success: true,

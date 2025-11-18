@@ -60,9 +60,14 @@ const RequestSchema = new mongoose.Schema({
   },
   timeSlot: {
     day: String,
+    date: Date,
     startTime: String,
     endTime: String,
-    subject: String
+    subject: String,
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }
   },
   targetSlot: TimeSlotSchema, // For swap requests
   targetUser: {

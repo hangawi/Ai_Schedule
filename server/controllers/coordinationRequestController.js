@@ -86,9 +86,9 @@ exports.createRequest = async (req, res) => {
 
         const room = await Room.findOne({ 'requests._id': requestId })
            .populate('requests.requester', 'firstName lastName email')
-           .populate('requests.targetUser', 'firstName lastName email')
+           .populate('requests.targetUser', 'firstName lastName email defaultSchedule')
            .populate('timeSlots.user', '_id firstName lastName email')
-           .populate('members.user', 'firstName lastName email');
+           .populate('members.user', 'firstName lastName email defaultSchedule');
 
         if (!room) {
            return res.status(404).json({ msg: '요청을 찾을 수 없습니다.' });
@@ -129,9 +129,12 @@ exports.createRequest = async (req, res) => {
 
         if (action === 'approved') {
            console.log('✅ Action is APPROVED - processing request...');
-           const { type, timeSlot, targetUser, requester } = request;
+           // Support both timeSlot (new) and targetSlot (old) fields for backward compatibility
+         const { type, timeSlot: ts, targetSlot, targetUser, requester } = request;
+         const timeSlot = (ts && Object.keys(ts).length > 0) ? ts : targetSlot;
            console.log('📋 Request type:', type);
-           console.log('📋 TimeSlot:', timeSlot);
+           console.log('📋 TimeSlot:', JSON.stringify(timeSlot), ts ? '(from timeSlot)' : '(from targetSlot fallback)');
+         console.log('📋 TimeSlot.date:', timeSlot?.date ? new Date(timeSlot.date).toISOString() : 'undefined');
            console.log('📋 Requester:', requester._id || requester);
 
            if (type === 'slot_release') {
@@ -219,6 +222,11 @@ exports.createRequest = async (req, res) => {
                        return s1 < e2 && s2 < e1;
                     };
 
+                    // 디버깅: 전체 슬롯 상태 확인
+                    console.log(`📊 Total slots in room: ${room.timeSlots.length}`);
+                    console.log(`📊 Target user ID: ${targetUser._id}`);
+                    console.log(`📊 Looking for day: ${timeSlot.day}, time: ${timeSlot.startTime}-${timeSlot.endTime}`);
+                    
                     // 요청 시간에 겹치는 모든 타겟 슬롯 찾기 (복수 개 가능)
                     const overlappingSlots = room.timeSlots.filter(slot => {
                        const slotUserId = slot.user._id || slot.user;
@@ -229,13 +237,36 @@ exports.createRequest = async (req, res) => {
                        // 요일 매칭
                        if (slot.day !== timeSlot.day) return false;
 
-                       // 날짜 비교 (요청에 date가 있는 경우)
-                       if (timeSlot.date) {
-                          if (!slot.date) return false;
-                          const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
-                          const requestDateStr = new Date(timeSlot.date).toISOString().split('T')[0];
-                          if (slotDateStr !== requestDateStr) return false;
+                       // 날짜 비교 (필수 - date가 없으면 매칭 실패)
+                       if (!slot.date) return false;
+                       
+                       // timeSlot.date가 없으면 desiredDay를 사용해서 날짜 계산
+                       let requestDate = timeSlot.date;
+                       if (!requestDate && request.desiredDay) {
+                          console.log(`   📅 Calculating date from desiredDay: ${request.desiredDay}`);
+                          // desiredDay에서 날짜 계산 (이번주 기준)
+                          const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                          const targetDayIndex = daysOfWeek.indexOf(request.desiredDay.toLowerCase());
+                          if (targetDayIndex !== -1) {
+                             const today = new Date();
+                             const currentDay = today.getDay();
+                             const diff = targetDayIndex - currentDay;
+                             requestDate = new Date(today);
+                             requestDate.setDate(today.getDate() + diff);
+                          }
                        }
+                       
+                       if (!requestDate) {
+                          console.log('⚠️ No date available for matching - skipping slot');
+                          return false;
+                       }
+                       
+                       // 디버깅: 날짜 계산 결과
+                       const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
+                       const requestDateStr = new Date(requestDate).toISOString().split('T')[0];
+                       console.log(`   🔍 Comparing: slot ${slotDateStr} vs request ${requestDateStr} (user: ${slotUserId.toString().slice(-6)})`);
+                       
+                       if (slotDateStr !== requestDateStr) return false;
 
                        // 시간 범위 겹침 체크
                        return timeRangesOverlap(
@@ -246,7 +277,43 @@ exports.createRequest = async (req, res) => {
                        );
                     });
 
+                    console.log(`📊 Found ${overlappingSlots.length} overlapping slots from target user`);
                     if (overlappingSlots.length > 0) {
+                       console.log(`   Overlapping slots:`, overlappingSlots.map(s => ({
+                          date: new Date(s.date).toISOString().split('T')[0],
+                          time: `${s.startTime}-${s.endTime}`,
+                          id: s._id.toString().slice(-6)
+                       })));
+                       
+                       // 🆕 A의 기존 슬롯(requesterSlots) 삭제
+                       if (request.requesterSlots && request.requesterSlots.length > 0) {
+                          console.log(`🗑️ Removing ${request.requesterSlots.length} requester's original slots`);
+                          request.requesterSlots.forEach(reqSlot => {
+                             const reqDateStr = reqSlot.date ? new Date(reqSlot.date).toISOString().split('T')[0] : null;
+                             const index = room.timeSlots.findIndex(slot => {
+                                const slotUserId = slot.user._id || slot.user;
+                                if (slotUserId.toString() !== requester._id.toString()) return false;
+                                if (slot.startTime !== reqSlot.startTime) return false;
+                                if (slot.endTime !== reqSlot.endTime) return false;
+                                // 날짜 비교 (필수)
+                                if (!slot.date) return false;
+                                if (reqDateStr) {
+                                   const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
+                                   if (slotDateStr !== reqDateStr) return false;
+                                } else {
+                                   // reqDateStr가 없으면 매칭 실패
+                                   return false;
+                                }
+                                return true;
+                             });
+                             if (index !== -1) {
+                                room.timeSlots.splice(index, 1);
+                                console.log(`   ❌ Removed: ${reqSlot.startTime}-${reqSlot.endTime}`);
+                             }
+                          });
+                          room.markModified('timeSlots');
+                       }
+
                        // 겹치는 슬롯들을 정렬
                        overlappingSlots.sort((a, b) => {
                           const aTime = a.startTime.split(':').map(Number);
@@ -273,52 +340,18 @@ exports.createRequest = async (req, res) => {
                        const requestStart = toMinutes(timeSlot.startTime);
                        const requestEnd = toMinutes(timeSlot.endTime);
 
-                       // 남은 시간 조각들을 저장할 배열
-                       const remainingSlots = [];
-
-                       overlappingSlots.forEach(slot => {
-                          const slotStart = toMinutes(slot.startTime);
-                          const slotEnd = toMinutes(slot.endTime);
-
-                          // 요청 시간 전에 남은 부분
-                          if (slotStart < requestStart) {
-                             const beforeEnd = Math.min(slotEnd, requestStart);
-                             remainingSlots.push({
-                                user: targetUser._id,
-                                date: slot.date,
-                                startTime: slot.startTime,
-                                endTime: toTimeString(beforeEnd),
-                                day: slot.day,
-                                subject: slot.subject,
-                                status: slot.status,
-                                assignedBy: slot.assignedBy
-                             });
-                          }
-
-                          // 요청 시간 후에 남은 부분
-                          if (slotEnd > requestEnd) {
-                             const afterStart = Math.max(slotStart, requestEnd);
-                             remainingSlots.push({
-                                user: targetUser._id,
-                                date: slot.date,
-                                startTime: toTimeString(afterStart),
-                                endTime: slot.endTime,
-                                day: slot.day,
-                                subject: slot.subject,
-                                status: slot.status,
-                                assignedBy: slot.assignedBy
-                             });
-                          }
-                       });
-
-                       // 모든 겹치는 슬롯 제거
+                       // 모든 겹치는 슬롯 제거 (B의 슬롯은 나중에 가장 가까운 시간으로 이동됨)
+                       console.log(`🗑️ Removing ${overlappingSlots.length} overlapping slots from target user (B)`);
                        overlappingSlots.forEach(slot => {
                           const index = room.timeSlots.findIndex(s => s._id.equals(slot._id));
                           if (index !== -1) {
                              room.timeSlots.splice(index, 1);
+                             console.log(`   ❌ Removed B's slot: ${new Date(slot.date).toISOString().split('T')[0]} ${slot.startTime}-${slot.endTime}`);
                           }
                        });
                        room.markModified('timeSlots');
+                       
+                       console.log(`📊 After removals - Total timeSlots: ${room.timeSlots.length}`);
 
                        // 요청자에게 요청한 시간 슬롯 추가
                        room.timeSlots.push({
@@ -332,10 +365,154 @@ exports.createRequest = async (req, res) => {
                           assignedBy: req.user.id
                        });
 
-                       // 남은 시간 조각들을 원래 소유자에게 다시 추가
-                       remainingSlots.forEach(slot => {
-                          room.timeSlots.push(slot);
-                       });
+                       // 🆕 B의 슬롯을 B의 선호시간 중 가장 가까운 시간으로 이동
+                       // Calculate total duration of removed slots (in minutes)
+                       const totalDuration = overlappingSlots.reduce((sum, slot) => {
+                          const start = toMinutes(slot.startTime);
+                          const end = toMinutes(slot.endTime);
+                          return sum + (end - start);
+                       }, 0);
+
+                       // Get target user's preferred schedule
+                       const targetUserSchedule = targetUser.defaultSchedule || [];
+
+                       if (targetUserSchedule.length > 0 && totalDuration > 0) {
+                          // Helper function to get day of week number
+                          const getDayOfWeek = (dayName) => {
+                             const days = { 'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6 };
+                             return days[dayName.toLowerCase()] || 0;
+                          };
+
+                          const originalDayOfWeek = getDayOfWeek(firstSlot.day);
+                          const originalDate = new Date(firstSlot.date);
+                          const originalStartMinutes = toMinutes(firstSlot.startTime);
+
+                          // Group schedule by day and merge continuous blocks
+                          const scheduleByDay = {};
+                          targetUserSchedule.forEach(s => {
+                             if (!scheduleByDay[s.dayOfWeek]) scheduleByDay[s.dayOfWeek] = [];
+                             scheduleByDay[s.dayOfWeek].push({
+                                start: toMinutes(s.startTime),
+                                end: toMinutes(s.endTime)
+                             });
+                          });
+
+                          // Merge and sort each day's schedule
+                          Object.keys(scheduleByDay).forEach(day => {
+                             const slots = scheduleByDay[day].sort((a, b) => a.start - b.start);
+                             const merged = [];
+                             slots.forEach(slot => {
+                                if (merged.length === 0 || slot.start > merged[merged.length - 1].end) {
+                                   merged.push({ ...slot });
+                                } else {
+                                   merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, slot.end);
+                                }
+                             });
+                             scheduleByDay[day] = merged;
+                          });
+
+                          // Find candidates: same day first, then other days
+                          const candidates = [];
+
+                          // Check same day first
+                          if (scheduleByDay[originalDayOfWeek]) {
+                             scheduleByDay[originalDayOfWeek].forEach(block => {
+                                // Check if this block can fit the duration (excluding the requested time)
+                                const requestStart = toMinutes(timeSlot.startTime);
+                                const requestEnd = toMinutes(timeSlot.endTime);
+
+                                // Try before the requested time
+                                if (block.start < requestStart) {
+                                   const availableEnd = Math.min(block.end, requestStart);
+                                   if (availableEnd - block.start >= totalDuration) {
+                                      candidates.push({
+                                         dayOfWeek: originalDayOfWeek,
+                                         date: originalDate,
+                                         startMinutes: block.start,
+                                         distance: Math.abs(block.start - originalStartMinutes)
+                                      });
+                                   }
+                                }
+
+                                // Try after the requested time
+                                if (block.end > requestEnd) {
+                                   const availableStart = Math.max(block.start, requestEnd);
+                                   if (block.end - availableStart >= totalDuration) {
+                                      candidates.push({
+                                         dayOfWeek: originalDayOfWeek,
+                                         date: originalDate,
+                                         startMinutes: availableStart,
+                                         distance: Math.abs(availableStart - originalStartMinutes)
+                                      });
+                                   }
+                                }
+                             });
+                          }
+
+                          // Check other days (within 7 days)
+                          for (let dayOffset = 1; dayOffset <= 7; dayOffset++) {
+                             const checkDay = (originalDayOfWeek + dayOffset) % 7;
+                             if (scheduleByDay[checkDay]) {
+                                const checkDate = new Date(originalDate);
+                                checkDate.setDate(originalDate.getDate() + dayOffset);
+
+                                scheduleByDay[checkDay].forEach(block => {
+                                   if (block.end - block.start >= totalDuration) {
+                                      candidates.push({
+                                         dayOfWeek: checkDay,
+                                         date: checkDate,
+                                         startMinutes: block.start,
+                                         distance: dayOffset * 1440 + Math.abs(block.start - originalStartMinutes) // 1440 = minutes in a day
+                                      });
+                                   }
+                                });
+                             }
+                          }
+
+                          // Sort by distance and pick the closest
+                          candidates.sort((a, b) => a.distance - b.distance);
+
+                          if (candidates.length > 0) {
+                             const bestCandidate = candidates[0];
+                             const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+                             // Check for conflicts with existing slots
+                             const newStartMinutes = bestCandidate.startMinutes;
+                             const newEndMinutes = newStartMinutes + totalDuration;
+                             const newDateStr = bestCandidate.date.toISOString().split('T')[0];
+
+                             const hasConflict = room.timeSlots.some(slot => {
+                                const slotUserId = slot.user._id || slot.user;
+                                if (slotUserId.toString() !== targetUser._id.toString()) return false;
+
+                                const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
+                                if (slotDateStr !== newDateStr) return false;
+
+                                const slotStart = toMinutes(slot.startTime);
+                                const slotEnd = toMinutes(slot.endTime);
+                                return newStartMinutes < slotEnd && newEndMinutes > slotStart;
+                             });
+
+                             if (!hasConflict) {
+                                // Create new slot for B at the closest available time
+                                room.timeSlots.push({
+                                   user: targetUser._id,
+                                   date: bestCandidate.date,
+                                   startTime: toTimeString(newStartMinutes),
+                                   endTime: toTimeString(newEndMinutes),
+                                   day: dayNames[bestCandidate.dayOfWeek],
+                                   subject: '자동 재배치',
+                                   status: 'confirmed',
+                                   assignedBy: req.user.id
+                                });
+                                console.log(`✅ B's slot moved to ${dayNames[bestCandidate.dayOfWeek]} ${toTimeString(newStartMinutes)}-${toTimeString(newEndMinutes)}`);
+                             } else {
+                                console.log(`⚠️ Could not find non-conflicting slot for B`);
+                             }
+                          } else {
+                             console.log(`⚠️ No available slot found in B's preferred schedule`);
+                          }
+                       }
 
                     } else {
 
