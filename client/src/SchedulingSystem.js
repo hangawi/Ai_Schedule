@@ -435,7 +435,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
    }, [globalEvents]);
 
    // 탭별 챗봇 메시지 처리 함수
-   const handleTabSpecificChatMessage = async (message) => {
+   const handleTabSpecificChatMessage = async (message, additionalContext = {}) => {
       try {
          // 현재 탭에 따라 다른 처리
          switch (activeTab) {
@@ -444,7 +444,8 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                return await handleChatMessage(message, {
                   context: 'profile',
                   tabType: 'local',
-                  currentEvents: globalEvents
+                  currentEvents: globalEvents,
+                  ...additionalContext
                });
 
             case 'events':
@@ -452,7 +453,8 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                return await handleChatMessage(message, {
                   context: 'events',
                   tabType: 'local',
-                  currentEvents: globalEvents
+                  currentEvents: globalEvents,
+                  ...additionalContext
                });
 
             case 'googleCalendar':
@@ -460,7 +462,8 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                return await handleChatMessage(message, {
                   context: 'googleCalendar',
                   tabType: 'google',
-                  currentEvents: globalEvents
+                  currentEvents: globalEvents,
+                  ...additionalContext
                });
 
             case 'coordination':
@@ -470,7 +473,8 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                   context: 'coordination',
                   roomId: currentRoomId,
                   currentEvents: globalEvents,
-                  pendingRequest: pendingRequest
+                  pendingRequest: pendingRequest,
+                  ...additionalContext
                });
 
                // 응답 처리: pendingRequest 상태 업데이트
@@ -489,7 +493,8 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                return await handleChatMessage(message, {
                   context: activeTab,
                   tabType: 'default',
-                  currentEvents: globalEvents
+                  currentEvents: globalEvents,
+                  ...additionalContext
                });
          }
       } catch (error) {

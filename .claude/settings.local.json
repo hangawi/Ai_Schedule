@@ -7,9 +7,15 @@
       "Bash(findstr:*)",
       "Bash(taskkill:*)",
       "Bash(cmd /c:*)",
-      "Bash(tasklist)"
+      "Bash(tasklist)",
+      "mcp__serena__replace_regex",
+      "mcp__serena__activate_project"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "serena"
+  ]
 }

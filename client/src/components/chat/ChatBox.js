@@ -980,7 +980,12 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
         result = await response.json();
       } else {
         // 텍스트만 있는 경우 기존 API 호출
-        result = await onSendMessage(originalMessage);
+        // 최근 메시지 5개를 컨텍스트로 전달 (현재 메시지 제외)
+        const recentMessages = messages.slice(-5).map(msg => ({
+          text: msg.text,
+          sender: msg.sender
+        }));
+        result = await onSendMessage(originalMessage, { recentMessages });
       }
 
       // 로딩 메시지 제거하고 실제 응답 추가

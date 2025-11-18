@@ -43,7 +43,10 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   'Content-Type': 'application/json',
                   'x-auth-token': token
                },
-               body: JSON.stringify({ message })
+               body: JSON.stringify({
+                  message,
+                  recentMessages: context.recentMessages || []
+               })
             });
 
             if (!parseResponse.ok) {
