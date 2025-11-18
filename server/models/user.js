@@ -2,6 +2,12 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const UserSchema = new mongoose.Schema({
+  firebaseUid: {
+    type: String,
+    unique: true,
+    sparse: true, // Allow null values and only enforce uniqueness on non-null values
+    index: true
+  },
   email: {
     type: String,
     required: [true, '이메일은 필수입니다.'],

@@ -1,22 +1,13 @@
+import { authenticatedFetch } from '../utils/apiClient';
+
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
 const request = async (url, options) => {
-  const token = localStorage.getItem('token');
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
-  if (token) {
-    headers['x-auth-token'] = token;
-  }
-
-  const response = await fetch(url, { ...options, headers });
+  const response = await authenticatedFetch(url, options);
 
   if (!response.ok) {
     const errorData = await response.json();
     const errorMsg = errorData.details || errorData.msg || 'API request failed';
-    if (errorData.errors) {
-    }
     throw new Error(errorMsg);
   }
 

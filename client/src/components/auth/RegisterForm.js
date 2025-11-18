@@ -113,6 +113,13 @@ const RegisterForm = ({ onClose, onRegisterSuccess, onLoginClick }) => {
 
     // 최종 유효성 검사
     const currentErrors = validateForm();
+
+    // password2 확인 추가
+    if (!password2) {
+      showAlert('비밀번호 확인을 입력해주세요.', 'warning', '입력 오류');
+      return;
+    }
+
     const hasErrors = Object.keys(currentErrors).length > 0 || passwordMatchError;
 
     if (hasErrors) {
@@ -146,7 +153,17 @@ const RegisterForm = ({ onClose, onRegisterSuccess, onLoginClick }) => {
         return; // 오류 발생 시 함수 종료
       }
 
-      onRegisterSuccess();
+      // 회원가입 성공 모달 표시
+      showAlert(
+        '회원가입이 완료되었습니다. 로그인 페이지로 이동합니다.',
+        'success',
+        '회원가입 성공',
+        false,
+        () => {
+          closeAlert();
+          onRegisterSuccess();
+        }
+      );
     } catch (error) {
       showAlert(`회원가입 실패: ${error.message}`, 'error', '회원가입 실패');
       // Register error - silently handle error

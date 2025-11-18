@@ -68,9 +68,9 @@ const logRequest = (endpoint) => (req, res, next) => {
 
 // 라우트들
 router.post('/register', logRequest('회원가입'), registerValidation, checkValidation, authController.register);
-router.post('/login', logRequest('로그인'), loginValidation, checkValidation, authController.login);
+router.post('/login', logRequest('로그인'), auth, authController.login);
 router.get('/', auth, authController.getLoggedInUser);
-router.post('/google', authController.googleAuth);
+router.post('/google', auth, authController.googleAuth);
 
 // Health check
 router.get('/health', (req, res) => {

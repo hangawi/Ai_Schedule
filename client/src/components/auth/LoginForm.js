@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { useGoogleLogin } from '@react-oauth/google';
+import { signInWithPopup, signInWithEmailAndPassword } from 'firebase/auth';
+import { auth, googleProvider } from '../../config/firebaseConfig';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import SocialLoginButtons from './SocialLoginButtons';
 
@@ -45,12 +46,20 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
       }
 
       try {
+         // Sign in with Firebase
+         const userCredential = await signInWithEmailAndPassword(auth, email, password);
+         const firebaseUser = userCredential.user;
+
+         // Get ID token
+         const idToken = await firebaseUser.getIdToken();
+
+         // Send to backend to get/create user in MongoDB
          const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ email, password }),
+               'Authorization': `Bearer ${idToken}`
+            }
          });
 
          const data = await response.json();
@@ -59,22 +68,29 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
             throw new Error(data.msg || '로그인 실패');
          }
 
-         localStorage.setItem('token', data.token);
          onLoginSuccess(data.user, 'general');
       } catch (error) {
+         console.error('[LoginForm] Email login error:', error);
          showAlert('이메일/비밀번호가 일치하지 않습니다.', 'error', '로그인 실패');
-         // Login error - silently handle error
       }
    };
 
-   const handleGoogleLoginSuccess = async codeResponse => {
+   const handleGoogleLogin = async () => {
       try {
+         // Sign in with Google using Firebase
+         const result = await signInWithPopup(auth, googleProvider);
+         const firebaseUser = result.user;
+
+         // Get ID token
+         const idToken = await firebaseUser.getIdToken();
+
+         // Send to backend to get/create user in MongoDB
          const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ code: codeResponse.code }),
+               'Authorization': `Bearer ${idToken}`
+            }
          });
 
          const data = await response.json();
@@ -84,30 +100,14 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
             throw new Error(data.msg || 'Google 로그인 실패');
          }
 
-         localStorage.setItem('token', data.token);
          localStorage.setItem('googleConnected', 'true');
          onLoginSuccess(data.user, 'google');
       } catch (error) {
+         console.error('[LoginForm] Google login error:', error);
          localStorage.setItem('googleConnected', 'false');
          showAlert(`Google 로그인 실패: ${error.message}`, 'error', 'Google 로그인 실패');
-         // Google Login Error - silently handle error
       }
    };
-
-   const googleLogin = useGoogleLogin({
-      onSuccess: handleGoogleLoginSuccess,
-      onError: () => {
-         showAlert('Google 로그인에 실패했습니다.', 'error', 'Google 로그인 실패');
-      },
-      flow: 'auth-code',
-      scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
-      access_type: 'offline',
-      prompt: 'consent',
-      // 환경에 따른 redirect_uri 설정
-      redirect_uri: process.env.NODE_ENV === 'production'
-         ? 'https://aisch-9258c2a376c0.herokuapp.com'
-         : 'http://localhost:3000',
-   });
 
    const handleKeyPress = event => {
       if (event.key === 'Enter') {
@@ -155,7 +155,7 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
                   회원가입
                </button>
 
-               <SocialLoginButtons googleLogin={googleLogin} showAlert={showAlert} />
+               <SocialLoginButtons googleLogin={handleGoogleLogin} showAlert={showAlert} />
             </div>
 
             <CustomAlertModal

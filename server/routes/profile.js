@@ -9,7 +9,7 @@ const User = require('../models/user');
 router.get('/', auth, async (req, res) => {
   try {
     console.log('[profile.js GET] Fetching profile for user:', req.user.id);
-    const user = await User.findById(req.user.id).select('-password');
+    const user = await User.findOne({ firebaseUid: req.user.id }).select('-password');
 
     if (!user) {
       console.log('[profile.js GET] User not found');
@@ -46,7 +46,7 @@ router.put('/', auth, async (req, res) => {
     console.log('[profile.js PUT] Update request for user:', req.user.id);
     console.log('[profile.js PUT] Data received:', { firstName, lastName, phone, occupation });
 
-    const user = await User.findById(req.user.id);
+    const user = await User.findOne({ firebaseUid: req.user.id });
 
     if (!user) {
       console.log('[profile.js PUT] User not found');

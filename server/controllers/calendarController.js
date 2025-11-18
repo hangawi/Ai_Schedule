@@ -33,7 +33,7 @@ const updateAccessToken = async (user) => {
 
 exports.getCalendarEvents = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findOne({ firebaseUid: req.user.id });
     if (!user || !user.google || !user.google.accessToken) {
       return res.status(401).json({ msg: 'Google 계정이 연결되지 않았거나 토큰이 없습니다.' });
     }
@@ -69,7 +69,7 @@ exports.getCalendarEvents = async (req, res) => {
 
 exports.createGoogleCalendarEvent = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findOne({ firebaseUid: req.user.id });
     if (!user || !user.google || !user.google.accessToken) {
       return res.status(401).json({ msg: 'Google 계정이 연결되지 않았거나 토큰이 없습니다.' });
     }
@@ -113,7 +113,7 @@ exports.createGoogleCalendarEvent = async (req, res) => {
 
 exports.deleteGoogleCalendarEvent = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findOne({ firebaseUid: req.user.id });
     if (!user || !user.google || !user.google.accessToken) {
       return res.status(401).json({ msg: 'Google 계정이 연결되지 않았거나 토큰이 없습니다.' });
     }
@@ -143,7 +143,7 @@ exports.deleteGoogleCalendarEvent = async (req, res) => {
 
 exports.updateGoogleCalendarEvent = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findOne({ firebaseUid: req.user.id });
     if (!user || !user.google || !user.google.accessToken) {
       return res.status(401).json({ msg: 'Google 계정이 연결되지 않았거나 토큰이 없습니다.' });
     }
