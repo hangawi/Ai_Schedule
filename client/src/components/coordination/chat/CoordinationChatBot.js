@@ -1,3 +1,19 @@
+/**
+ * ============================================================================
+ * CoordinationChatBot.js - 사용되지 않는 파일
+ * ============================================================================
+ * 
+ * ⚠️ 주의: 이 컴포넌트는 현재 UI에 통합되지 않음!
+ * 
+ * 일정맞추기 탭의 채팅 기능은 실제로 다음 파일에서 처리됨:
+ * - UI: client/src/components/chat/ChatBox.js
+ * - 로직: client/src/hooks/useChat.js
+ * 
+ * 이 파일은 별도의 채팅봇 컴포넌트로 만들어졌지만,
+ * useChat.js 훅에서 coordination context를 처리하므로 사용되지 않음.
+ * ============================================================================
+ */
+
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 

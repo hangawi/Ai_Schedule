@@ -1,4 +1,29 @@
 const Room = require('../models/Room');
+/**
+ * ============================================================================
+ * coordinationExchangeController.js - 일정맞추기 교환 API
+ * ============================================================================
+ * 
+ * 🔴 일정맞추기 탭의 채팅 시간 변경 기능 백엔드
+ * 
+ * [주요 API]
+ * - parseExchangeRequest: Gemini로 자연어 메시지 파싱
+ *   POST /api/coordination/rooms/:roomId/parse-exchange-request
+ * 
+ * - smartExchange: 시간 변경/교환 실행
+ *   POST /api/coordination/rooms/:roomId/smart-exchange
+ * 
+ * [프론트엔드 연결]
+ * - client/src/hooks/useChat.js에서 호출
+ * - ChatBox.js의 메시지가 useChat 훅을 통해 이 API로 전달됨
+ * 
+ * [사용 예시]
+ * 조원: "수요일로 바꿔줘"
+ * → parseExchangeRequest로 파싱
+ * → smartExchange로 교환 실행
+ * ============================================================================
+ */
+
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -15,6 +40,143 @@ function getHoursDifference(startTime, endTime) {
    const [sh, sm] = startTime.split(':').map(Number);
    const [eh, em] = endTime.split(':').map(Number);
    return ((eh * 60 + em) - (sh * 60 + sm)) / 60;
+}
+
+/**
+ * Handle date-based change requests (e.g., "11월 11일 → 11월 14일")
+ */
+async function handleDateChange(req, res, room, memberData, params) {
+   const { sourceMonth, sourceDay, targetMonth, targetDateNum, targetTime, viewMode, currentWeekStartDate } = params;
+
+   const now = new Date();
+   const currentYear = now.getFullYear();
+   const currentMonth = now.getMonth() + 1;
+
+   // Calculate source date (use UTC to avoid timezone issues)
+   let sourceDate;
+   if (sourceMonth && sourceDay) {
+      sourceDate = new Date(Date.UTC(currentYear, sourceMonth - 1, sourceDay, 0, 0, 0, 0));
+   } else {
+      // "오늘 일정" - find user's slot for today
+      const today = new Date();
+      sourceDate = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
+   }
+
+   // Calculate target date (use UTC to avoid timezone issues)
+   const finalTargetMonth = targetMonth || currentMonth;
+   const targetDate = new Date(Date.UTC(currentYear, finalTargetMonth - 1, targetDateNum, 0, 0, 0, 0));
+
+   // Get day of week for target date
+   const dayOfWeek = targetDate.getDay();
+   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+   const targetDayEnglish = dayNames[dayOfWeek];
+
+   // Validate: only weekdays
+   if (dayOfWeek === 0 || dayOfWeek === 6) {
+      return res.status(400).json({
+         success: false,
+         message: `${finalTargetMonth}월 ${targetDateNum}일은 주말입니다. 평일(월~금)로만 이동할 수 있습니다.`
+      });
+   }
+
+   console.log(`📅 Date change: ${sourceMonth || 'today'}/${sourceDay || 'today'} → ${finalTargetMonth}/${targetDateNum} (${targetDayEnglish})`);
+
+   // Find the source slot
+   const sourceDateStr = sourceDate.toISOString().split('T')[0];
+
+   console.log(`🔍 Looking for slots on source date: ${sourceDateStr}`);
+   console.log(`👤 User ID: ${req.user.id}`);
+
+   // First, check all user's slots regardless of date
+   const allUserSlots = room.timeSlots.filter(slot => {
+      const slotUserId = (slot.user._id || slot.user).toString();
+      return slotUserId === req.user.id.toString();
+   });
+
+   console.log(`📊 Total slots for user: ${allUserSlots.length}`);
+   allUserSlots.forEach(slot => {
+      const slotDate = new Date(slot.date).toISOString().split('T')[0];
+      console.log(`   - ${slotDate} ${slot.startTime}-${slot.endTime} (subject: "${slot.subject}")`);
+   });
+
+   const requesterSlots = room.timeSlots.filter(slot => {
+      const slotUserId = (slot.user._id || slot.user).toString();
+      const slotDate = new Date(slot.date).toISOString().split('T')[0];
+      const isUserSlot = slotUserId === req.user.id.toString();
+      const isSourceDate = slotDate === sourceDateStr;
+      const isValidSubject = slot.subject === '자동 배정' || slot.subject === '교환 결과';
+
+      if (isUserSlot && isSourceDate) {
+         console.log(`   🎯 Found matching date slot: ${slotDate} ${slot.startTime}-${slot.endTime}, subject="${slot.subject}", valid=${isValidSubject}`);
+      }
+
+      return isUserSlot && isSourceDate && isValidSubject;
+   });
+
+   console.log(`✅ Filtered slots on ${sourceDateStr}: ${requesterSlots.length}`);
+
+   if (requesterSlots.length === 0) {
+      return res.status(400).json({
+         success: false,
+         message: `${sourceMonth || (now.getMonth() + 1)}월 ${sourceDay || now.getDate()}일에 배정된 일정이 없습니다.`
+      });
+   }
+
+   // Sort and group into continuous block
+   requesterSlots.sort((a, b) => {
+      const [aH, aM] = a.startTime.split(':').map(Number);
+      const [bH, bM] = b.startTime.split(':').map(Number);
+      return (aH * 60 + aM) - (bH * 60 + bM);
+   });
+
+   const blockStartTime = requesterSlots[0].startTime;
+   const blockEndTime = requesterSlots[requesterSlots.length - 1].endTime;
+   const totalHours = getHoursDifference(blockStartTime, blockEndTime);
+
+   const newStartTime = targetTime || blockStartTime;
+   const newEndTime = addHours(newStartTime, totalHours);
+
+   // Remove old slots and create new ones
+   const slotIdsToRemove = requesterSlots.map(slot => slot._id.toString());
+   for (const slotId of slotIdsToRemove) {
+      const index = room.timeSlots.findIndex(slot => slot._id.toString() === slotId);
+      if (index !== -1) {
+         room.timeSlots.splice(index, 1);
+      }
+   }
+
+   // Create new slots
+   const newSlots = [];
+   let currentTime = newStartTime;
+   for (let i = 0; i < requesterSlots.length; i++) {
+      const slotEndTime = addHours(currentTime, 0.5);
+      newSlots.push({
+         user: req.user.id,
+         date: targetDate,
+         startTime: currentTime,
+         endTime: slotEndTime,
+         day: targetDayEnglish,
+         priority: requesterSlots[i].priority || 3,
+         subject: '자동 배정',
+         assignedBy: room.owner._id,
+         assignedAt: new Date(),
+         status: 'confirmed'
+      });
+      currentTime = slotEndTime;
+   }
+
+   room.timeSlots.push(...newSlots);
+   await room.save();
+   await room.populate('timeSlots.user', '_id firstName lastName email');
+
+   const targetDateFormatted = `${finalTargetMonth}월 ${targetDateNum}일`;
+   return res.json({
+      success: true,
+      message: `${targetDateFormatted} ${newStartTime}-${newEndTime}로 즉시 변경되었습니다!`,
+      immediateSwap: true,
+      targetDay: targetDayEnglish,
+      targetTime: newStartTime
+   });
 }
 
 /**
@@ -53,33 +215,50 @@ exports.parseExchangeRequest = async (req, res) => {
 
 다음 JSON 형식으로 응답해주세요:
 {
-  "type": "응답 타입 (time_change, confirm, reject 중 하나)",
-  "targetDay": "요일 (type이 time_change일 때만, 예: 월요일, 화요일, 수요일, 목요일, 금요일)",
-  "targetTime": "시간 (HH:00 형식, 예: 14:00. 시간이 명시되지 않았으면 null. type이 time_change일 때만)"
+  "type": "응답 타입 (time_change, date_change, confirm, reject 중 하나)",
+  "sourceWeekOffset": "소스 주 오프셋 (지지난주=-2, 저번주=-1, 이번주=0, 다음주=1. 소스가 명시되지 않으면 null)",
+  "sourceDay": "소스 요일 (time_change에서 소스가 명시된 경우, 예: 월요일. date_change일 때는 숫자)",
+  "targetDay": "목표 요일 (time_change일 때, 예: 월요일~금요일. date_change일 때는 null)",
+  "targetTime": "시간 (HH:00 형식, 예: 14:00. 명시되지 않으면 null)",
+  "weekNumber": "주차 (1~5. 명시되지 않으면 null)",
+  "weekOffset": "목표 주 오프셋 (이번주=0, 다음주=1, 다다음주=2. 명시되지 않으면 null)",
+  "sourceMonth": "출발 월 (date_change일 때, 예: 11)",
+  "targetMonth": "목표 월 (date_change일 때, 예: 11)",
+  "targetDate": "목표 일 (date_change일 때, 예: 14)"
 }
 
 **응답 타입 판단 규칙:**
-1. **time_change**: 시간 변경 요청 (예: "수요일로 바꿔줘", "목요일 2시로")
-2. **confirm**: 긍정/확인 응답
-   - 한국어: "네", "예", "응", "어", "웅", "ㅇㅇ", "ㅇ", "그래", "좋아", "오케이", "ok", "yes", "y"
-   - 조정 의사 표현: "조정해줘", "바꿔줘", "변경해줘"
-3. **reject**: 부정/거절 응답
-   - 한국어: "아니", "아니요", "아뇨", "싫어", "안돼", "안할래", "no", "n", "nope", "취소"
+1. **time_change**: 요일 기반 시간 변경 (예: "수요일로 바꿔줘", "다음주 목요일로")
+2. **date_change**: 날짜 기반 시간 변경 (예: "11월 11일을 11월 14일로", "15일로 옮겨줘")
+3. **confirm**: 긍정/확인 응답 ("네", "예", "응", "어", "웅", "ㅇㅇ", "ㅇ", "그래", "좋아", "오케이", "ok", "yes", "y")
+4. **reject**: 부정/거절 응답 ("아니", "아니요", "아뇨", "싫어", "안돼", "안할래", "no", "n", "nope", "취소")
 
-**time_change 타입일 때 규칙:**
-1. 요일만 언급된 경우 targetTime은 null
-2. 요일과 시간이 모두 언급된 경우 둘 다 추출
-3. 시간은 24시간 형식으로 변환 (예: "오후 2시" -> "14:00", "2시" -> "14:00")
+**time_change 규칙:**
+1. 요일만 언급: targetDay만 추출, sourceWeekOffset은 null
+2. "다음주", "이번주" 등 목표 주: weekOffset 사용 (이번주=0, 다음주=1, 다다음주=2)
+3. "저번주", "지지난주" 등 소스 주: sourceWeekOffset 사용 (지지난주=-2, 저번주=-1, 이번주=0)
+4. 소스 요일이 명시되면 sourceDay에 요일 추출
+5. "둘째 주", "셋째 주" 등: weekNumber 사용 (1~5)
+6. 시간은 24시간 형식 (오후 2시 → 14:00)
+
+**date_change 규칙:**
+1. "11월 11일을 14일로" → sourceMonth=11, sourceDay=11, targetMonth=11, targetDate=14
+2. "오늘 일정을 15일로" → sourceMonth=null, sourceDay=null (오늘), targetMonth=현재월, targetDate=15
+3. 월이 명시되지 않으면 현재 월로 간주
 
 **예시:**
-- "수요일로 바꿔줘" -> {"type": "time_change", "targetDay": "수요일", "targetTime": null}
-- "수요일 2시로 바꿔줘" -> {"type": "time_change", "targetDay": "수요일", "targetTime": "14:00"}
-- "네" -> {"type": "confirm", "targetDay": null, "targetTime": null}
-- "ㅇㅇ" -> {"type": "confirm", "targetDay": null, "targetTime": null}
-- "어" -> {"type": "confirm", "targetDay": null, "targetTime": null}
-- "웅" -> {"type": "confirm", "targetDay": null, "targetTime": null}
-- "아니" -> {"type": "reject", "targetDay": null, "targetTime": null}
-- "취소" -> {"type": "reject", "targetDay": null, "targetTime": null}
+- "수요일로 바꿔줘" -> {"type": "time_change", "sourceWeekOffset": null, "sourceDay": null, "targetDay": "수요일", "weekOffset": null, ...}
+- "다음주 수요일로" -> {"type": "time_change", "sourceWeekOffset": null, "sourceDay": null, "targetDay": "수요일", "weekOffset": 1, ...}
+- "이번주 금요일로" -> {"type": "time_change", "sourceWeekOffset": null, "sourceDay": null, "targetDay": "금요일", "weekOffset": 0, ...}
+- "저번주 화요일 일정 다음주 화요일로" -> {"type": "time_change", "sourceWeekOffset": -1, "sourceDay": "화요일", "targetDay": "화요일", "weekOffset": 1, ...}
+- "저번주 월요일 일정 이번주 수요일로" -> {"type": "time_change", "sourceWeekOffset": -1, "sourceDay": "월요일", "targetDay": "수요일", "weekOffset": 0, ...}
+- "지지난주 금요일을 다음주로" -> {"type": "time_change", "sourceWeekOffset": -2, "sourceDay": "금요일", "targetDay": "금요일", "weekOffset": 1, ...}
+- "오늘 일정 다음주 수요일로" -> {"type": "time_change", "sourceWeekOffset": 0, "sourceDay": null, "targetDay": "수요일", "weekOffset": 1, ...}
+- "둘째 주 월요일로" -> {"type": "time_change", "sourceWeekOffset": null, "sourceDay": null, "targetDay": "월요일", "weekNumber": 2, ...}
+- "11월 11일 일정 14일로" -> {"type": "date_change", "sourceMonth": 11, "sourceDay": 11, "targetMonth": 11, "targetDate": 14, ...}
+- "오늘 일정 15일로" -> {"type": "date_change", "sourceMonth": null, "sourceDay": null, "targetMonth": null, "targetDate": 15, ...}
+- "네" -> {"type": "confirm", ...}
+- "아니" -> {"type": "reject", ...}
 
 JSON만 반환하고 다른 텍스트는 포함하지 마세요.
 `;
@@ -129,6 +308,15 @@ JSON만 반환하고 다른 텍스트는 포함하지 마세요.
          }
       }
 
+      // Validate date_change type
+      if (parsed.type === 'date_change') {
+         if (!parsed.targetDate) {
+            return res.status(400).json({
+               error: '목표 날짜를 명확히 말씀해주세요. (예: 15일)'
+            });
+         }
+      }
+
       res.json({ parsed });
 
    } catch (error) {
@@ -147,10 +335,26 @@ JSON만 반환하고 다른 텍스트는 포함하지 마세요.
 exports.smartExchange = async (req, res) => {
    try {
       const { roomId } = req.params;
-      const { targetDay, targetTime } = req.body;
+      const {
+         type,
+         targetDay,
+         targetTime,
+         viewMode,
+         currentWeekStartDate,
+         weekNumber,
+         weekOffset,
+         sourceWeekOffset,
+         sourceDay,  // date_change: 숫자 (3일 → 3), time_change: 문자열 ("월요일")
+         sourceMonth,
+         targetMonth,
+         targetDate: targetDateNum
+      } = req.body;
+
+      // time_change용으로 sourceDayStr 별도 변수 생성
+      const sourceDayStr = (type === 'time_change' && sourceDay) ? sourceDay : null;
 
       console.log('🚀 ========== SMART EXCHANGE REQUEST ==========');
-      console.log('📝 Request params:', { roomId, targetDay, targetTime });
+      console.log('📝 Request params:', { roomId, type, targetDay, targetTime, viewMode, weekNumber, weekOffset, sourceWeekOffset, sourceDay, sourceDayStr, sourceMonth, targetMonth, targetDateNum });
       console.log('👤 Requester user ID:', req.user.id);
 
       // Verify room exists
@@ -180,6 +384,20 @@ exports.smartExchange = async (req, res) => {
          '금요일': 'friday'
       };
 
+      // Handle date_change type (날짜 기반 이동)
+      if (type === 'date_change') {
+         return await handleDateChange(req, res, room, memberData, {
+            sourceMonth,
+            sourceDay,
+            targetMonth,
+            targetDateNum,
+            targetTime,
+            viewMode,
+            currentWeekStartDate
+         });
+      }
+
+      // For time_change type, validate targetDay
       const targetDayEnglish = dayMap[targetDay];
       if (!targetDayEnglish) {
          return res.status(400).json({ success: false, message: '유효하지 않은 요일입니다.' });
@@ -188,18 +406,115 @@ exports.smartExchange = async (req, res) => {
       // 🧠 Phase 4: Smart validation logic
 
       // Get current week's Monday
+      // weekOffset 사용 시에는 항상 오늘 기준으로 계산 (캘린더 뷰 위치와 무관)
+      let monday;
       const now = new Date();
       const day = now.getUTCDay();
       const diff = now.getUTCDate() - day + (day === 0 ? -6 : 1);
-      const monday = new Date(now);
+      monday = new Date(now);
       monday.setUTCDate(diff);
       monday.setUTCHours(0, 0, 0, 0);
+
+      console.log(`📅 Current week Monday: ${monday.toISOString().split('T')[0]} (from today: ${now.toISOString().split('T')[0]})`);
+
+      // currentWeekStartDate가 제공되고 weekOffset이 없으면 해당 주 기준으로 계산
+      if (currentWeekStartDate && !weekOffset && weekOffset !== 0) {
+         const providedDate = new Date(currentWeekStartDate);
+         const providedDay = providedDate.getUTCDay();
+         const providedDiff = providedDate.getUTCDate() - providedDay + (providedDay === 0 ? -6 : 1);
+         monday = new Date(providedDate);
+         monday.setUTCDate(providedDiff);
+         monday.setUTCHours(0, 0, 0, 0);
+         console.log(`📅 Using provided week Monday: ${monday.toISOString().split('T')[0]}`);
+      }
 
       // Calculate target date
       const dayNumbers = { monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5 };
       const targetDayNumber = dayNumbers[targetDayEnglish];
-      const targetDate = new Date(monday);
-      targetDate.setUTCDate(monday.getUTCDate() + targetDayNumber - 1);
+      let targetDate;
+
+      // weekOffset 처리 (이번주=0, 다음주=1, 다다음주=2)
+      if (weekOffset !== null && weekOffset !== undefined) {
+         const targetWeekMonday = new Date(monday);
+         targetWeekMonday.setUTCDate(monday.getUTCDate() + (weekOffset * 7));
+
+         targetDate = new Date(targetWeekMonday);
+         targetDate.setUTCDate(targetWeekMonday.getUTCDate() + targetDayNumber - 1);
+
+         console.log(`📅 Week offset ${weekOffset}: Target date = ${targetDate.toISOString().split('T')[0]}`);
+      }
+      // 월간 모드에서 weekNumber가 제공된 경우 해당 주차로 계산
+      else if (viewMode === 'month' && weekNumber) {
+         // 현재 월의 첫째 주 월요일 찾기
+         const year = monday.getFullYear();
+         const month = monday.getMonth();
+         const firstDayOfMonth = new Date(year, month, 1);
+         const firstDayOfWeek = firstDayOfMonth.getDay();
+         const daysToFirstMonday = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
+         const firstMonday = new Date(firstDayOfMonth);
+         firstMonday.setDate(firstDayOfMonth.getDate() - daysToFirstMonday);
+         firstMonday.setUTCHours(0, 0, 0, 0);
+
+         // 요청한 주차의 월요일
+         const targetWeekMonday = new Date(firstMonday);
+         targetWeekMonday.setDate(firstMonday.getDate() + (weekNumber - 1) * 7);
+
+         // 요청한 요일
+         targetDate = new Date(targetWeekMonday);
+         targetDate.setUTCDate(targetWeekMonday.getUTCDate() + targetDayNumber - 1);
+
+         console.log(`📅 Monthly mode with weekNumber ${weekNumber}: Target date = ${targetDate.toISOString().split('T')[0]}`);
+      } else {
+         // 기본: 현재 주 내에서 계산
+         targetDate = new Date(monday);
+         targetDate.setUTCDate(monday.getUTCDate() + targetDayNumber - 1);
+      }
+
+      // 🔒 viewMode 검증: 주간 모드에서는 이번 주 내에서만 이동 가능
+      if (viewMode === 'week') {
+         const weekStart = new Date(monday);
+         const weekEnd = new Date(monday);
+         weekEnd.setUTCDate(monday.getUTCDate() + 6);
+         weekEnd.setUTCHours(23, 59, 59, 999);
+
+         if (targetDate < weekStart || targetDate > weekEnd) {
+            const weekStartStr = weekStart.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
+            const weekEndStr = weekEnd.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
+            return res.status(400).json({
+               success: false,
+               message: `주간 모드에서는 이번 주(${weekStartStr} ~ ${weekEndStr}) 내에서만 이동할 수 있습니다. 다른 주로 이동하려면 월간 모드로 전환해주세요.`
+            });
+         }
+      } else if (viewMode === 'month') {
+         // 월간 모드: 해당 월 범위 검증
+         const year = monday.getFullYear();
+         const month = monday.getMonth();
+         const firstDayOfMonth = new Date(year, month, 1);
+         const lastDayOfMonth = new Date(year, month + 1, 0);
+
+         // 첫째 주 월요일
+         const firstDayOfWeek = firstDayOfMonth.getDay();
+         const daysToFirstMonday = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
+         const monthStart = new Date(firstDayOfMonth);
+         monthStart.setDate(firstDayOfMonth.getDate() - daysToFirstMonday);
+         monthStart.setUTCHours(0, 0, 0, 0);
+
+         // 마지막 주 일요일
+         const lastDayOfWeek = lastDayOfMonth.getDay();
+         const daysToLastSunday = lastDayOfWeek === 0 ? 0 : 7 - lastDayOfWeek;
+         const monthEnd = new Date(lastDayOfMonth);
+         monthEnd.setDate(lastDayOfMonth.getDate() + daysToLastSunday);
+         monthEnd.setUTCHours(23, 59, 59, 999);
+
+         if (targetDate < monthStart || targetDate > monthEnd) {
+            const monthName = firstDayOfMonth.toLocaleDateString('ko-KR', { month: 'long' });
+            return res.status(400).json({
+               success: false,
+               message: `${monthName} 범위를 벗어나는 이동입니다. 다른 달로 이동하시겠습니까?`,
+               warning: 'out_of_month_range'
+            });
+         }
+      }
 
       // Find ALL requester's current assignments (including exchanged slots)
       const requesterCurrentSlots = room.timeSlots.filter(slot => {
@@ -269,51 +584,92 @@ exports.smartExchange = async (req, res) => {
       })));
 
       // Select block to move
-      // Strategy: Select block from THIS WEEK that is NOT on target day
       let selectedBlock;
 
-      // Calculate this week's date range (Monday to Sunday)
-      const thisWeekMonday = new Date(monday);
-      const thisWeekSunday = new Date(monday);
-      thisWeekSunday.setUTCDate(thisWeekMonday.getUTCDate() + 6);
+      // 📍 STEP 1: Determine source week range
+      let sourceWeekMonday, sourceWeekSunday;
 
-      // console.log(`📅 This week range: ${thisWeekMonday.toISOString().split('T')[0]} to ${thisWeekSunday.toISOString().split('T')[0]}`);
+      if (sourceWeekOffset !== null && sourceWeekOffset !== undefined) {
+         // sourceWeekOffset이 명시된 경우: 해당 주차 계산 (저번주=-1, 이번주=0, 다음주=1)
+         const now = new Date();
+         const day = now.getUTCDay();
+         const diff = now.getUTCDate() - day + (day === 0 ? -6 : 1);
+         const todayMonday = new Date(now);
+         todayMonday.setUTCDate(diff);
+         todayMonday.setUTCHours(0, 0, 0, 0);
 
-      // Filter blocks that are in THIS WEEK
-      const thisWeekBlocks = continuousBlocks.filter(block => {
+         sourceWeekMonday = new Date(todayMonday);
+         sourceWeekMonday.setUTCDate(todayMonday.getUTCDate() + (sourceWeekOffset * 7));
+
+         sourceWeekSunday = new Date(sourceWeekMonday);
+         sourceWeekSunday.setUTCDate(sourceWeekMonday.getUTCDate() + 6);
+
+         console.log(`🎯 Source week specified: offset=${sourceWeekOffset}, range=${sourceWeekMonday.toISOString().split('T')[0]} to ${sourceWeekSunday.toISOString().split('T')[0]}`);
+      } else {
+         // sourceWeekOffset이 없으면 이번주 기준
+         sourceWeekMonday = new Date(monday);
+         sourceWeekSunday = new Date(monday);
+         sourceWeekSunday.setUTCDate(sourceWeekMonday.getUTCDate() + 6);
+
+         console.log(`📅 Source week defaulting to current week: ${sourceWeekMonday.toISOString().split('T')[0]} to ${sourceWeekSunday.toISOString().split('T')[0]}`);
+      }
+
+      // 📍 STEP 2: Filter blocks in source week
+      const sourceWeekBlocks = continuousBlocks.filter(block => {
          const blockDate = new Date(block[0].date);
-         return blockDate >= thisWeekMonday && blockDate <= thisWeekSunday;
+         return blockDate >= sourceWeekMonday && blockDate <= sourceWeekSunday;
       });
 
-      // console.log(`🔍 Block selection - Target day: ${targetDayEnglish}`);
-      // console.log(`   Total blocks: ${continuousBlocks.length}`);
-      // console.log(`   This week blocks: ${thisWeekBlocks.length}`);
+      console.log(`🔍 Found ${sourceWeekBlocks.length} blocks in source week`);
 
-      // From this week's blocks, prefer blocks NOT on target day
-      const thisWeekBlocksNotOnTargetDay = thisWeekBlocks.filter(block => block[0].day !== targetDayEnglish);
-      const thisWeekBlocksOnTargetDay = thisWeekBlocks.filter(block => block[0].day === targetDayEnglish);
+      // 📍 STEP 3: sourceDayStr이 명시된 경우 해당 요일만 필터
+      let candidateBlocks = sourceWeekBlocks;
 
-      // console.log(`   This week blocks NOT on ${targetDayEnglish}: ${thisWeekBlocksNotOnTargetDay.length}`);
-      // console.log(`   This week blocks ON ${targetDayEnglish}: ${thisWeekBlocksOnTargetDay.length}`);
+      if (sourceDayStr) {
+         // 한글 요일 → 영어 요일 변환
+         const dayMap = {
+            '월요일': 'monday', '월': 'monday',
+            '화요일': 'tuesday', '화': 'tuesday',
+            '수요일': 'wednesday', '수': 'wednesday',
+            '목요일': 'thursday', '목': 'thursday',
+            '금요일': 'friday', '금': 'friday',
+            '토요일': 'saturday', '토': 'saturday',
+            '일요일': 'sunday', '일': 'sunday'
+         };
 
-      if (thisWeekBlocksNotOnTargetDay.length > 0) {
-         // Move block from other day to target day (within this week)
-         selectedBlock = thisWeekBlocksNotOnTargetDay[0];
-         // console.log(`✅ Selected THIS WEEK block from OTHER day: ${selectedBlock[0].day} ${selectedBlock[0].startTime}-${selectedBlock[selectedBlock.length - 1].endTime} (date: ${selectedBlock[0].date}) → ${targetDayEnglish}`);
-      } else if (thisWeekBlocksOnTargetDay.length > 0) {
-         // Only blocks on target day exist in this week - change time within same day
-         selectedBlock = thisWeekBlocksOnTargetDay[0];
-         // console.log(`✅ Selected THIS WEEK block on SAME day: ${selectedBlock[0].day} ${selectedBlock[0].startTime}-${selectedBlock[selectedBlock.length - 1].endTime} (date: ${selectedBlock[0].date}) (changing time within ${targetDayEnglish})`);
+         const sourceDayEnglish = dayMap[sourceDayStr] || sourceDayStr.toLowerCase();
+
+         candidateBlocks = sourceWeekBlocks.filter(block => block[0].day === sourceDayEnglish);
+
+         console.log(`🎯 Source day specified: ${sourceDayStr} (${sourceDayEnglish}), found ${candidateBlocks.length} blocks`);
+      }
+
+      // 📍 STEP 4: Select block from candidates
+      if (candidateBlocks.length > 0) {
+         // 타겟 요일이 아닌 블록 우선 선택 (다른 요일로 이동하는 경우)
+         const blocksNotOnTargetDay = candidateBlocks.filter(block => block[0].day !== targetDayEnglish);
+         const blocksOnTargetDay = candidateBlocks.filter(block => block[0].day === targetDayEnglish);
+
+         if (blocksNotOnTargetDay.length > 0) {
+            selectedBlock = blocksNotOnTargetDay[0];
+            console.log(`✅ Selected block from ${selectedBlock[0].day} ${selectedBlock[0].startTime}-${selectedBlock[selectedBlock.length - 1].endTime} (date: ${selectedBlock[0].date}) → ${targetDayEnglish}`);
+         } else if (blocksOnTargetDay.length > 0) {
+            selectedBlock = blocksOnTargetDay[0];
+            console.log(`✅ Selected block on same day ${selectedBlock[0].day} ${selectedBlock[0].startTime}-${selectedBlock[selectedBlock.length - 1].endTime} (date: ${selectedBlock[0].date})`);
+         } else {
+            selectedBlock = candidateBlocks[0];
+            console.log(`✅ Selected first available block: ${selectedBlock[0].day} ${selectedBlock[0].startTime}-${selectedBlock[selectedBlock.length - 1].endTime}`);
+         }
       } else {
-         // No blocks in this week - fallback to any block
-         // console.log(`⚠️ No blocks found in this week, selecting from all blocks`);
+         // 후보 블록이 없으면 fallback: 전체 블록에서 선택
+         console.log(`⚠️ No blocks found in specified source, selecting from all blocks`);
          const blocksNotOnTargetDay = continuousBlocks.filter(block => block[0].day !== targetDayEnglish);
          if (blocksNotOnTargetDay.length > 0) {
             selectedBlock = blocksNotOnTargetDay[0];
          } else {
             selectedBlock = continuousBlocks[0];
          }
-         // console.log(`⚠️ Fallback: selecting block from ${selectedBlock[0].date}`);
+         console.log(`⚠️ Fallback: selected block from ${selectedBlock[0].date}`);
       }
 
       // console.log(`   Total blocks available: ${continuousBlocks.length}`);

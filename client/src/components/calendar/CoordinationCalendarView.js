@@ -37,7 +37,16 @@ const DaySummaryBar = ({ blocks }) => {
 
         switch (block.type) {
           case 'assigned':
-            bgColor = 'bg-blue-500';
+            // "배정된 시간"만 있는 경우 보라색, 그 외는 파란색
+            const hasOnlyOthers = block.users && block.users.every(u => u === '배정된 시간');
+            const hasSelfAndOthers = block.users && block.users.some(u => u === '배정된 시간') && block.users.some(u => u !== '배정된 시간');
+            if (hasOnlyOthers) {
+              bgColor = 'bg-purple-500';
+            } else if (hasSelfAndOthers) {
+              bgColor = 'bg-indigo-500'; // 혼합: 본인 + 다른 사람
+            } else {
+              bgColor = 'bg-blue-500';
+            }
             tooltip = `${block.startTime} - ${getEndTimeForBlock(block)}: ${block.users.join(', ')}`;
             break;
           case 'blocked':
@@ -79,6 +88,8 @@ const CoordinationCalendarView = ({
   roomData,
   timeSlots = [],
   members = [],
+  currentUser,
+  isRoomOwner,
   onDateClick,
   selectedDate,
   ownerOriginalSchedule, // New prop
@@ -159,6 +170,27 @@ const CoordinationCalendarView = ({
         event = { type: 'travel', name: '이동시간' };
       } else if (activitySlots.length > 0) {
         const userNames = assignedSlots.map(slot => {
+            // 현재 사용자의 슬롯인지 확인
+            const slotUserId = slot.user?._id?.toString() || slot.user?.toString();
+            const currentUserId = currentUser?.id?.toString() || currentUser?._id?.toString();
+            const isOwnSlot = slotUserId && currentUserId && slotUserId === currentUserId;
+
+            // 방장이 아닌 경우: 본인 슬롯은 이름 표시, 다른 사람은 "다른 사람"
+            if (!isRoomOwner) {
+              if (isOwnSlot) {
+                // 본인 슬롯: 이름 표시
+                if (slot.user && typeof slot.user === 'object' && slot.user._id) {
+                  const user = slot.user;
+                  return `${user.firstName || ''} ${user.lastName || ''}`.trim() || '나';
+                }
+                return '나';
+              } else {
+                // 다른 사람 슬롯
+                return '배정된 시간';
+              }
+            }
+
+            // 방장인 경우: 모든 이름 표시
             // slot.user가 populate되어 있으면 직접 사용 (우선순위 1)
             if (slot.user && typeof slot.user === 'object' && slot.user._id) {
               const user = slot.user;
@@ -168,8 +200,8 @@ const CoordinationCalendarView = ({
             // slot.user가 ObjectId만 있으면 members에서 찾기 (우선순위 2)
             const member = members.find(m => {
               const memberUserId = m.user?._id?.toString() || m.user?.toString();
-              const slotUserId = slot.user?._id?.toString() || slot.user?.toString();
-              return memberUserId && slotUserId && memberUserId === slotUserId;
+              const slotUserIdInner = slot.user?._id?.toString() || slot.user?.toString();
+              return memberUserId && slotUserIdInner && memberUserId === slotUserIdInner;
             });
 
             if (member && member.user && typeof member.user === 'object') {
@@ -282,7 +314,16 @@ const CoordinationCalendarView = ({
               <DaySummaryBar blocks={dateInfo.blocks} />
               <div className="flex flex-wrap gap-1 mt-1 overflow-y-auto" style={{maxHeight: '4.5rem'}}>
                 {Array.from(new Set(dateInfo.blocks.filter(b => b.type === 'assigned').flatMap(b => b.users || []))).map((name, i) => (
-                  <span key={`user-${i}`} className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full">{name}</span>
+                  <span
+                    key={`user-${i}`}
+                    className={`text-xs px-1.5 py-0.5 rounded-full ${
+                      name === '배정된 시간'
+                        ? 'bg-purple-100 text-purple-800'
+                        : 'bg-blue-100 text-blue-800'
+                    }`}
+                  >
+                    {name}
+                  </span>
                 ))}
                 {Array.from(new Set(dateInfo.blocks.filter(b => b.type === 'blocked').map(b => b.name))).map((name, i) => (
                   <span key={`block-${i}`} className="text-xs bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full">{name}</span>

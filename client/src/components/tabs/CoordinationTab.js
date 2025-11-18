@@ -52,6 +52,11 @@ import {
   handleRequestWithUpdate,
   createChangeRequestData
 } from '../../utils/coordinationHandlers';
+import {
+  saveViewMode,
+  getViewMode,
+  saveCurrentWeekStartDate
+} from '../../utils/coordinationModeUtils';
 
 
 const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount }) => {
@@ -587,7 +592,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
   const [selectedMemberId, setSelectedMemberId] = useState(null);
 
   // Calendar view states
-  const [viewMode, setViewMode] = useState('week'); // 'month' or 'week'
+  const [viewMode, setViewMode] = useState(() => getViewMode()); // 'month' or 'week' - localStorage에서 복원
   const [selectedDate, setSelectedDate] = useState(null);
   const [showDetailGrid, setShowDetailGrid] = useState(false);
   const [showMerged, setShowMerged] = useState(true); // 병합/분할 모드
@@ -1381,8 +1386,14 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                       </div>
                       <div class="flex items-center">
                         <div class="w-3 h-3 rounded-sm bg-blue-500 mr-1"></div>
-                        <span>배정 시간</span>
+                        <span>내 배정</span>
                       </div>
+                      {!isOwner && (
+                        <div class="flex items-center">
+                          <div class="w-3 h-3 rounded-sm bg-purple-500 mr-1"></div>
+                          <span>배정된 시간</span>
+                        </div>
+                      )}
                       <div class="flex items-center">
                         <div class="w-3 h-3 rounded-sm bg-red-500 mr-1"></div>
                         <span>금지 시간</span>
@@ -1429,7 +1440,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                     )}
                   </button>
                   <button
-                    onClick={() => setViewMode('week')}
+                    onClick={() => { setViewMode('week'); saveViewMode('week'); }}
                     class={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
                       viewMode === 'week'
                         ? 'bg-blue-500 text-white'
@@ -1440,7 +1451,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                     주간
                   </button>
                   <button
-                    onClick={() => setViewMode('month')}
+                    onClick={() => { setViewMode('month'); saveViewMode('month'); }}
                     class={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
                       viewMode === 'month'
                         ? 'bg-blue-500 text-white'

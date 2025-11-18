@@ -200,14 +200,10 @@ export const handleRunAutoSchedule = async (
       ? currentWeekStartDate
       : new Date(currentWeekStartDate);
 
-    // 주간/월간 모드에 따라 배정 범위 결정
-    if (viewMode === 'week') {
-      // 주간 모드: 현재 주만 배정
-      numWeeks = 1;
-      uiCurrentWeek = currentDateObj;
-      console.log('📅 [Weekly Mode] Assigning only current week:', currentDateObj.toISOString().split('T')[0]);
-    } else {
-      // 월간 모드: 해당 월 전체 배정
+    // ✅ 자동배정은 viewMode와 상관없이 항상 해당 월 전체 범위로 수행
+    // (주간/월간 모드는 "일정 이동" 제한에만 적용됨)
+    {
+      // 해당 월 전체 배정
       const year = currentDateObj.getFullYear();
       const month = currentDateObj.getMonth();
 
@@ -235,7 +231,7 @@ export const handleRunAutoSchedule = async (
 
       // 시작일은 첫째 주 월요일
       uiCurrentWeek = firstMonday;
-      console.log('📅 [Monthly Mode] Assigning entire month:', numWeeks, 'weeks');
+      console.log('📅 [Auto Schedule] Assigning entire month:', numWeeks, 'weeks (', year, '년', month + 1, '월 )');
     }
     const finalOptions = {
       ...scheduleOptions,

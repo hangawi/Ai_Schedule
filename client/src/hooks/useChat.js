@@ -1,6 +1,30 @@
+/**
+ * ============================================================================
+ * useChat.js - 채팅 메시지 처리 훅
+ * ============================================================================
+ * 
+ * 🔴 중요: 일정맞추기(Coordination) 탭의 시간 변경 기능이 여기에 구현되어 있음!
+ * 
+ * [일정맞추기 탭 채팅 기능]
+ * - 조건: context.context === 'coordination' && context.roomId
+ * - 기능: 조원이 채팅으로 배정 시간 변경 가능
+ * - 예시: "수요일로 바꿔줘", "월요일 9시로 바꿔줘"
+ * - API: /api/coordination/rooms/:roomId/parse-exchange-request
+ *        /api/coordination/rooms/:roomId/smart-exchange
+ * 
+ * [다른 탭 기능]
+ * - profile, events, googleCalendar: 일반 일정 추가/수정/삭제
+ * 
+ * 관련 파일:
+ * - UI: client/src/components/chat/ChatBox.js
+ * - 백엔드: server/controllers/coordinationExchangeController.js
+ * ============================================================================
+ */
+
 import { useCallback } from 'react';
 import { generateAIPrompt, parseAIResponse, checkScheduleConflict, findAvailableTimeSlots } from '../utils';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getViewMode, getCurrentWeekStartDate } from '../utils/coordinationModeUtils';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -33,19 +57,26 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             console.log('🔍 [useChat] Context pendingRequest:', context.pendingRequest);
 
             // Handle different message types
-            if (parsed.type === 'time_change') {
+            if (parsed.type === 'time_change' || parsed.type === 'date_change') {
                // Execute immediately without confirmation
-               console.log('✅ [useChat] time_change detected, executing immediately');
+               console.log(`✅ [useChat] ${parsed.type} detected, executing immediately`);
                console.log('🚀 [useChat] Executing request:', parsed);
 
-               // Call smart-exchange API directly
+               // Call smart-exchange API directly with viewMode info
+               const viewMode = getViewMode();
+               const currentWeekStartDate = getCurrentWeekStartDate();
+
                const exchangeResponse = await fetch(`${API_BASE_URL}/api/coordination/rooms/${context.roomId}/smart-exchange`, {
                   method: 'POST',
                   headers: {
                      'Content-Type': 'application/json',
                      'x-auth-token': token
                   },
-                  body: JSON.stringify(parsed)
+                  body: JSON.stringify({
+                     ...parsed,
+                     viewMode,
+                     currentWeekStartDate: currentWeekStartDate.toISOString()
+                  })
                });
 
                if (!exchangeResponse.ok) {
