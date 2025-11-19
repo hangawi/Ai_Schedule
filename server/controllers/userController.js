@@ -32,7 +32,7 @@ exports.connectCalendar = async (req, res) => {
 // @access  Private
 exports.getUserSchedule = async (req, res) => {
   try {
-    const user = await User.findOne({ firebaseUid: req.user.id }).select('defaultSchedule scheduleExceptions personalTimes');
+    const user = await User.findById(req.user.id).select('defaultSchedule scheduleExceptions personalTimes');
     if (!user) {
       return res.status(404).json({ msg: 'User not found' });
     }
@@ -54,7 +54,7 @@ exports.updateUserSchedule = async (req, res) => {
   const { defaultSchedule, scheduleExceptions, personalTimes } = req.body;
 
   try {
-    const user = await User.findOne({ firebaseUid: req.user.id });
+    const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ msg: 'User not found' });
     }
@@ -163,7 +163,7 @@ exports.getUserScheduleById = async (req, res) => {
 exports.getUserProfile = async (req, res) => {
   try {
     console.log('[getUserProfile] Fetching profile for user:', req.user.id);
-    const user = await User.findOne({ firebaseUid: req.user.id }).select('firstName lastName email phone address addressDetail addressLat addressLng addressPlaceId occupation birthdate');
+    const user = await User.findById(req.user.id).select('firstName lastName email phone address addressDetail addressLat addressLng addressPlaceId occupation birthdate');
 
     if (!user) {
       console.log('[getUserProfile] User not found:', req.user.id);
@@ -199,7 +199,7 @@ exports.updateUserProfile = async (req, res) => {
     console.log('[updateUserProfile] Update request for user:', req.user.id);
     console.log('[updateUserProfile] Data received:', { firstName, lastName, phone, occupation });
 
-    const user = await User.findOne({ firebaseUid: req.user.id });
+    const user = await User.findById(req.user.id);
 
     if (!user) {
       console.log('[updateUserProfile] User not found:', req.user.id);

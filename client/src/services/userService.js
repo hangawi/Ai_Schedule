@@ -22,6 +22,9 @@ export const userService = {
   updateUserSchedule: (scheduleData) => {
     return request(`${API_BASE_URL}/api/users/profile/schedule`, {
       method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify(scheduleData),
     });
   },
@@ -37,6 +40,9 @@ export const userService = {
   updateUserProfile: (profileData) => {
     return request(`${API_BASE_URL}/api/users/profile`, {
       method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify(profileData),
     });
   },

@@ -20,10 +20,11 @@ if (!process.env.MONGO_URI) {
   process.exit(1);
 }
 
-if (!process.env.JWT_SECRET) {
-  console.error('JWT_SECRET is required');
-  process.exit(1);
-}
+// JWT_SECRET is no longer required (using Firebase Authentication)
+// if (!process.env.JWT_SECRET) {
+//   console.error('JWT_SECRET is required');
+//   process.exit(1);
+// }
 
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',')

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Users, MapPin, X } from 'lucide-react';
 import { getMemberDisplayName, isCurrentUser, isMemberOwner } from '../../utils/coordinationUtils';
 import { GoogleMap, Marker, DirectionsRenderer, Polyline } from '@react-google-maps/api';
+import { authenticatedFetch } from '../../utils/apiClient';
 
 const MemberItem = ({
   member,
@@ -31,21 +32,13 @@ const MemberItem = ({
   const fetchMemberAddress = async () => {
     try {
       // 조원 주소 가져오기
-      const memberResponse = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile/${memberData._id || memberData.id}`, {
-        headers: {
-          'x-auth-token': localStorage.getItem('token')
-        }
-      });
+      const memberResponse = await authenticatedFetch(`${process.env.REACT_APP_API_URL}/api/users/profile/${memberData._id || memberData.id}`);
       const memberData2 = await memberResponse.json();
       setMemberAddress(memberData2);
 
       // 방장 주소 가져오기
       const ownerId = currentRoom.owner._id || currentRoom.owner.id || currentRoom.owner;
-      const ownerResponse = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile/${ownerId}`, {
-        headers: {
-          'x-auth-token': localStorage.getItem('token')
-        }
-      });
+      const ownerResponse = await authenticatedFetch(`${process.env.REACT_APP_API_URL}/api/users/profile/${ownerId}`);
       const ownerData = await ownerResponse.json();
       setOwnerAddress(ownerData);
 

@@ -1,17 +1,19 @@
+import { auth } from '../config/firebaseConfig';
+
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
-const getAuthToken = () => {
-  const token = localStorage.getItem('token');
-  if (!token) throw new Error('No authentication token found.');
-  return token;
+const getAuthToken = async () => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('No authenticated user found.');
+  return await currentUser.getIdToken();
 };
 
 export const coordinationService = {
   // 방 세부 정보 가져오기
   async fetchRoomDetails(roomId) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}`, {
-      headers: { 'x-auth-token': token },
+      headers: { 'Authorization': `Bearer ${token}` },
     });
     
     if (!response.ok) {
@@ -24,9 +26,9 @@ export const coordinationService = {
 
   // 내 방 목록 가져오기
   async fetchMyRooms() {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/my-rooms`, {
-      headers: { 'x-auth-token': token },
+      headers: { 'Authorization': `Bearer ${token}` },
     });
     
     if (!response.ok) {
@@ -39,12 +41,12 @@ export const coordinationService = {
 
   // 방 생성
   async createRoom(roomData) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify(roomData),
     });
@@ -70,12 +72,12 @@ export const coordinationService = {
 
   // 방 참가
   async joinRoom(inviteCode) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${inviteCode}/join`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({ inviteCode: inviteCode.trim().toUpperCase() }),
     });
@@ -90,12 +92,12 @@ export const coordinationService = {
 
   // 방 수정
   async updateRoom(roomId, updateData) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify(updateData),
     });
@@ -110,10 +112,10 @@ export const coordinationService = {
 
   // 방 삭제
   async deleteRoom(roomId) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}`, {
       method: 'DELETE',
-      headers: { 'x-auth-token': token },
+      headers: { 'Authorization': `Bearer ${token}` },
     });
     
     if (!response.ok) {
@@ -126,10 +128,10 @@ export const coordinationService = {
 
   // 시간표 전체 삭제
   async deleteAllTimeSlots(roomId) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/time-slots`, {
       method: 'DELETE',
-      headers: { 'x-auth-token': token },
+      headers: { 'Authorization': `Bearer ${token}` },
     });
     
     if (!response.ok) {
@@ -142,12 +144,12 @@ export const coordinationService = {
 
   // 타임슬롯 제출
   async submitTimeSlots(roomId, slots) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/slots`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ slots }),
     });
@@ -162,12 +164,12 @@ export const coordinationService = {
 
   // 타임슬롯 제거
   async removeTimeSlot(roomId, day, startTime, endTime) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/slots/remove`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ day, startTime, endTime }),
     });
@@ -182,12 +184,12 @@ export const coordinationService = {
 
   // 타임슬롯 할당
   async assignTimeSlot(roomId, day, startTime, endTime, userId) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/assign`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ day, startTime, endTime, userId }),
     });
@@ -202,13 +204,13 @@ export const coordinationService = {
 
   // 요청 생성
   async createRequest(requestData) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
 
     const response = await fetch(`${API_BASE_URL}/api/coordination/requests`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify(requestData),
     });
@@ -226,10 +228,10 @@ export const coordinationService = {
 
   // 요청 처리
   async handleRequest(requestId, action) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/requests/${requestId}/${action}`, {
       method: 'POST',
-      headers: { 'x-auth-token': token },
+      headers: { 'Authorization': `Bearer ${token}` },
     });
     
     if (!response.ok) {
@@ -242,9 +244,9 @@ export const coordinationService = {
 
   // 교환 요청 수 가져오기
   async getExchangeRequestsCount() {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/exchange-requests-count`, {
-      headers: { 'x-auth-token': token },
+      headers: { 'Authorization': `Bearer ${token}` },
     });
 
     if (!response.ok) {
@@ -257,7 +259,7 @@ export const coordinationService = {
 
   // 교환 요청 응답 (승인/거절)
   async respondToExchangeRequest(roomId, requestId, action) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
 
     // 'approved' → 'accept', 'rejected' → 'reject' 변환
     const serverAction = action === 'approved' ? 'accept' : action === 'rejected' ? 'reject' : action;
@@ -271,7 +273,7 @@ export const coordinationService = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({ action: serverAction })
     });
@@ -286,9 +288,9 @@ export const coordinationService = {
 
   // 방별 교환 요청 수 가져오기
   async getRoomExchangeCounts() {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/exchange-counts`, {
-      headers: { 'x-auth-token': token },
+      headers: { 'Authorization': `Bearer ${token}` },
     });
     
     if (!response.ok) {
@@ -301,9 +303,9 @@ export const coordinationService = {
 
   // 보낸 교환 요청 내역 가져오기
   async getSentRequests() {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/sent-requests`, {
-      headers: { 'x-auth-token': token },
+      headers: { 'Authorization': `Bearer ${token}` },
     });
 
     if (!response.ok) {
@@ -316,9 +318,9 @@ export const coordinationService = {
 
   // 받은 교환 요청 내역 가져오기
   async getReceivedRequests() {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/received-requests`, {
-      headers: { 'x-auth-token': token },
+      headers: { 'Authorization': `Bearer ${token}` },
     });
 
     if (!response.ok) {
@@ -331,10 +333,10 @@ export const coordinationService = {
 
   // 요청 취소
   async cancelRequest(requestId) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/requests/${requestId}`, {
       method: 'DELETE',
-      headers: { 'x-auth-token': token },
+      headers: { 'Authorization': `Bearer ${token}` },
     });
     
     if (!response.ok) {
@@ -347,12 +349,12 @@ export const coordinationService = {
 
   // AI로 공통 시간 찾기
   async findCommonSlots(roomId, constraints) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/find-common-slots`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify(constraints),
     });
@@ -367,12 +369,12 @@ export const coordinationService = {
 
   // 자동 시간 배정 실행
   async runAutoSchedule(roomId, options) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/run-schedule`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify(options),
     });
@@ -388,9 +390,9 @@ export const coordinationService = {
 
   // 협의 목록 가져오기
   async getNegotiations(roomId) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/negotiations`, {
-      headers: { 'x-auth-token': token },
+      headers: { 'Authorization': `Bearer ${token}` },
     });
 
     if (!response.ok) {
@@ -403,12 +405,12 @@ export const coordinationService = {
 
   // 협의 메시지 추가
   async addNegotiationMessage(roomId, negotiationId, message) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/negotiations/${negotiationId}/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ message }),
     });
@@ -423,12 +425,12 @@ export const coordinationService = {
 
   // 협의 해결 (수동)
   async resolveNegotiation(roomId, negotiationId, assignedTo) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/negotiations/${negotiationId}/resolve`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ assignedTo }),
     });
@@ -443,12 +445,12 @@ export const coordinationService = {
 
   // 타임아웃 협의 자동 해결
   async autoResolveTimeoutNegotiations(roomId, negotiationTimeoutHours = 24) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/negotiations/auto-resolve`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ negotiationTimeoutHours }),
     });
@@ -463,12 +465,12 @@ export const coordinationService = {
 
   // 협의 강제 해결
   async forceResolveNegotiation(roomId, negotiationId, method = 'random') {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/negotiations/${negotiationId}/force-resolve`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ method }),
     });
@@ -483,12 +485,12 @@ export const coordinationService = {
 
   // 협의 응답
   async respondToNegotiation(roomId, negotiationId, payload) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const res = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/negotiations/${negotiationId}/respond`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify(payload), // payload includes: response, yieldOption, alternativeSlots
     });
@@ -502,12 +504,12 @@ export const coordinationService = {
   },
 
   async cancelNegotiationResponse(roomId, negotiationId) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const res = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/negotiations/${negotiationId}/cancel`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
     });
 
@@ -520,11 +522,11 @@ export const coordinationService = {
   },
 
   async resetAllMemberStats(roomId) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const res = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/reset-all-stats`, {
       method: 'POST',
       headers: {
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
     });
 
@@ -537,11 +539,11 @@ export const coordinationService = {
   },
 
   async clearCarryOverHistory(roomId, memberId) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const res = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/members/${memberId}/carry-over-history`, {
       method: 'DELETE',
       headers: {
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
     });
 
@@ -554,11 +556,11 @@ export const coordinationService = {
   },
 
   async clearAllCarryOverHistories(roomId) {
-    const token = getAuthToken();
+    const token = await getAuthToken();
     const res = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/all-carry-over-history`, {
       method: 'DELETE',
       headers: {
-        'x-auth-token': token,
+        'Authorization': `Bearer ${token}`,
       },
     });
 

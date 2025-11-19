@@ -2,19 +2,27 @@
  * 고정 일정 API 클라이언트
  */
 
+import { auth } from '../../config/firebaseConfig';
+
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+
+const getAuthToken = async () => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('No authenticated user found.');
+  return await currentUser.getIdToken();
+};
 
 /**
  * 고정 일정 추가 요청
  */
 export async function addFixedSchedule(message, currentSchedules, schedulesByImage, fixedSchedules) {
-  const token = localStorage.getItem('token');
+  const token = await getAuthToken();
 
   const response = await fetch(`${API_BASE_URL}/api/schedule/fixed-intent`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-auth-token': token
+      'Authorization': `Bearer ${token}`
     },
     body: JSON.stringify({
       message,
@@ -35,13 +43,13 @@ export async function addFixedSchedule(message, currentSchedules, schedulesByIma
  * 고정 일정 충돌 해결
  */
 export async function resolveFixedConflict(resolution, pendingFixed, conflictingFixed, allSchedules, existingFixedSchedules) {
-  const token = localStorage.getItem('token');
+  const token = await getAuthToken();
 
   const response = await fetch(`${API_BASE_URL}/api/schedule/resolve-fixed-conflict`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-auth-token': token
+      'Authorization': `Bearer ${token}`
     },
     body: JSON.stringify({
       resolution,
@@ -63,13 +71,13 @@ export async function resolveFixedConflict(resolution, pendingFixed, conflicting
  * 사용자가 여러 옵션 중 하나를 선택
  */
 export async function selectFixedOption(selectedSchedule, fixedSchedules, allSchedules, schedulesByImage) {
-  const token = localStorage.getItem('token');
+  const token = await getAuthToken();
 
   const response = await fetch(`${API_BASE_URL}/api/schedule/select-fixed-option`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-auth-token': token
+      'Authorization': `Bearer ${token}`
     },
     body: JSON.stringify({
       selectedSchedule,

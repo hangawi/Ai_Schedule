@@ -61,23 +61,9 @@ exports.register = async (req, res) => {
 // @access  Public
 exports.login = async (req, res) => {
   try {
-    // Firebase ID token is verified by auth middleware
-    // req.user.id contains Firebase UID from middleware
-    const firebaseUid = req.user.firebaseUid || req.user.id;
-
-    // Find user in MongoDB by Firebase UID
-    let user = await User.findOne({ firebaseUid });
-
-    // If user not found by firebaseUid, try by email (for backward compatibility)
-    if (!user && req.user.email) {
-      user = await User.findOne({ email: req.user.email });
-
-      // Update user with Firebase UID
-      if (user) {
-        user.firebaseUid = firebaseUid;
-        await user.save();
-      }
-    }
+    // Firebase ID token is already verified by auth middleware
+    // req.user.id now contains MongoDB ObjectId (set by middleware)
+    const user = await User.findById(req.user.id);
 
     if (!user) {
       return res.status(404).json({ msg: '사용자를 찾을 수 없습니다.' });
@@ -103,59 +89,13 @@ exports.login = async (req, res) => {
 // @access  Public
 exports.googleAuth = async (req, res) => {
   try {
-    // Firebase ID token is verified by auth middleware
-    const firebaseUid = req.user.firebaseUid || req.user.id;
-    const email = req.user.email;
-
-    // Get Firebase user info
-    const firebaseUserRecord = await firebaseAuth.getUser(firebaseUid);
-
-    // Parse display name
-    const displayName = firebaseUserRecord.displayName || '';
-    const nameParts = displayName.split(' ');
-    const given_name = nameParts[0] || '';
-    const family_name = nameParts.slice(1).join(' ') || '';
-
-    // Find or create user in MongoDB
-    let user = await User.findOne({ firebaseUid });
-
-    // If not found by firebaseUid, try by email (for backward compatibility)
-    if (!user && email) {
-      user = await User.findOne({ email });
-    }
+    // Firebase ID token is already verified by auth middleware
+    // req.user.id now contains MongoDB ObjectId (set by middleware)
+    const user = await User.findById(req.user.id);
 
     if (!user) {
-      // Create new user
-      user = new User({
-        firebaseUid,
-        firstName: given_name || '',
-        lastName: family_name || '',
-        email,
-        password: Math.random().toString(36).slice(-8), // Temporary password
-        defaultSchedule: [],
-        scheduleExceptions: [],
-        personalTimes: [],
-      });
-    } else {
-      // Update existing user with Firebase UID if not set
-      if (!user.firebaseUid) {
-        user.firebaseUid = firebaseUid;
-      }
-
-      // Clean up invalid schedule data
-      if (!user.defaultSchedule) user.defaultSchedule = [];
-      if (!user.personalTimes) user.personalTimes = [];
-
-      if (user.scheduleExceptions && Array.isArray(user.scheduleExceptions)) {
-        user.scheduleExceptions = user.scheduleExceptions.filter(ex =>
-          ex && ex.startTime && ex.endTime && ex.title && ex.specificDate
-        );
-      } else {
-        user.scheduleExceptions = [];
-      }
+      return res.status(404).json({ msg: '사용자를 찾을 수 없습니다.' });
     }
-
-    await user.save();
 
     res.json({
       user: {
@@ -178,10 +118,8 @@ exports.googleAuth = async (req, res) => {
 // @access  Private
 exports.getLoggedInUser = async (req, res) => {
   try {
-    const firebaseUid = req.user.firebaseUid || req.user.id;
-
-    // Find user by Firebase UID
-    let user = await User.findOne({ firebaseUid }).select('-password');
+    // req.user.id now contains MongoDB ObjectId (set by middleware)
+    const user = await User.findById(req.user.id).select('-password');
 
     if (!user) {
       return res.status(404).json({ msg: '사용자를 찾을 수 없습니다.' });
