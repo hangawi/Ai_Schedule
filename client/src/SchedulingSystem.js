@@ -30,6 +30,7 @@ import AutoDetectedScheduleModal from './components/modals/AutoDetectedScheduleM
 import MobileStatusIndicator from './components/indicators/MobileStatusIndicator';
 import NotificationModal from './components/modals/NotificationModal';
 import { coordinationService } from './services/coordinationService';
+import { auth } from './config/firebaseConfig';
 
 // 백그라운드 음성 인식 관련 imports
 import BackgroundCallIndicator from './components/indicators/BackgroundCallIndicator';
@@ -245,13 +246,13 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
     const fetchEvents = useCallback(async () => {
       if (!isLoggedIn) return;
       try {
-         const token = localStorage.getItem('token');
-         if (!token) {
+         const currentUser = auth.currentUser;
+         if (!currentUser) {
             handleLogout();
             return;
          }
          const response = await fetch(`${API_BASE_URL}/api/events`, {
-            headers: { 'x-auth-token': token },
+            headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
          });
          if (!response.ok) {
             if (response.status === 401) handleLogout();
@@ -268,12 +269,6 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
 
    const handleAddGlobalEvent = useCallback(async eventData => {
       try {
-         const token = localStorage.getItem('token');
-         if (!token) {
-            showAlert('로그인이 필요합니다.', 'error', '로그인 필요');
-            return;
-         }
-
          // Handle different input formats
          let date, time, duration;
 
@@ -305,9 +300,12 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
             participants: [],
             externalParticipants: [],
          };
+         const currentUser = auth.currentUser;
+         if (!currentUser) return;
+
          const response = await fetch(`${API_BASE_URL}/api/events`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
             body: JSON.stringify(payload),
          });
          if (!response.ok) {
@@ -326,14 +324,15 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
    const handleDeleteEvent = useCallback(async eventId => {
       const performDelete = async () => {
          try {
-            const token = localStorage.getItem('token');
-            if (!token) {
+            const currentUser = auth.currentUser;
+            if (!currentUser) {
                showAlert('로그인이 필요합니다.', 'error', '로그인 필요');
                return;
             }
+
             const response = await fetch(`${API_BASE_URL}/api/events/${eventId}`, {
                method: 'DELETE',
-               headers: { 'x-auth-token': token },
+               headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
             });
             if (!response.ok) {
                const errorData = await response.json();
@@ -363,15 +362,16 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
 
    const handleUpdateEvent = useCallback(async (eventData, eventId) => {
       try {
-         const token = localStorage.getItem('token');
-         if (!token) {
+         const currentUser = auth.currentUser;
+         if (!currentUser) {
             showAlert('로그인이 필요합니다.', 'error', '로그인 필요');
             return;
          }
          const payload = { title: eventData.title, date: eventData.date, time: eventData.time, color: eventData.color };
+
          const response = await fetch(`${API_BASE_URL}/api/events/${eventId}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
             body: JSON.stringify(payload),
          });
          if (!response.ok) {

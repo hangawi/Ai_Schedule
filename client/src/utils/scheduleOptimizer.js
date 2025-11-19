@@ -8,6 +8,8 @@
  * 4. 충돌 해결 옵션 제시
  */
 
+import { auth } from '../config/firebaseConfig';
+
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 /**
@@ -172,7 +174,7 @@ export const optimizeScheduleWithGPT = async (schedules, conflicts, userAnswers)
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': localStorage.getItem('token')
+        'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
       },
       body: JSON.stringify({
         schedules,

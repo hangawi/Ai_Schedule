@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { auth } from '../config/firebaseConfig';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -36,8 +37,8 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
     setIsAnalyzing(true);
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
         setVoiceStatus('waiting');
         setIsAnalyzing(false);
         return;
@@ -47,7 +48,7 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
       const response = await Promise.race([
         fetch(`${API_BASE_URL}/api/call-analysis/analyze`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
           body: JSON.stringify({ transcript: transcriptToAnalyze }),
         }),
         new Promise((_, reject) =>
@@ -162,8 +163,8 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
         endDateTime: endDateTime
       };
 
-      const token = localStorage.getItem('token');
-      if (!token) {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
         setNotification({
           type: 'error',
           title: '인증 오류',
@@ -177,7 +178,7 @@ export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-auth-token': token,
+          'Authorization': `Bearer ${await currentUser.getIdToken()}`,
         },
         body: JSON.stringify(eventData),
       });

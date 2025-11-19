@@ -45,3 +45,6 @@ commit_message.txt
 
 # Accidentally created files
 nul
+
+# Firebase service account (contains sensitive credentials)
+firebase-service-account.json

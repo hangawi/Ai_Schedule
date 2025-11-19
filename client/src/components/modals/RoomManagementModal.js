@@ -3,6 +3,7 @@ import { X, Users, Settings, Trash2, GraduationCap } from "lucide-react";
 import CustomAlertModal from './CustomAlertModal';
 import RoomInfoTab from './room/RoomInfoTab';
 import RoomMembersList from './room/RoomMembersList';
+import { auth } from '../../config/firebaseConfig';
 
 const RoomManagementModal = ({
   room,
@@ -75,7 +76,7 @@ const RoomManagementModal = ({
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
-            'x-auth-token': localStorage.getItem('token')
+            'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
           }
         });
 
@@ -107,7 +108,7 @@ const RoomManagementModal = ({
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
-            'x-auth-token': localStorage.getItem('token')
+            'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
           }
         });
 
@@ -132,13 +133,12 @@ const RoomManagementModal = ({
     }
   };
 
-  // Get current user ID from localStorage token
+  // Get current user ID from Firebase auth
   const getCurrentUserId = () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return null;
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      return payload.user?.id || payload.id;
+      const currentUser = auth.currentUser;
+      if (!currentUser) return null;
+      return currentUser.uid;
     } catch (error) {
       return null;
     }

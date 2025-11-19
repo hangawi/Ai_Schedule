@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Upload, X, Image as ImageIcon, Send, MessageCircle, ArrowLeft, ArrowRight, Calendar } from 'lucide-react';
 import { extractSchedulesFromImages } from '../../utils/ocrUtils';
 import ScheduleOptimizationModal from '../modals/ScheduleOptimizationModal';
+import { auth } from '../../config/firebaseConfig';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -295,14 +296,20 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        setChatHistory(prev => [...prev, { id: Date.now(), sender: 'bot', text: '로그인이 필요합니다.', timestamp: new Date() }]);
+        setIsFilteringChat(false);
+        return;
+      }
+      const idToken = await currentUser.getIdToken();
 
       // ⭐ 고정 일정 관련 요청인지 먼저 확인
       const fixedScheduleResponse = await fetch(`${API_BASE_URL}/api/schedule/fixed-intent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-auth-token': token
+          'Authorization': `Bearer ${idToken}`
         },
         body: JSON.stringify({
           message: currentMessage,
@@ -425,7 +432,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'x-auth-token': token
+              'Authorization': `Bearer ${idToken}`
             },
             body: JSON.stringify({
               schedules: currentOptimizedSchedules, // ⭐ 최적화된 결과 사용
@@ -486,7 +493,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-auth-token': token
+          'Authorization': `Bearer ${idToken}`
         },
         body: JSON.stringify({
           message: currentMessage,

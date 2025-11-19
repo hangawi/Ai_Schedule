@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import moment from 'moment';
 import CustomAlertModal from './CustomAlertModal';
+import { auth } from '../../config/firebaseConfig';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -20,8 +21,12 @@ const AddEventModal = ({ onClose, onAddEvent }) => {
   const handleAdd = async () => {
     if (title && date && startTime && endTime) {
       try {
-        const token = localStorage.getItem('token');
-        
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          showAlert('인증이 필요합니다.');
+          return;
+        }
+
         const startMoment = moment(`${date}T${startTime}`);
         const endMoment = moment(`${date}T${endTime}`);
 
@@ -37,7 +42,7 @@ const AddEventModal = ({ onClose, onAddEvent }) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-auth-token': token,
+            'Authorization': `Bearer ${await currentUser.getIdToken()}`,
           },
           body: JSON.stringify({ title, description, startDateTime, endDateTime }),
         });

@@ -23,6 +23,7 @@ import { Send, MessageCircle, Image } from 'lucide-react';
 import TimetableUploadWithChat from './TimetableUploadWithChat';
 import ScheduleOptimizationModal from '../modals/ScheduleOptimizationModal';
 import { userService } from '../../services/userService';
+import { auth } from '../../config/firebaseConfig';
 
 const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
   const [messages, setMessages] = useState([]);
@@ -320,7 +321,7 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
   // Corrected handleConflictChoice
   const handleConflictChoice = async (choice, pendingEvent, conflictingEvent) => {
     const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-    const token = localStorage.getItem('token');
+    const currentUser = auth.currentUser;
 
     try {
       const loadingMessage = { id: Date.now(), text: '처리 중...', sender: 'bot', timestamp: new Date(), isLoading: true };
@@ -422,13 +423,14 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
           await new Promise(resolve => setTimeout(resolve, 500));
 
           // 최신 일정 목록 가져오기
-          const token = localStorage.getItem('token');
           const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
           let updatedEvents = [];
           try {
+            const currentUser = auth.currentUser;
+            if (!currentUser) return;
             const scheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-              headers: { 'x-auth-token': token }
+              headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
             });
 
             if (scheduleResponse.ok) {
@@ -512,6 +514,12 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
         try {
           setMessages(prev => prev.filter(msg => !msg.isLoading));
 
+          if (!currentUser) {
+            setMessages(prev => [...prev, { id: Date.now(), text: '로그인이 필요합니다.', sender: 'bot', timestamp: new Date(), success: false }]);
+            return;
+          }
+          const idToken = await currentUser.getIdToken();
+
           // Step 1: 기존 일정 삭제
           const deleteLoadingMessage = { id: Date.now(), text: '기존 일정을 삭제하고 있습니다...', sender: 'bot', timestamp: new Date(), isLoading: true };
           setMessages(prev => [...prev, deleteLoadingMessage]);
@@ -520,7 +528,7 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'x-auth-token': token
+              'Authorization': `Bearer ${idToken}`
             },
             body: JSON.stringify({ conflictingEventId: conflictingEvent.id })
           });
@@ -543,7 +551,7 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'x-auth-token': token
+              'Authorization': `Bearer ${idToken}`
             },
             body: JSON.stringify({ pendingEvent })
           });
@@ -560,7 +568,7 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'x-auth-token': token
+              'Authorization': `Bearer ${idToken}`
             },
             body: JSON.stringify({ conflictingEventId: conflictingEvent.id })
           });
@@ -968,11 +976,14 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
           formData.append('message', originalMessage);
         }
 
-        const token = localStorage.getItem('token');
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          throw new Error('로그인이 필요합니다.');
+        }
         const response = await fetch('/api/calendar/analyze-image', {
           method: 'POST',
           headers: {
-            'x-auth-token': token
+            'Authorization': `Bearer ${await currentUser.getIdToken()}`
           },
           body: formData
         });

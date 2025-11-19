@@ -25,6 +25,7 @@ import { useCallback } from 'react';
 import { generateAIPrompt, parseAIResponse, checkScheduleConflict, findAvailableTimeSlots } from '../utils';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getViewMode, getCurrentWeekStartDate } from '../utils/coordinationModeUtils';
+import { auth } from '../config/firebaseConfig';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -32,8 +33,8 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
    const handleChatMessage = useCallback(async (message, context = {}) => {
       // 🔧 Coordination room time change request
       if (context.context === 'coordination' && context.roomId) {
-         const token = localStorage.getItem('token');
-         if (!token) return { success: false, message: '인증 토큰이 없습니다.' };
+         const currentUser = auth.currentUser;
+         if (!currentUser) return { success: false, message: '인증 토큰이 없습니다.' };
 
          try {
             // Parse the message using backend Gemini API
@@ -41,7 +42,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                method: 'POST',
                headers: {
                   'Content-Type': 'application/json',
-                  'x-auth-token': token
+                  'Authorization': `Bearer ${await currentUser.getIdToken()}`
                },
                body: JSON.stringify({
                   message,
@@ -73,7 +74,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   method: 'POST',
                   headers: {
                      'Content-Type': 'application/json',
-                     'x-auth-token': token
+                     'Authorization': `Bearer ${await currentUser.getIdToken()}`
                   },
                   body: JSON.stringify({
                      ...parsed,
@@ -119,8 +120,8 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
 
       // Direct deletion intent, bypassing AI
       if (typeof message === 'object' && message.intent === 'delete_specific_event' && message.eventId) {
-         const token = localStorage.getItem('token');
-         if (!token) return { success: false, message: '인증 토큰이 없습니다.' };
+         const currentUser = auth.currentUser;
+         if (!currentUser) return { success: false, message: '인증 토큰이 없습니다.' };
 
          try {
             // '나의 일정' 탭의 경우 /api/events 엔드포인트를 사용하여 직접 삭제
@@ -128,7 +129,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                 const eventIdToDelete = message.eventId;
                 const response = await fetch(`${API_BASE_URL}/api/events/${eventIdToDelete}`, {
                     method: 'DELETE',
-                    headers: { 'x-auth-token': token },
+                    headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
                 });
 
                 if (!response.ok) {
@@ -148,7 +149,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                 };
             } else { // 기존 '내 프로필' 탭 로직
                 const scheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-                   headers: { 'x-auth-token': token }
+                   headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                 });
 
                 if (!scheduleResponse.ok) {
@@ -204,7 +205,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                    method: 'PUT',
                    headers: {
                       'Content-Type': 'application/json',
-                      'x-auth-token': token,
+                      'Authorization': `Bearer ${await currentUser.getIdToken()}`,
                    },
                    body: JSON.stringify({
                       scheduleExceptions: cleanedExceptions,
@@ -278,8 +279,8 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                return { success: false, message: '일정 추가 기능이 아직 준비되지 않았습니다.' };
             }
 
-            const token = localStorage.getItem('token');
-            if (!token) {
+            const currentUser = auth.currentUser;
+            if (!currentUser) {
                return { success: false, message: 'Google 계정 인증이 필요합니다.' };
             }
 
@@ -292,7 +293,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                // 프로필 탭의 경우 한 번에 모든 날짜 추가
                if (context.context === 'profile' && context.tabType === 'local') {
                   const currentScheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-                     headers: { 'x-auth-token': token }
+                     headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                   });
                   const currentSchedule = await currentScheduleResponse.json();
 
@@ -409,7 +410,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                      method: 'PUT',
                      headers: {
                         'Content-Type': 'application/json',
-                        'x-auth-token': token
+                        'Authorization': `Bearer ${await currentUser.getIdToken()}`
                      },
                      body: JSON.stringify({
                         defaultSchedule: currentSchedule.defaultSchedule || [],
@@ -512,7 +513,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                            method: 'POST',
                            headers: {
                               'Content-Type': 'application/json',
-                              'x-auth-token': token
+                              'Authorization': `Bearer ${await currentUser.getIdToken()}`
                            },
                            body: JSON.stringify(eventData)
                         });
@@ -621,7 +622,9 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
 
          if (chatResponse.intent === 'delete_range' && chatResponse.startDate && chatResponse.endDate) {
             try {
-               const token = localStorage.getItem('token');
+               const currentUser = auth.currentUser;
+               if (!currentUser) return { success: false, message: '인증이 필요합니다.' };
+
                const startDate = new Date(chatResponse.startDate + 'T00:00:00+09:00');
                const endDate = new Date(chatResponse.endDate + 'T23:59:59+09:00');
 
@@ -629,7 +632,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
 
                if (context.context === 'profile' && context.tabType === 'local') {
                   const currentScheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-                     headers: { 'x-auth-token': token }
+                     headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                   });
                   const currentSchedule = await currentScheduleResponse.json();
 
@@ -652,7 +655,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                      method: 'PUT',
                      headers: {
                         'Content-Type': 'application/json',
-                        'x-auth-token': token
+                        'Authorization': `Bearer ${await currentUser.getIdToken()}`
                      },
                      body: JSON.stringify({
                         defaultSchedule: currentSchedule.defaultSchedule || [],
@@ -672,7 +675,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                      : `${API_BASE_URL}/api/events`;
 
                   const eventsResponse = await fetch(`${apiEndpoint}?startDate=${chatResponse.startDate}&endDate=${chatResponse.endDate}`, {
-                     headers: { 'x-auth-token': token }
+                     headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                   });
 
                   if (eventsResponse.ok) {
@@ -683,7 +686,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                         try {
                            const deleteResponse = await fetch(`${apiEndpoint}/${event._id || event.id}`, {
                               method: 'DELETE',
-                              headers: { 'x-auth-token': token }
+                              headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                            });
                            if (deleteResponse.ok) {
                               deleteCount++;
@@ -739,8 +742,8 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                }
             }
 
-            const token = localStorage.getItem('token');
-            if (!token) {
+            const currentUser = auth.currentUser;
+            if (!currentUser) {
               return { success: false, message: 'Google 계정 인증이 필요합니다.' };
             }
 
@@ -749,11 +752,11 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                let eventsResponse;
                if (context.context === 'profile' && context.tabType === 'local') {
                   eventsResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-                     headers: { 'x-auth-token': token }
+                     headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                   });
                } else if (context.tabType === 'local') {
                   eventsResponse = await fetch(`${API_BASE_URL}/api/events`, {
-                     headers: { 'x-auth-token': token }
+                     headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                   });
                } else {
                   const threeMonthsAgo = new Date();
@@ -761,7 +764,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   const oneYearLater = new Date();
                   oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
                   eventsResponse = await fetch(`${API_BASE_URL}/api/calendar/events?timeMin=${threeMonthsAgo.toISOString()}&timeMax=${oneYearLater.toISOString()}`, {
-                     headers: { 'x-auth-token': token }
+                     headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                   });
                }
 
@@ -855,7 +858,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                         currentSchedule = window.__profileEditingState;
                      } else {
                         const currentScheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-                           headers: { 'x-auth-token': token }
+                           headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                         });
                         if (!currentScheduleResponse.ok) {
                            throw new Error('현재 스케줄을 가져올 수 없습니다.');
@@ -913,7 +916,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
               method: httpMethod,
               headers: {
                 'Content-Type': 'application/json',
-                'x-auth-token': token,
+                'Authorization': `Bearer ${await currentUser.getIdToken()}`,
               },
               body: JSON.stringify(requestBody),
             });
@@ -953,18 +956,19 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                data: chatResponse
             };
          }
-         
+
          else if ((chatResponse.intent === 'delete_event' || chatResponse.intent === 'delete_range') && chatResponse.startDateTime) {
-            const token = localStorage.getItem('token');
-            
+            const currentUser = auth.currentUser;
+            if (!currentUser) return { success: false, message: '인증이 필요합니다.' };
+
             let eventsResponse;
             if (context.context === 'profile' && context.tabType === 'local') {
                eventsResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-                  headers: { 'x-auth-token': token }
+                  headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                });
             } else if (context.tabType === 'local') {
                eventsResponse = await fetch(`${API_BASE_URL}/api/events`, {
-                  headers: { 'x-auth-token': token }
+                  headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                });
             } else {
                const threeMonthsAgo = new Date();
@@ -972,7 +976,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                const oneYearLater = new Date();
                oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
                eventsResponse = await fetch(`${API_BASE_URL}/api/calendar/events?timeMin=${threeMonthsAgo.toISOString()}&timeMax=${oneYearLater.toISOString()}`, {
-                  headers: { 'x-auth-token': token }
+                  headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                });
             }
             
@@ -1123,7 +1127,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                      method: 'PUT',
                      headers: {
                         'Content-Type': 'application/json',
-                        'x-auth-token': token,
+                        'Authorization': `Bearer ${await currentUser.getIdToken()}`,
                      },
                      body: JSON.stringify({
                         defaultSchedule: eventsData.defaultSchedule,
@@ -1143,12 +1147,12 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                         if (context.tabType === 'local') {
                            deleteResponse = await fetch(`${API_BASE_URL}/api/events/${event._id || event.id}`, {
                               method: 'DELETE',
-                              headers: { 'x-auth-token': token }
+                              headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                            });
                         } else {
                            deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${event.id}`, {
                               method: 'DELETE',
-                              headers: { 'x-auth-token': token }
+                              headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                            });
                         }
 
@@ -1189,7 +1193,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   method: 'PUT',
                   headers: {
                      'Content-Type': 'application/json',
-                     'x-auth-token': token,
+                     'Authorization': `Bearer ${await currentUser.getIdToken()}`,
                   },
                   body: JSON.stringify({
                      defaultSchedule: eventsData.defaultSchedule,
@@ -1204,12 +1208,12 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
             } else if (context.tabType === 'local') {
                deleteResponse = await fetch(`${API_BASE_URL}/api/events/${eventToDelete._id || eventToDelete.id}`, {
                   method: 'DELETE',
-                  headers: { 'x-auth-token': token }
+                  headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                });
             } else {
                deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${eventToDelete.id}`, {
                   method: 'DELETE',
-                  headers: { 'x-auth-token': token }
+                  headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                });
             }
 
@@ -1225,10 +1229,11 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                data: chatResponse
             };
          }
-         
+
          else if (chatResponse.intent === 'edit_event') {
             // 일정 수정 처리
-            const token = localStorage.getItem('token');
+            const currentUser = auth.currentUser;
+            if (!currentUser) return { success: false, message: '인증이 필요합니다.' };
 
             if (!chatResponse.originalTitle || !chatResponse.originalDate) {
                return { success: false, message: '수정할 일정의 제목과 날짜가 필요합니다.' };
@@ -1239,11 +1244,11 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                let eventsResponse;
                if (context.context === 'profile' && context.tabType === 'local') {
                   eventsResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-                     headers: { 'x-auth-token': token }
+                     headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                   });
                } else if (context.tabType === 'local') {
                   eventsResponse = await fetch(`${API_BASE_URL}/api/events`, {
-                     headers: { 'x-auth-token': token }
+                     headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                   });
                } else {
                   const threeMonthsAgo = new Date();
@@ -1251,7 +1256,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                   const oneYearLater = new Date();
                   oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
                   eventsResponse = await fetch(`${API_BASE_URL}/api/calendar/events?timeMin=${threeMonthsAgo.toISOString()}&timeMax=${oneYearLater.toISOString()}`, {
-                     headers: { 'x-auth-token': token }
+                     headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
                   });
                }
 
@@ -1369,7 +1374,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                      method: 'PUT',
                      headers: {
                         'Content-Type': 'application/json',
-                        'x-auth-token': token
+                        'Authorization': `Bearer ${await currentUser.getIdToken()}`
                      },
                      body: JSON.stringify({
                         defaultSchedule: eventsData.defaultSchedule || [],
@@ -1428,7 +1433,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                      method: 'PUT',
                      headers: {
                         'Content-Type': 'application/json',
-                        'x-auth-token': token
+                        'Authorization': `Bearer ${await currentUser.getIdToken()}`
                      },
                      body: JSON.stringify({
                         title: chatResponse.newTitle || oldEvent.title,
@@ -1479,7 +1484,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
                      method: 'PUT',
                      headers: {
                         'Content-Type': 'application/json',
-                        'x-auth-token': token
+                        'Authorization': `Bearer ${await currentUser.getIdToken()}`
                      },
                      body: JSON.stringify({
                         title: chatResponse.newTitle || oldEvent.summary,

@@ -10,6 +10,7 @@ import EditEventModal from '../modals/EditEventModal';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import { Mic } from 'lucide-react';
 import { userService } from '../../services/userService'; // Import userService
+import { auth } from '../../config/firebaseConfig';
 
 moment.locale('ko');
 const localizer = momentLocalizer(moment);
@@ -107,16 +108,16 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
 
    const fetchEvents = useCallback(async currentDate => {
       try {
-         const token = localStorage.getItem('token');
+         const currentUser = auth.currentUser;
          const startOfMonth = moment(currentDate).startOf('month').toISOString();
          const endOfMonth = moment(currentDate).endOf('month').toISOString();
 
          let googleEvents = [];
          const googleConnected = localStorage.getItem('googleConnected');
-         if (token && googleConnected && googleConnected !== 'false') {
+         if (currentUser && googleConnected && googleConnected !== 'false') {
             const response = await fetch(
                `${API_BASE_URL}/api/calendar/events?timeMin=${startOfMonth}&timeMax=${endOfMonth}`,
-               { headers: { 'x-auth-token': token } }
+               { headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` } }
             );
 
             if (response.ok) {
@@ -138,7 +139,7 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
          }
 
          let personalEvents = [];
-         if (token) {
+         if (currentUser) {
             try {
                const scheduleData = await userService.getUserSchedule();
                if (scheduleData && scheduleData.personalTimes) {
@@ -179,10 +180,14 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
          return;
       }
       try {
-         const token = localStorage.getItem('token');
+         const currentUser = auth.currentUser;
+         if (!currentUser) {
+            showAlert('로그인이 필요합니다.', 'error', '로그인 필요');
+            return;
+         }
          const response = await fetch(`${API_BASE_URL}/api/calendar/events/${eventToDelete.id}`, {
             method: 'DELETE',
-            headers: { 'x-auth-token': token },
+            headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
          });
 
          if (!response.ok) {

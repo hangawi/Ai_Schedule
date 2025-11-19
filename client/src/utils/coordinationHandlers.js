@@ -4,6 +4,7 @@
 
 import { coordinationService } from '../services/coordinationService';
 import { days, getDayIndex, calculateEndTime } from './coordinationUtils';
+import { auth } from '../config/firebaseConfig';
 
 /**
  * Handle auto-resolution of timeout negotiations
@@ -52,11 +53,10 @@ export const handleResetCarryOverTimes = async (currentRoom, fetchRoomDetails, s
 
   try {
     const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-    const token = localStorage.getItem('token');
     const response = await fetch(`${apiUrl}/api/coordination/reset-carryover/${currentRoom._id}`, {
       method: 'POST',
       headers: {
-        'x-auth-token': token,
+        'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`,
         'Content-Type': 'application/json'
       }
     });
@@ -88,11 +88,10 @@ export const handleResetCompletedTimes = async (currentRoom, fetchRoomDetails, s
 
   try {
     const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-    const token = localStorage.getItem('token');
     const response = await fetch(`${apiUrl}/api/coordination/reset-completed/${currentRoom._id}`, {
       method: 'POST',
       headers: {
-        'x-auth-token': token,
+        'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`,
         'Content-Type': 'application/json'
       }
     });
@@ -124,11 +123,10 @@ export const handleClearAllNegotiations = async (currentRoom, fetchRoomDetails, 
 
   try {
     const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-    const token = localStorage.getItem('token');
     const response = await fetch(`${apiUrl}/api/coordination/rooms/${currentRoom._id}/negotiations`, {
       method: 'DELETE',
       headers: {
-        'x-auth-token': token,
+        'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`,
         'Content-Type': 'application/json'
       }
     });

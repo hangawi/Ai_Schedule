@@ -23,6 +23,7 @@ import NotificationModal from '../modals/NotificationModal';
 import NegotiationModal from '../modals/NegotiationModal';
 import NegotiationConflictModal from '../modals/NegotiationConflictModal';
 import MemberStatsModal from '../modals/MemberStatsModal';
+import { auth } from '../../config/firebaseConfig';
 
 // Extracted components
 import RoomList from '../coordination/RoomList';
@@ -934,7 +935,7 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                         method: 'DELETE',
                         headers: {
                           'Content-Type': 'application/json',
-                          'x-auth-token': localStorage.getItem('token')
+                          'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
                         }
                       });
 

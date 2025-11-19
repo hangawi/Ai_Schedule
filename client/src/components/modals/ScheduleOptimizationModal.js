@@ -6,6 +6,7 @@ import { detectConflicts, generateOptimizationQuestions, optimizeScheduleWithGPT
 import { COLOR_PALETTE, getColorForImageIndex } from '../../utils/scheduleAnalysis/assignScheduleColors';
 import OriginalScheduleModal from './OriginalScheduleModal';
 import { addFixedSchedule, resolveFixedConflict, selectFixedOption } from '../../services/fixedSchedule/fixedScheduleAPI';
+import { auth } from '../../config/firebaseConfig';
 
 const ScheduleOptimizationModal = ({
   combinations,
@@ -522,7 +523,13 @@ const ScheduleOptimizationModal = ({
 
     // 기존 AI 채팅 API로 폴백
     try {
-      const token = localStorage.getItem('token');
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        setChatMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: '로그인이 필요합니다.' }]);
+        setAiOptimizationState(prev => ({ ...prev, isProcessing: false }));
+        return;
+      }
+      const idToken = await currentUser.getIdToken();
 
       // 직전 봇 응답 찾기 (대화 컨텍스트 유지)
       const lastBotMessage = chatMessages
@@ -535,7 +542,7 @@ const ScheduleOptimizationModal = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-auth-token': token
+          'Authorization': `Bearer ${idToken}`
         },
         body: JSON.stringify({
           message: input,

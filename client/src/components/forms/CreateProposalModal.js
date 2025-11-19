@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { X, UserPlus } from 'lucide-react';
 import CustomAlertModal from '../modals/CustomAlertModal';
+import { auth } from '../../config/firebaseConfig';
 
 const ParticipantChip = ({ name, onRemove }) => (
    <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center">
@@ -82,11 +83,12 @@ const CreateProposalModal = ({ onClose, onProposalCreated }) => {
    };
 
    const handleSubmit = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
          showAlert('로그인이 필요합니다.', 'warning', '로그인 필요', false, () => onClose());
          return;
       }
+
       const proposalData = {
          title, description, duration: parseInt(duration),
          preferredTimeRanges: preferredTimeRangesInput.map(range => range.startDate && range.endDate && range.startTime && range.endTime ? { start: new Date(`${range.startDate}T${range.startTime}:00`).toISOString(), end: new Date(`${range.endDate}T${range.endTime}:00`).toISOString() } : null).filter(Boolean),
@@ -97,7 +99,7 @@ const CreateProposalModal = ({ onClose, onProposalCreated }) => {
       try {
          const response = await fetch('http://localhost:5000/api/proposals', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
             body: JSON.stringify(proposalData),
          });
          if (!response.ok) {

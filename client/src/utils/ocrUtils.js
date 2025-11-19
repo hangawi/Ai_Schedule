@@ -3,6 +3,8 @@
  * 학원/학습 시간표 이미지에서 정보를 추출하고 처리
  */
 
+import { auth } from '../config/firebaseConfig';
+
 // 학년부 정의
 export const GRADE_LEVELS = {
   ELEMENTARY: 'elementary',  // 초등부 (8-13세)
@@ -551,7 +553,7 @@ export const performOCR = async (imageFile) => {
       method: 'POST',
       body: formData,
       headers: {
-        'x-auth-token': localStorage.getItem('token')
+        'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
       }
     });
 
@@ -619,7 +621,7 @@ export const analyzeScheduleImages = async (imageFiles, birthdate, progressCallb
       method: 'POST',
       body: formData,
       headers: {
-        'x-auth-token': localStorage.getItem('token')
+        'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
       },
       signal: controller.signal
     });

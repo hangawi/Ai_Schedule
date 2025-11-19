@@ -15,6 +15,7 @@ import { useAuth } from './hooks/useAuth';
 import { useIntegratedVoiceSystem } from './hooks/useIntegratedVoiceSystem';
 import { useChat } from './hooks/useChat';
 import { speak } from './utils';
+import { auth } from './config/firebaseConfig';
 
 const libraries = ['places'];
 
@@ -59,12 +60,12 @@ function App() {
 
    const analyzeClipboard = useCallback(async (text) => {
       try {
-         const token = localStorage.getItem('token');
-         if (!token) return false;
+         const currentUser = auth.currentUser;
+         if (!currentUser) return false;
 
          const response = await fetch(`${process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000'}/api/call-analysis/analyze-clipboard`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
             body: JSON.stringify({ text }),
          });
 

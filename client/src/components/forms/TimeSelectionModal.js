@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import CustomAlertModal from '../modals/CustomAlertModal';
+import { auth } from '../../config/firebaseConfig';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -17,16 +18,18 @@ const TimeSelectionModal = ({ onClose, proposal, onFinalize }) => {
          showAlert('시간을 선택해주세요.');
          return;
       }
-      const token = localStorage.getItem('token');
-      if (!token) {
+
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
          showAlert('로그인이 필요합니다.');
          return;
       }
+
       const finalTime = proposal.suggestedTimes[selectedTimeIndex].startTime;
       try {
          const response = await fetch(`${API_BASE_URL}/api/proposals/${proposal._id}/finalize`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
             body: JSON.stringify({ finalTime }),
          });
          if (!response.ok) {

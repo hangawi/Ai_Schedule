@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { auth } from '../../config/firebaseConfig';
 
 const ExchangeRequestModal = ({ isOpen, onClose, request, roomId, onRequestHandled }) => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -12,12 +13,19 @@ const ExchangeRequestModal = ({ isOpen, onClose, request, roomId, onRequestHandl
     setResponseMessage('');
 
     try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        setResponseMessage('인증이 필요합니다.');
+        setIsProcessing(false);
+        return;
+      }
+
       const response = await axios.post(
         `${process.env.REACT_APP_API_URL}/api/coordination/rooms/${roomId}/exchange-requests/${request._id}/respond`,
         { action },
         {
           headers: {
-            'x-auth-token': localStorage.getItem('token')
+            'Authorization': `Bearer ${await currentUser.getIdToken()}`
           }
         }
       );

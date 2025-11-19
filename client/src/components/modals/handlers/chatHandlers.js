@@ -2,6 +2,8 @@
  * 채팅 관련 핸들러
  */
 
+import { auth } from '../../../config/firebaseConfig';
+
 export const handleChatSubmit = async (
   e,
   chatInput,
@@ -45,7 +47,18 @@ export const handleChatSubmit = async (
 
   // AI에게 자연어 요청 보내기
   try {
-    const token = localStorage.getItem('token');
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setChatMessages(prev => prev.filter(msg => msg.id !== thinkingMessageId));
+      setChatMessages(prev => [...prev, {
+        id: Date.now(),
+        text: '인증이 필요합니다.',
+        sender: 'bot',
+        timestamp: new Date()
+      }]);
+      return;
+    }
+
     // 직전 봇 응답 찾기 (대화 컨텍스트 유지)
     const lastBotMessage = chatMessages
       ? [...chatMessages].reverse().find(msg => msg.sender === 'bot' && msg.text !== '💭 답변을 생각하고 있어요...')
@@ -56,7 +69,7 @@ export const handleChatSubmit = async (
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': token
+        'Authorization': `Bearer ${await currentUser.getIdToken()}`
       },
       body: JSON.stringify({
         message: input,
