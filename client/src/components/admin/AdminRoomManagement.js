@@ -11,6 +11,7 @@ const AdminRoomManagement = () => {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [activeLogTab, setActiveLogTab] = useState('all');
 
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -281,7 +282,7 @@ const AdminRoomManagement = () => {
       {/* 로그 모달 */}
       {selectedRoom && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col">
             <div className="flex justify-between items-center p-5 border-b">
               <h3 className="text-xl font-bold text-gray-800">
                 {selectedRoom.name} - 활동 로그
@@ -290,10 +291,75 @@ const AdminRoomManagement = () => {
                 onClick={() => {
                   setSelectedRoom(null);
                   setLogs([]);
+                  setActiveLogTab('all');
                 }}
                 className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-200"
               >
                 <X size={22} />
+              </button>
+            </div>
+
+            {/* 탭 버튼 */}
+            <div className="flex gap-2 px-5 pt-4 pb-2 overflow-x-auto border-b">
+              <button
+                onClick={() => setActiveLogTab('all')}
+                className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+                  activeLogTab === 'all'
+                    ? 'bg-purple-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                전체 ({logs.length})
+              </button>
+              <button
+                onClick={() => setActiveLogTab('auto_assign')}
+                className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+                  activeLogTab === 'auto_assign'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                자동배정 ({logs.filter(log => log.action === 'auto_assign').length})
+              </button>
+              <button
+                onClick={() => setActiveLogTab('member')}
+                className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+                  activeLogTab === 'member'
+                    ? 'bg-green-600 text-white shadow-md border-2 border-green-800'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                멤버 활동 ({logs.filter(log => ['member_join', 'member_leave', 'member_kick'].includes(log.action)).length})
+              </button>
+              <button
+                onClick={() => setActiveLogTab('slot')}
+                className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+                  activeLogTab === 'slot'
+                    ? 'bg-indigo-600 text-white shadow-md border-2 border-indigo-800'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                자리 관리 ({logs.filter(log => ['slot_request', 'slot_yield', 'slot_swap'].includes(log.action)).length})
+              </button>
+              <button
+                onClick={() => setActiveLogTab('negotiation')}
+                className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+                  activeLogTab === 'negotiation'
+                    ? 'bg-pink-600 text-white shadow-md border-2 border-pink-800'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                협상 ({logs.filter(log => ['negotiation_start', 'negotiation_resolve'].includes(log.action)).length})
+              </button>
+              <button
+                onClick={() => setActiveLogTab('change')}
+                className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+                  activeLogTab === 'change'
+                    ? 'bg-purple-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                변경 요청 ({logs.filter(log => ['change_request', 'change_approve', 'change_reject'].includes(log.action)).length})
               </button>
             </div>
 
@@ -306,32 +372,52 @@ const AdminRoomManagement = () => {
                 <div className="text-center py-8 text-gray-500">
                   활동 로그가 없습니다.
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {logs.map((log) => (
-                    <div key={log._id} className="flex gap-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="flex-shrink-0">
-                        <span className={`inline-block px-2 py-1 text-xs font-medium rounded ${getActionColor(log.action)}`}>
-                          {getActionLabel(log.action)}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm text-gray-800">
-                          {log.userName}
+              ) : (() => {
+                // 선택된 탭에 따라 로그 필터링
+                let filteredLogs = logs;
+                if (activeLogTab === 'auto_assign') {
+                  filteredLogs = logs.filter(log => log.action === 'auto_assign');
+                } else if (activeLogTab === 'member') {
+                  filteredLogs = logs.filter(log => ['member_join', 'member_leave', 'member_kick'].includes(log.action));
+                } else if (activeLogTab === 'slot') {
+                  filteredLogs = logs.filter(log => ['slot_request', 'slot_yield', 'slot_swap'].includes(log.action));
+                } else if (activeLogTab === 'negotiation') {
+                  filteredLogs = logs.filter(log => ['negotiation_start', 'negotiation_resolve'].includes(log.action));
+                } else if (activeLogTab === 'change') {
+                  filteredLogs = logs.filter(log => ['change_request', 'change_approve', 'change_reject'].includes(log.action));
+                }
+
+                return filteredLogs.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    이 카테고리에 로그가 없습니다.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredLogs.map((log) => (
+                      <div key={log._id} className="flex gap-3 p-4 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex-shrink-0">
+                          <span className={`inline-block px-3 py-1.5 text-xs font-semibold rounded-lg ${getActionColor(log.action)}`}>
+                            {getActionLabel(log.action)}
+                          </span>
                         </div>
-                        {log.details && (
-                          <div className="text-sm text-gray-600 mt-1">
-                            {log.details}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-sm text-gray-800">
+                            {log.userName}
                           </div>
-                        )}
-                        <div className="text-xs text-gray-400 mt-1">
-                          {formatDateTime(log.createdAt)}
+                          {log.details && (
+                            <div className="text-sm text-gray-600 mt-1">
+                              {log.details}
+                            </div>
+                          )}
+                          <div className="text-xs text-gray-400 mt-1.5">
+                            {formatDateTime(log.createdAt)}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>

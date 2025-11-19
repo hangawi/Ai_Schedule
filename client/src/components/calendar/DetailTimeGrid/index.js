@@ -1,92 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Merge, Split } from 'lucide-react';
+import { X } from 'lucide-react';
 
-// 10분 단위 시간 슬롯 생성
-const generateTimeSlots = (startHour = 0, endHour = 24) => {
-  const slots = [];
-  for (let h = startHour; h < endHour; h++) {
-    for (let m = 0; m < 60; m += 10) {
-      const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      slots.push(time);
-    }
-  }
-  return slots;
-};
+// Import utilities
+import { generateTimeSlots, getNextTimeSlot, getTimeDifferenceInMinutes, timeToMinutes, calculateEndTime } from './utils/timeCalculations';
+import { mergeConsecutiveTimeSlots } from './utils/timeSlotMerger';
+import { formatDate, getDateString } from './utils/dateFormatters';
 
-const priorityConfig = {
-  3: { label: '선호', color: 'bg-blue-600', next: 2 },
-  2: { label: '보통', color: 'bg-blue-400', next: 1 },
-  1: { label: '조정 가능', color: 'bg-blue-200', next: null },
-  0: { label: '없어짐', color: 'bg-gray-200', next: null },
-};
-
-// 연속된 시간대 병합 함수
-const mergeConsecutiveTimeSlots = (schedule) => {
-  if (!schedule || schedule.length === 0) return [];
-
-  const sortedSchedule = [...schedule].sort((a, b) => {
-    // specificDate가 있으면 날짜로 정렬, 없으면 dayOfWeek로 정렬
-    if (a.specificDate && b.specificDate) {
-      if (a.specificDate !== b.specificDate) return a.specificDate.localeCompare(b.specificDate);
-    } else if (a.dayOfWeek !== b.dayOfWeek) {
-      return a.dayOfWeek - b.dayOfWeek;
-    }
-    return a.startTime.localeCompare(b.startTime);
-  });
-
-  const merged = [];
-  let currentGroup = null;
-
-  for (const slot of sortedSchedule) {
-    const sameDate = (currentGroup && slot.specificDate && currentGroup.specificDate) 
-      ? (currentGroup.specificDate === slot.specificDate)
-      : (currentGroup && currentGroup.dayOfWeek === slot.dayOfWeek && !slot.specificDate && !currentGroup.specificDate);
-    
-    if (currentGroup &&
-        sameDate &&
-        currentGroup.priority === slot.priority &&
-        currentGroup.endTime === slot.startTime) {
-      // 연속된 슬롯이므로 병합
-      currentGroup.endTime = slot.endTime;
-      currentGroup.isMerged = true;
-      if (!currentGroup.originalSlots) {
-        currentGroup.originalSlots = [{ ...currentGroup }];
-      }
-      currentGroup.originalSlots.push(slot);
-    } else {
-      // 새로운 그룹 시작
-      if (currentGroup) {
-        merged.push(currentGroup);
-      }
-      currentGroup = { ...slot };
-      // 기존 속성 정리
-      delete currentGroup.isMerged;
-      delete currentGroup.originalSlots;
-    }
-  }
-
-  if (currentGroup) {
-    merged.push(currentGroup);
-  }
-
-  return merged;
-};;
-
-// 다음 시간 슬롯 계산
-const getNextTimeSlot = (timeString) => {
-  const [hour, minute] = timeString.split(':').map(Number);
-  const nextMinute = minute + 10;
-  const nextHour = nextMinute >= 60 ? hour + 1 : hour;
-  const finalMinute = nextMinute >= 60 ? 0 : nextMinute;
-  return `${String(nextHour).padStart(2, '0')}:${String(finalMinute).padStart(2, '0')}`;
-};
-
-// 시간 차이 계산 (분 단위)
-const getTimeDifferenceInMinutes = (startTime, endTime) => {
-  const [startHour, startMin] = startTime.split(':').map(Number);
-  const [endHour, endMin] = endTime.split(':').map(Number);
-  return (endHour * 60 + endMin) - (startHour * 60 + startMin);
-};
+// Import constants
+import { priorityConfig } from './constants/priorityConfig';
 
 const DetailTimeGrid = ({
   selectedDate,

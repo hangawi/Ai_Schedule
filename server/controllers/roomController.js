@@ -50,8 +50,8 @@ exports.createRoom = async (req, res) => {
       }
 
       await room.save();
-      await room.populate('owner', 'firstName lastName email');
-      await room.populate('members.user', 'firstName lastName email');
+      await room.populate('owner', 'firstName lastName email firebaseUid');
+      await room.populate('members.user', 'firstName lastName email firebaseUid');
 
       res.status(201).json(room);
    } catch (error) {
@@ -118,8 +118,8 @@ exports.updateRoom = async (req, res) => {
 
       await room.save();
 
-      await room.populate('owner', 'firstName lastName email');
-      await room.populate('members.user', 'firstName lastName email');
+      await room.populate('owner', 'firstName lastName email firebaseUid');
+      await room.populate('members.user', 'firstName lastName email firebaseUid');
 
       res.json(room);
    } catch (error) {
@@ -173,8 +173,8 @@ exports.joinRoom = async (req, res) => {
 
       if (isMember || isOwner) {
          // User is already a member, just return the room details
-         await room.populate('owner', 'firstName lastName email');
-         await room.populate('members.user', 'firstName lastName email');
+         await room.populate('owner', 'firstName lastName email firebaseUid');
+         await room.populate('members.user', 'firstName lastName email firebaseUid');
          return res.json(room);
       }
 
@@ -397,12 +397,12 @@ exports.joinRoom = async (req, res) => {
 exports.getRoomDetails = async (req, res) => {
    try {
       const room = await Room.findById(req.params.roomId)
-         .populate('owner', '_id firstName lastName email defaultSchedule scheduleExceptions personalTimes address addressDetail addressLat addressLng')
-         .populate('members.user', '_id firstName lastName email defaultSchedule address addressDetail addressLat addressLng')
-         .populate('timeSlots.user', '_id firstName lastName email')
-         .populate('requests.requester', '_id firstName lastName email')
-         .populate('requests.targetUser', '_id firstName lastName email')
-         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email');
+         .populate('owner', '_id firstName lastName email firebaseUid defaultSchedule scheduleExceptions personalTimes address addressDetail addressLat addressLng')
+         .populate('members.user', '_id firstName lastName email firebaseUid defaultSchedule address addressDetail addressLat addressLng')
+         .populate('timeSlots.user', '_id firstName lastName email firebaseUid')
+         .populate('requests.requester', '_id firstName lastName email firebaseUid')
+         .populate('requests.targetUser', '_id firstName lastName email firebaseUid')
+         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email firebaseUid');
 
       if (!room) {
          return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
@@ -542,7 +542,8 @@ exports.getMyRooms = async (req, res) => {
       // Rooms where user is owner
       const ownedRooms = await Room.find({ owner: req.user.id })
          .select('name description createdAt maxMembers members inviteCode')
-         .populate('members.user', 'firstName lastName email');
+         .populate('owner', 'firstName lastName email firebaseUid')
+         .populate('members.user', 'firstName lastName email firebaseUid');
 
       // Rooms where user is a member
       const joinedRooms = await Room.find({
@@ -550,7 +551,8 @@ exports.getMyRooms = async (req, res) => {
          owner: { $ne: req.user.id },
       })
          .select('name description createdAt maxMembers members inviteCode')
-         .populate('members.user', 'firstName lastName email');
+         .populate('owner', 'firstName lastName email firebaseUid')
+         .populate('members.user', 'firstName lastName email firebaseUid');
 
       // Add member count to each room
       const formatRoom = room => ({
