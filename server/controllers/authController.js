@@ -1,4 +1,6 @@
 const User = require('../models/user');
+const Room = require('../models/room');
+const ActivityLog = require('../models/ActivityLog');
 const bcrypt = require('bcryptjs');
 const { auth: firebaseAuth } = require('../config/firebaseAdmin');
 const { OAuth2Client } = require('google-auth-library');
@@ -129,5 +131,60 @@ exports.getLoggedInUser = async (req, res) => {
   } catch (err) {
     console.error('[Get Logged In User] Error:', err);
     res.status(500).send('Server Error');
+  }
+};
+
+// @desc    Delete user account (self)
+// @route   DELETE /api/auth/delete-account
+// @access  Private
+exports.deleteAccount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ msg: '사용자를 찾을 수 없습니다.' });
+    }
+
+    const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+
+    // 활동 로그에 회원탈퇴 기록
+    await ActivityLog.create({
+      action: 'user_withdraw',
+      userName: userName,
+      details: user.email,
+      createdAt: new Date()
+    });
+
+    // Firebase 사용자 삭제
+    if (user.firebaseUid) {
+      try {
+        await firebaseAuth.deleteUser(user.firebaseUid);
+        console.log('Firebase user deleted:', user.firebaseUid);
+      } catch (firebaseErr) {
+        if (firebaseErr.code !== 'auth/user-not-found') {
+          console.error('Firebase user deletion error:', firebaseErr.message);
+        }
+      }
+    }
+
+    // 사용자가 속한 방에서 제거
+    await Room.updateMany(
+      { 'members.user': userId },
+      { $pull: { members: { user: userId } } }
+    );
+
+    // 사용자가 방장인 방 삭제
+    await Room.deleteMany({ owner: userId });
+
+    // 사용자 삭제
+    await User.findByIdAndDelete(userId);
+
+    console.log('User account deleted:', user.email);
+
+    res.json({ msg: '회원탈퇴가 완료되었습니다.' });
+  } catch (err) {
+    console.error('Delete account error:', err);
+    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };

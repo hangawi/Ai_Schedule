@@ -153,15 +153,15 @@ const RegisterForm = ({ onClose, onRegisterSuccess, onLoginClick }) => {
         return; // 오류 발생 시 함수 종료
       }
 
-      // 회원가입 성공 모달 표시
+      // 회원가입 성공 모달 표시 후 로그인 화면으로 이동
       showAlert(
-        '회원가입이 완료되었습니다. 로그인 페이지로 이동합니다.',
+        '회원가입이 완료되었습니다!',
         'success',
         '회원가입 성공',
         false,
         () => {
           closeAlert();
-          onRegisterSuccess();
+          onLoginClick(); // 로그인 화면으로 이동
         }
       );
     } catch (error) {

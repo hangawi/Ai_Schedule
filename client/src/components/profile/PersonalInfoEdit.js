@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { GoogleMap, Marker } from '@react-google-maps/api';
 import { userService } from '../../services/userService';
 import AddressAutocomplete from '../common/AddressAutocomplete';
-import { User, Mail, Phone, MapPin, Briefcase, Calendar } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Briefcase, Calendar, UserX } from 'lucide-react';
+import { auth } from '../../config/firebaseConfig';
 
 const PersonalInfoEdit = () => {
   const [userInfo, setUserInfo] = useState({
@@ -21,6 +22,9 @@ const PersonalInfoEdit = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
   useEffect(() => {
     fetchUserInfo();
@@ -87,6 +91,38 @@ const PersonalInfoEdit = () => {
       setMessage({ type: 'error', text: '개인정보 저장에 실패했습니다.' });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // 회원탈퇴 처리
+  const handleDeleteAccount = async () => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        setMessage({ type: 'error', text: '로그인이 필요합니다.' });
+        return;
+      }
+
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`${API_BASE_URL}/api/auth/delete-account`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.msg || '회원탈퇴에 실패했습니다.');
+      }
+
+      // Firebase 로그아웃
+      await auth.signOut();
+
+      // 페이지 새로고침으로 로그인 화면으로 이동
+      window.location.reload();
+    } catch (err) {
+      setMessage({ type: 'error', text: `회원탈퇴 실패: ${err.message}` });
     }
   };
 
@@ -270,6 +306,17 @@ const PersonalInfoEdit = () => {
             </button>
           </div>
           </form>
+
+          {/* 회원탈퇴 버튼 */}
+          <div className="pt-4 mt-4 border-t border-gray-200">
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="w-full py-3 px-4 rounded-lg font-medium text-white bg-red-500 hover:bg-red-600 transition-colors flex items-center justify-center"
+            >
+              <UserX size={16} className="mr-2" />
+              회원탈퇴
+            </button>
+          </div>
         </div>
 
         {/* 오른쪽: 지도 */}
@@ -302,6 +349,38 @@ const PersonalInfoEdit = () => {
           )}
         </div>
       </div>
+
+      {/* 회원탈퇴 확인 모달 */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-red-600 mb-4">회원탈퇴</h3>
+            <p className="text-gray-700 mb-4">
+              정말로 탈퇴하시겠습니까?<br />
+              <span className="text-red-500 font-semibold">
+                모든 데이터가 삭제되며 복구할 수 없습니다.
+              </span>
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  handleDeleteAccount();
+                }}
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+              >
+                탈퇴하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

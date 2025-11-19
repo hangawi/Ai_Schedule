@@ -26,6 +26,7 @@ import ProfileTab from './components/tabs/ProfileTab';
 import CoordinationTab from './components/tabs/CoordinationTab';
 import AdminUserManagement from './components/admin/AdminUserManagement';
 import AdminRoomManagement from './components/admin/AdminRoomManagement';
+import AdminDashboard from './components/admin/AdminDashboard';
 import AdminCodeModal from './components/admin/AdminCodeModal';
 import { useAdmin } from './contexts/AdminContext';
 import CreateProposalModal from './components/forms/CreateProposalModal';
@@ -95,6 +96,23 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
      const savedTab = localStorage.getItem('activeTab');
      return savedTab || 'dashboard';
    });
+
+   // 관리자 상태 변경 시 적절한 대시보드로 이동
+   useEffect(() => {
+     if (isAdmin) {
+       // 관리자인데 일반 탭에 있으면 관리자 대시보드로 이동
+       if (!activeTab.startsWith('admin')) {
+         setActiveTab('adminDashboard');
+         localStorage.setItem('activeTab', 'adminDashboard');
+       }
+     } else {
+       // 일반 사용자인데 관리자 탭에 있으면 일반 대시보드로 이동
+       if (activeTab.startsWith('admin')) {
+         setActiveTab('dashboard');
+         localStorage.setItem('activeTab', 'dashboard');
+       }
+     }
+   }, [isAdmin]);
 
    // Enhanced setActiveTab that includes browser history management
    const enhancedSetActiveTab = useCallback((newTab) => {
@@ -637,14 +655,17 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                   <h2 className="text-lg font-bold">메뉴</h2>
                   <button onClick={() => setIsSidebarOpen(false)}><X size={24} /></button>
                </div>
-               <div className="mb-6">
-                  <button onClick={() => { setShowCreateModal(true); setIsSidebarOpen(false); }} className="w-full bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center justify-center">
-                     <span>+ 새 일정 조율</span>
-                  </button>
-               </div>
+               {!isAdmin && (
+                  <div className="mb-6">
+                     <button onClick={() => { setShowCreateModal(true); setIsSidebarOpen(false); }} className="w-full bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center justify-center">
+                        <span>+ 새 일정 조율</span>
+                     </button>
+                  </div>
+               )}
                <div className="space-y-1">
                   {isAdmin ? (
                      <>
+                        <NavItem icon={<LayoutDashboard size={18} />} label="대시보드" active={activeTab === 'adminDashboard'} onClick={() => { enhancedSetActiveTab('adminDashboard'); setIsSidebarOpen(false); }} />
                         <NavItem icon={<Users size={18} />} label="회원 관리" active={activeTab === 'adminUsers'} onClick={() => { enhancedSetActiveTab('adminUsers'); setIsSidebarOpen(false); }} />
                         <NavItem icon={<Building2 size={18} />} label="방 관리" active={activeTab === 'adminRooms'} onClick={() => { enhancedSetActiveTab('adminRooms'); setIsSidebarOpen(false); }} />
                      </>
@@ -670,6 +691,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                {activeTab === 'coordination' && <CoordinationTab user={user} onExchangeRequestCountChange={setExchangeRequestCount} onRefreshExchangeCount={refreshExchangeRequestCount} />}
                {activeTab === 'agent' && <AgentTab />}
                {activeTab === 'profile' && <ProfileTab user={user} onEditingChange={setIsProfileEditing} />}
+               {activeTab === 'adminDashboard' && <AdminDashboard />}
                {activeTab === 'adminUsers' && <AdminUserManagement />}
                {activeTab === 'adminRooms' && <AdminRoomManagement />}
             </main>

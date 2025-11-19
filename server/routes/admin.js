@@ -14,6 +14,9 @@ router.post('/revoke', auth, adminController.revokeAdmin);
 // 대시보드 통계
 router.get('/stats', auth, adminAuth, adminController.getDashboardStats);
 
+// 최근 활동
+router.get('/activities', auth, adminAuth, adminController.getRecentActivities);
+
 // 회원 관리
 router.get('/users', auth, adminAuth, adminController.getAllUsers);
 router.delete('/users/:userId', auth, adminAuth, adminController.deleteUser);

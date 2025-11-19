@@ -25,6 +25,16 @@ export const AdminProvider = ({ children, user }) => {
     setLoading(false);
   }, [user]);
 
+  // 로그아웃 시 관리자 상태 초기화
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
+      if (!firebaseUser) {
+        setIsAdmin(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   const verifyAdminCode = async (code) => {
     try {
       const currentUser = auth.currentUser;

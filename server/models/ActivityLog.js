@@ -4,13 +4,13 @@ const ActivityLogSchema = new mongoose.Schema({
   roomId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Room',
-    required: true,
+    required: false,  // 전역 활동(회원가입, 회원탈퇴)은 roomId가 없음
     index: true
   },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false  // 회원탈퇴 후에는 userId가 없을 수 있음
   },
   userName: {
     type: String,
@@ -34,7 +34,8 @@ const ActivityLogSchema = new mongoose.Schema({
       'schedule_update',       // 일정 수정
       'change_request',        // 변경 요청
       'change_approve',        // 변경 승인
-      'change_reject'          // 변경 거절
+      'change_reject',         // 변경 거절
+      'user_withdraw'          // 회원탈퇴
     ]
   },
   details: {

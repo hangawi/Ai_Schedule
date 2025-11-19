@@ -351,3 +351,74 @@ exports.getDashboardStats = async (req, res) => {
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
+
+// 최근 활동 조회
+exports.getRecentActivities = async (req, res) => {
+  try {
+    const { limit = 20 } = req.query;
+    const activities = [];
+
+    // 최근 회원가입
+    const recentUsers = await User.find()
+      .select('firstName lastName email createdAt')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit));
+
+    console.log('Recent users count:', recentUsers.length);
+    if (recentUsers.length > 0) {
+      console.log('Latest user:', recentUsers[0].email, recentUsers[0].createdAt);
+    }
+
+    recentUsers.forEach(user => {
+      activities.push({
+        type: 'user_signup',
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+        details: user.email,
+        createdAt: user.createdAt
+      });
+    });
+
+    // 최근 방 생성
+    const recentRooms = await Room.find()
+      .populate('owner', 'firstName lastName')
+      .select('name owner createdAt')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit));
+
+    recentRooms.forEach(room => {
+      const ownerName = room.owner
+        ? `${room.owner.firstName} ${room.owner.lastName}`
+        : '알 수 없음';
+      activities.push({
+        type: 'room_create',
+        userName: ownerName,
+        details: `"${room.name}" 방 생성`,
+        createdAt: room.createdAt
+      });
+    });
+
+    // 최근 활동 로그 (방 활동)
+    const recentLogs = await ActivityLog.find()
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit));
+
+    recentLogs.forEach(log => {
+      activities.push({
+        type: log.action,
+        userName: log.userName,
+        details: log.details,
+        createdAt: log.createdAt
+      });
+    });
+
+    // 시간순 정렬
+    activities.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json({
+      activities: activities.slice(0, parseInt(limit))
+    });
+  } catch (error) {
+    console.error('Get recent activities error:', error);
+    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+  }
+};

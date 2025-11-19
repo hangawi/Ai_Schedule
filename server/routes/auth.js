@@ -71,6 +71,7 @@ router.post('/register', logRequest('회원가입'), registerValidation, checkVa
 router.post('/login', logRequest('로그인'), auth, authController.login);
 router.get('/', auth, authController.getLoggedInUser);
 router.post('/google', auth, authController.googleAuth);
+router.delete('/delete-account', auth, authController.deleteAccount);
 
 // Health check
 router.get('/health', (req, res) => {
