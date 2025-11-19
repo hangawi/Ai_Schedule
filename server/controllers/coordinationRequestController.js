@@ -1,5 +1,6 @@
 const Room = require('../models/Room');
 const User = require('../models/User');
+const ActivityLog = require('../models/ActivityLog');
 
 // @desc    Create a new request (slot_release, slot_swap, time_request, time_change)
 // @route   POST /api/coordination/requests
@@ -574,6 +575,58 @@ exports.createRequest = async (req, res) => {
         console.log('💾 Saving room changes...');
         await room.save();
         console.log('✅ Room saved successfully!');
+
+        // Log activity - change_approve or change_reject
+        const responder = await User.findById(req.user.id);
+        const responderName = responder
+           ? `${responder.firstName} ${responder.lastName}`
+           : 'Unknown';
+
+        const requesterName = request.requester.firstName && request.requester.lastName
+           ? `${request.requester.firstName} ${request.requester.lastName}`
+           : request.requester.email;
+
+        const timeSlotInfo = request.timeSlot || request.targetSlot;
+        let slotDetails = '';
+        if (timeSlotInfo) {
+           if (timeSlotInfo.date) {
+              const slotDate = new Date(timeSlotInfo.date);
+              const slotMonth = slotDate.getUTCMonth() + 1;
+              const slotDay = slotDate.getUTCDate();
+              slotDetails = `${slotMonth}월 ${slotDay}일 ${timeSlotInfo.startTime}-${timeSlotInfo.endTime}`;
+           } else {
+              slotDetails = `${timeSlotInfo.day} ${timeSlotInfo.startTime}-${timeSlotInfo.endTime}`;
+           }
+        }
+
+        if (action === 'approved') {
+           await ActivityLog.logActivity(
+              room._id,
+              req.user.id,
+              responderName,
+              'change_approve',
+              `${responderName}님이 ${requesterName}님의 요청 승인: ${slotDetails}`,
+              { responder: responderName, requester: requesterName, slot: slotDetails }
+           );
+           // Also log slot_swap for the requester
+           await ActivityLog.logActivity(
+              room._id,
+              request.requester._id || request.requester,
+              requesterName,
+              'slot_swap',
+              `${slotDetails} 변경요청으로 변경`,
+              { slot: slotDetails, type: 'from_request' }
+           );
+        } else {
+           await ActivityLog.logActivity(
+              room._id,
+              req.user.id,
+              responderName,
+              'change_reject',
+              `${responderName}님이 ${requesterName}님의 요청 거절: ${slotDetails}`,
+              { responder: responderName, requester: requesterName, slot: slotDetails }
+           );
+        }
 
         const updatedRoom = await Room.findById(room._id)
            .populate('requests.requester', 'firstName lastName email')

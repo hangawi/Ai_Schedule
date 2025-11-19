@@ -27,5 +27,6 @@ router.put('/users/:userId/demote', auth, adminAuth, adminController.demoteUser)
 router.get('/rooms', auth, adminAuth, adminController.getAllRooms);
 router.delete('/rooms/:roomId', auth, adminAuth, adminController.deleteRoom);
 router.get('/rooms/:roomId/logs', auth, adminAuth, adminController.getRoomLogs);
+router.delete('/rooms/:roomId/logs', auth, adminAuth, adminController.clearRoomLogs);
 
 module.exports = router;

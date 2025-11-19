@@ -324,6 +324,29 @@ exports.getRoomLogs = async (req, res) => {
   }
 };
 
+// 방 활동 로그 삭제
+exports.clearRoomLogs = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+
+    const room = await Room.findById(roomId);
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    const result = await ActivityLog.deleteMany({ roomId });
+
+    res.json({
+      success: true,
+      msg: `${result.deletedCount}개의 로그가 삭제되었습니다.`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Clear room logs error:', error);
+    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+  }
+};
+
 // 대시보드 통계
 exports.getDashboardStats = async (req, res) => {
   try {

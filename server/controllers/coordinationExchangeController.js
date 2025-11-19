@@ -1,4 +1,5 @@
 const Room = require('../models/Room');
+const ActivityLog = require('../models/ActivityLog');
 /**
  * ============================================================================
  * coordinationExchangeController.js - 일정맞추기 교환 API
@@ -396,6 +397,18 @@ async function handleDateChange(req, res, room, memberData, params) {
                await room.save();
                await room.populate('timeSlots.user', '_id firstName lastName email');
 
+               // Log activity
+               await ActivityLog.logActivity(
+                  room._id,
+                  req.user.id,
+                  memberData.user.firstName && memberData.user.lastName
+                     ? `${memberData.user.firstName} ${memberData.user.lastName}`
+                     : memberData.user.email,
+                  'slot_swap',
+                  `${finalTargetMonth}월 ${targetDateNum}일 ${autoStartTime}-${autoEndTime}로 자동 배치`,
+                  { targetDate: `${finalTargetMonth}월 ${targetDateNum}일`, targetTime: `${autoStartTime}-${autoEndTime}` }
+               );
+
                return res.json({
                   success: true,
                   message: `${finalTargetMonth}월 ${targetDateNum}일 ${autoStartTime}-${autoEndTime}로 자동 배치되었습니다! (원래 시간대에 다른 일정이 있어서 가장 가까운 빈 시간으로 이동)`,
@@ -458,6 +471,18 @@ async function handleDateChange(req, res, room, memberData, params) {
             }
             return '다른 사용자';
          });
+
+         // Log activity - change request
+         await ActivityLog.logActivity(
+            room._id,
+            req.user.id,
+            memberData.user.firstName && memberData.user.lastName
+               ? `${memberData.user.firstName} ${memberData.user.lastName}`
+               : memberData.user.email,
+            'change_request',
+            `${finalTargetMonth}월 ${targetDateNum}일 ${newStartTime}-${newEndTime} 변경 요청 (${conflictUsers.join(', ')}님에게)`,
+            { targetDate: `${finalTargetMonth}월 ${targetDateNum}일`, targetTime: `${newStartTime}-${newEndTime}`, targetUsers: conflictUsers }
+         );
 
          return res.json({
             success: true,
@@ -598,6 +623,18 @@ async function handleDateChange(req, res, room, memberData, params) {
                   await room.save();
                   await room.populate('timeSlots.user', '_id firstName lastName email');
 
+                  // Log activity
+                  await ActivityLog.logActivity(
+                     room._id,
+                     req.user.id,
+                     memberData.user.firstName && memberData.user.lastName
+                        ? `${memberData.user.firstName} ${memberData.user.lastName}`
+                        : memberData.user.email,
+                     'slot_swap',
+                     `${finalTargetMonth}월 ${targetDateNum}일 ${foundSlot.startTime}-${foundSlot.endTime}로 자동 배치`,
+                     { targetDate: `${finalTargetMonth}월 ${targetDateNum}일`, targetTime: `${foundSlot.startTime}-${foundSlot.endTime}` }
+                  );
+
                   return res.json({
                      success: true,
                      message: `${finalTargetMonth}월 ${targetDateNum}일 ${foundSlot.startTime}-${foundSlot.endTime}로 자동 배치되었습니다! (원래 시간대에 다른 일정이 있어서 가장 가까운 빈 시간으로 이동)`,
@@ -700,6 +737,19 @@ async function handleDateChange(req, res, room, memberData, params) {
    console.log(`✅ Save complete`);
 
    const targetDateFormatted = `${finalTargetMonth}월 ${targetDateNum}일`;
+
+   // Log activity
+   await ActivityLog.logActivity(
+      room._id,
+      req.user.id,
+      memberData.user.firstName && memberData.user.lastName
+         ? `${memberData.user.firstName} ${memberData.user.lastName}`
+         : memberData.user.email,
+      'slot_swap',
+      `${targetDateFormatted} ${newStartTime}-${newEndTime}로 즉시 변경`,
+      { targetDate: targetDateFormatted, targetTime: `${newStartTime}-${newEndTime}` }
+   );
+
    return res.json({
       success: true,
       message: `${targetDateFormatted} ${newStartTime}-${newEndTime}로 즉시 변경되었습니다!`,
@@ -1591,9 +1641,26 @@ exports.smartExchange = async (req, res) => {
          await room.save();
          await room.populate('timeSlots.user', '_id firstName lastName email');
 
+         // Log activity
+         const requesterUser = memberData.user;
+         const targetMonth = targetDate.getUTCMonth() + 1;
+         const targetDateNum = targetDate.getUTCDate();
+         const formattedDate = `${targetMonth}월 ${targetDateNum}일`;
+
+         await ActivityLog.logActivity(
+            room._id,
+            req.user.id,
+            requesterUser.firstName && requesterUser.lastName
+               ? `${requesterUser.firstName} ${requesterUser.lastName}`
+               : requesterUser.email,
+            'slot_swap',
+            `${formattedDate} ${finalNewStartTime}-${finalNewEndTime}로 즉시 변경`,
+            { targetDate: formattedDate, targetTime: `${finalNewStartTime}-${finalNewEndTime}` }
+         );
+
          return res.json({
             success: true,
-            message: `${targetDay} ${finalNewStartTime}-${finalNewEndTime}로 즉시 변경되었습니다!`,
+            message: `${formattedDate} ${finalNewStartTime}-${finalNewEndTime}로 즉시 변경되었습니다!`,
             immediateSwap: true,
             targetDay,
             targetTime: finalNewStartTime
@@ -1678,9 +1745,26 @@ exports.smartExchange = async (req, res) => {
             await room.save();
             await room.populate('timeSlots.user', '_id firstName lastName email');
 
+            // Log activity
+            const requesterUserAuto = memberData.user;
+            const autoTargetMonth = targetDate.getUTCMonth() + 1;
+            const autoTargetDateNum = targetDate.getUTCDate();
+            const autoFormattedDate = `${autoTargetMonth}월 ${autoTargetDateNum}일`;
+
+            await ActivityLog.logActivity(
+               room._id,
+               req.user.id,
+               requesterUserAuto.firstName && requesterUserAuto.lastName
+                  ? `${requesterUserAuto.firstName} ${requesterUserAuto.lastName}`
+                  : requesterUserAuto.email,
+               'slot_swap',
+               `${autoFormattedDate} ${autoStartTime}-${autoEndTime}로 자동 배치`,
+               { targetDate: autoFormattedDate, targetTime: `${autoStartTime}-${autoEndTime}` }
+            );
+
             return res.json({
                success: true,
-               message: `${targetDay} ${autoStartTime}-${autoEndTime}로 자동 배치되었습니다! (원래 시간대에 다른 일정이 있어서 가장 가까운 빈 시간으로 이동)`,
+               message: `${autoFormattedDate} ${autoStartTime}-${autoEndTime}로 자동 배치되었습니다! (원래 시간대에 다른 일정이 있어서 가장 가까운 빈 시간으로 이동)`,
                immediateSwap: true,
                targetDay,
                targetTime: autoStartTime
@@ -1733,9 +1817,29 @@ exports.smartExchange = async (req, res) => {
 
       console.log('✅ Yield request created:', createdRequest._id);
 
+      // Log activity - change request (yield)
+      const requesterUserYield = memberData.user;
+      const yieldMonth = targetDate.getUTCMonth() + 1;
+      const yieldDay = targetDate.getUTCDate();
+      const yieldDateFormatted = `${yieldMonth}월 ${yieldDay}일`;
+
+      const requesterNameYield = requesterUserYield.firstName && requesterUserYield.lastName
+         ? `${requesterUserYield.firstName} ${requesterUserYield.lastName}`
+         : requesterUserYield.email;
+      const targetUserName = `${occupiedSlot.user.firstName} ${occupiedSlot.user.lastName}`;
+
+      await ActivityLog.logActivity(
+         room._id,
+         req.user.id,
+         requesterNameYield,
+         'change_request',
+         `${requesterNameYield}님이 ${targetUserName}님에게 ${yieldDateFormatted} ${finalNewStartTime}-${finalNewEndTime} 양보 요청`,
+         { targetDate: yieldDateFormatted, targetTime: `${finalNewStartTime}-${finalNewEndTime}`, requester: requesterNameYield, targetUser: targetUserName }
+      );
+
       res.json({
          success: true,
-         message: `${targetDay} ${finalNewStartTime}는 ${occupiedSlot.user.firstName}님이 사용 중입니다. 자리요청관리에 요청을 보냈습니다. 승인되면 자동으로 변경됩니다.`,
+         message: `${yieldDateFormatted} ${finalNewStartTime}는 ${occupiedSlot.user.firstName}님이 사용 중입니다. 자리요청관리에 요청을 보냈습니다. 승인되면 자동으로 변경됩니다.`,
          immediateSwap: false,
          needsApproval: true,
          targetDay,

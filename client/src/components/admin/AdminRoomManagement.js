@@ -105,6 +105,34 @@ const AdminRoomManagement = () => {
     }
   };
 
+  const clearLogs = async (roomId) => {
+    if (!window.confirm('정말로 이 방의 모든 로그를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+      return;
+    }
+
+    try {
+      const currentUser = auth.currentUser;
+
+      const response = await fetch(`${API_BASE_URL}/api/admin/rooms/${roomId}/logs`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${await currentUser.getIdToken()}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.msg || '로그 삭제 실패');
+      }
+
+      setLogs([]);
+      alert('로그가 성공적으로 삭제되었습니다.');
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('ko-KR', {
@@ -159,9 +187,9 @@ const AdminRoomManagement = () => {
       room_create: 'bg-indigo-100 text-indigo-700',
       room_update: 'bg-cyan-100 text-cyan-700',
       schedule_update: 'bg-pink-100 text-pink-700',
-      change_request: 'bg-amber-100 text-amber-700',
-      change_approve: 'bg-lime-100 text-lime-700',
-      change_reject: 'bg-rose-100 text-rose-700'
+      change_request: 'bg-blue-100 text-blue-700',
+      change_approve: 'bg-green-100 text-green-700',
+      change_reject: 'bg-red-100 text-red-700'
     };
     return colors[action] || 'bg-gray-100 text-gray-700';
   };
@@ -342,6 +370,16 @@ const AdminRoomManagement = () => {
                 자리 관리 ({logs.filter(log => ['slot_request', 'slot_yield', 'slot_swap'].includes(log.action)).length})
               </button>
               <button
+                onClick={() => setActiveLogTab('change')}
+                className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+                  activeLogTab === 'change'
+                    ? 'bg-purple-600 text-white shadow-md border-2 border-purple-800'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                변경 요청 ({logs.filter(log => ['change_request', 'change_approve', 'change_reject'].includes(log.action)).length})
+              </button>
+              <button
                 onClick={() => setActiveLogTab('negotiation')}
                 className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
                   activeLogTab === 'negotiation'
@@ -352,24 +390,22 @@ const AdminRoomManagement = () => {
                 협상 ({logs.filter(log => ['negotiation_start', 'negotiation_resolve'].includes(log.action)).length})
               </button>
               <button
-                onClick={() => setActiveLogTab('change')}
-                className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
-                  activeLogTab === 'change'
-                    ? 'bg-purple-600 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
+                onClick={() => clearLogs(selectedRoom.id)}
+                className="ml-auto px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all bg-red-500 text-white hover:bg-red-600 shadow-md"
+                title="로그 초기화"
               >
-                변경 요청 ({logs.filter(log => ['change_request', 'change_approve', 'change_reject'].includes(log.action)).length})
+                <Trash2 size={16} className="inline mr-1" />
+                초기화
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5">
+            <div className="flex-1 overflow-y-auto p-5" style={{ minHeight: '560px', maxHeight: '560px' }}>
               {logsLoading ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
                 </div>
               ) : logs.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="flex items-center justify-center text-gray-500" style={{ minHeight: '520px' }}>
                   활동 로그가 없습니다.
                 </div>
               ) : (() => {
