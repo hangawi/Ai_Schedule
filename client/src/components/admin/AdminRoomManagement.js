@@ -157,7 +157,7 @@ const AdminRoomManagement = () => {
       auto_assign: '자동배정 실행',
       slot_request: '자리 요청',
       slot_yield: '자리 양보',
-      slot_swap: '자리 교환',
+      slot_swap: '자리 변경',
       negotiation_start: '협상 시작',
       negotiation_resolve: '협상 해결',
       member_join: '멤버 입장',
@@ -181,8 +181,8 @@ const AdminRoomManagement = () => {
       slot_swap: 'bg-purple-100 text-purple-700',
       negotiation_start: 'bg-orange-100 text-orange-700',
       negotiation_resolve: 'bg-emerald-100 text-emerald-700',
-      member_join: 'bg-teal-100 text-teal-700',
-      member_leave: 'bg-gray-100 text-gray-700',
+      member_join: 'bg-green-100 text-green-700',
+      member_leave: 'bg-red-100 text-red-700',
       member_kick: 'bg-red-100 text-red-700',
       room_create: 'bg-indigo-100 text-indigo-700',
       room_update: 'bg-cyan-100 text-cyan-700',
@@ -340,16 +340,6 @@ const AdminRoomManagement = () => {
                 전체 ({logs.length})
               </button>
               <button
-                onClick={() => setActiveLogTab('auto_assign')}
-                className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
-                  activeLogTab === 'auto_assign'
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                자동배정 ({logs.filter(log => log.action === 'auto_assign').length})
-              </button>
-              <button
                 onClick={() => setActiveLogTab('member')}
                 className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
                   activeLogTab === 'member'
@@ -360,14 +350,14 @@ const AdminRoomManagement = () => {
                 멤버 활동 ({logs.filter(log => ['member_join', 'member_leave', 'member_kick'].includes(log.action)).length})
               </button>
               <button
-                onClick={() => setActiveLogTab('slot')}
+                onClick={() => setActiveLogTab('auto_assign')}
                 className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
-                  activeLogTab === 'slot'
-                    ? 'bg-indigo-600 text-white shadow-md border-2 border-indigo-800'
+                  activeLogTab === 'auto_assign'
+                    ? 'bg-blue-600 text-white shadow-md'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                자리 관리 ({logs.filter(log => ['slot_request', 'slot_yield', 'slot_swap'].includes(log.action)).length})
+                자동배정 ({logs.filter(log => log.action === 'auto_assign').length})
               </button>
               <button
                 onClick={() => setActiveLogTab('change')}
@@ -378,6 +368,16 @@ const AdminRoomManagement = () => {
                 }`}
               >
                 변경 요청 ({logs.filter(log => ['change_request', 'change_approve', 'change_reject'].includes(log.action)).length})
+              </button>
+              <button
+                onClick={() => setActiveLogTab('slot')}
+                className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+                  activeLogTab === 'slot'
+                    ? 'bg-indigo-600 text-white shadow-md border-2 border-indigo-800'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                자리 관리 ({logs.filter(log => ['slot_request', 'slot_yield', 'slot_swap'].includes(log.action)).length})
               </button>
               <button
                 onClick={() => setActiveLogTab('negotiation')}

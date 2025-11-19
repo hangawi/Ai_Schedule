@@ -1,5 +1,6 @@
 const Room = require('../models/room');
 const User = require('../models/user');
+const ActivityLog = require('../models/ActivityLog');
 const schedulingAlgorithm = require('../services/schedulingAlgorithm');
 
 // @desc    Create a new coordination room
@@ -384,6 +385,21 @@ exports.joinRoom = async (req, res) => {
       await room.populate('requests.requester', '_id firstName lastName email');
       await room.populate('requests.targetUser', '_id firstName lastName email');
       await room.populate('negotiations.conflictingMembers.user', '_id firstName lastName email');
+
+      // 활동 로그 기록 - 멤버 입장
+      try {
+         const joiningUser = await User.findById(req.user.id);
+         const userName = joiningUser ? `${joiningUser.firstName} ${joiningUser.lastName}` : 'Unknown';
+         await ActivityLog.logActivity(
+            room._id,
+            req.user.id,
+            userName,
+            'member_join',
+            '방에 입장'
+         );
+      } catch (logError) {
+         console.error('Activity log error:', logError);
+      }
 
       res.json(room);
    } catch (error) {
