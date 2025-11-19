@@ -48,3 +48,4 @@ nul
 
 # Firebase service account (contains sensitive credentials)
 firebase-service-account.json
+firebase-service-account*.json
