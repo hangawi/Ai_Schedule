@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { LoadScript } from '@react-google-maps/api';
 import SchedulingSystem from './SchedulingSystem';
 import AuthScreen from './components/auth/AuthScreen';
+import { AdminProvider } from './contexts/AdminContext';
 import ChatBox from './components/chat/ChatBox';
 import CommandModal from './components/modals/CommandModal';
 import SharedTextModal from './components/modals/SharedTextModal';
@@ -208,7 +209,11 @@ function App() {
          <Router>
             <Routes>
                <Route path="/auth" element={isLoggedIn ? <Navigate to="/" /> : <AuthScreen onLoginSuccess={handleLoginSuccess} />} />
-               <Route path="/" element={isLoggedIn ? <SchedulingSystem {...schedulingSystemProps} speak={speak} /> : <Navigate to="/auth" />} />
+               <Route path="/" element={isLoggedIn ? (
+                  <AdminProvider user={user}>
+                     <SchedulingSystem {...schedulingSystemProps} speak={speak} />
+                  </AdminProvider>
+               ) : <Navigate to="/auth" />} />
             </Routes>
             {isLoggedIn && sharedText && (
                <SharedTextModal text={sharedText} onClose={() => setSharedText(null)} onConfirm={handleConfirmSharedText} />

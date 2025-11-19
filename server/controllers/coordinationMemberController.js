@@ -1,5 +1,6 @@
 const Room = require('../models/Room');
 const User = require('../models/User');
+const ActivityLog = require('../models/ActivityLog');
 
 // @desc    Remove a member from a room (owner only)
 // @route   DELETE /api/coordination/rooms/:roomId/members/:memberId
@@ -48,6 +49,22 @@ exports.removeMember = async (req, res) => {
     await room.save();
     await room.populate('owner', 'firstName lastName email');
     await room.populate('members.user', 'firstName lastName email');
+
+    // 활동 로그 기록
+    try {
+      const ownerUser = await User.findById(req.user.id);
+      const ownerName = ownerUser ? `${ownerUser.firstName} ${ownerUser.lastName}` : 'Unknown';
+      const removedName = removedUser?.name || `${removedUser?.firstName || ''} ${removedUser?.lastName || ''}`.trim();
+      await ActivityLog.logActivity(
+        roomId,
+        req.user.id,
+        ownerName,
+        'member_kick',
+        `${removedName}님을 강퇴함`
+      );
+    } catch (logError) {
+      console.error('Activity log error:', logError);
+    }
 
     res.json({
       msg: '조원이 성공적으로 제거되었습니다.',
@@ -108,6 +125,21 @@ exports.leaveRoom = async (req, res) => {
     await room.save();
     await room.populate('owner', 'firstName lastName email');
     await room.populate('members.user', 'firstName lastName email');
+
+    // 활동 로그 기록
+    try {
+      const leavingUser = await User.findById(userId);
+      const userName = leavingUser ? `${leavingUser.firstName} ${leavingUser.lastName}` : 'Unknown';
+      await ActivityLog.logActivity(
+        roomId,
+        userId,
+        userName,
+        'member_leave',
+        '방에서 퇴장'
+      );
+    } catch (logError) {
+      console.error('Activity log error:', logError);
+    }
 
     res.json({
       msg: '방에서 성공적으로 나갔습니다.',

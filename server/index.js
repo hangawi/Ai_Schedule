@@ -113,6 +113,7 @@ app.use('/api/ocr-chat', require('./routes/ocrChat'));
 app.use('/api/schedule', require('./routes/scheduleOptimizer'));
 app.use('/api/schedule', require('./routes/fixedSchedule'));
 app.use('/api/nview', require('./routes/nview')); // AI 학습 시스템
+app.use('/api/admin', require('./routes/admin')); // 관리자 API
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '..', 'client', 'build')));

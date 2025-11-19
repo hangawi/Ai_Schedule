@@ -11,7 +11,10 @@ import {
    History,
    User,
    Clipboard,
-   ClipboardX
+   ClipboardX,
+   Shield,
+   Users,
+   Building2
 } from 'lucide-react';
 import MyCalendar from './components/calendar/Calendar';
 import EventFormModal from './components/forms/EventFormModal';
@@ -21,6 +24,10 @@ import EventsTab from './components/tabs/EventsTab';
 import AgentTab from './components/tabs/AgentTab';
 import ProfileTab from './components/tabs/ProfileTab';
 import CoordinationTab from './components/tabs/CoordinationTab';
+import AdminUserManagement from './components/admin/AdminUserManagement';
+import AdminRoomManagement from './components/admin/AdminRoomManagement';
+import AdminCodeModal from './components/admin/AdminCodeModal';
+import { useAdmin } from './contexts/AdminContext';
 import CreateProposalModal from './components/forms/CreateProposalModal';
 import TimeSelectionModal from './components/forms/TimeSelectionModal';
 import CustomAlertModal from './components/modals/CustomAlertModal';
@@ -82,6 +89,8 @@ const formatEventForClient = (event, color) => {
 
 const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled, isClipboardMonitoring, setIsClipboardMonitoring, loginMethod }) => {
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+   const [showAdminCodeModal, setShowAdminCodeModal] = useState(false);
+   const { isAdmin } = useAdmin();
    const [activeTab, setActiveTab] = useState(() => {
      const savedTab = localStorage.getItem('activeTab');
      return savedTab || 'dashboard';
@@ -541,13 +550,31 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                         )}
                      </div>
                      <h1 className="text-xl font-bold text-gray-800 hidden sm:block">MeetAgent</h1>
+                     {isAdmin && (
+                        <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full hidden sm:inline-flex items-center gap-1">
+                           <Shield size={10} /> 관리자
+                        </span>
+                     )}
                   </button>
                </div>
                <div className="flex items-center space-x-1 sm:space-x-2">
+                  {/* 관리자 버튼 - 캘린더 왼쪽 */}
+                  <button
+                     onClick={() => setShowAdminCodeModal(true)}
+                     className={`hidden sm:flex items-center p-2 rounded-full transition-colors duration-200 ${
+                        isAdmin
+                           ? 'text-purple-600 hover:bg-purple-100'
+                           : 'text-gray-600 hover:bg-gray-100'
+                     }`}
+                     title={isAdmin ? "관리자 모드" : "관리자 인증"}
+                  >
+                     <Shield size={20} />
+                  </button>
+
                   <button className="hidden sm:block text-gray-600 hover:text-gray-800" onClick={() => enhancedSetActiveTab('googleCalendar')}>
                      <Calendar size={20} />
                   </button>
-                  
+
                   {/* 백그라운드 모니터링 & 클립보드 버튼 */}
                   <div className="hidden sm:flex items-center space-x-2">
                      <button
@@ -616,13 +643,22 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                   </button>
                </div>
                <div className="space-y-1">
-                  <NavItem icon={<LayoutDashboard size={18} />} label="대시보드" active={activeTab === 'dashboard'} onClick={() => { enhancedSetActiveTab('dashboard'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<User size={18} />} label="내 프로필" active={activeTab === 'profile'} onClick={() => { enhancedSetActiveTab('profile'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<ListTodo size={18} />} label="나의 일정" active={activeTab === 'events'} onClick={() => { enhancedSetActiveTab('events'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<Calendar size={18} />} label="Google 캘린더" active={activeTab === 'googleCalendar'} onClick={() => { enhancedSetActiveTab('googleCalendar'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<History size={18} />} label="조율 내역" active={activeTab === 'proposals'} onClick={() => { enhancedSetActiveTab('proposals'); setIsSidebarOpen(false); }} />
-                  <NavItem icon={<CalendarCheck size={18} />} label="일정 맞추기" active={activeTab === 'coordination'} onClick={() => { enhancedSetActiveTab('coordination'); setIsSidebarOpen(false); }} badge={exchangeRequestCount > 0 ? exchangeRequestCount.toString() : undefined} />
-                  <NavItem icon={<Bot size={18} />} label="내 AI 비서" active={activeTab === 'agent'} onClick={() => { enhancedSetActiveTab('agent'); setIsSidebarOpen(false); }} />
+                  {isAdmin ? (
+                     <>
+                        <NavItem icon={<Users size={18} />} label="회원 관리" active={activeTab === 'adminUsers'} onClick={() => { enhancedSetActiveTab('adminUsers'); setIsSidebarOpen(false); }} />
+                        <NavItem icon={<Building2 size={18} />} label="방 관리" active={activeTab === 'adminRooms'} onClick={() => { enhancedSetActiveTab('adminRooms'); setIsSidebarOpen(false); }} />
+                     </>
+                  ) : (
+                     <>
+                        <NavItem icon={<LayoutDashboard size={18} />} label="대시보드" active={activeTab === 'dashboard'} onClick={() => { enhancedSetActiveTab('dashboard'); setIsSidebarOpen(false); }} />
+                        <NavItem icon={<User size={18} />} label="내 프로필" active={activeTab === 'profile'} onClick={() => { enhancedSetActiveTab('profile'); setIsSidebarOpen(false); }} />
+                        <NavItem icon={<ListTodo size={18} />} label="나의 일정" active={activeTab === 'events'} onClick={() => { enhancedSetActiveTab('events'); setIsSidebarOpen(false); }} />
+                        <NavItem icon={<Calendar size={18} />} label="Google 캘린더" active={activeTab === 'googleCalendar'} onClick={() => { enhancedSetActiveTab('googleCalendar'); setIsSidebarOpen(false); }} />
+                        <NavItem icon={<History size={18} />} label="조율 내역" active={activeTab === 'proposals'} onClick={() => { enhancedSetActiveTab('proposals'); setIsSidebarOpen(false); }} />
+                        <NavItem icon={<CalendarCheck size={18} />} label="일정 맞추기" active={activeTab === 'coordination'} onClick={() => { enhancedSetActiveTab('coordination'); setIsSidebarOpen(false); }} badge={exchangeRequestCount > 0 ? exchangeRequestCount.toString() : undefined} />
+                        <NavItem icon={<Bot size={18} />} label="내 AI 비서" active={activeTab === 'agent'} onClick={() => { enhancedSetActiveTab('agent'); setIsSidebarOpen(false); }} />
+                     </>
+                  )}
                </div>
             </nav>
 
@@ -634,6 +670,8 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                {activeTab === 'coordination' && <CoordinationTab user={user} onExchangeRequestCountChange={setExchangeRequestCount} onRefreshExchangeCount={refreshExchangeRequestCount} />}
                {activeTab === 'agent' && <AgentTab />}
                {activeTab === 'profile' && <ProfileTab user={user} onEditingChange={setIsProfileEditing} />}
+               {activeTab === 'adminUsers' && <AdminUserManagement />}
+               {activeTab === 'adminRooms' && <AdminRoomManagement />}
             </main>
          </div>
 
@@ -649,6 +687,12 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
             message={alertModal.message}
             type={alertModal.type}
             showCancel={alertModal.showCancel}
+         />
+
+         {/* 관리자 코드 입력 모달 */}
+         <AdminCodeModal
+            isOpen={showAdminCodeModal}
+            onClose={() => setShowAdminCodeModal(false)}
          />
 
          {/* 탭별 컨텍스트를 가진 ChatBox - 내 프로필 탭에서는 편집 모드일 때만 활성화 */}

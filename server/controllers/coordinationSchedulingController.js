@@ -1,5 +1,6 @@
 const Room = require('../models/Room');
 const User = require('../models/User');
+const ActivityLog = require('../models/ActivityLog');
 const schedulingAlgorithm = require('../services/schedulingAlgorithm');
 
 // @desc    Run auto-schedule algorithm for the room
@@ -301,6 +302,21 @@ exports.runAutoSchedule = async (req, res) => {
       });
 
       await room.save();
+
+      // 활동 로그 기록
+      try {
+         const ownerUser = await User.findById(req.user.id);
+         const ownerName = ownerUser ? `${ownerUser.firstName} ${ownerUser.lastName}` : 'Unknown';
+         await ActivityLog.logActivity(
+            roomId,
+            req.user.id,
+            ownerName,
+            'auto_assign',
+            `자동배정 실행 완료 (주당 ${minHoursPerWeek}시간, ${membersOnly.length}명 배정)`
+         );
+      } catch (logError) {
+         console.error('Activity log error:', logError);
+      }
 
       const freshRoom = await Room.findById(roomId)
          .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes address addressDetail addressLat addressLng')
