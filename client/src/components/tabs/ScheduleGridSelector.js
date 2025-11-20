@@ -346,16 +346,6 @@ const ScheduleGridSelector = ({
         });
         events = uniqueEvents;
 
-        // 🔍 수면시간 디버깅
-        if (events.some(e => e.title?.includes('수면') || e.title?.includes('睡眠'))) {
-            console.log(`[${time}] 수면시간 발견:`, events.map(e => ({
-                title: e.title,
-                type: e.type,
-                startTime: e.startTime,
-                endTime: e.endTime
-            })));
-        }
-
         if (!events || events.length === 0) {
             // 빈 시간
             if (currentBlock && currentBlock.type === 'empty') {
@@ -408,33 +398,10 @@ const ScheduleGridSelector = ({
                 return false;
             })();
 
-            // 🔍 수면시간 병합 디버깅
-            if (events.some(e => e.title?.includes('수면') || e.title?.includes('睡眠'))) {
-                console.log(`[${time}] 병합 체크:`, {
-                    isSameEventSet,
-                    isTimeConsecutive,
-                    currentBlockExists: !!currentBlock,
-                    currentBlockStartTime: currentBlock?.startTime,
-                    currentBlockDuration: currentBlock?.duration
-                });
-            }
-
             if (isSameEventSet && isTimeConsecutive) {
                 currentBlock.duration += 10;
-                // 🔍 병합 성공
-                if (events.some(e => e.title?.includes('수면') || e.title?.includes('睡眠'))) {
-                    console.log(`[${time}] ✅ 병합 성공! 현재 duration: ${currentBlock.duration}분`);
-                }
             } else {
                 if (currentBlock) {
-                    // 🔍 블록 추가 로그
-                    if (currentBlock.events?.some(e => e.title?.includes('수면') || e.title?.includes('睡眠'))) {
-                        console.log(`[${time}] 🔴 새 블록 생성 - 이전 블록 저장:`, {
-                            startTime: currentBlock.startTime,
-                            duration: currentBlock.duration,
-                            계산된endTime: `${currentBlock.startTime}~${Math.floor((timeToMinutes(currentBlock.startTime) + currentBlock.duration) / 60)}:${(timeToMinutes(currentBlock.startTime) + currentBlock.duration) % 60}`
-                        });
-                    }
                     blocks.push(currentBlock);
                 }
                 // 단일 이벤트일 경우 필요한 속성만 복사
@@ -462,31 +429,7 @@ const ScheduleGridSelector = ({
     });
 
     if (currentBlock) {
-        // 🔍 마지막 블록 저장 로그
-        if (currentBlock.events?.some(e => e.title?.includes('수면') || e.title?.includes('睡眠'))) {
-            console.log(`[루프 종료] 🔴 마지막 블록 저장:`, {
-                startTime: currentBlock.startTime,
-                duration: currentBlock.duration
-            });
-        }
         blocks.push(currentBlock);
-    }
-
-    // 🔍 endTime 계산 전 블록 상태
-    const sleepBlocksBeforeCalc = blocks.filter(b =>
-      b.events?.some(e => e.title?.includes('수면') || e.title?.includes('睡眠'))
-    );
-    if (sleepBlocksBeforeCalc.length > 0) {
-      console.log('=== endTime 계산 전 수면시간 블록 ===');
-      sleepBlocksBeforeCalc.forEach((b, i) => {
-        console.log(`블록 ${i}:`, {
-          startTime: b.startTime,
-          duration: b.duration,
-          endTime: b.endTime,
-          hasOwnProperty_duration: b.hasOwnProperty('duration'),
-          전체키: Object.keys(b)
-        });
-      });
     }
 
     // 각 블록의 endTime 계산 (병합된 블록의 실제 종료 시간)
@@ -497,17 +440,6 @@ const ScheduleGridSelector = ({
       const endMin = endMinutes % 60;
       block.endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
     });
-
-    // 🔍 최종 블록 출력 (수면시간만)
-    const sleepBlocks = blocks.filter(b =>
-      b.events?.some(e => e.title?.includes('수면') || e.title?.includes('睡眠'))
-    );
-    if (sleepBlocks.length > 0) {
-      console.log('=== 최종 수면시간 블록 ===');
-      sleepBlocks.forEach((b, i) => {
-        console.log(`블록 ${i}: ${b.startTime}~${b.endTime} (${b.duration}분)`, b.events.map(e => e.title));
-      });
-    }
 
     return blocks;
   };
@@ -751,8 +683,33 @@ const ScheduleGridSelector = ({
         color: priorityColorMap[priorityConfig[e.priority]?.color] || '#2563eb'
       }));
 
-      // 4. 세 배열 합치기
-      const filteredSchedules = [...personalFiltered, ...scheduleFiltered, ...exceptionsFiltered];
+      // 4. 세 배열 합치기 (자정 넘는 일정 분할)
+      const allSchedules = [...personalFiltered, ...scheduleFiltered, ...exceptionsFiltered];
+
+      // 자정을 넘나드는 일정을 분할
+      const filteredSchedules = [];
+      allSchedules.forEach(schedule => {
+        const startMin = timeToMinutes(schedule.startTime);
+        const endMin = timeToMinutes(schedule.endTime);
+
+        // 자정을 넘는 경우 (예: 22:00~08:00)
+        if (endMin <= startMin) {
+          // 오늘 밤 부분: startTime ~ 23:50
+          filteredSchedules.push({
+            ...schedule,
+            endTime: '23:50'
+          });
+          // 내일 새벽 부분: 00:00 ~ endTime
+          filteredSchedules.push({
+            ...schedule,
+            startTime: '00:00',
+            endTime: schedule.endTime
+          });
+        } else {
+          // 정상적인 하루 내 시간
+          filteredSchedules.push(schedule);
+        }
+      });
 
       // 디버깅: 이고은 원장 일정 확인
       const debugSchedules = filteredSchedules.filter(s => s.title?.includes('이고은') || s.instructor?.includes('이고은'));
@@ -822,6 +779,7 @@ const ScheduleGridSelector = ({
 
       // 디버깅: 병합 후 이고은 원장 일정 확인
       const debugMerged = mergedSchedules.filter(s => s.title?.includes('이고은') || s.instructor?.includes('이고은'));
+
       return mergedSchedules;
     };
 
