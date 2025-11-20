@@ -835,7 +835,7 @@ const ScheduleGridSelector = ({
           ))}
         </div>
 
-        <div className="overflow-y-auto" style={{ maxHeight: '600px' }}>
+        <div className="overflow-y-auto" style={{ maxHeight: '1000px' }}>
           <div className="flex w-full">
             {/* 시간 컬럼은 전체 시간대 표시 */}
             <div className="w-16 flex-shrink-0">

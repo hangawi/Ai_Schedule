@@ -85,7 +85,7 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
         }
       }}
     >
-      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-7xl max-h-[95vh] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-bold text-gray-800">{memberName}님의 시간표</h3>
         </div>
