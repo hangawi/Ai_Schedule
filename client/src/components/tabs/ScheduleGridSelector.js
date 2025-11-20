@@ -348,13 +348,13 @@ const ScheduleGridSelector = ({
             }
         } else {
             // 이벤트가 있는 시간
-            // 같은 이벤트 세트인지 체크 (제목 기준으로 비교)
+            // 같은 이벤트 세트인지 체크 (제목, type, priority 기준으로 비교)
             const isSameEventSet = currentBlock && currentBlock.events &&
                                   currentBlock.events.length === events.length &&
                                   (() => {
-                                      // 제목 기준으로 정렬해서 비교
-                                      const currentTitles = currentBlock.events.map(e => e.title || e.type).sort().join('|');
-                                      const newTitles = events.map(e => e.title || e.type).sort().join('|');
+                                      // 제목, type, priority 기준으로 정렬해서 비교
+                                      const currentTitles = currentBlock.events.map(e => `${e.title || e.type}_${e.priority || 'none'}`).sort().join('|');
+                                      const newTitles = events.map(e => `${e.title || e.type}_${e.priority || 'none'}`).sort().join('|');
                                       return currentTitles === newTitles;
                                   })();
 
@@ -375,6 +375,15 @@ const ScheduleGridSelector = ({
     });
 
     if (currentBlock) blocks.push(currentBlock);
+
+    // 각 블록의 endTime 계산 (병합된 블록의 실제 종료 시간)
+    blocks.forEach(block => {
+      const startMinutes = timeToMinutes(block.startTime);
+      const endMinutes = startMinutes + block.duration;
+      const endHour = Math.floor(endMinutes / 60);
+      const endMin = endMinutes % 60;
+      block.endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+    });
 
     return blocks;
   };
@@ -710,10 +719,10 @@ const ScheduleGridSelector = ({
     };
 
     return (
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm w-full">
         {/* 헤더 추가 - 요일과 날짜 표시 */}
         <div className="flex bg-gray-100 sticky top-0 z-10 border-b border-gray-300">
-          <div className="w-12 flex-shrink-0 p-2 text-center font-semibold text-gray-700 border-r border-gray-300 text-sm">시간</div>
+          <div className="w-16 flex-shrink-0 p-2 text-center font-semibold text-gray-700 border-r border-gray-300 text-sm">시간</div>
           {weekDates.slice(0, 7).map((date, index) => (
             <div key={index} className="flex-1 p-2 text-center font-semibold text-gray-700 border-r border-gray-200 last:border-r-0 text-sm">
               {date.display}
@@ -722,9 +731,9 @@ const ScheduleGridSelector = ({
         </div>
 
         <div className="overflow-y-auto" style={{ maxHeight: '600px' }}>
-          <div className="flex">
+          <div className="flex w-full">
             {/* 시간 컬럼은 전체 시간대 표시 */}
-            <div className="w-12 flex-shrink-0">
+            <div className="w-16 flex-shrink-0">
               {timeSlots.map(time => (
                 <div
                   key={time}
@@ -1206,6 +1215,45 @@ const ScheduleGridSelector = ({
     setCurrentDate(newDate);
   };
 
+  // 선호시간 체크 헬퍼 함수 (WeekView.js의 getOwnerOriginalScheduleInfo 로직과 유사)
+  const hasPreferredTime = (dayOfWeek, time, dateStr) => {
+    const timeMinutes = timeToMinutes(time);
+
+    // 먼저 해당 날짜의 예외 일정 확인 (특정 날짜 선호시간)
+    const exceptionSlot = exceptions.find(e => {
+      if (e.specificDate !== dateStr) return false;
+      if (!e.priority || e.priority < 2) return false; // priority 2 이상만 선호시간
+
+      let startMins, endMins;
+      if (e.startTime && e.startTime.includes('T')) {
+        const startDate = new Date(e.startTime);
+        const endDate = new Date(e.endTime);
+        startMins = startDate.getHours() * 60 + startDate.getMinutes();
+        endMins = endDate.getHours() * 60 + endDate.getMinutes();
+      } else if (e.startTime && e.startTime.includes(':')) {
+        startMins = timeToMinutes(e.startTime);
+        endMins = timeToMinutes(e.endTime);
+      } else {
+        return false;
+      }
+
+      return timeMinutes >= startMins && timeMinutes < endMins;
+    });
+
+    if (exceptionSlot) return true;
+
+    // 반복 일정에서 선호시간 확인 (priority >= 2)
+    const preferredSlot = schedule.find(s => {
+      if (s.dayOfWeek !== dayOfWeek) return false;
+      if (!s.priority || s.priority < 2) return false; // priority 2 이상만 선호시간
+      const startMinutes = timeToMinutes(s.startTime);
+      const endMinutes = timeToMinutes(s.endTime);
+      return timeMinutes >= startMinutes && timeMinutes < endMinutes;
+    });
+
+    return !!preferredSlot;
+  };
+
   // 세부 시간표 모달 렌더링
   const renderDateDetailModal = () => {
     if (!showDateDetailModal || !selectedDateForDetail) return null;
@@ -1223,7 +1271,7 @@ const ScheduleGridSelector = ({
           }
         }}
       >
-        <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[85vh] overflow-hidden">
+        <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[85vh] overflow-hidden">
           <div className="flex justify-center items-center p-4 border-b border-gray-200 bg-gray-50">
             <h3 className="text-lg font-bold text-gray-800">
               {dayData.date.getMonth() + 1}월 {dayData.date.getDate()}일 ({['일', '월', '화', '수', '목', '금', '토'][dayData.date.getDay()]}) 시간표
@@ -1238,48 +1286,6 @@ const ScheduleGridSelector = ({
                   let bgColor = 'bg-gray-50';
                   let textColor = 'text-gray-500';
                   let content = '';
-                  let multipleSchedules = [];
-
-                  // 같은 시간대의 모든 personalTimes 찾기
-                  if (block.type === 'personal') {
-                    const startMin = timeToMinutes(block.startTime);
-                    const endMin = timeToMinutes(block.endTime);
-
-                    multipleSchedules = allPersonalTimes.filter(p => {
-                      const personalDays = p.days || [];
-
-                      // ⭐ specificDate가 있으면 해당 날짜의 요일에 표시
-                      if (p.specificDate && personalDays.length === 0) {
-                        const dateObj = new Date(p.specificDate);
-                        const dateDay = dateObj.getDay();
-
-                        if (dateDay !== dayData.dayOfWeek) {
-                          return false; // 요일이 다르면 필터링
-                        }
-
-                        // 요일이 맞으면 시간대가 겹치는지 확인
-                        const pStart = timeToMinutes(p.startTime);
-                        const pEnd = timeToMinutes(p.endTime);
-
-                        return (pStart >= startMin && pStart < endMin) ||
-                               (pEnd > startMin && pEnd <= endMin) ||
-                               (pStart <= startMin && pEnd >= endMin);
-                      }
-
-                      const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
-
-                      if (p.isRecurring !== false && convertedDays.includes(dayData.dayOfWeek)) {
-                        const pStart = timeToMinutes(p.startTime);
-                        const pEnd = timeToMinutes(p.endTime);
-
-                        // 시간대가 겹치는지 확인
-                        return (pStart >= startMin && pStart < endMin) ||
-                               (pEnd > startMin && pEnd <= endMin) ||
-                               (pStart <= startMin && pEnd >= endMin);
-                      }
-                      return false;
-                    });
-                  }
 
                   if (block.type === 'schedule') {
                     bgColor = priorityConfig[block.priority]?.color || 'bg-blue-400';
@@ -1290,39 +1296,33 @@ const ScheduleGridSelector = ({
                     textColor = 'text-white';
                     content = `${block.title} (${block.duration}분)`;
                   } else if (block.type === 'personal') {
-                    // personalTime에 color가 있으면 사용, 없으면 주황색
+                    // personalTime 표시 (수면시간, 개인일정 등)
+                    const title = block.title || block.subjectName || block.academyName || '개인일정';
+                    // 수면시간 여부 확인
+                    const isSleepTime = title.includes('수면') || title.includes('睡眠') || title.toLowerCase().includes('sleep');
+
                     // Tailwind 클래스를 hex 색상으로 변환
                     const tailwindToHex = {
-                      'bg-gray-100': '#f3f4f6', 'bg-gray-200': '#e5e7eb', 'bg-gray-300': '#d1d5db',
-                      'bg-gray-400': '#9ca3af', 'bg-gray-500': '#6b7280', 'bg-gray-600': '#4b5563',
-                      'bg-gray-700': '#374151', 'bg-gray-800': '#1f2937', 'bg-gray-900': '#111827',
-                      'bg-red-100': '#fee2e2', 'bg-red-200': '#fecaca', 'bg-red-300': '#fca5a5',
-                      'bg-red-400': '#f87171', 'bg-red-500': '#ef4444', 'bg-red-600': '#dc2626',
-                      'bg-orange-100': '#ffedd5', 'bg-orange-200': '#fed7aa', 'bg-orange-300': '#fdba74',
-                      'bg-orange-400': '#fb923c', 'bg-orange-500': '#f97316', 'bg-orange-600': '#ea580c',
-                      'bg-yellow-100': '#fef3c7', 'bg-yellow-200': '#fde68a', 'bg-yellow-300': '#fcd34d',
-                      'bg-yellow-400': '#fbbf24', 'bg-yellow-500': '#f59e0b', 'bg-yellow-600': '#d97706',
-                      'bg-green-100': '#d1fae5', 'bg-green-200': '#a7f3d0', 'bg-green-300': '#6ee7b7',
-                      'bg-green-400': '#34d399', 'bg-green-500': '#10b981', 'bg-green-600': '#059669',
-                      'bg-blue-100': '#dbeafe', 'bg-blue-200': '#bfdbfe', 'bg-blue-300': '#93c5fd',
-                      'bg-blue-400': '#60a5fa', 'bg-blue-500': '#3b82f6', 'bg-blue-600': '#2563eb',
                       'bg-purple-100': '#e9d5ff', 'bg-purple-200': '#ddd6fe', 'bg-purple-300': '#c4b5fd',
-                      'bg-purple-400': '#a78bfa', 'bg-purple-500': '#8b5cf6', 'bg-purple-600': '#7c3aed',
-                      'bg-pink-100': '#fce7f3', 'bg-pink-200': '#fbcfe8', 'bg-pink-300': '#f9a8d4',
-                      'bg-pink-400': '#f472b6', 'bg-pink-500': '#ec4899', 'bg-pink-600': '#db2777'
+                      'bg-purple-400': '#a78bfa', 'bg-purple-500': '#8b5cf6', 'bg-purple-600': '#7c3aed'
                     };
-                    let rawColor = multipleSchedules[0]?.color || '#8b5cf6';
+                    let rawColor = block.color || '#8b5cf6';
                     const personalColor = tailwindToHex[rawColor] || rawColor;
-                    bgColor = personalColor; // inline style로 사용
+                    bgColor = personalColor;
                     textColor = 'text-white';
-                    if (multipleSchedules.length > 1) {
-                      content = multipleSchedules.map(p => p.title || p.subjectName || p.academyName || '일정').join(' / ');
-                    } else {
-                      const displayTitle = block.title || block.subjectName || block.academyName || '일정';
-                      content = `${displayTitle} (${block.duration}분)`;
-                    }
+                    content = `${isSleepTime ? '수면시간' : title} (${block.duration}분)`;
                   } else {
-                    content = `빈 시간 (${block.duration}분)`;
+                    // 빈 시간 - 선호시간이 아니면 금지시간으로 표시
+                    const isPreferred = hasPreferredTime(dayData.dayOfWeek, block.startTime, dateStr);
+                    if (!isPreferred) {
+                      bgColor = 'bg-red-200'; // 빨강색 (금지시간)
+                      textColor = 'text-red-900';
+                      content = `불가능 시간 (${block.duration}분)`;
+                    } else {
+                      bgColor = 'bg-gray-50';
+                      textColor = 'text-gray-500';
+                      content = `빈 시간 (${block.duration}분)`;
+                    }
                   }
 
                   // bgColor가 hex 색상인지 Tailwind 클래스인지 확인
@@ -1331,49 +1331,21 @@ const ScheduleGridSelector = ({
                   return (
                     <div
                       key={index}
-                      className={`p-3 rounded-lg ${multipleSchedules.length > 1 ? 'bg-gray-100' : (isHexColor ? '' : bgColor)}`}
-                      style={isHexColor && multipleSchedules.length <= 1 ? { backgroundColor: bgColor } : {}}
+                      className={`p-3 rounded-lg ${isHexColor ? '' : bgColor}`}
+                      style={isHexColor ? { backgroundColor: bgColor } : {}}
                     >
                       <div className="flex justify-between items-center mb-2">
-                        <span className={`text-sm font-medium ${multipleSchedules.length > 1 ? 'text-gray-700' : textColor}`}>
-                          {block.startTime}
+                        <span className={`text-sm font-medium ${textColor}`}>
+                          {block.startTime}~{block.endTime}
                         </span>
-                        <span className={`text-xs ${multipleSchedules.length > 1 ? 'text-gray-600' : textColor}`}>
+                        <span className={`text-xs ${textColor}`}>
                           {Math.floor(block.duration / 60) > 0 && `${Math.floor(block.duration / 60)}시간 `}
                           {block.duration % 60 > 0 && `${block.duration % 60}분`}
                         </span>
                       </div>
-                      {multipleSchedules.length > 1 ? (
-                        <div className="flex gap-2">
-                          {multipleSchedules.map((p, idx) => {
-                            // Tailwind 클래스를 hex 색상으로 변환
-                            const tailwindToHex = {
-                              'bg-gray-100': '#f3f4f6', 'bg-gray-200': '#e5e7eb', 'bg-gray-300': '#d1d5db',
-                              'bg-gray-400': '#9ca3af', 'bg-gray-500': '#6b7280', 'bg-gray-600': '#4b5563',
-                              'bg-red-100': '#fee2e2', 'bg-red-200': '#fecaca', 'bg-red-300': '#fca5a5',
-                              'bg-red-400': '#f87171', 'bg-red-500': '#ef4444', 'bg-red-600': '#dc2626',
-                              'bg-orange-100': '#ffedd5', 'bg-orange-500': '#f97316', 'bg-orange-600': '#ea580c',
-                              'bg-blue-100': '#dbeafe', 'bg-blue-400': '#60a5fa', 'bg-blue-600': '#2563eb'
-                            };
-                            let rawColor = p.color || '#8b5cf6';
-                            const finalColor = tailwindToHex[rawColor] || rawColor;
-
-                            return (
-                              <div
-                                key={idx}
-                                className="flex-1 text-white text-sm px-3 py-2 rounded-lg text-center"
-                                style={{ backgroundColor: finalColor }}
-                              >
-                                {p.title || p.subjectName || p.academyName || '일정'}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className={`text-sm mt-1 ${textColor}`}>
-                          {content}
-                        </div>
-                      )}
+                      <div className={`text-sm mt-1 ${textColor}`}>
+                        {content}
+                      </div>
                     </div>
                   );
                 })}
@@ -1458,40 +1430,33 @@ const ScheduleGridSelector = ({
                     textColor = 'text-white';
                     content = exceptionSlot.title;
                   } else if (personalSlots.length > 0) {
-                    // personalTime에 color가 있으면 사용, 없으면 주황색
+                    // personalTime 표시 (수면시간, 개인일정 등)
+                    const firstSlot = personalSlots[0];
+                    const title = firstSlot.title || firstSlot.subjectName || firstSlot.academyName || '개인일정';
+                    // 수면시간 여부 확인
+                    const isSleepTime = title.includes('수면') || title.includes('睡眠') || title.toLowerCase().includes('sleep');
+
                     // Tailwind 클래스를 hex 색상으로 변환
                     const tailwindToHex = {
-                      'bg-gray-100': '#f3f4f6', 'bg-gray-200': '#e5e7eb', 'bg-gray-300': '#d1d5db',
-                      'bg-gray-400': '#9ca3af', 'bg-gray-500': '#6b7280', 'bg-gray-600': '#4b5563',
-                      'bg-gray-700': '#374151', 'bg-gray-800': '#1f2937', 'bg-gray-900': '#111827',
-                      'bg-red-100': '#fee2e2', 'bg-red-200': '#fecaca', 'bg-red-300': '#fca5a5',
-                      'bg-red-400': '#f87171', 'bg-red-500': '#ef4444', 'bg-red-600': '#dc2626',
-                      'bg-orange-100': '#ffedd5', 'bg-orange-200': '#fed7aa', 'bg-orange-300': '#fdba74',
-                      'bg-orange-400': '#fb923c', 'bg-orange-500': '#f97316', 'bg-orange-600': '#ea580c',
-                      'bg-yellow-100': '#fef3c7', 'bg-yellow-200': '#fde68a', 'bg-yellow-300': '#fcd34d',
-                      'bg-yellow-400': '#fbbf24', 'bg-yellow-500': '#f59e0b', 'bg-yellow-600': '#d97706',
-                      'bg-green-100': '#d1fae5', 'bg-green-200': '#a7f3d0', 'bg-green-300': '#6ee7b7',
-                      'bg-green-400': '#34d399', 'bg-green-500': '#10b981', 'bg-green-600': '#059669',
-                      'bg-blue-100': '#dbeafe', 'bg-blue-200': '#bfdbfe', 'bg-blue-300': '#93c5fd',
-                      'bg-blue-400': '#60a5fa', 'bg-blue-500': '#3b82f6', 'bg-blue-600': '#2563eb',
                       'bg-purple-100': '#e9d5ff', 'bg-purple-200': '#ddd6fe', 'bg-purple-300': '#c4b5fd',
-                      'bg-purple-400': '#a78bfa', 'bg-purple-500': '#8b5cf6', 'bg-purple-600': '#7c3aed',
-                      'bg-pink-100': '#fce7f3', 'bg-pink-200': '#fbcfe8', 'bg-pink-300': '#f9a8d4',
-                      'bg-pink-400': '#f472b6', 'bg-pink-500': '#ec4899', 'bg-pink-600': '#db2777'
+                      'bg-purple-400': '#a78bfa', 'bg-purple-500': '#8b5cf6', 'bg-purple-600': '#7c3aed'
                     };
-                    let rawColor = personalSlots[0].color || '#8b5cf6';
+                    let rawColor = firstSlot.color || '#8b5cf6';
                     bgColor = tailwindToHex[rawColor] || rawColor;
                     textColor = 'text-white';
-                    if (personalSlots.length > 1) {
-                      hasMultiple = true;
-                      content = personalSlots.map(p => p.title || p.subjectName || p.academyName || '일정').join('\n');
-                    } else {
-                      content = personalSlots[0].title || personalSlots[0].subjectName || personalSlots[0].academyName || '일정';
-                    }
+                    content = isSleepTime ? '수면시간' : title;
                   } else if (recurringSlot) {
                     bgColor = priorityConfig[recurringSlot.priority]?.color || 'bg-blue-400';
                     textColor = 'text-white';
                     content = priorityConfig[recurringSlot.priority]?.label;
+                  } else {
+                    // 빈 시간 - 선호시간이 아니면 금지시간으로 표시
+                    const isPreferred = hasPreferredTime(dayData.dayOfWeek, time, dateStr);
+                    if (!isPreferred) {
+                      bgColor = 'bg-red-200'; // 빨강색 (금지시간)
+                      textColor = 'text-red-900';
+                      content = '불가능';
+                    }
                   }
 
                   // bgColor가 hex 색상인지 확인
