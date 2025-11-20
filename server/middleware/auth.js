@@ -134,6 +134,7 @@ module.exports = async function (req, res, next) {
     // IMPORTANT: req.user.id must be MongoDB ObjectId for compatibility
     req.user = {
       id: user._id.toString(),  // MongoDB ObjectId as string (same as JWT version)
+      uid: firebaseUid,         // Firebase UID for direct Firebase auth checks
       email: user.email,
       firebaseUid: user.firebaseUid,
       _id: user._id  // Keep original ObjectId for reference

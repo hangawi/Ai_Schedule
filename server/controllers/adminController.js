@@ -302,12 +302,22 @@ exports.getRoomLogs = async (req, res) => {
       return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
     }
 
-    const logs = await ActivityLog.find({ roomId })
+    // 관리자 초기화 시점 이후의 로그만 조회
+    const clearedAt = room.logsClearedAt?.admin;
+    console.log('Admin clearedAt:', clearedAt);
+    
+    const query = { roomId };
+    if (clearedAt) {
+      query.createdAt = { $gt: clearedAt };
+      console.log('Filtering logs after:', clearedAt);
+    }
+
+    const logs = await ActivityLog.find(query)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 
-    const total = await ActivityLog.countDocuments({ roomId });
+    const total = await ActivityLog.countDocuments(query);
 
     res.json({
       logs,
@@ -334,12 +344,20 @@ exports.clearRoomLogs = async (req, res) => {
       return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
     }
 
-    const result = await ActivityLog.deleteMany({ roomId });
+    // 관리자의 초기화 시점 업데이트 (실제 삭제 대신)
+    if (!room.logsClearedAt) {
+      room.logsClearedAt = { owner: null, admin: null };
+    }
+    room.logsClearedAt.admin = new Date();
+    room.markModified('logsClearedAt');
+    await room.save();
+    
+    console.log('Admin cleared logs at:', room.logsClearedAt.admin);
 
     res.json({
       success: true,
-      msg: `${result.deletedCount}개의 로그가 삭제되었습니다.`,
-      deletedCount: result.deletedCount
+      msg: '로그가 초기화되었습니다.',
+      clearedAt: room.logsClearedAt.admin
     });
   } catch (error) {
     console.error('Clear room logs error:', error);

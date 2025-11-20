@@ -507,6 +507,33 @@ exports.createRequest = async (req, res) => {
                                    assignedBy: req.user.id
                                 });
                                 console.log(`✅ B's slot moved to ${dayNames[bestCandidate.dayOfWeek]} ${toTimeString(newStartMinutes)}-${toTimeString(newEndMinutes)}`);
+
+                               // Log A's relocation (the approver who gave up their slot)
+                               const targetUserName = targetUser.firstName && targetUser.lastName
+                                  ? `${targetUser.firstName} ${targetUser.lastName}`
+                                  : targetUser.email;
+                               const requesterNameForLog = requester.firstName && requester.lastName
+                                  ? `${requester.firstName} ${requester.lastName}`
+                                  : requester.email;
+                               const origMonth = new Date(firstSlot.date).getUTCMonth() + 1;
+                               const origDay = new Date(firstSlot.date).getUTCDate();
+                               const newMonth = bestCandidate.date.getUTCMonth() + 1;
+                               const newDay = bestCandidate.date.getUTCDate();
+                               
+                               await ActivityLog.logActivity(
+                                  room._id,
+                                  targetUser._id,
+                                  targetUserName,
+                                  'slot_swap',
+                                  `${targetUserName}님: ${origMonth}월 ${origDay}일 ${firstSlot.startTime}-${lastSlot.endTime} → ${newMonth}월 ${newDay}일 ${toTimeString(newStartMinutes)}-${toTimeString(newEndMinutes)}로 재배치 (${requesterNameForLog}님에게 양보)`,
+                                  { 
+                                     prevDate: `${origMonth}월 ${origDay}일`, 
+                                     prevTime: `${firstSlot.startTime}-${lastSlot.endTime}`,
+                                     targetDate: `${newMonth}월 ${newDay}일`, 
+                                     targetTime: `${toTimeString(newStartMinutes)}-${toTimeString(newEndMinutes)}`,
+                                     yieldedTo: requesterNameForLog
+                                  }
+                               );
                              } else {
                                 console.log(`⚠️ Could not find non-conflicting slot for B`);
                              }
@@ -600,22 +627,45 @@ exports.createRequest = async (req, res) => {
         }
 
         if (action === 'approved') {
+           // Get requester's previous slot info
+           let prevSlotDetails = '';
+           if (request.requesterSlots && request.requesterSlots.length > 0) {
+              const firstReqSlot = request.requesterSlots[0];
+              const lastReqSlot = request.requesterSlots[request.requesterSlots.length - 1];
+              if (firstReqSlot.date) {
+                 const prevDate = new Date(firstReqSlot.date);
+                 const prevMonth = prevDate.getUTCMonth() + 1;
+                 const prevDay = prevDate.getUTCDate();
+                 prevSlotDetails = `${prevMonth}월 ${prevDay}일 ${firstReqSlot.startTime}-${lastReqSlot.endTime}`;
+              } else {
+                 prevSlotDetails = `${firstReqSlot.day} ${firstReqSlot.startTime}-${lastReqSlot.endTime}`;
+              }
+           }
+
            await ActivityLog.logActivity(
               room._id,
               req.user.id,
               responderName,
               'change_approve',
-              `${responderName}님이 ${requesterName}님의 요청 승인: ${slotDetails}`,
+              `${requesterName}님의 요청(${slotDetails})을 승인`,
               { responder: responderName, requester: requesterName, slot: slotDetails }
            );
-           // Also log slot_swap for the requester
+           // Also log slot_swap for the requester with previous slot info
+           const requesterLogDetails = prevSlotDetails 
+              ? `${requesterName}님: ${prevSlotDetails} → ${slotDetails}로 변경 완료 (${responderName}님 승인)`
+              : `${requesterName}님: ${slotDetails}로 변경 완료 (${responderName}님 승인)`;
            await ActivityLog.logActivity(
               room._id,
               request.requester._id || request.requester,
               requesterName,
               'slot_swap',
-              `${slotDetails} 변경요청으로 변경`,
-              { slot: slotDetails, type: 'from_request' }
+              requesterLogDetails,
+              { 
+                 prevSlot: prevSlotDetails,
+                 slot: slotDetails, 
+                 type: 'from_request', 
+                 approver: responderName 
+              }
            );
         } else {
            await ActivityLog.logActivity(
@@ -623,7 +673,7 @@ exports.createRequest = async (req, res) => {
               req.user.id,
               responderName,
               'change_reject',
-              `${responderName}님이 ${requesterName}님의 요청 거절: ${slotDetails}`,
+              `${requesterName}님의 요청(${slotDetails})을 거절`,
               { responder: responderName, requester: requesterName, slot: slotDetails }
            );
         }

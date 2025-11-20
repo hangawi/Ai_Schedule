@@ -18,6 +18,8 @@ router.put('/rooms/:roomId', auth, coordinationController.updateRoom);
 router.delete('/rooms/:roomId', auth, coordinationController.deleteRoom);
 router.post('/rooms/:inviteCode/join', auth, coordinationController.joinRoom);
 router.get('/rooms/:roomId', auth, coordinationController.getRoomDetails);
+router.get('/rooms/:roomId/logs', auth, coordinationController.getRoomLogs);
+router.post('/rooms/:roomId/clear-logs', auth, coordinationController.clearRoomLogs);
 
 // Member management
 router.delete('/rooms/:roomId/members/:memberId', auth, coordinationController.removeMember);

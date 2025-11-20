@@ -15,7 +15,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTravelMode } from '../../hooks/useTravelMode';
 import { coordinationService } from '../../services/coordinationService';
 import { userService } from '../../services/userService';
-import { Calendar, Grid, PlusCircle, LogIn, Users, MessageSquare, Clock, RefreshCw, Merge, Split, X } from 'lucide-react';
+import { Calendar, Grid, PlusCircle, LogIn, Users, MessageSquare, Clock, RefreshCw, Merge, Split, X, FileText } from 'lucide-react';
 import { translateEnglishDays } from '../../utils';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import MemberScheduleModal from '../modals/MemberScheduleModal';
@@ -462,6 +462,21 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
     closeChangeRequestModal
   } = useCoordinationModals();
 
+  // 방 관리 모달의 기본 탭
+  const [roomModalDefaultTab, setRoomModalDefaultTab] = useState('info');
+
+  // 로그 보기 버튼 클릭 핸들러
+  const openLogsModal = () => {
+    setRoomModalDefaultTab('logs');
+    openManageRoomModal();
+  };
+
+  // 방 관리 모달 닫기 핸들러 (기본 탭 리셋)
+  const handleCloseManageRoomModal = () => {
+    closeManageRoomModal();
+    setRoomModalDefaultTab('info');
+  };
+
   // Handle auto-resolution of timeout negotiations
   const handleAutoResolveNegotiationsCallback = useCallback(async () => {
     await handleAutoResolveNegotiations(currentRoom, fetchRoomDetails, showAlert);
@@ -891,12 +906,12 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
                   방 관리
                 </button>
                 <button
-                  onClick={syncOwnerPersonalTimes}
-                  className="px-3 py-2 text-sm bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors font-medium shadow-sm flex items-center"
-                  title="내 프로필의 개인시간을 이 방에 동기화합니다"
+                  onClick={openLogsModal}
+                  className="px-3 py-2 text-sm bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition-colors font-medium shadow-sm flex items-center"
+                  title="방 활동 로그를 확인합니다"
                 >
-                  <RefreshCw size={14} className="mr-1" />
-                  개인시간 동기화
+                  <FileText size={14} className="mr-1" />
+                  로그 보기
                 </button>
               </div>
             )}
@@ -1573,9 +1588,10 @@ const CoordinationTab = ({ onExchangeRequestCountChange, onRefreshExchangeCount 
         {showManageRoomModal && currentRoom && (
           <RoomManagementModal
             room={currentRoom}
-            onClose={closeManageRoomModal}
+            onClose={handleCloseManageRoomModal}
             updateRoom={updateRoom}
             deleteRoom={deleteRoom}
+            defaultTab={roomModalDefaultTab}
             onRoomUpdated={(updatedRoom) => {
               setCurrentRoom(updatedRoom);
               fetchMyRooms();

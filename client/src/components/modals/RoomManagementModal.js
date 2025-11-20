@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { X, Users, Settings, Trash2, GraduationCap } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { X, Users, Settings, Trash2, GraduationCap, FileText } from "lucide-react";
 import CustomAlertModal from './CustomAlertModal';
 import RoomInfoTab from './room/RoomInfoTab';
 import RoomMembersList from './room/RoomMembersList';
@@ -11,8 +11,9 @@ const RoomManagementModal = ({
   onRoomUpdated,
   updateRoom,
   deleteRoom,
+  defaultTab = "info",
 }) => {
-  const [activeTab, setActiveTab] = useState("info");
+  const [activeTab, setActiveTab] = useState(defaultTab);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     name: room?.name || "",
@@ -32,10 +33,154 @@ const RoomManagementModal = ({
     endTime: '13:00'
   });
 
+  // Get current user ID from Firebase auth
+  const getCurrentUserId = () => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return null;
+      return currentUser.uid;
+    } catch (error) {
+      return null;
+    }
+  };
+
   // CustomAlert 상태
   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
   const showAlert = (message) => setCustomAlert({ show: true, message });
   const closeAlert = () => setCustomAlert({ show: false, message: '' });
+
+  // 로그 관련 상태
+  const [logs, setLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [activeLogTab, setActiveLogTab] = useState('all');
+
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+
+  // 방장인지 확인
+  const currentUserId = getCurrentUserId();
+  const roomOwnerId = typeof room?.ownerId === 'object' ? room?.ownerId?._id : room?.ownerId;
+  const roomOwnerUid = room?.owner?.uid || room?.ownerId?.uid;
+  const isOwner = roomOwnerId === currentUserId || roomOwnerUid === currentUserId;
+
+  console.log('isOwner check:', { currentUserId, roomOwnerId, roomOwnerUid, isOwner, room });
+
+  // 로그 조회
+  const fetchLogs = async () => {
+    try {
+      setLogsLoading(true);
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+
+      const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${room._id}/logs`, {
+        headers: {
+          'Authorization': `Bearer ${await currentUser.getIdToken()}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.msg || '로그를 불러올 수 없습니다.');
+      }
+
+      setLogs(data.logs);
+    } catch (err) {
+      console.error('Fetch logs error:', err);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  // 로그 탭 선택 시 데이터 로드
+  useEffect(() => {
+    if (activeTab === 'logs' && logs.length === 0) {
+      fetchLogs();
+    }
+  }, [activeTab]);
+
+  // 로그 초기화
+  const clearLogs = async () => {
+    if (!window.confirm('로그를 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+      return;
+    }
+    
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+
+      const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${room._id}/clear-logs`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${await currentUser.getIdToken()}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.msg || '로그를 초기화할 수 없습니다.');
+      }
+
+      // 초기화 후 로그 목록 비우기
+      setLogs([]);
+      alert('로그가 초기화되었습니다.');
+    } catch (err) {
+      console.error('Clear logs error:', err);
+      alert(err.message || '로그 초기화 중 오류가 발생했습니다.');
+    }
+  };
+
+  const getActionLabel = (action) => {
+    const labels = {
+      auto_assign: '자동배정 실행',
+      slot_request: '자리 요청',
+      slot_yield: '자리 양보',
+      slot_swap: '자리 변경',
+      negotiation_start: '협상 시작',
+      negotiation_resolve: '협상 해결',
+      member_join: '멤버 입장',
+      member_leave: '멤버 퇴장',
+      member_kick: '멤버 강퇴',
+      room_create: '방 생성',
+      room_update: '방 설정 변경',
+      schedule_update: '일정 수정',
+      change_request: '변경 요청',
+      change_approve: '변경 승인',
+      change_reject: '변경 거절'
+    };
+    return labels[action] || action;
+  };
+
+  const getActionColor = (action) => {
+    const colors = {
+      auto_assign: 'bg-blue-100 text-blue-700',
+      slot_request: 'bg-yellow-100 text-yellow-700',
+      slot_yield: 'bg-green-100 text-green-700',
+      slot_swap: 'bg-purple-100 text-purple-700',
+      negotiation_start: 'bg-orange-100 text-orange-700',
+      negotiation_resolve: 'bg-emerald-100 text-emerald-700',
+      member_join: 'bg-green-100 text-green-700',
+      member_leave: 'bg-red-100 text-red-700',
+      member_kick: 'bg-red-100 text-red-700',
+      room_create: 'bg-indigo-100 text-indigo-700',
+      room_update: 'bg-cyan-100 text-cyan-700',
+      schedule_update: 'bg-pink-100 text-pink-700',
+      change_request: 'bg-blue-100 text-blue-700',
+      change_approve: 'bg-green-100 text-green-700',
+      change_reject: 'bg-red-100 text-red-700'
+    };
+    return colors[action] || 'bg-gray-100 text-gray-700';
+  };
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleString('ko-KR', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
   const handleUpdate = async () => {
     try {
@@ -133,17 +278,6 @@ const RoomManagementModal = ({
     }
   };
 
-  // Get current user ID from Firebase auth
-  const getCurrentUserId = () => {
-    try {
-      const currentUser = auth.currentUser;
-      if (!currentUser) return null;
-      return currentUser.uid;
-    } catch (error) {
-      return null;
-    }
-  };
-
   const renderInfoTab = () => (
     <RoomInfoTab
       room={room}
@@ -214,9 +348,134 @@ const RoomManagementModal = ({
     </div>
   );
 
+  const renderLogsTab = () => {
+    // 선택된 탭에 따라 로그 필터링
+    let filteredLogs = logs;
+    if (activeLogTab === 'auto_assign') {
+      filteredLogs = logs.filter(log => log.action === 'auto_assign');
+    } else if (activeLogTab === 'member') {
+      filteredLogs = logs.filter(log => ['member_join', 'member_leave', 'member_kick'].includes(log.action));
+    } else if (activeLogTab === 'slot') {
+      filteredLogs = logs.filter(log => ['slot_request', 'slot_yield', 'slot_swap'].includes(log.action));
+    } else if (activeLogTab === 'negotiation') {
+      filteredLogs = logs.filter(log => ['negotiation_start', 'negotiation_resolve'].includes(log.action));
+    } else if (activeLogTab === 'change') {
+      filteredLogs = logs.filter(log => ['change_request', 'change_approve', 'change_reject'].includes(log.action));
+    }
+
+    return (
+      <div className="space-y-4">
+        {/* 탭 버튼 */}
+        <div className="flex gap-2 overflow-x-auto pb-2 border-b">
+          <button
+            onClick={() => setActiveLogTab('all')}
+            className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+              activeLogTab === 'all'
+                ? 'bg-purple-600 text-white shadow-md'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            전체 ({logs.length})
+          </button>
+          <button
+            onClick={() => setActiveLogTab('member')}
+            className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+              activeLogTab === 'member'
+                ? 'bg-green-600 text-white shadow-md border-2 border-green-800'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            멤버 활동 ({logs.filter(log => ['member_join', 'member_leave', 'member_kick'].includes(log.action)).length})
+          </button>
+          <button
+            onClick={() => setActiveLogTab('auto_assign')}
+            className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+              activeLogTab === 'auto_assign'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            자동배정 ({logs.filter(log => log.action === 'auto_assign').length})
+          </button>
+          <button
+            onClick={() => setActiveLogTab('change')}
+            className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+              activeLogTab === 'change'
+                ? 'bg-purple-600 text-white shadow-md border-2 border-purple-800'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            변경 요청 ({logs.filter(log => ['change_request', 'change_approve', 'change_reject'].includes(log.action)).length})
+          </button>
+          <button
+            onClick={() => setActiveLogTab('slot')}
+            className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+              activeLogTab === 'slot'
+                ? 'bg-indigo-600 text-white shadow-md border-2 border-indigo-800'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            자리 관리 ({logs.filter(log => ['slot_request', 'slot_yield', 'slot_swap'].includes(log.action)).length})
+          </button>
+          <button
+            onClick={() => setActiveLogTab('negotiation')}
+            className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+              activeLogTab === 'negotiation'
+                ? 'bg-pink-600 text-white shadow-md border-2 border-pink-800'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            협상 ({logs.filter(log => ['negotiation_start', 'negotiation_resolve'].includes(log.action)).length})
+          </button>
+        </div>
+
+        {/* 로그 목록 */}
+        <div className="overflow-y-auto" style={{ minHeight: '400px', maxHeight: '400px' }}>
+          {logsLoading ? (
+            <div className="flex items-center justify-center" style={{ minHeight: '380px' }}>
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
+                <p className="mt-4 text-gray-500">로딩 중...</p>
+              </div>
+            </div>
+          ) : filteredLogs.length === 0 ? (
+            <div className="flex items-center justify-center text-gray-500" style={{ minHeight: '380px' }}>
+              {logs.length === 0 ? '활동 로그가 없습니다.' : '이 카테고리에 로그가 없습니다.'}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredLogs.map((log) => (
+                <div key={log._id} className="flex gap-3 p-4 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex-shrink-0">
+                    <span className={`inline-block px-3 py-1.5 text-xs font-semibold rounded-lg ${getActionColor(log.action)}`}>
+                      {getActionLabel(log.action)}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm text-gray-800">
+                      {log.userName}
+                    </div>
+                    {log.details && (
+                      <div className="text-sm text-gray-600 mt-1">
+                        {log.details}
+                      </div>
+                    )}
+                    <div className="text-xs text-gray-400 mt-1.5">
+                      {formatDateTime(log.createdAt)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden border border-gray-200">
         <div className="flex justify-between items-center p-5 border-b bg-slate-50">
           <h2 className="text-xl font-bold text-gray-800">
             방 관리: <span className="text-blue-600">{room?.name || ""}</span>
@@ -242,16 +501,6 @@ const RoomManagementModal = ({
             <Settings size={16} /> 방 정보
           </button>
           <button
-            onClick={() => setActiveTab("members")}
-            className={`flex-1 px-4 py-3 font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
-              activeTab === "members"
-                ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50 shadow-inner"
-                : "text-gray-500 hover:text-blue-600 hover:bg-slate-50"
-            }`}
-          >
-            <Users size={16} /> 멤버 관리 ({room.members?.length || 0})
-          </button>
-          <button
             onClick={() => setActiveTab("ai-learning")}
             className={`flex-1 px-4 py-3 font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
               activeTab === "ai-learning"
@@ -261,10 +510,33 @@ const RoomManagementModal = ({
           >
             <GraduationCap size={16} /> AI 학습
           </button>
+          <button
+            onClick={() => setActiveTab("logs")}
+            className={`flex-1 px-4 py-3 font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
+              activeTab === "logs"
+                ? "border-b-2 border-yellow-500 text-yellow-600 bg-yellow-50 shadow-inner"
+                : "text-gray-500 hover:text-yellow-600 hover:bg-slate-50"
+            }`}
+          >
+            <FileText size={16} /> 로그 보기
+          </button>
+          <button
+            onClick={() => setActiveTab("members")}
+            className={`flex-1 px-4 py-3 font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
+              activeTab === "members"
+                ? "border-b-2 border-blue-500 text-blue-600 bg-blue-50 shadow-inner"
+                : "text-gray-500 hover:text-blue-600 hover:bg-slate-50"
+            }`}
+          >
+            <Users size={16} /> 멤버 관리 ({room.members?.length || 0})
+          </button>
         </div>
 
         <div className="p-6 overflow-y-auto bg-white">
-          {activeTab === "info" ? renderInfoTab() : activeTab === "members" ? renderMembersTab() : renderAILearningTab()}
+          {activeTab === "info" && renderInfoTab()}
+          {activeTab === "ai-learning" && renderAILearningTab()}
+          {activeTab === "logs" && renderLogsTab()}
+          {activeTab === "members" && renderMembersTab()}
         </div>
 
         <div className="border-t p-4 flex justify-between items-center bg-slate-50">
@@ -275,6 +547,14 @@ const RoomManagementModal = ({
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium flex items-center gap-2 text-sm shadow-sm"
               >
                 <Trash2 size={16} /> 방 삭제
+              </button>
+            )}
+            {activeTab === "logs" && (
+              <button
+                onClick={clearLogs}
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium text-sm"
+              >
+                초기화
               </button>
             )}
           </div>

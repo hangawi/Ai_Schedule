@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Room = require('../models/room');
 const User = require('../models/user');
 const Event = require('../models/event');
+const ActivityLog = require('../models/ActivityLog');
 const { findOptimalSlots } = require('../services/schedulingAnalysisService');
 const schedulingAlgorithm = require('../services/schedulingAlgorithm');
 const { OWNER_COLOR, getAvailableColor } = require('../utils/colorUtils');
@@ -1725,5 +1726,93 @@ exports.forceResolveNegotiation = async (req, res) => {
       res.json({ success: true });
    } catch (error) {
       res.status(500).json({ msg: 'Server error' });
+   }
+};
+
+// 방장용 방 활동 로그 조회
+exports.getRoomLogs = async (req, res) => {
+   try {
+      const { roomId } = req.params;
+      const userId = req.user.id;  // MongoDB ObjectId string
+      const { page = 1, limit = 50 } = req.query;
+
+      const room = await Room.findById(roomId);
+      if (!room) {
+         return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+      }
+
+      // 방장인지 확인
+      const roomOwnerId = room.ownerId?.toString() || room.owner?.toString();
+      if (!roomOwnerId || roomOwnerId !== userId) {
+         return res.status(403).json({ msg: '방장만 로그를 조회할 수 있습니다.' });
+      }
+
+      // 초기화 시점 이후의 로그만 조회
+      const clearedAt = room.logsClearedAt?.owner;
+      console.log('Owner clearedAt:', clearedAt);
+      
+      const query = { roomId };
+      if (clearedAt) {
+         query.createdAt = { $gt: clearedAt };
+         console.log('Filtering logs after:', clearedAt);
+      }
+
+      const logs = await ActivityLog.find(query)
+         .sort({ createdAt: -1 })
+         .skip((page - 1) * limit)
+         .limit(parseInt(limit));
+
+      const total = await ActivityLog.countDocuments(query);
+
+      res.json({
+         logs,
+         roomName: room.name,
+         pagination: {
+            current: parseInt(page),
+            pages: Math.ceil(total / limit),
+            total
+         }
+      });
+   } catch (error) {
+      console.error('Get room logs error:', error);
+      res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+   }
+};
+
+// Clear room logs for owner
+exports.clearRoomLogs = async (req, res) => {
+   try {
+      const { roomId } = req.params;
+      const userId = req.user.id;
+
+      const room = await Room.findById(roomId);
+      if (!room) {
+         return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+      }
+
+      // 방장인지 확인
+      const roomOwnerId = room.ownerId?.toString() || room.owner?.toString();
+      if (!roomOwnerId || roomOwnerId !== userId) {
+         return res.status(403).json({ msg: '방장만 로그를 초기화할 수 있습니다.' });
+      }
+
+      // 방장의 초기화 시점 업데이트
+      if (!room.logsClearedAt) {
+         room.logsClearedAt = { owner: null, admin: null };
+      }
+      room.logsClearedAt.owner = new Date();
+      room.markModified('logsClearedAt');
+      await room.save();
+      
+      console.log('Owner cleared logs at:', room.logsClearedAt.owner);
+
+      res.json({ 
+         success: true, 
+         msg: '로그가 초기화되었습니다.',
+         clearedAt: room.logsClearedAt.owner
+      });
+   } catch (error) {
+      console.error('Clear room logs error:', error);
+      res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
    }
 };

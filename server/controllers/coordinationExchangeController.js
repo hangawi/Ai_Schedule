@@ -397,16 +397,28 @@ async function handleDateChange(req, res, room, memberData, params) {
                await room.save();
                await room.populate('timeSlots.user', '_id firstName lastName email');
 
-               // Log activity
+               // Log activity - include previous slot info
+               const prevSlot = requesterSlots[0];
+               const prevDate = new Date(prevSlot.date);
+               const prevMonth = prevDate.getUTCMonth() + 1;
+               const prevDateNum = prevDate.getUTCDate();
+               const prevTimeRange = `${prevSlot.startTime}-${requesterSlots[requesterSlots.length - 1].endTime}`;
+               const userName = memberData.user.firstName && memberData.user.lastName
+                  ? `${memberData.user.firstName} ${memberData.user.lastName}`
+                  : memberData.user.email;
+               
                await ActivityLog.logActivity(
                   room._id,
                   req.user.id,
-                  memberData.user.firstName && memberData.user.lastName
-                     ? `${memberData.user.firstName} ${memberData.user.lastName}`
-                     : memberData.user.email,
+                  userName,
                   'slot_swap',
-                  `${finalTargetMonth}월 ${targetDateNum}일 ${autoStartTime}-${autoEndTime}로 자동 배치`,
-                  { targetDate: `${finalTargetMonth}월 ${targetDateNum}일`, targetTime: `${autoStartTime}-${autoEndTime}` }
+                  `${userName}님: ${prevMonth}월 ${prevDateNum}일 ${prevTimeRange} → ${finalTargetMonth}월 ${targetDateNum}일 ${autoStartTime}-${autoEndTime}로 자동 배치`,
+                  { 
+                     prevDate: `${prevMonth}월 ${prevDateNum}일`, 
+                     prevTime: prevTimeRange,
+                     targetDate: `${finalTargetMonth}월 ${targetDateNum}일`, 
+                     targetTime: `${autoStartTime}-${autoEndTime}` 
+                  }
                );
 
                return res.json({
@@ -472,16 +484,33 @@ async function handleDateChange(req, res, room, memberData, params) {
             return '다른 사용자';
          });
 
-         // Log activity - change request
+         // Log activity - change request with requester's current slot info
+         const requesterName = memberData.user.firstName && memberData.user.lastName
+            ? `${memberData.user.firstName} ${memberData.user.lastName}`
+            : memberData.user.email;
+         
+         // Get requester's current slot info
+         const reqFirstSlot = requesterSlots[0];
+         const reqLastSlot = requesterSlots[requesterSlots.length - 1];
+         const reqDate = new Date(reqFirstSlot.date);
+         const reqMonth = reqDate.getUTCMonth() + 1;
+         const reqDay = reqDate.getUTCDate();
+         const reqTimeRange = `${reqFirstSlot.startTime}-${reqLastSlot.endTime}`;
+         
          await ActivityLog.logActivity(
             room._id,
             req.user.id,
-            memberData.user.firstName && memberData.user.lastName
-               ? `${memberData.user.firstName} ${memberData.user.lastName}`
-               : memberData.user.email,
+            requesterName,
             'change_request',
-            `${finalTargetMonth}월 ${targetDateNum}일 ${newStartTime}-${newEndTime} 변경 요청 (${conflictUsers.join(', ')}님에게)`,
-            { targetDate: `${finalTargetMonth}월 ${targetDateNum}일`, targetTime: `${newStartTime}-${newEndTime}`, targetUsers: conflictUsers }
+            `${requesterName}님(${reqMonth}월 ${reqDay}일 ${reqTimeRange})이 ${conflictUsers.join(', ')}님에게 ${finalTargetMonth}월 ${targetDateNum}일 ${newStartTime}-${newEndTime} 자리 요청`,
+            { 
+               prevDate: `${reqMonth}월 ${reqDay}일`, 
+               prevTime: reqTimeRange,
+               targetDate: `${finalTargetMonth}월 ${targetDateNum}일`, 
+               targetTime: `${newStartTime}-${newEndTime}`, 
+               targetUsers: conflictUsers, 
+               requester: requesterName 
+            }
          );
 
          return res.json({
@@ -623,16 +652,28 @@ async function handleDateChange(req, res, room, memberData, params) {
                   await room.save();
                   await room.populate('timeSlots.user', '_id firstName lastName email');
 
-                  // Log activity
+                  // Log activity - include previous slot info
+                  const prevSlot2 = requesterSlots[0];
+                  const prevDate2 = new Date(prevSlot2.date);
+                  const prevMonth2 = prevDate2.getUTCMonth() + 1;
+                  const prevDateNum2 = prevDate2.getUTCDate();
+                  const prevTimeRange2 = `${prevSlot2.startTime}-${requesterSlots[requesterSlots.length - 1].endTime}`;
+                  const userName2 = memberData.user.firstName && memberData.user.lastName
+                     ? `${memberData.user.firstName} ${memberData.user.lastName}`
+                     : memberData.user.email;
+                  
                   await ActivityLog.logActivity(
                      room._id,
                      req.user.id,
-                     memberData.user.firstName && memberData.user.lastName
-                        ? `${memberData.user.firstName} ${memberData.user.lastName}`
-                        : memberData.user.email,
+                     userName2,
                      'slot_swap',
-                     `${finalTargetMonth}월 ${targetDateNum}일 ${foundSlot.startTime}-${foundSlot.endTime}로 자동 배치`,
-                     { targetDate: `${finalTargetMonth}월 ${targetDateNum}일`, targetTime: `${foundSlot.startTime}-${foundSlot.endTime}` }
+                     `${userName2}님: ${prevMonth2}월 ${prevDateNum2}일 ${prevTimeRange2} → ${finalTargetMonth}월 ${targetDateNum}일 ${foundSlot.startTime}-${foundSlot.endTime}로 자동 배치`,
+                     { 
+                        prevDate: `${prevMonth2}월 ${prevDateNum2}일`, 
+                        prevTime: prevTimeRange2,
+                        targetDate: `${finalTargetMonth}월 ${targetDateNum}일`, 
+                        targetTime: `${foundSlot.startTime}-${foundSlot.endTime}` 
+                     }
                   );
 
                   return res.json({
@@ -738,16 +779,28 @@ async function handleDateChange(req, res, room, memberData, params) {
 
    const targetDateFormatted = `${finalTargetMonth}월 ${targetDateNum}일`;
 
-   // Log activity
+   // Log activity - include previous slot info
+   const prevSlot3 = requesterSlots[0];
+   const prevDate3 = new Date(prevSlot3.date);
+   const prevMonth3 = prevDate3.getUTCMonth() + 1;
+   const prevDateNum3 = prevDate3.getUTCDate();
+   const prevTimeRange3 = `${prevSlot3.startTime}-${requesterSlots[requesterSlots.length - 1].endTime}`;
+   const userName3 = memberData.user.firstName && memberData.user.lastName
+      ? `${memberData.user.firstName} ${memberData.user.lastName}`
+      : memberData.user.email;
+   
    await ActivityLog.logActivity(
       room._id,
       req.user.id,
-      memberData.user.firstName && memberData.user.lastName
-         ? `${memberData.user.firstName} ${memberData.user.lastName}`
-         : memberData.user.email,
+      userName3,
       'slot_swap',
-      `${targetDateFormatted} ${newStartTime}-${newEndTime}로 즉시 변경`,
-      { targetDate: targetDateFormatted, targetTime: `${newStartTime}-${newEndTime}` }
+      `${userName3}님: ${prevMonth3}월 ${prevDateNum3}일 ${prevTimeRange3} → ${targetDateFormatted} ${newStartTime}-${newEndTime}로 즉시 변경`,
+      { 
+         prevDate: `${prevMonth3}월 ${prevDateNum3}일`, 
+         prevTime: prevTimeRange3,
+         targetDate: targetDateFormatted, 
+         targetTime: `${newStartTime}-${newEndTime}` 
+      }
    );
 
    return res.json({
@@ -1641,21 +1694,33 @@ exports.smartExchange = async (req, res) => {
          await room.save();
          await room.populate('timeSlots.user', '_id firstName lastName email');
 
-         // Log activity
+         // Log activity - include previous slot info
          const requesterUser = memberData.user;
          const targetMonth = targetDate.getUTCMonth() + 1;
          const targetDateNum = targetDate.getUTCDate();
          const formattedDate = `${targetMonth}월 ${targetDateNum}일`;
-
+         
+         const prevSlot4 = allSlotsInBlock[0];
+         const prevDate4 = new Date(prevSlot4.date);
+         const prevMonth4 = prevDate4.getUTCMonth() + 1;
+         const prevDateNum4 = prevDate4.getUTCDate();
+         const prevTimeRange4 = `${prevSlot4.startTime}-${allSlotsInBlock[allSlotsInBlock.length - 1].endTime}`;
+         const userName4 = requesterUser.firstName && requesterUser.lastName
+            ? `${requesterUser.firstName} ${requesterUser.lastName}`
+            : requesterUser.email;
+         
          await ActivityLog.logActivity(
             room._id,
             req.user.id,
-            requesterUser.firstName && requesterUser.lastName
-               ? `${requesterUser.firstName} ${requesterUser.lastName}`
-               : requesterUser.email,
+            userName4,
             'slot_swap',
-            `${formattedDate} ${finalNewStartTime}-${finalNewEndTime}로 즉시 변경`,
-            { targetDate: formattedDate, targetTime: `${finalNewStartTime}-${finalNewEndTime}` }
+            `${userName4}님: ${prevMonth4}월 ${prevDateNum4}일 ${prevTimeRange4} → ${formattedDate} ${finalNewStartTime}-${finalNewEndTime}로 즉시 변경`,
+            { 
+               prevDate: `${prevMonth4}월 ${prevDateNum4}일`, 
+               prevTime: prevTimeRange4,
+               targetDate: formattedDate, 
+               targetTime: `${finalNewStartTime}-${finalNewEndTime}` 
+            }
          );
 
          return res.json({
@@ -1745,21 +1810,33 @@ exports.smartExchange = async (req, res) => {
             await room.save();
             await room.populate('timeSlots.user', '_id firstName lastName email');
 
-            // Log activity
+            // Log activity - include previous slot info
             const requesterUserAuto = memberData.user;
             const autoTargetMonth = targetDate.getUTCMonth() + 1;
             const autoTargetDateNum = targetDate.getUTCDate();
             const autoFormattedDate = `${autoTargetMonth}월 ${autoTargetDateNum}일`;
-
+            
+            const prevSlot5 = allSlotsInBlock[0];
+            const prevDate5 = new Date(prevSlot5.date);
+            const prevMonth5 = prevDate5.getUTCMonth() + 1;
+            const prevDateNum5 = prevDate5.getUTCDate();
+            const prevTimeRange5 = `${prevSlot5.startTime}-${allSlotsInBlock[allSlotsInBlock.length - 1].endTime}`;
+            const userName5 = requesterUserAuto.firstName && requesterUserAuto.lastName
+               ? `${requesterUserAuto.firstName} ${requesterUserAuto.lastName}`
+               : requesterUserAuto.email;
+            
             await ActivityLog.logActivity(
                room._id,
                req.user.id,
-               requesterUserAuto.firstName && requesterUserAuto.lastName
-                  ? `${requesterUserAuto.firstName} ${requesterUserAuto.lastName}`
-                  : requesterUserAuto.email,
+               userName5,
                'slot_swap',
-               `${autoFormattedDate} ${autoStartTime}-${autoEndTime}로 자동 배치`,
-               { targetDate: autoFormattedDate, targetTime: `${autoStartTime}-${autoEndTime}` }
+               `${userName5}님: ${prevMonth5}월 ${prevDateNum5}일 ${prevTimeRange5} → ${autoFormattedDate} ${autoStartTime}-${autoEndTime}로 자동 배치`,
+               { 
+                  prevDate: `${prevMonth5}월 ${prevDateNum5}일`, 
+                  prevTime: prevTimeRange5,
+                  targetDate: autoFormattedDate, 
+                  targetTime: `${autoStartTime}-${autoEndTime}` 
+               }
             );
 
             return res.json({
@@ -1817,7 +1894,7 @@ exports.smartExchange = async (req, res) => {
 
       console.log('✅ Yield request created:', createdRequest._id);
 
-      // Log activity - change request (yield)
+      // Log activity - change request (yield) with requester's current slot info
       const requesterUserYield = memberData.user;
       const yieldMonth = targetDate.getUTCMonth() + 1;
       const yieldDay = targetDate.getUTCDate();
@@ -1827,14 +1904,29 @@ exports.smartExchange = async (req, res) => {
          ? `${requesterUserYield.firstName} ${requesterUserYield.lastName}`
          : requesterUserYield.email;
       const targetUserName = `${occupiedSlot.user.firstName} ${occupiedSlot.user.lastName}`;
+      
+      // Get requester's current slot info
+      const yieldFirstSlot = allSlotsInBlock[0];
+      const yieldLastSlot = allSlotsInBlock[allSlotsInBlock.length - 1];
+      const yieldPrevDate = new Date(yieldFirstSlot.date);
+      const yieldPrevMonth = yieldPrevDate.getUTCMonth() + 1;
+      const yieldPrevDay = yieldPrevDate.getUTCDate();
+      const yieldPrevTimeRange = `${yieldFirstSlot.startTime}-${yieldLastSlot.endTime}`;
 
       await ActivityLog.logActivity(
          room._id,
          req.user.id,
          requesterNameYield,
          'change_request',
-         `${requesterNameYield}님이 ${targetUserName}님에게 ${yieldDateFormatted} ${finalNewStartTime}-${finalNewEndTime} 양보 요청`,
-         { targetDate: yieldDateFormatted, targetTime: `${finalNewStartTime}-${finalNewEndTime}`, requester: requesterNameYield, targetUser: targetUserName }
+         `${requesterNameYield}님(${yieldPrevMonth}월 ${yieldPrevDay}일 ${yieldPrevTimeRange})이 ${targetUserName}님에게 ${yieldDateFormatted} ${finalNewStartTime}-${finalNewEndTime} 양보 요청`,
+         { 
+            prevDate: `${yieldPrevMonth}월 ${yieldPrevDay}일`, 
+            prevTime: yieldPrevTimeRange,
+            targetDate: yieldDateFormatted, 
+            targetTime: `${finalNewStartTime}-${finalNewEndTime}`, 
+            requester: requesterNameYield, 
+            targetUser: targetUserName 
+         }
       );
 
       res.json({
