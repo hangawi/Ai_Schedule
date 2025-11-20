@@ -307,9 +307,22 @@ const ScheduleGridSelector = ({
                 return false;
             });
 
-            // 모든 개인 시간을 배열에 추가
-            if (personalSlots.length > 0) {
-                assignedEvents.push(...personalSlots.map(p => ({ ...p, type: 'personal' })));
+            // ⭐ 수면시간 필터링: 기본 모드(9-18시)에서는 수면시간 제외
+            const filteredPersonalSlots = personalSlots.filter(p => {
+                // 24시간 모드이면 모든 시간 표시
+                if (showFullDay) return true;
+
+                // 기본 모드에서는 수면시간 제외 (제목에 '수면' 포함 또는 22:00 이후 시작)
+                const isSleepTime = p.title?.includes('수면') ||
+                                   p.name?.includes('수면') ||
+                                   (p.startTime && timeToMinutes(p.startTime) >= 22 * 60);
+
+                return !isSleepTime;
+            });
+
+            // 모든 개인 시간을 배열에 추가 (수면시간 필터링 적용)
+            if (filteredPersonalSlots.length > 0) {
+                assignedEvents.push(...filteredPersonalSlots.map(p => ({ ...p, type: 'personal' })));
             } else {
                 // 기본 일정 확인 - 시간 범위 내에 있는지 확인
                 const scheduleSlot = schedule.find(s => {
@@ -653,7 +666,17 @@ const ScheduleGridSelector = ({
         ...p,
         // 개인시간에 색상이 없으면 보라색 할당
         color: p.color || '#8b5cf6'
-      }));
+      })).filter(p => {
+        // ⭐ 병합 모드에서도 기본 모드일 때는 수면시간 제외
+        if (showFullDay) return true; // 24시간 모드이면 모두 표시
+
+        // 기본 모드에서는 수면시간 제외 (제목에 '수면' 포함 또는 22:00 이후 시작)
+        const isSleepTime = p.title?.includes('수면') ||
+                           p.name?.includes('수면') ||
+                           (p.startTime && timeToMinutes(p.startTime) >= 22 * 60);
+
+        return !isSleepTime;
+      });
 
       // 2. schedule (defaultSchedule)에서 해당 요일 필터링 - 선호도를 색상으로 표시
       const priorityColorMap = {
