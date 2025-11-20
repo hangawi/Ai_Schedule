@@ -19,6 +19,7 @@ router.get('/activities', auth, adminAuth, adminController.getRecentActivities);
 
 // 회원 관리
 router.get('/users', auth, adminAuth, adminController.getAllUsers);
+router.get('/users/:userId', auth, adminAuth, adminController.getUserById);
 router.delete('/users/:userId', auth, adminAuth, adminController.deleteUser);
 router.put('/users/:userId/promote', auth, adminAuth, adminController.promoteUser);
 router.put('/users/:userId/demote', auth, adminAuth, adminController.demoteUser);
@@ -28,5 +29,6 @@ router.get('/rooms', auth, adminAuth, adminController.getAllRooms);
 router.delete('/rooms/:roomId', auth, adminAuth, adminController.deleteRoom);
 router.get('/rooms/:roomId/logs', auth, adminAuth, adminController.getRoomLogs);
 router.delete('/rooms/:roomId/logs', auth, adminAuth, adminController.clearRoomLogs);
+router.delete('/rooms/:roomId/logs/user/:userId', auth, adminAuth, adminController.clearUserLogs);
 
 module.exports = router;

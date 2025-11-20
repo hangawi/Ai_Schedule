@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Search, Trash2, RefreshCw, Users, Clock, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Building2, Search, Trash2, RefreshCw, Users, Clock, ChevronDown, ChevronUp, X, FileText } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
+import MemberLogsModal from '../modals/MemberLogsModal';
 
 const AdminRoomManagement = () => {
   const [rooms, setRooms] = useState([]);
@@ -12,6 +13,10 @@ const AdminRoomManagement = () => {
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [activeLogTab, setActiveLogTab] = useState('all');
+  const [selectedMemberForLogs, setSelectedMemberForLogs] = useState(null);
+  const [roomMembers, setRoomMembers] = useState([]);
+  const [roomMembersWithUserInfo, setRoomMembersWithUserInfo] = useState([]);
+  const [modalTab, setModalTab] = useState('logs'); // 'logs' 또는 'members'
 
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -79,7 +84,7 @@ const AdminRoomManagement = () => {
     }
   };
 
-  const fetchLogs = async (roomId) => {
+  const fetchLogs = async (roomId, roomObj = null) => {
     try {
       setLogsLoading(true);
       const currentUser = auth.currentUser;
@@ -98,10 +103,63 @@ const AdminRoomManagement = () => {
 
       setLogs(data.logs);
       setSelectedRoom({ id: roomId, name: data.roomName });
+
+      // 방 객체가 전달되었으면 멤버 정보 사용
+      if (roomObj && roomObj.members) {
+        console.log('Room members from roomObj:', roomObj.members);
+        setRoomMembers(roomObj.members);
+        // 사용자 정보 가져오기
+        await fetchMembersUserInfo(roomObj.members);
+      } else {
+        // 방 객체가 없으면 rooms 배열에서 찾기
+        const foundRoom = rooms.find(r => r._id === roomId);
+        if (foundRoom && foundRoom.members) {
+          console.log('Room members from foundRoom:', foundRoom.members);
+          setRoomMembers(foundRoom.members);
+          // 사용자 정보 가져오기
+          await fetchMembersUserInfo(foundRoom.members);
+        }
+      }
     } catch (err) {
       alert(err.message);
     } finally {
       setLogsLoading(false);
+    }
+  };
+
+  const fetchMembersUserInfo = async (members) => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+
+      // 각 멤버의 userId로 사용자 정보 가져오기
+      const userInfoPromises = members.map(async (member) => {
+        const userId = typeof member.user === 'string' ? member.user : member.user?._id;
+        if (!userId) return { ...member, userInfo: null };
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}`, {
+            headers: {
+              'Authorization': `Bearer ${await currentUser.getIdToken()}`
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            return { ...member, userInfo: data.user };
+          } else {
+            return { ...member, userInfo: null };
+          }
+        } catch (err) {
+          console.error(`Failed to fetch user info for ${userId}:`, err);
+          return { ...member, userInfo: null };
+        }
+      });
+
+      const membersWithUserInfo = await Promise.all(userInfoPromises);
+      setRoomMembersWithUserInfo(membersWithUserInfo);
+    } catch (err) {
+      console.error('Failed to fetch members user info:', err);
     }
   };
 
@@ -268,7 +326,7 @@ const AdminRoomManagement = () => {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => fetchLogs(room._id)}
+                      onClick={() => fetchLogs(room._id, room)}
                       className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
                     >
                       로그 보기
@@ -320,6 +378,10 @@ const AdminRoomManagement = () => {
                   setSelectedRoom(null);
                   setLogs([]);
                   setActiveLogTab('all');
+                  setModalTab('logs');
+                  setRoomMembers([]);
+                  setRoomMembersWithUserInfo([]);
+                  setSelectedMemberForLogs(null);
                 }}
                 className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-200"
               >
@@ -327,8 +389,34 @@ const AdminRoomManagement = () => {
               </button>
             </div>
 
-            {/* 탭 버튼 */}
-            <div className="flex gap-2 px-5 pt-4 pb-2 overflow-x-auto border-b">
+            {/* 모달 탭 (로그/멤버) */}
+            <div className="flex gap-2 px-5 pt-4 border-b bg-gray-50">
+              <button
+                onClick={() => setModalTab('logs')}
+                className={`px-6 py-3 font-semibold text-sm transition-all ${
+                  modalTab === 'logs'
+                    ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
+                    : 'text-gray-500 hover:text-blue-600'
+                }`}
+              >
+                활동 로그
+              </button>
+              <button
+                onClick={() => setModalTab('members')}
+                className={`px-6 py-3 font-semibold text-sm transition-all ${
+                  modalTab === 'members'
+                    ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
+                    : 'text-gray-500 hover:text-blue-600'
+                }`}
+              >
+                멤버 목록 ({roomMembers.length})
+              </button>
+            </div>
+
+            {/* 로그 탭의 하위 탭 버튼 */}
+            {modalTab === 'logs' && (
+              <div className="flex gap-2 px-5 pt-4 pb-2 overflow-x-auto border-b">
+
               <button
                 onClick={() => setActiveLogTab('all')}
                 className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
@@ -397,10 +485,13 @@ const AdminRoomManagement = () => {
                 <Trash2 size={16} className="inline mr-1" />
                 초기화
               </button>
-            </div>
+              </div>
+            )}
 
+            {/* 컨텐츠 영역 */}
             <div className="flex-1 overflow-y-auto p-5" style={{ minHeight: '560px', maxHeight: '560px' }}>
-              {logsLoading ? (
+              {modalTab === 'logs' ? (
+                logsLoading ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
                 </div>
@@ -453,10 +544,74 @@ const AdminRoomManagement = () => {
                     ))}
                   </div>
                 );
-              })()}
+              })()
+              ) : (
+                <div className="space-y-3">
+                  {roomMembersWithUserInfo.length === 0 ? (
+                    <div className="flex items-center justify-center text-gray-500" style={{ minHeight: '520px' }}>
+                      멤버 정보를 불러오는 중...
+                    </div>
+                  ) : (
+                    roomMembersWithUserInfo.map((member, index) => {
+                      const userData = member.userInfo;
+                      if (!userData) return null;
+
+                      const memberId = userData._id?.toString() || userData.id?.toString();
+                      const displayName =
+                        userData.fullName ||
+                        `${userData.firstName || ''} ${userData.lastName || ''}`.trim() ||
+                        userData.name ||
+                        "이름 정보 없음";
+                      const displayEmail = userData.email || "이메일 정보 없음";
+                      const displayInitial = (userData.firstName || userData.name || "U")
+                        .charAt(0)
+                        .toUpperCase();
+
+                      return (
+                        <div
+                          key={memberId || index}
+                          className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex items-center gap-3 flex-1">
+                            <div className="w-12 h-12 rounded-full bg-blue-200 flex items-center justify-center text-blue-700 font-bold text-lg">
+                              {displayInitial}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-semibold text-gray-800">{displayName}</p>
+                              <p className="text-sm text-gray-500">{displayEmail}</p>
+                            </div>
+                            <button
+                              onClick={() => setSelectedMemberForLogs({
+                                id: memberId,
+                                name: displayName
+                              })}
+                              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium text-sm flex items-center gap-2 transition-colors shadow-sm"
+                              title="활동 로그 보기"
+                            >
+                              <FileText size={16} />
+                              로그 보기
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
+      )}
+
+      {/* 멤버 로그 모달 */}
+      {selectedMemberForLogs && (
+        <MemberLogsModal
+          roomId={selectedRoom?.id}
+          memberId={selectedMemberForLogs.id}
+          memberName={selectedMemberForLogs.name}
+          onClose={() => setSelectedMemberForLogs(null)}
+          isAdmin={true}
+        />
       )}
     </div>
   );

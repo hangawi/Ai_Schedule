@@ -463,3 +463,49 @@ exports.getRecentActivities = async (req, res) => {
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
+
+// 특정 사용자 정보 조회
+exports.getUserById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId)
+      .select('firstName lastName email fullName name firebaseUid');
+
+    if (!user) {
+      return res.status(404).json({ msg: '사용자를 찾을 수 없습니다.' });
+    }
+
+    res.json({ user });
+  } catch (error) {
+    console.error('Get user by ID error:', error);
+    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+  }
+};
+
+// 특정 사용자의 로그만 삭제
+exports.clearUserLogs = async (req, res) => {
+  try {
+    const { roomId, userId } = req.params;
+
+    // 방이 존재하는지 확인
+    const room = await Room.findById(roomId);
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    // 해당 사용자의 로그만 삭제
+    const result = await ActivityLog.deleteMany({
+      roomId: roomId,
+      userId: userId
+    });
+
+    res.json({
+      msg: `${result.deletedCount}개의 로그가 삭제되었습니다.`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('Clear user logs error:', error);
+    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+  }
+};

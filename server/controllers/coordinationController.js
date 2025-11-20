@@ -1806,13 +1806,46 @@ exports.clearRoomLogs = async (req, res) => {
       
       console.log('Owner cleared logs at:', room.logsClearedAt.owner);
 
-      res.json({ 
-         success: true, 
+      res.json({
+         success: true,
          msg: '로그가 초기화되었습니다.',
          clearedAt: room.logsClearedAt.owner
       });
    } catch (error) {
       console.error('Clear room logs error:', error);
+      res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+   }
+};
+
+// 특정 사용자의 로그만 삭제 (방장 전용)
+exports.clearUserLogs = async (req, res) => {
+   try {
+      const { roomId, userId } = req.params;
+      const currentUserId = req.user.id;
+
+      // 방 존재 확인
+      const room = await Room.findById(roomId);
+      if (!room) {
+         return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+      }
+
+      // 방장 권한 확인
+      if (room.ownerId.toString() !== currentUserId) {
+         return res.status(403).json({ msg: '방장만 로그를 삭제할 수 있습니다.' });
+      }
+
+      // 해당 사용자의 로그만 삭제
+      const result = await ActivityLog.deleteMany({
+         roomId: roomId,
+         userId: userId
+      });
+
+      res.json({
+         msg: `${result.deletedCount}개의 로그가 삭제되었습니다.`,
+         deletedCount: result.deletedCount
+      });
+   } catch (error) {
+      console.error('Clear user logs error:', error);
       res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
    }
 };
