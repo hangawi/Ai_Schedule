@@ -4,7 +4,6 @@ import DashboardTab from '../tabs/DashboardTab';
 import ProposalsTab from '../tabs/ProposalsTab';
 import EventsTab from '../tabs/EventsTab';
 import AgentTab from '../tabs/AgentTab';
-import CoordinationTab from '../tabs/CoordinationTab';
 
 const MainContent = ({
   activeTab,
