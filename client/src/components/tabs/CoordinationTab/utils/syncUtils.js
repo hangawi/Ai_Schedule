@@ -14,7 +14,6 @@ import { DAY_OF_WEEK_MAP } from '../constants';
  */
 export const syncOwnerPersonalTimes = async (currentRoom, user, fetchRoomDetails, showAlert) => {
   if (!currentRoom || !isRoomOwner(user, currentRoom)) {
-    showAlert('방장만 개인시간을 동기화할 수 있습니다.');
     return;
   }
 
@@ -26,14 +25,20 @@ export const syncOwnerPersonalTimes = async (currentRoom, user, fetchRoomDetails
     const roomData = await coordinationService.fetchRoomDetails(currentRoom._id);
     const existingSettings = roomData.settings || { roomExceptions: [] };
 
-    // 기존의 방장 연동 예외들 제거 (isSynced: true인 것들)
-    const nonSyncedExceptions = existingSettings.roomExceptions.filter(ex => !ex.isSynced);
+    // 기존의 방장 연동 예외들 모두 제거
+    // - isSynced: true인 것들
+    // - name에 "(방장)"이 포함된 것들 (이전 버전에서 추가된 것)
+    const nonSyncedExceptions = existingSettings.roomExceptions.filter(ex => {
+      const hasIsSynced = ex.isSynced === true;
+      const hasOwnerInName = ex.name && ex.name.includes('(방장)');
+      return !hasIsSynced && !hasOwnerInName;
+    });
 
-    // 새로운 방장 시간표 예외들 생성 (불가능한 시간만 추가)
+    // 새로운 방장 시간표 예외들 생성
     const syncedExceptions = [];
 
-    // defaultSchedule(가능한 시간)은 roomExceptions에 추가하지 않음
-    // roomExceptions는 금지 시간이므로
+    // defaultSchedule은 roomExceptions에 추가하지 않음
+    // 대신 ownerOriginalSchedule로 WeekView에서 렌더링 처리됨
 
     // scheduleExceptions을 roomExceptions으로 변환 (시간대별 병합)
     const scheduleExceptionGroups = {};
@@ -186,9 +191,10 @@ export const syncOwnerPersonalTimes = async (currentRoom, user, fetchRoomDetails
     // 현재 방 데이터 새로고침
     await fetchRoomDetails(currentRoom._id);
 
-    showAlert(`방장 개인시간이 성공적으로 동기화되었습니다! (${syncedExceptions.length}개 항목)`);
+    // Silent sync - no alert
 
   } catch (err) {
-    showAlert(`개인시간 동기화에 실패했습니다: ${err.message}`);
+    // Silent error handling
+    console.error('개인시간 동기화 실패:', err.message);
   }
 };

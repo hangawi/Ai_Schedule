@@ -29,7 +29,7 @@ const TimetableControls = ({
         </h3>
         <TravelModeButtons
           selectedMode={travelMode}
-          onModeChange={onTravelModeChange}
+          onModeChange={onTravelModeChange || (() => {})}
           disabled={!currentRoom || !currentRoom.timeSlots || currentRoom.timeSlots.length === 0}
         />
         {isTravelCalculating && (

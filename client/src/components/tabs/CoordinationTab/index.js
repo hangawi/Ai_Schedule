@@ -1,11 +1,11 @@
 // CoordinationTab - Main component (Refactored)
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { auth } from '../../../firebase';
-import { useCoordination } from '../../../contexts/CoordinationContext';
+import { auth } from '../../../config/firebaseConfig';
+import { useCoordination } from '../../../hooks/useCoordination';
 import { useCoordinationModals } from '../../../hooks/useCoordinationModals';
 import { useTravelMode } from '../../../hooks/useTravelMode';
-import coordinationService from '../../../services/coordinationService';
+import { coordinationService } from '../../../services/coordinationService';
 
 // Utils
 import { translateEnglishDays } from '../../../utils';
@@ -21,26 +21,26 @@ import {
 } from '../../../utils/coordinationHandlers';
 
 // Components
-import TimetableGrid from '../../coordination/TimetableGrid';
+import TimetableGrid from '../../timetable/TimetableGrid';
 import CoordinationCalendarView from '../../calendar/CoordinationCalendarView';
 import CoordinationDetailGrid from '../../calendar/CoordinationDetailGrid';
 import MemberList from '../../coordination/MemberList';
-import AutoSchedulerPanel from '../../coordination/AutoSchedulerPanel';
+import AutoSchedulerPanel from '../../scheduler/AutoSchedulerPanel';
 import NegotiationSection from '../../coordination/NegotiationSection';
 
 // Modals
-import RoomCreationModal from '../../coordination/RoomCreationModal';
-import RoomJoinModal from '../../coordination/RoomJoinModal';
-import RoomManagementModal from '../../coordination/RoomManagementModal';
-import AssignSlotModal from '../../coordination/AssignSlotModal';
-import RequestSlotModal from '../../coordination/RequestSlotModal';
-import ChangeRequestModal from '../../coordination/ChangeRequestModal';
-import CustomAlertModal from '../../coordination/CustomAlertModal';
-import NotificationModal from '../../coordination/NotificationModal';
-import NegotiationModal from '../../coordination/NegotiationModal';
-import NegotiationConflictModal from '../../coordination/NegotiationConflictModal';
-import MemberStatsModal from '../../coordination/MemberStatsModal';
-import MemberScheduleModal from '../../coordination/MemberScheduleModal';
+import RoomCreationModal from '../../modals/RoomCreationModal';
+import RoomJoinModal from '../../modals/RoomJoinModal';
+import RoomManagementModal from '../../modals/RoomManagementModal';
+import AssignSlotModal from '../../modals/AssignSlotModal';
+import RequestSlotModal from '../../modals/RequestSlotModal';
+import ChangeRequestModal from '../../modals/ChangeRequestModal';
+import CustomAlertModal from '../../modals/CustomAlertModal';
+import NotificationModal from '../../modals/NotificationModal';
+import NegotiationModal from '../../modals/NegotiationModal';
+import NegotiationConflictModal from '../../modals/NegotiationConflictModal';
+import MemberStatsModal from '../../modals/MemberStatsModal';
+import MemberScheduleModal from '../../modals/MemberScheduleModal';
 
 // Local modules
 import { syncOwnerPersonalTimes } from './utils/syncUtils';
@@ -58,7 +58,6 @@ import {
 } from './handlers/requestHandlers';
 import {
   RoomHeader,
-  RoomActions,
   TimetableControls,
   RequestSection,
   RoomList,
@@ -71,17 +70,17 @@ import {
 } from './components';
 
 const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
+  // Custom hooks - order matters for dependencies
+  const { customAlert, showAlert, closeAlert } = useAlertState();
+  const { sentRequests, receivedRequests, setSentRequests, setReceivedRequests, loadSentRequests, loadReceivedRequests } = useRequests(user);
+
   const {
     myRooms, currentRoom, isLoading, error,
     setCurrentRoom, fetchMyRooms, fetchRoomDetails,
     createRoom, joinRoom, updateRoom, deleteRoom,
     submitTimeSlots, assignTimeSlot, removeTimeSlot,
     createRequest, cancelRequest, handleRequest
-  } = useCoordination();
-
-  // Custom hooks
-  const { customAlert, showAlert, closeAlert } = useAlertState();
-  const { sentRequests, receivedRequests, setSentRequests, setReceivedRequests, loadSentRequests, loadReceivedRequests } = useRequests(user);
+  } = useCoordination(user?.id, onExchangeRequestCountChange, loadSentRequests, showAlert);
   const { roomExchangeCounts, setRoomExchangeCounts, loadRoomExchangeCounts, getRoomRequestCount } = useRoomExchangeCounts(user, myRooms, receivedRequests);
 
   const {
@@ -123,9 +122,15 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
   // Travel mode
   const {
-    travelMode, travelError, isTravelCalculating, ownerScheduleCache,
-    getCurrentScheduleData, handleTravelModeChange
-  } = useTravelMode(currentRoom, user);
+    travelMode,
+    handleModeChange: handleTravelModeChange,
+    isCalculating: isTravelCalculating,
+    error: travelError,
+    getCurrentScheduleData
+  } = useTravelMode(currentRoom);
+
+  // 방장 시간표 정보 캐시
+  const [ownerScheduleCache, setOwnerScheduleCache] = useState(null);
 
   // Additional states
   const [roomModalDefaultTab, setRoomModalDefaultTab] = useState('info');
@@ -143,9 +148,22 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   // Sync owner personal times
   useEffect(() => {
     if (currentRoom && user) {
-      syncOwnerPersonalTimes(currentRoom, user, setCurrentRoom);
+      syncOwnerPersonalTimes(currentRoom, user, fetchRoomDetails, showAlert);
     }
-  }, [currentRoom?._id, user?.personalTimes]);
+  }, [currentRoom?._id, user?.personalTimes, fetchRoomDetails, showAlert]);
+
+  // 방장 시간표 정보 캐시 업데이트
+  useEffect(() => {
+    if (currentRoom?.owner?.defaultSchedule) {
+      setOwnerScheduleCache({
+        defaultSchedule: currentRoom.owner.defaultSchedule,
+        scheduleExceptions: currentRoom.owner.scheduleExceptions,
+        personalTimes: currentRoom.owner.personalTimes
+      });
+    } else {
+      setOwnerScheduleCache(null);
+    }
+  }, [currentRoom]);
 
   // Room navigation event handlers
   useEffect(() => {
@@ -181,7 +199,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   useEffect(() => {
     if (!onExchangeRequestCountChange) return;
     const count = currentRoom
-      ? receivedRequests.filter(req => req.status === 'pending' && req.roomId === currentRoom._id).length
+      ? receivedRequests.filter(req => req.status === 'pending' && req.roomId === currentRoom?._id).length
       : receivedRequests.filter(req => req.status === 'pending').length;
     onExchangeRequestCountChange(count);
   }, [currentRoom, receivedRequests, onExchangeRequestCountChange]);
@@ -337,9 +355,9 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   const executeDeleteAllSlots = async () => {
     if (!currentRoom?._id) return;
     try {
-      await coordinationService.deleteAllSlots(currentRoom._id);
-      await fetchRoomDetails(currentRoom._id);
-      showAlert('모든 시간표가 삭제되었습니다.');
+      const updatedRoom = await coordinationService.deleteAllTimeSlots(currentRoom._id);
+      setCurrentRoom(updatedRoom);
+      showAlert('시간표가 모두 삭제되었습니다.');
     } catch (error) {
       showAlert(`시간표 삭제에 실패했습니다: ${error.message}`, 'error');
     }
@@ -439,10 +457,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           isOwner={isOwner}
           onManageRoom={openManageRoomModal}
           onOpenLogs={openLogsModal}
-        />
-
-        <RoomActions
-          isOwner={isOwner}
           selectedSlots={selectedSlots}
           onSubmitSlots={handleSubmitSlots}
           onBackToRoomList={handleBackToRoomList}

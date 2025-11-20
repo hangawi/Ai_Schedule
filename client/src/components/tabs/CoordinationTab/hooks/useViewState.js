@@ -9,6 +9,7 @@ import {
   INITIAL_SCHEDULE_OPTIONS
 } from '../constants';
 import { getViewMode, saveViewMode } from '../../../../utils/coordinationModeUtils';
+import { getCurrentWeekMonday } from '../../../../utils/coordinationUtils';
 
 /**
  * Custom hook for managing view-related states
@@ -38,6 +39,9 @@ export const useViewState = () => {
 
   // Schedule options
   const [scheduleOptions, setScheduleOptions] = useState(INITIAL_SCHEDULE_OPTIONS);
+
+  // Week navigation
+  const [currentWeekStartDate, setCurrentWeekStartDate] = useState(() => getCurrentWeekMonday());
 
   // View mode handlers
   const handleSetViewMode = useCallback((mode) => {
@@ -79,6 +83,10 @@ export const useViewState = () => {
     setSelectedSlots([]);
   }, []);
 
+  const handleWeekChange = useCallback((date) => {
+    setCurrentWeekStartDate(date);
+  }, []);
+
   return {
     // Calendar view
     viewMode,
@@ -118,6 +126,10 @@ export const useViewState = () => {
 
     // Schedule options
     scheduleOptions,
-    setScheduleOptions
+    setScheduleOptions,
+
+    // Week navigation
+    currentWeekStartDate,
+    handleWeekChange
   };
 };

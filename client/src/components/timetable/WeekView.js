@@ -110,7 +110,6 @@ const WeekView = ({
 
       const isInRange = timeMinutes >= startMinutes && timeMinutes < endMinutes;
 
-
       return isInRange;
     });
 

@@ -95,8 +95,8 @@ const ReceivedRequestsView = ({
   handleRequestWithUpdate,
   handleCancelRequest
 }) => {
-  const pendingReceived = receivedRequests.filter(req => req.status === 'pending' && req.roomId === currentRoom._id);
-  const processedReceived = receivedRequests.filter(req => req.status !== 'pending' && req.roomId === currentRoom._id);
+  const pendingReceived = receivedRequests.filter(req => req.status === 'pending' && req.roomId === currentRoom?._id);
+  const processedReceived = receivedRequests.filter(req => req.status !== 'pending' && req.roomId === currentRoom?._id);
 
   return (
     <div>
@@ -240,7 +240,7 @@ const SentRequestsView = ({
   setExpandedSections,
   handleCancelRequest
 }) => {
-  const currentRoomSentRequests = sentRequests.filter(req => req.roomId === currentRoom._id);
+  const currentRoomSentRequests = sentRequests.filter(req => req.roomId === currentRoom?._id);
   const pendingRequests = currentRoomSentRequests.filter(req => req.status === 'pending');
   const processedRequests = currentRoomSentRequests.filter(req => req.status !== 'pending');
 
