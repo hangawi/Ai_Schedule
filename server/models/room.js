@@ -357,6 +357,17 @@ const RoomSchema = new mongoose.Schema({
       type: Date,
       default: null
     }
+  },
+  // 멤버별 로그 초기화 시점 - 방장과 관리자 각각 저장
+  memberLogsClearedAt: {
+    owner: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {}
+    },
+    admin: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {}
+    }
   }
 }, {
   timestamps: true

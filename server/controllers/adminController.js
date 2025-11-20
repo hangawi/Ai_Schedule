@@ -305,22 +305,32 @@ exports.getRoomLogs = async (req, res) => {
     // 관리자 초기화 시점 이후의 로그만 조회
     const clearedAt = room.logsClearedAt?.admin;
     console.log('Admin clearedAt:', clearedAt);
-    
+
     const query = { roomId };
     if (clearedAt) {
       query.createdAt = { $gt: clearedAt };
       console.log('Filtering logs after:', clearedAt);
     }
 
-    const logs = await ActivityLog.find(query)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
+    const allLogs = await ActivityLog.find(query)
+      .sort({ createdAt: -1 });
 
-    const total = await ActivityLog.countDocuments(query);
+    // 멤버별 초기화 시점도 필터링
+    const memberClearedAt = room.memberLogsClearedAt?.admin || {};
+    const filteredLogs = allLogs.filter(log => {
+      const userClearedAt = memberClearedAt[log.userId];
+      if (userClearedAt && log.createdAt <= userClearedAt) {
+        return false; // 이 멤버의 로그는 관리자가 초기화함
+      }
+      return true;
+    });
+
+    // 페이지네이션 적용
+    const total = filteredLogs.length;
+    const paginatedLogs = filteredLogs.slice((page - 1) * limit, page * limit);
 
     res.json({
-      logs,
+      logs: paginatedLogs,
       roomName: room.name,
       pagination: {
         current: parseInt(page),
@@ -483,7 +493,7 @@ exports.getUserById = async (req, res) => {
   }
 };
 
-// 특정 사용자의 로그만 삭제
+// 특정 사용자의 로그만 삭제 (관리자용 - 타임스탬프 방식)
 exports.clearUserLogs = async (req, res) => {
   try {
     const { roomId, userId } = req.params;
@@ -494,15 +504,23 @@ exports.clearUserLogs = async (req, res) => {
       return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
     }
 
-    // 해당 사용자의 로그만 삭제
-    const result = await ActivityLog.deleteMany({
-      roomId: roomId,
-      userId: userId
-    });
+    // 관리자의 멤버별 초기화 시점 업데이트 (실제 삭제 대신)
+    if (!room.memberLogsClearedAt) {
+      room.memberLogsClearedAt = { owner: {}, admin: {} };
+    }
+    if (!room.memberLogsClearedAt.admin) {
+      room.memberLogsClearedAt.admin = {};
+    }
+    room.memberLogsClearedAt.admin[userId] = new Date();
+    room.markModified('memberLogsClearedAt');
+    await room.save();
+
+    console.log('Admin cleared member logs for user:', userId, 'at:', room.memberLogsClearedAt.admin[userId]);
 
     res.json({
-      msg: `${result.deletedCount}개의 로그가 삭제되었습니다.`,
-      deletedCount: result.deletedCount
+      success: true,
+      msg: '로그가 초기화되었습니다.',
+      clearedAt: room.memberLogsClearedAt.admin[userId]
     });
   } catch (error) {
     console.error('Clear user logs error:', error);
