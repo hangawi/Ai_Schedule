@@ -26,8 +26,8 @@ const priorityConfig = {
 
 const generateTimeSlots = (startHour = 0, endHour = 24) => {
   const slots = [];
-  // endHour까지 포함하도록 <= 사용
-  for (let h = startHour; h <= endHour; h++) {
+  // 24:00 이후 생성 방지: h < endHour 사용
+  for (let h = startHour; h < endHour; h++) {
     for (let m = 0; m < 60; m += 10) {
       const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
       slots.push(time);
@@ -68,8 +68,8 @@ const ScheduleGridSelector = ({
   const [weekDates, setWeekDates] = useState([]);
   const [viewMode, setViewMode] = useState('week'); // 'week', 'month'
   const [timeRange, setTimeRange] = useState(initialTimeRange || { start: 9, end: 18 });
-  const [showFullDay, setShowFullDay] = useState(false);
-  const [showMerged, setShowMerged] = useState(defaultShowMerged); // props로 받은 기본값 사용
+  const [showFullDay, setShowFullDay] = useState(false); // 항상 기본 모드로 시작
+  const [showMerged, setShowMerged] = useState(true); // 항상 병합 모드로 시작
 
   // 월간 모드에서 선택된 날짜에 대한 세부 시간표 모달
   const [selectedDateForDetail, setSelectedDateForDetail] = useState(null);
@@ -332,7 +332,29 @@ const ScheduleGridSelector = ({
     let currentBlock = null;
 
     allPossibleSlots.forEach(time => {
-        const events = slotMap.get(time);
+        let events = slotMap.get(time) || [];
+
+        // 중복 이벤트 제거 (같은 타입, 제목, 우선순위를 가진 이벤트는 하나만 유지)
+        const uniqueEvents = [];
+        const seenKeys = new Set();
+        events.forEach(e => {
+            const key = `${e.type}_${e.title || e.subjectName || e.academyName || ''}_${e.priority || ''}`;
+            if (!seenKeys.has(key)) {
+                seenKeys.add(key);
+                uniqueEvents.push(e);
+            }
+        });
+        events = uniqueEvents;
+
+        // 🔍 수면시간 디버깅
+        if (events.some(e => e.title?.includes('수면') || e.title?.includes('睡眠'))) {
+            console.log(`[${time}] 수면시간 발견:`, events.map(e => ({
+                title: e.title,
+                type: e.type,
+                startTime: e.startTime,
+                endTime: e.endTime
+            })));
+        }
 
         if (!events || events.length === 0) {
             // 빈 시간
@@ -348,42 +370,144 @@ const ScheduleGridSelector = ({
             }
         } else {
             // 이벤트가 있는 시간
-            // 같은 이벤트 세트인지 체크 (제목, type, priority 기준으로 비교)
+            // 같은 이벤트 세트인지 체크 (타입과 제목만으로 단순 비교)
             const isSameEventSet = currentBlock && currentBlock.events &&
                                   currentBlock.events.length === events.length &&
                                   (() => {
-                                      // 제목, type, priority 기준으로 정렬해서 비교
-                                      const currentTitles = currentBlock.events.map(e => `${e.title || e.type}_${e.priority || 'none'}`).sort().join('|');
-                                      const newTitles = events.map(e => `${e.title || e.type}_${e.priority || 'none'}`).sort().join('|');
-                                      return currentTitles === newTitles;
+                                      // 타입과 제목으로만 비교 (가장 단순하게)
+                                      const getEventKey = (e) => {
+                                        const title = e.title || e.subjectName || e.academyName || '';
+                                        const type = e.type || 'unknown';
+                                        const priority = e.priority || '';
+                                        return `${type}_${title}_${priority}`;
+                                      };
+                                      const currentKeys = currentBlock.events.map(getEventKey).sort().join('|');
+                                      const newKeys = events.map(getEventKey).sort().join('|');
+                                      return currentKeys === newKeys;
                                   })();
 
-            if (isSameEventSet) {
+            // 시간 연속성 확인 (자정 넘는 경우 고려)
+            const isTimeConsecutive = (() => {
+                if (!currentBlock) return false;
+
+                // 이전 슬롯의 마지막 시간 계산
+                const prevSlotEndMins = timeToMinutes(currentBlock.startTime) + currentBlock.duration;
+                const currentSlotStartMins = timeToMinutes(time);
+
+                // 정상적인 연속 (10분 차이)
+                if (prevSlotEndMins === currentSlotStartMins) {
+                    return true;
+                }
+
+                // 자정을 넘는 경우 처리 (23:50 → 00:00)
+                // 23:50 + 10분 = 1440분 = 24:00 = 00:00
+                if (prevSlotEndMins === 1440 && currentSlotStartMins === 0) {
+                    return true;
+                }
+
+                return false;
+            })();
+
+            // 🔍 수면시간 병합 디버깅
+            if (events.some(e => e.title?.includes('수면') || e.title?.includes('睡眠'))) {
+                console.log(`[${time}] 병합 체크:`, {
+                    isSameEventSet,
+                    isTimeConsecutive,
+                    currentBlockExists: !!currentBlock,
+                    currentBlockStartTime: currentBlock?.startTime,
+                    currentBlockDuration: currentBlock?.duration
+                });
+            }
+
+            if (isSameEventSet && isTimeConsecutive) {
                 currentBlock.duration += 10;
+                // 🔍 병합 성공
+                if (events.some(e => e.title?.includes('수면') || e.title?.includes('睡眠'))) {
+                    console.log(`[${time}] ✅ 병합 성공! 현재 duration: ${currentBlock.duration}분`);
+                }
             } else {
-                if (currentBlock) blocks.push(currentBlock);
-                currentBlock = {
+                if (currentBlock) {
+                    // 🔍 블록 추가 로그
+                    if (currentBlock.events?.some(e => e.title?.includes('수면') || e.title?.includes('睡眠'))) {
+                        console.log(`[${time}] 🔴 새 블록 생성 - 이전 블록 저장:`, {
+                            startTime: currentBlock.startTime,
+                            duration: currentBlock.duration,
+                            계산된endTime: `${currentBlock.startTime}~${Math.floor((timeToMinutes(currentBlock.startTime) + currentBlock.duration) / 60)}:${(timeToMinutes(currentBlock.startTime) + currentBlock.duration) % 60}`
+                        });
+                    }
+                    blocks.push(currentBlock);
+                }
+                // 단일 이벤트일 경우 필요한 속성만 복사
+                const baseBlock = {
                     type: events.length > 1 ? 'multiple' : events[0].type,
                     events: events,
                     startTime: time,
-                    duration: 10,
-                    // 단일 이벤트일 경우 속성 복사 (title, priority 등)
-                    ...(events.length === 1 ? events[0] : {})
+                    duration: 10
                 };
+
+                // 단일 이벤트인 경우 일부 속성만 선택적으로 복사 (duration, endTime, startTime 제외)
+                if (events.length === 1) {
+                    const evt = events[0];
+                    if (evt.title) baseBlock.title = evt.title;
+                    if (evt.subjectName) baseBlock.subjectName = evt.subjectName;
+                    if (evt.academyName) baseBlock.academyName = evt.academyName;
+                    if (evt.priority !== undefined) baseBlock.priority = evt.priority;
+                    if (evt.color) baseBlock.color = evt.color;
+                    if (evt.dayOfWeek !== undefined) baseBlock.dayOfWeek = evt.dayOfWeek;
+                }
+
+                currentBlock = baseBlock;
             }
         }
     });
 
-    if (currentBlock) blocks.push(currentBlock);
+    if (currentBlock) {
+        // 🔍 마지막 블록 저장 로그
+        if (currentBlock.events?.some(e => e.title?.includes('수면') || e.title?.includes('睡眠'))) {
+            console.log(`[루프 종료] 🔴 마지막 블록 저장:`, {
+                startTime: currentBlock.startTime,
+                duration: currentBlock.duration
+            });
+        }
+        blocks.push(currentBlock);
+    }
+
+    // 🔍 endTime 계산 전 블록 상태
+    const sleepBlocksBeforeCalc = blocks.filter(b =>
+      b.events?.some(e => e.title?.includes('수면') || e.title?.includes('睡眠'))
+    );
+    if (sleepBlocksBeforeCalc.length > 0) {
+      console.log('=== endTime 계산 전 수면시간 블록 ===');
+      sleepBlocksBeforeCalc.forEach((b, i) => {
+        console.log(`블록 ${i}:`, {
+          startTime: b.startTime,
+          duration: b.duration,
+          endTime: b.endTime,
+          hasOwnProperty_duration: b.hasOwnProperty('duration'),
+          전체키: Object.keys(b)
+        });
+      });
+    }
 
     // 각 블록의 endTime 계산 (병합된 블록의 실제 종료 시간)
     blocks.forEach(block => {
       const startMinutes = timeToMinutes(block.startTime);
       const endMinutes = startMinutes + block.duration;
-      const endHour = Math.floor(endMinutes / 60);
+      const endHour = Math.floor(endMinutes / 60) % 24; // 24시간 형식으로 변환
       const endMin = endMinutes % 60;
       block.endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
     });
+
+    // 🔍 최종 블록 출력 (수면시간만)
+    const sleepBlocks = blocks.filter(b =>
+      b.events?.some(e => e.title?.includes('수면') || e.title?.includes('睡眠'))
+    );
+    if (sleepBlocks.length > 0) {
+      console.log('=== 최종 수면시간 블록 ===');
+      sleepBlocks.forEach((b, i) => {
+        console.log(`블록 ${i}: ${b.startTime}~${b.endTime} (${b.duration}분)`, b.events.map(e => e.title));
+      });
+    }
 
     return blocks;
   };
@@ -417,7 +541,7 @@ const ScheduleGridSelector = ({
             </button>
             <div className="border-l border-gray-300 pl-3 ml-1 flex space-x-2 flex-wrap gap-y-2">
                 <button onClick={toggleTimeRange} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${showFullDay ? 'bg-purple-500 text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}><Clock size={16} className="mr-2 inline" />{showFullDay ? '24시간' : '기본'}</button>
-                <button onClick={() => setShowMerged(!showMerged)} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${showMerged ? 'bg-green-500 text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>{showMerged ? <><Split size={16} className="mr-2 inline" />분할</> : <><Merge size={16} className="mr-2 inline" />병합</>}</button>
+                <button onClick={() => setShowMerged(!showMerged)} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${showMerged ? 'bg-green-500 text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>{showMerged ? <><Merge size={16} className="mr-2 inline" />병합</> : <><Split size={16} className="mr-2 inline" />분할</>}</button>
             </div>
         </div>
         <div className="flex items-center space-x-2">
@@ -1146,14 +1270,8 @@ const ScheduleGridSelector = ({
     }
 
     const handleDateClick = (dayData) => {
-      if (showMerged) {
-        // 병합 모드에서는 블록 형태로 일정 보기
-        const dayBlocks = getBlocksForDay(dayData.date, dayData.dayOfWeek);
-        setSelectedDateForDetail({ ...dayData, blocks: dayBlocks });
-      } else {
-        // 일반 모드에서는 세부 시간표 보기
-        setSelectedDateForDetail(dayData);
-      }
+      // 날짜 정보만 저장 (blocks는 모달 내에서 실시간으로 생성)
+      setSelectedDateForDetail(dayData);
       setShowDateDetailModal(true);
     };
 
@@ -1262,6 +1380,9 @@ const ScheduleGridSelector = ({
     const timeSlots = getCurrentTimeSlots();
     const dateStr = `${dayData.date.getFullYear()}-${String(dayData.date.getMonth() + 1).padStart(2, '0')}-${String(dayData.date.getDate()).padStart(2, '0')}`;
 
+    // 병합 모드일 때 실시간으로 blocks 생성
+    const dayBlocks = showMerged ? getBlocksForDay(dayData.date, dayData.dayOfWeek) : null;
+
     return (
       <div
         className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4"
@@ -1272,17 +1393,43 @@ const ScheduleGridSelector = ({
         }}
       >
         <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[85vh] overflow-hidden">
-          <div className="flex justify-center items-center p-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50">
             <h3 className="text-lg font-bold text-gray-800">
               {dayData.date.getMonth() + 1}월 {dayData.date.getDate()}일 ({['일', '월', '화', '수', '목', '금', '토'][dayData.date.getDay()]}) 시간표
             </h3>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowFullDay(!showFullDay)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  showFullDay
+                    ? 'bg-purple-600 text-white hover:bg-purple-700'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                {showFullDay ? '24시간' : '기본'}
+              </button>
+              <button
+                onClick={() => setShowMerged(!showMerged)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  showMerged
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                {showMerged ? '병합' : '분할'}
+              </button>
+            </div>
           </div>
 
-          <div className="p-4">
-            {showMerged && dayData.blocks ? (
+          <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 80px)' }}>
+            {showMerged ? (
               // 병합 모드: 블록 형태로 표시
               <div className="space-y-2">
-                {dayData.blocks.map((block, index) => {
+                {!dayBlocks || dayBlocks.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    표시할 일정이 없습니다.
+                  </div>
+                ) : dayBlocks.map((block, index) => {
                   let bgColor = 'bg-gray-50';
                   let textColor = 'text-gray-500';
                   let content = '';
