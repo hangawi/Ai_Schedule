@@ -23,7 +23,6 @@ function App() {
    });
    const [isClipboardMonitoring, setIsClipboardMonitoring] = useState(false); // 클립보드 모니터링 ON/OFF
    const [eventActions, setEventActions] = useState(null);
-   const [areEventActionsReady, setAreEventActionsReady] = useState(false);
    const { handleChatMessage } = useChat(isLoggedIn, setEventAddedKey, eventActions);
 
    

@@ -175,13 +175,25 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         catch { setCurrentRoom(null); }
       }
     };
+    const handleCoordinationUpdate = async (event) => {
+      const { type, roomId } = event.detail;
+      if (type === 'timeSwap' && currentRoom?._id && roomId === currentRoom._id) {
+        try {
+          await fetchRoomDetails(currentRoom._id);
+        } catch (error) {
+          console.error('Failed to refresh room after time swap:', error);
+        }
+      }
+    };
     window.addEventListener('clearCurrentRoom', handleClearCurrentRoom);
     window.addEventListener('restoreRoom', handleRestoreRoom);
+    window.addEventListener('coordinationUpdate', handleCoordinationUpdate);
     return () => {
       window.removeEventListener('clearCurrentRoom', handleClearCurrentRoom);
       window.removeEventListener('restoreRoom', handleRestoreRoom);
+      window.removeEventListener('coordinationUpdate', handleCoordinationUpdate);
     };
-  }, [setCurrentRoom, fetchRoomDetails]);
+  }, [setCurrentRoom, fetchRoomDetails, currentRoom]);
 
   // Initial data load
   useEffect(() => {
