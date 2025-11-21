@@ -51,12 +51,14 @@ ${conversationContext}
   "sourceWeekOffset": "소스 주 오프셋 (지지난주=-2, 저번주=-1, 이번주=0, 다음주=1. 소스가 명시되지 않으면 null)",
   "sourceDay": "소스 요일/날짜 (time_change: 요일 문자열 예: '월요일'. date_change: 숫자 예: 11)",
   "sourceTime": "소스 시간 (시간이 명시된 경우, HH:00 형식, 예: '1시' → '13:00'. 명시되지 않으면 null)",
+  "sourceMonth": "출발 월 (예: 11. 명시되지 않으면 null)",
+  "sourceYear": "출발 년도 (예: 2025, 2026. 명시되지 않으면 null)",
   "targetDay": "목표 요일 (time_change일 때만, 예: 월요일~금요일. date_change일 때는 null)",
   "targetTime": "타겟 시간 (HH:00 형식, 예: 14:00. 명시되지 않으면 null)",
   "weekNumber": "주차 (1~5. 명시되지 않으면 null)",
   "weekOffset": "목표 주 오프셋 (이번주=0, 다음주=1, 다다음주=2. 명시되지 않으면 null)",
-  "sourceMonth": "출발 월 (예: 11. 명시되지 않으면 null)",
   "targetMonth": "목표 월 (예: 11. 명시되지 않으면 null)",
+  "targetYear": "목표 년도 (예: 2025, 2026. 명시되지 않으면 null)",
   "targetDate": "목표 일 (date_change일 때만, 예: 14)"
 }
 
@@ -117,19 +119,27 @@ ${conversationContext}
 **date_change에서 상대적 표현을 실제 날짜로 계산:**
 현재: ${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
 이번주 월요일: ${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1)}일
-저번주 월요일: ${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) - 7}일
-다음주 월요일: ${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 7}일
+이번주 화요일: ${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 1}일
+이번주 수요일: ${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 2}일
+이번주 목요일: ${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 3}일
+이번주 금요일: ${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 4}일
+
+**IMPORTANT: "이번주 X요일 일정"을 보면 반드시 sourceDay를 숫자로 계산하세요! 절대 "화요일" 같은 문자열을 sourceDay에 넣지 마세요!**
 
 - "오늘 일정" → sourceMonth=null, sourceDay=null (코드에서 처리)
 - "어제 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - 1}
 - "내일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() + 1}
 - "모레 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() + 2}
-- "저번주 월요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) - 7}
-- "저번주 화요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) - 6}
-- "저번주 수요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) - 5}
 - "이번주 월요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1)}
+- "이번주 화요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 1}
+- "이번주 수요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 2}
+- "이번주 목요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 3}
+- "이번주 금요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 4}
 - "다음주 월요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 7}
+- "다음주 화요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 8}
 - "다음주 수요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 9}
+- "다음주 목요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 10}
+- "다음주 금요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 11}
 
 **타겟 날짜 계산:**
 - "어제로" → targetMonth=${new Date().getMonth() + 1}, targetDate=${new Date().getDate() - 1}

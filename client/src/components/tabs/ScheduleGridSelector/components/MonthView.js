@@ -48,7 +48,14 @@ const MonthView = ({
     const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
     // 해당 날짜의 일정 확인
-    const hasSchedule = schedule.some(s => s.dayOfWeek === dayOfWeek);
+    const hasSchedule = schedule.some(s => {
+      // 🔧 수정: specificDate가 있으면 그 날짜에만 적용
+      if (s.specificDate) {
+        return s.specificDate === dateStr;
+      } else {
+        return s.dayOfWeek === dayOfWeek;
+      }
+    });
     const hasException = exceptions.some(e => e.specificDate === dateStr);
     const hasPersonal = allPersonalTimes.some(p => {
       const personalDays = p.days || [];

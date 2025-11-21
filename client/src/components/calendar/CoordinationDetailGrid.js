@@ -42,11 +42,22 @@ const CoordinationDetailGrid = ({
   const [timeRange, setTimeRange] = useState({ start: 0, end: 24 });
 
   const getOwnerScheduleInfoForTime = (date, time) => {
-    if (!ownerOriginalSchedule) return null;
+    if (!ownerOriginalSchedule) {
+      console.log('⚠️ ownerOriginalSchedule가 없음!');
+      return null;
+    }
 
     const timeMinutes = timeToMinutes(time);
     const dayOfWeek = date.getDay();
     const dateStr = toYYYYMMDD(date);
+
+    // 🔍 디버깅 로그 (처음 슬롯만)
+    if (time === '00:00') {
+      console.log(`📅 날짜: ${dateStr} (요일: ${dayOfWeek}), ownerOriginalSchedule:`, {
+        defaultScheduleCount: ownerOriginalSchedule.defaultSchedule?.length || 0,
+        personalTimesCount: ownerOriginalSchedule.personalTimes?.length || 0
+      });
+    }
 
     const exception = ownerOriginalSchedule.scheduleExceptions?.find(e => {
       if (e.specificDate !== dateStr) return false;
@@ -67,13 +78,31 @@ const CoordinationDetailGrid = ({
     });
     if (personal) return { type: 'personal', ...personal };
 
-    const preferred = ownerOriginalSchedule.defaultSchedule?.some(s => 
-      s.dayOfWeek === dayOfWeek &&
-      timeMinutes >= timeToMinutes(s.startTime) &&
-      timeMinutes < timeToMinutes(s.endTime)
-    );
+    const preferred = ownerOriginalSchedule.defaultSchedule?.some(s => {
+      // 🔧 수정: specificDate가 있으면 그 날짜에만 적용
+      if (s.specificDate) {
+        if (s.specificDate !== dateStr) return false;
+      } else {
+        // specificDate가 없으면 dayOfWeek로 체크 (반복 일정)
+        if (s.dayOfWeek !== dayOfWeek) return false;
+      }
 
-    if (preferred) return { type: 'preferred' };
+      return timeMinutes >= timeToMinutes(s.startTime) &&
+             timeMinutes < timeToMinutes(s.endTime);
+    });
+
+    if (preferred) {
+      // 🔍 디버깅 로그 (샘플링)
+      if (time === '13:00' && dayOfWeek === 4) {
+        console.log(`✅ 목요일 13:00에 선호시간 있음 (${dateStr})`);
+      }
+      return { type: 'preferred' };
+    }
+
+    // 🔍 디버깅 로그 (샘플링)
+    if (time === '13:00' && dayOfWeek === 4) {
+      console.log(`❌ 목요일 13:00에 선호시간 없음 (${dateStr}) - non_preferred 반환`);
+    }
 
     return { type: 'non_preferred' };
   };
@@ -131,6 +160,10 @@ const CoordinationDetailGrid = ({
         event = { type: 'assigned', name: uniqueUserNames.join(', '), users: uniqueUserNames };
       } else if (ownerInfo?.type === 'non_preferred') {
         event = { type: 'blocked', name: '방장 불가능' };
+        // 🔍 디버깅 로그 (샘플링)
+        if (time === '13:00') {
+          console.log(`🚫 ${time}에 방장 불가능 블록 설정됨`);
+        }
       }
       slotMap.set(time, event);
     });

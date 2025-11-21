@@ -130,11 +130,18 @@ const CoordinationCalendarView = ({
     });
     if (personal) return { type: 'personal', ...personal };
 
-    const preferred = ownerOriginalSchedule.defaultSchedule?.some(s => 
-      s.dayOfWeek === dayOfWeek &&
-      timeMinutes >= timeToMinutes(s.startTime) &&
-      timeMinutes < timeToMinutes(s.endTime)
-    );
+    const preferred = ownerOriginalSchedule.defaultSchedule?.some(s => {
+      // 🔧 수정: specificDate가 있으면 그 날짜에만 적용
+      if (s.specificDate) {
+        if (s.specificDate !== dateStr) return false;
+      } else {
+        // specificDate가 없으면 dayOfWeek로 체크 (반복 일정)
+        if (s.dayOfWeek !== dayOfWeek) return false;
+      }
+
+      return timeMinutes >= timeToMinutes(s.startTime) &&
+             timeMinutes < timeToMinutes(s.endTime);
+    });
 
     if (preferred) return { type: 'preferred' };
 

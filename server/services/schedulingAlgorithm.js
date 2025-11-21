@@ -816,6 +816,26 @@ class SchedulingAlgorithm {
     // 💡 Step 1: 방장의 가능한 시간대를 먼저 수집
     const ownerAvailableSlots = new Set();
 
+    console.log('\n========== 자동 배정 디버그 로그 시작 ==========');
+    console.log('📅 배정 범위:', {
+      start: ownerRangeStart.toISOString(),
+      end: ownerRangeEnd.toISOString()
+    });
+    console.log('👤 방장 정보:', {
+      userId: owner._id,
+      defaultScheduleCount: owner.defaultSchedule ? owner.defaultSchedule.length : 0,
+      personalTimesCount: owner.personalTimes ? owner.personalTimes.length : 0
+    });
+    console.log('📋 방장 defaultSchedule 상세:');
+    if (owner.defaultSchedule && owner.defaultSchedule.length > 0) {
+      owner.defaultSchedule.forEach((sched, idx) => {
+        const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+        console.log(`  [${idx}] 요일: ${dayNames[sched.dayOfWeek]} (${sched.dayOfWeek}), 시간: ${sched.startTime}-${sched.endTime}, specificDate: ${sched.specificDate || '없음'}`);
+      });
+    } else {
+      console.log('  (없음)');
+    }
+
     if (owner.defaultSchedule && Array.isArray(owner.defaultSchedule)) {
       const validSchedules = owner.defaultSchedule.filter(schedule => {
         if (!schedule.startTime) return false;
@@ -823,7 +843,7 @@ class SchedulingAlgorithm {
         return startMin === 0 || startMin === 30;
       });
 
-      validSchedules.forEach(schedule => {
+      validSchedules.forEach((schedule, scheduleIdx) => {
         const dayOfWeek = schedule.dayOfWeek;
         const startTime = schedule.startTime;
         const endTime = schedule.endTime;
@@ -832,25 +852,31 @@ class SchedulingAlgorithm {
         // 주말 제외
         if (dayOfWeek === 0 || dayOfWeek === 6) return;
 
-        if (specificDate) {
-          // 특정 날짜가 설정된 경우, 해당 요일에 맞는 모든 날짜를 배정 범위에 포함
-          // 💡 전체 범위(ownerRangeStart ~ ownerRangeEnd)에서 찾기
-          const currentDate = new Date(ownerRangeStart);
+        // 🔍 목요일(4) 항목인 경우 로그 출력
+        if (dayOfWeek === 4) {
           const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-          let matchedDates = [];
+          console.log(`⚠️ 목요일 defaultSchedule 발견! [인덱스 ${scheduleIdx}] 요일: ${dayNames[dayOfWeek]}, 시간: ${startTime}-${endTime}, specificDate: ${specificDate || '없음'}`);
+        }
 
-          while (currentDate < ownerRangeEnd) {
-            if (currentDate.getUTCDay() === dayOfWeek) {
-              const slots = this._generateTimeSlots(startTime, endTime);
-              const dateKey = currentDate.toISOString().split('T')[0];
-              matchedDates.push(dateKey);
+        if (specificDate) {
+          // 🔧 수정: specificDate가 있으면 그 날짜 하나에만 적용!
+          const specDate = new Date(specificDate);
 
-              slots.forEach(slotTime => {
-                const key = `${dateKey}-${slotTime}`;
-                ownerAvailableSlots.add(key);
-              });
+          // 범위 내에 있는 경우에만 슬롯 생성
+          if (specDate >= ownerRangeStart && specDate < ownerRangeEnd) {
+            const slots = this._generateTimeSlots(startTime, endTime);
+            const dateKey = specDate.toISOString().split('T')[0];
+
+            slots.forEach(slotTime => {
+              const key = `${dateKey}-${slotTime}`;
+              ownerAvailableSlots.add(key);
+            });
+
+            // 🔍 목요일인지 체크
+            if (specDate.getUTCDay() === 4) {
+              console.log(`⚠️ specificDate 항목이 목요일 슬롯 생성! [인덱스 ${scheduleIdx}] specificDate: ${specificDate}, 시간: ${startTime}-${endTime}`);
+              console.log(`   생성된 슬롯 수: ${slots.length}개`);
             }
-            currentDate.setUTCDate(currentDate.getUTCDate() + 1);
           }
 
         } else {
@@ -858,12 +884,18 @@ class SchedulingAlgorithm {
           const currentDate = new Date(ownerRangeStart);
           const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
           let matchedDates = [];
+          let thursdayDatesAdded = []; // 목요일 날짜 추적
 
           while (currentDate < ownerRangeEnd) {
             if (currentDate.getUTCDay() === dayOfWeek) {
               const slots = this._generateTimeSlots(startTime, endTime);
               const dateKey = currentDate.toISOString().split('T')[0];
               matchedDates.push(dateKey);
+
+              // 🔍 목요일인지 체크
+              if (currentDate.getUTCDay() === 4) {
+                thursdayDatesAdded.push(dateKey);
+              }
 
               slots.forEach(slotTime => {
                 const key = `${dateKey}-${slotTime}`;
@@ -873,8 +905,110 @@ class SchedulingAlgorithm {
             currentDate.setUTCDate(currentDate.getUTCDate() + 1);
           }
 
+          // 🔍 목요일 슬롯이 추가되었으면 로그 (반복 항목)
+          if (thursdayDatesAdded.length > 0) {
+            const sampleSlots = this._generateTimeSlots(startTime, endTime);
+            console.log(`⚠️ 반복 요일 항목이 목요일 슬롯 생성! [인덱스 ${scheduleIdx}] dayOfWeek: ${dayOfWeek} (${dayNames[dayOfWeek]}), 시간: ${startTime}-${endTime}`);
+            console.log(`   추가된 목요일 날짜들 (처음 5개):`, thursdayDatesAdded.slice(0, 5));
+            console.log(`   총 ${thursdayDatesAdded.length}개 목요일 날짜, 각 날짜당 ${sampleSlots.length}개 슬롯, 총 ${thursdayDatesAdded.length * sampleSlots.length}개 슬롯`);
+          }
+
         }
       });
+    }
+
+    console.log('\n✅ Step 1 완료: ownerAvailableSlots 생성');
+    console.log('📊 ownerAvailableSlots 크기:', ownerAvailableSlots.size);
+    if (ownerAvailableSlots.size > 0) {
+      const sampleSlots = Array.from(ownerAvailableSlots).slice(0, 10);
+      console.log('📝 샘플 슬롯 (처음 10개):', sampleSlots);
+
+      // 목요일 슬롯이 있는지 확인
+      const thursdaySlots = Array.from(ownerAvailableSlots).filter(slot => {
+        const dateStr = slot.split('-')[0];
+        const date = new Date(dateStr);
+        return date.getUTCDay() === 4; // 4 = 목요일
+      });
+      console.log('🔍 목요일 슬롯 개수:', thursdaySlots.length);
+      if (thursdaySlots.length > 0) {
+        console.log('📝 목요일 샘플 슬롯 (처음 5개):', thursdaySlots.slice(0, 5));
+      }
+    }
+
+    // 💡 Step 1.5: 방장의 개인시간(personalTimes) 제거 - 불가능한 시간대
+    console.log('\n🚀 Step 1.5 시작: 방장 personalTimes 제거');
+    console.log('📋 방장 personalTimes 상세:');
+    if (owner.personalTimes && owner.personalTimes.length > 0) {
+      owner.personalTimes.forEach((pt, idx) => {
+        const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+        if (pt.days && pt.days.length > 0) {
+          const dayLabels = pt.days.map(d => dayNames[d === 7 ? 0 : d]).join(', ');
+          console.log(`  [${idx}] 반복: ${dayLabels} (${pt.days}), 시간: ${pt.startTime}-${pt.endTime}`);
+        } else if (pt.specificDate) {
+          console.log(`  [${idx}] 특정날짜: ${pt.specificDate}, 시간: ${pt.startTime}-${pt.endTime}`);
+        }
+      });
+    } else {
+      console.log('  (없음)');
+    }
+    if (owner.personalTimes && Array.isArray(owner.personalTimes)) {
+      owner.personalTimes.forEach(personalTime => {
+        // Recurring personal times
+        if (personalTime.isRecurring !== false && personalTime.days && personalTime.days.length > 0) {
+          personalTime.days.forEach(dayOfWeek => {
+            const jsDay = dayOfWeek === 7 ? 0 : dayOfWeek;
+
+            // 전체 범위(ownerRangeStart ~ ownerRangeEnd)에서 제거
+            const currentDate = new Date(ownerRangeStart);
+            while (currentDate < ownerRangeEnd) {
+              if (currentDate.getUTCDay() === jsDay) {
+                const slots = this._generateTimeSlots(personalTime.startTime, personalTime.endTime);
+
+                slots.forEach(slotTime => {
+                  const dateKey = currentDate.toISOString().split('T')[0];
+                  const key = `${dateKey}-${slotTime}`;
+
+                  // ownerAvailableSlots에서 제거
+                  ownerAvailableSlots.delete(key);
+                });
+              }
+              currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+            }
+          });
+        }
+
+        // Specific date personal times
+        if (personalTime.specificDate) {
+          const personalDate = new Date(personalTime.specificDate);
+
+          if (personalDate >= ownerRangeStart && personalDate < ownerRangeEnd) {
+            const slots = this._generateTimeSlots(personalTime.startTime, personalTime.endTime);
+
+            slots.forEach(slotTime => {
+              const dateKey = personalDate.toISOString().split('T')[0];
+              const key = `${dateKey}-${slotTime}`;
+
+              // ownerAvailableSlots에서 제거
+              ownerAvailableSlots.delete(key);
+            });
+          }
+        }
+      });
+    }
+
+    console.log('\n✅ Step 1.5 완료: personalTimes 제거 후');
+    console.log('📊 ownerAvailableSlots 크기:', ownerAvailableSlots.size);
+    if (ownerAvailableSlots.size > 0) {
+      // 목요일 슬롯이 있는지 확인
+      const thursdaySlots = Array.from(ownerAvailableSlots).filter(slot => {
+        const dateStr = slot.split('-')[0];
+        const date = new Date(dateStr);
+        return date.getUTCDay() === 4; // 4 = 목요일
+      });
+      console.log('🔍 목요일 슬롯 개수 (personalTimes 제거 후):', thursdaySlots.length);
+      if (thursdaySlots.length > 0) {
+        console.log('📝 목요일 샘플 슬롯 (처음 5개):', thursdaySlots.slice(0, 5));
+      }
     }
 
     // 💡 Step 2: 조원들의 개인 시간표를 추가 (방장 가능 시간대와 겹치는 것만)
@@ -1031,11 +1165,27 @@ class SchedulingAlgorithm {
 
     const totalSlots = Object.keys(timetable).length;
 
+    console.log('\n========== 최종 타임테이블 ==========');
+    console.log('📊 전체 슬롯 개수:', totalSlots);
+
     // 타임테이블 샘플 출력 (정렬해서)
     if (totalSlots > 0) {
       const sortedKeys = Object.keys(timetable).sort();
       const sampleKeys = sortedKeys.slice(0, 10);
+      console.log('📝 샘플 슬롯 (처음 10개):', sampleKeys);
+
+      // 목요일 슬롯 확인
+      const thursdaySlots = sortedKeys.filter(slot => {
+        const dateStr = slot.split('-')[0];
+        const date = new Date(dateStr);
+        return date.getUTCDay() === 4; // 4 = 목요일
+      });
+      console.log('🔍 최종 타임테이블 내 목요일 슬롯 개수:', thursdaySlots.length);
+      if (thursdaySlots.length > 0) {
+        console.log('📝 목요일 샘플 슬롯 (처음 5개):', thursdaySlots.slice(0, 5));
+      }
     }
+    console.log('========== 자동 배정 디버그 로그 끝 ==========\n');
 
     return timetable;
   }

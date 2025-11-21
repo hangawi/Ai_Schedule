@@ -30,7 +30,7 @@ const { validateNotWeekend, validateMemberPreferredDay, validateHasOverlap } = r
  * @returns {Promise<Object>} Response object
  */
 async function handleDateChange(req, res, room, memberData, params) {
-  const { sourceMonth, sourceDay, sourceTime, targetMonth, targetDateNum, targetTime, viewMode, currentWeekStartDate } = params;
+  const { sourceMonth, sourceDay, sourceTime, sourceYear, targetMonth, targetDateNum, targetTime, targetYear, viewMode, currentWeekStartDate } = params;
 
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -39,7 +39,8 @@ async function handleDateChange(req, res, room, memberData, params) {
   // Calculate source date (use UTC to avoid timezone issues)
   let sourceDate;
   if (sourceMonth && sourceDay) {
-    sourceDate = new Date(Date.UTC(currentYear, sourceMonth - 1, sourceDay, 0, 0, 0, 0));
+    const finalSourceYear = sourceYear || currentYear;
+    sourceDate = new Date(Date.UTC(finalSourceYear, sourceMonth - 1, sourceDay, 0, 0, 0, 0));
   } else {
     // "오늘 일정" - find user's slot for today
     const today = new Date();
@@ -48,7 +49,8 @@ async function handleDateChange(req, res, room, memberData, params) {
 
   // Calculate target date (use UTC to avoid timezone issues)
   const finalTargetMonth = targetMonth || currentMonth;
-  const targetDate = new Date(Date.UTC(currentYear, finalTargetMonth - 1, targetDateNum, 0, 0, 0, 0));
+  const finalTargetYear = targetYear || currentYear;
+  const targetDate = new Date(Date.UTC(finalTargetYear, finalTargetMonth - 1, targetDateNum, 0, 0, 0, 0));
 
   // Get day of week for target date
   const dayOfWeek = targetDate.getDay();
@@ -169,6 +171,82 @@ async function handleDateChange(req, res, room, memberData, params) {
   const newStartTime = targetTime || blockStartTime;
   const newEndTime = addHours(newStartTime, totalHours);
 
+  // 🔒 Validate: Check if target day/time is in OWNER's preferred schedule
+  const owner = room.owner;
+  const ownerDefaultSchedule = owner.defaultSchedule || [];
+
+  console.log(`🔍 [방장 검증] Checking owner's schedule - Target day: ${targetDayEnglish} (dayOfWeek: ${dayOfWeek})`);
+  console.log(`👑 Owner user ID: ${owner._id || owner.toString()}`);
+  console.log(`👑 Owner's defaultSchedule (${ownerDefaultSchedule.length} entries)`);
+
+  const targetDateStr = targetDate.toISOString().split('T')[0];
+
+  // Check if owner has schedule for this date/day
+  const ownerTargetSchedules = ownerDefaultSchedule.filter(s => {
+    // 🔧 specificDate가 있으면 그 날짜에만 적용
+    if (s.specificDate) {
+      return s.specificDate === targetDateStr;
+    } else {
+      // specificDate가 없으면 dayOfWeek로 체크 (반복 일정)
+      return s.dayOfWeek === dayOfWeek;
+    }
+  });
+
+  console.log(`📅 [방장 검증] Owner schedules for ${targetDateStr}: ${ownerTargetSchedules.length} entries`);
+
+  if (ownerTargetSchedules.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: `❌ ${finalTargetMonth}월 ${targetDateNum}일(${targetDayEnglish})은 방장의 선호시간이 아닙니다. 방장이 가능한 날짜/시간으로만 이동할 수 있습니다.`
+    });
+  }
+
+  // Check if the requested time fits within owner's schedule
+  const ownerStartMinutes = timeToMinutes(newStartTime);
+  const ownerEndMinutes = timeToMinutes(newEndTime);
+
+  const ownerScheduleTimes = ownerTargetSchedules.map(s => ({
+    start: timeToMinutes(s.startTime),
+    end: timeToMinutes(s.endTime)
+  })).sort((a, b) => a.start - b.start);
+
+  const ownerMergedBlocks = [];
+  ownerScheduleTimes.forEach(slot => {
+    if (ownerMergedBlocks.length === 0) {
+      ownerMergedBlocks.push({ start: slot.start, end: slot.end });
+    } else {
+      const lastBlock = ownerMergedBlocks[ownerMergedBlocks.length - 1];
+      if (slot.start <= lastBlock.end) {
+        lastBlock.end = Math.max(lastBlock.end, slot.end);
+      } else {
+        ownerMergedBlocks.push({ start: slot.start, end: slot.end });
+      }
+    }
+  });
+
+  console.log(`📊 [방장 검증] Owner merged blocks:`, ownerMergedBlocks.map(b => `${Math.floor(b.start/60)}:${String(b.start%60).padStart(2,'0')}-${Math.floor(b.end/60)}:${String(b.end%60).padStart(2,'0')}`).join(', '));
+
+  const fitsInOwnerSchedule = ownerMergedBlocks.some(block =>
+    ownerStartMinutes >= block.start && ownerEndMinutes <= block.end
+  );
+
+  if (!fitsInOwnerSchedule) {
+    const ownerScheduleRanges = ownerMergedBlocks.map(b => {
+      const startHour = Math.floor(b.start / 60);
+      const startMin = b.start % 60;
+      const endHour = Math.floor(b.end / 60);
+      const endMin = b.end % 60;
+      return `${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}-${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+    }).join(', ');
+
+    return res.status(400).json({
+      success: false,
+      message: `❌ ${finalTargetMonth}월 ${targetDateNum}일 ${newStartTime}-${newEndTime}은 방장의 선호시간(${ownerScheduleRanges})에 포함되지 않습니다.`
+    });
+  }
+
+  console.log(`✅ [방장 검증] 통과: ${newStartTime}-${newEndTime}은 방장의 선호시간 내에 있습니다.`);
+
   // 🔒 Validate: Check if target day is in MEMBER's preferred schedule
   const requesterUser = memberData.user;
   const requesterDefaultSchedule = requesterUser.defaultSchedule || [];
@@ -255,7 +333,7 @@ async function handleDateChange(req, res, room, memberData, params) {
   console.log(`✅ Member's schedule check passed`);
 
   // 🔒 Check if OTHER users have slots at target date/time
-  const targetDateStr = targetDate.toISOString().split('T')[0];
+  // targetDateStr은 이미 위에서 선언됨 (line 182)
   const otherUsersSlots = room.timeSlots.filter(slot => {
     const slotUserId = (slot.user._id || slot.user).toString();
     const slotDate = new Date(slot.date).toISOString().split('T')[0];

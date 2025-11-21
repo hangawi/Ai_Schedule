@@ -79,7 +79,9 @@ exports.smartExchange = async (req, res) => {
       sourceDay,  // date_change: 숫자 (3일 → 3), time_change: 문자열 ("월요일")
       sourceTime, // date_change에서 소스 시간 (예: "13:00")
       sourceMonth,
+      sourceYear, // 출발 년도 (예: 2025, 2026)
       targetMonth,
+      targetYear, // 목표 년도 (예: 2025, 2026)
       targetDate: targetDateNum
     } = req.body;
 
@@ -87,7 +89,7 @@ exports.smartExchange = async (req, res) => {
     const sourceDayStr = (type === 'time_change' && sourceDay) ? sourceDay : null;
 
     console.log('🚀 ========== SMART EXCHANGE REQUEST (FULLY REFACTORED) ==========');
-    console.log('📝 Request params:', { roomId, type, targetDay, targetTime, viewMode, weekNumber, weekOffset, sourceWeekOffset, sourceDay, sourceTime, sourceDayStr, sourceMonth, targetMonth, targetDateNum });
+    console.log('📝 Request params:', { roomId, type, targetDay, targetTime, viewMode, weekNumber, weekOffset, sourceWeekOffset, sourceDay, sourceTime, sourceDayStr, sourceMonth, sourceYear, targetMonth, targetYear, targetDateNum });
     console.log('👤 Requester user ID:', req.user.id);
 
     // Verify room exists
@@ -124,9 +126,11 @@ exports.smartExchange = async (req, res) => {
         sourceMonth,
         sourceDay,
         sourceTime,
+        sourceYear,
         targetMonth,
         targetDateNum,
         targetTime,
+        targetYear,
         viewMode,
         currentWeekStartDate
       });
@@ -231,6 +235,85 @@ exports.smartExchange = async (req, res) => {
           warning: 'out_of_month_range'
         });
       }
+    }
+
+    // 🔒 Validate: Check if target day/time is in OWNER's preferred schedule
+    const owner = room.owner;
+    const ownerDefaultSchedule = owner.defaultSchedule || [];
+    const targetDateStr = targetDate.toISOString().split('T')[0];
+    const targetDayOfWeek = targetDate.getDay();
+
+    console.log(`🔍 [방장 검증] Target day: ${targetDayEnglish} (dayOfWeek: ${targetDayOfWeek}), date: ${targetDateStr}`);
+    console.log(`👑 Owner defaultSchedule: ${ownerDefaultSchedule.length} entries`);
+
+    // Check if owner has schedule for this date/day
+    const ownerTargetSchedules = ownerDefaultSchedule.filter(s => {
+      // 🔧 specificDate가 있으면 그 날짜에만 적용
+      if (s.specificDate) {
+        return s.specificDate === targetDateStr;
+      } else {
+        // specificDate가 없으면 dayOfWeek로 체크 (반복 일정)
+        return s.dayOfWeek === targetDayOfWeek;
+      }
+    });
+
+    console.log(`📅 [방장 검증] Owner schedules for ${targetDateStr}: ${ownerTargetSchedules.length} entries`);
+
+    if (ownerTargetSchedules.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: `❌ ${targetDay}은 방장의 선호시간이 아닙니다. 방장이 가능한 날짜/시간으로만 이동할 수 있습니다.`
+      });
+    }
+
+    // Check if the requested time fits within owner's schedule (if targetTime is specified)
+    if (targetTime) {
+      const timeToMinutes = (timeStr) => {
+        const [hour, minute] = timeStr.split(':').map(Number);
+        return hour * 60 + minute;
+      };
+
+      const targetTimeMinutes = timeToMinutes(targetTime);
+
+      const ownerScheduleTimes = ownerTargetSchedules.map(s => ({
+        start: timeToMinutes(s.startTime),
+        end: timeToMinutes(s.endTime)
+      })).sort((a, b) => a.start - b.start);
+
+      const ownerMergedBlocks = [];
+      ownerScheduleTimes.forEach(slot => {
+        if (ownerMergedBlocks.length === 0) {
+          ownerMergedBlocks.push({ start: slot.start, end: slot.end });
+        } else {
+          const lastBlock = ownerMergedBlocks[ownerMergedBlocks.length - 1];
+          if (slot.start <= lastBlock.end) {
+            lastBlock.end = Math.max(lastBlock.end, slot.end);
+          } else {
+            ownerMergedBlocks.push({ start: slot.start, end: slot.end });
+          }
+        }
+      });
+
+      const fitsInOwnerSchedule = ownerMergedBlocks.some(block =>
+        targetTimeMinutes >= block.start
+      );
+
+      if (!fitsInOwnerSchedule) {
+        const ownerScheduleRanges = ownerMergedBlocks.map(b => {
+          const startHour = Math.floor(b.start / 60);
+          const startMin = b.start % 60;
+          const endHour = Math.floor(b.end / 60);
+          const endMin = b.end % 60;
+          return `${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}-${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+        }).join(', ');
+
+        return res.status(400).json({
+          success: false,
+          message: `❌ ${targetTime}는 방장의 선호시간(${ownerScheduleRanges})에 포함되지 않습니다.`
+        });
+      }
+
+      console.log(`✅ [방장 검증] 통과: ${targetTime}은 방장의 선호시간 내에 있습니다.`);
     }
 
     // Find requester's current slots
@@ -364,19 +447,7 @@ exports.smartExchange = async (req, res) => {
     const newStartTime = targetTime || blockStartTime;
     const newEndTime = addHours(newStartTime, totalHours);
 
-    // Check OWNER's preferred schedule
-    const ownerUser = room.owner;
-    const ownerDefaultSchedule = ownerUser.defaultSchedule || [];
-    const dayOfWeekMap = { monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5 };
-    const targetDayOfWeek = dayOfWeekMap[targetDayEnglish];
-    const ownerTargetDaySchedules = ownerDefaultSchedule.filter(s => s.dayOfWeek === targetDayOfWeek);
-
-    if (ownerTargetDaySchedules.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: `${targetDay}는 방장의 선호 시간이 아닙니다. 방장이 설정한 선호 요일로만 변경할 수 있습니다.`
-      });
-    }
+    // ✅ Owner validation already done above (lines 240-267) - removed duplicate
 
     // Check MEMBER's preferred schedule
     const requesterUser = memberData.user;

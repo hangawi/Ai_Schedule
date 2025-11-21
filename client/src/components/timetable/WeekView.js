@@ -27,7 +27,7 @@ const WeekView = ({
 }) => {
   // 방장의 원본 시간표에서 해당 시간대의 일정을 확인하는 함수
   const getOwnerOriginalScheduleInfo = (date, time) => {
-    if (!ownerOriginalSchedule) return null; // 방장뿐만 아니라 모든 조원이 볼 수 있도록 isRoomOwner 체크 제거
+    if (!ownerOriginalSchedule) return null;
 
 
 
@@ -103,7 +103,15 @@ const WeekView = ({
     // 개인시간과 예외일정이 없는 경우에만, 선호시간(priority >= 2) 체크
     // defaultSchedule에서 해당 요일의 선호시간 확인
     const hasPreferredTime = ownerOriginalSchedule.defaultSchedule?.some(sched => {
-      if (sched.dayOfWeek !== dayOfWeek || sched.priority < 2) return false;
+      if (sched.priority < 2) return false;
+
+      // 🔧 수정: specificDate가 있으면 그 날짜에만 적용
+      if (sched.specificDate) {
+        if (sched.specificDate !== dateStr) return false;
+      } else {
+        // specificDate가 없으면 dayOfWeek로 체크 (반복 일정)
+        if (sched.dayOfWeek !== dayOfWeek) return false;
+      }
 
       const startMinutes = timeToMinutes(sched.startTime);
       const endMinutes = timeToMinutes(sched.endTime);
