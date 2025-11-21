@@ -10,6 +10,7 @@
  */
 export const createWeekHandlers = (navigateWeek) => {
   return {
+    navigateWeek,  // navigateWeek 함수 자체도 포함
     handlePrevWeek: () => navigateWeek(-1),
     handleNextWeek: () => navigateWeek(1)
   };
@@ -22,6 +23,7 @@ export const createWeekHandlers = (navigateWeek) => {
  */
 export const createMonthHandlers = (navigateMonth) => {
   return {
+    navigateMonth,  // navigateMonth 함수 자체도 포함
     handlePrevMonth: () => navigateMonth(-1),
     handleNextMonth: () => navigateMonth(1)
   };
