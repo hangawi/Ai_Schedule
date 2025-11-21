@@ -11,6 +11,11 @@ exports.runAutoSchedule = async (req, res) => {
       const { roomId } = req.params;
       const { minHoursPerWeek = 3, numWeeks = 4, currentWeek, ownerFocusTime = 'none' } = req.body;
       const startDate = currentWeek ? new Date(currentWeek) : new Date();
+      
+      console.log('🔍 ===== [서버] 자동배정 요청 받음 =====');
+      console.log('📥 받은 파라미터:', { minHoursPerWeek, numWeeks, currentWeek: currentWeek ? currentWeek : 'undefined', ownerFocusTime });
+      console.log('📅 계산된 startDate:', startDate.toISOString().split('T')[0]);
+      console.log('🔍 ===================================\n');
 
       const room = await Room.findById(roomId)
         .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes priority')
@@ -300,6 +305,26 @@ exports.runAutoSchedule = async (req, res) => {
           }
         }
       });
+
+      // 💡 저장 전 최종 슬롯 통계 로그
+      console.log('\n📊 ===== [서버] 최종 배정 결과 =====');
+      console.log('총 슬롯 수:', room.timeSlots.length);
+      
+      if (room.timeSlots.length > 0) {
+        const dates = room.timeSlots.map(slot => new Date(slot.date).toISOString().split('T')[0]).sort();
+        const uniqueDates = [...new Set(dates)];
+        console.log('날짜 범위:', uniqueDates[0], '~', uniqueDates[uniqueDates.length - 1]);
+        console.log('총 배정일 수:', uniqueDates.length);
+        
+        // 월별 통계
+        const monthCount = {};
+        uniqueDates.forEach(date => {
+          const month = date.substring(0, 7);
+          monthCount[month] = (monthCount[month] || 0) + 1;
+        });
+        console.log('월별 배정일 수:', monthCount);
+      }
+      console.log('🔍 ===================================\n');
 
       await room.save();
 

@@ -198,38 +198,64 @@ export const handleRunAutoSchedule = async (
       ? currentWeekStartDate
       : new Date(currentWeekStartDate);
 
-    // ✅ 자동배정은 viewMode와 상관없이 항상 해당 월 전체 범위로 수행
-    // (주간/월간 모드는 "일정 이동" 제한에만 적용됨)
+    // ✅ 자동배정: 모든 멤버의 선호시간이 있는 날짜를 포함하도록 범위 계산
     {
-      // 해당 월 전체 배정
-      const year = currentDateObj.getFullYear();
-      const month = currentDateObj.getMonth();
+      // 모든 멤버의 specificDate 수집
+      let minDate = null;
+      let maxDate = null;
 
-      // 해당 월의 1일
-      const firstDayOfMonth = new Date(Date.UTC(year, month, 1));
+      const allMembers = currentRoom.members || [];
 
-      // 해당 월의 마지막 날
-      const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0));
+      allMembers.forEach(member => {
+        const schedules = member.defaultSchedule || [];
+        schedules.forEach(schedule => {
+          if (schedule.specificDate) {
+            const date = new Date(schedule.specificDate);
+            if (!minDate || date < minDate) {
+              minDate = date;
+            }
+            if (!maxDate || date > maxDate) {
+              maxDate = date;
+            }
+          }
+        });
+      });
 
-      // 💡 첫째 주 월요일 찾기: 1일이 속한 주의 월요일 (이전 달일 수도 있음)
-      const firstDayOfWeek = firstDayOfMonth.getUTCDay(); // 0=일요일, 1=월요일, ...
-      const daysToMonday = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1; // 일요일이면 6일 전, 아니면 (요일-1)일 전
-      const firstMonday = new Date(firstDayOfMonth);
-      firstMonday.setUTCDate(firstDayOfMonth.getUTCDate() - daysToMonday);
+      if (minDate && maxDate) {
+        // specificDate가 있는 경우: 최소~최대 날짜를 커버
+        const minDateDay = minDate.getUTCDay();
+        const daysToMonday = minDateDay === 0 ? 6 : minDateDay - 1;
+        const firstMonday = new Date(Date.UTC(
+          minDate.getUTCFullYear(),
+          minDate.getUTCMonth(),
+          minDate.getUTCDate() - daysToMonday
+        ));
 
-      // 💡 마지막 주 일요일 찾기: 마지막 날이 속한 주의 일요일 (다음 달일 수도 있음)
-      const lastDayOfWeek = lastDayOfMonth.getUTCDay();
-      const daysToSunday = lastDayOfWeek === 0 ? 0 : 7 - lastDayOfWeek;
-      const lastSunday = new Date(lastDayOfMonth);
-      lastSunday.setUTCDate(lastDayOfMonth.getUTCDate() + daysToSunday);
+        const millisInWeek = 7 * 24 * 60 * 60 * 1000;
+        const weeksDiff = Math.ceil((maxDate - firstMonday) / millisInWeek) + 1;
 
-      // 전체 기간 계산 (월요일~일요일 기준)
-      const totalDays = Math.ceil((lastSunday - firstMonday) / (1000 * 60 * 60 * 24)) + 1;
-      numWeeks = Math.ceil(totalDays / 7);
+        uiCurrentWeek = firstMonday;
+        numWeeks = Math.max(weeksDiff, 12);
 
-      // 시작일은 첫째 주 월요일
-      uiCurrentWeek = firstMonday;
-      console.log('📅 [Auto Schedule] Assigning entire month:', numWeeks, 'weeks (', year, '년', month + 1, '월 )');
+        console.log('📅 [Auto Schedule] specificDate 기반 범위:', firstMonday.toISOString().split('T')[0], '~', maxDate.toISOString().split('T')[0], '(', numWeeks, '주)');
+      } else {
+        // specificDate가 없는 경우: 충분히 긴 범위 사용 (현재 날짜 기준 6개월 전부터 1년간)
+        const today = new Date();
+        const sixMonthsAgo = new Date(Date.UTC(
+          today.getUTCFullYear(),
+          today.getUTCMonth() - 6,
+          1
+        ));
+        const sixMonthsAgoDay = sixMonthsAgo.getUTCDay();
+        const daysToMonday = sixMonthsAgoDay === 0 ? 6 : sixMonthsAgoDay - 1;
+        const firstMonday = new Date(sixMonthsAgo);
+        firstMonday.setUTCDate(sixMonthsAgo.getUTCDate() - daysToMonday);
+
+        uiCurrentWeek = firstMonday;
+        numWeeks = 52; // 1년
+
+        console.log('📅 [Auto Schedule] dayOfWeek 기반 범위: 6개월 전부터 1년간 (52주)');
+      }
     }
     const finalOptions = {
       ...scheduleOptions,
@@ -237,6 +263,14 @@ export const handleRunAutoSchedule = async (
       numWeeks,
       travelMode // Add travelMode to options
     };
+    
+    console.log('🔍 ===== [클라이언트] 자동배정 요청 전송 =====');
+    console.log('📤 보내는 파라미터:', {
+      currentWeek: uiCurrentWeek ? uiCurrentWeek.toISOString().split('T')[0] : 'undefined',
+      numWeeks,
+      minHoursPerWeek: finalOptions.minHoursPerWeek
+    });
+    console.log('🔍 ==========================================');
     const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = await coordinationService.runAutoSchedule(currentRoom._id, finalOptions);
 
     // 배정된 슬롯들의 상세 정보 출력
