@@ -118,6 +118,7 @@ ${conversationContext}
 현재: ${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
 이번주 월요일: ${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1)}일
 저번주 월요일: ${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) - 7}일
+다음주 월요일: ${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 7}일
 
 - "오늘 일정" → sourceMonth=null, sourceDay=null (코드에서 처리)
 - "어제 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - 1}
@@ -126,6 +127,9 @@ ${conversationContext}
 - "저번주 월요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) - 7}
 - "저번주 화요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) - 6}
 - "저번주 수요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) - 5}
+- "이번주 월요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1)}
+- "다음주 월요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 7}
+- "다음주 수요일 일정" → sourceMonth=${new Date().getMonth() + 1}, sourceDay=${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 9}
 
 **타겟 날짜 계산:**
 - "어제로" → targetMonth=${new Date().getMonth() + 1}, targetDate=${new Date().getDate() - 1}
@@ -166,8 +170,10 @@ ${conversationContext}
 - "어제 일정 오늘로" -> {"type": "date_change", "sourceMonth": ${new Date().getMonth() + 1}, "sourceDay": ${new Date().getDate() - 1}, "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate()}}
 - "어제 일정 오늘 오전 9시로" -> {"type": "date_change", "sourceMonth": ${new Date().getMonth() + 1}, "sourceDay": ${new Date().getDate() - 1}, "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate()}, "targetTime": "09:00"}
 - "어제 일정 내일 오후 3시로" -> {"type": "date_change", "sourceMonth": ${new Date().getMonth() + 1}, "sourceDay": ${new Date().getDate() - 1}, "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate() + 1}, "targetTime": "15:00"}
-- "저번주 월요일 일정 내일로" -> {"type": "date_change", "sourceMonth": 11, "sourceDay": (저번주 월요일 날짜), "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate() + 1}}
-- "저번주 월요일 일정 어제로" -> {"type": "date_change", "sourceMonth": 11, "sourceDay": (저번주 월요일 날짜), "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate() - 1}}
+- "저번주 월요일 일정 내일로" -> {"type": "date_change", "sourceMonth": ${new Date().getMonth() + 1}, "sourceDay": ${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) - 7}, "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate() + 1}}
+- "저번주 월요일 일정 어제로" -> {"type": "date_change", "sourceMonth": ${new Date().getMonth() + 1}, "sourceDay": ${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) - 7}, "targetMonth": ${new Date().getMonth() + 1}, "targetDate": ${new Date().getDate() - 1}}
+- "다음주 월요일 일정 12월 17일로" -> {"type": "date_change", "sourceMonth": ${new Date().getMonth() + 1}, "sourceDay": ${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 7}, "targetMonth": 12, "targetDate": 17}
+- "이번주 수요일 일정 11월 25일로" -> {"type": "date_change", "sourceMonth": ${new Date().getMonth() + 1}, "sourceDay": ${new Date().getDate() - (new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) + 2}, "targetMonth": 11, "targetDate": 25}
 
 **confirm/reject:**
 - "네" -> {"type": "confirm"}

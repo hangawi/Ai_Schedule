@@ -470,31 +470,51 @@ exports.createRequest = async (req, res) => {
                              }
                           }
 
-                          // Sort by distance and pick the closest
+                          // Sort by distance and pick the closest non-conflicting candidate
                           candidates.sort((a, b) => a.distance - b.distance);
 
-                          if (candidates.length > 0) {
-                             const bestCandidate = candidates[0];
-                             const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                          console.log(`📊 Found ${candidates.length} candidates for B, checking for conflicts...`);
 
-                             // Check for conflicts with existing slots
-                             const newStartMinutes = bestCandidate.startMinutes;
+                          let bestCandidate = null;
+                          const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+                          // Find first non-conflicting candidate
+                          for (const candidate of candidates) {
+                             const newStartMinutes = candidate.startMinutes;
                              const newEndMinutes = newStartMinutes + totalDuration;
-                             const newDateStr = bestCandidate.date.toISOString().split('T')[0];
+                             const newDateStr = candidate.date.toISOString().split('T')[0];
+
+                             console.log(`🔍 Checking candidate: ${dayNames[candidate.dayOfWeek]} ${newDateStr} ${toTimeString(newStartMinutes)}-${toTimeString(newEndMinutes)}`);
 
                              const hasConflict = room.timeSlots.some(slot => {
-                                const slotUserId = slot.user._id || slot.user;
-                                if (slotUserId.toString() !== targetUser._id.toString()) return false;
-
                                 const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
                                 if (slotDateStr !== newDateStr) return false;
 
                                 const slotStart = toMinutes(slot.startTime);
                                 const slotEnd = toMinutes(slot.endTime);
-                                return newStartMinutes < slotEnd && newEndMinutes > slotStart;
+                                const overlaps = newStartMinutes < slotEnd && newEndMinutes > slotStart;
+
+                                if (overlaps) {
+                                   const slotUserId = slot.user._id || slot.user;
+                                   const slotUserName = slot.user?.firstName || 'Unknown';
+                                   console.log(`   ⚠️  Conflict: overlaps with ${slotUserName}'s slot ${slot.startTime}-${slot.endTime}`);
+                                }
+
+                                return overlaps;
                              });
 
                              if (!hasConflict) {
+                                console.log(`   ✅ No conflict! Selected this candidate.`);
+                                bestCandidate = candidate;
+                                break;
+                             } else {
+                                console.log(`   ❌ Has conflict, trying next candidate...`);
+                             }
+                          }
+
+                          if (bestCandidate) {
+                             const newStartMinutes = bestCandidate.startMinutes;
+                             const newEndMinutes = newStartMinutes + totalDuration;
                                 // Create new slot for B at the closest available time
                                 room.timeSlots.push({
                                    user: targetUser._id,
@@ -534,11 +554,8 @@ exports.createRequest = async (req, res) => {
                                      yieldedTo: requesterNameForLog
                                   }
                                );
-                             } else {
-                                console.log(`⚠️ Could not find non-conflicting slot for B`);
-                             }
                           } else {
-                             console.log(`⚠️ No available slot found in B's preferred schedule`);
+                             console.log(`⚠️ Could not find non-conflicting slot for B`);
                           }
                        }
 

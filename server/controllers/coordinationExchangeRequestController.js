@@ -19,8 +19,14 @@ function getHoursDifference(startTime, endTime) {
  * Find alternative slot for user B when they accept exchange
  */
 async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDate, slotsToIgnore = []) {
-   console.log(`🔍 Finding alternative slot for user ${userId}, required: ${requiredHours}h, excluding date: ${excludeDate}`);
-   console.log(`   Ignoring ${slotsToIgnore.length} slots that will be freed by requester`);
+   console.log(`\n🔍 ========== Finding alternative slot for user ${userId} ==========`);
+   console.log(`📋 Required: ${requiredHours}h, Excluding date: ${excludeDate}`);
+   console.log(`📦 Slots to ignore (${slotsToIgnore.length}):`, slotsToIgnore.map(s => ({
+      day: s.day,
+      date: new Date(s.date).toISOString().split('T')[0],
+      time: `${s.startTime}-${s.endTime}`,
+      user: s.user
+   })));
 
    // Get user's member data
    const memberData = room.members.find(m =>
@@ -41,6 +47,24 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
       priority: s.priority
    })));
 
+   // Log all current time slots in the room
+   console.log(`\n📊 Current room timeSlots (total: ${room.timeSlots.length}):`);
+   const groupedSlots = {};
+   room.timeSlots.forEach(slot => {
+      const dateKey = new Date(slot.date).toISOString().split('T')[0];
+      if (!groupedSlots[dateKey]) groupedSlots[dateKey] = [];
+      const slotUserId = (slot.user._id || slot.user).toString();
+      const slotUserName = slot.user?.firstName || 'Unknown';
+      groupedSlots[dateKey].push({
+         time: `${slot.startTime}-${slot.endTime}`,
+         user: `${slotUserName} (${slotUserId.substring(0, 8)}...)`,
+         day: slot.day
+      });
+   });
+   Object.keys(groupedSlots).sort().forEach(date => {
+      console.log(`   ${date}:`, groupedSlots[date]);
+   });
+
    // Get current week's Monday
    const now = new Date();
    const day = now.getUTCDay();
@@ -53,17 +77,46 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
    const dayMap = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday' };
    const requiredSlots = Math.ceil(requiredHours * 2); // 30분 단위
 
-   // Determine which day to prioritize (same day as excluded date)
+   // 시간적으로 가까운 순서로 요일 체크 (선호시간만 포함)
    const excludedDate = new Date(excludeDate);
-   const excludedDayOfWeek = excludedDate.getUTCDay() === 0 ? 7 : excludedDate.getUTCDay();
 
-   // Check same day first, then other days
-   const daysToCheck = [excludedDayOfWeek];
-   for (let d = 1; d <= 5; d++) {
-      if (d !== excludedDayOfWeek) daysToCheck.push(d);
+   // 사용자의 선호시간 요일들만 추출 (우선순위 2 이상)
+   const preferredDays = [...new Set(userSchedule
+      .filter(s => s.priority >= 2)
+      .map(s => s.dayOfWeek)
+   )].sort((a, b) => a - b);
+
+   // 현재 날짜 기준으로 선호 요일들을 가까운 순서로 정렬
+   const daysToCheck = [];
+   const today = new Date();
+   const currentDayOfWeek = today.getUTCDay() === 0 ? 7 : today.getUTCDay();
+
+   // 이번 주와 다음 주의 선호 요일들을 수집
+   const candidates = [];
+   for (const dayOfWeek of preferredDays) {
+      // 이번 주
+      let daysUntil = dayOfWeek - currentDayOfWeek;
+      if (daysUntil >= 0) {
+         candidates.push({ dayOfWeek, daysUntil });
+      }
+      // 다음 주
+      candidates.push({ dayOfWeek, daysUntil: daysUntil + 7 });
    }
 
+   // 가까운 순서대로 정렬하고 요일만 추출
+   candidates.sort((a, b) => a.daysUntil - b.daysUntil);
+   for (const candidate of candidates) {
+      if (!daysToCheck.includes(candidate.dayOfWeek)) {
+         daysToCheck.push(candidate.dayOfWeek);
+      }
+   }
+
+   console.log(`📅 선호시간 요일들을 시간적으로 가까운 순서로 체크:`, daysToCheck.map(d => dayMap[d]));
+   console.log(`📅 선호 요일 숫자:`, daysToCheck);
+   console.log(`📅 현재 요일: ${currentDayOfWeek} (${dayMap[currentDayOfWeek]})`);
+
    for (const dayOfWeek of daysToCheck) {
+      console.log(`\n➡️  Checking ${dayMap[dayOfWeek]} (dayOfWeek=${dayOfWeek})...`);
       const dayPreferences = userSchedule.filter(s =>
          s.dayOfWeek === dayOfWeek && s.priority >= 2
       );
@@ -112,10 +165,11 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
          }
       }
 
-      console.log(`📊 ${dayMap[dayOfWeek]} merged blocks:`, mergedBlocks);
+      console.log(`   📊 ${dayMap[dayOfWeek]} merged blocks:`, mergedBlocks);
 
       // Check each merged block
       for (const block of mergedBlocks) {
+         console.log(`   🔎 Checking block ${block.startTime}-${block.endTime}...`);
          const blockHours = getHoursDifference(block.startTime, block.endTime);
 
          if (blockHours < requiredHours) {
@@ -130,6 +184,7 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
          const endMinutes = endH * 60 + endM;
 
          let isOccupied = false;
+         console.log(`   ⏰ Checking 30-min slots from ${block.startTime} to ${addHours(block.startTime, requiredHours)}...`);
          for (let currentMinutes = startMinutes; currentMinutes < endMinutes; currentMinutes += 30) {
             const slotStart = `${Math.floor(currentMinutes/60).toString().padStart(2,'0')}:${(currentMinutes%60).toString().padStart(2,'0')}`;
             const slotEnd = addHours(slotStart, 0.5);
@@ -142,27 +197,47 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
 
                if (!isMatchingSlot) return false;
 
+               // Get the user ID of this slot
+               const slotUserId = (slot.user._id || slot.user).toString();
+               const slotUserName = slot.user?.firstName || 'Unknown';
+
                // Check if this slot is one of the slots being freed by requester
                const isBeingFreed = slotsToIgnore.some(ignoreSlot => {
                   const ignoreDate = new Date(ignoreSlot.date).toISOString().split('T')[0];
-                  return ignoreDate === slotDate &&
+                  const ignoreUserId = (ignoreSlot.user._id || ignoreSlot.user)?.toString();
+                  const match = ignoreDate === slotDate &&
                          ignoreSlot.startTime === slot.startTime &&
-                         ignoreSlot.endTime === slot.endTime;
+                         ignoreSlot.endTime === slot.endTime &&
+                         ignoreUserId === slotUserId; // 사용자도 일치해야 함
+                  return match;
                });
+
+               if (!isBeingFreed) {
+                  console.log(`      ⚠️  Slot ${slotStart}-${slotEnd} is OCCUPIED by ${slotUserName} (${slotUserId.substring(0, 8)}...)`);
+               } else {
+                  console.log(`      ✓ Slot ${slotStart}-${slotEnd} will be freed (ignoring)`);
+               }
 
                return !isBeingFreed; // Only consider occupied if NOT being freed
             });
 
             if (occupied) {
+               console.log(`      ❌ Block is occupied at ${slotStart}-${slotEnd}`);
                isOccupied = true;
                break;
+            } else {
+               console.log(`      ✓ Slot ${slotStart}-${slotEnd} is available`);
             }
          }
 
          if (!isOccupied) {
             // Found a suitable slot!
             const endTime = addHours(block.startTime, requiredHours);
-            console.log(`✅ Found alternative slot: ${dayMap[dayOfWeek]} ${block.startTime}-${endTime} on ${targetDateStr}`);
+            console.log(`\n✅ ========== FOUND ALTERNATIVE SLOT ==========`);
+            console.log(`📅 Day: ${dayMap[dayOfWeek]} (${targetDateStr})`);
+            console.log(`⏰ Time: ${block.startTime}-${endTime}`);
+            console.log(`⏱️  Duration: ${requiredHours}h`);
+            console.log(`✅ ============================================\n`);
 
             return {
                day: dayMap[dayOfWeek],
@@ -173,12 +248,15 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
                requiredHours
             };
          } else {
-            console.log(`  ❌ Block ${block.startTime}-${block.endTime} is occupied`);
+            console.log(`   ❌ Block ${block.startTime}-${block.endTime} is occupied, skipping...`);
          }
       }
    }
 
-   console.log('❌ No alternative slot found');
+   console.log(`\n❌ ========== NO ALTERNATIVE SLOT FOUND ==========`);
+   console.log(`📋 Checked all preferred days:`, daysToCheck.map(d => dayMap[d]));
+   console.log(`⚠️  All slots in preferred times are occupied or too small`);
+   console.log(`❌ ================================================\n`);
    return null;
 }
 
@@ -283,7 +361,8 @@ exports.createExchangeRequest = async (req, res) => {
             date: s.date,
             startTime: s.startTime,
             endTime: s.endTime,
-            subject: s.subject
+            subject: s.subject,
+            user: s.user._id || s.user
          })),
          targetSlot: {
             day: targetSlot.day,
