@@ -237,7 +237,7 @@ exports.smartExchange = async (req, res) => {
     const requesterCurrentSlots = room.timeSlots.filter(slot => {
       const slotUserId = (slot.user._id || slot.user).toString();
       const isUserSlot = slotUserId === req.user.id.toString();
-      const isValidSubject = slot.subject === '자동 배정' || slot.subject === '교환 결과';
+      const isValidSubject = slot.subject === '자동 배정' || slot.subject === '교환 결과' || slot.subject === '자동 재배치';
       return isUserSlot && isValidSubject;
     });
 
@@ -282,6 +282,9 @@ exports.smartExchange = async (req, res) => {
     });
 
     console.log(`📦 Found ${continuousBlocks.length} continuous blocks`);
+    continuousBlocks.forEach((block, idx) => {
+      console.log(`   Block ${idx + 1}: ${block[0].day} ${new Date(block[0].date).toISOString().split('T')[0]} ${block[0].startTime}-${block[block.length - 1].endTime} (${block.length} slots)`);
+    });
 
     // Select block to move (source filtering logic)
     let selectedBlock;
@@ -303,9 +306,16 @@ exports.smartExchange = async (req, res) => {
       sourceWeekSunday.setUTCDate(sourceWeekMonday.getUTCDate() + 6);
     }
 
+    console.log(`📅 Source week: ${sourceWeekMonday.toISOString().split('T')[0]} ~ ${sourceWeekSunday.toISOString().split('T')[0]}`);
+
     const sourceWeekBlocks = continuousBlocks.filter(block => {
       const blockDate = new Date(block[0].date);
       return blockDate >= sourceWeekMonday && blockDate <= sourceWeekSunday;
+    });
+
+    console.log(`📊 Found ${sourceWeekBlocks.length} blocks in source week`);
+    sourceWeekBlocks.forEach((block, idx) => {
+      console.log(`   Week Block ${idx + 1}: ${block[0].day} ${new Date(block[0].date).toISOString().split('T')[0]}`);
     });
 
     let candidateBlocks = sourceWeekBlocks;
@@ -319,8 +329,15 @@ exports.smartExchange = async (req, res) => {
         '금요일': 'friday', '금': 'friday'
       };
       const sourceDayEnglish = sourceDayMap[sourceDayStr] || sourceDayStr.toLowerCase();
-      candidateBlocks = sourceWeekBlocks.filter(block => block[0].day === sourceDayEnglish);
+      console.log(`🔍 Filtering by source day: "${sourceDayStr}" → "${sourceDayEnglish}"`);
+      candidateBlocks = sourceWeekBlocks.filter(block => {
+        const match = block[0].day === sourceDayEnglish;
+        console.log(`   Checking block: ${block[0].day} === ${sourceDayEnglish} ? ${match}`);
+        return match;
+      });
     }
+
+    console.log(`✅ Final candidate blocks: ${candidateBlocks.length}`);
 
     if (candidateBlocks.length > 0) {
       const blocksNotOnTargetDay = candidateBlocks.filter(block => block[0].day !== targetDayEnglish);

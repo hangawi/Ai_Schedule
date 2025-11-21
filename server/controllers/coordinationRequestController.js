@@ -450,25 +450,34 @@ exports.createRequest = async (req, res) => {
                              });
                           }
 
-                          // Check other days (within 7 days)
-                          for (let dayOffset = 1; dayOffset <= 7; dayOffset++) {
-                             const checkDay = (originalDayOfWeek + dayOffset) % 7;
-                             if (scheduleByDay[checkDay]) {
-                                const checkDate = new Date(originalDate);
-                                checkDate.setDate(originalDate.getDate() + dayOffset);
+                          // Check other days (within 7 days) - iterate through user's schedule days
+                          Object.keys(scheduleByDay).forEach(scheduleDayStr => {
+                             const scheduleDay = parseInt(scheduleDayStr);
 
-                                scheduleByDay[checkDay].forEach(block => {
+                             // Skip the same day (already checked above)
+                             if (scheduleDay === originalDayOfWeek) return;
+
+                             // Calculate days until this day of week
+                             let daysUntil = (scheduleDay - originalDayOfWeek + 7) % 7;
+                             if (daysUntil === 0) daysUntil = 7; // If same day somehow, go to next week
+
+                             // Only check within 7 days
+                             if (daysUntil <= 7) {
+                                const checkDate = new Date(originalDate);
+                                checkDate.setUTCDate(checkDate.getUTCDate() + daysUntil);
+
+                                scheduleByDay[scheduleDay].forEach(block => {
                                    if (block.end - block.start >= totalDuration) {
                                       candidates.push({
-                                         dayOfWeek: checkDay,
+                                         dayOfWeek: scheduleDay,
                                          date: checkDate,
                                          startMinutes: block.start,
-                                         distance: dayOffset * 1440 + Math.abs(block.start - originalStartMinutes) // 1440 = minutes in a day
+                                         distance: daysUntil * 1440 + Math.abs(block.start - originalStartMinutes) // 1440 = minutes in a day
                                       });
                                    }
                                 });
                              }
-                          }
+                          });
 
                           // Sort by distance and pick the closest non-conflicting candidate
                           candidates.sort((a, b) => a.distance - b.distance);
@@ -515,18 +524,28 @@ exports.createRequest = async (req, res) => {
                           if (bestCandidate) {
                              const newStartMinutes = bestCandidate.startMinutes;
                              const newEndMinutes = newStartMinutes + totalDuration;
-                                // Create new slot for B at the closest available time
+
+                             // Create 30-minute slots (시스템은 30분 단위 슬롯을 기대함)
+                             const numSlots = Math.ceil(totalDuration / 30);
+                             console.log(`📦 Creating ${numSlots} slots (30-min each) from ${toTimeString(newStartMinutes)} to ${toTimeString(newEndMinutes)}`);
+                             console.log(`📅 Date: ${bestCandidate.date.toISOString().split('T')[0]}, Day: ${dayNames[bestCandidate.dayOfWeek]}`);
+
+                             for (let i = 0; i < numSlots; i++) {
+                                const slotStart = newStartMinutes + (i * 30);
+                                const slotEnd = slotStart + 30;
                                 room.timeSlots.push({
                                    user: targetUser._id,
                                    date: bestCandidate.date,
-                                   startTime: toTimeString(newStartMinutes),
-                                   endTime: toTimeString(newEndMinutes),
+                                   startTime: toTimeString(slotStart),
+                                   endTime: toTimeString(slotEnd),
                                    day: dayNames[bestCandidate.dayOfWeek],
                                    subject: '자동 재배치',
                                    status: 'confirmed',
                                    assignedBy: req.user.id
                                 });
-                                console.log(`✅ B's slot moved to ${dayNames[bestCandidate.dayOfWeek]} ${toTimeString(newStartMinutes)}-${toTimeString(newEndMinutes)}`);
+                             }
+
+                             console.log(`✅ B's slot moved to ${dayNames[bestCandidate.dayOfWeek]} ${toTimeString(newStartMinutes)}-${toTimeString(newEndMinutes)} (${numSlots} x 30min slots)`);
 
                                // Log A's relocation (the approver who gave up their slot)
                                const targetUserName = targetUser.firstName && targetUser.lastName
