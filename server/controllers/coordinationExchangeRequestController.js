@@ -41,6 +41,14 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
    const userSchedule = memberData.user.defaultSchedule;
    const excludeDateStr = new Date(excludeDate).toISOString().split('T')[0];
 
+   // 🔧 방장의 선호시간도 가져오기
+   const ownerSchedule = room.owner?.defaultSchedule || [];
+   console.log(`👑 Owner schedule:`, ownerSchedule.map(s => ({
+      day: s.dayOfWeek,
+      time: `${s.startTime}-${s.endTime}`,
+      priority: s.priority
+   })));
+
    console.log(`📅 User schedule:`, userSchedule.map(s => ({
       day: s.dayOfWeek,
       time: `${s.startTime}-${s.endTime}`,
@@ -128,6 +136,22 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
       targetDate.setUTCDate(monday.getUTCDate() + dayOfWeek - 1);
       const targetDateStr = targetDate.toISOString().split('T')[0];
 
+      // 🔧 방장의 해당 요일 선호시간 확인
+      const ownerDayPreferences = ownerSchedule.filter(s => {
+         // specificDate가 있으면 그 날짜에만 적용
+         if (s.specificDate) {
+            return s.specificDate === targetDateStr;
+         }
+         return s.dayOfWeek === dayOfWeek;
+      });
+
+      if (ownerDayPreferences.length === 0) {
+         console.log(`   ⚠️ 방장의 ${dayMap[dayOfWeek]} 선호시간 없음 - 스킵`);
+         continue;
+      }
+
+      console.log(`   👑 방장의 ${dayMap[dayOfWeek]} 선호시간:`, ownerDayPreferences.map(s => `${s.startTime}-${s.endTime}`));
+
       // Merge continuous time blocks (including overlapping and nearby blocks)
       const sortedPrefs = dayPreferences.sort((a, b) =>
          a.startTime.localeCompare(b.startTime)
@@ -167,8 +191,41 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
 
       console.log(`   📊 ${dayMap[dayOfWeek]} merged blocks:`, mergedBlocks);
 
-      // Check each merged block
+      // 🔧 방장의 선호시간과 겹치는 블록만 필터링
+      const ownerFilteredBlocks = [];
       for (const block of mergedBlocks) {
+         const [blockStartH, blockStartM] = block.startTime.split(':').map(Number);
+         const [blockEndH, blockEndM] = block.endTime.split(':').map(Number);
+         const blockStartMin = blockStartH * 60 + blockStartM;
+         const blockEndMin = blockEndH * 60 + blockEndM;
+
+         for (const ownerPref of ownerDayPreferences) {
+            const [ownerStartH, ownerStartM] = ownerPref.startTime.split(':').map(Number);
+            const [ownerEndH, ownerEndM] = ownerPref.endTime.split(':').map(Number);
+            const ownerStartMin = ownerStartH * 60 + ownerStartM;
+            const ownerEndMin = ownerEndH * 60 + ownerEndM;
+
+            // 겹치는 구간 계산
+            const overlapStart = Math.max(blockStartMin, ownerStartMin);
+            const overlapEnd = Math.min(blockEndMin, ownerEndMin);
+
+            if (overlapStart < overlapEnd) {
+               const overlapStartTime = `${Math.floor(overlapStart / 60).toString().padStart(2, '0')}:${(overlapStart % 60).toString().padStart(2, '0')}`;
+               const overlapEndTime = `${Math.floor(overlapEnd / 60).toString().padStart(2, '0')}:${(overlapEnd % 60).toString().padStart(2, '0')}`;
+               ownerFilteredBlocks.push({ startTime: overlapStartTime, endTime: overlapEndTime });
+            }
+         }
+      }
+
+      console.log(`   👑 방장 시간과 겹치는 블록:`, ownerFilteredBlocks);
+
+      if (ownerFilteredBlocks.length === 0) {
+         console.log(`   ⚠️ 방장의 선호시간과 겹치는 시간 없음 - 스킵`);
+         continue;
+      }
+
+      // Check each merged block (방장 시간과 겹치는 것만)
+      for (const block of ownerFilteredBlocks) {
          console.log(`   🔎 Checking block ${block.startTime}-${block.endTime}...`);
          const blockHours = getHoursDifference(block.startTime, block.endTime);
 
@@ -423,6 +480,7 @@ exports.respondToExchangeRequest = async (req, res) => {
       });
 
       const room = await Room.findById(roomId)
+         .populate('owner', 'firstName lastName email defaultSchedule')
          .populate('members.user', 'firstName lastName email defaultSchedule')
          .populate('timeSlots.user', '_id firstName lastName email')
          .populate('requests.requester', 'firstName lastName email')

@@ -86,6 +86,7 @@ exports.createRequest = async (req, res) => {
         }
 
         const room = await Room.findOne({ 'requests._id': requestId })
+           .populate('owner', 'firstName lastName email defaultSchedule')
            .populate('requests.requester', 'firstName lastName email')
            .populate('requests.targetUser', 'firstName lastName email defaultSchedule')
            .populate('timeSlots.user', '_id firstName lastName email')
@@ -377,6 +378,11 @@ exports.createRequest = async (req, res) => {
                        // Get target user's preferred schedule
                        const targetUserSchedule = targetUser.defaultSchedule || [];
 
+                       // 🔍 디버그: targetUserSchedule 원본 데이터 출력
+                       console.log(`🔍 targetUser: ${targetUser.firstName} ${targetUser.lastName}`);
+                       console.log(`🔍 targetUserSchedule 길이: ${targetUserSchedule.length}`);
+                       console.log(`🔍 targetUserSchedule 원본:`, JSON.stringify(targetUserSchedule.slice(0, 5)));
+
                        if (targetUserSchedule.length > 0 && totalDuration > 0) {
                           // Helper function to get day of week number
                           const getDayOfWeek = (dayName) => {
@@ -389,14 +395,38 @@ exports.createRequest = async (req, res) => {
                           const originalStartMinutes = toMinutes(firstSlot.startTime);
 
                           // Group schedule by day and merge continuous blocks
+                          // 🔧 같은 주(7일 이내)의 선호시간만 사용
                           const scheduleByDay = {};
+                          const seenBlocks = new Set(); // 중복 방지용
+                          const requestDateStr = originalDate.toISOString().split('T')[0];
+                          const requestDateMs = originalDate.getTime();
+
+                          console.log(`🔍 요청 날짜: ${requestDateStr}`);
+
                           targetUserSchedule.forEach(s => {
+                             // specificDate가 있으면 같은 주(7일 이내)인지 체크
+                             if (s.specificDate) {
+                                const specificDateMs = new Date(s.specificDate).getTime();
+                                const daysDiff = Math.abs(specificDateMs - requestDateMs) / (1000 * 60 * 60 * 24);
+                                if (daysDiff > 7) {
+                                   return; // 7일 초과면 스킵
+                                }
+                             }
+
+                             // dayOfWeek + startTime + endTime 조합으로 중복 체크
+                             const blockKey = `${s.dayOfWeek}-${s.startTime}-${s.endTime}`;
+                             if (seenBlocks.has(blockKey)) return; // 중복 스킵
+                             seenBlocks.add(blockKey);
+
                              if (!scheduleByDay[s.dayOfWeek]) scheduleByDay[s.dayOfWeek] = [];
                              scheduleByDay[s.dayOfWeek].push({
                                 start: toMinutes(s.startTime),
                                 end: toMinutes(s.endTime)
                              });
                           });
+
+                          console.log(`🔍 같은 주 블록 개수: ${seenBlocks.size}`);
+                          console.log(`🔍 요일별 스케줄 (숫자): ${Object.keys(scheduleByDay).join(', ')}`); // 0=일, 1=월, 2=화, 3=수, 4=목, 5=금, 6=토
 
                           // Merge and sort each day's schedule
                           Object.keys(scheduleByDay).forEach(day => {
@@ -412,6 +442,16 @@ exports.createRequest = async (req, res) => {
                              scheduleByDay[day] = merged;
                           });
 
+                          // 🔧 디버그: B의 선호 요일 확인
+                          const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                          console.log(`🔍 B의 선호 요일: ${Object.keys(scheduleByDay).map(d => dayNames[d]).join(', ')}`);
+                          console.log(`🔍 B의 targetUserSchedule:`, JSON.stringify(targetUserSchedule.map(s => ({
+                             dayOfWeek: s.dayOfWeek,
+                             day: dayNames[s.dayOfWeek],
+                             startTime: s.startTime,
+                             endTime: s.endTime
+                          }))));
+
                           // Find candidates: same day first, then other days
                           const candidates = [];
 
@@ -426,11 +466,12 @@ exports.createRequest = async (req, res) => {
                                 if (block.start < requestStart) {
                                    const availableEnd = Math.min(block.end, requestStart);
                                    if (availableEnd - block.start >= totalDuration) {
+                                      // 🔧 같은 날은 daysUntil=0, 시작 시간이 빠를수록 우선
                                       candidates.push({
                                          dayOfWeek: originalDayOfWeek,
                                          date: originalDate,
                                          startMinutes: block.start,
-                                         distance: Math.abs(block.start - originalStartMinutes)
+                                         distance: block.start
                                       });
                                    }
                                 }
@@ -439,11 +480,12 @@ exports.createRequest = async (req, res) => {
                                 if (block.end > requestEnd) {
                                    const availableStart = Math.max(block.start, requestEnd);
                                    if (block.end - availableStart >= totalDuration) {
+                                      // 🔧 같은 날은 daysUntil=0, 시작 시간이 빠를수록 우선
                                       candidates.push({
                                          dayOfWeek: originalDayOfWeek,
                                          date: originalDate,
                                          startMinutes: availableStart,
-                                         distance: Math.abs(availableStart - originalStartMinutes)
+                                         distance: availableStart
                                       });
                                    }
                                 }
@@ -468,12 +510,15 @@ exports.createRequest = async (req, res) => {
 
                                 scheduleByDay[scheduleDay].forEach(block => {
                                    if (block.end - block.start >= totalDuration) {
+                                      // 🔧 가장 빠른 날짜 + 가장 빠른 시간 순으로 정렬
+                                      const distance = daysUntil * 1440 + block.start;
                                       candidates.push({
                                          dayOfWeek: scheduleDay,
                                          date: checkDate,
                                          startMinutes: block.start,
-                                         distance: daysUntil * 1440 + Math.abs(block.start - originalStartMinutes) // 1440 = minutes in a day
+                                         distance: distance
                                       });
+                                      console.log(`🔍 후보 추가: ${dayNames[scheduleDay]} ${block.start}분-${block.end}분, distance: ${distance}`);
                                    }
                                 });
                              }
@@ -485,7 +530,6 @@ exports.createRequest = async (req, res) => {
                           console.log(`📊 Found ${candidates.length} candidates for B, checking for conflicts...`);
 
                           let bestCandidate = null;
-                          const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
                           // Find first non-conflicting candidate
                           for (const candidate of candidates) {

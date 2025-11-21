@@ -494,7 +494,7 @@ exports.smartExchange = async (req, res) => {
       return merged;
     };
 
-    const ownerMergedRanges = mergeSlots(ownerTargetDaySchedules);
+    const ownerMergedRanges = mergeSlots(ownerTargetSchedules);
     const memberMergedRanges = mergeSlots(memberTargetDaySchedules);
 
     const overlappingRanges = [];
