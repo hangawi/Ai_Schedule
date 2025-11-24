@@ -732,7 +732,6 @@ exports.getExchangeRequestsCount = memberController.getExchangeRequestsCount;
 // Re-export from schedulingController
 exports.runAutoSchedule = schedulingController.runAutoSchedule;
 exports.deleteAllTimeSlots = schedulingController.deleteAllTimeSlots;
-exports.clearAllNegotiations = schedulingController.clearAllNegotiations;
 
 // Re-export from exchangeController
 exports.parseExchangeRequest = exchangeController.parseExchangeRequest;

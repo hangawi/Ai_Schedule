@@ -28,10 +28,8 @@ import {
   generateDayTimeSlots,
   getBlockedTimeInfo as getBlockedTimeInfoHelper,
   getRoomExceptionInfo as getRoomExceptionInfoHelper,
-  getNegotiationInfo as getNegotiationInfoHelper,
   getSlotOwner as getSlotOwnerHelper,
   isSlotSelected as isSlotSelectedHelper,
-  getCurrentWeekNegotiations as getCurrentWeekNegotiationsHelper,
   mergeConsecutiveTimeSlots
 } from '../../utils/timetableHelpers';
 import {
@@ -70,8 +68,6 @@ const TimetableGrid = ({
   calculateEndTime,
   onWeekChange, // New prop to pass current week start date to parent
   initialStartDate, // New prop to set the initial week to display
-  onOpenNegotiation, // New prop to handle negotiation modal opening
-  onCurrentWeekNegotiationsChange, // New prop to pass current week negotiations to parent
   showMerged = true, // New prop for merged view
   ownerOriginalSchedule = null, // 방장의 원본 시간표 데이터
   onOpenChangeRequestModal // New prop to open change request modal
@@ -160,24 +156,6 @@ const TimetableGrid = ({
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
   const [slotToChange, setSlotToChange] = useState(null);
 
-  // Helper to check if a slot is under negotiation
-  const getNegotiationInfo = useCallback((date, time) => {
-    return getNegotiationInfoHelper(date, time, roomData);
-  }, [roomData?.negotiations]);
-
-  // Helper to get current week's negotiations
-  const getCurrentWeekNegotiations = useCallback(() => {
-    return getCurrentWeekNegotiationsHelper(roomData, weekDates, timeSlotsInDay, getNegotiationInfo);
-  }, [roomData?.negotiations, weekDates, getNegotiationInfo, timeSlotsInDay]);
-
-  // Notify parent component about current week's negotiations
-  useEffect(() => {
-    if (onCurrentWeekNegotiationsChange && roomData?.negotiations) {
-      const currentWeekNegotiations = getCurrentWeekNegotiations();
-      onCurrentWeekNegotiationsChange(currentWeekNegotiations);
-    }
-  }, [roomData?.negotiations, weekDates]); // Only update when negotiations or week changes
-
   // Helper to get who booked a slot (based on Date object overlap)
   const getSlotOwner = useCallback((date, time) => {
     const slotsToUse = showMerged ? mergedTimeSlots : timeSlots;
@@ -188,8 +166,7 @@ const TimetableGrid = ({
       slotsToUse,
       members,
       currentUser,
-      isRoomOwner,
-      getNegotiationInfo
+      isRoomOwner
     );
 
     // 병합 모드에서 병합된 슬롯인지 확인
@@ -213,7 +190,7 @@ const TimetableGrid = ({
     }
 
     return baseOwnerInfo;
-  }, [timeSlots, mergedTimeSlots, members, currentUser, isRoomOwner, getNegotiationInfo, showMerged]);
+  }, [timeSlots, mergedTimeSlots, members, currentUser, isRoomOwner, showMerged]);
 
   // Helper to check if a slot is selected by the current user (uses currentSelectedSlots)
   const isSlotSelected = (date, time) => {
@@ -333,17 +310,6 @@ const TimetableGrid = ({
     }
 
     if (ownerInfo) {
-      // Check if this is a negotiation slot
-      if (ownerInfo.isNegotiation) {
-        // Open negotiation modal
-        if (onOpenNegotiation) {
-          onOpenNegotiation(ownerInfo.negotiationData);
-        } else {
-          showAlert('이 시간대는 현재 협의 중입니다. 협의가 완료될 때까지 기다려주세요.');
-        }
-        return;
-      }
-
       if (isOwnedByCurrentUser) {
         if (onRemoveSlot && window.confirm('이 시간을 삭제하시겠습니까?')) {
           const [hour, minute] = time.split(':').map(Number);

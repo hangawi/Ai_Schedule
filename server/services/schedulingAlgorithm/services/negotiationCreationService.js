@@ -162,64 +162,31 @@ const processNegotiationBlocks = (params) => {
       }
     }
 
-    // 협의 생성
-    if (totalNeeded === 0) {
-      totalNeeded = unsatisfiedMembers.reduce((sum, m) => sum + m.neededSlots, 0);
-    }
-
-    // 협의 타입 결정
-    const negotiationType = determineNegotiationType(unsatisfiedMembers, totalNeeded, totalSlots);
-
-    // 시간대 옵션 생성
-    let availableTimeSlots = [];
-
-    if (negotiationType === NEGOTIATION_TYPES.TIME_SLOT_CHOICE) {
-      const originalNeededPerMember = unsatisfiedMembers[0].originallyNeededSlots;
-      const requiredDuration = originalNeededPerMember * MINUTES_PER_SLOT;
-
-      memberTimeSlotOptions = generateMemberTimeSlotOptions(
-        unsatisfiedMembers,
-        block,
-        timetable,
-        requiredDuration
-      );
-
-      // 모든 멤버가 옵션을 가지는지 확인
-      const allMembersHaveOptions = unsatisfiedMembers.every(member =>
-        memberTimeSlotOptions[member.memberId] && memberTimeSlotOptions[member.memberId].length > 0
-      );
-
-      if (allMembersHaveOptions) {
-        availableTimeSlots = mergeAllTimeSlotOptions(memberTimeSlotOptions);
-      } else {
-        // 옵션이 없으면 full_conflict로 변경
-        memberTimeSlotOptions = {};
+    // 협의 시스템 삭제 - 충돌 시 랜덤 자동 배정
+    // 가장 적게 배정받은 멤버에게 우선 배정
+    const sortedByAssigned = [...unsatisfiedMembers].sort((a, b) => {
+      const hoursA = assignments[a.memberId]?.assignedHours || 0;
+      const hoursB = assignments[b.memberId]?.assignedHours || 0;
+      if (hoursA !== hoursB) {
+        return hoursA - hoursB; // 적게 배정받은 멤버 우선
       }
-    }
-
-    // full_conflict인 경우 대체 시간대 옵션 수집
-    if (negotiationType === NEGOTIATION_TYPES.FULL_CONFLICT) {
-      memberTimeSlotOptions = collectFullConflictTimeOptions(
-        unsatisfiedMembers,
-        nonOwnerMembers,
-        assignments,
-        startDate
-      );
-    }
-
-    // 협의 객체 생성
-    const negotiation = createNegotiation({
-      type: negotiationType,
-      block,
-      unsatisfiedMembers,
-      memberTimeSlotOptions,
-      availableTimeSlots,
-      nonOwnerMembers,
-      ownerId,
-      startDate
+      return b.neededSlots - a.neededSlots; // 더 많이 필요한 멤버 우선
     });
 
-    negotiations.push(negotiation);
+    const winnerMember = sortedByAssigned[0];
+
+    autoAssignments.push({
+      memberId: winnerMember.memberId,
+      dateObj: block.dateObj,
+      dayString: dayString,
+      startTime: block.startTime,
+      endTime: block.endTime,
+      neededSlots: winnerMember.neededSlots,
+      totalSlots: totalSlots
+    });
+
+    const slotsToAssign = Math.min(winnerMember.neededSlots, totalSlots);
+    assignments[winnerMember.memberId].assignedHours += slotsToAssign;
   }
 
   return { negotiations, autoAssignments };

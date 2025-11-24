@@ -112,14 +112,9 @@ const CoordinationDetailGrid = ({
     const slotMap = new Map();
 
     allPossibleSlots.forEach(time => {
-      const negotiation = roomData.negotiations?.find(neg =>
-        neg.status === 'active' && // ✅ active 상태인 협의만
-        toYYYYMMDD(neg.slotInfo.date) === toYYYYMMDD(selectedDate) &&
-        time >= neg.slotInfo.startTime && time < neg.slotInfo.endTime
-      );
       const blockingInfo = getBlockedTimeInfo(time, roomData.settings) || getRoomExceptionInfo(selectedDate, time, roomData.settings);
-      const assignedSlots = timeSlots.filter(slot => 
-        toYYYYMMDD(slot.date) === toYYYYMMDD(selectedDate) && 
+      const assignedSlots = timeSlots.filter(slot =>
+        toYYYYMMDD(slot.date) === toYYYYMMDD(selectedDate) &&
         time >= slot.startTime && time < slot.endTime
       );
       const travelSlot = assignedSlots.find(slot => slot.isTravel);
@@ -130,8 +125,6 @@ const CoordinationDetailGrid = ({
       let event = null;
       if (blockingInfo) {
         event = { type: 'blocked', name: blockingInfo.name };
-      } else if (negotiation) {
-        event = { type: 'negotiation', name: `협의: ${negotiation._id}` };
       } else if (travelSlot) {
         event = { type: 'travel', name: '이동시간' };
       } else if (activitySlots.length > 0) {
@@ -235,12 +228,6 @@ const CoordinationDetailGrid = ({
                   textColor = 'text-red-800';
                   Icon = Ban;
                   content = block.name.includes('방장') ? block.name : `금지: ${block.name}`;
-                  break;
-                case 'negotiation':
-                  bgColor = 'bg-yellow-100';
-                  textColor = 'text-yellow-800';
-                  Icon = MessageSquare;
-                  content = '협의 중';
                   break;
                 case 'travel':
                   bgColor = 'bg-green-100';

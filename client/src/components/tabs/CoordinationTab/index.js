@@ -9,14 +9,11 @@ import { coordinationService } from '../../../services/coordinationService';
 
 // Utils
 import { translateEnglishDays } from '../../../utils';
-import { isRoomOwner, calculateEndTime, days, getHourFromSettings, countActiveNegotiations } from '../../../utils/coordinationUtils';
+import { isRoomOwner, calculateEndTime, days, getHourFromSettings } from '../../../utils/coordinationUtils';
 import { getViewMode } from '../../../utils/coordinationModeUtils';
 import {
-  handleAutoResolveNegotiations,
-  handleForceResolveNegotiation,
   handleResetCarryOverTimes,
   handleResetCompletedTimes,
-  handleClearAllNegotiations,
   handleRunAutoSchedule
 } from '../../../utils/coordinationHandlers';
 
@@ -26,7 +23,6 @@ import CoordinationCalendarView from '../../calendar/CoordinationCalendarView';
 import CoordinationDetailGrid from '../../calendar/CoordinationDetailGrid';
 import MemberList from '../../coordination/MemberList';
 import AutoSchedulerPanel from '../../scheduler/AutoSchedulerPanel';
-import NegotiationSection from '../../coordination/NegotiationSection';
 
 // Modals
 import RoomCreationModal from '../../modals/RoomCreationModal';
@@ -36,8 +32,6 @@ import RequestSlotModal from '../../modals/RequestSlotModal';
 import ChangeRequestModal from '../../modals/ChangeRequestModal';
 import CustomAlertModal from '../../modals/CustomAlertModal';
 import NotificationModal from '../../modals/NotificationModal';
-import NegotiationModal from '../../modals/NegotiationModal';
-import NegotiationConflictModal from '../../modals/NegotiationConflictModal';
 import MemberStatsModal from '../../modals/MemberStatsModal';
 import MemberScheduleModal from '../../modals/MemberScheduleModal';
 // 4.txt: 연쇄 교환 요청 모달
@@ -48,7 +42,6 @@ import { syncOwnerPersonalTimes } from './utils/syncUtils';
 import { useAlertState } from './hooks/useAlertState';
 import { useRequests, useRoomExchangeCounts } from './hooks/useRequests';
 import { useViewState } from './hooks/useViewState';
-import { useNegotiationState } from './hooks/useNegotiationState';
 import { useSchedulerState, useMemberModalState } from './hooks/useSchedulerState';
 import {
   createHandleRequestSlot,
@@ -96,12 +89,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     currentWeekStartDate, handleWeekChange
   } = useViewState();
 
-  const {
-    showNegotiationModal, setShowNegotiationModal, selectedNegotiation, setSelectedNegotiation,
-    showNegotiationAlert, setShowNegotiationAlert, negotiationAlertData, setNegotiationAlertData,
-    showConflictModal, setShowConflictModal, conflictNegotiation, setConflictNegotiation,
-    currentWeekNegotiations, setCurrentWeekNegotiations
-  } = useNegotiationState();
 
   const {
     isScheduling, setIsScheduling, scheduleError, setScheduleError,
@@ -346,24 +333,12 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   };
 
   // Auto-scheduling callbacks
-  const handleAutoResolveNegotiationsCallback = useCallback(async () => {
-    await handleAutoResolveNegotiations(currentRoom, fetchRoomDetails, showAlert);
-  }, [currentRoom, fetchRoomDetails, showAlert]);
-
-  const handleForceResolveNegotiationCallback = useCallback(async (negotiationId, method = 'random') => {
-    await handleForceResolveNegotiation(currentRoom, negotiationId, fetchRoomDetails, showAlert, method);
-  }, [currentRoom, fetchRoomDetails, showAlert]);
-
   const handleResetCarryOverTimesCallback = useCallback(async () => {
     await handleResetCarryOverTimes(currentRoom, fetchRoomDetails, setCurrentRoom, showAlert);
   }, [currentRoom, fetchRoomDetails, setCurrentRoom, showAlert]);
 
   const handleResetCompletedTimesCallback = useCallback(async () => {
     await handleResetCompletedTimes(currentRoom, fetchRoomDetails, setCurrentRoom, showAlert);
-  }, [currentRoom, fetchRoomDetails, setCurrentRoom, showAlert]);
-
-  const handleClearAllNegotiationsCallback = useCallback(async () => {
-    await handleClearAllNegotiations(currentRoom, fetchRoomDetails, setCurrentRoom, showAlert);
   }, [currentRoom, fetchRoomDetails, setCurrentRoom, showAlert]);
 
   const handleClearAllCarryOverHistoriesCallback = useCallback(async () => {
@@ -380,7 +355,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   }, [currentRoom, setCurrentRoom, showAlert]);
 
   const handleRunAutoScheduleCallback = async () => {
-    await handleRunAutoSchedule(currentRoom, currentWeekStartDate, user, scheduleOptions, setIsScheduling, setScheduleError, setUnassignedMembersInfo, setConflictSuggestions, setCurrentRoom, setNegotiationAlertData, setShowNegotiationAlert, showAlert, viewMode, travelMode);
+    await handleRunAutoSchedule(currentRoom, currentWeekStartDate, user, scheduleOptions, setIsScheduling, setScheduleError, setUnassignedMembersInfo, setConflictSuggestions, setCurrentRoom, showAlert, viewMode, travelMode);
   };
 
   const handleDeleteAllSlots = () => setShowDeleteConfirm(true);
@@ -396,51 +371,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     }
     setShowDeleteConfirm(false);
   };
-
-  // Negotiation handlers
-  const handleOpenNegotiation = useCallback((negotiationData) => {
-    const otherActiveNegotiations = (currentRoom?.negotiations || []).filter(nego => {
-      if (nego.status !== 'active' || nego._id === negotiationData._id) return false;
-      if (negotiationData.weekStartDate && nego.weekStartDate && nego.weekStartDate !== negotiationData.weekStartDate) return false;
-      return nego.conflictingMembers?.some(cm => {
-        const cmUserId = cm.user?._id || cm.user?.id || cm.user;
-        return cmUserId === user?.id || cmUserId?.toString() === user?.id?.toString();
-      });
-    });
-
-    const hasRespondedToOther = otherActiveNegotiations.some(nego => {
-      const memberInOtherNego = nego.conflictingMembers?.find(cm => {
-        const cmUserId = cm.user?._id || cm.user?.id || cm.user;
-        return cmUserId === user?.id || cmUserId?.toString() === user?.id?.toString();
-      });
-      return memberInOtherNego && memberInOtherNego.response && memberInOtherNego.response !== 'pending';
-    });
-
-    if (hasRespondedToOther) {
-      const respondedNego = otherActiveNegotiations.find(nego => {
-        const memberInOtherNego = nego.conflictingMembers?.find(cm => {
-          const cmUserId = cm.user?._id || cm.user?.id || cm.user;
-          return cmUserId === user?.id || cmUserId?.toString() === user?.id?.toString();
-        });
-        return memberInOtherNego && memberInOtherNego.response && memberInOtherNego.response !== 'pending';
-      });
-      setConflictNegotiation(respondedNego);
-      setShowConflictModal(true);
-      return;
-    }
-
-    setSelectedNegotiation(negotiationData);
-    setShowNegotiationModal(true);
-  }, [currentRoom?.negotiations, user?.id]);
-
-  const handleCloseNegotiation = useCallback(() => {
-    setShowNegotiationModal(false);
-    setSelectedNegotiation(null);
-  }, []);
-
-  const handleNegotiationRefresh = useCallback(async () => {
-    if (currentRoom?._id) await fetchRoomDetails(currentRoom._id);
-  }, [currentRoom?._id, fetchRoomDetails]);
 
   // Modal handlers
   const openLogsModal = () => {
@@ -504,14 +434,11 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
                 onRun={handleRunAutoScheduleCallback}
                 isLoading={isScheduling}
                 currentRoom={currentRoom}
-                onAutoResolveNegotiations={handleAutoResolveNegotiationsCallback}
                 onResetCarryOverTimes={handleResetCarryOverTimesCallback}
                 onResetCompletedTimes={handleResetCompletedTimesCallback}
-                onClearAllNegotiations={handleClearAllNegotiationsCallback}
                 onClearAllCarryOverHistories={handleClearAllCarryOverHistoriesCallback}
                 onDeleteAllSlots={handleDeleteAllSlots}
                 currentWeekStartDate={currentWeekStartDate}
-                activeNegotiationsCount={countActiveNegotiations(currentRoom)}
               />
             )}
             <MemberList
@@ -538,15 +465,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
                 handleCancelRequest={handleCancelRequestCallback}
               />
             )}
-
-            <NegotiationSection
-              currentWeekNegotiations={currentWeekNegotiations}
-              allNegotiations={currentRoom?.negotiations || []}
-              user={user}
-              onOpenNegotiation={handleOpenNegotiation}
-              isOwner={isOwner}
-              currentWeekStartDate={currentWeekStartDate}
-            />
           </div>
 
           {/* Main content */}
@@ -595,7 +513,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
                   calculateEndTime={calculateEndTime}
                   readOnly={isOwner}
                   showMerged={showMerged}
-                  onCurrentWeekNegotiationsChange={setCurrentWeekNegotiations}
                   onOpenChangeRequestModal={openChangeRequestModal}
                 />
               ) : (
@@ -659,30 +576,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           showCancel={false}
         />
 
-        <NotificationModal
-          isOpen={showNegotiationAlert}
-          onClose={() => setShowNegotiationAlert(false)}
-          type="info"
-          title="협의가 필요한 시간대가 있습니다"
-          message={negotiationAlertData ? `귀하가 참여해야 하는 ${negotiationAlertData.count}개의 협의가 있습니다.${negotiationAlertData.totalCount > negotiationAlertData.count ? ` (전체 ${negotiationAlertData.totalCount}개 중)` : ''} 시간표의 '협의중' 슬롯을 클릭하여 참여하세요. 24시간 후 자동으로 해결됩니다.` : ''}
-        />
-
-        <NegotiationModal
-          isOpen={showNegotiationModal}
-          onClose={handleCloseNegotiation}
-          negotiation={selectedNegotiation}
-          currentUser={user}
-          roomId={currentRoom?._id}
-          onRefresh={handleNegotiationRefresh}
-        />
-
-        <NegotiationConflictModal
-          isOpen={showConflictModal}
-          onClose={() => setShowConflictModal(false)}
-          onNavigate={() => { setShowConflictModal(false); setSelectedNegotiation(conflictNegotiation); setShowNegotiationModal(true); }}
-          respondedNegotiation={conflictNegotiation}
-        />
-
         <MemberStatsModal
           isOpen={memberStatsModal.isOpen}
           onClose={() => setMemberStatsModal({ isOpen: false, member: null })}
@@ -722,7 +615,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
               await removeTimeSlot(currentRoom._id, slotData.day, slotData.startTime, slotData.endTime);
               await fetchRoomDetails(currentRoom._id);
             }}
-            onOpenNegotiation={handleOpenNegotiation}
             ownerOriginalSchedule={ownerScheduleCache}
           />
         )}

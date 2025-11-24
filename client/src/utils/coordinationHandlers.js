@@ -7,45 +7,6 @@ import { days, getDayIndex, calculateEndTime } from './coordinationUtils';
 import { auth } from '../config/firebaseConfig';
 
 /**
- * Handle auto-resolution of timeout negotiations
- */
-export const handleAutoResolveNegotiations = async (currentRoom, fetchRoomDetails, showAlert) => {
-  if (!currentRoom?._id) return;
-
-  try {
-    const result = await coordinationService.autoResolveTimeoutNegotiations(currentRoom._id, 24);
-
-    if (result.resolvedCount > 0) {
-      // Show notification about auto-resolved negotiations
-      showAlert(`${result.resolvedCount}개의 협의가 자동으로 해결되었습니다.`);
-
-      // Refresh room data
-      await fetchRoomDetails(currentRoom._id);
-    }
-  } catch (error) {
-    // Silent error handling
-  }
-};
-
-/**
- * Handle force resolve negotiation
- */
-export const handleForceResolveNegotiation = async (currentRoom, negotiationId, fetchRoomDetails, showAlert, method = 'random') => {
-  if (!currentRoom?._id) return;
-
-  try {
-    const result = await coordinationService.forceResolveNegotiation(currentRoom._id, negotiationId, method);
-
-    showAlert(`협의가 ${result.assignmentMethod}으로 해결되었습니다.`);
-
-    // Refresh room data
-    await fetchRoomDetails(currentRoom._id);
-  } catch (error) {
-    showAlert(`협의 해결 실패: ${error.message}`);
-  }
-};
-
-/**
  * Handle reset carryover times
  */
 export const handleResetCarryOverTimes = async (currentRoom, fetchRoomDetails, setCurrentRoom, showAlert) => {
@@ -116,41 +77,6 @@ export const handleResetCompletedTimes = async (currentRoom, fetchRoomDetails, s
 };
 
 /**
- * Handle clear all negotiations
- */
-export const handleClearAllNegotiations = async (currentRoom, fetchRoomDetails, setCurrentRoom, showAlert) => {
-  if (!currentRoom?._id) return;
-
-  try {
-    const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-    const response = await fetch(`${apiUrl}/api/coordination/rooms/${currentRoom._id}/negotiations`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to clear negotiations');
-    }
-
-    const result = await response.json();
-    showAlert(result.msg || `${result.clearedCount}개의 협의가 삭제되었습니다.`);
-
-    // Immediately update room data without refresh
-    if (result.room) {
-      setCurrentRoom(result.room);
-    } else {
-      // Fallback to refresh if room data not returned
-      await fetchRoomDetails(currentRoom._id);
-    }
-  } catch (error) {
-    showAlert(`협의 삭제 실패: ${error.message}`);
-  }
-};
-
-/**
  * Handle auto-scheduling
  */
 export const handleRunAutoSchedule = async (
@@ -163,8 +89,6 @@ export const handleRunAutoSchedule = async (
   setUnassignedMembersInfo,
   setConflictSuggestions,
   setCurrentRoom,
-  setNegotiationAlertData,
-  setShowNegotiationAlert,
   showAlert,
   viewMode = 'week',
   travelMode = 'normal' // Add travelMode parameter
@@ -295,32 +219,8 @@ export const handleRunAutoSchedule = async (
     const newRoomState = JSON.parse(JSON.stringify(updatedRoom));
     setCurrentRoom(newRoomState);
 
-    // Check for active negotiations and show notification
-    const activeNegotiations = updatedRoom.negotiations?.filter(neg =>
-      neg.status === 'active' && neg.conflictingMembers?.length > 0
-    ) || [];
-
-    // Filter negotiations where current user is involved
-    const userNegotiations = activeNegotiations.filter(neg =>
-      neg.conflictingMembers?.some(cm =>
-        (cm.user._id || cm.user) === user?.id
-      )
-    );
-
-    if (userNegotiations.length > 0) {
-      // Show alert for negotiations user is involved in
-      setNegotiationAlertData({
-        count: userNegotiations.length,
-        negotiations: userNegotiations,
-        totalCount: activeNegotiations.length
-      });
-      setShowNegotiationAlert(true);
-    } else if (activeNegotiations.length > 0) {
-      // Show passive notification for other negotiations
-      showAlert(`자동 시간 배정이 완료되었습니다. ${activeNegotiations.length}개의 협의가 생성되었습니다. 같은 우선순위의 멤버들 간 조율이 필요한 시간대입니다.`);
-    } else {
-      showAlert('자동 시간 배정이 완료되었습니다. 모든 시간이 성공적으로 할당되었습니다.');
-    }
+    // 자동 배정 완료 알림
+    showAlert('자동 시간 배정이 완료되었습니다.');
   } catch (error) {
     setScheduleError(error.message);
     showAlert(`자동 배정 실패: ${error.message}`);

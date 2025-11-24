@@ -202,36 +202,16 @@ export const getNegotiationInfo = (date, time, roomData) => {
  * @param {Array} members - Array of room members
  * @param {Object} currentUser - Current user object
  * @param {boolean} isRoomOwner - Whether current user is room owner
- * @param {Function} getNegotiationInfoFunc - Function to get negotiation info
  * @returns {Object|null} - Slot owner info or null
  */
-export const getSlotOwner = (date, time, timeSlots, members, currentUser, isRoomOwner, getNegotiationInfoFunc) => {
+export const getSlotOwner = (date, time, timeSlots, members, currentUser, isRoomOwner) => {
   if (!timeSlots || !time || !date) return null;
 
   const currentTime = time.trim();
   const currentMinutes = timeToMinutes(currentTime);
   const currentDateStr = date.toISOString().split('T')[0];
 
-  // 1. Check for negotiations first
-  const negotiationInfo = getNegotiationInfoFunc(date, time);
-  if (negotiationInfo) {
-    const memberCount = negotiationInfo.conflictingMembers?.length || 0;
-    const isUserInvolved = negotiationInfo.conflictingMembers?.some(cm =>
-      (cm.user._id || cm.user) === currentUser?.id
-    );
-    return {
-      name: isUserInvolved ? `협의 참여 (${memberCount}명)` : `협의중 (${memberCount}명)`,
-      color: isUserInvolved ? DEFAULT_COLORS.NEGOTIATION_USER_INVOLVED : DEFAULT_COLORS.NEGOTIATION_OTHER,
-      userId: 'negotiation',
-      actualUserId: 'negotiation',
-      subject: isUserInvolved ? '내가 참여하는 협의' : '다른 멤버들의 협의',
-      isNegotiation: true,
-      negotiationData: negotiationInfo,
-      isUserInvolved: isUserInvolved
-    };
-  }
-
-  // 2. Find the specific slot for the given time
+  // Find the specific slot for the given time
   const bookedSlot = (timeSlots || []).find(slot => {
     if (!slot || !slot.date || !slot.startTime || !slot.endTime) return false;
     

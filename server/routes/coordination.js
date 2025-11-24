@@ -44,15 +44,6 @@ router.get('/sent-requests', auth, coordinationController.getSentRequests);
 router.get('/received-requests', auth, coordinationController.getReceivedRequests);
 router.get('/exchange-requests-count', auth, coordinationController.getExchangeRequestsCount);
 
-// Negotiation management
-router.get('/rooms/:roomId/negotiations', auth, coordinationController.getNegotiations);
-router.post('/rooms/:roomId/negotiations/:negotiationId/messages', auth, coordinationController.addNegotiationMessage);
-router.post('/rooms/:roomId/negotiations/:negotiationId/resolve', auth, coordinationController.resolveNegotiation);
-router.post('/rooms/:roomId/negotiations/:negotiationId/respond', auth, coordinationController.respondToNegotiation);
-router.post('/rooms/:roomId/negotiations/:negotiationId/cancel', auth, coordinationController.cancelNegotiationResponse);
-router.post('/rooms/:roomId/negotiations/auto-resolve', auth, coordinationController.autoResolveTimeoutNegotiations);
-router.post('/rooms/:roomId/negotiations/:negotiationId/force-resolve', auth, coordinationController.forceResolveNegotiation);
-router.delete('/rooms/:roomId/negotiations', auth, coordinationController.clearAllNegotiations);
 router.post('/rooms/:roomId/reset-completed-times', auth, timeSlotController.resetCompletedTimes);
 
 // @route   DELETE /api/coordination/rooms/:roomId/members/:memberId/carry-over-history

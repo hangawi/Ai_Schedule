@@ -54,31 +54,19 @@ const TimeSlot = ({
         <>
           {ownerInfo && (
             <span
-              className={`text-xs font-medium px-1 py-0.5 rounded ${
-                ownerInfo.isNegotiation ? 'animate-pulse border border-orange-300' : ''
-              } ${showMerged && ownerInfo.isMergedSlot ? 'border-2' : ''}`}
+              className={`text-xs font-medium px-1 py-0.5 rounded ${showMerged && ownerInfo.isMergedSlot ? 'border-2' : ''}`}
               style={{
                 color: ownerInfo.textColor || ownerInfo.color,
-                backgroundColor: `${ownerInfo.color}${ownerInfo.isNegotiation ? '30' : '10'}`,
+                backgroundColor: `${ownerInfo.color}10`,
                 ...(showMerged && ownerInfo.isMergedSlot ? {
                   borderColor: ownerInfo.color,
                   borderStyle: 'solid'
                 } : {})
               }}
               title={ownerInfo.isTravel && ownerInfo.travelInfo ? `${ownerInfo.subject} (${ownerInfo.travelInfo.durationText})` :
-                (ownerInfo.isNegotiation ?
-                `협의 참여자: ${ownerInfo.negotiationData?.conflictingMembers?.map(cm => {
-                  if (cm.user?.name) {
-                    return cm.user.name;
-                  } else if (cm.user?.firstName || cm.user?.lastName) {
-                    return `${cm.user.firstName || ''} ${cm.user.lastName || ''}`.trim();
-                  } else {
-                    return '멤버';
-                  }
-                }).join(', ') || '알 수 없음'}` :
                 (showMerged && ownerInfo.isMergedSlot && ownerInfo.mergedDuration ?
                   `${ownerInfo.subject || ownerInfo.name} - 병합됨 (${ownerInfo.mergedDuration}분)` :
-                  ownerInfo.subject || ownerInfo.name))
+                  ownerInfo.subject || ownerInfo.name)
               }
             >
               {ownerInfo.isTravel ? ownerInfo.subject : (ownerInfo.name.length > 6 ? ownerInfo.name.substring(0, 4) + '...' : ownerInfo.name)}
