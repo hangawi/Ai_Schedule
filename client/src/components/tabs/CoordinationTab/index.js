@@ -32,7 +32,6 @@ import NegotiationSection from '../../coordination/NegotiationSection';
 import RoomCreationModal from '../../modals/RoomCreationModal';
 import RoomJoinModal from '../../modals/RoomJoinModal';
 import RoomManagementModal from '../../modals/RoomManagementModal';
-import AssignSlotModal from '../../modals/AssignSlotModal';
 import RequestSlotModal from '../../modals/RequestSlotModal';
 import ChangeRequestModal from '../../modals/ChangeRequestModal';
 import CustomAlertModal from '../../modals/CustomAlertModal';
@@ -118,12 +117,12 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   // Coordination modals
   const {
     showCreateRoomModal, showJoinRoomModal, showManageRoomModal,
-    showAssignModal, showRequestModal, showChangeRequestModal,
-    slotToAssign, slotToRequest, slotToChange,
+    showRequestModal, showChangeRequestModal,
+    slotToRequest, slotToChange,
     openCreateRoomModal, closeCreateRoomModal,
     openJoinRoomModal, closeJoinRoomModal,
     openManageRoomModal, closeManageRoomModal,
-    closeAssignModal, closeRequestModal, openChangeRequestModal, closeChangeRequestModal
+    closeRequestModal, openChangeRequestModal, closeChangeRequestModal
   } = useCoordinationModals();
 
   // Travel mode
@@ -301,10 +300,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     } catch (error) {}
   };
 
-  const handleAssignSlot = async (assignmentData) => {
-    if (!currentRoom) return;
-    await assignTimeSlot(assignmentData.roomId, assignmentData.day, assignmentData.startTime, assignmentData.endTime, assignmentData.userId);
-  };
 
   const handleSlotSelect = (slotData) => {
     setSelectedSlots(prev => {
@@ -638,23 +633,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           />
         )}
 
-        {showAssignModal && slotToAssign && (
-          <AssignSlotModal
-            onClose={closeAssignModal}
-            onAssign={(memberId) => {
-              handleAssignSlot({
-                roomId: currentRoom._id,
-                day: days[slotToAssign.dayIndex - 1],
-                startTime: slotToAssign.time,
-                endTime: calculateEndTime(slotToAssign.time),
-                userId: memberId
-              });
-              closeAssignModal();
-            }}
-            slotInfo={slotToAssign}
-            members={currentRoom.members}
-          />
-        )}
 
         {showRequestModal && slotToRequest && (
           <RequestSlotModal
@@ -739,7 +717,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
             onClose={handleCloseDetailGrid}
             onSlotSelect={null}
             selectedSlots={[]}
-            onAssignSlot={handleAssignSlot}
             onRequestSlot={handleRequestSlot}
             onRemoveSlot={async (slotData) => {
               await removeTimeSlot(currentRoom._id, slotData.day, slotData.startTime, slotData.endTime);

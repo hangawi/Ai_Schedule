@@ -61,7 +61,6 @@ const TimetableGrid = ({
   onSlotSelect,
   currentUser,
   isRoomOwner,
-  onAssignSlot,
   onRequestSlot,
   onRemoveSlot,
   onDirectSubmit,
@@ -157,9 +156,6 @@ const TimetableGrid = ({
 
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [slotToRequest, setSlotToRequest] = useState(null);
-
-  const [showAssignModal, setShowAssignModal] = useState(false);
-  const [slotToAssign, setSlotToAssign] = useState(null);
 
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
   const [slotToChange, setSlotToChange] = useState(null);
@@ -430,28 +426,23 @@ const TimetableGrid = ({
         }
       }
           } else { // Empty slot
-            if (isRoomOwner) {
-              setSlotToAssign({ date: date, time }); // Pass date object
-              setShowAssignModal(true);
-            } else {
-              const daysKey = DAY_NAMES;
-              const dayIndex = getDayIndex(date);
-              if (dayIndex === -1) return; // Weekend, skip
-              
-              const [hour, minute] = time.split(':').map(Number);
-              const endHour = minute >= 50 ? hour + 1 : hour;
-              const endMinute = minute >= 50 ? 0 : minute + 10;
-              
-              const newSlot = {
-                date: date, // Pass date object
-                day: daysKey[dayIndex],
-                startTime: time,
-                endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
-                subject: '새 일정'
-              };
-              
-              if (onSlotSelect) onSlotSelect(newSlot);
-            }
+            const daysKey = DAY_NAMES;
+            const dayIndex = getDayIndex(date);
+            if (dayIndex === -1) return; // Weekend, skip
+
+            const [hour, minute] = time.split(':').map(Number);
+            const endHour = minute >= 50 ? hour + 1 : hour;
+            const endMinute = minute >= 50 ? 0 : minute + 10;
+
+            const newSlot = {
+              date: date, // Pass date object
+              day: daysKey[dayIndex],
+              startTime: time,
+              endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
+              subject: '새 일정'
+            };
+
+            if (onSlotSelect) onSlotSelect(newSlot);
           }  }, [
     getBlockedTimeInfo,
     getSlotOwner,
@@ -466,27 +457,6 @@ const TimetableGrid = ({
     timeSlots,
     onRequestSlot
   ]);
-
-  // Function to handle assignment from modal
-  const handleAssign = useCallback((memberId) => {
-    if (slotToAssign && slotToAssign.time && memberId && onAssignSlot) {
-      const [hour, minute] = slotToAssign.time.split(':').map(Number);
-      const endHour = minute === 30 ? hour + 1 : hour;
-      const endMinute = minute === 30 ? 0 : minute + 30;
-
-      const assignmentData = {
-        date: slotToAssign.date, // Pass date object
-        day: dayNames[getDayIndex(slotToAssign.date)],
-        startTime: slotToAssign.time,
-        endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
-        userId: memberId,
-        roomId: roomId
-      };
-      onAssignSlot(assignmentData);
-      setShowAssignModal(false);
-      setSlotToAssign(null);
-    }
-  }, [slotToAssign, onAssignSlot, roomId]);
 
   // Function to handle request from modal
   const handleRequest = useCallback((message) => {
@@ -632,38 +602,6 @@ const TimetableGrid = ({
         ownerOriginalSchedule={ownerOriginalSchedule}
         travelMode={travelMode} // Pass travelMode down
       />
-
-      {/* Assignment Modal Placeholder */}
-      {showAssignModal && slotToAssign && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-96">
-            <h3 className="text-lg font-bold mb-4">시간 배정</h3>
-            <p className="mb-4">
-              {days[getDayIndex(slotToAssign.date)]}요일 {slotToAssign.time} 시간을 누구에게 배정하시겠습니까?
-            </p>
-            <select className="w-full p-2 border rounded mb-4" onChange={(e) => handleAssign(e.target.value)} value="">
-              <option value="">조원 선택</option>
-              {(members || [])
-                .filter(member => {
-                  const memberId = member._id || member.user?._id || member.id || member.user?.id;
-                  const currentUserId = currentUser?.id || currentUser?._id;
-                  return memberId !== currentUserId; // 방장(현재 사용자) 제외
-                })
-                .map(member => (
-                  <option key={member._id || member.user?._id || member.id || member.user?.id} value={member._id || member.user?._id || member.id || member.user?.id}>
-                    {`${member.user?.firstName || ''} ${member.user?.lastName || ''}`.trim()}
-                  </option>
-                ))}
-            </select>
-            <button
-              onClick={() => setShowAssignModal(false)}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
-            >
-              취소
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Request Modal Placeholder */}
       {showRequestModal && slotToRequest && (

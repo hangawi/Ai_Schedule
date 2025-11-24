@@ -7,8 +7,6 @@ export const useCoordinationModals = () => {
   const [showManageRoomModal, setShowManageRoomModal] = useState(false);
   
   // Timetable interaction modals
-  const [showAssignModal, setShowAssignModal] = useState(false);
-  const [slotToAssign, setSlotToAssign] = useState(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [slotToRequest, setSlotToRequest] = useState(null);
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
@@ -23,15 +21,6 @@ export const useCoordinationModals = () => {
   
   const openManageRoomModal = () => setShowManageRoomModal(true);
   const closeManageRoomModal = () => setShowManageRoomModal(false);
-  
-  const openAssignModal = (slot) => {
-    setSlotToAssign(slot);
-    setShowAssignModal(true);
-  };
-  const closeAssignModal = () => {
-    setShowAssignModal(false);
-    setSlotToAssign(null);
-  };
   
   const openRequestModal = (slot) => {
     setSlotToRequest(slot);
@@ -56,15 +45,13 @@ export const useCoordinationModals = () => {
     showCreateRoomModal,
     showJoinRoomModal,
     showManageRoomModal,
-    showAssignModal,
     showRequestModal,
     showChangeRequestModal,
-    
+
     // Slot data
-    slotToAssign,
     slotToRequest,
     slotToChange,
-    
+
     // Modal controls
     openCreateRoomModal,
     closeCreateRoomModal,
@@ -72,8 +59,6 @@ export const useCoordinationModals = () => {
     closeJoinRoomModal,
     openManageRoomModal,
     closeManageRoomModal,
-    openAssignModal,
-    closeAssignModal,
     openRequestModal,
     closeRequestModal,
     openChangeRequestModal,
