@@ -495,8 +495,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           isOwner={isOwner}
           onManageRoom={openManageRoomModal}
           onOpenLogs={openLogsModal}
-          selectedSlots={selectedSlots}
-          onSubmitSlots={handleSubmitSlots}
           onBackToRoomList={handleBackToRoomList}
           onLeaveRoom={handleLeaveRoom}
         />
@@ -594,8 +592,8 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
                   roomData={currentRoom}
                   currentUser={user}
                   isRoomOwner={isOwner}
-                  selectedSlots={selectedSlots}
-                  onSlotSelect={isOwner ? null : handleSlotSelect}
+                  selectedSlots={[]}
+                  onSlotSelect={null}
                   onWeekChange={handleWeekChange}
                   ownerOriginalSchedule={ownerScheduleCache}
                   initialStartDate={currentWeekStartDate}
@@ -739,8 +737,8 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
             roomData={currentRoom}
             showMerged={showMerged}
             onClose={handleCloseDetailGrid}
-            onSlotSelect={handleSlotSelect}
-            selectedSlots={selectedSlots}
+            onSlotSelect={null}
+            selectedSlots={[]}
             onAssignSlot={handleAssignSlot}
             onRequestSlot={handleRequestSlot}
             onRemoveSlot={async (slotData) => {

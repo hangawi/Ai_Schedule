@@ -11,8 +11,6 @@ const RoomHeader = ({
   isOwner,
   onManageRoom,
   onOpenLogs,
-  selectedSlots,
-  onSubmitSlots,
   onBackToRoomList,
   onLeaveRoom
 }) => {
@@ -60,15 +58,6 @@ const RoomHeader = ({
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">
-        {!isOwner && (
-          <button
-            onClick={onSubmitSlots}
-            className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm"
-            disabled={selectedSlots.length === 0}
-          >
-            선택 시간표 제출 ({selectedSlots.length}개)
-          </button>
-        )}
         <button
           onClick={onBackToRoomList}
           className="px-5 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors shadow-sm"
