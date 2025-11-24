@@ -4,7 +4,7 @@
  * "11월 11일을 14일로" 같은 날짜 기반 변경 요청을 처리합니다.
  */
 
-const Room = require('../../../models/Room');
+const Room = require('../../../models/room');
 const ActivityLog = require('../../../models/ActivityLog');
 const { timeToMinutes, minutesToTime, addHours, getHoursDifference } = require('../utils/timeUtils');
 const { logSlotSwap, logAutoPlacement, logChangeRequest } = require('../helpers/activityLogger');

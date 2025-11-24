@@ -1,5 +1,5 @@
-const Room = require('../models/Room');
-const User = require('../models/User');
+const Room = require('../models/room');
+const User = require('../models/user');
 const ActivityLog = require('../models/ActivityLog');
 const schedulingAlgorithm = require('../services/schedulingAlgorithm');
 

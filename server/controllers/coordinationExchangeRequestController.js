@@ -1,4 +1,4 @@
-const Room = require('../models/Room');
+const Room = require('../models/room');
 
 // Helper: 시간 계산 함수들
 function addHours(timeStr, hours) {

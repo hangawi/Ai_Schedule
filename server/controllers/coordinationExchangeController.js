@@ -17,7 +17,7 @@
  * helpers/      - 헬퍼 함수 (slotFinder, scheduleOverlap, autoPlacement, activityLogger)
  */
 
-const Room = require('../models/Room');
+const Room = require('../models/room');
 const ActivityLog = require('../models/ActivityLog');
 const { parseMessage } = require('./coordinationExchangeController/services/geminiService');
 const { handleDateChange } = require('./coordinationExchangeController/services/dateChangeService');
