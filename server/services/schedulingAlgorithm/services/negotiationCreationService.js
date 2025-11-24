@@ -2,11 +2,9 @@
  * 협의 생성 서비스
  */
 
-const { DAY_MAP, NEGOTIATION_TYPES, FAIRNESS_GAP_THRESHOLD } = require('../constants/schedulingConstants');
-const { MINUTES_PER_SLOT } = require('../constants/timeConstants');
+const { DAY_MAP, FAIRNESS_GAP_THRESHOLD } = require('../constants/schedulingConstants');
 const { calculateBlockSlotCount, filterUnsatisfiedConflictingMembers } = require('../helpers/conflictMerger');
-const { getMemberPriority, findMemberById, calculateFlexibilityScores, sortByFlexibility } = require('../helpers/memberHelper');
-const { determineNegotiationType, createNegotiation, generateMemberTimeSlotOptions, mergeAllTimeSlotOptions } = require('../helpers/negotiationHelper');
+const { findMemberById, calculateFlexibilityScores, sortByFlexibility } = require('../helpers/memberHelper');
 
 /**
  * 협의 블록 처리 및 협의 생성

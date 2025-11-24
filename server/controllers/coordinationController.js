@@ -5,7 +5,6 @@ const Event = require('../models/event');
 const ActivityLog = require('../models/ActivityLog');
 const { findOptimalSlots } = require('../services/schedulingAnalysisService');
 const schedulingAlgorithm = require('../services/schedulingAlgorithm');
-const { OWNER_COLOR, getAvailableColor } = require('../utils/colorUtils');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
