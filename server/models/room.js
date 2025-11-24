@@ -55,7 +55,7 @@ const RequestSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['time_request', 'time_change', 'time_swap', 'slot_swap', 'slot_release', 'exchange_request'],
+    enum: ['time_request', 'time_change', 'time_swap', 'slot_swap', 'slot_release', 'exchange_request', 'chain_exchange_request'],
     required: true
   },
   timeSlot: {
@@ -80,6 +80,21 @@ const RequestSchema = new mongoose.Schema({
   desiredDay: String, // e.g., 'wednesday'
   desiredTime: String, // e.g., '14:00' (optional)
   message: String,
+  // Chain exchange request fields (A → B → C)
+  chainData: {
+    originalRequestId: { type: mongoose.Schema.Types.ObjectId }, // 원본 요청 ID
+    originalRequester: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // A
+    intermediateUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // B
+    chainUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // C (현재 요청 대상)
+    intermediateSlot: TimeSlotSchema, // B의 원래 자리 (A가 원하는 자리)
+    chainSlot: TimeSlotSchema, // C의 자리 (B가 이동할 자리)
+    rejectedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // 거절한 사용자들
+    candidateUsers: [{ // 아직 요청하지 않은 후보들
+      user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      slot: TimeSlotSchema,
+      date: Date
+    }]
+  },
   status: {
     type: String,
     enum: ['pending', 'approved', 'rejected', 'cancelled'],

@@ -41,6 +41,8 @@ import NegotiationModal from '../../modals/NegotiationModal';
 import NegotiationConflictModal from '../../modals/NegotiationConflictModal';
 import MemberStatsModal from '../../modals/MemberStatsModal';
 import MemberScheduleModal from '../../modals/MemberScheduleModal';
+// 4.txt: 연쇄 교환 요청 모달
+import ChainExchangeRequestModal from '../../coordination/ChainExchangeRequestModal';
 
 // Local modules
 import { syncOwnerPersonalTimes } from './utils/syncUtils';
@@ -72,7 +74,11 @@ import {
 const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   // Custom hooks - order matters for dependencies
   const { customAlert, showAlert, closeAlert } = useAlertState();
-  const { sentRequests, receivedRequests, setSentRequests, setReceivedRequests, loadSentRequests, loadReceivedRequests } = useRequests(user);
+  const { sentRequests, receivedRequests, setSentRequests, setReceivedRequests, loadSentRequests, loadReceivedRequests, chainExchangeRequests, setChainExchangeRequests, loadChainExchangeRequests } = useRequests(user);
+
+  // 4.txt: 연쇄 교환 요청 모달 상태
+  const [showChainExchangeModal, setShowChainExchangeModal] = useState(false);
+  const [selectedChainRequest, setSelectedChainRequest] = useState(null);
 
   const {
     myRooms, currentRoom, isLoading, error,
@@ -203,9 +209,29 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         loadRoomExchangeCounts();
         loadSentRequests();
         loadReceivedRequests();
+        // 4.txt: 연쇄 교환 요청 로드
+        loadChainExchangeRequests();
       }, 100);
     }
   }, [user?.id]);
+
+  // 4.txt: 연쇄 교환 요청이 있으면 자동으로 모달 표시
+  useEffect(() => {
+    if (chainExchangeRequests.length > 0 && !showChainExchangeModal) {
+      const firstRequest = chainExchangeRequests[0];
+      setSelectedChainRequest(firstRequest);
+      setShowChainExchangeModal(true);
+    }
+  }, [chainExchangeRequests]);
+
+  // 4.txt: 연쇄 교환 요청 처리 완료 핸들러
+  const handleChainExchangeRequestHandled = async () => {
+    await loadChainExchangeRequests();
+    if (currentRoom?._id) {
+      await fetchRoomDetails(currentRoom._id);
+    }
+    loadRoomExchangeCounts();
+  };
 
   // Update exchange count
   useEffect(() => {
@@ -732,6 +758,15 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
             onClose={() => { setShowMemberScheduleModal(false); setSelectedMemberId(null); }}
           />
         )}
+
+        {/* 4.txt: 연쇄 교환 요청 모달 */}
+        <ChainExchangeRequestModal
+          isOpen={showChainExchangeModal}
+          onClose={() => { setShowChainExchangeModal(false); setSelectedChainRequest(null); }}
+          request={selectedChainRequest}
+          roomId={selectedChainRequest?.roomId}
+          onRequestHandled={handleChainExchangeRequestHandled}
+        />
       </div>
     );
   }
@@ -768,6 +803,15 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         message={customAlert.message}
         type="warning"
         showCancel={false}
+      />
+
+      {/* 4.txt: 연쇄 교환 요청 모달 (Room list view에서도 표시) */}
+      <ChainExchangeRequestModal
+        isOpen={showChainExchangeModal}
+        onClose={() => { setShowChainExchangeModal(false); setSelectedChainRequest(null); }}
+        request={selectedChainRequest}
+        roomId={selectedChainRequest?.roomId}
+        onRequestHandled={handleChainExchangeRequestHandled}
       />
     </>
   );

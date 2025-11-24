@@ -571,4 +571,50 @@ export const coordinationService = {
 
     return await res.json();
   },
+
+  // ========== 연쇄 교환 요청 API (4.txt: A → B → C) ==========
+
+  // 대기 중인 연쇄 교환 요청 가져오기
+  async getPendingChainExchangeRequests() {
+    const token = await getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/coordination/chain-exchange-requests/pending`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to get pending chain exchange requests');
+    }
+
+    return await response.json();
+  },
+
+  // 연쇄 교환 요청 응답 (승인/거절)
+  async respondToChainExchangeRequest(roomId, requestId, action) {
+    const token = await getAuthToken();
+
+    // 'approved' → 'accept', 'rejected' → 'reject' 변환
+    const serverAction = action === 'approved' ? 'accept' : action === 'rejected' ? 'reject' : action;
+
+    console.log('🔗 [coordinationService] Calling respondToChainExchangeRequest API');
+    console.log('   Room ID:', roomId);
+    console.log('   Request ID:', requestId);
+    console.log('   Action:', action, '→', serverAction);
+
+    const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/chain-exchange-requests/${requestId}/respond`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ action: serverAction })
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.message || errData.msg || `Failed to ${action} chain exchange request`);
+    }
+
+    return await response.json();
+  },
 };

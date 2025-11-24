@@ -79,4 +79,8 @@ router.post('/rooms/:roomId/exchange-requests', auth, exchangeRequestController.
 router.post('/rooms/:roomId/exchange-requests/:requestId/respond', auth, exchangeRequestController.respondToExchangeRequest);
 router.get('/exchange-requests/pending', auth, exchangeRequestController.getPendingExchangeRequests);
 
+// Chain exchange request endpoints (4.txt: A → B → C 연쇄 교환)
+router.post('/rooms/:roomId/chain-exchange-requests/:requestId/respond', auth, exchangeRequestController.respondToChainExchangeRequest);
+router.get('/chain-exchange-requests/pending', auth, exchangeRequestController.getPendingChainExchangeRequests);
+
 module.exports = router;

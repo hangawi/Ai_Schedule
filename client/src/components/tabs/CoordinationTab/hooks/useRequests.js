@@ -11,6 +11,8 @@ import { coordinationService } from '../../../../services/coordinationService';
 export const useRequests = (userId) => {
   const [sentRequests, setSentRequests] = useState([]);
   const [receivedRequests, setReceivedRequests] = useState([]);
+  // 4.txt: 연쇄 교환 요청 상태 추가
+  const [chainExchangeRequests, setChainExchangeRequests] = useState([]);
 
   const loadSentRequests = useCallback(async () => {
     if (!userId) return;
@@ -36,13 +38,31 @@ export const useRequests = (userId) => {
     }
   }, [userId]);
 
+  // 4.txt: 연쇄 교환 요청 로드 함수
+  const loadChainExchangeRequests = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const result = await coordinationService.getPendingChainExchangeRequests();
+      if (result.success) {
+        setChainExchangeRequests(result.requests);
+      }
+    } catch (error) {
+      // Silent error handling
+      console.log('Chain exchange requests load error:', error);
+    }
+  }, [userId]);
+
   return {
     sentRequests,
     setSentRequests,
     receivedRequests,
     setReceivedRequests,
     loadSentRequests,
-    loadReceivedRequests
+    loadReceivedRequests,
+    // 4.txt: 연쇄 교환 요청
+    chainExchangeRequests,
+    setChainExchangeRequests,
+    loadChainExchangeRequests
   };
 };
 

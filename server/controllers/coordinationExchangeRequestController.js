@@ -16,6 +16,116 @@ function getHoursDifference(startTime, endTime) {
 }
 
 /**
+ * Find chain candidates (C users) who occupy B's preferred time slots
+ * 4.txt: B의 선호시간을 차지한 사람들 중 오늘 이후 가장 가까운 날짜에 있는 사람부터 찾기
+ */
+function findChainCandidates(room, userId, excludeUsers = []) {
+   console.log(`\n🔗 ========== Finding Chain Candidates for user ${userId} ==========`);
+
+   // Get user's member data (B)
+   const memberData = room.members.find(m =>
+      (m.user._id || m.user).toString() === userId.toString()
+   );
+
+   if (!memberData || !memberData.user.defaultSchedule) {
+      console.log('❌ No member data or default schedule found');
+      return [];
+   }
+
+   const userSchedule = memberData.user.defaultSchedule;
+   const today = new Date();
+   today.setUTCHours(0, 0, 0, 0);
+
+   // Get user's preferred days (priority >= 2)
+   const preferredSlots = userSchedule.filter(s => s.priority >= 2);
+   console.log(`📅 User's preferred slots:`, preferredSlots.map(s => ({
+      day: s.dayOfWeek,
+      time: `${s.startTime}-${s.endTime}`
+   })));
+
+   // 현재 주의 월요일 계산
+   const now = new Date();
+   const day = now.getUTCDay();
+   const diff = now.getUTCDate() - day + (day === 0 ? -6 : 1);
+   const monday = new Date(now);
+   monday.setUTCDate(diff);
+   monday.setUTCHours(0, 0, 0, 0);
+
+   const dayMap = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday' };
+
+   // B의 선호시간을 차지한 사람들 찾기
+   const candidates = [];
+
+   for (const pref of preferredSlots) {
+      // Calculate date for this preference
+      const targetDate = new Date(monday);
+      targetDate.setUTCDate(monday.getUTCDate() + pref.dayOfWeek - 1);
+      const targetDateStr = targetDate.toISOString().split('T')[0];
+
+      // 오늘 이후인지 확인
+      if (targetDate < today) continue;
+
+      // 해당 날짜/시간에 배정된 슬롯 찾기
+      const occupyingSlots = room.timeSlots.filter(slot => {
+         const slotDate = new Date(slot.date).toISOString().split('T')[0];
+         const slotUserId = (slot.user._id || slot.user).toString();
+
+         // 자기 자신이거나 제외 대상이면 제외
+         if (slotUserId === userId.toString()) return false;
+         if (excludeUsers.some(u => u.toString() === slotUserId)) return false;
+
+         // 날짜 일치
+         if (slotDate !== targetDateStr) return false;
+
+         // 시간이 겹치는지 확인
+         const [prefStartH, prefStartM] = pref.startTime.split(':').map(Number);
+         const [prefEndH, prefEndM] = pref.endTime.split(':').map(Number);
+         const [slotStartH, slotStartM] = slot.startTime.split(':').map(Number);
+         const [slotEndH, slotEndM] = slot.endTime.split(':').map(Number);
+
+         const prefStartMin = prefStartH * 60 + prefStartM;
+         const prefEndMin = prefEndH * 60 + prefEndM;
+         const slotStartMin = slotStartH * 60 + slotStartM;
+         const slotEndMin = slotEndH * 60 + slotEndM;
+
+         // 시간 겹침 확인
+         return (slotStartMin < prefEndMin && slotEndMin > prefStartMin);
+      });
+
+      for (const slot of occupyingSlots) {
+         const slotUserId = (slot.user._id || slot.user).toString();
+
+         // 이미 후보에 있는 사용자인지 확인
+         const existingCandidate = candidates.find(c =>
+            c.userId === slotUserId &&
+            new Date(c.slot.date).toISOString().split('T')[0] === targetDateStr
+         );
+
+         if (!existingCandidate) {
+            candidates.push({
+               userId: slotUserId,
+               userName: slot.user?.firstName || 'Unknown',
+               slot: slot,
+               date: targetDate,
+               daysDiff: Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24))
+            });
+         }
+      }
+   }
+
+   // 오늘 이후 가장 가까운 날짜 순으로 정렬
+   candidates.sort((a, b) => a.daysDiff - b.daysDiff);
+
+   console.log(`📋 Found ${candidates.length} chain candidates:`);
+   candidates.forEach((c, i) => {
+      console.log(`   ${i + 1}. ${c.userName} (${c.userId.substring(0, 8)}...) - ${c.slot.day} ${c.slot.startTime}-${c.slot.endTime} (${c.daysDiff} days from today)`);
+   });
+   console.log(`🔗 ============================================\n`);
+
+   return candidates;
+}
+
+/**
  * Find alternative slot for user B when they accept exchange
  */
 async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDate, slotsToIgnore = []) {
@@ -558,9 +668,49 @@ exports.respondToExchangeRequest = async (req, res) => {
          );
 
          if (!alternativeSlot) {
-            return res.status(400).json({
-               success: false,
-               message: '대체 가능한 시간을 찾을 수 없습니다. 다른 요일에 가능한 시간이 없습니다.'
+            // 4.txt: B에게 빈 시간이 없을 때 연쇄 요청 시작
+            console.log('🔗 No alternative slot found for B, starting chain exchange process...');
+
+            // 원본 요청자(A)를 제외한 채로 연쇄 후보 찾기
+            const originalRequesterId = (request.requester._id || request.requester).toString();
+            const excludeUsers = [originalRequesterId, targetUserId]; // A와 B 제외
+
+            const chainCandidates = findChainCandidates(room, targetUserId, excludeUsers);
+
+            if (chainCandidates.length === 0) {
+               return res.status(400).json({
+                  success: false,
+                  message: '대체 가능한 시간을 찾을 수 없고, 연쇄 조정할 후보도 없습니다.'
+               });
+            }
+
+            // 첫 번째 후보에게 연쇄 요청 생성
+            const firstCandidate = chainCandidates[0];
+            console.log(`📤 Creating chain request to first candidate: ${firstCandidate.userName}`);
+
+            const chainRequest = await createChainExchangeRequest(
+               room,
+               request,
+               targetUserId, // B
+               firstCandidate,
+               chainCandidates
+            );
+
+            // 원본 요청 상태를 '대기 중 - 연쇄 조정'으로 업데이트
+            request.status = 'pending';
+            request.response = `연쇄 조정 진행 중 - ${firstCandidate.userName}님에게 요청 전송됨`;
+
+            await room.save();
+
+            // Populate the chain request
+            await room.populate('requests.requester', 'firstName lastName email');
+            await room.populate('requests.targetUser', 'firstName lastName email');
+
+            return res.json({
+               success: true,
+               message: `빈 시간이 없어 ${firstCandidate.userName}님에게 연쇄 조정을 요청했습니다.`,
+               chainRequest: chainRequest,
+               chainCandidatesCount: chainCandidates.length
             });
          }
 
@@ -766,8 +916,472 @@ exports.getPendingExchangeRequests = async (req, res) => {
    }
 };
 
+/**
+ * Create chain exchange request (B → C)
+ * 4.txt: B가 승인했지만 빈 시간이 없을 때, C에게 연쇄 요청
+ */
+async function createChainExchangeRequest(room, originalRequest, intermediateUserId, chainCandidate, allCandidates) {
+   console.log(`\n🔗 ========== Creating Chain Exchange Request ==========`);
+   console.log(`📋 Original request: ${originalRequest._id}`);
+   console.log(`👤 Intermediate user (B): ${intermediateUserId}`);
+   console.log(`👤 Chain user (C): ${chainCandidate.userId}`);
+
+   const intermediateUser = room.members.find(m =>
+      (m.user._id || m.user).toString() === intermediateUserId.toString()
+   );
+
+   const chainUser = room.members.find(m =>
+      (m.user._id || m.user).toString() === chainCandidate.userId
+   );
+
+   // 원본 요청자 (A)
+   const originalRequesterId = (originalRequest.requester._id || originalRequest.requester).toString();
+
+   // C의 슬롯들 찾기 (같은 날짜의 연속된 슬롯들)
+   const chainSlotDate = new Date(chainCandidate.slot.date).toISOString().split('T')[0];
+   const chainUserSlots = room.timeSlots.filter(slot => {
+      const slotDate = new Date(slot.date).toISOString().split('T')[0];
+      const slotUserId = (slot.user._id || slot.user).toString();
+      return slotDate === chainSlotDate && slotUserId === chainCandidate.userId;
+   });
+
+   // 남은 후보들 (현재 후보 제외)
+   const remainingCandidates = allCandidates
+      .filter(c => c.userId !== chainCandidate.userId)
+      .map(c => ({
+         user: c.userId,
+         slot: {
+            day: c.slot.day,
+            date: c.slot.date,
+            startTime: c.slot.startTime,
+            endTime: c.slot.endTime,
+            user: c.slot.user
+         },
+         date: c.date
+      }));
+
+   const chainRequest = {
+      requester: intermediateUserId, // B가 요청자
+      type: 'chain_exchange_request',
+      targetUser: chainCandidate.userId, // C가 대상
+      requesterSlots: originalRequest.requesterSlots, // A의 원래 슬롯들 (참조용)
+      targetSlot: {
+         day: chainCandidate.slot.day,
+         date: chainCandidate.slot.date,
+         startTime: chainCandidate.slot.startTime,
+         endTime: chainCandidate.slot.endTime,
+         subject: chainCandidate.slot.subject,
+         user: chainCandidate.slot.user._id || chainCandidate.slot.user
+      },
+      message: `${intermediateUser?.user?.firstName || 'Unknown'}님이 일정 조정을 위해 ${chainCandidate.slot.day} ${chainCandidate.slot.startTime} 자리를 요청합니다. 남아있는 빈 시간으로 이동해주실 수 있나요?`,
+      chainData: {
+         originalRequestId: originalRequest._id,
+         originalRequester: originalRequesterId, // A
+         intermediateUser: intermediateUserId, // B
+         chainUser: chainCandidate.userId, // C
+         intermediateSlot: originalRequest.targetSlot, // B의 원래 자리 (A가 원하는 자리)
+         chainSlot: {
+            day: chainCandidate.slot.day,
+            date: chainCandidate.slot.date,
+            startTime: chainCandidate.slot.startTime,
+            endTime: chainCandidate.slot.endTime,
+            subject: chainCandidate.slot.subject,
+            user: chainCandidate.slot.user._id || chainCandidate.slot.user
+         },
+         rejectedUsers: [],
+         candidateUsers: remainingCandidates
+      },
+      status: 'pending',
+      createdAt: new Date()
+   };
+
+   room.requests.push(chainRequest);
+
+   console.log(`✅ Chain exchange request created`);
+   console.log(`📋 Remaining candidates: ${remainingCandidates.length}`);
+   console.log(`🔗 ============================================\n`);
+
+   return room.requests[room.requests.length - 1];
+}
+
+/**
+ * Respond to chain exchange request (C's response)
+ * POST /api/coordination/rooms/:roomId/chain-exchange-requests/:requestId/respond
+ */
+exports.respondToChainExchangeRequest = async (req, res) => {
+   try {
+      const { roomId, requestId } = req.params;
+      const { action } = req.body; // 'accept' or 'reject'
+
+      console.log('🔗 Responding to chain exchange request:', {
+         roomId,
+         requestId,
+         responderId: req.user.id,
+         action
+      });
+
+      const room = await Room.findById(roomId)
+         .populate('owner', 'firstName lastName email defaultSchedule')
+         .populate('members.user', 'firstName lastName email defaultSchedule')
+         .populate('timeSlots.user', '_id firstName lastName email')
+         .populate('requests.requester', 'firstName lastName email')
+         .populate('requests.targetUser', 'firstName lastName email');
+
+      if (!room) {
+         return res.status(404).json({ success: false, message: '방을 찾을 수 없습니다.' });
+      }
+
+      const request = room.requests.id(requestId);
+      if (!request || request.type !== 'chain_exchange_request') {
+         return res.status(404).json({ success: false, message: '연쇄 교환 요청을 찾을 수 없습니다.' });
+      }
+
+      // Verify responder is the chain user (C)
+      const chainUserId = (request.targetUser._id || request.targetUser).toString();
+      if (chainUserId !== req.user.id.toString()) {
+         return res.status(403).json({
+            success: false,
+            message: '이 요청에 응답할 권한이 없습니다.'
+         });
+      }
+
+      if (request.status !== 'pending') {
+         return res.status(400).json({
+            success: false,
+            message: '이미 처리된 요청입니다.'
+         });
+      }
+
+      if (action === 'reject') {
+         console.log('❌ C rejected the chain exchange request');
+
+         // C를 거절 목록에 추가
+         if (!request.chainData.rejectedUsers) {
+            request.chainData.rejectedUsers = [];
+         }
+         request.chainData.rejectedUsers.push(req.user.id);
+
+         // 다음 후보 찾기
+         const remainingCandidates = request.chainData.candidateUsers || [];
+         console.log(`📋 Remaining candidates: ${remainingCandidates.length}`);
+
+         if (remainingCandidates.length > 0) {
+            // 다음 후보에게 요청
+            const nextCandidate = remainingCandidates[0];
+            console.log(`📤 Sending request to next candidate: ${nextCandidate.user}`);
+
+            // 현재 요청 상태 업데이트
+            request.status = 'rejected';
+            request.respondedAt = new Date();
+            request.respondedBy = req.user.id;
+            request.response = '거절됨 - 다음 후보에게 요청 중';
+
+            // 새로운 연쇄 요청 생성
+            const newChainRequest = {
+               requester: request.chainData.intermediateUser,
+               type: 'chain_exchange_request',
+               targetUser: nextCandidate.user,
+               requesterSlots: request.requesterSlots,
+               targetSlot: nextCandidate.slot,
+               message: `일정 조정을 위해 ${nextCandidate.slot.day} ${nextCandidate.slot.startTime} 자리를 요청합니다. 남아있는 빈 시간으로 이동해주실 수 있나요?`,
+               chainData: {
+                  originalRequestId: request.chainData.originalRequestId,
+                  originalRequester: request.chainData.originalRequester,
+                  intermediateUser: request.chainData.intermediateUser,
+                  chainUser: nextCandidate.user,
+                  intermediateSlot: request.chainData.intermediateSlot,
+                  chainSlot: nextCandidate.slot,
+                  rejectedUsers: [...request.chainData.rejectedUsers],
+                  candidateUsers: remainingCandidates.slice(1)
+               },
+               status: 'pending',
+               createdAt: new Date()
+            };
+
+            room.requests.push(newChainRequest);
+            await room.save();
+
+            return res.json({
+               success: true,
+               message: '거절되었습니다. 다른 사용자에게 요청을 보내는 중입니다.',
+               nextCandidate: nextCandidate.user
+            });
+         } else {
+            // 모든 후보가 거절 - 원본 요청 실패 처리
+            console.log('❌ All candidates rejected - chain exchange failed');
+
+            request.status = 'rejected';
+            request.respondedAt = new Date();
+            request.respondedBy = req.user.id;
+            request.response = '모든 후보가 거절 - 조정 실패';
+
+            // 원본 요청도 실패 처리
+            const originalRequest = room.requests.id(request.chainData.originalRequestId);
+            if (originalRequest) {
+               originalRequest.status = 'rejected';
+               originalRequest.response = '연쇄 조정 실패 - 모든 후보가 거절했습니다.';
+            }
+
+            await room.save();
+
+            return res.json({
+               success: false,
+               message: '모든 후보가 거절하여 조정이 불가능합니다.'
+            });
+         }
+      }
+
+      if (action === 'accept') {
+         console.log('✅ C accepted the chain exchange request');
+
+         // C의 빈 시간 찾기
+         const chainUserId = req.user.id.toString();
+         const requesterSlots = request.requesterSlots;
+         const firstSlot = requesterSlots[0];
+         const lastSlot = requesterSlots[requesterSlots.length - 1];
+         const requiredHours = getHoursDifference(firstSlot.startTime, lastSlot.endTime);
+
+         // C가 이동할 빈 시간 찾기
+         const alternativeSlotForC = await findAlternativeSlotForUser(
+            room,
+            chainUserId,
+            requiredHours,
+            request.targetSlot.date,
+            [] // C의 슬롯이 비워질 것이므로 무시할 슬롯 없음
+         );
+
+         if (!alternativeSlotForC) {
+            return res.status(400).json({
+               success: false,
+               message: '이동할 빈 시간이 없습니다. 다른 사용자에게 요청합니다.'
+            });
+         }
+
+         console.log('🔄 Executing chain exchange...');
+
+         // === 연쇄 교환 실행 ===
+         // 1. C를 빈 시간으로 이동
+         // 2. B를 C의 원래 자리로 이동
+         // 3. A를 B의 원래 자리로 이동
+
+         const originalRequesterId = request.chainData.originalRequester.toString();
+         const intermediateUserId = request.chainData.intermediateUser.toString();
+
+         // Step 1: C의 현재 슬롯 삭제
+         const chainSlotDate = new Date(request.chainData.chainSlot.date).toISOString().split('T')[0];
+         const cSlotsToRemove = room.timeSlots.filter(slot => {
+            const slotDate = new Date(slot.date).toISOString().split('T')[0];
+            const slotUserId = (slot.user._id || slot.user).toString();
+            return slotDate === chainSlotDate && slotUserId === chainUserId;
+         });
+
+         for (const slot of cSlotsToRemove) {
+            const index = room.timeSlots.findIndex(s =>
+               s._id.toString() === slot._id.toString()
+            );
+            if (index !== -1) {
+               room.timeSlots.splice(index, 1);
+            }
+         }
+         console.log(`🗑️ Removed ${cSlotsToRemove.length} C's slots`);
+
+         // Step 2: B의 현재 슬롯 삭제 (B의 원래 자리 = A가 원하는 자리)
+         const intermediateSlotDate = new Date(request.chainData.intermediateSlot.date).toISOString().split('T')[0];
+         const bSlotsToRemove = room.timeSlots.filter(slot => {
+            const slotDate = new Date(slot.date).toISOString().split('T')[0];
+            const slotUserId = (slot.user._id || slot.user).toString();
+            return slotDate === intermediateSlotDate && slotUserId === intermediateUserId;
+         });
+
+         for (const slot of bSlotsToRemove) {
+            const index = room.timeSlots.findIndex(s =>
+               s._id.toString() === slot._id.toString()
+            );
+            if (index !== -1) {
+               room.timeSlots.splice(index, 1);
+            }
+         }
+         console.log(`🗑️ Removed ${bSlotsToRemove.length} B's slots`);
+
+         // Step 3: A의 현재 슬롯 삭제
+         for (const reqSlot of request.requesterSlots) {
+            const index = room.timeSlots.findIndex(slot => {
+               const slotDate = new Date(slot.date).toISOString().split('T')[0];
+               const reqDate = new Date(reqSlot.date).toISOString().split('T')[0];
+               const slotUserId = (slot.user._id || slot.user).toString();
+               const reqUserId = (reqSlot.user._id || reqSlot.user).toString();
+               return slotDate === reqDate &&
+                      slot.startTime === reqSlot.startTime &&
+                      slot.endTime === reqSlot.endTime &&
+                      slotUserId === reqUserId;
+            });
+            if (index !== -1) {
+               room.timeSlots.splice(index, 1);
+            }
+         }
+         console.log(`🗑️ Removed A's original slots`);
+
+         // Step 4: C를 빈 시간으로 이동
+         const cNewSlots = [];
+         let cCurrentTime = alternativeSlotForC.startTime;
+         for (let i = 0; i < cSlotsToRemove.length; i++) {
+            const slotEnd = addHours(cCurrentTime, 0.5);
+            cNewSlots.push({
+               user: chainUserId,
+               date: alternativeSlotForC.date,
+               startTime: cCurrentTime,
+               endTime: slotEnd,
+               day: alternativeSlotForC.day,
+               subject: '연쇄 교환 결과',
+               status: 'confirmed',
+               assignedBy: req.user.id,
+               assignedAt: new Date()
+            });
+            cCurrentTime = slotEnd;
+         }
+         room.timeSlots.push(...cNewSlots);
+         console.log(`➕ Added ${cNewSlots.length} new slots for C at ${alternativeSlotForC.day} ${alternativeSlotForC.startTime}`);
+
+         // Step 5: B를 C의 원래 자리로 이동
+         const bNewSlots = [];
+         let bCurrentTime = request.chainData.chainSlot.startTime;
+         for (let i = 0; i < bSlotsToRemove.length; i++) {
+            const slotEnd = addHours(bCurrentTime, 0.5);
+            bNewSlots.push({
+               user: intermediateUserId,
+               date: request.chainData.chainSlot.date,
+               startTime: bCurrentTime,
+               endTime: slotEnd,
+               day: request.chainData.chainSlot.day,
+               subject: '연쇄 교환 결과',
+               status: 'confirmed',
+               assignedBy: req.user.id,
+               assignedAt: new Date()
+            });
+            bCurrentTime = slotEnd;
+         }
+         room.timeSlots.push(...bNewSlots);
+         console.log(`➕ Added ${bNewSlots.length} new slots for B at ${request.chainData.chainSlot.day}`);
+
+         // Step 6: A를 B의 원래 자리로 이동
+         const aNewSlots = [];
+         let aCurrentTime = request.chainData.intermediateSlot.startTime;
+         for (let i = 0; i < request.requesterSlots.length; i++) {
+            const slotEnd = addHours(aCurrentTime, 0.5);
+            aNewSlots.push({
+               user: originalRequesterId,
+               date: request.chainData.intermediateSlot.date,
+               startTime: aCurrentTime,
+               endTime: slotEnd,
+               day: request.chainData.intermediateSlot.day,
+               subject: '연쇄 교환 결과',
+               status: 'confirmed',
+               assignedBy: req.user.id,
+               assignedAt: new Date()
+            });
+            aCurrentTime = slotEnd;
+         }
+         room.timeSlots.push(...aNewSlots);
+         console.log(`➕ Added ${aNewSlots.length} new slots for A at ${request.chainData.intermediateSlot.day}`);
+
+         // 요청 상태 업데이트
+         request.status = 'approved';
+         request.respondedAt = new Date();
+         request.respondedBy = req.user.id;
+         request.response = `수락됨 - 연쇄 교환 완료`;
+
+         // 원본 요청도 완료 처리
+         const originalRequest = room.requests.id(request.chainData.originalRequestId);
+         if (originalRequest) {
+            originalRequest.status = 'approved';
+            originalRequest.respondedAt = new Date();
+            originalRequest.response = `연쇄 교환 완료 - C(${chainUserId.substring(0, 8)})가 승인`;
+         }
+
+         room.markModified('timeSlots');
+         await room.save();
+         await room.populate('timeSlots.user', '_id firstName lastName email');
+
+         console.log('✅ Chain exchange completed successfully!');
+
+         return res.json({
+            success: true,
+            message: '연쇄 교환이 완료되었습니다.',
+            result: {
+               c: { newDay: alternativeSlotForC.day, newTime: alternativeSlotForC.startTime },
+               b: { newDay: request.chainData.chainSlot.day, newTime: request.chainData.chainSlot.startTime },
+               a: { newDay: request.chainData.intermediateSlot.day, newTime: request.chainData.intermediateSlot.startTime }
+            }
+         });
+      }
+
+   } catch (error) {
+      console.error('Respond to chain exchange request error:', error);
+      res.status(500).json({
+         success: false,
+         message: '서버 오류가 발생했습니다.',
+         details: error.message
+      });
+   }
+};
+
+/**
+ * Get pending chain exchange requests for user
+ * GET /api/coordination/chain-exchange-requests/pending
+ */
+exports.getPendingChainExchangeRequests = async (req, res) => {
+   try {
+      const userId = req.user.id;
+
+      const rooms = await Room.find({
+         'members.user': userId,
+         'requests.type': 'chain_exchange_request',
+         'requests.status': 'pending'
+      })
+      .populate('requests.requester', 'firstName lastName email')
+      .populate('requests.targetUser', 'firstName lastName email');
+
+      const pendingRequests = [];
+
+      for (const room of rooms) {
+         const userRequests = room.requests.filter(req =>
+            req.type === 'chain_exchange_request' &&
+            req.status === 'pending' &&
+            (req.targetUser._id || req.targetUser).toString() === userId
+         );
+
+         for (const request of userRequests) {
+            pendingRequests.push({
+               ...request.toObject(),
+               roomId: room._id,
+               roomName: room.name
+            });
+         }
+      }
+
+      res.json({
+         success: true,
+         requests: pendingRequests,
+         count: pendingRequests.length
+      });
+
+   } catch (error) {
+      console.error('Get pending chain exchange requests error:', error);
+      res.status(500).json({
+         success: false,
+         message: '서버 오류가 발생했습니다.',
+         details: error.message
+      });
+   }
+};
+
 module.exports = {
    createExchangeRequest: exports.createExchangeRequest,
    respondToExchangeRequest: exports.respondToExchangeRequest,
-   getPendingExchangeRequests: exports.getPendingExchangeRequests
+   getPendingExchangeRequests: exports.getPendingExchangeRequests,
+   respondToChainExchangeRequest: exports.respondToChainExchangeRequest,
+   getPendingChainExchangeRequests: exports.getPendingChainExchangeRequests,
+   // Helper functions for internal use
+   findChainCandidates,
+   createChainExchangeRequest
 };
