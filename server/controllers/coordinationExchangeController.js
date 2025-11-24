@@ -452,7 +452,40 @@ exports.smartExchange = async (req, res) => {
     // Check MEMBER's preferred schedule
     const requesterUser = memberData.user;
     const requesterDefaultSchedule = requesterUser.defaultSchedule || [];
-    const memberTargetDaySchedules = requesterDefaultSchedule.filter(s => s.dayOfWeek === targetDayOfWeek);
+
+    // 🔧 targetDate 기준 7일 이내 스케줄만 필터링 (±3일)
+    const sevenDaysBefore = new Date(targetDate);
+    sevenDaysBefore.setDate(sevenDaysBefore.getDate() - 3);
+    const sevenDaysAfter = new Date(targetDate);
+    sevenDaysAfter.setDate(sevenDaysAfter.getDate() + 3);
+
+    const nearbySchedules = requesterDefaultSchedule.filter(s => {
+      if (s.specificDate) {
+        const scheduleDate = new Date(s.specificDate);
+        return scheduleDate >= sevenDaysBefore && scheduleDate <= sevenDaysAfter;
+      }
+      return false;
+    });
+
+    // 7일 이내 스케줄들의 요일 추출
+    const nearbyDayOfWeeks = [...new Set(nearbySchedules.map(s => s.dayOfWeek))];
+
+    console.log(`🔍 [멤버 검증] targetDate: ${targetDate.toISOString().split('T')[0]}`);
+    console.log(`🔍 [멤버 검증] 7일 이내 스케줄: ${nearbySchedules.length}개`);
+    console.log(`🔍 [멤버 검증] 7일 이내 요일: ${nearbyDayOfWeeks.join(', ')}`);
+
+    // targetDayOfWeek가 7일 이내 요일에 있는지 체크
+    if (!nearbyDayOfWeeks.includes(targetDayOfWeek)) {
+      const dayNames = { 0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토' };
+      const availableDays = nearbyDayOfWeeks.map(d => dayNames[d] + '요일').join(', ') || '없음';
+      return res.status(400).json({
+        success: false,
+        message: `${targetDay}는 해당 주의 선호 시간이 아닙니다. 가능한 요일: ${availableDays}`
+      });
+    }
+
+    // 기존 시간 검증은 nearbySchedules 기준으로
+    const memberTargetDaySchedules = nearbySchedules.filter(s => s.dayOfWeek === targetDayOfWeek);
 
     if (memberTargetDaySchedules.length === 0) {
       return res.status(400).json({
