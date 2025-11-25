@@ -442,7 +442,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
             <div className="flex-shrink-0">
               {/* 숨겨진 더미 텍스트로 사이드바 크기 강제 */}
               <div className="invisible h-0 overflow-hidden whitespace-nowrap">
-                학생님이 일정 조정을 위해 화요일 09:00-12:00 자리를 요청합니다. 남아있는 빈 시간으로 
+                00000000000000000000000000000000000000000000000000000000
               </div>
 
               {isOwner && (
