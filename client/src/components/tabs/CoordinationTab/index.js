@@ -437,9 +437,9 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           onLeaveRoom={handleLeaveRoom}
         />
 
-        <div className="flex flex-col lg:flex-row gap-4 w-full">
+        <div className="flex flex-col lg:flex-row gap-2 w-full">
           {/* Left sidebar */}
-          <div className="lg:w-1/5 w-full flex-shrink-0">
+          <div className="w-full lg:w-auto flex-shrink-0">
             {isOwner && (
               <AutoSchedulerPanel
                 options={scheduleOptions}
@@ -481,7 +481,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           </div>
 
           {/* Main content */}
-          <div className="lg:w-4/5 w-full flex-grow min-w-0">
+          <div className="w-full flex-grow min-w-0">
             <ScheduleErrorAlert scheduleError={scheduleError} />
             <UnassignedMembersAlert unassignedMembersInfo={unassignedMembersInfo} />
             <ConflictSuggestionsAlert conflictSuggestions={conflictSuggestions} />

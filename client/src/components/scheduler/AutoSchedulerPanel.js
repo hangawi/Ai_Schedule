@@ -26,7 +26,7 @@ const AutoSchedulerPanel = ({
   };
 
   return (
-    <div className="bg-gradient-to-br from-white to-gray-50 p-3 rounded-lg shadow-md border border-gray-200 mb-3 max-w-lg">
+    <div className="bg-gradient-to-br from-white to-gray-50 p-3 rounded-lg shadow-md mb-3 max-w-sm">
       <h3 className="text-base font-bold text-gray-800 mb-2 flex items-center">
         <Zap size={16} className="mr-2 text-purple-600" />
         자동 시간 배정
