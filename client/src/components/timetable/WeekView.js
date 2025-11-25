@@ -371,7 +371,7 @@ const WeekView = ({
           {filteredTimeSlotsInDay.map(time => (
             <div
               key={time}
-              className="h-8 px-1 text-center text-xs font-medium text-gray-600 border-b border-gray-200 flex items-center justify-center"
+              className="h-5 px-1 text-center text-xs font-medium text-gray-600 border-b border-gray-200 flex items-center justify-center"
             >
               {time}
             </div>
@@ -381,15 +381,15 @@ const WeekView = ({
         {/* 각 날짜별 컬럼 */}
         {weekDates.slice(0, 5).map((dateInfo, dayIndex) => {
           const blocks = dayBlocks[dayIndex];
-          const totalHeight = filteredTimeSlotsInDay.length * 32; // 전체 컬럼 높이 (h-8 = 32px)
+          const totalHeight = filteredTimeSlotsInDay.length * 20; // 전체 컬럼 높이 (h-8 = 20px)
 
           return (
             <div key={dayIndex} className="col-span-1 border-l border-gray-200 relative" style={{ height: `${totalHeight}px` }}>
               {blocks.map((block, blockIndex) => {
                 const date = dateInfo.fullDate;
-                const blockHeight = block.duration * 3.2; // 10분 = 3.2px (32px/10)
+                const blockHeight = block.duration * 2.0; // 10분 = 2.0px (20px/10)
                 const startIndex = getTimeSlotIndex(block.startTime);
-                const topPosition = startIndex * 32; // 각 시간 슬롯은 32px (h-8)
+                const topPosition = startIndex * 20; // 각 시간 슬롯은 20px (h-8)
 
                 return (
                   <div
@@ -476,8 +476,8 @@ const WeekView = ({
                   const topOffsetMinutes = travelStartMinutes - scheduleStartMinutes;
                   const durationMinutes = travelEndMinutes - travelStartMinutes;
 
-                  const topPosition = (topOffsetMinutes / 10) * 32;
-                  const slotHeight = (durationMinutes / 10) * 32;
+                  const topPosition = (topOffsetMinutes / 10) * 20;
+                  const slotHeight = (durationMinutes / 10) * 20;
 
                   if (slotHeight <= 0) return null;
 
