@@ -439,7 +439,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
         <div className="flex flex-col lg:flex-row gap-4 w-full">
           {/* Left sidebar */}
-          <div className="lg:w-1/4 w-full flex-shrink-0">
+          <div className="lg:w-1/5 w-full flex-shrink-0">
             {isOwner && (
               <AutoSchedulerPanel
                 options={scheduleOptions}
@@ -481,12 +481,12 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           </div>
 
           {/* Main content */}
-          <div className="lg:w-3/4 w-full flex-grow min-w-0">
+          <div className="lg:w-4/5 w-full flex-grow min-w-0">
             <ScheduleErrorAlert scheduleError={scheduleError} />
             <UnassignedMembersAlert unassignedMembersInfo={unassignedMembersInfo} />
             <ConflictSuggestionsAlert conflictSuggestions={conflictSuggestions} />
 
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mt-4">
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mt-4 max-h-[300px] overflow-auto">
               <TimetableControls
                 viewMode={viewMode}
                 setViewMode={setViewMode}

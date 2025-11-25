@@ -323,7 +323,7 @@ const CoordinationCalendarView = ({
                 {Array.from(new Set(dateInfo.blocks.filter(b => b.type === 'assigned').flatMap(b => b.users || []))).map((name, i) => (
                   <span
                     key={`user-${i}`}
-                    className={`text-xs px-1.5 py-0.5 rounded-full ${
+                    className={`text-sm px-1.5 py-0.5 rounded-full ${
                       name === '배정된 시간'
                         ? 'bg-purple-100 text-purple-800'
                         : 'bg-blue-100 text-blue-800'
@@ -333,10 +333,10 @@ const CoordinationCalendarView = ({
                   </span>
                 ))}
                 {Array.from(new Set(dateInfo.blocks.filter(b => b.type === 'blocked').map(b => b.name))).map((name, i) => (
-                  <span key={`block-${i}`} className="text-xs bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full">{name}</span>
+                  <span key={`block-${i}`} className="text-sm bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full">{name}</span>
                 ))}
                 {dateInfo.blocks.some(b => b.type === 'negotiation') && (
-                  <span className="text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full">협의 중</span>
+                  <span className="text-sm bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full">협의 중</span>
                 )}
                 {dateInfo.blocks.some(b => b.type === 'travel') && (
                   <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">이동시간</span>

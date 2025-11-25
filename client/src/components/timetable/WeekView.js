@@ -437,31 +437,32 @@ const WeekView = ({
                     onClick={() => handleSlotClick(date, block.startTime)}
                   >
                     {block.type === 'blocked' ? (
-                      <div className="text-xs text-gray-600 font-medium" title={`${block.data?.name} (${block.startTime}~${block.actualEndTime})`}>
-                        <div className="text-xs leading-tight">{block.data?.name.length > 6 ? block.data?.name.substring(0, 4) + '...' : block.data?.name}</div>
-                        {blockHeight > 20 && <div className="text-xs leading-tight">{block.startTime}~{block.actualEndTime}</div>}
+                      <div className="text-xs text-gray-600 font-medium" style={{ fontSize: '25px' }} title={`${block.data?.name} (${block.startTime}~${block.actualEndTime})`}>
+                        <div className="text-xs leading-tight" style={{ fontSize: '25px' }}>{block.data?.name.length > 6 ? block.data?.name.substring(0, 4) + '...' : block.data?.name}</div>
+                        {blockHeight > 20 && <div className="text-xs leading-tight" style={{ fontSize: '25px' }}>{block.startTime}~{block.actualEndTime}</div>}
                       </div>
                     ) : block.type === 'owner' ? (
                       <div
                         className="text-xs font-medium px-0.5 py-0.5 rounded"
                         style={{
                           color: block.data?.textColor || block.data?.color,
-                          backgroundColor: `${block.data?.color}10`
+                          backgroundColor: `${block.data?.color}10`,
+                          fontSize: '25px'
                         }}
                         title={`${block.data?.subject || block.data?.name} (${block.startTime}~${block.actualEndTime})`}
                       >
-                        <div className="text-xs leading-tight">{block.data?.name.length > 4 ? block.data?.name.substring(0, 3) + '...' : block.data?.name}</div>
-                        {blockHeight > 20 && <div className="text-xs leading-tight">{block.startTime}~{block.actualEndTime}</div>}
+                        <div className="text-xs leading-tight" style={{ fontSize: '25px' }}>{block.data?.name.length > 4 ? block.data?.name.substring(0, 3) + '...' : block.data?.name}</div>
+                        {blockHeight > 20 && <div className="text-xs leading-tight" style={{ fontSize: '25px' }}>{block.startTime}~{block.actualEndTime}</div>}
                       </div>
                     ) : block.type === 'selected' ? (
-                      <div className="text-xs font-medium text-blue-700 px-0.5 py-0.5 rounded bg-blue-100">
-                        <div className="text-xs leading-tight">선택됨</div>
-                        {blockHeight > 20 && <div className="text-xs leading-tight">{block.startTime}~{block.actualEndTime}</div>}
+                      <div className="text-xs font-medium text-blue-700 px-0.5 py-0.5 rounded bg-blue-100" style={{ fontSize: '25px' }}>
+                        <div className="text-xs leading-tight" style={{ fontSize: '25px' }}>선택됨</div>
+                        {blockHeight > 20 && <div className="text-xs leading-tight" style={{ fontSize: '25px' }}>{block.startTime}~{block.actualEndTime}</div>}
                       </div>
                     ) : (
-                      <div className="text-xs text-gray-400">
-                        <div className="text-xs leading-tight">빈 시간</div>
-                        {blockHeight > 20 && <div className="text-xs leading-tight">{block.startTime}~{block.actualEndTime}</div>}
+                      <div className="text-xs text-gray-400" style={{ fontSize: '25px' }}>
+                        <div className="text-xs leading-tight" style={{ fontSize: '25px' }}>빈 시간</div>
+                        {blockHeight > 20 && <div className="text-xs leading-tight" style={{ fontSize: '25px' }}>{block.startTime}~{block.actualEndTime}</div>}
                       </div>
                     )}
                   </div>

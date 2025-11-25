@@ -612,7 +612,7 @@ const MemberList = ({
   showAlert
 }) => {
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4">
+    <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 max-w-lg">
       <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
         <Users size={20} className="mr-2 text-blue-600" />
         조원 목록 ({(currentRoom.members || []).length}명)
