@@ -67,11 +67,15 @@ const removeMemberFromSlot = (timetable, key, memberId) => {
 const createOwnerAvailableSlots = (owner, rangeStart, rangeEnd) => {
   const ownerAvailableSlots = new Set();
 
-  if (!owner.defaultSchedule || !Array.isArray(owner.defaultSchedule)) {
+  // owner.user.defaultSchedule 또는 owner.defaultSchedule 지원
+  const ownerSchedule = owner.user?.defaultSchedule || owner.defaultSchedule;
+
+  if (!ownerSchedule || !Array.isArray(ownerSchedule)) {
+    console.log('⚠️ 방장 스케줄이 없습니다:', { hasUser: !!owner.user, hasDefaultSchedule: !!owner.defaultSchedule });
     return ownerAvailableSlots;
   }
 
-  const validSchedules = filterValidSchedules(owner.defaultSchedule);
+  const validSchedules = filterValidSchedules(ownerSchedule);
 
   validSchedules.forEach(schedule => {
     const { dayOfWeek, startTime, endTime, specificDate } = schedule;
@@ -119,9 +123,12 @@ const createOwnerAvailableSlots = (owner, rangeStart, rangeEnd) => {
  * @param {Date} rangeEnd - 범위 끝
  */
 const removeOwnerPersonalTimes = (ownerAvailableSlots, owner, rangeStart, rangeEnd) => {
-  if (!owner.personalTimes || !Array.isArray(owner.personalTimes)) return;
+  // owner.user.personalTimes 또는 owner.personalTimes 지원
+  const ownerPersonalTimes = owner.user?.personalTimes || owner.personalTimes;
 
-  owner.personalTimes.forEach(personalTime => {
+  if (!ownerPersonalTimes || !Array.isArray(ownerPersonalTimes)) return;
+
+  ownerPersonalTimes.forEach(personalTime => {
     // 반복 개인 시간
     if (personalTime.isRecurring !== false && personalTime.days && personalTime.days.length > 0) {
       personalTime.days.forEach(dayOfWeek => {

@@ -34,7 +34,7 @@ const { processDeferredAssignments } = require('./helpers/carryOverHelper');
 // Services
 const { createTimetableFromPersonalSchedules } = require('./services/timetableCreationService');
 const { identifyConflictsBeforeAssignment } = require('./services/conflictIdentificationService');
-const { assignUndisputedSlots, iterativeAssignment } = require('./services/slotAssignmentService');
+const { assignByTimeOrder, assignUndisputedSlots, iterativeAssignment } = require('./services/slotAssignmentService');
 const { resolveConflictsWithOwner, resolveConflictsByOwnerTakingSlot } = require('./services/conflictResolutionService');
 const { runMultiWeekSchedule } = require('./services/multiWeekSchedulingService');
 const { processNegotiationBlocks } = require('./services/negotiationCreationService');
@@ -129,23 +129,27 @@ class SchedulingAlgorithm {
     const conflictingSlots = conflicts;
     const negotiationBlocks = mergeConsecutiveConflicts(conflictingSlots, timetable, calculateEndTime);
 
+    // 새로운 배정 전략: 시간 순서 우선 배정 (1시간 블록씩)
+    assignByTimeOrder(timetable, assignments, memberRequiredSlots, ownerId);
+
+    // 기존 Phase 2, 3 비활성화 (단독 슬롯 우선 배정 제거)
     // Phase 2: 논쟁 없는 슬롯 배정 (고우선순위)
-    assignUndisputedSlots(timetable, assignments, 3, memberRequiredSlots, conflictingSlots);
+    // assignUndisputedSlots(timetable, assignments, 3, memberRequiredSlots, conflictingSlots);
 
     // Phase 2-2: 논쟁 없는 슬롯 배정 (저우선순위)
-    assignUndisputedSlots(timetable, assignments, 1, memberRequiredSlots, conflictingSlots);
+    // assignUndisputedSlots(timetable, assignments, 1, memberRequiredSlots, conflictingSlots);
 
     // Phase 3: 반복적 배정
-    iterativeAssignment(
-      timetable,
-      assignments,
-      2,
-      memberRequiredSlots,
-      nonOwnerMembers,
-      ownerPreferences,
-      conflictingSlots,
-      ownerId
-    );
+    // iterativeAssignment(
+    //   timetable,
+    //   assignments,
+    //   2,
+    //   memberRequiredSlots,
+    //   nonOwnerMembers,
+    //   ownerPreferences,
+    //   conflictingSlots,
+    //   ownerId
+    // );
 
     // Phase 4: 방장 슬롯 가져가기 (현재 미사용)
     resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, memberRequiredSlots, ownerPreferences);
