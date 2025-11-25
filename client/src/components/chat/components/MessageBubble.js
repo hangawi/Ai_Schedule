@@ -34,7 +34,7 @@ const getTimestampColor = (message) => {
 };
 
 /**
- * 메시지 버블 컴포넌트
+ * 범용 메시지 버블 컴포넌트
  */
 const MessageBubble = ({
   message,
@@ -137,6 +137,19 @@ const MessageBubble = ({
         <p className={`text-xs mt-1 ${timestampColor}`}>
           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </p>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * 간소화된 메시지 버블 컴포넌트 (TimetableUploadWithChat용)
+ */
+export const SimpleMessageBubble = ({ message }) => {
+  return (
+    <div className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+      <div className={`max-w-[85%] px-3 py-1.5 rounded-lg ${message.sender === 'user' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200'}`}>
+        <p className="text-xs whitespace-pre-wrap">{message.text}</p>
       </div>
     </div>
   );

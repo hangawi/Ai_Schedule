@@ -11,6 +11,8 @@ import { useEffect } from 'react';
  */
 export const useScrollToBottom = (messagesEndRef, messages) => {
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, messagesEndRef]);
+    if (messagesEndRef && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
 };

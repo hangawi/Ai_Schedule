@@ -7,9 +7,35 @@
 import { useState, useRef } from 'react';
 
 /**
- * 채팅 상태 관리 훅
+ * 채팅 상태 관리 훅 (TimetableUploadWithChat용)
  */
 export const useChatState = () => {
+  const [chatMessage, setChatMessage] = useState('');
+  const [chatHistory, setChatHistory] = useState([]);
+  const [isFilteringChat, setIsFilteringChat] = useState(false);
+  const [userProfile, setUserProfile] = useState({});
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const chatEndRef = useRef(null);
+
+  return {
+    chatMessage,
+    setChatMessage,
+    chatHistory,
+    setChatHistory,
+    isFilteringChat,
+    setIsFilteringChat,
+    userProfile,
+    setUserProfile,
+    conversationHistory,
+    setConversationHistory,
+    chatEndRef
+  };
+};
+
+/**
+ * 범용 채팅 상태 관리 훅
+ */
+export const useGeneralChatState = () => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isOpen, setIsOpen] = useState(false);

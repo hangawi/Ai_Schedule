@@ -20,7 +20,7 @@ import { MessageCircle } from 'lucide-react';
 import TimetableUploadWithChat from './TimetableUploadWithChat';
 import ScheduleOptimizationModal from '../modals/ScheduleOptimizationModal';
 import { CHAT_SIZE } from './constants/chatConstants';
-import { useChatState } from './hooks/useChatState';
+import { useGeneralChatState } from './hooks/useChatState';
 import { useMobileDetection } from './hooks/useMobileDetection';
 import { useScrollToBottom } from './hooks/useScrollToBottom';
 import ChatHeader from './components/ChatHeader';
@@ -53,7 +53,7 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
     messagesEndRef,
     imageInputRef,
     removeImage,
-  } = useChatState();
+  } = useGeneralChatState();
 
   // 모바일 감지
   const isMobile = useMobileDetection();
