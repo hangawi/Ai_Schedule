@@ -228,18 +228,28 @@ export const coordinationService = {
 
   // 요청 처리
   async handleRequest(requestId, action) {
+    console.log('🔍 [coordinationService.handleRequest] requestId:', requestId, 'action:', action);
     const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/requests/${requestId}/${action}`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}` },
     });
-    
+
     if (!response.ok) {
       const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      console.error('🔍 [coordinationService.handleRequest] Error:', errData);
       throw new Error(errData.msg || `Failed to ${action} request`);
     }
-    
-    return await response.json();
+
+    const result = await response.json();
+    console.log('🔍 [coordinationService.handleRequest] Response:', result);
+    // 🔍 DEBUG: 응답에서 요청 상태 확인
+    if (result.requests) {
+      result.requests.forEach(req => {
+        console.log('🔍 [handleRequest] Request in response:', req._id, 'status:', req.status);
+      });
+    }
+    return result;
   },
 
   // 교환 요청 수 가져오기

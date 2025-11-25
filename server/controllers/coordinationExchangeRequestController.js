@@ -62,8 +62,7 @@ function findChainCandidates(room, userId, excludeUsers = []) {
       targetDate.setUTCDate(monday.getUTCDate() + pref.dayOfWeek - 1);
       const targetDateStr = targetDate.toISOString().split('T')[0];
 
-      // 오늘 이후인지 확인
-      if (targetDate < today) continue;
+      // ★ 이번 주 전체(월~일) 포함 - 날짜 체크 제거
 
       // 해당 날짜/시간에 배정된 슬롯 찾기
       const occupyingSlots = room.timeSlots.filter(slot => {
@@ -302,7 +301,7 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
       console.log(`   📊 ${dayMap[dayOfWeek]} merged blocks:`, mergedBlocks);
 
       // 🔧 방장의 선호시간과 겹치는 블록만 필터링
-      const ownerFilteredBlocks = [];
+      const ownerFilteredBlocksRaw = [];
       for (const block of mergedBlocks) {
          const [blockStartH, blockStartM] = block.startTime.split(':').map(Number);
          const [blockEndH, blockEndM] = block.endTime.split(':').map(Number);
@@ -322,12 +321,39 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
             if (overlapStart < overlapEnd) {
                const overlapStartTime = `${Math.floor(overlapStart / 60).toString().padStart(2, '0')}:${(overlapStart % 60).toString().padStart(2, '0')}`;
                const overlapEndTime = `${Math.floor(overlapEnd / 60).toString().padStart(2, '0')}:${(overlapEnd % 60).toString().padStart(2, '0')}`;
-               ownerFilteredBlocks.push({ startTime: overlapStartTime, endTime: overlapEndTime });
+               ownerFilteredBlocksRaw.push({ startTime: overlapStartTime, endTime: overlapEndTime });
             }
          }
       }
 
-      console.log(`   👑 방장 시간과 겹치는 블록:`, ownerFilteredBlocks);
+      // 🆕 겹치는 블록들을 다시 병합 (10분 단위로 쪼개진 것을 하나로 합침)
+      const ownerFilteredBlocks = [];
+      for (const block of ownerFilteredBlocksRaw) {
+         if (ownerFilteredBlocks.length === 0) {
+            ownerFilteredBlocks.push({ ...block });
+         } else {
+            const lastBlock = ownerFilteredBlocks[ownerFilteredBlocks.length - 1];
+            const [lastH, lastM] = lastBlock.endTime.split(':').map(Number);
+            const [currH, currM] = block.startTime.split(':').map(Number);
+
+            const lastEndMinutes = lastH * 60 + lastM;
+            const currStartMinutes = currH * 60 + currM;
+
+            // 연속되거나 30분 이내 간격이면 병합
+            if (currStartMinutes - lastEndMinutes <= 30) {
+               const [blockEndH, blockEndM] = block.endTime.split(':').map(Number);
+               const [lastBlockEndH, lastBlockEndM] = lastBlock.endTime.split(':').map(Number);
+
+               if (blockEndH * 60 + blockEndM > lastBlockEndH * 60 + lastBlockEndM) {
+                  lastBlock.endTime = block.endTime;
+               }
+            } else {
+               ownerFilteredBlocks.push({ ...block });
+            }
+         }
+      }
+
+      console.log(`   👑 방장 시간과 겹치는 블록 (병합 후):`, ownerFilteredBlocks);
 
       if (ownerFilteredBlocks.length === 0) {
          console.log(`   ⚠️ 방장의 선호시간과 겹치는 시간 없음 - 스킵`);

@@ -1,7 +1,10 @@
 // Request management section component for non-owners
 
 import React from 'react';
-import { Users } from 'lucide-react';
+import { Users, AlertTriangle } from 'lucide-react';
+import { auth } from '../../../../config/firebaseConfig';
+
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
 const dayMap = {
   'monday': '월요일',
@@ -95,8 +98,17 @@ const ReceivedRequestsView = ({
   handleRequestWithUpdate,
   handleCancelRequest
 }) => {
-  const pendingReceived = receivedRequests.filter(req => req.status === 'pending' && req.roomId === currentRoom?._id);
-  const processedReceived = receivedRequests.filter(req => req.status !== 'pending' && req.roomId === currentRoom?._id);
+  // 🆕 needs_chain_confirmation, waiting_for_chain도 대기 중으로 분류
+  const pendingReceived = receivedRequests.filter(req =>
+    (req.status === 'pending' || req.status === 'needs_chain_confirmation' || req.status === 'waiting_for_chain') &&
+    req.roomId === currentRoom?._id
+  );
+  const processedReceived = receivedRequests.filter(req =>
+    req.status !== 'pending' &&
+    req.status !== 'needs_chain_confirmation' &&
+    req.status !== 'waiting_for_chain' &&
+    req.roomId === currentRoom?._id
+  );
 
   return (
     <div>
@@ -109,6 +121,27 @@ const ReceivedRequestsView = ({
               .map((request, index) => {
                 const requesterData = request.requester;
                 const requesterName = `${requesterData?.firstName || ''} ${requesterData?.lastName || ''}`.trim() || '알 수 없음';
+
+                // 🆕 waiting_for_chain 상태 처리
+                if (request.status === 'waiting_for_chain') {
+                  return (
+                    <div key={request._id || index} className="p-3 bg-blue-50 border border-blue-300 rounded-lg">
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="text-xs font-semibold text-blue-900">{requesterName}</div>
+                        <div className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">
+                          연쇄 조정 진행중
+                        </div>
+                      </div>
+                      <div className="text-xs font-medium text-blue-800 mb-2">
+                        {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+                      </div>
+                      <div className="text-xs text-gray-600 p-2 bg-white rounded border border-blue-200">
+                        빈 시간이 없어 다른 사람에게 연쇄 요청을 보냈습니다. 응답을 기다리는 중입니다.
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <div key={request._id || index} className="p-2 bg-blue-500 border border-blue-600 rounded-lg relative">
                     <div className="flex justify-between items-center mb-1">
@@ -241,8 +274,13 @@ const SentRequestsView = ({
   handleCancelRequest
 }) => {
   const currentRoomSentRequests = sentRequests.filter(req => req.roomId === currentRoom?._id);
-  const pendingRequests = currentRoomSentRequests.filter(req => req.status === 'pending');
-  const processedRequests = currentRoomSentRequests.filter(req => req.status !== 'pending');
+  // 🆕 needs_chain_confirmation, waiting_for_chain도 대기 중으로 분류
+  const pendingRequests = currentRoomSentRequests.filter(req =>
+    req.status === 'pending' || req.status === 'needs_chain_confirmation' || req.status === 'waiting_for_chain'
+  );
+  const processedRequests = currentRoomSentRequests.filter(req =>
+    req.status !== 'pending' && req.status !== 'needs_chain_confirmation' && req.status !== 'waiting_for_chain'
+  );
 
   return (
     <div>
@@ -255,6 +293,105 @@ const SentRequestsView = ({
               .map((request, index) => {
                 const targetUserData = request.targetUser;
                 const targetUserName = `${targetUserData?.firstName || ''} ${targetUserData?.lastName || ''}`.trim() || '방장';
+
+                // 🆕 waiting_for_chain 상태 처리
+                if (request.status === 'waiting_for_chain') {
+                  return (
+                    <div key={request._id || index} className="p-3 bg-blue-50 border border-blue-300 rounded-lg">
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="text-xs font-semibold text-blue-900">
+                          To: {targetUserName}
+                        </div>
+                        <div className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">
+                          연쇄 조정 진행중
+                        </div>
+                      </div>
+                      <div className="text-xs font-medium text-blue-800 mb-2">
+                        {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+                      </div>
+                      <div className="text-xs text-gray-600 p-2 bg-white rounded border border-blue-200">
+                        {targetUserName}님에게 빈 시간이 없어 다른 사람에게 연쇄 요청을 보냈습니다. 응답을 기다리는 중입니다.
+                      </div>
+                    </div>
+                  );
+                }
+
+                // 🆕 needs_chain_confirmation 상태 처리 (혹시 남아있는 경우)
+                if (request.status === 'needs_chain_confirmation') {
+                  const chainCandidate = request.chainData?.firstCandidate;
+
+                  const handleChainAction = async (action) => {
+                    try {
+                      const currentUser = auth.currentUser;
+                      if (!currentUser) {
+                        alert('로그인이 필요합니다.');
+                        return;
+                      }
+                      const token = await currentUser.getIdToken();
+
+                      const response = await fetch(`${API_BASE_URL}/api/coordination/requests/${request._id}/chain-confirm`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ action })
+                      });
+
+                      const data = await response.json();
+
+                      if (data.success) {
+                        alert(data.msg);
+                        window.location.reload(); // 간단하게 페이지 새로고침
+                      } else {
+                        alert(data.msg || '처리 중 오류가 발생했습니다.');
+                      }
+                    } catch (error) {
+                      console.error('Chain action error:', error);
+                      alert('연쇄 조정 처리 중 오류가 발생했습니다.');
+                    }
+                  };
+
+                  return (
+                    <div key={request._id || index} className="p-3 bg-amber-50 border border-amber-300 rounded-lg">
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="text-xs font-semibold text-amber-900 flex items-center">
+                          <AlertTriangle size={14} className="mr-1 text-amber-600" />
+                          To: {targetUserName}
+                        </div>
+                        <div className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-medium">
+                          연쇄 조정 확인 필요
+                        </div>
+                      </div>
+                      <div className="text-xs font-medium text-amber-800 mb-2">
+                        {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+                      </div>
+                      <div className="text-xs text-gray-700 mb-3 p-2 bg-white rounded border border-amber-200">
+                        <div className="font-medium mb-1">{targetUserName}님에게 이동할 빈 시간이 없습니다.</div>
+                        {chainCandidate && (
+                          <div className="text-gray-600">
+                            <strong>{chainCandidate.userName}</strong>님에게 연쇄 요청을 보내면 조정이 가능합니다.
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <button
+                          onClick={() => handleChainAction('proceed')}
+                          className="px-3 py-1.5 text-xs bg-amber-500 text-white rounded-md hover:bg-amber-600 font-medium"
+                        >
+                          연쇄 조정 진행
+                        </button>
+                        <button
+                          onClick={() => handleChainAction('cancel')}
+                          className="px-3 py-1.5 text-xs bg-gray-400 text-white rounded-md hover:bg-gray-500"
+                        >
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <div key={request._id || index} className="p-2 bg-gray-50 border border-gray-200 rounded-lg relative">
                     <div className="flex justify-between items-center mb-1">

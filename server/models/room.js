@@ -55,7 +55,7 @@ const RequestSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['time_request', 'time_change', 'time_swap', 'slot_swap', 'slot_release', 'exchange_request', 'chain_exchange_request'],
+    enum: ['time_request', 'time_change', 'time_swap', 'slot_swap', 'slot_release', 'exchange_request', 'chain_exchange_request', 'chain_request'],
     required: true
   },
   timeSlot: {
@@ -93,11 +93,23 @@ const RequestSchema = new mongoose.Schema({
       user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
       slot: TimeSlotSchema,
       date: Date
-    }]
+    }],
+    // 🆕 needs_chain_confirmation 상태에서 사용 (요청자에게 연쇄 조정 확인용)
+    firstCandidate: {
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      userName: String,
+      slot: TimeSlotSchema
+    },
+    // ★ C의 원래 슬롯 저장 (chain 실패 시 복원용)
+    requesterOriginalSlots: [TimeSlotSchema],
+    // ★ B의 원래 슬롯 저장 (chain 성공 시 삭제용)
+    intermediateOriginalSlots: [TimeSlotSchema],
+    // 🆕 chain_request 타입에서 사용
+    originalRequest: { type: mongoose.Schema.Types.ObjectId }
   },
   status: {
     type: String,
-    enum: ['pending', 'approved', 'rejected', 'cancelled'],
+    enum: ['pending', 'approved', 'rejected', 'cancelled', 'needs_chain_confirmation', 'waiting_for_chain', 'chain_request'],
     default: 'pending'
   },
   createdAt: {

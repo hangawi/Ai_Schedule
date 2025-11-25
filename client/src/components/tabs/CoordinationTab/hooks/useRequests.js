@@ -18,11 +18,18 @@ export const useRequests = (userId) => {
     if (!userId) return;
     try {
       const result = await coordinationService.getSentRequests();
+      // 🔍 DEBUG: 보낸 요청 로드 확인
+      console.log('🔍 loadSentRequests result:', result);
+      if (result.requests) {
+        result.requests.forEach(req => {
+          console.log('🔍 Sent request:', req._id, 'status:', req.status, 'chainData:', req.chainData);
+        });
+      }
       if (result.success) {
         setSentRequests(result.requests);
       }
     } catch (error) {
-      // Silent error handling
+      console.error('🔍 loadSentRequests error:', error);
     }
   }, [userId]);
 
@@ -30,11 +37,18 @@ export const useRequests = (userId) => {
     if (!userId) return;
     try {
       const result = await coordinationService.getReceivedRequests();
+      // 🔍 DEBUG: 받은 요청 로드 확인
+      console.log('🔍 loadReceivedRequests result:', result);
+      if (result.requests) {
+        result.requests.forEach(req => {
+          console.log('🔍 Received request:', req._id, 'status:', req.status, 'chainData:', req.chainData);
+        });
+      }
       if (result.success) {
         setReceivedRequests(result.requests);
       }
     } catch (error) {
-      // Silent error handling
+      console.error('🔍 loadReceivedRequests error:', error);
     }
   }, [userId]);
 

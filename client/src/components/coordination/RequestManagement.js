@@ -1,6 +1,9 @@
 import React from 'react';
-import { Calendar, Users } from 'lucide-react';
+import { Calendar, Users, AlertTriangle } from 'lucide-react';
 import { dayMap, getMemberDisplayName, filterRequestsByRoomAndStatus } from '../../utils/coordinationUtils';
+import { auth } from '../../config/firebaseConfig';
+
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
 const PendingRequestItem = ({ request, onApprove, onReject, index }) => {
   const requesterData = request.requester;
@@ -73,7 +76,16 @@ const OwnerRequestsSection = ({
   );
 };
 
-const ExchangeRequestItem = ({ request, type, onCancel, onApprove, onReject, index }) => {
+const ExchangeRequestItem = ({ request, type, onCancel, onApprove, onReject, onChainConfirm, index }) => {
+  // 🔍 DEBUG: 요청 상태 확인
+  console.log('🔍 ExchangeRequestItem render:', {
+    requestId: request._id,
+    status: request.status,
+    type: type,
+    hasChainData: !!request.chainData,
+    chainData: request.chainData
+  });
+
   const userData = type === 'sent' ? request.targetUser : request.requester;
   const userName = getMemberDisplayName(userData) || (type === 'sent' ? '방장' : '알 수 없음');
 
@@ -81,6 +93,7 @@ const ExchangeRequestItem = ({ request, type, onCancel, onApprove, onReject, ind
     switch (status) {
       case 'approved': return 'bg-green-50 border-green-200';
       case 'cancelled': return 'bg-gray-50 border-gray-200';
+      case 'needs_chain_confirmation': return 'bg-amber-50 border-amber-200';
       default: return 'bg-red-50 border-red-200';
     }
   };
@@ -89,6 +102,7 @@ const ExchangeRequestItem = ({ request, type, onCancel, onApprove, onReject, ind
     switch (status) {
       case 'approved': return '승인됨';
       case 'cancelled': return '취소됨';
+      case 'needs_chain_confirmation': return '연쇄 조정 필요';
       default: return '거절됨';
     }
   };
@@ -97,9 +111,78 @@ const ExchangeRequestItem = ({ request, type, onCancel, onApprove, onReject, ind
     switch (status) {
       case 'approved': return 'text-green-700';
       case 'cancelled': return 'text-gray-700';
+      case 'needs_chain_confirmation': return 'text-amber-700';
       default: return 'text-red-700';
     }
   };
+
+  // 🆕 needs_chain_confirmation 상태 처리
+  if (request.status === 'needs_chain_confirmation') {
+    const chainCandidate = request.chainData?.firstCandidate;
+
+    // 보낸 요청(sent) - C(요청자)가 연쇄 조정 진행/취소 선택
+    if (type === 'sent') {
+      return (
+        <div key={request._id || index} className="p-3 bg-amber-50 border border-amber-300 rounded-lg">
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-xs font-medium text-amber-900 flex items-center">
+              <AlertTriangle size={14} className="mr-1 text-amber-600" />
+              연쇄 조정 필요
+            </div>
+            <div className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800">
+              확인 대기중
+            </div>
+          </div>
+          <div className="text-xs text-amber-800 mb-2">
+            <strong>{userName}</strong>님에게 이동할 빈 시간이 없습니다.
+          </div>
+          <div className="text-xs text-amber-700 mb-2">
+            {(dayMap[request.timeSlot?.day?.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+          </div>
+          {chainCandidate && (
+            <div className="text-xs text-gray-600 mb-2 p-2 bg-white rounded border border-amber-200">
+              <strong>{chainCandidate.userName}</strong>님에게 연쇄 요청을 보내면 조정이 가능합니다.
+            </div>
+          )}
+          <div className="flex justify-end space-x-2 mt-3">
+            <button
+              onClick={() => onChainConfirm && onChainConfirm(request._id, 'proceed')}
+              className="px-3 py-1.5 text-xs bg-amber-500 text-white rounded-md hover:bg-amber-600 font-medium"
+            >
+              연쇄 조정 진행
+            </button>
+            <button
+              onClick={() => onChainConfirm && onChainConfirm(request._id, 'cancel')}
+              className="px-3 py-1.5 text-xs bg-gray-400 text-white rounded-md hover:bg-gray-500"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // 받은 요청(received) - B(응답자)에게 상태 표시
+    return (
+      <div key={request._id || index} className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+        <div className="flex justify-between items-center mb-2">
+          <div className="text-xs font-medium text-amber-900 flex items-center">
+            <AlertTriangle size={14} className="mr-1 text-amber-500" />
+            {userName}
+          </div>
+          <div className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700">
+            연쇄 조정 대기중
+          </div>
+        </div>
+        <div className="text-xs text-amber-700 mb-2">
+          {(dayMap[request.timeSlot?.day?.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
+        </div>
+        <div className="text-xs text-gray-500 p-2 bg-white rounded border border-amber-100">
+          빈 시간이 없어 요청자에게 연쇄 조정 확인을 요청했습니다.
+        </div>
+      </div>
+    );
+  }
 
   if (request.status === 'pending') {
     return (
@@ -191,10 +274,20 @@ const RequestSection = ({
   onToggleExpanded,
   onCancel,
   onApprove,
-  onReject
+  onReject,
+  onChainConfirm
 }) => {
-  const pendingRequests = requests.filter(req => req.status === 'pending');
-  const processedRequests = requests.filter(req => req.status !== 'pending');
+  // 🔍 DEBUG: RequestSection에 전달된 요청 확인
+  console.log('🔍 [RequestSection] type:', type, 'requests count:', requests.length);
+  requests.forEach(req => {
+    console.log('🔍 [RequestSection] Request:', req._id, 'status:', req.status);
+  });
+
+  // 🆕 needs_chain_confirmation도 대기 중으로 분류
+  const pendingRequests = requests.filter(req => req.status === 'pending' || req.status === 'needs_chain_confirmation');
+  const processedRequests = requests.filter(req => req.status !== 'pending' && req.status !== 'needs_chain_confirmation');
+
+  console.log('🔍 [RequestSection] pendingRequests:', pendingRequests.length, 'processedRequests:', processedRequests.length);
 
   return (
     <>
@@ -213,6 +306,7 @@ const RequestSection = ({
                   onCancel={onCancel}
                   onApprove={onApprove}
                   onReject={onReject}
+                  onChainConfirm={onChainConfirm}
                   index={index}
                 />
               ))}
@@ -286,14 +380,57 @@ const RequestManagement = ({
   expandedSections,
   setExpandedSections,
   onRequestWithUpdate,
-  onCancelRequest
+  onCancelRequest,
+  onRefreshRoom
 }) => {
+  // 🔍 DEBUG: RequestManagement 렌더링 확인
+  console.log('🔍 [RequestManagement] Rendered!');
+  console.log('🔍 [RequestManagement] receivedRequests:', receivedRequests.length);
+  console.log('🔍 [RequestManagement] sentRequests:', sentRequests.length);
+  console.log('🔍 [RequestManagement] requestViewMode:', requestViewMode);
+
   const handleShowAll = (key) => {
     setShowAllRequests(prev => ({ ...prev, [key]: true }));
   };
 
   const handleToggleExpanded = (key) => {
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // 🆕 연쇄 조정 확인/취소 핸들러
+  const handleChainConfirm = async (requestId, action) => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+      const token = await currentUser.getIdToken();
+
+      const response = await fetch(`${API_BASE_URL}/api/coordination/requests/${requestId}/chain-confirm`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ action })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(data.msg);
+        // 방 정보 새로고침
+        if (onRefreshRoom) {
+          onRefreshRoom();
+        }
+      } else {
+        alert(data.msg || '처리 중 오류가 발생했습니다.');
+      }
+    } catch (error) {
+      console.error('Chain confirm error:', error);
+      alert('연쇄 조정 처리 중 오류가 발생했습니다.');
+    }
   };
 
   return (
@@ -330,7 +467,7 @@ const RequestManagement = ({
       {requestViewMode === 'received' && (
         <RequestSection
           title="대기 중인 요청"
-          requests={filterRequestsByRoomAndStatus(receivedRequests, currentRoom._id, 'pending')}
+          requests={receivedRequests.filter(req => req.roomId === currentRoom._id)}
           type="received"
           showAllKey="receivedPending"
           expandedKey="receivedProcessed"
@@ -347,7 +484,7 @@ const RequestManagement = ({
       {requestViewMode === 'sent' && (
         <RequestSection
           title="대기 중인 요청"
-          requests={filterRequestsByRoomAndStatus(sentRequests, currentRoom._id, 'pending')}
+          requests={sentRequests.filter(r => r.roomId === currentRoom._id)}
           type="sent"
           showAllKey="sentPending"
           expandedKey="sentProcessed"
@@ -358,6 +495,7 @@ const RequestManagement = ({
           onCancel={onCancelRequest}
           onApprove={(id) => onRequestWithUpdate(id, 'approved')}
           onReject={(id) => onRequestWithUpdate(id, 'rejected')}
+          onChainConfirm={handleChainConfirm}
         />
       )}
     </div>

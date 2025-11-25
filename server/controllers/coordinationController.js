@@ -722,6 +722,7 @@ exports.handleRequest = requestController.handleRequest;
 exports.cancelRequest = requestController.cancelRequest;
 exports.getSentRequests = requestController.getSentRequests;
 exports.getReceivedRequests = requestController.getReceivedRequests;
+exports.handleChainConfirmation = requestController.handleChainConfirmation;
 
 // Re-export from memberController
 exports.removeMember = memberController.removeMember;

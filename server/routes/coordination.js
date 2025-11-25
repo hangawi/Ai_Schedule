@@ -38,6 +38,8 @@ router.post('/rooms/:roomId/run-schedule', auth, coordinationController.runAutoS
 
 // Request management
 router.post('/requests', auth, coordinationController.createRequest);
+// 🔧 더 구체적인 라우트를 먼저 배치
+router.post('/requests/:requestId/chain-confirm', auth, coordinationController.handleChainConfirmation);
 router.post('/requests/:requestId/:action', auth, coordinationController.handleRequest);
 router.delete('/requests/:requestId', auth, coordinationController.cancelRequest);
 router.get('/sent-requests', auth, coordinationController.getSentRequests);

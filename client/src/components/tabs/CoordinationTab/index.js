@@ -201,6 +201,19 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     }
   }, [user?.id]);
 
+  // 🆕 Polling for sent requests (to detect needs_chain_confirmation status)
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const pollInterval = setInterval(() => {
+      loadSentRequests();
+      loadReceivedRequests();
+      loadChainExchangeRequests();
+    }, 5000); // 5초마다 새로고침
+
+    return () => clearInterval(pollInterval);
+  }, [user?.id, loadSentRequests, loadReceivedRequests, loadChainExchangeRequests]);
+
   // 4.txt: 연쇄 교환 요청이 있으면 자동으로 모달 표시
   useEffect(() => {
     if (chainExchangeRequests.length > 0 && !showChainExchangeModal) {

@@ -287,14 +287,18 @@ export const handleRequestWithUpdate = async (
     console.log('🔍 [handleRequestWithUpdate] Action:', action);
 
     // exchange_request 타입은 별도의 API 사용
+    let result;
     if (request?.type === 'exchange_request') {
       console.log('✅ [handleRequestWithUpdate] Using exchange request API');
       const { coordinationService } = await import('../services/coordinationService');
-      await coordinationService.respondToExchangeRequest(currentRoom._id, requestId, action);
+      result = await coordinationService.respondToExchangeRequest(currentRoom._id, requestId, action);
     } else {
       console.log('✅ [handleRequestWithUpdate] Using regular request API');
-      await handleRequest(requestId, action);
+      result = await handleRequest(requestId, action);
     }
+
+    // 🔍 DEBUG: API 응답 확인
+    console.log('🔍 [handleRequestWithUpdate] API response:', result);
 
     showAlert(`요청을 ${action === 'approved' ? '승인' : '거절'}했습니다.`);
 
