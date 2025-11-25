@@ -437,51 +437,51 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           onLeaveRoom={handleLeaveRoom}
         />
 
-        <div className="flex flex-col lg:flex-row gap-2 w-full">
-          {/* Left sidebar */}
-          <div className="w-full lg:w-auto flex-shrink-0">
-            {isOwner && (
-              <AutoSchedulerPanel
-                options={scheduleOptions}
-                setOptions={setScheduleOptions}
-                onRun={handleRunAutoScheduleCallback}
-                isLoading={isScheduling}
+        <div className="flex gap-2">
+            {/* Left sidebar */}
+            <div className="flex-shrink-0 w-[512px]">
+              {isOwner && (
+                <AutoSchedulerPanel
+                  options={scheduleOptions}
+                  setOptions={setScheduleOptions}
+                  onRun={handleRunAutoScheduleCallback}
+                  isLoading={isScheduling}
+                  currentRoom={currentRoom}
+                  onResetCarryOverTimes={handleResetCarryOverTimesCallback}
+                  onResetCompletedTimes={handleResetCompletedTimesCallback}
+                  onClearAllCarryOverHistories={handleClearAllCarryOverHistoriesCallback}
+                  onDeleteAllSlots={handleDeleteAllSlots}
+                  currentWeekStartDate={currentWeekStartDate}
+                />
+              )}
+              <MemberList
                 currentRoom={currentRoom}
-                onResetCarryOverTimes={handleResetCarryOverTimesCallback}
-                onResetCompletedTimes={handleResetCompletedTimesCallback}
-                onClearAllCarryOverHistories={handleClearAllCarryOverHistoriesCallback}
-                onDeleteAllSlots={handleDeleteAllSlots}
-                currentWeekStartDate={currentWeekStartDate}
+                user={user}
+                isOwner={isOwner}
+                onMemberClick={handleMemberClick}
+                onMemberScheduleClick={handleMemberScheduleClick}
+                showAlert={showAlert}
               />
-            )}
-            <MemberList
-              currentRoom={currentRoom}
-              user={user}
-              isOwner={isOwner}
-              onMemberClick={handleMemberClick}
-              onMemberScheduleClick={handleMemberScheduleClick}
-              showAlert={showAlert}
-            />
 
-            {!isOwner && (
-              <RequestSection
-                currentRoom={currentRoom}
-                requestViewMode={requestViewMode}
-                setRequestViewMode={setRequestViewMode}
-                receivedRequests={receivedRequests}
-                sentRequests={sentRequests}
-                showAllRequests={showAllRequests}
-                setShowAllRequests={setShowAllRequests}
-                expandedSections={expandedSections}
-                setExpandedSections={setExpandedSections}
-                handleRequestWithUpdate={handleRequestWithUpdateCallback}
-                handleCancelRequest={handleCancelRequestCallback}
-              />
-            )}
-          </div>
+              {!isOwner && (
+                <RequestSection
+                  currentRoom={currentRoom}
+                  requestViewMode={requestViewMode}
+                  setRequestViewMode={setRequestViewMode}
+                  receivedRequests={receivedRequests}
+                  sentRequests={sentRequests}
+                  showAllRequests={showAllRequests}
+                  setShowAllRequests={setShowAllRequests}
+                  expandedSections={expandedSections}
+                  setExpandedSections={setExpandedSections}
+                  handleRequestWithUpdate={handleRequestWithUpdateCallback}
+                  handleCancelRequest={handleCancelRequestCallback}
+                />
+              )}
+            </div>
 
-          {/* Main content */}
-          <div className="w-full flex-grow min-w-0">
+            {/* Main content */}
+            <div className="flex-grow">
             <ScheduleErrorAlert scheduleError={scheduleError} />
             <UnassignedMembersAlert unassignedMembersInfo={unassignedMembersInfo} />
             <ConflictSuggestionsAlert conflictSuggestions={conflictSuggestions} />
