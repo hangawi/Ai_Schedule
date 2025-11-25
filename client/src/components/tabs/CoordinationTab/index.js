@@ -486,7 +486,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
             <UnassignedMembersAlert unassignedMembersInfo={unassignedMembersInfo} />
             <ConflictSuggestionsAlert conflictSuggestions={conflictSuggestions} />
 
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mt-4 max-h-[300px] overflow-auto">
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 max-h-[300px] overflow-auto wfull">
               <TimetableControls
                 viewMode={viewMode}
                 setViewMode={setViewMode}
