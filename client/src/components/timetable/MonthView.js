@@ -165,7 +165,7 @@ const MonthView = ({
                   const member = members.find(m => m.user._id === (slot.user._id || slot.user));
                   const userName = member ? `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim() : 'Unknown';
                   return (
-                    <div key={slot._id} className="p-1 rounded mb-1 flex items-center" style={{ backgroundColor: member?.user.color || '#E0E0E0' }}>
+                    <div key={slot._id} className="p-1 rounded mb-1 flex items-center" style={{ backgroundColor: (member?.user.color || '#E0E0E0') + 'CC', color: '#000000' }}>
                       <span className="font-semibold mr-1">{slot.startTime}</span>
                       <span>{userName}</span>
                     </div>

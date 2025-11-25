@@ -168,10 +168,10 @@ const DetailedWeekView = ({
                 const personalColor = tailwindToHex[rawColor] || rawColor;
 
                 slotClass = 'hover:opacity-90';
-                customStyle = { backgroundColor: personalColor };
+                customStyle = { backgroundColor: personalColor + 'CC' };
                 const displayTitle = personalSlot.title || personalSlot.subjectName || personalSlot.academyName || '일정';
                 content = (
-                  <span className="text-xs text-white truncate px-1 font-medium" title={`개인시간: ${displayTitle}`}>
+                  <span className="text-xs truncate px-1 font-medium" style={{ color: '#000000' }} title={`개인시간: ${displayTitle}`}>
                     {displayTitle}
                   </span>
                 );

@@ -32,7 +32,7 @@ const TimeSlot = ({
         ${!isEffectivelyBlocked && ownerInfo && currentUser ? 'cursor-pointer hover:opacity-80' : ''}
         ${!isEffectivelyBlocked && isRoomOwner && !ownerInfo ? 'cursor-pointer hover:bg-green-50' : ''}
       `}
-      style={!isEffectivelyBlocked && ownerInfo ? { backgroundColor: `${ownerInfo.color}20`, borderColor: ownerInfo.color } :
+      style={!isEffectivelyBlocked && ownerInfo ? { backgroundColor: `${ownerInfo.color}CC`, borderColor: ownerInfo.color } :
              // 방장의 불가능한 시간 (non_preferred) - 연한 보라/라벤더
              isEffectivelyBlocked && blockedInfo?.ownerScheduleType === 'non_preferred' ? { backgroundColor: '#E9D5FF', borderColor: '#C084FC' } :
              // 방장의 개인시간 (personal) - 연한 주황/피치
@@ -56,8 +56,8 @@ const TimeSlot = ({
             <span
               className={`text-xs font-medium px-1 py-0.5 rounded ${showMerged && ownerInfo.isMergedSlot ? 'border-2' : ''}`}
               style={{
-                color: ownerInfo.textColor || ownerInfo.color,
-                backgroundColor: `${ownerInfo.color}10`,
+                color: '#000000',
+                backgroundColor: `${ownerInfo.color}CC`,
                 ...(showMerged && ownerInfo.isMergedSlot ? {
                   borderColor: ownerInfo.color,
                   borderStyle: 'solid'

@@ -338,7 +338,7 @@ const MergedWeekView = ({
                   };
 
                   let rawColor = seg.schedule.color || '#8b5cf6';
-                  const bgColor = tailwindToHex[rawColor] || rawColor;
+                  const bgColor = (tailwindToHex[rawColor] || rawColor) + 'CC';
 
                   const columnWidth = seg.overlapCount > 1 ? `${100 / seg.overlapCount}%` : '100%';
                   const leftPosition = seg.overlapCount > 1 ? `${(100 / seg.overlapCount) * seg.overlapIndex}%` : '0%';
@@ -382,7 +382,7 @@ const MergedWeekView = ({
                                           largestSeg.overlapIndex === seg.overlapIndex;
 
                   // border 클래스 동적 생성
-                  let borderClasses = 'absolute text-center px-1 text-white';
+                  let borderClasses = 'absolute text-center px-1';
                   if (!hasSameAbove) borderClasses += ' border-t';
                   if (!hasSameBelow) borderClasses += ' border-b';
                   borderClasses += ' border-l border-r border-gray-300';
@@ -397,6 +397,7 @@ const MergedWeekView = ({
                         left: leftPosition,
                         width: columnWidth,
                         backgroundColor: bgColor,
+                        color: '#000000',
                         zIndex: seg.overlapIndex
                       }}
                       title={`${seg.schedule.academyName ? seg.schedule.academyName + ' - ' : ''}${seg.schedule.subjectName ? seg.schedule.subjectName + ' - ' : ''}${seg.schedule.title}${seg.schedule.instructor ? ` (${seg.schedule.instructor})` : ''}${seg.schedule.floor ? ` (${seg.schedule.floor}층)` : ''} (${seg.schedule.startTime}~${seg.schedule.endTime})`}
