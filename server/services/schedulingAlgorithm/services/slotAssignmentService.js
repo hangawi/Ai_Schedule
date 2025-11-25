@@ -164,11 +164,9 @@ const iterativeAssignment = (timetable, assignments, priority, memberRequiredSlo
   const conflictingMembers = createConflictingMembersSet(conflictingSlots);
   const conflictKeys = createConflictKeysSet(conflictingSlots);
 
-  // 1시간 블록 찾기 함수 - 우선순위가 가장 높은 블록을 반환
+  // 1시간 블록 찾기 함수 - 시간 순서대로 가장 이른 블록을 반환
   const findOneHourBlock = (memberId, conflicts, debugMode = false) => {
     const sortedKeys = Object.keys(timetable).sort();
-    let bestBlock = null;
-    let bestBlockPriority = -1;
 
     for (let i = 0; i < sortedKeys.length - 1; i++) {
       const key1 = sortedKeys[i];
@@ -238,18 +236,14 @@ const iterativeAssignment = (timetable, assignments, priority, memberRequiredSlo
 
           // 연속 슬롯인지 확인
           if (areConsecutiveSlots(key1, key2)) {
-            const blockPriority = (avail1.priority + avail2.priority) / 2;
-
-            if (blockPriority > bestBlockPriority) {
-              bestBlock = [key1, key2];
-              bestBlockPriority = blockPriority;
-            }
+            // 시간 순서대로 가장 이른 블록 반환 (이미 sortedKeys로 정렬됨)
+            return [key1, key2];
           }
         }
       }
     }
 
-    return bestBlock;
+    return null;
   };
 
   // 배정 루프

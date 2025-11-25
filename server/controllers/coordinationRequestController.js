@@ -486,28 +486,8 @@ exports.createRequest = async (req, res) => {
 
                              console.log(`   🔍 Checking: ${dayNames[candidate.dayOfWeek]} ${toTimeString(newStartMinutes)}-${toTimeString(newEndMinutes)} (${newDateStr})`);
 
-                             // Check if in owner's schedule (required availability)
-                             const ownerSchedule = room.owner?.defaultSchedule || [];
-                             const isInOwnerSchedule = ownerSchedule.some(s => {
-                                if (s.dayOfWeek !== candidate.dayOfWeek) return false;
-
-                                // 날짜 매칭 (specificDate가 있으면 확인)
-                                if (s.specificDate) {
-                                   const schedDateStr = new Date(s.specificDate).toISOString().split('T')[0];
-                                   if (schedDateStr !== newDateStr) return false;
-                                }
-
-                                // 시간 범위 매칭
-                                const schedStart = toMinutes(s.startTime);
-                                const schedEnd = toMinutes(s.endTime);
-                                // 후보 시간이 방장 선호시간 내에 완전히 포함되어야 함
-                                return newStartMinutes >= schedStart && newEndMinutes <= schedEnd;
-                             });
-
-                             if (!isInOwnerSchedule) {
-                                console.log(`   🚫 Not in owner's schedule (forbidden time) - skipping`);
-                                continue;
-                             }
+                             // ★ 멤버끼리 교환할 때는 방장 스케줄 검증 안 함 (각자의 선호 시간만 확인)
+                             // 방장 스케줄은 자동 배정 시에만 사용
 
                              const hasConflict = room.timeSlots.some(slot => {
                                 const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
