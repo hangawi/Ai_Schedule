@@ -320,7 +320,11 @@ exports.smartExchange = async (req, res) => {
     const requesterCurrentSlots = room.timeSlots.filter(slot => {
       const slotUserId = (slot.user._id || slot.user).toString();
       const isUserSlot = slotUserId === req.user.id.toString();
-      const isValidSubject = slot.subject === '자동 배정' || slot.subject === '교환 결과' || slot.subject === '자동 재배치';
+      const isValidSubject = slot.subject === '자동 배정' ||
+                             slot.subject === '교환 결과' ||
+                             slot.subject === '자동 재배치' ||
+                             slot.subject === '연쇄 교환 결과' ||
+                             slot.subject === '연쇄 조정 결과';
       return isUserSlot && isValidSubject;
     });
 
@@ -428,16 +432,43 @@ exports.smartExchange = async (req, res) => {
       selectedBlock = blocksNotOnTargetDay.length > 0 ? blocksNotOnTargetDay[0] :
                      blocksOnTargetDay.length > 0 ? blocksOnTargetDay[0] : candidateBlocks[0];
     } else {
-      if (sourceWeekOffset !== null && sourceWeekOffset !== undefined) {
+      // 주차 필터링에서 찾지 못한 경우, 전체 블록에서 sourceDayStr로 찾기
+      if (sourceDayStr) {
+        const sourceDayMap = {
+          '월요일': 'monday', '월': 'monday',
+          '화요일': 'tuesday', '화': 'tuesday',
+          '수요일': 'wednesday', '수': 'wednesday',
+          '목요일': 'thursday', '목': 'thursday',
+          '금요일': 'friday', '금': 'friday'
+        };
+        const sourceDayEnglish = sourceDayMap[sourceDayStr] || sourceDayStr.toLowerCase();
+        console.log(`🔍 주차에서 찾지 못함. 전체 블록에서 "${sourceDayStr}" (${sourceDayEnglish}) 찾기`);
+
+        const allDayBlocks = continuousBlocks.filter(block => block[0].day === sourceDayEnglish);
+        if (allDayBlocks.length > 0) {
+          console.log(`✅ 전체에서 ${allDayBlocks.length}개 블록 발견`);
+          allDayBlocks.forEach((block, idx) => {
+            console.log(`   Block ${idx + 1}: ${block[0].day} ${new Date(block[0].date).toISOString().split('T')[0]}`);
+          });
+          const blocksNotOnTargetDay = allDayBlocks.filter(block => block[0].day !== targetDayEnglish);
+          selectedBlock = blocksNotOnTargetDay.length > 0 ? blocksNotOnTargetDay[0] : allDayBlocks[0];
+        } else {
+          return res.status(400).json({
+            success: false,
+            message: `${sourceDayStr}에 배정된 일정이 없습니다.`
+          });
+        }
+      } else if (sourceWeekOffset !== null && sourceWeekOffset !== undefined) {
         const weekNames = { '-2': '지지난주', '-1': '저번주', '0': '이번주', '1': '다음주' };
         const weekName = weekNames[sourceWeekOffset.toString()] || `${sourceWeekOffset}주 전`;
         return res.status(400).json({
           success: false,
-          message: `${weekName} ${sourceDayStr || '해당'}에 배정된 일정이 없습니다.`
+          message: `${weekName}에 배정된 일정이 없습니다.`
         });
+      } else {
+        const blocksNotOnTargetDay = continuousBlocks.filter(block => block[0].day !== targetDayEnglish);
+        selectedBlock = blocksNotOnTargetDay.length > 0 ? blocksNotOnTargetDay[0] : continuousBlocks[0];
       }
-      const blocksNotOnTargetDay = continuousBlocks.filter(block => block[0].day !== targetDayEnglish);
-      selectedBlock = blocksNotOnTargetDay.length > 0 ? blocksNotOnTargetDay[0] : continuousBlocks[0];
     }
 
     const allSlotsInBlock = selectedBlock;

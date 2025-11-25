@@ -1148,6 +1148,17 @@ exports.createRequest = async (req, res) => {
               console.error('❌ Room save error:', saveError);
               throw saveError;
            }
+        } else if (action === 'rejected') {
+           // 거절 시에도 DB에 저장
+           console.log('❌ Action is REJECTED - saving status...');
+           room.markModified('requests');
+           try {
+              await room.save();
+              console.log('✅ Room saved successfully (rejected)!');
+           } catch (saveError) {
+              console.error('❌ Room save error:', saveError);
+              throw saveError;
+           }
         }
 
         // 🆕 waiting_for_chain 상태인 경우 바로 응답 반환 (activity log 생략)

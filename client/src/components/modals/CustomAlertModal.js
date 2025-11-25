@@ -61,9 +61,9 @@ const CustomAlertModal = ({
   const handleConfirm = () => {
     if (onConfirm) {
       onConfirm();
-    } else {
-      onClose();
     }
+    // onConfirm 실행 여부와 관계없이 항상 모달 닫기
+    onClose();
   };
 
   const handleOverlayClick = (e) => {
