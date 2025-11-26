@@ -261,11 +261,20 @@ exports.analyzeScheduleImages = async (req, res) => {
         }
 
         // sourceImageIndex 추가 (시간 수정 제거 - OCR이 정확히 인식하도록 프롬프트 개선)
-        const schedulesWithIndex = (parsedSchedules.schedules || []).map(schedule => ({
-          ...schedule,
-          sourceImage: file.originalname,
-          sourceImageIndex: i
-        }));
+        const schedulesWithIndex = (parsedSchedules.schedules || []).map(schedule => {
+          // 🎨 디버깅: backgroundColor 확인
+          if (schedule.backgroundColor) {
+            console.log(`🎨 OCR 색상 추출됨: ${schedule.title} → backgroundColor: ${schedule.backgroundColor}`);
+          } else {
+            console.log(`⚪ OCR 색상 없음: ${schedule.title} → backgroundColor: ${schedule.backgroundColor || 'undefined'}`);
+          }
+          
+          return {
+            ...schedule,
+            sourceImage: file.originalname,
+            sourceImageIndex: i
+          };
+        });
 
         // imageTitle 추출 (AI가 분석한 제목)
         const extractedTitle = parsedSchedules.imageTitle || null;

@@ -315,7 +315,7 @@ const MergedWeekView = ({
                   const startIndex = getTimeSlotIndex(startTime);
                   const topPosition = startIndex * 16;
 
-                  // 스케줄의 색상 사용 (없으면 주황색)
+                  // ⭐ 스케줄의 색상 사용 (우선순위: backgroundColor → sourceImageIndex → 기본 보라색)
                   // Tailwind 클래스를 hex 색상으로 변환
                   const tailwindToHex = {
                     'bg-gray-100': '#f3f4f6', 'bg-gray-200': '#e5e7eb', 'bg-gray-300': '#d1d5db',
@@ -337,8 +337,33 @@ const MergedWeekView = ({
                     'bg-pink-400': '#f472b6', 'bg-pink-500': '#ec4899', 'bg-pink-600': '#db2777'
                   };
 
-                  let rawColor = seg.schedule.color || '#8b5cf6';
-                  const bgColor = (tailwindToHex[rawColor] || rawColor) + 'CC';
+                  // ⭐ 색상 결정 로직 개선
+                  let rawColor = seg.schedule.color; // 먼저 스케줄의 color 필드 확인
+                  
+                  // 🎨 디버깅: MergedWeekView 색상 적용
+                  console.log(`🎨 [MergedWeekView] ${seg.schedule.title} 렌더링:`, {
+                    color: seg.schedule.color,
+                    backgroundColor: seg.schedule.backgroundColor,
+                    sourceImageIndex: seg.schedule.sourceImageIndex
+                  });
+                  
+                  // color가 없으면 sourceImageIndex 기반으로 색상 할당
+                  if (!rawColor && seg.schedule.sourceImageIndex !== undefined) {
+                    const { getColorForImageIndex } = require('../../../../utils/scheduleAnalysis/assignScheduleColors');
+                    const colorInfo = getColorForImageIndex(seg.schedule.sourceImageIndex);
+                    rawColor = colorInfo.border; // 이미지 인덱스 색상 사용
+                    console.log(`  📊 fallback to sourceImageIndex: ${seg.schedule.sourceImageIndex} → ${rawColor}`);
+                  }
+                  
+                  // 그래도 없으면 기본 보라색
+                  if (!rawColor) {
+                    rawColor = '#8b5cf6';
+                    console.log(`  ⚪ fallback to default: ${rawColor}`);
+                  } else {
+                    console.log(`  ✅ 최종 색상: ${rawColor}`);
+                  }
+                  
+                  const bgColor = tailwindToHex[rawColor] || rawColor;
 
                   const columnWidth = seg.overlapCount > 1 ? `${100 / seg.overlapCount}%` : '100%';
                   const leftPosition = seg.overlapCount > 1 ? `${(100 / seg.overlapCount) * seg.overlapIndex}%` : '0%';
@@ -382,7 +407,7 @@ const MergedWeekView = ({
                                           largestSeg.overlapIndex === seg.overlapIndex;
 
                   // border 클래스 동적 생성
-                  let borderClasses = 'absolute text-center px-1';
+                  let borderClasses = 'absolute text-center px-1 text-white';
                   if (!hasSameAbove) borderClasses += ' border-t';
                   if (!hasSameBelow) borderClasses += ' border-b';
                   borderClasses += ' border-l border-r border-gray-300';
@@ -397,7 +422,6 @@ const MergedWeekView = ({
                         left: leftPosition,
                         width: columnWidth,
                         backgroundColor: bgColor,
-                        color: '#000000',
                         zIndex: seg.overlapIndex
                       }}
                       title={`${seg.schedule.academyName ? seg.schedule.academyName + ' - ' : ''}${seg.schedule.subjectName ? seg.schedule.subjectName + ' - ' : ''}${seg.schedule.title}${seg.schedule.instructor ? ` (${seg.schedule.instructor})` : ''}${seg.schedule.floor ? ` (${seg.schedule.floor}층)` : ''} (${seg.schedule.startTime}~${seg.schedule.endTime})`}

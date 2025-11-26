@@ -4,6 +4,48 @@ import { DAY_MAP } from '../constants/scheduleConstants';
 import { getColorForImageIndex } from '../../../../utils/scheduleAnalysis/assignScheduleColors';
 
 /**
+ * 색상 이름을 hex 코드로 변환
+ * @param {string} colorName - 색상 이름 (예: "blue", "red", "green" 등)
+ * @returns {string} hex 색상 코드
+ */
+const convertColorNameToHex = (colorName) => {
+  if (!colorName) return '#9333ea'; // 기본 보라색
+  
+  // 이미 hex 코드인 경우 그대로 반환
+  if (colorName.startsWith('#')) return colorName;
+  
+  // 색상 이름 매핑 테이블
+  const colorMap = {
+    'blue': '#3b82f6',
+    'skyblue': '#38bdf8',
+    'red': '#ef4444',
+    'green': '#22c55e',
+    'yellow': '#eab308',
+    'orange': '#f97316',
+    'purple': '#a855f7',
+    'pink': '#ec4899',
+    'gray': '#6b7280',
+    'grey': '#6b7280',
+    'brown': '#92400e',
+    'black': '#1f2937',
+    'white': '#f9fafb',
+    'cyan': '#06b6d4',
+    'teal': '#14b8a6',
+    'indigo': '#6366f1',
+    'violet': '#8b5cf6',
+    'fuchsia': '#d946ef',
+    'rose': '#f43f5e',
+    'lime': '#84cc16',
+    'emerald': '#10b981',
+    'amber': '#f59e0b'
+  };
+  
+  // 소문자로 변환하여 매핑
+  const normalizedColor = colorName.toLowerCase().trim();
+  return colorMap[normalizedColor] || '#9333ea'; // 매칭 안 되면 기본 보라색
+};
+
+/**
  * 시간 슬롯 관련 로직을 관리하는 커스텀 훅
  * @param {Array} personalTimes - 개인 시간 배열
  * @param {Array} fixedSchedules - 고정 일정 배열
@@ -41,11 +83,27 @@ const useTimeSlots = (personalTimes, fixedSchedules, showFullDay, timeRange, set
           return;
         }
 
-        // 이미지 인덱스로 색상 가져오기
+        // ⭐ 색상 우선순위: 1) OCR backgroundColor, 2) 이미지 인덱스 색상, 3) 기본 보라색
         let scheduleColor = '#9333ea'; // 기본 보라색
-        if (fixed.sourceImageIndex !== undefined) {
+
+        // 🎨 디버깅: 색상 할당 과정 로그
+        console.log(`🎨 [useTimeSlots] ${fixed.title} 색상 할당:`, {
+          backgroundColor: fixed.backgroundColor,
+          sourceImageIndex: fixed.sourceImageIndex
+        });
+
+        // 1순위: OCR에서 추출한 backgroundColor 사용
+        if (fixed.backgroundColor) {
+          scheduleColor = convertColorNameToHex(fixed.backgroundColor);
+          console.log(`  ✅ backgroundColor 사용: ${fixed.backgroundColor} → ${scheduleColor}`);
+        }
+        // 2순위: 이미지 인덱스로 색상 가져오기
+        else if (fixed.sourceImageIndex !== undefined) {
           const colorInfo = getColorForImageIndex(fixed.sourceImageIndex);
           scheduleColor = colorInfo.border; // 색상 팔레트에서 border 색상 사용
+          console.log(`  📊 sourceImageIndex 사용: ${fixed.sourceImageIndex} → ${scheduleColor}`);
+        } else {
+          console.log(`  ⚪ 기본 색상 사용: ${scheduleColor}`);
         }
 
         combined.push({
