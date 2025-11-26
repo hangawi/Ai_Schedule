@@ -338,7 +338,7 @@ const MergedWeekView = ({
                   };
 
                   let rawColor = seg.schedule.color || '#8b5cf6';
-                  const bgColor = tailwindToHex[rawColor] || rawColor;
+                  const bgColor = (tailwindToHex[rawColor] || rawColor) + 'CC';
 
                   const columnWidth = seg.overlapCount > 1 ? `${100 / seg.overlapCount}%` : '100%';
                   const leftPosition = seg.overlapCount > 1 ? `${(100 / seg.overlapCount) * seg.overlapIndex}%` : '0%';

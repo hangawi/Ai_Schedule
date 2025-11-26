@@ -137,8 +137,8 @@ const WeekView = ({
     if (!hasPreferredTime && !hasPreferredExceptionTime) {
       return {
         type: 'non_preferred',
-        name: '불가능 (방장)',
-        title: '불가능한 시간'
+        name: '다른 일정 (방장)',
+        title: '다른 일정'
       };
     }
 
@@ -405,7 +405,7 @@ const WeekView = ({
                       height: `${blockHeight}px`,
                       top: `${topPosition}px`,
                       ...(block.type === 'owner' && block.data ? {
-                        backgroundColor: `${block.data.color}20`,
+                        backgroundColor: `${block.data.color}CC`,
                         borderColor: block.data.color
                       } : {}),
                       // 방장의 불가능한 시간 (non_preferred) - 연한 보라/라벤더
@@ -445,8 +445,8 @@ const WeekView = ({
                       <div
                         className="text-xs font-medium px-0.5 py-0.5 rounded"
                         style={{
-                          color: block.data?.textColor || block.data?.color,
-                          backgroundColor: `${block.data?.color}10`,
+                          color: '#000000',
+                          backgroundColor: `${block.data?.color}CC`,
                           fontSize: '25px'
                         }}
                         title={`${block.data?.subject || block.data?.name} (${block.startTime}~${block.actualEndTime})`}

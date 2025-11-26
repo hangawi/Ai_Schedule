@@ -386,8 +386,8 @@ const DateDetailModal = ({
                   };
                   let rawColor = block.color || '#8b5cf6';
                   const personalColor = tailwindToHex[rawColor] || rawColor;
-                  bgColor = personalColor;
-                  textColor = 'text-white';
+                  bgColor = personalColor + 'CC';
+                  textColor = 'text-black';
                   content = `${isSleepTime ? '수면시간' : title} (${block.duration}분)`;
                 } else {
                   // 빈 시간
@@ -513,8 +513,8 @@ const DateDetailModal = ({
                     'bg-purple-400': '#a78bfa', 'bg-purple-500': '#8b5cf6', 'bg-purple-600': '#7c3aed'
                   };
                   let rawColor = firstSlot.color || '#8b5cf6';
-                  bgColor = tailwindToHex[rawColor] || rawColor;
-                  textColor = 'text-white';
+                  bgColor = (tailwindToHex[rawColor] || rawColor) + 'CC';
+                  textColor = 'text-black';
                   content = isSleepTime ? '수면시간' : title;
                 } else if (recurringSlot) {
                   bgColor = priorityConfig[recurringSlot.priority]?.color || 'bg-blue-400';
@@ -550,13 +550,13 @@ const DateDetailModal = ({
                             'bg-blue-100': '#dbeafe', 'bg-blue-400': '#60a5fa', 'bg-blue-600': '#2563eb'
                           };
                           let rawColor = p.color || '#8b5cf6';
-                          const finalColor = tailwindToHex[rawColor] || rawColor;
+                          const finalColor = (tailwindToHex[rawColor] || rawColor) + 'CC';
 
                           return (
                             <div
                               key={idx}
-                              className="flex-1 text-white text-xs px-2 py-1 rounded text-center"
-                              style={{ backgroundColor: finalColor }}
+                              className="flex-1 text-xs px-2 py-1 rounded text-center"
+                              style={{ backgroundColor: finalColor, color: '#000000' }}
                             >
                               {p.title || p.subjectName || p.academyName || '일정'}
                             </div>
