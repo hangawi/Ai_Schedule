@@ -115,13 +115,11 @@ exports.runAutoSchedule = async (req, res) => {
         }
       }
 
-      // 💡 자동배정 실행 전: 기존의 모든 timeSlots와 negotiations 삭제
+      // 💡 자동배정 실행 전: 기존의 모든 timeSlots 삭제
       const beforeSlotCount = room.timeSlots.length;
-      const beforeNegotiationCount = room.negotiations ? room.negotiations.length : 0;
 
-      // 💡 모든 슬롯과 협의 삭제
+      // 💡 모든 슬롯 삭제
       room.timeSlots = [];
-      room.negotiations = [];
 
       // 개인 시간표 기반 자동배정으로 변경
       const result = schedulingAlgorithm.runAutoSchedule(
@@ -146,7 +144,7 @@ exports.runAutoSchedule = async (req, res) => {
       const oneWeekAgo = new Date(startDate);
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-      const forcedNegotiationSuggestions = [];
+      const conflictSuggestions = [];
 
       for (const member of room.members) {
         const memberUser = await User.findById(member.user);
@@ -161,7 +159,7 @@ exports.runAutoSchedule = async (req, res) => {
 
             if (hasConsecutiveCarryOver) {
                 const memberName = memberUser.name || `${memberUser.firstName} ${memberUser.lastName}`;
-                forcedNegotiationSuggestions.push({
+                conflictSuggestions.push({
                     title: '장기 이월 멤버 발생',
                     content: `멤버 '${memberName}'의 시간이 2주 이상 연속으로 이월되었습니다. 최소 할당 시간을 줄이거나, 멤버의 참여 가능 시간을 늘리거나, 직접 시간을 할당하여 문제를 해결해야 합니다.`
                 });
@@ -222,10 +220,7 @@ exports.runAutoSchedule = async (req, res) => {
       // 디버깅을 위해 실제 저장된 슬롯들 확인
       const recentlyAdded = room.timeSlots.filter(slot => slot.assignedBy || slot.subject === '자동 배정');
 
-      if (result.negotiations && result.negotiations.length > 0) {
-        room.negotiations = room.negotiations.filter(neg => neg.status !== 'active');
-        room.negotiations.push(...result.negotiations);
-      }
+      // Negotiations feature removed
 
       for (const member of room.members) {
         const memberId = member.user._id.toString();
@@ -349,7 +344,6 @@ exports.runAutoSchedule = async (req, res) => {
          .populate('timeSlots.user', '_id firstName lastName email')
          .populate('requests.requester', 'firstName lastName email')
          .populate('requests.targetUser', 'firstName lastName email')
-         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email')
          .lean();
 
       if (freshRoom.timeSlots.length > 0) {
@@ -362,7 +356,7 @@ exports.runAutoSchedule = async (req, res) => {
       res.json({
          room: freshRoom,
          unassignedMembersInfo: result.unassignedMembersInfo,
-         conflictSuggestions: forcedNegotiationSuggestions, // Use the new suggestions
+         conflictSuggestions: conflictSuggestions,
       });
    } catch (error) {
 
@@ -401,8 +395,7 @@ exports.deleteAllTimeSlots = async (req, res) => {
       // Clear the timeSlots array
       room.timeSlots = [];
 
-      // Also clear all active negotiations and non-pending requests as they are linked to slots
-      room.negotiations = [];
+      // Also clear non-pending requests as they are linked to slots
       room.requests = room.requests.filter(r => r.status === 'pending');
 
 
@@ -414,45 +407,6 @@ exports.deleteAllTimeSlots = async (req, res) => {
          .populate('timeSlots.user', '_id firstName lastName email');
 
       res.json(updatedRoom);
-
-   } catch (error) {
-      res.status(500).json({ msg: 'Server error' });
-   }
-};
-
-// @desc    Clear all negotiations in a room
-// @route   DELETE /api/coordination/rooms/:roomId/negotiations
-// @access  Private (Room Owner only)
-exports.clearAllNegotiations = async (req, res) => {
-   try {
-      const { roomId } = req.params;
-      const room = await Room.findById(roomId);
-
-      if (!room) {
-         return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
-      }
-
-      if (!room.isOwner(req.user.id)) {
-         return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
-      }
-
-      const clearedCount = room.negotiations.length;
-
-      // Clear all negotiations
-      room.negotiations = [];
-      await room.save();
-
-      const updatedRoom = await Room.findById(room._id)
-         .populate('owner', 'firstName lastName email')
-         .populate('members.user', 'firstName lastName email')
-         .populate('timeSlots.user', '_id firstName lastName email')
-         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email');
-
-      res.json({
-         msg: `${clearedCount}개의 협의가 삭제되었습니다.`,
-         clearedCount,
-         room: updatedRoom
-      });
 
    } catch (error) {
       res.status(500).json({ msg: 'Server error' });

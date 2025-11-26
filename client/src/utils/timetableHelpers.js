@@ -4,7 +4,7 @@
 
 import { timeToMinutes, minutesToTime } from './timeUtils';
 import { safeDateToISOString, getDayIndex } from './dateUtils';
-import { DAY_NAMES, DEFAULT_COLORS, NEGOTIATION_STATUS } from './timetableConstants';
+import { DAY_NAMES, DEFAULT_COLORS } from './timetableConstants';
 
 // 연속된 시간대 병합 함수
 export const mergeConsecutiveTimeSlots = (slots) => {
@@ -153,48 +153,6 @@ export const getRoomExceptionInfo = (date, time, roomSettings) => {
 };
 
 /**
- * Check if a slot is under negotiation
- * @param {Date} date - Date object
- * @param {string} time - Time string
- * @param {Object} roomData - Room data object
- * @returns {Object|null} - Negotiation info or null
- */
-export const getNegotiationInfo = (date, time, roomData) => {
-  if (!roomData?.negotiations || roomData.negotiations.length === 0) return null;
-
-  const negotiation = roomData.negotiations.find(neg => {
-    if (neg.status !== NEGOTIATION_STATUS.ACTIVE) return false;
-    if (!neg.slotInfo) return false;
-
-    // slotInfo.date가 Date 객체인지 문자열인지 확인
-    let negDate;
-    if (neg.slotInfo.date instanceof Date) {
-      negDate = neg.slotInfo.date;
-    } else {
-      negDate = new Date(neg.slotInfo.date);
-    }
-
-    const dateMatch = negDate.toISOString().split('T')[0] === date.toISOString().split('T')[0];
-
-    // Check if the time slot falls within the negotiation time range
-    const startTime = neg.slotInfo.startTime.trim();
-    const endTime = neg.slotInfo.endTime.trim();
-    const currentTime = time.trim();
-
-    const startMinutes = timeToMinutes(startTime);
-    const endMinutes = timeToMinutes(endTime);
-    const currentMinutes = timeToMinutes(currentTime);
-
-    // Check if current time slot is within or touches the negotiation time range
-    const timeMatch = currentMinutes >= startMinutes && currentMinutes < endMinutes;
-
-    return dateMatch && timeMatch;
-  });
-
-  return negotiation || null;
-};
-
-/**
  * Get who owns/booked a particular slot
  * @param {Date} date - Date object
  * @param {string} time - Time string
@@ -294,50 +252,6 @@ export const isSlotSelected = (date, time, currentSelectedSlots) => {
   if (dayIndex === -1) return false; // Weekend
   const dayKey = DAY_NAMES[dayIndex];
   return currentSelectedSlots.some(s => s.day === dayKey && s.startTime === time);
-};
-
-/**
- * Get current week's negotiations
- * @param {Object} roomData - Room data object
- * @param {Array} weekDates - Array of week dates
- * @param {Array} timeSlotsInDay - Array of time slots in a day
- * @param {Function} getNegotiationInfoFunc - Function to get negotiation info
- * @returns {Array} - Array of current week negotiations
- */
-export const getCurrentWeekNegotiations = (roomData, weekDates, timeSlotsInDay, getNegotiationInfoFunc) => {
-  if (!roomData?.negotiations || !weekDates || weekDates.length === 0) return [];
-
-  const currentWeekNegotiations = [];
-  const addedNegotiationIds = new Set(); // 중복 방지
-
-  // 각 협의를 한 번만 추가 (병합된 상태로)
-  roomData.negotiations.forEach(negotiation => {
-    if (negotiation.status !== 'active') return;
-    if (addedNegotiationIds.has(negotiation._id)) return;
-
-    // 협의의 날짜가 현재 주에 포함되는지 확인
-    const negDate = negotiation.slotInfo?.date;
-    if (!negDate) return;
-
-    const negDateStr = new Date(negDate).toISOString().split('T')[0];
-    const weekDateInfo = weekDates.find(d => {
-      const weekDateStr = new Date(d.fullDate).toISOString().split('T')[0];
-      return weekDateStr === negDateStr;
-    });
-
-    if (weekDateInfo) {
-      addedNegotiationIds.add(negotiation._id);
-      currentWeekNegotiations.push({
-        ...negotiation,
-        dayIndex: weekDates.indexOf(weekDateInfo),
-        time: negotiation.slotInfo.startTime,
-        date: weekDateInfo.fullDate,
-        dayDisplay: weekDateInfo.display
-      });
-    }
-  });
-
-  return currentWeekNegotiations;
 };
 
 export const mergeDefaultSchedule = (schedule) => {

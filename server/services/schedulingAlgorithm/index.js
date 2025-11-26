@@ -7,7 +7,7 @@
 
 // Constants
 const { SLOTS_PER_HOUR } = require('./constants/timeConstants');
-const { DAY_MAP, NEGOTIATION_TYPES, DEFAULT_REQUIRED_SLOTS } = require('./constants/schedulingConstants');
+const { DAY_MAP, DEFAULT_REQUIRED_SLOTS } = require('./constants/schedulingConstants');
 
 // Utils
 const { calculateEndTime } = require('./utils/timeUtils');
@@ -37,7 +37,6 @@ const { identifyConflictsBeforeAssignment } = require('./services/conflictIdenti
 const { assignByTimeOrder, assignUndisputedSlots, iterativeAssignment } = require('./services/slotAssignmentService');
 const { resolveConflictsWithOwner, resolveConflictsByOwnerTakingSlot } = require('./services/conflictResolutionService');
 const { runMultiWeekSchedule } = require('./services/multiWeekSchedulingService');
-const { processNegotiationBlocks } = require('./services/negotiationCreationService');
 
 /**
  * 스케줄링 알고리즘 클래스
@@ -127,7 +126,7 @@ class SchedulingAlgorithm {
       memberRequiredSlots
     );
     const conflictingSlots = conflicts;
-    const negotiationBlocks = mergeConsecutiveConflicts(conflictingSlots, timetable, calculateEndTime);
+    // Negotiation blocks feature removed
 
     // 새로운 배정 전략: 시간 순서 우선 배정 (1시간 블록씩)
     assignByTimeOrder(timetable, assignments, memberRequiredSlots, ownerId);
@@ -177,26 +176,10 @@ class SchedulingAlgorithm {
       startDate
     );
 
-    // 협의 처리
-    const { negotiations, autoAssignments } = processNegotiationBlocks({
-      negotiationBlocks,
-      assignments,
-      memberRequiredSlots,
-      memberAvailableSlots,
-      nonOwnerMembers,
-      timetable,
-      ownerId,
-      startDate
-    });
-
-    // 자동 배정 처리
-    if (autoAssignments && autoAssignments.length > 0) {
-      processAutoAssignments(assignments, autoAssignments);
-    }
+    // Negotiation feature removed
 
     return {
       assignments,
-      negotiations,
       carryOverAssignments,
       unassignedMembersInfo
     };

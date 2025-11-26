@@ -7,14 +7,11 @@ const AutoSchedulerPanel = ({
   onRun,
   isLoading,
   currentRoom,
-  onAutoResolveNegotiations,
   onResetCarryOverTimes,
   onResetCompletedTimes,
-  onClearAllNegotiations,
   onDeleteAllSlots,
   onClearAllCarryOverHistories,
-  currentWeekStartDate,
-  activeNegotiationsCount = 0
+  currentWeekStartDate
 }) => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -107,14 +104,6 @@ const AutoSchedulerPanel = ({
           </button>
         </div>
       </div>
-
-      {activeNegotiationsCount > 0 && (
-        <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded-md">
-          <p className="text-xs text-orange-700">
-            {activeNegotiationsCount}개 협의 진행중 (24시간 후 자동해결)
-          </p>
-        </div>
-      )}
     </div>
   );
 };

@@ -39,21 +39,6 @@ const SLOT_STATUS = {
   CANCELLED: 'cancelled'
 };
 
-// 협의 타입
-const NEGOTIATION_TYPES = {
-  FULL_CONFLICT: 'full_conflict',           // 양보/주장 협의
-  PARTIAL_CONFLICT: 'partial_conflict',     // 시간 분할 협의
-  TIME_SLOT_CHOICE: 'time_slot_choice'      // 시간대 선택 협의
-};
-
-// 협의 상태
-const NEGOTIATION_STATUS = {
-  ACTIVE: 'active',
-  RESOLVED: 'resolved',
-  CANCELLED: 'cancelled',
-  PENDING: 'pending'
-};
-
 // 멤버 응답 상태
 const MEMBER_RESPONSE_STATUS = {
   PENDING: 'pending',
@@ -95,8 +80,6 @@ module.exports = {
   DEFAULT_MIN_SLOTS_PER_WEEK,
   DEFAULT_REQUIRED_SLOTS,
   SLOT_STATUS,
-  NEGOTIATION_TYPES,
-  NEGOTIATION_STATUS,
   MEMBER_RESPONSE_STATUS,
   AUTO_ASSIGNMENT_SUBJECT,
   CARRY_OVER_THRESHOLD_WEEKS,

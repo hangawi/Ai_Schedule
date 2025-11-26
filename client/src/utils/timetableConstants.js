@@ -24,8 +24,6 @@ export const TIME_SLOT_INTERVAL = 30;
 // Default colors for various UI elements
 export const DEFAULT_COLORS = {
   UNKNOWN_USER: '#6B7280',
-  NEGOTIATION_USER_INVOLVED: '#DC2626', // Red for user involvement
-  NEGOTIATION_OTHER: '#F59E0B', // Orange for others
 };
 
 // Request types
@@ -38,13 +36,6 @@ export const REQUEST_TYPES = {
 
 // Request debounce time in milliseconds
 export const REQUEST_DEBOUNCE_TIME = 5000;
-
-// Negotiation status
-export const NEGOTIATION_STATUS = {
-  ACTIVE: 'active',
-  RESOLVED: 'resolved',
-  CANCELLED: 'cancelled',
-};
 
 // Modal types
 export const MODAL_TYPES = {

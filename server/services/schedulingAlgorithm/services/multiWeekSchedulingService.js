@@ -20,7 +20,6 @@ const runMultiWeekSchedule = (params, runSingleWeekSchedule) => {
   endDate.setUTCDate(startDate.getUTCDate() + (numWeeks * 7));
 
   const allAssignments = {};
-  const allNegotiations = [];
   const allSlots = [];
 
   // 각 멤버별로 assignments 초기화
@@ -66,41 +65,18 @@ const runMultiWeekSchedule = (params, runSingleWeekSchedule) => {
       }
     });
 
-    // 협의 병합 (주별로 분리)
-    if (result.negotiations && result.negotiations.length > 0) {
-      const weekNegotiations = result.negotiations.map(neg => ({
-        ...neg,
-        weekIndex: weekIndex + 1,
-        weekStartDate: weekStartDate.toISOString().split('T')[0]
-      }));
-      allNegotiations.push(...weekNegotiations);
-    }
+    // Negotiation feature removed
   }
 
   return {
     assignments: allAssignments,
-    negotiations: allNegotiations,
     carryOverAssignments: [],
     unassignedMembersInfo: []
   };
 };
 
-/**
- * 주차 정보 추가하여 협의 생성
- * @param {Array} negotiations - 협의 배열
- * @param {number} weekIndex - 주 인덱스 (0-based)
- * @param {Date} weekStartDate - 주 시작 날짜
- * @returns {Array} 주차 정보가 추가된 협의 배열
- */
-const addWeekInfoToNegotiations = (negotiations, weekIndex, weekStartDate) => {
-  return negotiations.map(neg => ({
-    ...neg,
-    weekIndex: weekIndex + 1,
-    weekStartDate: weekStartDate.toISOString().split('T')[0]
-  }));
-};
+// Negotiation feature removed - addWeekInfoToNegotiations function deleted
 
 module.exports = {
-  runMultiWeekSchedule,
-  addWeekInfoToNegotiations
+  runMultiWeekSchedule
 };

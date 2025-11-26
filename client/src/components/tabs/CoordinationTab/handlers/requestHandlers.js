@@ -137,14 +137,3 @@ export const createHandleChangeRequest = (currentRoom, slotToChange, handleReque
     handleRequestSlot(requestData);
   };
 };
-
-/**
- * Create handler for negotiation refresh
- */
-export const createHandleNegotiationRefresh = (currentRoom, fetchRoomDetails) => {
-  return async () => {
-    if (currentRoom?._id) {
-      await fetchRoomDetails(currentRoom._id);
-    }
-  };
-};

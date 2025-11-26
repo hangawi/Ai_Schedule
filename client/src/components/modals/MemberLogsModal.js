@@ -53,8 +53,6 @@ const MemberLogsModal = ({ roomId, memberId, memberName, onClose, isAdmin = fals
       slot_request: '자리 요청',
       slot_yield: '자리 양보',
       slot_swap: '자리 변경',
-      negotiation_start: '협상 시작',
-      negotiation_resolve: '협상 해결',
       member_join: '멤버 입장',
       member_leave: '멤버 퇴장',
       member_kick: '멤버 강퇴',
@@ -74,8 +72,6 @@ const MemberLogsModal = ({ roomId, memberId, memberName, onClose, isAdmin = fals
       slot_request: 'bg-yellow-100 text-yellow-700',
       slot_yield: 'bg-green-100 text-green-700',
       slot_swap: 'bg-purple-100 text-purple-700',
-      negotiation_start: 'bg-orange-100 text-orange-700',
-      negotiation_resolve: 'bg-emerald-100 text-emerald-700',
       member_join: 'bg-green-100 text-green-700',
       member_leave: 'bg-red-100 text-red-700',
       member_kick: 'bg-red-100 text-red-700',
@@ -141,8 +137,6 @@ const MemberLogsModal = ({ roomId, memberId, memberName, onClose, isAdmin = fals
     filteredLogs = logs.filter(log => ['member_join', 'member_leave', 'member_kick'].includes(log.action));
   } else if (activeLogTab === 'slot') {
     filteredLogs = logs.filter(log => ['slot_request', 'slot_yield', 'slot_swap'].includes(log.action));
-  } else if (activeLogTab === 'negotiation') {
-    filteredLogs = logs.filter(log => ['negotiation_start', 'negotiation_resolve'].includes(log.action));
   } else if (activeLogTab === 'change') {
     filteredLogs = logs.filter(log => ['change_request', 'change_approve', 'change_reject'].includes(log.action));
   }
@@ -228,16 +222,6 @@ const MemberLogsModal = ({ roomId, memberId, memberName, onClose, isAdmin = fals
             }`}
           >
             자리 관리 ({logs.filter(log => ['slot_request', 'slot_yield', 'slot_swap'].includes(log.action)).length})
-          </button>
-          <button
-            onClick={() => setActiveLogTab('negotiation')}
-            className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
-              activeLogTab === 'negotiation'
-                ? 'bg-pink-600 text-white shadow-md'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            협상 ({logs.filter(log => ['negotiation_start', 'negotiation_resolve'].includes(log.action)).length})
           </button>
         </div>
 

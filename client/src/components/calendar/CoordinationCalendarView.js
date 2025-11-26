@@ -52,9 +52,6 @@ const DaySummaryBar = ({ blocks }) => {
           case 'blocked':
             bgColor = 'bg-red-500';
             break;
-          case 'negotiation':
-            bgColor = 'bg-yellow-500';
-            break;
           case 'travel':
             bgColor = 'bg-green-500';
             tooltip = `${block.startTime} - ${getEndTimeForBlock(block)}: 이동시간`;
@@ -153,14 +150,9 @@ const CoordinationCalendarView = ({
     const slotMap = new Map();
 
     allPossibleSlots.forEach(time => {
-      const negotiation = roomData.negotiations?.find(neg =>
-        neg.status === 'active' && // ✅ active 상태인 협의만
-        toYYYYMMDD(neg.slotInfo.date) === toYYYYMMDD(date) &&
-        time >= neg.slotInfo.startTime && time < neg.slotInfo.endTime
-      );
       const blockingInfo = getBlockedTimeInfo(time, roomData.settings) || getRoomExceptionInfo(date, time, roomData.settings);
-      const assignedSlots = timeSlots.filter(slot => 
-        toYYYYMMDD(slot.date) === toYYYYMMDD(date) && 
+      const assignedSlots = timeSlots.filter(slot =>
+        toYYYYMMDD(slot.date) === toYYYYMMDD(date) &&
         time >= slot.startTime && time < slot.endTime
       );
       const travelSlot = assignedSlots.find(slot => slot.isTravel);
@@ -171,8 +163,6 @@ const CoordinationCalendarView = ({
       let event = null;
       if (blockingInfo) {
         event = { type: 'blocked', name: blockingInfo.name };
-      } else if (negotiation) {
-        event = { type: 'negotiation', name: `협의: ${negotiation._id}` };
       } else if (travelSlot) {
         event = { type: 'travel', name: '이동시간' };
       } else if (activitySlots.length > 0) {
@@ -335,9 +325,6 @@ const CoordinationCalendarView = ({
                 {Array.from(new Set(dateInfo.blocks.filter(b => b.type === 'blocked').map(b => b.name))).map((name, i) => (
                   <span key={`block-${i}`} className="text-sm bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full">{name}</span>
                 ))}
-                {dateInfo.blocks.some(b => b.type === 'negotiation') && (
-                  <span className="text-sm bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full">협의 중</span>
-                )}
                 {dateInfo.blocks.some(b => b.type === 'travel') && (
                   <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">이동시간</span>
                 )}

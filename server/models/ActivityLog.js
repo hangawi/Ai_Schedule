@@ -24,8 +24,6 @@ const ActivityLogSchema = new mongoose.Schema({
       'slot_request',          // 자리 요청
       'slot_yield',            // 자리 양보
       'slot_swap',             // 자리 교환
-      'negotiation_start',     // 협상 시작
-      'negotiation_resolve',   // 협상 해결
       'member_join',           // 멤버 입장
       'member_leave',          // 멤버 퇴장
       'member_kick',           // 멤버 강퇴

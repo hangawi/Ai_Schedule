@@ -96,8 +96,6 @@ const AdminDashboard = () => {
       slot_request: '자리 요청',
       slot_yield: '자리 양보',
       slot_swap: '자리 교환',
-      negotiation_start: '협상 시작',
-      negotiation_resolve: '협상 해결',
       change_request: '변경 요청',
       change_approve: '변경 승인',
       change_reject: '변경 거절'
@@ -120,8 +118,6 @@ const AdminDashboard = () => {
       slot_request: 'bg-yellow-100 text-yellow-700',
       slot_yield: 'bg-emerald-100 text-emerald-700',
       slot_swap: 'bg-pink-100 text-pink-700',
-      negotiation_start: 'bg-orange-100 text-orange-700',
-      negotiation_resolve: 'bg-lime-100 text-lime-700',
       change_request: 'bg-amber-100 text-amber-700',
       change_approve: 'bg-cyan-100 text-cyan-700',
       change_reject: 'bg-rose-100 text-rose-700'

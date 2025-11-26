@@ -272,16 +272,13 @@ exports.joinRoom = async (req, res) => {
                }
             }
 
-            // Clear previous auto-generated slots (keep manually assigned and negotiation slots)
+            // Clear previous auto-generated slots (keep manually assigned slots)
             room.timeSlots = room.timeSlots.filter(slot => {
                // Keep manually assigned slots (no assignedBy)
                if (!slot.assignedBy) return true;
-               // Keep negotiation-based slots
-               if (slot.subject && slot.subject.includes('협의')) return true;
                // Remove auto-generated slots
                return false;
             });
-            room.negotiations = [];
 
             console.log('🔍 Before runAutoSchedule:', {
                membersOnlyCount: membersOnly.length,
@@ -312,17 +309,13 @@ exports.joinRoom = async (req, res) => {
 
             console.log('🔍 Auto-schedule result:', {
                hasAssignments: !!result.assignments,
-               assignmentCount: result.assignments ? Object.keys(result.assignments).length : 0,
-               negotiationsCount: result.negotiations?.length || 0
+               assignmentCount: result.assignments ? Object.keys(result.assignments).length : 0
             });
 
             // schedulingAlgorithm returns assignments, not timeSlots directly
             // Process assignments and convert to timeSlots (same logic as coordinationController)
             if (result.assignments) {
                console.log('✅ Auto-schedule successful, processing assignments...');
-
-               // Update negotiations
-               room.negotiations = result.negotiations || [];
 
                // Convert assignments to timeSlots
                const addedSlots = new Set();
@@ -384,7 +377,6 @@ exports.joinRoom = async (req, res) => {
       await room.populate('timeSlots.user', '_id firstName lastName email');
       await room.populate('requests.requester', '_id firstName lastName email');
       await room.populate('requests.targetUser', '_id firstName lastName email');
-      await room.populate('negotiations.conflictingMembers.user', '_id firstName lastName email');
 
       // 활동 로그 기록 - 멤버 입장
       try {
@@ -417,8 +409,7 @@ exports.getRoomDetails = async (req, res) => {
          .populate('members.user', '_id firstName lastName email firebaseUid defaultSchedule address addressDetail addressLat addressLng')
          .populate('timeSlots.user', '_id firstName lastName email firebaseUid')
          .populate('requests.requester', '_id firstName lastName email firebaseUid')
-         .populate('requests.targetUser', '_id firstName lastName email firebaseUid')
-         .populate('negotiations.conflictingMembers.user', '_id firstName lastName email firebaseUid');
+         .populate('requests.targetUser', '_id firstName lastName email firebaseUid');
 
       if (!room) {
          return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
@@ -428,110 +419,7 @@ exports.getRoomDetails = async (req, res) => {
          return res.status(403).json({ msg: '이 방에 접근할 권한이 없습니다.' });
       }
 
-      // 💡 협의에 memberSpecificTimeSlots가 없으면 자동 생성
-      let needsSave = false;
-      for (const negotiation of room.negotiations) {
-         if (negotiation.status === 'active' &&
-             (!negotiation.memberSpecificTimeSlots || Object.keys(negotiation.memberSpecificTimeSlots).length === 0)) {
-            negotiation.memberSpecificTimeSlots = {};
-
-            const dayString = negotiation.slotInfo.day;
-            const conflictDate = new Date(negotiation.slotInfo.date);
-            const dayMap = { 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 0 };
-            const conflictDayOfWeek = dayMap[dayString];
-
-            // 이번 주의 시작일 계산
-            const weekStart = new Date(conflictDate);
-            weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // 일요일로 이동
-            weekStart.setHours(0, 0, 0, 0);
-
-            for (const cm of negotiation.conflictingMembers) {
-               const memberId = (cm.user._id || cm.user).toString();
-               const roomMember = room.members.find(m => {
-                  const mUserId = m.user._id ? m.user._id.toString() : m.user.toString();
-                  return mUserId === memberId;
-               });
-
-               if (roomMember && roomMember.user && roomMember.user.defaultSchedule) {
-                  // 💡 모든 요일의 선호 시간 가져오기
-                  const dayPreferences = roomMember.user.defaultSchedule.filter(sched => sched.priority >= 2);
-
-                  // 💡 요일별로 그룹화
-                  const dayMap2 = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-                  const prefsByDay = {};
-                  dayPreferences.forEach(pref => {
-                     const dayName = dayMap2[pref.dayOfWeek];
-                     if (!prefsByDay[dayName]) prefsByDay[dayName] = [];
-                     prefsByDay[dayName].push(pref);
-                  });
-
-                  const memberOptions = [];
-
-                  // 💡 각 요일마다 처리
-                  for (const [dayName, prefs] of Object.entries(prefsByDay)) {
-                     // 연속된 시간 블록 병합
-                     const sortedPrefs = prefs.sort((a, b) => a.startTime.localeCompare(b.startTime));
-                     const mergedBlocks = [];
-
-                     for (const pref of sortedPrefs) {
-                        if (mergedBlocks.length === 0) {
-                           mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
-                        } else {
-                           const lastBlock = mergedBlocks[mergedBlocks.length - 1];
-                           if (lastBlock.endTime === pref.startTime) {
-                              lastBlock.endTime = pref.endTime;
-                           } else {
-                              mergedBlocks.push({ startTime: pref.startTime, endTime: pref.endTime });
-                           }
-                        }
-                     }
-
-                     // 해당 요일의 실제 날짜 계산
-                     const targetDayIndex = dayMap2.indexOf(dayName);
-                     const currentDayIndex = conflictDate.getDay();
-                     let daysToAdd = targetDayIndex - currentDayIndex;
-                     if (daysToAdd < 0) daysToAdd += 7;
-
-                     const targetDate = new Date(conflictDate);
-                     targetDate.setDate(conflictDate.getDate() + daysToAdd);
-                     const targetDateStr = targetDate.toISOString().split('T')[0];
-                     const conflictDateStr = conflictDate.toISOString().split('T')[0];
-                     const isConflictDate = targetDateStr === conflictDateStr;
-
-                     // 이미 배정받은 시간 제외하고 옵션 생성
-                     for (const block of mergedBlocks) {
-                        const [startH, startM] = block.startTime.split(':').map(Number);
-                        const [endH, endM] = block.endTime.split(':').map(Number);
-                        const rangeStartMinutes = startH * 60 + startM;
-                        const rangeEndMinutes = endH * 60 + endM;
-
-                        const requiredSlots = cm.requiredSlots || 2;
-                        const requiredMinutes = requiredSlots * 30;
-
-                        // 💡 협의 날짜가 아니면 그대로 옵션 생성
-                        if (!isConflictDate) {
-                           for (let minutes = rangeStartMinutes; minutes + requiredMinutes <= rangeEndMinutes; minutes += requiredMinutes) {
-                              const slotEndMinutes = minutes + requiredMinutes;
-                              const slotStartTime = `${Math.floor(minutes / 60).toString().padStart(2, '0')}:${(minutes % 60).toString().padStart(2, '0')}`;
-                              const slotEndTime = `${Math.floor(slotEndMinutes / 60).toString().padStart(2, '0')}:${(slotEndMinutes % 60).toString().padStart(2, '0')}`;
-                              memberOptions.push({ startTime: slotStartTime, endTime: slotEndTime, day: dayName });
-                           }
-                        }
-                     }
-                  }
-
-                  negotiation.memberSpecificTimeSlots[memberId] = memberOptions;
-               } else {
-                  negotiation.memberSpecificTimeSlots[memberId] = [];
-               }
-            }
-            needsSave = true;
-         }
-      }
-
-      if (needsSave) {
-         await room.save();
-      }
+      // Negotiation feature removed
 
       // timeSlots의 user._id를 user.id로 변환 (클라이언트 호환성)
       const roomObj = room.toObject();
