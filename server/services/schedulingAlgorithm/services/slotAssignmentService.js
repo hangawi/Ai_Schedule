@@ -16,111 +16,34 @@ const { getMemberPriority, findMemberById } = require('../helpers/memberHelper')
  * @param {string} ownerId - 방장 ID
  */
 const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId) => {
-  console.log('🕐 시간 순서 우선 배정 시작 (같은 날 여러 멤버 분할 배정)');
+  console.log('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
+  console.log('🕐 시간 순서 우선 배정 시작 (2단계 하이브리드) - v4');
+  console.log('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
 
-  // 타임테이블의 모든 슬롯을 시간 순서대로 정렬
   const sortedKeys = Object.keys(timetable).sort();
-
-  // 각 멤버의 전체 가능한 슬롯 수 미리 계산 (캐시)
-  const memberTotalAvailableSlots = {};
-  for (const key of sortedKeys) {
-    const slot = timetable[key];
-    for (const avail of slot.available) {
-      if (!avail.isOwner) {
-        memberTotalAvailableSlots[avail.memberId] = (memberTotalAvailableSlots[avail.memberId] || 0) + 1;
-      }
-    }
-  }
-
-  console.log('📊 멤버별 전체 가능한 슬롯 수:', Object.fromEntries(
-    Object.entries(memberTotalAvailableSlots).map(([id, count]) => [id.substring(0, 8) + '...', count + '슬롯=' + (count/2) + 'h'])
-  ));
-
-  // 현재 시간부터 시작하는 연속 블록을 찾는 함수 (날짜 구분 없이)
-  const findConsecutiveBlockFromCurrentTime = (startIndex, memberId, maxSlots) => {
+  
+  const findConsecutiveBlock = (startIndex, memberId, maxSlots) => {
     const blockKeys = [];
-
     for (let i = startIndex; i < sortedKeys.length; i++) {
       const key = sortedKeys[i];
       const slot = timetable[key];
-
-      // 이미 배정됨
       if (slot.assignedTo) break;
-
-      // 멤버가 사용 가능한지 확인
       const canUse = slot.available.some(a => a.memberId === memberId && !a.isOwner);
       if (!canUse) break;
-
-      // 이전 슬롯과 연속되는지 확인 (첫 슬롯이 아닐 때)
-      if (blockKeys.length > 0) {
-        const prevKey = blockKeys[blockKeys.length - 1];
-        if (!areConsecutiveSlots(prevKey, key)) break;
-      }
-
+      if (blockKeys.length > 0 && !areConsecutiveSlots(blockKeys[blockKeys.length - 1], key)) break;
       blockKeys.push(key);
-
-      // maxSlots 제한 체크
       if (blockKeys.length >= maxSlots) break;
     }
-
     return blockKeys.length > 0 ? blockKeys : null;
   };
-
-  // 시간 순서대로 배정
-  let i = 0;
-  while (i < sortedKeys.length) {
-    const key = sortedKeys[i];
-    const slot = timetable[key];
-
-    // 이미 배정된 슬롯은 건너뜀
-    if (slot.assignedTo) {
-      i++;
-      continue;
-    }
-
-    // 이 슬롯을 사용할 수 있는 멤버 찾기 (방장 제외)
-    const availableMembers = slot.available
-      .filter(a => !a.isOwner)
-      .map(a => a.memberId);
-
-    if (availableMembers.length === 0) {
-      i++;
-      continue;
-    }
-
-    // 시간 순서 엄수: 현재 시간을 사용할 수 있는 첫 번째 멤버 선택
-    let selectedMember = null;
-    let selectedBlock = null;
-
-    for (const memberId of availableMembers) {
-      const assignedHours = assignments[memberId]?.assignedHours || 0;
-      const requiredSlots = memberRequiredSlots[memberId] || DEFAULT_REQUIRED_SLOTS;
-
-      // 이미 필요한 시간을 모두 배정받았으면 제외
-      if (assignedHours >= requiredSlots) continue;
-
-      // 남은 필요 슬롯 수 계산
-      const remainingSlots = requiredSlots - assignedHours;
-
-      // 현재 시간부터 시작하는 연속 블록 찾기
-      const block = findConsecutiveBlockFromCurrentTime(i, memberId, remainingSlots);
-      if (!block) continue;
-
-      // 첫 번째로 블록을 찾을 수 있는 멤버를 바로 선택 (시간 순서 엄수)
-      selectedMember = memberId;
-      selectedBlock = block;
-      break;
-    }
-
-    // 선택된 멤버에게 블록 배정
-    if (selectedMember && selectedBlock) {
-      const startKey = selectedBlock[0];
-      const endKey = selectedBlock[selectedBlock.length - 1];
-      const dateStr = extractDateFromSlotKey(startKey);
+  
+  const logAssignment = (memberId, block, fitType) => {
+      const startKey = block[0];
+      const endKey = block[block.length - 1];
+      const blockDateStr = extractDateFromSlotKey(startKey);
       const startTime = extractTimeFromSlotKey(startKey);
       const endTime = extractTimeFromSlotKey(endKey);
 
-      // 종료 시간 계산 (마지막 슬롯 + 30분)
       const [endH, endM] = endTime.split(':').map(Number);
       let finalEndH = endH;
       let finalEndM = endM + 30;
@@ -130,25 +53,103 @@ const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId)
       }
       const finalEndTime = `${String(finalEndH).padStart(2, '0')}:${String(finalEndM).padStart(2, '0')}`;
 
-      const beforeAssigned = assignments[selectedMember]?.assignedHours || 0;
-      const afterAssigned = beforeAssigned + selectedBlock.length;
-      const remainingAfter = (memberRequiredSlots[selectedMember] || DEFAULT_REQUIRED_SLOTS) - afterAssigned;
+      const beforeAssigned = assignments[memberId]?.assignedHours || 0;
+      const afterAssigned = beforeAssigned + block.length;
+      const remainingAfter = (memberRequiredSlots[memberId] || DEFAULT_REQUIRED_SLOTS) - afterAssigned;
 
-      console.log(`  ✅ ${dateStr} ${startTime}-${finalEndTime} (${selectedBlock.length}슬롯=${selectedBlock.length/2}h) → 멤버 ${selectedMember.substring(0, 8)}... (${beforeAssigned}→${afterAssigned}슬롯, 남은필요:${remainingAfter}슬롯)`);
+      console.log(`  ✅ [${fitType}] ${memberId.substring(0, 8)}... → ${blockDateStr} ${startTime}-${finalEndTime} (${block.length} 슬롯)`);
+      console.log(`     (통계: ${beforeAssigned}→${afterAssigned} 슬롯, 남은 필요량: ${remainingAfter})`);
+  };
 
-      // 블록 전체 배정
-      for (const blockKey of selectedBlock) {
-        assignSlot(timetable, assignments, blockKey, selectedMember);
+  // --- 1단계: 완전 배정 우선 탐색 ---
+  console.log("\n--- 1단계: 완전 배정 우선 탐색 시작 ---");
+  let i = 0;
+  while (i < sortedKeys.length) {
+    const key = sortedKeys[i];
+    const slot = timetable[key];
+
+    if (slot.assignedTo) {
+      i++;
+      continue;
+    }
+
+    const availableMembers = [...new Set(slot.available.filter(a => !a.isOwner).map(a => a.memberId))];
+    let assignedInThisSlot = false;
+
+    for (const memberId of availableMembers) {
+      const assignedHours = assignments[memberId]?.assignedHours || 0;
+      const requiredSlots = memberRequiredSlots[memberId] || DEFAULT_REQUIRED_SLOTS;
+      if (assignedHours >= requiredSlots) continue;
+
+      const remainingSlots = requiredSlots - assignedHours;
+      const block = findConsecutiveBlock(i, memberId, remainingSlots);
+
+      if (block && block.length >= remainingSlots) {
+        const blockToAssign = block.slice(0, remainingSlots);
+        logAssignment(memberId, blockToAssign, '완전');
+        
+        for (const blockKey of blockToAssign) {
+          assignSlot(timetable, assignments, blockKey, memberId);
+        }
+        
+        i += blockToAssign.length;
+        assignedInThisSlot = true;
+        break; // 이 슬롯에서 한 명 배정했으므로 다음 슬롯으로 넘어감
       }
+    }
 
-      // 배정한 블록만큼 건너뛰기
-      i += selectedBlock.length;
-    } else {
+    if (!assignedInThisSlot) {
       i++;
     }
   }
+  console.log("--- 1단계 완료 ---");
 
-  console.log('🕐 시간 순서 우선 배정 완료');
+  // --- 2단계: 부분 배정 정리 ---
+  console.log("\n--- 2단계: 남은 멤버 부분 배정 시작 ---");
+  const remainingMembers = Object.keys(assignments).filter(id => (assignments[id].assignedHours || 0) < (memberRequiredSlots[id] || DEFAULT_REQUIRED_SLOTS));
+
+  if(remainingMembers.length === 0) {
+    console.log("모든 멤버가 배정되었습니다. 2단계를 건너뜁니다.");
+  }
+
+  for (const memberId of remainingMembers) {
+    const assignedHours = assignments[memberId]?.assignedHours || 0;
+    const requiredSlots = memberRequiredSlots[memberId] || DEFAULT_REQUIRED_SLOTS;
+    const remainingSlots = requiredSlots - assignedHours;
+    
+    console.log(`\nProcessing remaining member ${memberId.substring(0,4)} (needs ${remainingSlots} slots)`);
+    
+    let bestPartialFit = null;
+
+    for (let j = 0; j < sortedKeys.length; j++) {
+      const key = sortedKeys[j];
+      const slot = timetable[key];
+
+      if (slot.assignedTo || !slot.available.some(a => a.memberId === memberId && !a.isOwner)) {
+        continue;
+      }
+
+      const block = findConsecutiveBlock(j, memberId, remainingSlots);
+      if (block && (!bestPartialFit || block.length > bestPartialFit.length)) {
+        bestPartialFit = block;
+      }
+    }
+
+    if (bestPartialFit) {
+      logAssignment(memberId, bestPartialFit, '부분');
+      for (const blockKey of bestPartialFit) {
+        assignSlot(timetable, assignments, blockKey, memberId);
+      }
+    } else {
+      console.log(`  -> Could not find any remaining slot for Member ${memberId.substring(0,4)}.`);
+    }
+  }
+  console.log("--- 2단계 완료 ---");
+  
+  console.log('\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
+  console.log('🕐 시간 순서 우선 배정 완료 (하이브리드) - v4');
+  console.log('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
+  console.log('Final Assignments:', assignments);
 };
 
 /**

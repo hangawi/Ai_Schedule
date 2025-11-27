@@ -41,16 +41,19 @@ const runMultiWeekSchedule = (params, runSingleWeekSchedule) => {
     const weekStartDate = new Date(startDate);
     weekStartDate.setUTCDate(startDate.getUTCDate() + (weekIndex * 7));
 
-    console.log(`\n✅ [${weekIndex + 1}주차] ${weekStartDate.toISOString().split('T')[0]} 시작`);
+    const weekEndDate = new Date(weekStartDate);
+    weekEndDate.setUTCDate(weekStartDate.getUTCDate() + 7);
+
+    console.log(`\n✅ [${weekIndex + 1}주차] ${weekStartDate.toISOString().split('T')[0]} ~ ${weekEndDate.toISOString().split('T')[0]} 시작`);
 
     // 이번 주만 배정 (numWeeks = 1)
-    // 전체 범위(fullRangeStart, fullRangeEnd)를 전달하여 방장 가용 시간 계산 시 사용
+    // fullRange를 해당 주로 제한하여 데이터가 격리되도록 함
     const weekOptions = {
       ...options,
       numWeeks: 1,
       currentWeek: weekStartDate,
-      fullRangeStart: startDate,
-      fullRangeEnd: endDate
+      fullRangeStart: weekStartDate,
+      fullRangeEnd: weekEndDate
     };
 
     // 기존 슬롯 제외하고 배정
