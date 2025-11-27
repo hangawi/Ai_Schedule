@@ -75,9 +75,19 @@ const createOwnerAvailableSlots = (owner, rangeStart, rangeEnd) => {
     return ownerAvailableSlots;
   }
 
+  console.log('\n🔍 방장 스케줄 처리:');
+  console.log('  총 스케줄:', ownerSchedule.length);
+  console.log('  배정 범위:', rangeStart.toISOString().split('T')[0], '~', rangeEnd.toISOString().split('T')[0]);
+
   const validSchedules = filterValidSchedules(ownerSchedule);
+  console.log('  유효한 스케줄:', validSchedules.length);
+  
+  let specificDateCount = 0;
+  let recurringCount = 0;
 
   validSchedules.forEach(schedule => {
+    if (schedule.specificDate) specificDateCount++;
+    else recurringCount++;
     const { dayOfWeek, startTime, endTime, specificDate } = schedule;
 
     // 주말 제외
@@ -111,6 +121,10 @@ const createOwnerAvailableSlots = (owner, rangeStart, rangeEnd) => {
       }
     }
   });
+
+  console.log('  specificDate 스케줄:', specificDateCount, '개');
+  console.log('  반복 스케줄:', recurringCount, '개');
+  console.log('  생성된 슬롯:', ownerAvailableSlots.size, '개');
 
   return ownerAvailableSlots;
 };

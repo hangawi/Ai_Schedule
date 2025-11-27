@@ -44,7 +44,11 @@ const runMultiWeekSchedule = (params, runSingleWeekSchedule) => {
     const weekEndDate = new Date(weekStartDate);
     weekEndDate.setUTCDate(weekStartDate.getUTCDate() + 7);
 
-    console.log(`\n✅ [${weekIndex + 1}주차] ${weekStartDate.toISOString().split('T')[0]} ~ ${weekEndDate.toISOString().split('T')[0]} 시작`);
+    if (weekIndex < 3 || weekIndex >= numWeeks - 2) {
+      console.log(`\n✅ [${weekIndex + 1}주차] ${weekStartDate.toISOString().split('T')[0]} ~ ${weekEndDate.toISOString().split('T')[0]} 시작`);
+    } else if (weekIndex === 3) {
+      console.log(`\n... (${numWeeks - 4}개 주차 생략) ...`);
+    }
 
     // 이번 주만 배정 (numWeeks = 1)
     // fullRange를 해당 주로 제한하여 데이터가 격리되도록 함

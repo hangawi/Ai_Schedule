@@ -16,11 +16,12 @@ const { getMemberPriority, findMemberById } = require('../helpers/memberHelper')
  * @param {string} ownerId - 방장 ID
  */
 const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId) => {
-  console.log('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-  console.log('🕐 시간 순서 우선 배정 시작 (2단계 하이브리드) - v4');
-  console.log('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-
   const sortedKeys = Object.keys(timetable).sort();
+  const hasSlots = sortedKeys.length > 0;
+  
+  if (hasSlots) {
+    console.log('\n🕐 시간 순서 배정 시작 (슬롯:', sortedKeys.length, '개)');
+  }
   
   const findConsecutiveBlock = (startIndex, memberId, maxSlots) => {
     const blockKeys = [];
@@ -61,8 +62,12 @@ const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId)
       console.log(`     (통계: ${beforeAssigned}→${afterAssigned} 슬롯, 남은 필요량: ${remainingAfter})`);
   };
 
-  // --- 1단계: 완전 배정 우선 탐색 ---
-  console.log("\n--- 1단계: 완전 배정 우선 탐색 시작 ---");
+  // --- 1단계: 우선순위 완전 배정 ---
+  // 최고 우선순위 멤버가 유일한 경우에만 완전 배정
+  if (hasSlots) {
+    console.log("\n--- 1단계: 우선순위 완전 배정 ---");
+  }
+
   let i = 0;
   while (i < sortedKeys.length) {
     const key = sortedKeys[i];
@@ -73,83 +78,221 @@ const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId)
       continue;
     }
 
-    const availableMembers = [...new Set(slot.available.filter(a => !a.isOwner).map(a => a.memberId))];
-    let assignedInThisSlot = false;
+    // 가능한 멤버들과 우선순위 확인
+    const availableMembers = slot.available.filter(a => !a.isOwner);
+    if (availableMembers.length === 0) {
+      i++;
+      continue;
+    }
 
-    for (const memberId of availableMembers) {
+    // 최고 우선순위 찾기
+    const maxPriority = Math.max(...availableMembers.map(a => a.priority || 2));
+    const highestPriorityMembers = availableMembers.filter(a => (a.priority || 2) === maxPriority);
+
+    // 최고 우선순위가 유일한 경우에만 완전 배정 시도
+    if (highestPriorityMembers.length === 1) {
+      const memberId = highestPriorityMembers[0].memberId;
       const assignedHours = assignments[memberId]?.assignedHours || 0;
       const requiredSlots = memberRequiredSlots[memberId] || DEFAULT_REQUIRED_SLOTS;
-      if (assignedHours >= requiredSlots) continue;
 
-      const remainingSlots = requiredSlots - assignedHours;
-      const block = findConsecutiveBlock(i, memberId, remainingSlots);
+      if (assignedHours < requiredSlots) {
+        const remainingSlots = requiredSlots - assignedHours;
+        const block = findConsecutiveBlock(i, memberId, remainingSlots);
 
-      if (block && block.length >= remainingSlots) {
-        const blockToAssign = block.slice(0, remainingSlots);
-        logAssignment(memberId, blockToAssign, '완전');
-        
-        for (const blockKey of blockToAssign) {
-          assignSlot(timetable, assignments, blockKey, memberId);
+        if (block && block.length >= remainingSlots) {
+          const blockToAssign = block.slice(0, remainingSlots);
+          logAssignment(memberId, blockToAssign, '완전');
+
+          for (const blockKey of blockToAssign) {
+            assignSlot(timetable, assignments, blockKey, memberId);
+          }
+
+          i += blockToAssign.length;
+          continue;
         }
-        
-        i += blockToAssign.length;
-        assignedInThisSlot = true;
-        break; // 이 슬롯에서 한 명 배정했으므로 다음 슬롯으로 넘어감
       }
     }
 
-    if (!assignedInThisSlot) {
-      i++;
-    }
+    i++;
   }
-  console.log("--- 1단계 완료 ---");
 
-  // --- 2단계: 부분 배정 정리 ---
-  console.log("\n--- 2단계: 남은 멤버 부분 배정 시작 ---");
+  if (hasSlots) {
+    console.log("--- 1단계 완료 ---");
+  }
+
+  // --- 2단계: 균등 분할 배정 (남은 멤버) ---
   const remainingMembers = Object.keys(assignments).filter(id => (assignments[id].assignedHours || 0) < (memberRequiredSlots[id] || DEFAULT_REQUIRED_SLOTS));
 
-  if(remainingMembers.length === 0) {
-    console.log("모든 멤버가 배정되었습니다. 2단계를 건너뜁니다.");
+  if (hasSlots && remainingMembers.length > 0) {
+    console.log("\n--- 2단계: 균등 분할 배정 (남은 멤버", remainingMembers.length, "명) ---");
+  } else if (!hasSlots) {
+    // 슬롯이 없으면 로그 스킵
+  } else {
+    if (hasSlots) console.log("\n--- 모든 멤버 배정 완료 ---");
   }
 
   for (const memberId of remainingMembers) {
+    if (!hasSlots) continue;
+    
     const assignedHours = assignments[memberId]?.assignedHours || 0;
     const requiredSlots = memberRequiredSlots[memberId] || DEFAULT_REQUIRED_SLOTS;
     const remainingSlots = requiredSlots - assignedHours;
     
-    console.log(`\nProcessing remaining member ${memberId.substring(0,4)} (needs ${remainingSlots} slots)`);
+    console.log(`\n📋 [${memberId.substring(0,6)}] 필요: ${remainingSlots}슬롯`);
     
-    let bestPartialFit = null;
+    // 모든 가능한 블록 찾기
+    const findAllAvailableBlocks = () => {
+      const blocks = [];
+      let totalSlotsChecked = 0;
+      let assignedSlotsCount = 0;
+      let unavailableSlotsCount = 0;
+      let blocksFoundCount = 0;
 
-    for (let j = 0; j < sortedKeys.length; j++) {
-      const key = sortedKeys[j];
-      const slot = timetable[key];
+      console.log(`🔍 블록 탐색 중 (전체 슬롯: ${sortedKeys.length}개)`);
 
-      if (slot.assignedTo || !slot.available.some(a => a.memberId === memberId && !a.isOwner)) {
-        continue;
+      for (let j = 0; j < sortedKeys.length; j++) {
+        const key = sortedKeys[j];
+        const slot = timetable[key];
+        totalSlotsChecked++;
+
+        if (slot.assignedTo) {
+          assignedSlotsCount++;
+          continue;
+        }
+
+        const isAvailable = slot.available.some(a => a.memberId === memberId && !a.isOwner);
+        if (!isAvailable) {
+          unavailableSlotsCount++;
+          continue;
+        }
+
+        const block = findConsecutiveBlock(j, memberId, remainingSlots);
+        if (block && block.length > 0) {
+          const startKey = block[0];
+          const endKey = block[block.length - 1];
+          const blockDateStr = extractDateFromSlotKey(startKey);
+          const startTime = extractTimeFromSlotKey(startKey);
+          const endTime = extractTimeFromSlotKey(endKey);
+
+          blocksFoundCount++;
+          console.log(`   찾음 #${blocksFoundCount}: ${blockDateStr} ${startTime}~ (${block.length}슬롯)`);
+          blocks.push(block);
+        }
       }
 
-      const block = findConsecutiveBlock(j, memberId, remainingSlots);
-      if (block && (!bestPartialFit || block.length > bestPartialFit.length)) {
-        bestPartialFit = block;
+      console.log(`   → 체크: ${totalSlotsChecked}슬롯, 이미배정: ${assignedSlotsCount}, 불가: ${unavailableSlotsCount}, 블록발견: ${blocksFoundCount}`);
+      return blocks;
+    };
+
+    const allBlocks = findAllAvailableBlocks();
+    
+    if (allBlocks.length === 0) {
+      console.log(`   → 가능한 블록 없음`);
+      continue;
+    }
+
+    // 균등 분할 시도: 남은 슬롯을 2개로 나누기
+    const targetSize = Math.ceil(remainingSlots / 2);
+    let totalAssigned = 0;
+
+    // 첫 번째 블록
+    let firstBlock = null;
+    for (const block of allBlocks) {
+      if (block.length >= targetSize) {
+        firstBlock = block.slice(0, targetSize);
+        break;
       }
     }
 
-    if (bestPartialFit) {
-      logAssignment(memberId, bestPartialFit, '부분');
-      for (const blockKey of bestPartialFit) {
+    if (!firstBlock && allBlocks.length > 0) {
+      const longestBlock = allBlocks.reduce((max, block) => 
+        block.length > max.length ? block : max
+      , allBlocks[0]);
+      firstBlock = longestBlock;
+    }
+
+    if (firstBlock) {
+      logAssignment(memberId, firstBlock, '부분1');
+      for (const blockKey of firstBlock) {
         assignSlot(timetable, assignments, blockKey, memberId);
       }
+      totalAssigned += firstBlock.length;
+    }
+
+    // 두 번째 블록
+    const stillNeeded = remainingSlots - totalAssigned;
+    if (stillNeeded > 0) {
+      
+      const secondBlocks = findAllAvailableBlocks();
+      
+      if (secondBlocks.length > 0) {
+        let secondBlock = null;
+        for (const block of secondBlocks) {
+          if (block.length >= stillNeeded) {
+            secondBlock = block.slice(0, stillNeeded);
+            break;
+          }
+        }
+        
+        if (!secondBlock) {
+          const longestBlock = secondBlocks.reduce((max, block) => 
+            block.length > max.length ? block : max
+          , secondBlocks[0]);
+          secondBlock = longestBlock;
+        }
+        
+        if (secondBlock) {
+          logAssignment(memberId, secondBlock, '부분2');
+          for (const blockKey of secondBlock) {
+            assignSlot(timetable, assignments, blockKey, memberId);
+          }
+          totalAssigned += secondBlock.length;
+        }
+      }
+    }
+
+    // 세 번째 블록
+    const finalNeeded = remainingSlots - totalAssigned;
+    if (finalNeeded > 0) {
+      const thirdBlocks = findAllAvailableBlocks();
+      
+      if (thirdBlocks.length > 0) {
+        let thirdBlock = null;
+        for (const block of thirdBlocks) {
+          if (block.length >= finalNeeded) {
+            thirdBlock = block.slice(0, finalNeeded);
+            break;
+          }
+        }
+        
+        if (!thirdBlock) {
+          const longestBlock = thirdBlocks.reduce((max, block) => 
+            block.length > max.length ? block : max
+          , thirdBlocks[0]);
+          thirdBlock = longestBlock;
+        }
+        
+        if (thirdBlock) {
+          logAssignment(memberId, thirdBlock, '부분3');
+          for (const blockKey of thirdBlock) {
+            assignSlot(timetable, assignments, blockKey, memberId);
+          }
+          totalAssigned += thirdBlock.length;
+        }
+      }
+    }
+
+    const finalShortage = remainingSlots - totalAssigned;
+    if (finalShortage > 0) {
+      console.log(`   → 최종: ${totalAssigned}/${remainingSlots}슬롯 (부족: ${finalShortage})`);
     } else {
-      console.log(`  -> Could not find any remaining slot for Member ${memberId.substring(0,4)}.`);
+      console.log(`   → 완료: ${totalAssigned}/${remainingSlots}슬롯 ✓`);
     }
   }
-  console.log("--- 2단계 완료 ---");
   
-  console.log('\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-  console.log('🕐 시간 순서 우선 배정 완료 (하이브리드) - v4');
-  console.log('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-  console.log('Final Assignments:', assignments);
+  if (hasSlots) {
+    console.log("\n✅ 배정 완료\n");
+  }
 };
 
 /**

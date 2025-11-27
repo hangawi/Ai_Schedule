@@ -98,6 +98,8 @@ class SchedulingAlgorithm {
     const startDate = currentWeek ? new Date(currentWeek) : new Date('2025-09-16T00:00:00.000Z');
 
     // 타임테이블 생성
+    // 타임테이블 생성 로그는 timetableCreationService에서 출력
+    
     const timetable = createTimetableFromPersonalSchedules(
       members,
       owner,
@@ -107,6 +109,26 @@ class SchedulingAlgorithm {
       fullRangeStart,
       fullRangeEnd
     );
+
+    // 타임테이블이 비어있으면 빠르게 종료 (성능 최적화)
+    const timetableSize = Object.keys(timetable).length;
+    if (timetableSize === 0) {
+      const emptyAssignments = {};
+      nonOwnerMembers.forEach(m => {
+        const memberId = extractMemberId(m);
+        emptyAssignments[memberId] = {
+          memberId,
+          assignedHours: 0,
+          requiredSlots: memberRequiredSlots[memberId] || DEFAULT_REQUIRED_SLOTS,
+          slots: []
+        };
+      });
+      return {
+        assignments: emptyAssignments,
+        carryOverAssignments: [],
+        unassignedMembersInfo: []
+      };
+    }
 
     // 배정 초기화
     let assignments = initializeMemberAssignments(nonOwnerMembers, memberRequiredSlots);

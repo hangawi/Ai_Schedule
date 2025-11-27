@@ -187,9 +187,9 @@ const RoomSchema = new mongoose.Schema({
   },
   maxMembers: {
     type: Number,
-    default: 10,
+    default: 100,
     min: 2,
-    max: 20
+    max: 100
   },
   timeSlots: [TimeSlotSchema],
   requests: [RequestSchema],

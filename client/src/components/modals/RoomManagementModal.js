@@ -18,7 +18,7 @@ const RoomManagementModal = ({
   const [formData, setFormData] = useState({
     name: room?.name || "",
     description: room?.description || "",
-    maxMembers: room?.maxMembers || 10,
+    maxMembers: room?.maxMembers || 100,
     settings: {
       startHour: room?.settings?.startHour || 9,
       endHour: room?.settings?.endHour || 18,

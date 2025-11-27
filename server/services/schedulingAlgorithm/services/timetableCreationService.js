@@ -37,33 +37,23 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
 
   const ownerId = owner._id.toString();
 
-  console.log('\n========== 자동 배정 디버그 로그 시작 ==========');
-  console.log('📅 배정 범위:', {
-    start: ownerRangeStart.toISOString(),
-    end: ownerRangeEnd.toISOString(),
-    startDate: startDate.toISOString(),
-    endDate: endDate.toISOString()
-  });
-  console.log('👑 방장 defaultSchedule:', JSON.stringify(owner.user?.defaultSchedule, null, 2));
-  console.log('📊 총 멤버 수:', members.length);
+  // 타임테이블 생성 로그 최소화 (성능 개선)
+  const ownerSchedule = owner.user?.defaultSchedule || owner.defaultSchedule || [];
 
   // Step 1: 방장의 가능한 시간대 수집
   const ownerAvailableSlots = createOwnerAvailableSlots(owner, ownerRangeStart, ownerRangeEnd);
-  console.log('✅ Step 1 완료: ownerAvailableSlots 생성, 크기:', ownerAvailableSlots.size);
 
   // Step 1.5: 방장의 개인시간 제거
   removeOwnerPersonalTimes(ownerAvailableSlots, owner, ownerRangeStart, ownerRangeEnd);
-  console.log('✅ Step 1.5 완료: personalTimes 제거 후, 크기:', ownerAvailableSlots.size);
 
   // Step 2: 조원들의 개인 시간표 추가 (방장 가능 시간대와 겹치는 것만)
-  console.log('\n📋 멤버들의 개인 시간표:');
   members.forEach(member => {
     const user = member.user;
     const userId = user._id.toString();
     const priority = getMemberPriority(member);
 
-    console.log(`\n👤 멤버 ${userId.substring(0, 8)}...`);
-    console.log('  defaultSchedule:', JSON.stringify(user.defaultSchedule, null, 2));
+    let memberSlotsAdded = 0;
+    let memberSlotsSkipped = 0;
 
     // 개인 시간표(defaultSchedule) 처리
     if (user.defaultSchedule && Array.isArray(user.defaultSchedule)) {
@@ -88,7 +78,10 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
               const key = createSlotKey(dateKey, slotTime);
 
               // 방장이 가능한 시간대인지 확인
-              if (!ownerAvailableSlots.has(key)) return;
+              if (!ownerAvailableSlots.has(key)) {
+                memberSlotsSkipped++;
+                return;
+              }
 
               if (!timetable[key]) {
                 const oneIndexedDayOfWeek = convertToOneIndexedDay(targetDate.getDay());
@@ -101,6 +94,7 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
               }
 
               addMemberAvailability(timetable[key], userId, schedulePriority, false);
+              memberSlotsAdded++;
             });
           }
         } else {
@@ -115,7 +109,10 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
                 const key = createSlotKey(dateKey, slotTime);
 
                 // 방장이 가능한 시간대인지 확인
-                if (!ownerAvailableSlots.has(key)) return;
+                if (!ownerAvailableSlots.has(key)) {
+                  memberSlotsSkipped++;
+                  return;
+                }
 
                 if (!timetable[key]) {
                   const oneIndexedDayOfWeek = convertToOneIndexedDay(dayOfWeek);
@@ -128,6 +125,7 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
                 }
 
                 addMemberAvailability(timetable[key], userId, schedulePriority, false);
+                memberSlotsAdded++;
               });
             }
             currentDate.setUTCDate(currentDate.getUTCDate() + 1);
@@ -161,11 +159,6 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
       });
     }
   });
-
-  const totalSlots = Object.keys(timetable).length;
-  console.log('\n========== 최종 타임테이블 ==========');
-  console.log('📊 전체 슬롯 개수:', totalSlots);
-  console.log('========== 자동 배정 디버그 로그 끝 ==========\n');
 
   return timetable;
 };

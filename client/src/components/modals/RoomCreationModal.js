@@ -7,7 +7,7 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
   const [ownerProfileSchedule, setOwnerProfileSchedule] = useState(initialOwnerSchedule);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [maxMembers, setMaxMembers] = useState(10);
+  const [maxMembers, setMaxMembers] = useState(100);
   const [settings, setSettings] = useState({
     startHour: 9,
     endHour: 18,
@@ -289,11 +289,11 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
               type="number"
               className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               value={maxMembers}
-              onChange={(e) => setMaxMembers(Math.max(2, Math.min(20, Number(e.target.value))))}
+              onChange={(e) => setMaxMembers(Math.max(2, Math.min(100, Number(e.target.value))))}
               min="2"
-              max="20"
+              max="100"
             />
-            <p className="text-xs text-gray-500 mt-1">2명~20명까지 설정할 수 있습니다</p>
+            <p className="text-xs text-gray-500 mt-1">2명~100명까지 설정할 수 있습니다</p>
           </div>
 
           <div className="border-t pt-4">
