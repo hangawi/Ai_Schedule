@@ -37,8 +37,9 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
 
   const ownerId = owner._id.toString();
 
-  // 타임테이블 생성 로그 최소화 (성능 개선)
+  // 타임테이블 생성 로그 (디버깅용)
   const ownerSchedule = owner.user?.defaultSchedule || owner.defaultSchedule || [];
+  console.log('\n🔍 [타임테이블] 생성:', ownerRangeStart.toISOString().split('T')[0], '~', ownerRangeEnd.toISOString().split('T')[0]);
 
   // Step 1: 방장의 가능한 시간대 수집
   const ownerAvailableSlots = createOwnerAvailableSlots(owner, ownerRangeStart, ownerRangeEnd);

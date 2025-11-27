@@ -96,6 +96,56 @@ const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId)
       const requiredSlots = memberRequiredSlots[memberId] || DEFAULT_REQUIRED_SLOTS;
 
       if (assignedHours < requiredSlots) {
+        const currentPriority = highestPriorityMembers[0].priority || 2;
+        const currentDate = extractDateFromSlotKey(key);
+        
+        // 이 멤버가 더 높은 우선순위 슬롯 또는 같은 우선순위의 더 빠른 슬롯을 가지고 있는지 확인
+        let shouldSkipCurrentSlot = false;
+        
+        // 1. 전체 슬롯 중에서 더 높은 우선순위 슬롯 찾기 (미래 날짜)
+        for (let j = i + 1; j < sortedKeys.length; j++) {
+          const futureKey = sortedKeys[j];
+          const futureSlot = timetable[futureKey];
+          const futureDate = extractDateFromSlotKey(futureKey);
+          
+          if (futureDate === currentDate) continue;
+          if (futureSlot.assignedTo) continue;
+          
+          const memberAvail = futureSlot.available.find(a => a.memberId === memberId && !a.isOwner);
+          if (memberAvail && (memberAvail.priority || 2) > currentPriority) {
+            shouldSkipCurrentSlot = true;
+            console.log(`  ⏭️  ${memberId.substring(0,6)} ${currentDate} 우선순위 ${currentPriority} → ${futureDate}에 더 높은 우선순위 ${memberAvail.priority} 대기`);
+            break;
+          }
+        }
+        
+        // 2. 같은 우선순위에서 더 빠른 날짜에 가능한 슬롯이 있는지 확인 (과거 날짜)
+        if (!shouldSkipCurrentSlot) {
+          for (let j = 0; j < i; j++) {
+            const pastKey = sortedKeys[j];
+            const pastSlot = timetable[pastKey];
+            const pastDate = extractDateFromSlotKey(pastKey);
+            
+            if (pastDate === currentDate) continue;
+            if (pastSlot.assignedTo) continue;
+            
+            const memberAvail = pastSlot.available.find(a => a.memberId === memberId && !a.isOwner);
+            if (memberAvail && (memberAvail.priority || 2) === currentPriority) {
+              // 같은 우선순위의 더 빠른 슬롯이 있음
+              shouldSkipCurrentSlot = true;
+              console.log(`  ⏭️  ${memberId.substring(0,6)} ${currentDate} 우선순위 ${currentPriority} → ${pastDate}에 같은 우선순위의 더 빠른 슬롯 대기`);
+              break;
+            }
+          }
+        }
+        
+        // 조건에 해당하면 현재 배정 건너뛰기
+        if (shouldSkipCurrentSlot) {
+          console.log(`  ⏭️  ${memberId.substring(0,6)} ${currentDate} 우선순위 ${currentPriority} → 더 높은 우선순위 슬롯 대기 중`);
+          i++;
+          continue;
+        }
+
         const remainingSlots = requiredSlots - assignedHours;
         const block = findConsecutiveBlock(i, memberId, remainingSlots);
 
@@ -121,10 +171,42 @@ const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId)
   }
 
   // --- 2단계: 균등 분할 배정 (남은 멤버) ---
-  const remainingMembers = Object.keys(assignments).filter(id => (assignments[id].assignedHours || 0) < (memberRequiredSlots[id] || DEFAULT_REQUIRED_SLOTS));
+  // 멤버별 가용 슬롯 수와 최대 우선순위 계산
+  const memberAvailableSlots = {};
+  const memberMaxPriority = {};
+  Object.keys(assignments).forEach(memberId => {
+    if ((assignments[memberId].assignedHours || 0) < (memberRequiredSlots[memberId] || DEFAULT_REQUIRED_SLOTS)) {
+      let availableCount = 0;
+      let maxPriority = 0;
+      sortedKeys.forEach(key => {
+        const slot = timetable[key];
+        if (!slot.assignedTo) {
+          const memberAvail = slot.available.find(a => a.memberId === memberId && !a.isOwner);
+          if (memberAvail) {
+            availableCount++;
+            maxPriority = Math.max(maxPriority, memberAvail.priority || 2);
+          }
+        }
+      });
+      memberAvailableSlots[memberId] = availableCount;
+      memberMaxPriority[memberId] = maxPriority;
+    }
+  });
+
+  // 우선순위 높은 멤버 먼저, 같으면 가용 슬롯 적은 멤버 먼저
+  const remainingMembers = Object.keys(memberAvailableSlots)
+    .sort((a, b) => {
+      const priorityDiff = memberMaxPriority[b] - memberMaxPriority[a];
+      if (priorityDiff !== 0) return priorityDiff;
+      return memberAvailableSlots[a] - memberAvailableSlots[b];
+    });
 
   if (hasSlots && remainingMembers.length > 0) {
-    console.log("\n--- 2단계: 균등 분할 배정 (남은 멤버", remainingMembers.length, "명) ---");
+    console.log("--- 2단계: 균등 분할 배정 (남은 멤버", remainingMembers.length, "명) ---");
+    console.log("📊 멤버 처리 순서 (우선순위 높음→가용슬롯 적음):");
+    remainingMembers.forEach(memberId => {
+      console.log(`   ${memberId.substring(0,6)}: 우선순위 ${memberMaxPriority[memberId]}, 가용 ${memberAvailableSlots[memberId]}슬롯`);
+    });
   } else if (!hasSlots) {
     // 슬롯이 없으면 로그 스킵
   } else {
