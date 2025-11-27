@@ -151,10 +151,10 @@ class SchedulingAlgorithm {
     // );
 
     // Phase 4: 방장 슬롯 가져가기 (현재 미사용)
-    resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, memberRequiredSlots, ownerPreferences);
+    // resolveConflictsByOwnerTakingSlot(timetable, assignments, owner, memberRequiredSlots, ownerPreferences);
 
-    // Phase 5: 방장 양보 충돌 해결
-    resolveConflictsWithOwner(timetable, assignments, owner, memberRequiredSlots);
+    // Phase 5: 방장 양보 충돌 해결 (시간 순서 배정 사용으로 비활성화)
+    // resolveConflictsWithOwner(timetable, assignments, owner, memberRequiredSlots);
 
     // Phase 6: 캐리오버 처리
     this._carryOverAssignments(timetable, assignments, memberRequiredSlots, members);

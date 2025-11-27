@@ -36,33 +36,31 @@ const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId)
     Object.entries(memberTotalAvailableSlots).map(([id, count]) => [id.substring(0, 8) + '...', count + '슬롯=' + (count/2) + 'h'])
   ));
 
-  // 같은 날짜의 연속 슬롯을 찾는 함수
-  const findConsecutiveSlotsInSameDay = (startIndex, maxSlots, memberId) => {
+  // 현재 시간부터 시작하는 연속 블록을 찾는 함수 (날짜 구분 없이)
+  const findConsecutiveBlockFromCurrentTime = (startIndex, memberId, maxSlots) => {
     const blockKeys = [];
-    const startDate = extractDateFromSlotKey(sortedKeys[startIndex]);
 
-    for (let i = 0; i < maxSlots; i++) {
-      const index = startIndex + i;
-      if (index >= sortedKeys.length) break;
-
-      const key = sortedKeys[index];
+    for (let i = startIndex; i < sortedKeys.length; i++) {
+      const key = sortedKeys[i];
       const slot = timetable[key];
-      const currentDate = extractDateFromSlotKey(key);
-
-      // 날짜가 바뀌면 중단
-      if (currentDate !== startDate) break;
 
       // 이미 배정됨
       if (slot.assignedTo) break;
-
-      // 이전 슬롯과 연속되는지 확인
-      if (i > 0 && !areConsecutiveSlots(sortedKeys[index - 1], key)) break;
 
       // 멤버가 사용 가능한지 확인
       const canUse = slot.available.some(a => a.memberId === memberId && !a.isOwner);
       if (!canUse) break;
 
+      // 이전 슬롯과 연속되는지 확인 (첫 슬롯이 아닐 때)
+      if (blockKeys.length > 0) {
+        const prevKey = blockKeys[blockKeys.length - 1];
+        if (!areConsecutiveSlots(prevKey, key)) break;
+      }
+
       blockKeys.push(key);
+
+      // maxSlots 제한 체크
+      if (blockKeys.length >= maxSlots) break;
     }
 
     return blockKeys.length > 0 ? blockKeys : null;
@@ -90,10 +88,9 @@ const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId)
       continue;
     }
 
-    // 우선순위 계산: (1) 남은 필요 슬롯이 적을수록, (2) 전체 가능한 슬롯이 적을수록, (3) 현재 배정된 시간이 적을수록
+    // 시간 순서 엄수: 현재 시간을 사용할 수 있는 첫 번째 멤버 선택
     let selectedMember = null;
     let selectedBlock = null;
-    let bestPriority = { remainingSlots: Infinity, totalAvailableSlots: Infinity, assignedHours: Infinity };
 
     for (const memberId of availableMembers) {
       const assignedHours = assignments[memberId]?.assignedHours || 0;
@@ -105,27 +102,14 @@ const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId)
       // 남은 필요 슬롯 수 계산
       const remainingSlots = requiredSlots - assignedHours;
 
-      // 같은 날짜 내에서 연속된 블록 찾기
-      const block = findConsecutiveSlotsInSameDay(i, remainingSlots, memberId);
+      // 현재 시간부터 시작하는 연속 블록 찾기
+      const block = findConsecutiveBlockFromCurrentTime(i, memberId, remainingSlots);
       if (!block) continue;
 
-      // 전체 가능한 슬롯 수
-      const totalAvailableSlots = memberTotalAvailableSlots[memberId] || 0;
-
-      // 우선순위 비교:
-      // 1) 남은 필요 슬롯이 적을수록 우선
-      // 2) 같으면, 전체 가능한 슬롯이 적을수록 우선 (여유가 적은 멤버 우선)
-      // 3) 같으면, 현재 배정된 시간이 적을수록 우선
-      const shouldSelect =
-        remainingSlots < bestPriority.remainingSlots ||
-        (remainingSlots === bestPriority.remainingSlots && totalAvailableSlots < bestPriority.totalAvailableSlots) ||
-        (remainingSlots === bestPriority.remainingSlots && totalAvailableSlots === bestPriority.totalAvailableSlots && assignedHours < bestPriority.assignedHours);
-
-      if (shouldSelect) {
-        bestPriority = { remainingSlots, totalAvailableSlots, assignedHours };
-        selectedMember = memberId;
-        selectedBlock = block;
-      }
+      // 첫 번째로 블록을 찾을 수 있는 멤버를 바로 선택 (시간 순서 엄수)
+      selectedMember = memberId;
+      selectedBlock = block;
+      break;
     }
 
     // 선택된 멤버에게 블록 배정

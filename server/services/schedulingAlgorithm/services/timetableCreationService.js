@@ -40,8 +40,12 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
   console.log('\n========== 자동 배정 디버그 로그 시작 ==========');
   console.log('📅 배정 범위:', {
     start: ownerRangeStart.toISOString(),
-    end: ownerRangeEnd.toISOString()
+    end: ownerRangeEnd.toISOString(),
+    startDate: startDate.toISOString(),
+    endDate: endDate.toISOString()
   });
+  console.log('👑 방장 defaultSchedule:', JSON.stringify(owner.user?.defaultSchedule, null, 2));
+  console.log('📊 총 멤버 수:', members.length);
 
   // Step 1: 방장의 가능한 시간대 수집
   const ownerAvailableSlots = createOwnerAvailableSlots(owner, ownerRangeStart, ownerRangeEnd);
@@ -52,10 +56,14 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
   console.log('✅ Step 1.5 완료: personalTimes 제거 후, 크기:', ownerAvailableSlots.size);
 
   // Step 2: 조원들의 개인 시간표 추가 (방장 가능 시간대와 겹치는 것만)
+  console.log('\n📋 멤버들의 개인 시간표:');
   members.forEach(member => {
     const user = member.user;
     const userId = user._id.toString();
     const priority = getMemberPriority(member);
+
+    console.log(`\n👤 멤버 ${userId.substring(0, 8)}...`);
+    console.log('  defaultSchedule:', JSON.stringify(user.defaultSchedule, null, 2));
 
     // 개인 시간표(defaultSchedule) 처리
     if (user.defaultSchedule && Array.isArray(user.defaultSchedule)) {
@@ -72,7 +80,7 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
           // 특정 날짜 처리
           const targetDate = new Date(specificDate);
 
-          if (targetDate >= startDate && targetDate < endDate) {
+          if (targetDate >= ownerRangeStart && targetDate < ownerRangeEnd) {
             const slots = generateTimeSlots(startTime, endTime);
 
             slots.forEach(slotTime => {
@@ -97,8 +105,8 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
           }
         } else {
           // 주간 반복 처리
-          const currentDate = new Date(startDate);
-          while (currentDate < endDate) {
+          const currentDate = new Date(ownerRangeStart);
+          while (currentDate < ownerRangeEnd) {
             if (currentDate.getUTCDay() === dayOfWeek) {
               const slots = generateTimeSlots(startTime, endTime);
 
@@ -135,8 +143,8 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
           personalTime.days.forEach(dayOfWeek => {
             const jsDay = dayOfWeek === 7 ? 0 : dayOfWeek;
 
-            const currentDate = new Date(startDate);
-            while (currentDate < endDate) {
+            const currentDate = new Date(ownerRangeStart);
+            while (currentDate < ownerRangeEnd) {
               if (currentDate.getUTCDay() === jsDay) {
                 const slots = generateTimeSlots(personalTime.startTime, personalTime.endTime);
 

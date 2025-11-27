@@ -2,7 +2,7 @@
   "mcpServers": {
     "serena": {
       "type": "stdio",
-      "command": "uv",
+      "command": "C:\\Users\\예상\\.local\\bin\\uv.exe",
       "args": [
         "run",
         "--directory",
