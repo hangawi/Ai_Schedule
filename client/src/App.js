@@ -189,13 +189,15 @@ function App() {
       setShowBackgroundGuide(false);
    };
 
-   // API 키 디버깅
-   const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || 'AIzaSyD-vRy7OPDKSxKUy2w52LBkqfSj2lJCwdY';
-   console.log('Google Maps API Key:', GOOGLE_MAPS_API_KEY);
+   // 새로운 환경 변수 이름 사용
+   const GOOGLE_API_KEY = process.env.REACT_APP_MY_GOOGLE_KEY || 'AIzaSyCzHlB4yeFRas3uDGVjJcwxo3npR784txc';
+   console.log('🔑 새 환경 변수:', process.env.REACT_APP_MY_GOOGLE_KEY);
+   console.log('🔑 최종 키:', GOOGLE_API_KEY);
+   console.log('🔑 끝부분:', GOOGLE_API_KEY?.slice(-10));
 
    return (
       <LoadScript
-         googleMapsApiKey={GOOGLE_MAPS_API_KEY}
+         googleMapsApiKey={GOOGLE_API_KEY}
          libraries={libraries}
          language="ko"
       >

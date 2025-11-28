@@ -246,24 +246,11 @@ const RoomSchema = new mongoose.Schema({
         default: '13:00'
       }
     },
-    ownerPreferences: {
-      focusTimeType: {
-        type: String,
-        enum: ['morning', 'lunch', 'afternoon', 'evening', 'none'],
-        default: 'none'
-      },
-      description: {
-        type: String,
-        default: ''
-      },
-      preferredStartTime: {
-        type: String,
-        default: null
-      },
-      preferredEndTime: {
-        type: String,
-        default: null
-      }
+    // 배정 모드 설정 (방장 선호시간 대체)
+    assignmentMode: {
+      type: String,
+      enum: ['normal', 'first_come_first_served', 'consecutive'],
+      default: 'normal'
     },
     minHoursPerWeek: {
       type: Number,
@@ -296,7 +283,7 @@ const RoomSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true
-});
+});;
 
 // Generate unique invite code before saving
 RoomSchema.pre('save', function(next) {

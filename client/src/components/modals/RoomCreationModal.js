@@ -12,7 +12,8 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
     startHour: 9,
     endHour: 18,
     blockedTimes: [], // 금지 시간대 배열
-    roomExceptions: [] // 새로운 roomExceptions 배열
+    roomExceptions: [], // 새로운 roomExceptions 배열
+    assignmentMode: 'normal' // 배정 모드 (기본값: 보통 모드)
   });
   
   const [newBlockedTime, setNewBlockedTime] = useState({
@@ -470,6 +471,54 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
                 )}
               </div>
             )}
+          </div>
+
+          {/* 배정 모드 선택 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              배정 모드
+            </label>
+            <div className="space-y-2">
+              <label className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  name="assignmentMode"
+                  value="normal"
+                  checked={settings.assignmentMode === 'normal'}
+                  onChange={(e) => setSettings(prev => ({ ...prev, assignmentMode: e.target.value }))}
+                  className="form-radio text-blue-500"
+                />
+                <span className="text-sm">
+                  <strong>보통 모드</strong> - 우선순위 높음 → 가능한 시간 적은 멤버 우선 (기본값)
+                </span>
+              </label>
+              <label className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  name="assignmentMode"
+                  value="first_come_first_served"
+                  checked={settings.assignmentMode === 'first_come_first_served'}
+                  onChange={(e) => setSettings(prev => ({ ...prev, assignmentMode: e.target.value }))}
+                  className="form-radio text-blue-500"
+                />
+                <span className="text-sm">
+                  <strong>선착순 모드</strong> - 우선순위 높음 → 방 입장 순서 우선
+                </span>
+              </label>
+              <label className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  name="assignmentMode"
+                  value="consecutive"
+                  checked={settings.assignmentMode === 'consecutive'}
+                  onChange={(e) => setSettings(prev => ({ ...prev, assignmentMode: e.target.value }))}
+                  className="form-radio text-blue-500"
+                />
+                <span className="text-sm">
+                  <strong>연속 배정 모드</strong> - 같은 시간대 멤버들을 연속으로 배치 (예: a 9-10시, b 10-11시)
+                </span>
+              </label>
+            </div>
           </div>
         </div>
         
