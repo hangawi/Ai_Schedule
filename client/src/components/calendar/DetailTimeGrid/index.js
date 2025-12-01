@@ -247,20 +247,28 @@ const DetailTimeGrid = ({
       const exDateStr = ex.specificDate;
 
       if (exDateStr === dateStr) {
-        // startTime이 ISO 형식인 경우와 "HH:MM" 형식인 경우를 모두 처리
-        let exStartHour, exStartMinute;
+        // 현재 슬롯 시간 (분 단위)
+        const slotMinutes = hour * 60 + minute;
+
+        // startTime과 endTime이 ISO 형식인 경우와 "HH:MM" 형식인 경우를 모두 처리
+        let exStartMinutes, exEndMinutes;
 
         if (ex.startTime.includes('T')) {
           // ISO 형식 (예: "2025-09-26T10:00:00.000Z")
           const exStartTime = new Date(ex.startTime);
-          exStartHour = exStartTime.getHours();
-          exStartMinute = exStartTime.getMinutes();
+          const exEndTime = new Date(ex.endTime);
+          exStartMinutes = exStartTime.getHours() * 60 + exStartTime.getMinutes();
+          exEndMinutes = exEndTime.getHours() * 60 + exEndTime.getMinutes();
         } else {
           // "HH:MM" 형식
-          [exStartHour, exStartMinute] = ex.startTime.split(':').map(Number);
+          const [exStartHour, exStartMinute] = ex.startTime.split(':').map(Number);
+          const [exEndHour, exEndMinute] = ex.endTime.split(':').map(Number);
+          exStartMinutes = exStartHour * 60 + exStartMinute;
+          exEndMinutes = exEndHour * 60 + exEndMinute;
         }
 
-        if (hour === exStartHour && minute === exStartMinute) {
+        // 슬롯이 시작~종료 시간 범위 안에 있는지 확인
+        if (slotMinutes >= exStartMinutes && slotMinutes < exEndMinutes) {
           return ex;
         }
       }

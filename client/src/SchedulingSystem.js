@@ -44,6 +44,7 @@ import { auth } from './config/firebaseConfig';
 import BackgroundCallIndicator from './components/indicators/BackgroundCallIndicator';
 import { useIntegratedVoiceSystem } from './hooks/useIntegratedVoiceSystem';
 import { useChat } from './hooks/useChat';
+import { useChatEnhanced } from './hooks/useChat/enhanced';
 
 // NavItem component
 const NavItem = ({ icon, label, active, onClick, badge }) => (
@@ -442,7 +443,13 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
    }, [isLoggedIn, handleAddGlobalEvent, handleDeleteEvent, handleEditEvent]);
 
    // SchedulingSystem 내에서 useChat 호출
-   const { handleChatMessage } = useChat(isLoggedIn, setEventAddedKey, eventActions);
+   // 두 hooks를 모두 호출 (React Hooks 규칙 준수)
+   const chatLegacy = useChat(isLoggedIn, setEventAddedKey, eventActions);
+   const chatEnhanced = useChatEnhanced(isLoggedIn, setEventAddedKey, eventActions);
+
+   // 강화된 채팅 시스템 사용 여부 (true: 신규 기능 활성화, false: 기존 기능)
+   const USE_ENHANCED_CHAT = true;
+   const { handleChatMessage } = USE_ENHANCED_CHAT ? chatEnhanced : chatLegacy;
 
    const { todayEvents, upcomingEvents } = useMemo(() => {
       const today = new Date();

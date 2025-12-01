@@ -72,7 +72,14 @@ const CalendarView = ({
       const scheduleCount = getScheduleCount(date);
       const exceptionCount = getExceptionCount(date);
       const personalTimeCount = getPersonalTimeCount(date);
-      
+
+      // exception 정보도 가져오기
+      const dateYear = date.getFullYear();
+      const dateMonth = String(date.getMonth() + 1).padStart(2, '0');
+      const dateDay = String(date.getDate()).padStart(2, '0');
+      const dateStr = `${dateYear}-${dateMonth}-${dateDay}`;
+      const dateExceptions = exceptions.filter(ex => ex.specificDate === dateStr && ex.title !== '휴무일' && !ex.isHoliday);
+
       dates.push({
         date: new Date(date),
         day: date.getDate(),
@@ -86,7 +93,8 @@ const CalendarView = ({
         scheduleCount,
         exceptionCount,
         personalTimeCount,
-        totalCount: scheduleCount + exceptionCount + personalTimeCount
+        totalCount: scheduleCount + exceptionCount + personalTimeCount,
+        exceptions: dateExceptions
       });
     }
 
@@ -377,10 +385,17 @@ onClick={() => navigateMonth(1)}
                       <div key={`schedule-${i}`} className="w-full h-1 bg-blue-500 rounded-full"></div>
                     ))
                   )}
-                  {dateInfo.exceptionCount > 0 && (
-                    [...Array(Math.min(dateInfo.exceptionCount, 3))].map((_, i) => (
-                      <div key={`exception-${i}`} className="w-full h-1 bg-yellow-500 rounded-full"></div>
-                    ))
+                  {dateInfo.exceptionCount > 0 && dateInfo.exceptions && (
+                    dateInfo.exceptions.slice(0, 3).map((ex, i) => {
+                      const priority = ex.priority !== undefined ? ex.priority : 3;
+                      const colorMap = {
+                        3: 'bg-blue-600',
+                        2: 'bg-blue-400',
+                        1: 'bg-blue-200'
+                      };
+                      const color = colorMap[priority] || 'bg-blue-600';
+                      return <div key={`exception-${i}`} className={`w-full h-1 ${color} rounded-full`}></div>;
+                    })
                   )}
                   {dateInfo.personalTimeCount > 0 && (
                     [...Array(Math.min(dateInfo.personalTimeCount, 3))].map((_, i) => (

@@ -13,6 +13,24 @@ export const useCalendarUpdate = (
 ) => {
   useEffect(() => {
     const handleCalendarUpdate = async (event) => {
+      // 🆕 선호시간 추가인 경우
+      if (event.detail && event.detail.type === 'add_preferred_time' && event.detail.context === 'profile') {
+        fetchSchedule();
+        return;
+      }
+
+      // 🆕 반복 선호시간 추가인 경우
+      if (event.detail && event.detail.type === 'add_recurring_preferred_time' && event.detail.context === 'profile') {
+        fetchSchedule();
+        return;
+      }
+
+      // 🆕 개인시간 추가인 경우
+      if (event.detail && event.detail.type === 'add_personal_time' && event.detail.context === 'profile') {
+        fetchSchedule();
+        return;
+      }
+
       // 범위 삭제인 경우
       if (event.detail && event.detail.type === 'delete_range') {
         fetchSchedule();

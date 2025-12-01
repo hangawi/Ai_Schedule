@@ -190,7 +190,7 @@ function App() {
    };
 
    // 새로운 환경 변수 이름 사용
-   const GOOGLE_API_KEY = process.env.REACT_APP_MY_GOOGLE_KEY || 'AIzaSyCzHlB4yeFRas3uDGVjJcwxo3npR784txc';
+   const GOOGLE_API_KEY = process.env.REACT_APP_MY_GOOGLE_KEY;
    console.log('🔑 새 환경 변수:', process.env.REACT_APP_MY_GOOGLE_KEY);
    console.log('🔑 최종 키:', GOOGLE_API_KEY);
    console.log('🔑 끝부분:', GOOGLE_API_KEY?.slice(-10));

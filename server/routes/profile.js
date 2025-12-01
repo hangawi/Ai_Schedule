@@ -92,4 +92,77 @@ router.put('/', auth, async (req, res) => {
   }
 });
 
+// @route   POST api/users/profile/schedule
+// @desc    Add schedule exceptions or personal times
+// @access  Private
+router.post('/schedule', auth, async (req, res) => {
+  try {
+    const { scheduleExceptions, personalTimes } = req.body;
+    console.log('[profile.js POST /schedule] Request for user:', req.user.id);
+    console.log('[profile.js POST /schedule] Data:', { scheduleExceptions, personalTimes });
+
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ msg: '사용자를 찾을 수 없습니다.' });
+    }
+
+    let addedCount = 0;
+    let duplicateCount = 0;
+
+    // Add schedule exceptions (선호시간) - 중복 체크
+    if (scheduleExceptions && Array.isArray(scheduleExceptions)) {
+      scheduleExceptions.forEach(exception => {
+        // 같은 날짜, 같은 시간 범위가 이미 있는지 체크
+        const isDuplicate = user.scheduleExceptions.some(existing => {
+          return existing.specificDate === exception.specificDate &&
+                 new Date(existing.startTime).getTime() === new Date(exception.startTime).getTime() &&
+                 new Date(existing.endTime).getTime() === new Date(exception.endTime).getTime();
+        });
+
+        if (isDuplicate) {
+          duplicateCount++;
+        } else {
+          user.scheduleExceptions.push(exception);
+          addedCount++;
+        }
+      });
+    }
+
+    // Add personal times (개인시간) - 중복 체크
+    if (personalTimes && Array.isArray(personalTimes)) {
+      personalTimes.forEach(personalTime => {
+        // 같은 날짜, 같은 시간 범위가 이미 있는지 체크
+        const isDuplicate = user.personalTimes.some(existing => {
+          return existing.specificDate === personalTime.specificDate &&
+                 existing.startTime === personalTime.startTime &&
+                 existing.endTime === personalTime.endTime;
+        });
+
+        if (isDuplicate) {
+          duplicateCount++;
+        } else {
+          user.personalTimes.push(personalTime);
+          addedCount++;
+        }
+      });
+    }
+
+    await user.save();
+    console.log('[profile.js POST /schedule] Added:', addedCount, 'Duplicates:', duplicateCount);
+
+    res.json({
+      success: true,
+      scheduleExceptions: user.scheduleExceptions,
+      personalTimes: user.personalTimes,
+      addedCount,
+      duplicateCount,
+      isDuplicate: duplicateCount > 0 && addedCount === 0
+    });
+  } catch (err) {
+    console.error('[profile.js POST /schedule] Error:', err);
+    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+  }
+});
+
 module.exports = router;
