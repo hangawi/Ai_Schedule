@@ -1,0 +1,55 @@
+## Bug Report: Data Corruption in Schedule Management (DetailTimeGrid Component)
+
+**Problem Description:**
+The application is experiencing severe data corruption in the user's schedule management. Specifically, one-time schedule exceptions (e.g., preferred times added via chat for specific dates) are being incorrectly merged into the `defaultSchedule` (which is intended for recurring weekly schedules). This leads to an ever-growing `defaultSchedule` array (observed logs show 1050 entries), causing performance issues and incorrect behavior in schedule validation logic (e.g., in `coordinationExchangeController.js`).
+
+**Root Cause Analysis:**
+The root cause of this data corruption lies within the component responsible for editing daily schedules, which is imported as `DetailTimeGrid` in `ProfileTab/index.js`.
+
+This component exhibits the following flawed behavior:
+1.  **Combined Display:** For displaying a single day's schedule, `DetailTimeGrid` merges data from both `defaultSchedule` (passed as `schedule` prop) and `scheduleExceptions` (passed as `exceptions` prop).
+2.  **Incorrect Update Logic:** When a user interactively modifies (adds, edits, or deletes) a time slot within the `DetailTimeGrid` UI, the component fails to correctly identify the original source of the modified slot. Instead of updating the `exceptions` state (via `setExceptions` prop) for one-time events or the `schedule` state (via `setSchedule` prop) for recurring events, it erroneously saves all modified/new slots into the `schedule` state (i.e., `defaultSchedule`).
+3.  **State Contamination:** This leads to `scheduleExceptions` data being pushed into the `defaultSchedule` state variable within the `ProfileTab` component. When the `ProfileTab` then triggers a save operation (e.g., via `createSaveHandler` or `createAutoSaveHandler`), the now-contaminated `defaultSchedule` is sent to the server, resulting in permanent data corruption in the database.
+
+**Impact:**
+- Performance degradation due to large `defaultSchedule` arrays.
+- Incorrect schedule validation, especially in coordination features, as one-time exceptions are not properly recognized as such.
+- User frustration due to unexpected schedule behavior.
+
+**Proposed Solution & Fix Guide for `DetailTimeGrid.js`:**
+
+The file `Ai_Schedule/client/src/components/calendar/DetailTimeGrid.js` (or whichever file is imported as `DetailTimeGrid` in `ProfileTab/index.js`) needs to be modified to correctly differentiate and update schedule types.
+
+**Key Modifications Required:**
+
+1.  **Identify Data Source on Display:** When rendering slots within `DetailTimeGrid`, each slot should carry an identifier indicating whether it originated from `defaultSchedule` or `scheduleExceptions`. This could be a new property like `sourceType: 'default'` or `sourceType: 'exception'`.
+2.  **Separate Update Logic:** When a user action (add/edit/delete) modifies a slot:
+    *   **For existing slots:** Based on their `sourceType`, call either the `setSchedule` prop (for `defaultSchedule` items) or the `setExceptions` prop (for `scheduleExceptions` items) with the updated data. Ensure that the updated data sent to these setters *only* contains the relevant schedule type.
+    *   **For new slots:** Any newly created time slots within `DetailTimeGrid` for a specific date should be treated as one-time exceptions. Therefore, these new slots should be passed to the `setExceptions` prop, not `setSchedule`.
+3.  **Prevent Merging:** Ensure that `setSchedule` is *only* called with actual recurring schedule data, and `setExceptions` is *only* called with actual one-time exception data. The component must strictly maintain the separation of these two schedule types.
+
+**Example Conceptual Change (inside `DetailTimeGrid.js`'s save handler or state update logic):**
+
+```javascript
+// Current problematic approach (conceptual):
+// let allModifiedSlots = someMergedDisplayState;
+// setSchedule(allModifiedSlots); // <--- This incorrectly puts everything into defaultSchedule
+
+// Desired corrected approach (conceptual):
+// Separate modified slots back into their original types
+let newDefaultSchedule = []; // Filtered and updated default slots
+let newScheduleExceptions = []; // Filtered and updated exception slots
+
+allModifiedSlots.forEach(slot => {
+    if (slot.sourceType === 'default' || (slot.isRecurring && !slot.specificDate)) {
+        newDefaultSchedule.push(slot);
+    } else { // sourceType is exception, or it's a new one-time slot
+        newScheduleExceptions.push(slot);
+    }
+});
+
+setSchedule(newDefaultSchedule);
+setExceptions(newScheduleExceptions);
+```
+
+By implementing this clear separation, the data corruption will be stopped, and the schedule management will function as intended.
