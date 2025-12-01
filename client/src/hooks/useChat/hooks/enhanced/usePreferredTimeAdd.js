@@ -31,7 +31,7 @@ export const usePreferredTimeAdd = (setEventAddedKey) => {
         startDateTime,
         endDateTime,
         priority = 3, // 디폴트: 선호(3)
-        title = '선호시간',
+        title, // title은 사용하지 않음 (버튼 추가와 동일하게)
         response
       } = chatResponse;
 
@@ -56,10 +56,9 @@ export const usePreferredTimeAdd = (setEventAddedKey) => {
       const day = String(start.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
 
-      // API 요청 데이터 구성
+      // API 요청 데이터 구성 (title 제거 - 버튼 추가와 동일하게)
       const requestData = {
         scheduleExceptions: [{
-          title: title,
           startTime: startDateTime,
           endTime: endDateTime,
           priority: validPriority,
@@ -74,9 +73,8 @@ export const usePreferredTimeAdd = (setEventAddedKey) => {
         throw new Error('로그인이 필요합니다.');
       }
 
-      const apiUrl = context.context === 'profile'
-        ? '/api/users/profile/schedule'
-        : '/api/events';
+      // 선호시간은 항상 프로필에 저장 (일정맞추기에서 조회 가능하도록)
+      const apiUrl = '/api/users/profile/schedule';
 
       const serverResponse = await fetch(apiUrl, {
         method: 'POST',

@@ -567,6 +567,8 @@ exports.handleRequest = async (req, res) => {
                   const ownerSchedule = room.owner?.defaultSchedule || [];
 
                   const scheduleByDay = buildScheduleByDay(dUserSchedule, new Date(dSlotDate));
+                  console.log(`🔍 [chain_request] D user: ${dUserData?.firstName} ${dUserData?.lastName}`);
+                  console.log(`🔍 [chain_request] scheduleByDay 결과:`, JSON.stringify(scheduleByDay, null, 2));
 
                   const candidates = [];
                   const dDayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].indexOf(dSlotDay.toLowerCase());
@@ -756,13 +758,18 @@ exports.handleRequest = async (req, res) => {
 
                      console.log('✅ Chain request completed successfully!');
                   } else {
+                     console.log('❌ [chain_request] 후보를 찾지 못함!');
+                     console.log(`   D user: ${dUserData?.firstName} ${dUserData?.lastName}`);
+                     console.log(`   후보 개수: ${candidates.length}`);
+                     console.log(`   scheduleByDay 키 개수: ${Object.keys(scheduleByDay).length}`);
+                     
                      request.status = 'rejected';
-                     request.response = 'D가 이동할 빈 시간이 없어 조정이 실패했습니다.';
+                     request.response = `D(${dUserData?.firstName})가 이번 주 선호시간이 없어 조정이 실패했습니다. D의 이번 주 선호시간을 확인해주세요.`;
 
                      const originalRequest = room.requests.id(chainData.originalRequest);
                      if (originalRequest) {
                         originalRequest.status = 'rejected';
-                        originalRequest.response = '연쇄 조정 실패 - D가 이동할 빈 시간 없음';
+                        originalRequest.response = `연쇄 조정 실패 - D(${dUserData?.firstName})가 이번 주 선호시간 없음`;
                      }
                   }
 

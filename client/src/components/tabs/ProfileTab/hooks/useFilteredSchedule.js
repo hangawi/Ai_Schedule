@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 
-export const useFilteredSchedule = (defaultSchedule, personalTimes, viewingMonth) => {
+export const useFilteredSchedule = (defaultSchedule, personalTimes, scheduleExceptions, viewingMonth) => {
   const filteredDefaultSchedule = useMemo(() => {
     if (!viewingMonth) return defaultSchedule;
     const year = viewingMonth.getFullYear();
@@ -28,8 +28,21 @@ export const useFilteredSchedule = (defaultSchedule, personalTimes, viewingMonth
     });
   }, [personalTimes, viewingMonth]);
 
+  const filteredScheduleExceptions = useMemo(() => {
+    if (!viewingMonth) return scheduleExceptions;
+    const year = viewingMonth.getFullYear();
+    const month = viewingMonth.getMonth();
+
+    return scheduleExceptions.filter(exception => {
+      if (!exception.specificDate) return true; // Always include if no specific date
+      const [slotYear, slotMonth] = exception.specificDate.split('-').map(Number);
+      return slotYear === year && (slotMonth - 1) === month;
+    });
+  }, [scheduleExceptions, viewingMonth]);
+
   return {
     filteredDefaultSchedule,
-    filteredPersonalTimes
+    filteredPersonalTimes,
+    filteredScheduleExceptions
   };
 };

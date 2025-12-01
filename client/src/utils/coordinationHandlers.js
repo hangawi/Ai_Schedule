@@ -124,17 +124,32 @@ export const handleRunAutoSchedule = async (
 
     // ✅ 자동배정: 모든 멤버의 선호시간이 있는 날짜를 포함하도록 범위 계산
     {
-      // 모든 멤버의 specificDate 수집
+      // 모든 멤버의 specificDate 수집 (defaultSchedule + scheduleExceptions)
       let minDate = null;
       let maxDate = null;
 
       const allMembers = currentRoom.members || [];
 
       allMembers.forEach(member => {
+        // defaultSchedule 확인
         const schedules = member.defaultSchedule || [];
         schedules.forEach(schedule => {
           if (schedule.specificDate) {
             const date = new Date(schedule.specificDate);
+            if (!minDate || date < minDate) {
+              minDate = date;
+            }
+            if (!maxDate || date > maxDate) {
+              maxDate = date;
+            }
+          }
+        });
+
+        // scheduleExceptions 확인 (챗봇으로 추가된 선호시간)
+        const exceptions = member.scheduleExceptions || [];
+        exceptions.forEach(exception => {
+          if (exception.specificDate) {
+            const date = new Date(exception.specificDate);
             if (!minDate || date < minDate) {
               minDate = date;
             }

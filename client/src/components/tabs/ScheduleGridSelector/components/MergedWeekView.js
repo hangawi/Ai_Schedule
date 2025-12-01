@@ -106,10 +106,28 @@ const MergedWeekView = ({
         return targetDateStr === exceptionDateStr;
       }
       return false;
-    }).map(e => ({
-      ...e,
-      color: priorityColorMap[priorityConfig[e.priority]?.color] || '#2563eb'
-    }));
+    }).map(e => {
+      // ISO datetime에서 HH:MM 형식으로 변환
+      let startTime = e.startTime;
+      let endTime = e.endTime;
+
+      // ISO 형식인지 확인 (T가 포함되어 있으면 ISO 형식)
+      if (typeof startTime === 'string' && startTime.includes('T')) {
+        const startDate = new Date(startTime);
+        startTime = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`;
+      }
+      if (typeof endTime === 'string' && endTime.includes('T')) {
+        const endDate = new Date(endTime);
+        endTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
+      }
+
+      return {
+        ...e,
+        startTime,
+        endTime,
+        color: priorityColorMap[priorityConfig[e.priority]?.color] || '#2563eb'
+      };
+    });
 
     // 4. 세 배열 합치기 (자정 넘는 일정 분할)
     const allSchedules = [...personalFiltered, ...scheduleFiltered, ...exceptionsFiltered];

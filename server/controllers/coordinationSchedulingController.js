@@ -72,24 +72,33 @@ exports.runAutoSchedule = async (req, res) => {
         return memberId;
       });
 
-      // 개인 시간표가 있는지 확인
+      // 개인 시간표가 있는지 확인 (defaultSchedule 또는 scheduleExceptions 중 하나라도 있으면 OK)
       let membersWithDefaultSchedule = 0;
       for (const member of membersOnly) {
-        if (member.user.defaultSchedule && member.user.defaultSchedule.length > 0) {
+        const hasDefaultSchedule = member.user.defaultSchedule && member.user.defaultSchedule.length > 0;
+        const hasScheduleExceptions = member.user.scheduleExceptions && member.user.scheduleExceptions.length > 0;
+        if (hasDefaultSchedule || hasScheduleExceptions) {
           membersWithDefaultSchedule++;
         }
       }
 
-      if (!room.owner || !room.owner.defaultSchedule || room.owner.defaultSchedule.length === 0) {
+      // 방장 선호시간 확인 (defaultSchedule 또는 scheduleExceptions 중 하나라도 있으면 OK)
+      const ownerHasDefaultSchedule = room.owner?.defaultSchedule && room.owner.defaultSchedule.length > 0;
+      const ownerHasScheduleExceptions = room.owner?.scheduleExceptions && room.owner.scheduleExceptions.length > 0;
+
+      if (!room.owner || (!ownerHasDefaultSchedule && !ownerHasScheduleExceptions)) {
         const ownerName = `${room.owner?.firstName || ''} ${room.owner?.lastName || ''}`.trim() || '방장';
         return res.status(400).json({
           msg: `방장(${ownerName})이 선호시간표를 설정하지 않았습니다. 내프로필에서 선호시간표를 설정해주세요.`
         });
       }
+
       const membersWithoutDefaultSchedule = [];
       for (const member of membersOnly) {
+        const hasDefaultSchedule = member.user?.defaultSchedule && member.user.defaultSchedule.length > 0;
+        const hasScheduleExceptions = member.user?.scheduleExceptions && member.user.scheduleExceptions.length > 0;
 
-        if (!member.user || !member.user.defaultSchedule || member.user.defaultSchedule.length === 0) {
+        if (!member.user || (!hasDefaultSchedule && !hasScheduleExceptions)) {
           const userName = member.user?.name || `${member.user?.firstName || ''} ${member.user?.lastName || ''}`.trim() || '알 수 없음';
           membersWithoutDefaultSchedule.push(userName);
         }

@@ -135,6 +135,56 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
       });
     }
 
+    // 선호시간(scheduleExceptions) 처리 - 챗봇으로 추가된 시간
+    if (user.scheduleExceptions && Array.isArray(user.scheduleExceptions)) {
+      user.scheduleExceptions.forEach(exception => {
+        const { specificDate, priority: exceptionPriority } = exception;
+        const schedulePriority = exceptionPriority || priority;
+
+        if (!specificDate) return;
+
+        const targetDate = new Date(specificDate);
+
+        // 주말 제외
+        if (isWeekendDay(targetDate.getUTCDay())) return;
+
+        if (targetDate >= ownerRangeStart && targetDate < ownerRangeEnd) {
+          // ISO datetime에서 HH:MM 추출
+          const startDateTime = new Date(exception.startTime);
+          const endDateTime = new Date(exception.endTime);
+
+          const startTime = `${String(startDateTime.getHours()).padStart(2, '0')}:${String(startDateTime.getMinutes()).padStart(2, '0')}`;
+          const endTime = `${String(endDateTime.getHours()).padStart(2, '0')}:${String(endDateTime.getMinutes()).padStart(2, '0')}`;
+
+          const slots = generateTimeSlots(startTime, endTime);
+
+          slots.forEach(slotTime => {
+            const dateKey = targetDate.toISOString().split('T')[0];
+            const key = createSlotKey(dateKey, slotTime);
+
+            // 방장이 가능한 시간대인지 확인
+            if (!ownerAvailableSlots.has(key)) {
+              memberSlotsSkipped++;
+              return;
+            }
+
+            if (!timetable[key]) {
+              const oneIndexedDayOfWeek = convertToOneIndexedDay(targetDate.getDay());
+              timetable[key] = {
+                assignedTo: null,
+                available: [],
+                date: new Date(targetDate),
+                dayOfWeek: oneIndexedDayOfWeek
+              };
+            }
+
+            addMemberAvailability(timetable[key], userId, schedulePriority, false);
+            memberSlotsAdded++;
+          });
+        }
+      });
+    }
+
     // 개인시간(personalTimes) 처리 - 이 시간대는 제외
     if (user.personalTimes && Array.isArray(user.personalTimes)) {
       user.personalTimes.forEach(personalTime => {

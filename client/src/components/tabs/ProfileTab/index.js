@@ -64,9 +64,10 @@ const ProfileTab = ({ onEditingChange }) => {
   );
 
   // 필터링된 스케줄
-  const { filteredDefaultSchedule, filteredPersonalTimes } = useFilteredSchedule(
+  const { filteredDefaultSchedule, filteredPersonalTimes, filteredScheduleExceptions } = useFilteredSchedule(
     defaultSchedule,
     personalTimes,
+    scheduleExceptions,
     viewingMonth
   );
 
@@ -213,6 +214,8 @@ const ProfileTab = ({ onEditingChange }) => {
         <PreferenceTimeSection
           filteredDefaultSchedule={filteredDefaultSchedule}
           defaultSchedule={defaultSchedule}
+          filteredScheduleExceptions={filteredScheduleExceptions}
+          scheduleExceptions={scheduleExceptions}
         />
 
         <div>

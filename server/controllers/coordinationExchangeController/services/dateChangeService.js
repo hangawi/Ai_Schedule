@@ -250,6 +250,7 @@ async function handleDateChange(req, res, room, memberData, params) {
   // 🔒 Validate: Check if target day is in MEMBER's preferred schedule
   const requesterUser = memberData.user;
   const requesterDefaultSchedule = requesterUser.defaultSchedule || [];
+  const requesterScheduleExceptions = requesterUser.scheduleExceptions || []; // 🆕 챗봇으로 추가한 선호시간
 
   // Map day to dayOfWeek number (0=Sunday, 1=Monday, ..., 6=Saturday)
   const dayOfWeekMap = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
@@ -259,41 +260,90 @@ async function handleDateChange(req, res, room, memberData, params) {
   console.log(`👤 Requester user ID: ${requesterUser._id || requesterUser.toString()}`);
   console.log(`👤 Requester name: ${requesterUser.firstName} ${requesterUser.lastName}`);
   console.log(`👤 Member's defaultSchedule (${requesterDefaultSchedule.length} entries):`, JSON.stringify(requesterDefaultSchedule, null, 2));
+  console.log(`👤 Member's scheduleExceptions (${requesterScheduleExceptions.length} entries):`, JSON.stringify(requesterScheduleExceptions, null, 2));
 
-  // 🔧 targetDate 기준 7일 이내 스케줄만 필터링 (±3일)
-  const sevenDaysBefore = new Date(targetDate);
-  sevenDaysBefore.setDate(sevenDaysBefore.getDate() - 3);
-  const sevenDaysAfter = new Date(targetDate);
-  sevenDaysAfter.setDate(sevenDaysAfter.getDate() + 3);
+  // 🔧 이번 주 범위 계산 (월요일 ~ 일요일)
+  // currentWeekStartDate가 제공되었으면 사용, 아니면 현재 주 월요일 계산
+  let thisWeekMonday;
+  if (currentWeekStartDate) {
+    const providedDate = new Date(currentWeekStartDate);
+    const providedDay = providedDate.getUTCDay();
+    const daysToMonday = providedDay === 0 ? 6 : providedDay - 1;
+    thisWeekMonday = new Date(providedDate);
+    thisWeekMonday.setUTCDate(providedDate.getUTCDate() - daysToMonday);
+    thisWeekMonday.setUTCHours(0, 0, 0, 0);
+  } else {
+    const now = new Date();
+    const nowDay = now.getUTCDay();
+    const daysToMonday = nowDay === 0 ? 6 : nowDay - 1;
+    thisWeekMonday = new Date(now);
+    thisWeekMonday.setUTCDate(now.getUTCDate() - daysToMonday);
+    thisWeekMonday.setUTCHours(0, 0, 0, 0);
+  }
 
-  const nearbySchedules = requesterDefaultSchedule.filter(s => {
+  const thisWeekSunday = new Date(thisWeekMonday);
+  thisWeekSunday.setUTCDate(thisWeekMonday.getUTCDate() + 6);
+  thisWeekSunday.setUTCHours(23, 59, 59, 999);
+
+  console.log(`🔍 [멤버 검증] 이번 주 범위: ${thisWeekMonday.toISOString().split('T')[0]} ~ ${thisWeekSunday.toISOString().split('T')[0]}`);
+  console.log(`🔍 [멤버 검증] targetDate: ${targetDate.toISOString().split('T')[0]}`);
+
+  // 이번 주 범위 내의 스케줄만 필터링 (defaultSchedule + scheduleExceptions)
+  const thisWeekDefaultSchedules = requesterDefaultSchedule.filter(s => {
     if (s.specificDate) {
+      // specificDate가 있는 경우: 이번 주 범위 내에 있는지 체크
       const scheduleDate = new Date(s.specificDate);
-      return scheduleDate >= sevenDaysBefore && scheduleDate <= sevenDaysAfter;
+      const isThisWeek = scheduleDate >= thisWeekMonday && scheduleDate <= thisWeekSunday;
+      console.log(`   [defaultSchedule] specificDate: ${s.specificDate}, isThisWeek: ${isThisWeek}`);
+      return isThisWeek;
+    }
+    // ✅ specificDate 없는 반복 일정은 매주 반복되므로 항상 포함
+    console.log(`   [defaultSchedule] dayOfWeek: ${s.dayOfWeek}, 반복일정 - 항상 포함`);
+    return true;
+  });
+
+  // 🆕 scheduleExceptions (챗봇으로 추가한 선호시간) 필터링
+  const thisWeekExceptions = requesterScheduleExceptions.filter(ex => {
+    if (ex.specificDate) {
+      const scheduleDate = new Date(ex.specificDate);
+      const isThisWeek = scheduleDate >= thisWeekMonday && scheduleDate <= thisWeekSunday;
+      console.log(`   [scheduleExceptions] specificDate: ${ex.specificDate}, isThisWeek: ${isThisWeek}`);
+
+      if (isThisWeek) {
+        // ISO datetime에서 HH:MM 형식으로 변환
+        const startDateTime = new Date(ex.startTime);
+        const endDateTime = new Date(ex.endTime);
+        ex.startTime = `${String(startDateTime.getHours()).padStart(2, '0')}:${String(startDateTime.getMinutes()).padStart(2, '0')}`;
+        ex.endTime = `${String(endDateTime.getHours()).padStart(2, '0')}:${String(endDateTime.getMinutes()).padStart(2, '0')}`;
+        ex.dayOfWeek = scheduleDate.getDay(); // dayOfWeek 추가
+      }
+
+      return isThisWeek;
     }
     return false;
   });
 
-  // 7일 이내 스케줄들의 요일 추출
-  const nearbyDayOfWeeks = [...new Set(nearbySchedules.map(s => s.dayOfWeek))];
+  // 두 배열 합치기
+  const thisWeekSchedules = [...thisWeekDefaultSchedules, ...thisWeekExceptions];
 
-  console.log(`🔍 [멤버 검증] targetDate: ${targetDate.toISOString().split('T')[0]}`);
-  console.log(`🔍 [멤버 검증] 7일 이내 범위: ${sevenDaysBefore.toISOString().split('T')[0]} ~ ${sevenDaysAfter.toISOString().split('T')[0]}`);
-  console.log(`🔍 [멤버 검증] 7일 이내 스케줄: ${nearbySchedules.length}개`);
-  console.log(`🔍 [멤버 검증] 7일 이내 요일: ${nearbyDayOfWeeks.join(', ')}`);
+  // 이번 주 스케줄들의 요일 추출
+  const thisWeekDayOfWeeks = [...new Set(thisWeekSchedules.map(s => s.dayOfWeek))];
 
-  // targetDayOfWeek가 7일 이내 요일에 있는지 체크
-  if (!nearbyDayOfWeeks.includes(targetDayOfWeek)) {
+  console.log(`🔍 [멤버 검증] 이번 주 스케줄: ${thisWeekSchedules.length}개`);
+  console.log(`🔍 [멤버 검증] 이번 주 요일: ${thisWeekDayOfWeeks.join(', ')}`);
+
+  // targetDayOfWeek가 이번 주 요일에 있는지 체크
+  if (!thisWeekDayOfWeeks.includes(targetDayOfWeek)) {
     const dayNames = { 0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토' };
-    const availableDays = nearbyDayOfWeeks.map(d => dayNames[d] + '요일').join(', ') || '없음';
+    const availableDays = thisWeekDayOfWeeks.map(d => dayNames[d] + '요일').join(', ') || '없음';
     return res.status(400).json({
       success: false,
-      message: `${finalTargetMonth}월 ${targetDateNum}일(${targetDayEnglish})은 해당 주의 선호 시간이 아닙니다. 가능한 요일: ${availableDays}`
+      message: `${finalTargetMonth}월 ${targetDateNum}일(${targetDayEnglish})은 이번 주의 선호 시간이 아닙니다. 가능한 요일: ${availableDays}`
     });
   }
 
-  // Check if member has any schedule for this day (7일 이내 기준)
-  const memberTargetDaySchedules = nearbySchedules.filter(s => s.dayOfWeek === targetDayOfWeek);
+  // Check if member has any schedule for this day (이번 주 기준)
+  const memberTargetDaySchedules = thisWeekSchedules.filter(s => s.dayOfWeek === targetDayOfWeek);
 
   console.log(`📅 Filtered schedules for dayOfWeek ${targetDayOfWeek}: ${memberTargetDaySchedules.length} entries`);
   if (memberTargetDaySchedules.length > 0) {

@@ -68,8 +68,22 @@ const MemberItem = ({
 
   const calculateMapDirections = async (owner, member, mode = 'TRANSIT') => {
     const KAKAO_API_KEY = '6fb94acce40079c0c08ad7b6e2be2875';
-    const origin = { lat: parseFloat(owner.addressLat), lng: parseFloat(owner.addressLng) };
-    const destination = { lat: parseFloat(member.addressLat), lng: parseFloat(member.addressLng) };
+
+    // 좌표 유효성 검증
+    const ownerLat = parseFloat(owner.addressLat);
+    const ownerLng = parseFloat(owner.addressLng);
+    const memberLat = parseFloat(member.addressLat);
+    const memberLng = parseFloat(member.addressLng);
+
+    if (isNaN(ownerLat) || isNaN(ownerLng) || isNaN(memberLat) || isNaN(memberLng)) {
+      console.error('Invalid coordinates:', { ownerLat, ownerLng, memberLat, memberLng });
+      setPolylinePath(null);
+      setDirectionsResponse(null);
+      return;
+    }
+
+    const origin = { lat: ownerLat, lng: ownerLng };
+    const destination = { lat: memberLat, lng: memberLng };
 
     // Reset states
     setDirectionsResponse(null);
@@ -178,9 +192,21 @@ const MemberItem = ({
   const calculateRoutes = async (owner, member) => {
     setLoadingRoute(true);
     try {
+      // 좌표 유효성 검증
+      const ownerLat = parseFloat(owner.addressLat);
+      const ownerLng = parseFloat(owner.addressLng);
+      const memberLat = parseFloat(member.addressLat);
+      const memberLng = parseFloat(member.addressLng);
+
+      if (isNaN(ownerLat) || isNaN(ownerLng) || isNaN(memberLat) || isNaN(memberLng)) {
+        console.error('Invalid coordinates in calculateRoutes:', { ownerLat, ownerLng, memberLat, memberLng });
+        setLoadingRoute(false);
+        return;
+      }
+
       const directionsService = new window.google.maps.DirectionsService();
-      const origin = { lat: parseFloat(owner.addressLat), lng: parseFloat(owner.addressLng) };
-      const destination = { lat: parseFloat(member.addressLat), lng: parseFloat(member.addressLng) };
+      const origin = { lat: ownerLat, lng: ownerLng };
+      const destination = { lat: memberLat, lng: memberLng };
       const results = [];
 
       // 1. 대중교통 - Google Maps로 시도
@@ -439,57 +465,72 @@ const MemberItem = ({
                   )}
 
                   <div className="rounded-lg overflow-hidden border border-gray-200">
-                    <GoogleMap
-                      key={mapKey}
-                      mapContainerStyle={{ width: '100%', height: '400px' }}
-                      center={{
-                        lat: parseFloat(memberAddress.addressLat),
-                        lng: parseFloat(memberAddress.addressLng)
-                      }}
-                      zoom={13}
-                    >
-                      {directionsResponse ? (
-                        <DirectionsRenderer
-                          directions={directionsResponse}
-                          options={{
-                            suppressMarkers: false,
-                            polylineOptions: {
-                              strokeColor: '#4F46E5',
-                              strokeWeight: 5
-                            }
-                          }}
-                        />
-                      ) : (
-                        <>
-                          {ownerAddress && (
-                            <Marker
-                              position={{
-                                lat: parseFloat(ownerAddress.addressLat),
-                                lng: parseFloat(ownerAddress.addressLng)
-                              }}
-                              label="방장"
-                            />
-                          )}
-                          <Marker
-                            position={{
-                              lat: parseFloat(memberAddress.addressLat),
-                              lng: parseFloat(memberAddress.addressLng)
-                            }}
-                            label="조원"
-                          />
-                          {polylinePath && (
-                            <Polyline
-                              path={polylinePath}
+                    {(() => {
+                      const memberLat = parseFloat(memberAddress.addressLat);
+                      const memberLng = parseFloat(memberAddress.addressLng);
+
+                      // 좌표가 유효하지 않으면 지도 표시 안 함
+                      if (isNaN(memberLat) || isNaN(memberLng)) {
+                        return (
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+                            <p className="text-sm text-yellow-800">지도 정보가 올바르지 않습니다.</p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <GoogleMap
+                          key={mapKey}
+                          mapContainerStyle={{ width: '100%', height: '400px' }}
+                          center={{ lat: memberLat, lng: memberLng }}
+                          zoom={13}
+                        >
+                          {directionsResponse ? (
+                            <DirectionsRenderer
+                              directions={directionsResponse}
                               options={{
-                                strokeColor: '#4F46E5', // 경로 색상과 통일
-                                strokeWeight: 2,
-                                strokeOpacity: 0.8,
+                                suppressMarkers: false,
+                                polylineOptions: {
+                                  strokeColor: '#4F46E5',
+                                  strokeWeight: 5
+                                }
                               }}
                             />
+                          ) : (
+                            <>
+                              {ownerAddress && (() => {
+                                const ownerLat = parseFloat(ownerAddress.addressLat);
+                                const ownerLng = parseFloat(ownerAddress.addressLng);
+
+                                if (!isNaN(ownerLat) && !isNaN(ownerLng)) {
+                                  return (
+                                    <Marker
+                                      position={{ lat: ownerLat, lng: ownerLng }}
+                                      label="방장"
+                                    />
+                                  );
+                                }
+                                return null;
+                              })()}
+                              <Marker
+                                position={{ lat: memberLat, lng: memberLng }}
+                                label="조원"
+                              />
+                              {polylinePath && (
+                                <Polyline
+                                  path={polylinePath}
+                                  options={{
+                                    strokeColor: '#4F46E5',
+                                    strokeWeight: 2,
+                                    strokeOpacity: 0.8,
+                                  }}
+                                />
+                              )}
+                            </>
                           )}
-                        </>
-                      )}
-                    </GoogleMap>
+                        </GoogleMap>
+                      );
+                    })()}
                   </div>
                 </div>
               )}

@@ -69,6 +69,7 @@ const createOwnerAvailableSlots = (owner, rangeStart, rangeEnd) => {
 
   // owner.user.defaultSchedule 또는 owner.defaultSchedule 지원
   const ownerSchedule = owner.user?.defaultSchedule || owner.defaultSchedule;
+  const ownerScheduleExceptions = owner.user?.scheduleExceptions || owner.scheduleExceptions || [];
 
   if (!ownerSchedule || !Array.isArray(ownerSchedule)) {
     console.log('⚠️ 방장 스케줄이 없습니다:', { hasUser: !!owner.user, hasDefaultSchedule: !!owner.defaultSchedule });
@@ -77,11 +78,12 @@ const createOwnerAvailableSlots = (owner, rangeStart, rangeEnd) => {
 
   console.log('\n🔍 방장 스케줄 처리:');
   console.log('  총 스케줄:', ownerSchedule.length);
+  console.log('  총 선호시간(챗봇):', ownerScheduleExceptions.length);
   console.log('  배정 범위:', rangeStart.toISOString().split('T')[0], '~', rangeEnd.toISOString().split('T')[0]);
 
   const validSchedules = filterValidSchedules(ownerSchedule);
   console.log('  유효한 스케줄:', validSchedules.length);
-  
+
   let specificDateCount = 0;
   let recurringCount = 0;
 
@@ -122,8 +124,40 @@ const createOwnerAvailableSlots = (owner, rangeStart, rangeEnd) => {
     }
   });
 
+  // 선호시간(scheduleExceptions) 처리 - 챗봇으로 추가된 시간
+  let exceptionCount = 0;
+  ownerScheduleExceptions.forEach(exception => {
+    const { specificDate } = exception;
+
+    if (!specificDate) return;
+
+    const specDate = new Date(specificDate);
+
+    // 주말 제외
+    if (isWeekendDay(specDate.getUTCDay())) return;
+
+    if (specDate >= rangeStart && specDate < rangeEnd) {
+      // ISO datetime에서 HH:MM 추출
+      const startDateTime = new Date(exception.startTime);
+      const endDateTime = new Date(exception.endTime);
+
+      const startTime = `${String(startDateTime.getHours()).padStart(2, '0')}:${String(startDateTime.getMinutes()).padStart(2, '0')}`;
+      const endTime = `${String(endDateTime.getHours()).padStart(2, '0')}:${String(endDateTime.getMinutes()).padStart(2, '0')}`;
+
+      const slots = generateTimeSlots(startTime, endTime);
+      const dateKey = specDate.toISOString().split('T')[0];
+
+      slots.forEach(slotTime => {
+        ownerAvailableSlots.add(createSlotKey(dateKey, slotTime));
+      });
+
+      exceptionCount++;
+    }
+  });
+
   console.log('  specificDate 스케줄:', specificDateCount, '개');
   console.log('  반복 스케줄:', recurringCount, '개');
+  console.log('  챗봇 선호시간:', exceptionCount, '개');
   console.log('  생성된 슬롯:', ownerAvailableSlots.size, '개');
 
   return ownerAvailableSlots;

@@ -76,9 +76,8 @@ export const usePersonalTimeAdd = (setEventAddedKey) => {
         throw new Error('로그인이 필요합니다.');
       }
 
-      const apiUrl = context.context === 'profile'
-        ? '/api/users/profile/schedule'
-        : '/api/events';
+      // 개인시간은 항상 프로필에 저장 (일정맞추기에서 조회 가능하도록)
+      const apiUrl = '/api/users/profile/schedule';
 
       const serverResponse = await fetch(apiUrl, {
         method: 'POST',

@@ -11,14 +11,32 @@ const { toMinutes } = require('../utils/timeConverter');
 const buildScheduleByDay = (userSchedule, requestDate) => {
   const scheduleByDay = {};
   const seenBlocks = new Set();
-  const requestDateMs = new Date(requestDate).getTime();
+  
+  // 🔧 이번 주 범위 계산 (월요일 ~ 일요일)
+  const requestDateObj = new Date(requestDate);
+  const requestDay = requestDateObj.getUTCDay();
+  const daysToMonday = requestDay === 0 ? 6 : requestDay - 1;
+  
+  const thisWeekMonday = new Date(requestDateObj);
+  thisWeekMonday.setUTCDate(requestDateObj.getUTCDate() - daysToMonday);
+  thisWeekMonday.setUTCHours(0, 0, 0, 0);
+  
+  const thisWeekSunday = new Date(thisWeekMonday);
+  thisWeekSunday.setUTCDate(thisWeekMonday.getUTCDate() + 6);
+  thisWeekSunday.setUTCHours(23, 59, 59, 999);
+
+  console.log(`🔍 [buildScheduleByDay] 이번 주 범위: ${thisWeekMonday.toISOString().split('T')[0]} ~ ${thisWeekSunday.toISOString().split('T')[0]}`);
 
   userSchedule.forEach(s => {
-    // 같은 주 (7일 이내)인지 체크
+    // ✅ specificDate가 있는 경우: 이번 주 범위 내에 있는지 체크
     if (s.specificDate) {
-      const specificDateMs = new Date(s.specificDate).getTime();
-      const daysDiff = Math.abs(specificDateMs - requestDateMs) / (1000 * 60 * 60 * 24);
-      if (daysDiff > 7) return;
+      const specificDateObj = new Date(s.specificDate);
+      const isThisWeek = specificDateObj >= thisWeekMonday && specificDateObj <= thisWeekSunday;
+      console.log(`   [buildScheduleByDay] specificDate: ${s.specificDate}, isThisWeek: ${isThisWeek}`);
+      if (!isThisWeek) return; // 이번 주가 아니면 제외
+    } else {
+      // ✅ specificDate 없는 반복 일정: 매주 반복되므로 항상 포함
+      console.log(`   [buildScheduleByDay] dayOfWeek: ${s.dayOfWeek}, 반복일정 - 포함`);
     }
 
     const blockKey = `${s.dayOfWeek}-${s.startTime}-${s.endTime}`;
