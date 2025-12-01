@@ -21,9 +21,9 @@
  */
 
 /**
- * Date Change Service - ?�짜 기반 ?�정 변�?처리
+ * Date Change Service - 날짜 기반 일정 변경 처리
  *
- * "11??11?�을 14?�로" 같�? ?�짜 기반 변�??�청??처리?�니??
+ * "11월 11일을 14일로" 같은 날짜 기반 변경 요청을 처리합니다.
  */
 
 const Room = require('../../../models/room');
@@ -34,7 +34,7 @@ const { findAvailableSlot, removeSlots, createNewSlots } = require('../helpers/a
 const { validateNotWeekend, validateMemberPreferredDay, validateHasOverlap } = require('../validators/scheduleValidator');
 
 /**
- * Handle date-based change requests (e.g., "11??11????11??14??)
+ * Handle date-based change requests (e.g., "11월 11일을 11월 14일로")
  *
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
@@ -64,7 +64,7 @@ async function handleDateChange(req, res, room, memberData, params) {
     const finalSourceYear = sourceYear || currentYear;
     sourceDate = new Date(Date.UTC(finalSourceYear, sourceMonth - 1, sourceDay, 0, 0, 0, 0));
   } else {
-    // "?�늘 ?�정" - find user's slot for today
+    // "오늘 일정" - find user's slot for today
     const today = new Date();
     sourceDate = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
   }
@@ -85,7 +85,7 @@ async function handleDateChange(req, res, room, memberData, params) {
   } catch (error) {
     return res.status(400).json({
       success: false,
-      message: `${finalTargetMonth}??${targetDateNum}?��? 주말?�니?? ?�일(??�?로만 ?�동?????�습?�다.`
+      message: `${finalTargetMonth}월 ${targetDateNum}일은 주말입니다. 평일(월~금)로만 이동할 수 있습니다.`
     });
   }
 
@@ -115,7 +115,7 @@ async function handleDateChange(req, res, room, memberData, params) {
     const slotDate = new Date(slot.date).toISOString().split('T')[0];
     const isUserSlot = slotUserId === req.user.id.toString();
     const isSourceDate = slotDate === sourceDateStr;
-    const isValidSubject = slot.subject === '?�동 배정' || slot.subject === '교환 결과';
+    const isValidSubject = slot.subject === '자동 배정' || slot.subject === '교환 결과';
     return isUserSlot && isSourceDate && isValidSubject;
   });
 
@@ -175,7 +175,7 @@ async function handleDateChange(req, res, room, memberData, params) {
   if (requesterSlots.length === 0) {
     return res.status(400).json({
       success: false,
-      message: `${sourceMonth || (now.getMonth() + 1)}??${sourceDay || now.getDate()}?�에 배정???�정???�습?�다.`
+      message: `${sourceMonth || (now.getMonth() + 1)}월 ${sourceDay || now.getDate()}일에 배정된 일정이 없습니다.`
     });
   }
 
@@ -193,7 +193,7 @@ async function handleDateChange(req, res, room, memberData, params) {
   const newStartTime = targetTime || blockStartTime;
   const newEndTime = addHours(newStartTime, totalHours);
 
-  // ?�� Validate: Check if target day/time is in OWNER's preferred schedule
+  // ✅ Validate: Check if target day/time is in OWNER's preferred schedule
   const owner = room.owner;
   const ownerDefaultSchedule = owner.defaultSchedule || [];
 
@@ -205,11 +205,11 @@ async function handleDateChange(req, res, room, memberData, params) {
 
   // Check if owner has schedule for this date/day
   const ownerTargetSchedules = ownerDefaultSchedule.filter(s => {
-    // ?�� specificDate가 ?�으�?�??�짜?�만 ?�용
+    // ✅ specificDate가 있으면 해당 날짜에만 적용
     if (s.specificDate) {
       return s.specificDate === targetDateStr;
     } else {
-      // specificDate가 ?�으�?dayOfWeek�?체크 (반복 ?�정)
+      // specificDate가 없으면 dayOfWeek로 체크 (반복 일정)
       return s.dayOfWeek === dayOfWeek;
     }
   });
@@ -219,7 +219,7 @@ async function handleDateChange(req, res, room, memberData, params) {
   if (ownerTargetSchedules.length === 0) {
     return res.status(400).json({
       success: false,
-      message: `??${finalTargetMonth}??${targetDateNum}??${targetDayEnglish})?� 방장???�호?�간???�닙?�다. 방장??가?�한 ?�짜/?�간?�로�??�동?????�습?�다.`
+      message: `✅ ${finalTargetMonth}월 ${targetDateNum}일(${targetDayEnglish})은 방장의 선호시간이 아닙니다. 방장이가능한 날짜/시간으로만 이동할 수 있습니다.`
     });
   }
 
@@ -263,16 +263,16 @@ async function handleDateChange(req, res, room, memberData, params) {
 
     return res.status(400).json({
       success: false,
-      message: `??${finalTargetMonth}??${targetDateNum}??${newStartTime}-${newEndTime}?� 방장???�호?�간(${ownerScheduleRanges})???�함?��? ?�습?�다.`
+      message: `✅ ${finalTargetMonth}월 ${targetDateNum}일 ${newStartTime}-${newEndTime}은 방장의 선호시간(${ownerScheduleRanges})에 포함되지 않습니다.`
     });
   }
 
 
 
-  // ?�� Validate: Check if target day is in MEMBER's preferred schedule
+  // ✅ Validate: Check if target day is in MEMBER's preferred schedule
   const requesterUser = memberData.user;
   const requesterDefaultSchedule = requesterUser.defaultSchedule || [];
-  const requesterScheduleExceptions = requesterUser.scheduleExceptions || []; // ?�� 챗봇?�로 추�????�호?�간
+  const requesterScheduleExceptions = requesterUser.scheduleExceptions || []; // ✅ 챗봇으로 추가된 선호시간
 
   // Map day to dayOfWeek number (0=Sunday, 1=Monday, ..., 6=Saturday)
   const dayOfWeekMap = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
@@ -284,8 +284,8 @@ async function handleDateChange(req, res, room, memberData, params) {
 
 
 
-  // ?�� ?�번 �?범위 계산 (?�요??~ ?�요??
-  // currentWeekStartDate가 ?�공?�었?�면 ?�용, ?�니�??�재 �??�요??계산
+  // ✅ 이번 주 범위 계산 (월요일~ 일요일)
+  // currentWeekStartDate가 제공되었으면 사용, 아니면 현재 날짜로 월요일 계산
   let thisWeekMonday;
   if (currentWeekStartDate) {
     const providedDate = new Date(currentWeekStartDate);
@@ -310,21 +310,21 @@ async function handleDateChange(req, res, room, memberData, params) {
 
 
 
-  // ?�번 �?범위 ?�의 ?��?줄만 ?�터�?(defaultSchedule + scheduleExceptions)
+  // 이번 주 범위 내의 스케줄만 필터링 (defaultSchedule + scheduleExceptions)
   const thisWeekDefaultSchedules = requesterDefaultSchedule.filter(s => {
     if (s.specificDate) {
-      // specificDate가 ?�는 경우: ?�번 �?범위 ?�에 ?�는지 체크
+      // specificDate가 있는 경우: 이번 주 범위 내에 있는지 체크
       const scheduleDate = new Date(s.specificDate);
       const isThisWeek = scheduleDate >= thisWeekMonday && scheduleDate <= thisWeekSunday;
 
       return isThisWeek;
     }
-    // ??specificDate ?�는 반복 ?�정?� 매주 반복?��?�???�� ?�함
+    // specificDate 없는 반복 일정은 매주 반복되므로 항상 포함
 
     return true;
   });
 
-  // ?�� scheduleExceptions (챗봇?�로 추�????�호?�간) ?�터�?
+  // ✅ scheduleExceptions (챗봇으로 추가된 선호시간) 필터링
   const thisWeekExceptions = requesterScheduleExceptions.filter(ex => {
     if (ex.specificDate) {
       const scheduleDate = new Date(ex.specificDate);
@@ -332,12 +332,12 @@ async function handleDateChange(req, res, room, memberData, params) {
 
 
       if (isThisWeek) {
-        // ISO datetime?�서 HH:MM ?�식?�로 변??
+        // ISO datetime에서 HH:MM 형식으로 변환
         const startDateTime = new Date(ex.startTime);
         const endDateTime = new Date(ex.endTime);
         ex.startTime = `${String(startDateTime.getHours()).padStart(2, '0')}:${String(startDateTime.getMinutes()).padStart(2, '0')}`;
         ex.endTime = `${String(endDateTime.getHours()).padStart(2, '0')}:${String(endDateTime.getMinutes()).padStart(2, '0')}`;
-        ex.dayOfWeek = scheduleDate.getDay(); // dayOfWeek 추�?
+        ex.dayOfWeek = scheduleDate.getDay(); // dayOfWeek 추가
       }
 
       return isThisWeek;
@@ -345,26 +345,26 @@ async function handleDateChange(req, res, room, memberData, params) {
     return false;
   });
 
-  // ??배열 ?�치�?
+  // 두 배열 합치기
   const thisWeekSchedules = [...thisWeekDefaultSchedules, ...thisWeekExceptions];
 
-  // ?�번 �??��?줄들???�일 추출
+  // 이번 주 스케줄들에서 요일 추출
   const thisWeekDayOfWeeks = [...new Set(thisWeekSchedules.map(s => s.dayOfWeek))];
 
 
 
 
-  // targetDayOfWeek가 ?�번 �??�일???�는지 체크
+  // targetDayOfWeek가 이번 주 요일들에 있는지 체크
   if (!thisWeekDayOfWeeks.includes(targetDayOfWeek)) {
-    const dayNames = { 0: '??, 1: '??, 2: '??, 3: '??, 4: '�?, 5: '�?, 6: '?? };
-    const availableDays = thisWeekDayOfWeeks.map(d => dayNames[d] + '?�일').join(', ') || '?�음';
+    const dayNames = { 0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토' };
+    const availableDays = thisWeekDayOfWeeks.map(d => dayNames[d] + '요일').join(', ') || '없음';
     return res.status(400).json({
       success: false,
-      message: `${finalTargetMonth}??${targetDateNum}??${targetDayEnglish})?� ?�번 주의 ?�호 ?�간???�닙?�다. 가?�한 ?�일: ${availableDays}`
+      message: `${finalTargetMonth}월 ${targetDateNum}일(${targetDayEnglish})은 이번 주의 선호 시간이 아닙니다. 가능한 요일: ${availableDays}`
     });
   }
 
-  // Check if member has any schedule for this day (?�번 �?기�?)
+  // Check if member has any schedule for this day (이번 주 기준)
   const memberTargetDaySchedules = thisWeekSchedules.filter(s => s.dayOfWeek === targetDayOfWeek);
 
 
@@ -430,14 +430,14 @@ async function handleDateChange(req, res, room, memberData, params) {
 
     return res.status(400).json({
       success: false,
-      message: `${newStartTime}-${newEndTime}???�원?�의 ?�호 ?�간?�가 ?�닙?�다. ?�원?�의 ?�호 ?�간?�: ${scheduleRanges}`
+      message: `${newStartTime}-${newEndTime}은 회원의 선호 시간대가 아닙니다. 회원의 선호 시간대: ${scheduleRanges}`
     });
   }
 
 
 
-  // ?�� Check if OTHER users have slots at target date/time
-  // targetDateStr?� ?��? ?�에???�언??(line 182)
+  // ✅ Check if OTHER users have slots at target date/time
+  // targetDateStr은 위에서 선언됨 (line 182)
   const otherUsersSlots = room.timeSlots.filter(slot => {
     const slotUserId = (slot.user._id || slot.user).toString();
     const slotDate = new Date(slot.date).toISOString().split('T')[0];
@@ -462,17 +462,17 @@ async function handleDateChange(req, res, room, memberData, params) {
     if (conflictingSlots.length > 0) {
 
 
-      // ?�� ?�간??지?�하지 ?��? 경우: ?�동?�로 �??�간??배치
+      // ✅ 시간을 지정하지 않은 경우: 자동으로 빈 시간으로 배치
       if (!targetTime) {
 
 
-        // ?�당 ?�짜??모든 ?�롯 가?�오�?(?�른 ?�용??+ 본인)
+        // 해당 날짜의 모든 슬롯 가져오기 (다른 사용자 + 본인)
         const allSlotsOnTargetDate = room.timeSlots.filter(slot => {
           const slotDate = new Date(slot.date).toISOString().split('T')[0];
           return slotDate === targetDateStr;
         });
 
-        // �??�롯 찾기
+        // 빈 슬롯 찾기
         const foundSlot = findAvailableSlot({
           allSlotsOnDate: allSlotsOnTargetDate,
           memberSchedules: memberTargetDaySchedules,
@@ -485,10 +485,10 @@ async function handleDateChange(req, res, room, memberData, params) {
 
 
 
-          // 기존 ?�롯 ??��
+          // 기존 슬롯 삭제
           removeSlots(room, requesterSlots.map(slot => slot._id.toString()));
 
-          // ???�롯 ?�성
+          // 새 슬롯 생성
           const newSlots = createNewSlots({
             userId: req.user.id,
             targetDate,
@@ -524,31 +524,31 @@ async function handleDateChange(req, res, room, memberData, params) {
 
           return res.json({
             success: true,
-            message: `${finalTargetMonth}??${targetDateNum}??${autoStartTime}-${autoEndTime}�??�동 배치?�었?�니?? (?�래 ?�간?�???�른 ?�정???�어??가??가까운 �??�간?�로 ?�동)`,
+            message: `${finalTargetMonth}월 ${targetDateNum}일 ${autoStartTime}-${autoEndTime}으로 자동 배치되었습니다. (원래 시간에 다른 일정이 있어 가장 가까운 빈 시간으로 이동)`,
             immediateSwap: true,
             targetDay: targetDayEnglish,
             targetTime: autoStartTime
           });
         }
-        // �??�롯??�?찾으�??�래?�서 ?�청 ?�성
+        // 빈 슬롯을 못찾으면 아래에서 요청 생성
 
       }
 
-      // ?�간??지?�한 경우 ?�는 �??�롯??�?찾�? 경우: ?�청 ?�성
+      // 시간을 지정한 경우 또는 빈 슬롯을 못찾은 경우: 요청 생성
       // Get unique conflicting users
       const conflictingUserIds = [...new Set(conflictingSlots.map(s => {
         const userId = s.user._id || s.user;
         return userId.toString();
       }))];
 
-      // �?번째 충돌 ?�롯???�제 ?�보 ?�용
+      // 첫번째 충돌 슬롯의 실제 정보 사용
       const firstConflictSlot = conflictingSlots[0];
 
       // Create time change request
       const request = {
         requester: req.user.id,
         type: 'time_change',
-        targetUser: conflictingUserIds[0], // �?번째 충돌 ?�용?��? targetUser�??�정
+        targetUser: conflictingUserIds[0], // 첫번째 충돌 사용자를 targetUser로 지정
         requesterSlots: requesterSlots.map(slot => ({
           user: slot.user,
           date: slot.date,
@@ -569,7 +569,7 @@ async function handleDateChange(req, res, room, memberData, params) {
         },
         desiredDay: targetDayEnglish,
         desiredTime: newStartTime,
-        message: `${new Date(firstConflictSlot.date).toISOString().split('T')[0]} ${newStartTime}-${newEndTime}�??�보 ?�청`,
+        message: `${new Date(firstConflictSlot.date).toISOString().split('T')[0]} ${newStartTime}-${newEndTime}으로 변경 요청`,
         status: 'pending',
         createdAt: new Date()
       };
@@ -582,7 +582,7 @@ async function handleDateChange(req, res, room, memberData, params) {
         if (member && member.user && typeof member.user === 'object') {
           return `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim();
         }
-        return '?�른 ?�용??;
+        return '다른 사용자';
       });
 
       // Log activity
@@ -607,14 +607,14 @@ async function handleDateChange(req, res, room, memberData, params) {
 
       return res.json({
         success: true,
-        message: `${finalTargetMonth}??${targetDateNum}??${newStartTime}-${newEndTime} ?�간?�??${conflictUsers.join(', ')}?�의 ?�정???�습?�다. ?�리?�청관리에 ?�청??보냈?�니?? ?�인?�면 ?�동?�로 변경됩?�다.`,
+        message: `${finalTargetMonth}월 ${targetDateNum}일 ${newStartTime}-${newEndTime} 시간에는 ${conflictUsers.join(', ')}의 일정이 있습니다. 관리요청관리에 요청을 보냈으니 확인하면 자동으로 변경됩니다.`,
         requestCreated: true,
         requestId: request._id
       });
     }
   }
 
-  // ?�� Check if target date/time already has a slot for this user
+  // ✅ Check if target date/time already has a slot for this user
   const existingSlotsAtTarget = room.timeSlots.filter(slot => {
     const slotUserId = (slot.user._id || slot.user).toString();
     const slotDate = new Date(slot.date).toISOString().split('T')[0];
@@ -633,7 +633,7 @@ async function handleDateChange(req, res, room, memberData, params) {
     const hasOverlap = validateHasOverlap(existingSlotsAtTarget, newStartTime, newEndTime);
 
     if (hasOverlap) {
-      // ?�� ?�간??지?�하지 ?��? 경우: ?�기 ?�정�?겹쳐???�동 배치
+      // ✅ 시간을 지정하지 않은 경우: 자기 일정과 겹치므로 자동 배치
       if (!targetTime) {
 
 
@@ -652,10 +652,10 @@ async function handleDateChange(req, res, room, memberData, params) {
           const autoStartTime = minutesToTime(foundSlot.start);
           const autoEndTime = minutesToTime(foundSlot.end);
 
-          // 기존 ?�롯 ??��
+          // 기존 슬롯 삭제
           removeSlots(room, requesterSlots.map(slot => slot._id.toString()));
 
-          // ???�롯 ?�성
+          // 새 슬롯 생성
           const newSlots = createNewSlots({
             userId: req.user.id,
             targetDate: new Date(targetDateStr + 'T00:00:00Z'),
@@ -691,14 +691,14 @@ async function handleDateChange(req, res, room, memberData, params) {
 
           return res.json({
             success: true,
-            message: `${finalTargetMonth}??${targetDateNum}??${autoStartTime}-${autoEndTime}�??�동 배치?�었?�니?? (?�래 ?�간?�???�른 ?�정???�어??가??가까운 �??�간?�로 ?�동)`,
+            message: `${finalTargetMonth}월 ${targetDateNum}일 ${autoStartTime}-${autoEndTime}으로 자동 배치되었습니다. (원래 시간에 다른 일정이 있어 가장 가까운 빈 시간으로 이동)`,
             immediateSwap: true,
             targetDay: targetDayEnglish,
             targetTime: autoStartTime
           });
         }
       }
-      // �??�롯??�?찾으�??�래?�서 ?�러 반환
+      // 빈 슬롯을 못찾으면 아래에서 에러 반환
     }
 
     // Merge overlapping and consecutive slots into continuous blocks for error message
@@ -736,8 +736,8 @@ async function handleDateChange(req, res, room, memberData, params) {
 
     return res.status(400).json({
       success: false,
-      message: `${finalTargetMonth}??${targetDateNum}??${newStartTime}-${newEndTime} ?�간?�???��? ?�정???�습?�다.
-기존 ?�정: ${existingTimesStr}`
+      message: `${finalTargetMonth}월 ${targetDateNum}일 ${newStartTime}-${newEndTime} 시간에는 이미 일정이 있습니다.
+기존 일정: ${existingTimesStr}`
     });
   }
 
@@ -777,7 +777,7 @@ async function handleDateChange(req, res, room, memberData, params) {
   await room.populate('timeSlots.user', '_id firstName lastName email');
 
 
-  const targetDateFormatted = `${finalTargetMonth}??${targetDateNum}??;
+  const targetDateFormatted = `${finalTargetMonth}월 ${targetDateNum}일`;
 
   // Log activity
   const prevSlot = requesterSlots[0];
@@ -800,7 +800,7 @@ async function handleDateChange(req, res, room, memberData, params) {
 
   return res.json({
     success: true,
-    message: `${targetDateFormatted} ${newStartTime}-${newEndTime}�?즉시 변경되?�습?�다!`,
+    message: `${targetDateFormatted} ${newStartTime}-${newEndTime}로 즉시 변경되었습니다!`,
     immediateSwap: true,
     targetDay: targetDayEnglish,
     targetTime: newStartTime
