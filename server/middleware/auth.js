@@ -114,7 +114,6 @@ module.exports = async function (req, res, next) {
             scheduleExceptions: [],
             personalTimes: [],
           });
-
           await user.save();
           console.log('[Auth Middleware] Created new user:', user.email);
         }

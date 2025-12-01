@@ -140,14 +140,15 @@ function App() {
 
             // 날짜/요일이 있을 때만 분석
             if (hasDateOrDay) {
-               const isSchedule = await analyzeClipboard(text);
-               if (isSchedule) {
-                  setCopiedText(text);
-                  setIsAnalyzing(true);
-                  setTimeout(() => setIsAnalyzing(false), 500);
-               } else {
-                  addToDismissedTexts(text);
-               }
+               analyzeClipboard(text).then(isSchedule => {
+                 if (isSchedule) {
+                    setCopiedText(text);
+                    setIsAnalyzing(true);
+                    setTimeout(() => setIsAnalyzing(false), 500);
+                 } else {
+                    addToDismissedTexts(text);
+                 }
+               });
             } else {
                // 날짜/요일 없으면 무시 목록에 추가
                addToDismissedTexts(text);

@@ -85,6 +85,7 @@ export const useRecurringPreferredTimeAdd = (setEventAddedKey) => {
           const endDateTime = new Date(year, month - 1, day, parseInt(endHour), parseInt(endMin), 0);
 
           scheduleExceptions.push({
+            title: title || '선호시간', // 제목 추가
             startTime: startDateTime.toISOString(),
             endTime: endDateTime.toISOString(),
             priority: validPriority,

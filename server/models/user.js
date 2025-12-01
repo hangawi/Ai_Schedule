@@ -313,6 +313,7 @@ UserSchema.virtual('accountAge').get(function() {
 });
 
 // 인덱스 설정
+UserSchema.index({ firebaseUid: 1 });
 UserSchema.index({ email: 1 }, { unique: true });
 UserSchema.index({ status: 1 });
 UserSchema.index({ createdAt: -1 });
