@@ -53,7 +53,7 @@ export const usePersonalTimeAdd = (setEventAddedKey) => {
 
       // PersonalTime 데이터 구성
       const personalTime = {
-        id: `chat_${Date.now()}`,
+        id: Date.now(),
         title: title,
         type: 'event',
         startTime: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,

@@ -59,6 +59,7 @@ export const usePreferredTimeAdd = (setEventAddedKey) => {
       // API 요청 데이터 구성 (title 제거 - 버튼 추가와 동일하게)
       const requestData = {
         scheduleExceptions: [{
+          title: title || '선호시간', // 제목 추가
           startTime: startDateTime,
           endTime: endDateTime,
           priority: validPriority,
