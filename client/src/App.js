@@ -1,3 +1,25 @@
+/**
+ * ===================================================================================================
+ * App Component (메인 앱 컴포넌트)
+ * ===================================================================================================
+ *
+ * 설명: React 애플리케이션의 최상위 컴포넌트
+ *
+ * 주요 기능:
+ * - 라우팅 설정 (React Router)
+ * - 전역 상태 관리 (Context Providers)
+ * - 인증 상태 확인
+ * - 레이아웃 구조
+ *
+ * 라우트:
+ * - / - 캘린더 (메인 페이지)
+ * - /login - 로그인
+ * - /register - 회원가입
+ * - /coordination - 일정 조정
+ *
+ * ===================================================================================================
+ */
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { LoadScript } from '@react-google-maps/api';

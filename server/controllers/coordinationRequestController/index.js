@@ -1,3 +1,23 @@
+/**
+ * ===================================================================================================
+ * Coordination Request Controller (조정 요청 컨트롤러)
+ * ===================================================================================================
+ *
+ * 설명: 시간 교환 요청 처리 (A ↔ B)
+ *
+ * 주요 기능:
+ * - 교환 요청 생성
+ * - 요청 승인/거절 처리
+ * - 연쇄 교환 (Chain Exchange) - A → B → C → D
+ * - 자동 빈 시간 찾기
+ *
+ * 관련 파일:
+ * - server/controllers/coordinationRequestController/helpers/
+ * - server/controllers/coordinationExchangeController/
+ *
+ * ===================================================================================================
+ */
+
 const Room = require('../../models/room');
 const User = require('../../models/user');
 const ActivityLog = require('../../models/ActivityLog');
@@ -567,8 +587,6 @@ exports.handleRequest = async (req, res) => {
                   const ownerSchedule = room.owner?.defaultSchedule || [];
 
                   const scheduleByDay = buildScheduleByDay(dUserSchedule, new Date(dSlotDate));
-                  console.log(`🔍 [chain_request] D user: ${dUserData?.firstName} ${dUserData?.lastName}`);
-                  console.log(`🔍 [chain_request] scheduleByDay 결과:`, JSON.stringify(scheduleByDay, null, 2));
 
                   const candidates = [];
                   const dDayOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].indexOf(dSlotDay.toLowerCase());
@@ -758,11 +776,6 @@ exports.handleRequest = async (req, res) => {
 
                      console.log('✅ Chain request completed successfully!');
                   } else {
-                     console.log('❌ [chain_request] 후보를 찾지 못함!');
-                     console.log(`   D user: ${dUserData?.firstName} ${dUserData?.lastName}`);
-                     console.log(`   후보 개수: ${candidates.length}`);
-                     console.log(`   scheduleByDay 키 개수: ${Object.keys(scheduleByDay).length}`);
-                     
                      request.status = 'rejected';
                      request.response = `D(${dUserData?.firstName})가 이번 주 선호시간이 없어 조정이 실패했습니다. D의 이번 주 선호시간을 확인해주세요.`;
 

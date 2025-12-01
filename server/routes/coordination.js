@@ -1,3 +1,24 @@
+/**
+ * ===================================================================================================
+ * Coordination Routes (일정 조정 라우터)
+ * ===================================================================================================
+ *
+ * 설명: 일정 조정(Coordination) 관련 API 엔드포인트
+ *
+ * 주요 엔드포인트:
+ * - POST /api/coordination/rooms - 방 생성
+ * - GET /api/coordination/rooms/:id - 방 조회
+ * - POST /api/coordination/requests - 조정 요청 생성
+ * - POST /api/coordination/requests/:id/:action - 요청 승인/거절
+ * - POST /api/coordination/auto-assign - 자동 배정 실행
+ *
+ * 관련 파일:
+ * - server/controllers/coordinationController.js
+ * - server/controllers/coordinationRequestController
+ *
+ * ===================================================================================================
+ */
+
 const express = require('express');
 const router = express.Router();
 const coordinationController = require('../controllers/coordinationController');

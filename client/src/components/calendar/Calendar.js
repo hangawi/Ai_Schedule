@@ -1,3 +1,23 @@
+/**
+ * ===================================================================================================
+ * Calendar Component (캘린더 컴포넌트)
+ * ===================================================================================================
+ *
+ * 설명: 개인 일정 표시 캘린더
+ *
+ * 주요 기능:
+ * - 월간/주간/일간 뷰
+ * - 일정 추가/수정/삭제
+ * - Google Calendar 동기화
+ * - 드래그 앤 드롭
+ *
+ * 관련 파일:
+ * - client/src/components/calendar/CalendarView.js
+ * - server/routes/events.js
+ *
+ * ===================================================================================================
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';

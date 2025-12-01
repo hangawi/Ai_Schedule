@@ -1,3 +1,23 @@
+/**
+ * ===================================================================================================
+ * Auth Routes (인증 라우터)
+ * ===================================================================================================
+ *
+ * 설명: 사용자 인증 관련 API 엔드포인트
+ *
+ * 주요 엔드포인트:
+ * - POST /api/auth/register - 회원가입
+ * - POST /api/auth/login - 로그인
+ * - GET /api/auth - 현재 사용자 정보
+ * - POST /api/auth/logout - 로그아웃
+ *
+ * 관련 파일:
+ * - server/controllers/authController.js - 인증 로직
+ * - server/middleware/auth.js - JWT 검증
+ *
+ * ===================================================================================================
+ */
+
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
