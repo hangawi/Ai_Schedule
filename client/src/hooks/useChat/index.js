@@ -79,7 +79,7 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
       return { success: false, message: '로그인이 필요합니다.' };
     }
 
-    const API_KEY = process.env.REACT_APP_MY_GOOGLE_KEY || 'AIzaSyCzHlB4yeFRas3uDGVjJcwxo3npR784txc';
+    const API_KEY = process.env.REACT_APP_MY_GOOGLE_KEY;
     const apiKeyError = validateApiKey(API_KEY);
     if (apiKeyError) {
       return apiKeyError;
