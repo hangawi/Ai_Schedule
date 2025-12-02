@@ -587,8 +587,15 @@ exports.handleRequest = async (req, res) => {
                      (m.user._id || m.user).toString() === chainUserId
                   );
                   const dUserData = dUserMember?.user || targetUser;
-                  const dUserSchedule = dUserData?.defaultSchedule || [];
-                  const ownerSchedule = room.owner?.defaultSchedule || [];
+                  // ✅ Include both defaultSchedule AND scheduleExceptions
+                  const dUserSchedule = [
+                     ...(dUserData?.defaultSchedule || []),
+                     ...(dUserData?.scheduleExceptions || [])
+                  ];
+                  const ownerSchedule = [
+                     ...(room.owner?.defaultSchedule || []),
+                     ...(room.owner?.scheduleExceptions || [])
+                  ];
 
                   const scheduleByDay = buildScheduleByDay(dUserSchedule, new Date(dSlotDate));
 
