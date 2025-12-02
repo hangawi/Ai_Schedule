@@ -97,9 +97,12 @@ router.put('/', auth, async (req, res) => {
 // @access  Private
 router.post('/schedule', auth, async (req, res) => {
   try {
-    const { scheduleExceptions, personalTimes } = req.body;
+    const { scheduleExceptions, personalTimes, defaultSchedule } = req.body;
     console.log('[profile.js POST /schedule] Request for user:', req.user.id);
-    console.log('[profile.js POST /schedule] Data:', { scheduleExceptions, personalTimes });
+    console.log('[profile.js POST /schedule] Data:', { scheduleExceptions, personalTimes, defaultSchedule });
+    console.log('🔵 [서버] scheduleExceptions 개수:', scheduleExceptions?.length || 0);
+    console.log('🔵 [서버] personalTimes 개수:', personalTimes?.length || 0);
+    console.log('🔵 [서버] defaultSchedule 개수:', defaultSchedule?.length || 0);
 
     const user = await User.findById(req.user.id);
 
@@ -148,13 +151,35 @@ router.post('/schedule', auth, async (req, res) => {
       });
     }
 
+    // 🆕 Add defaultSchedule (선호시간) - 중복 체크
+    if (defaultSchedule && Array.isArray(defaultSchedule)) {
+      defaultSchedule.forEach(schedule => {
+        // 같은 날짜, 같은 시간 범위가 이미 있는지 체크
+        const isDuplicate = user.defaultSchedule.some(existing => {
+          return existing.specificDate === schedule.specificDate &&
+                 existing.startTime === schedule.startTime &&
+                 existing.endTime === schedule.endTime;
+        });
+
+        if (isDuplicate) {
+          duplicateCount++;
+        } else {
+          user.defaultSchedule.push(schedule);
+          addedCount++;
+        }
+      });
+    }
+
     await user.save();
     console.log('[profile.js POST /schedule] Added:', addedCount, 'Duplicates:', duplicateCount);
+    console.log('🔵 [서버] 최종 user.defaultSchedule 개수:', user.defaultSchedule?.length || 0);
+    console.log('🔵 [서버] 최종 user.scheduleExceptions 개수:', user.scheduleExceptions?.length || 0);
 
     res.json({
       success: true,
       scheduleExceptions: user.scheduleExceptions,
       personalTimes: user.personalTimes,
+      defaultSchedule: user.defaultSchedule,
       addedCount,
       duplicateCount,
       isDuplicate: duplicateCount > 0 && addedCount === 0

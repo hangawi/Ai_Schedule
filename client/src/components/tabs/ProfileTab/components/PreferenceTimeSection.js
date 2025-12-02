@@ -14,43 +14,18 @@ export const PreferenceTimeSection = ({
   filteredScheduleExceptions = [],
   scheduleExceptions = []
 }) => {
-  // scheduleExceptions를 defaultSchedule 형식으로 변환
-  const normalizedExceptions = useMemo(() => {
-    return filteredScheduleExceptions.map(exception => {
-      // ISO datetime에서 HH:MM 추출
-      const startDate = new Date(exception.startTime);
-      const endDate = new Date(exception.endTime);
+  // 🔥 수정: 이제 선호시간은 모두 defaultSchedule에 저장되므로 
+  // scheduleExceptions는 사용하지 않음 (버튼과 채팅 모두 동일)
 
-      const startTime = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`;
-      const endTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
-
-      return {
-        ...exception,
-        startTime,
-        endTime,
-        isFromChat: true // 챗봇에서 추가된 것 표시
-      };
-    });
-  }, [filteredScheduleExceptions]);
-
-  // defaultSchedule과 scheduleExceptions 병합
+  // 🔥 수정: defaultSchedule만 사용 (채팅과 버튼 모두 여기 저장됨)
   const mergedSchedule = useMemo(() => {
-    return [...filteredDefaultSchedule, ...normalizedExceptions];
-  }, [filteredDefaultSchedule, normalizedExceptions]);
+    return filteredDefaultSchedule;
+  }, [filteredDefaultSchedule]);
 
   // 전체 개수 (필터링 전)
   const totalCount = useMemo(() => {
-    return mergeDefaultSchedule([...defaultSchedule, ...scheduleExceptions.map(exception => {
-      const startDate = new Date(exception.startTime);
-      const endDate = new Date(exception.endTime);
-
-      return {
-        ...exception,
-        startTime: `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`,
-        endTime: `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`
-      };
-    })]).length;
-  }, [defaultSchedule, scheduleExceptions]);
+    return mergeDefaultSchedule([...defaultSchedule]).length;
+  }, [defaultSchedule]);
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <div className="flex justify-between items-center mb-4">
@@ -68,7 +43,7 @@ export const PreferenceTimeSection = ({
         </div>
       </div>
 
-      {defaultSchedule.length === 0 && scheduleExceptions.length === 0 ? (
+      {defaultSchedule.length === 0 ? (
         <div className="text-center py-8 text-gray-500">
           <p className="mb-2">{MESSAGES.NO_PREFERENCE_TIME}</p>
           <p className="text-sm">{MESSAGES.NO_PREFERENCE_TIME_HELP}</p>

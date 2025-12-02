@@ -56,15 +56,16 @@ export const usePreferredTimeAdd = (setEventAddedKey) => {
       const day = String(start.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
 
-      // API 요청 데이터 구성 (title 제거 - 버튼 추가와 동일하게)
+      // API 요청 데이터 구성 (버튼 추가와 동일하게 defaultSchedule에 저장)
+      console.log('🔵 [선호시간 추가] 시작:', { startDateTime, endDateTime, priority: validPriority });
+      
       const requestData = {
-        scheduleExceptions: [{
-          title: title || '선호시간', // 제목 추가
-          startTime: startDateTime,
-          endTime: endDateTime,
+        defaultSchedule: [{
+          dayOfWeek: start.getDay(),
+          startTime: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
+          endTime: `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`,
           priority: validPriority,
-          specificDate: dateStr,
-          isFromChat: true // 챗봇에서 추가된 것 표시
+          specificDate: dateStr
         }]
       };
 
@@ -94,6 +95,7 @@ export const usePreferredTimeAdd = (setEventAddedKey) => {
 
       console.log('✅ [선호시간 추가] 서버 응답:', savedData);
       console.log('✅ [선호시간 추가] 요청 데이터:', requestData);
+      console.log('🔵 [선호시간 추가] defaultSchedule에 저장됨:', requestData.defaultSchedule);
 
       // 중복 체크
       if (savedData.isDuplicate) {

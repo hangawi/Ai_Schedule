@@ -117,15 +117,33 @@ const CoordinationCalendarView = ({
     if (exception) return { type: 'exception', ...exception };
 
     const personal = ownerOriginalSchedule.personalTimes?.find(p => {
-      if (p.isRecurring !== false && p.days?.includes(dayOfWeek)) {
-        const startMins = timeToMinutes(p.startTime);
-        const endMins = timeToMinutes(p.endTime);
-        if (endMins <= startMins) return timeMinutes >= startMins || timeMinutes < endMins;
-        return timeMinutes >= startMins && timeMinutes < endMins;
+      // specificDate가 있으면 날짜로 비교 (일회성 일정)
+      if (p.specificDate) {
+        if (p.specificDate !== dateStr) return false;
+      } else if (p.isRecurring !== false && p.days?.includes(dayOfWeek)) {
+        // specificDate가 없고 반복되는 경우만
+      } else {
+        return false;
       }
-      return false;
+
+      const startMins = timeToMinutes(p.startTime);
+      const endMins = timeToMinutes(p.endTime);
+      if (endMins <= startMins) return timeMinutes >= startMins || timeMinutes < endMins;
+      return timeMinutes >= startMins && timeMinutes < endMins;
     });
     if (personal) return { type: 'personal', ...personal };
+
+    // 🔍 디버깅: defaultSchedule 전체 확인
+    if (time === '09:00' && ownerOriginalSchedule?.defaultSchedule) {
+      console.log('🔍 [일정맞추기-캘린더뷰] 09:00 시간의 defaultSchedule:', {
+        dateStr,
+        dayOfWeek,
+        totalCount: ownerOriginalSchedule.defaultSchedule.length,
+        items: ownerOriginalSchedule.defaultSchedule.filter(s => 
+          s.specificDate === dateStr || s.dayOfWeek === dayOfWeek
+        )
+      });
+    }
 
     const preferred = ownerOriginalSchedule.defaultSchedule?.some(s => {
       // 🔧 수정: specificDate가 있으면 그 날짜에만 적용
@@ -140,7 +158,13 @@ const CoordinationCalendarView = ({
              timeMinutes < timeToMinutes(s.endTime);
     });
 
-    if (preferred) return { type: 'preferred' };
+    if (preferred) {
+      // 🔍 디버깅: preferred 타입 반환
+      if (time === '09:00') {
+        console.log('✅ [일정맞추기-캘린더뷰] 09:00에 preferred 타입 반환 (빈시간)');
+      }
+      return { type: 'preferred' };
+    }
 
     return { type: 'non_preferred' };
   };
@@ -210,9 +234,13 @@ const CoordinationCalendarView = ({
         }).filter(Boolean).sort();
         const uniqueUserNames = [...new Set(userNames)];
         event = { type: 'assigned', name: uniqueUserNames.join(', '), users: uniqueUserNames };
+      } else if (ownerInfo?.type === 'personal') {
+        // personalTimes는 방장의 개인 일정이므로 배정 불가능
+        event = { type: 'blocked', name: ownerInfo.title || '방장 개인일정' };
       } else if (ownerInfo?.type === 'non_preferred') {
         event = { type: 'blocked', name: '방장 불가능' };
       }
+      // preferred 타입은 무시 (선호시간이므로 빈 시간으로 유지 = 배정 가능)
       slotMap.set(time, event);
     });
 

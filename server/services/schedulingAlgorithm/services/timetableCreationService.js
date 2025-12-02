@@ -188,7 +188,20 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
     // 개인시간(personalTimes) 처리 - 이 시간대는 제외
     if (user.personalTimes && Array.isArray(user.personalTimes)) {
       user.personalTimes.forEach(personalTime => {
-        if (personalTime.isRecurring !== false && personalTime.days && personalTime.days.length > 0) {
+        // specificDate가 있는 경우 (일회성 개인 일정 - 채팅으로 추가된 경우)
+        if (personalTime.specificDate) {
+          const targetDate = new Date(personalTime.specificDate);
+          if (targetDate >= ownerRangeStart && targetDate < ownerRangeEnd) {
+            const slots = generateTimeSlots(personalTime.startTime, personalTime.endTime);
+            slots.forEach(slotTime => {
+              const dateKey = targetDate.toISOString().split('T')[0];
+              const key = createSlotKey(dateKey, slotTime);
+              removeMemberFromSlot(timetable, key, userId);
+            });
+          }
+        }
+        // 반복되는 개인 일정
+        else if (personalTime.isRecurring !== false && personalTime.days && personalTime.days.length > 0) {
           personalTime.days.forEach(dayOfWeek => {
             const jsDay = dayOfWeek === 7 ? 0 : dayOfWeek;
 

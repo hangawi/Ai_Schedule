@@ -68,37 +68,36 @@ export const useRecurringPreferredTimeAdd = (setEventAddedKey) => {
         timeRangesToProcess = [{ startTime, endTime }];
       }
 
-      // 각 날짜 x 각 시간 범위마다 scheduleException 생성
-      const scheduleExceptions = [];
+      // 각 날짜 x 각 시간 범위마다 defaultSchedule 생성 (버튼 추가와 동일)
+      const defaultScheduleSlots = [];
 
       for (const dateStr of dates) {
         for (const timeRange of timeRangesToProcess) {
           const { startTime: rangeStart, endTime: rangeEnd } = timeRange;
 
-          // startTime과 endTime을 ISO 형식으로 변환
+          // startTime과 endTime 파싱
           const [startHour, startMin] = rangeStart.split(':');
           const [endHour, endMin] = rangeEnd.split(':');
 
           const [year, month, day] = dateStr.split('-').map(Number);
+          const dateObj = new Date(year, month - 1, day);
 
-          const startDateTime = new Date(year, month - 1, day, parseInt(startHour), parseInt(startMin), 0);
-          const endDateTime = new Date(year, month - 1, day, parseInt(endHour), parseInt(endMin), 0);
-
-          scheduleExceptions.push({
-            title: title || '선호시간', // 제목 추가
-            startTime: startDateTime.toISOString(),
-            endTime: endDateTime.toISOString(),
+          defaultScheduleSlots.push({
+            dayOfWeek: dateObj.getDay(),
+            startTime: rangeStart,
+            endTime: rangeEnd,
             priority: validPriority,
-            specificDate: dateStr,
-            isFromChat: true,
-            isRecurring: true // 반복 일정 표시
+            specificDate: dateStr
           });
         }
       }
 
-      // API 요청 데이터 구성
+      // API 요청 데이터 구성 (버튼 추가와 동일하게 defaultSchedule에 저장)
+      console.log('🔵 [반복 선호시간 추가] 시작:', { dates, timeRanges, priority: validPriority });
+      console.log('🔵 [반복 선호시간 추가] defaultScheduleSlots:', defaultScheduleSlots);
+      
       const requestData = {
-        scheduleExceptions: scheduleExceptions
+        defaultSchedule: defaultScheduleSlots
       };
 
       // 서버에 저장

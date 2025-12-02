@@ -56,9 +56,25 @@ const WeekView = ({
       };
     }
 
-    // personalTimes 확인 (반복 개인시간 + 특정 날짜 개인시간)
+    // personalTimes 확인 (특정 날짜 우선, 그 다음 반복 일정)
     const personalSlot = ownerOriginalSchedule.personalTimes?.find(p => {
-      // 반복되는 개인시간 처리
+      // 🔧 수정: specificDate가 있는 경우를 먼저 체크 (isRecurring 값과 무관하게)
+      if (p.specificDate) {
+        const specificDate = new Date(p.specificDate);
+        const currentDate = new Date(dateStr);
+
+        // 날짜가 일치하는지 확인
+        if (specificDate.toDateString() === currentDate.toDateString()) {
+          const startMinutes = timeToMinutes(p.startTime);
+          const endMinutes = timeToMinutes(p.endTime);
+
+          return timeMinutes >= startMinutes && timeMinutes < endMinutes;
+        }
+        // 날짜가 일치하지 않으면 이 항목은 무시
+        return false;
+      }
+
+      // 반복되는 개인시간 처리 (specificDate가 없는 경우만)
       const personalDays = p.days || [];
       if (p.isRecurring !== false && personalDays.length > 0) {
         const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
@@ -72,20 +88,6 @@ const WeekView = ({
           } else {
             return timeMinutes >= startMinutes && timeMinutes < endMinutes;
           }
-        }
-      }
-
-      // 특정 날짜 개인시간 처리 (챗봇에서 추가한 경우)
-      if (p.isRecurring === false && p.specificDate) {
-        const specificDate = new Date(p.specificDate);
-        const currentDate = new Date(dateStr);
-
-        // 날짜가 일치하는지 확인
-        if (specificDate.toDateString() === currentDate.toDateString()) {
-          const startMinutes = timeToMinutes(p.startTime);
-          const endMinutes = timeToMinutes(p.endTime);
-
-          return timeMinutes >= startMinutes && timeMinutes < endMinutes;
         }
       }
 
