@@ -2,10 +2,34 @@
 
 /**
  * 시간 문자열을 분(minutes)으로 변환
- * @param {string} timeStr - "HH:MM" 형식의 시간
+ * @param {string|Date|object} timeStr - "HH:MM" 형식의 시간 또는 Date 객체
  * @returns {number} 분 단위 시간
  */
 const toMinutes = (timeStr) => {
+  // ✅ Date 객체나 다른 객체인 경우 문자열로 변환
+  if (typeof timeStr !== 'string') {
+    if (timeStr instanceof Date) {
+      timeStr = timeStr.toISOString();
+    } else if (typeof timeStr === 'object') {
+      timeStr = timeStr.toString();
+    } else {
+      return 0; // 기본값
+    }
+  }
+
+  // If already "HH:MM" format
+  if (timeStr.match(/^\d{2}:\d{2}$/)) {
+    const [h, m] = timeStr.split(':').map(Number);
+    return h * 60 + m;
+  }
+
+  // If ISO format (contains 'T')
+  if (timeStr.includes('T')) {
+    const date = new Date(timeStr);
+    return date.getHours() * 60 + date.getMinutes();
+  }
+
+  // Fallback: try to parse as "HH:MM"
   const [h, m] = timeStr.split(':').map(Number);
   return h * 60 + m;
 };

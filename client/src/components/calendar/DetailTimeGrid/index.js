@@ -1503,7 +1503,8 @@ const DetailTimeGrid = ({
               } else {
                 const exceptionPriority = slot.data.priority !== undefined ? slot.data.priority : 3;
                 slotClass = priorityConfig[exceptionPriority]?.color || 'bg-blue-600';
-                content = `${slot.data.title} (${slot.duration}분)`;
+                // priority 레이블 사용 (title 대신)
+                content = `${priorityConfig[exceptionPriority]?.label} (${slot.duration}분)`;
               }
               title = slot.data.title;
             } else if (slot.type === 'personal') {

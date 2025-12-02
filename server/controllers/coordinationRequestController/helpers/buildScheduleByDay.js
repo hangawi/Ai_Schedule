@@ -54,21 +54,32 @@ const buildScheduleByDay = (userSchedule, requestDate) => {
 
 
   userSchedule.forEach(s => {
+    // ✅ dayOfWeek 계산 (scheduleExceptions의 경우 specificDate에서 계산)
+    let dayOfWeek = s.dayOfWeek;
+
     // ✅ specificDate가 있는 경우: 이번 주 범위 내에 있는지 체크
     if (s.specificDate) {
       const specificDateObj = new Date(s.specificDate);
       const isThisWeek = specificDateObj >= thisWeekMonday && specificDateObj <= thisWeekSunday;
       if (!isThisWeek) return; // 이번 주가 아니면 제외
+
+      // dayOfWeek가 없으면 specificDate에서 계산
+      if (dayOfWeek === undefined || dayOfWeek === null) {
+        dayOfWeek = specificDateObj.getDay();
+      }
     } else {
       // ✅ specificDate 없는 반복 일정: 매주 반복되므로 항상 포함
     }
 
-    const blockKey = `${s.dayOfWeek}-${s.startTime}-${s.endTime}`;
+    // dayOfWeek가 여전히 없으면 스킵
+    if (dayOfWeek === undefined || dayOfWeek === null) return;
+
+    const blockKey = `${dayOfWeek}-${s.startTime}-${s.endTime}`;
     if (seenBlocks.has(blockKey)) return; // 중복 스킵
     seenBlocks.add(blockKey);
 
-    if (!scheduleByDay[s.dayOfWeek]) scheduleByDay[s.dayOfWeek] = [];
-    scheduleByDay[s.dayOfWeek].push({
+    if (!scheduleByDay[dayOfWeek]) scheduleByDay[dayOfWeek] = [];
+    scheduleByDay[dayOfWeek].push({
       start: toMinutes(s.startTime),
       end: toMinutes(s.endTime)
     });

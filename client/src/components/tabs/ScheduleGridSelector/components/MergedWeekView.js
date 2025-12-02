@@ -125,6 +125,10 @@ const MergedWeekView = ({
         ...e,
         startTime,
         endTime,
+        // exception도 priority 레이블로 표시 (schedule과 동일하게)
+        title: e.title && (e.title.includes('휴무') || e.title.includes('휴일'))
+          ? e.title
+          : priorityConfig[e.priority]?.label || '일정',
         color: priorityColorMap[priorityConfig[e.priority]?.color] || '#2563eb'
       };
     });

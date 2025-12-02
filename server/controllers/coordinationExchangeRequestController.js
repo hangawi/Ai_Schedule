@@ -27,20 +27,25 @@ function findChainCandidates(room, userId, excludeUsers = []) {
       (m.user._id || m.user).toString() === userId.toString()
    );
 
-   if (!memberData || !memberData.user.defaultSchedule) {
-      console.log('❌ No member data or default schedule found');
+   if (!memberData || (!memberData.user.defaultSchedule && !memberData.user.scheduleExceptions)) {
+      console.log('❌ No member data or schedule found');
       return [];
    }
 
-   const userSchedule = memberData.user.defaultSchedule;
+   // ✅ Include both defaultSchedule AND scheduleExceptions
+   const userSchedule = [
+      ...(memberData.user.defaultSchedule || []),
+      ...(memberData.user.scheduleExceptions || [])
+   ];
    const today = new Date();
    today.setUTCHours(0, 0, 0, 0);
 
    // Get user's preferred days (priority >= 2)
    const preferredSlots = userSchedule.filter(s => s.priority >= 2);
-   console.log(`📅 User's preferred slots:`, preferredSlots.map(s => ({
+   console.log(`📅 User's preferred slots (${userSchedule.length} total):`, preferredSlots.map(s => ({
       day: s.dayOfWeek,
-      time: `${s.startTime}-${s.endTime}`
+      time: `${s.startTime}-${s.endTime}`,
+      specificDate: s.specificDate
    })));
 
    // 현재 주의 월요일 계산
@@ -472,7 +477,7 @@ exports.createExchangeRequest = async (req, res) => {
       });
 
       const room = await Room.findById(roomId)
-         .populate('members.user', 'firstName lastName email defaultSchedule')
+         .populate('members.user', 'firstName lastName email defaultSchedule scheduleExceptions')
          .populate('timeSlots.user', '_id firstName lastName email')
          .populate('requests.requester', 'firstName lastName email')
          .populate('requests.targetUser', 'firstName lastName email');
@@ -616,8 +621,8 @@ exports.respondToExchangeRequest = async (req, res) => {
       });
 
       const room = await Room.findById(roomId)
-         .populate('owner', 'firstName lastName email defaultSchedule')
-         .populate('members.user', 'firstName lastName email defaultSchedule')
+         .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions')
+         .populate('members.user', 'firstName lastName email defaultSchedule scheduleExceptions')
          .populate('timeSlots.user', '_id firstName lastName email')
          .populate('requests.requester', 'firstName lastName email')
          .populate('requests.targetUser', 'firstName lastName email');
@@ -1047,8 +1052,8 @@ exports.respondToChainExchangeRequest = async (req, res) => {
       });
 
       const room = await Room.findById(roomId)
-         .populate('owner', 'firstName lastName email defaultSchedule')
-         .populate('members.user', 'firstName lastName email defaultSchedule')
+         .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions')
+         .populate('members.user', 'firstName lastName email defaultSchedule scheduleExceptions')
          .populate('timeSlots.user', '_id firstName lastName email')
          .populate('requests.requester', 'firstName lastName email')
          .populate('requests.targetUser', 'firstName lastName email');

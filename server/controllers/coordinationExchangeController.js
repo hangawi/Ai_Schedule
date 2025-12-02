@@ -500,6 +500,11 @@ exports.smartExchange = async (req, res) => {
 
     console.log(`[멤버 검증] Found ${memberTargetDaySchedules.length} applicable schedules for member on ${targetDateStr}`);
 
+    // 🐛 DEBUG: 실제 스케줄 데이터 확인
+    if (memberTargetDaySchedules.length > 0) {
+      console.log('🐛 [DEBUG] Member schedules:', JSON.stringify(memberTargetDaySchedules, null, 2));
+    }
+
     if (memberTargetDaySchedules.length === 0) {
       return res.status(400).json({
         success: false,
@@ -509,9 +514,39 @@ exports.smartExchange = async (req, res) => {
 
     // Merge and find overlapping time ranges
     const mergeSlots = (schedules) => {
+      // Helper: Convert time to "HH:MM" format (handles ISO datetime)
+      const normalizeTime = (timeStr) => {
+        console.log('🐛 [normalizeTime] Input:', timeStr, 'Type:', typeof timeStr);
+        if (!timeStr) return '00:00';
+
+        // ✅ Date 객체나 다른 객체인 경우 문자열로 변환
+        if (typeof timeStr !== 'string') {
+          if (timeStr instanceof Date) {
+            timeStr = timeStr.toISOString();
+          } else if (typeof timeStr === 'object') {
+            timeStr = timeStr.toString();
+          } else {
+            return '00:00';
+          }
+        }
+
+        // If already "HH:MM" format
+        if (timeStr.match(/^\d{2}:\d{2}$/)) return timeStr;
+        // If ISO format (contains 'T')
+        if (timeStr.includes('T')) {
+          const date = new Date(timeStr);
+          const result = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+          console.log('🐛 [normalizeTime] ISO converted:', timeStr, '→', result);
+          return result;
+        }
+        return timeStr;
+      };
+
       const sorted = [...schedules].sort((a, b) => {
-        const [aH, aM] = a.startTime.split(':').map(Number);
-        const [bH, bM] = b.startTime.split(':').map(Number);
+        const aTime = normalizeTime(a.startTime);
+        const bTime = normalizeTime(b.startTime);
+        const [aH, aM] = aTime.split(':').map(Number);
+        const [bH, bM] = bTime.split(':').map(Number);
         return (aH * 60 + aM) - (bH * 60 + bM);
       });
 
@@ -519,20 +554,22 @@ exports.smartExchange = async (req, res) => {
       let current = null;
 
       for (const schedule of sorted) {
-        const [startH, startM] = schedule.startTime.split(':').map(Number);
-        const [endH, endM] = schedule.endTime.split(':').map(Number);
+        const startTime = normalizeTime(schedule.startTime);
+        const endTime = normalizeTime(schedule.endTime);
+        const [startH, startM] = startTime.split(':').map(Number);
+        const [endH, endM] = endTime.split(':').map(Number);
         const startMinutes = startH * 60 + startM;
         const endMinutes = endH * 60 + endM;
 
         if (!current) {
-          current = { startMinutes, endMinutes, startTime: schedule.startTime, endTime: schedule.endTime };
+          current = { startMinutes, endMinutes, startTime: startTime, endTime: endTime };
         } else {
           if (startMinutes <= current.endMinutes) {
             current.endMinutes = Math.max(current.endMinutes, endMinutes);
-            current.endTime = schedule.endTime;
+            current.endTime = endTime;
           } else {
             merged.push({ ...current });
-            current = { startMinutes, endMinutes, startTime: schedule.startTime, endTime: schedule.endTime };
+            current = { startMinutes, endMinutes, startTime: startTime, endTime: endTime };
           }
         }
       }
@@ -542,6 +579,9 @@ exports.smartExchange = async (req, res) => {
 
     const ownerMergedRanges = mergeSlots(ownerTargetSchedules);
     const memberMergedRanges = mergeSlots(memberTargetDaySchedules);
+
+    console.log('🕐 [시간 병합 결과] 방장:', ownerMergedRanges.map(r => `${r.startTime}-${r.endTime}`).join(', '));
+    console.log('🕐 [시간 병합 결과] 멤버:', memberMergedRanges.map(r => `${r.startTime}-${r.endTime}`).join(', '));
 
     const overlappingRanges = [];
     for (const ownerRange of ownerMergedRanges) {

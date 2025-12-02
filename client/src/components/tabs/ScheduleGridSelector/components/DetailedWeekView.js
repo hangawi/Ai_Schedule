@@ -136,9 +136,13 @@ const DetailedWeekView = ({
               if (exceptionSlot) {
                 // 예외 일정 (가장 높은 우선순위)
                 slotClass = `${priorityConfig[exceptionSlot.priority]?.color || 'bg-blue-600'} hover:opacity-90`;
+                // exception도 priority 레이블로 표시 (휴무/휴일은 제외)
+                const displayTitle = exceptionSlot.title && (exceptionSlot.title.includes('휴무') || exceptionSlot.title.includes('휴일'))
+                  ? exceptionSlot.title
+                  : priorityConfig[exceptionSlot.priority]?.label || '일정';
                 content = (
-                  <span className="text-xs text-white truncate px-1 font-medium" title={exceptionSlot.title}>
-                    {exceptionSlot.title}
+                  <span className="text-xs text-white truncate px-1 font-medium" title={displayTitle}>
+                    {displayTitle}
                   </span>
                 );
               } else if (personalSlot) {

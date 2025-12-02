@@ -122,11 +122,11 @@ exports.handleRequest = async (req, res) => {
       }
 
       const room = await Room.findOne({ 'requests._id': requestId })
-         .populate('owner', 'firstName lastName email defaultSchedule')
+         .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions')
          .populate('requests.requester', 'firstName lastName email')
-         .populate('requests.targetUser', 'firstName lastName email defaultSchedule')
+         .populate('requests.targetUser', 'firstName lastName email defaultSchedule scheduleExceptions')
          .populate('timeSlots.user', '_id firstName lastName email')
-         .populate('members.user', 'firstName lastName email defaultSchedule');
+         .populate('members.user', 'firstName lastName email defaultSchedule scheduleExceptions');
 
       if (!room) {
          return res.status(404).json({ msg: ERROR_MESSAGES.REQUEST_NOT_FOUND });
@@ -267,9 +267,13 @@ exports.handleRequest = async (req, res) => {
 
                      console.log(`🔍 Checking if B has empty time BEFORE modifying any slots...`);
 
-                     const targetUserSchedule = targetUser.defaultSchedule || [];
+                     // ✅ Include both defaultSchedule AND scheduleExceptions
+                     const targetUserSchedule = [
+                        ...(targetUser.defaultSchedule || []),
+                        ...(targetUser.scheduleExceptions || [])
+                     ];
                      console.log(`🔍 targetUser: ${targetUser.firstName} ${targetUser.lastName}`);
-                     console.log(`🔍 targetUserSchedule 길이: ${targetUserSchedule.length}`);
+                     console.log(`🔍 targetUserSchedule 길이: ${targetUserSchedule.length} (defaultSchedule: ${targetUser.defaultSchedule?.length || 0}, scheduleExceptions: ${targetUser.scheduleExceptions?.length || 0})`);
 
                      let bestCandidate = null;
 
@@ -973,11 +977,11 @@ exports.handleChainConfirmation = async (req, res) => {
       }
 
       const room = await Room.findOne({ 'requests._id': requestId })
-         .populate('owner', 'firstName lastName email defaultSchedule')
+         .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions')
          .populate('requests.requester', 'firstName lastName email')
-         .populate('requests.targetUser', 'firstName lastName email defaultSchedule')
+         .populate('requests.targetUser', 'firstName lastName email defaultSchedule scheduleExceptions')
          .populate('timeSlots.user', '_id firstName lastName email')
-         .populate('members.user', 'firstName lastName email defaultSchedule');
+         .populate('members.user', 'firstName lastName email defaultSchedule scheduleExceptions');
 
       if (!room) {
          return res.status(404).json({ msg: '요청을 찾을 수 없습니다.' });
