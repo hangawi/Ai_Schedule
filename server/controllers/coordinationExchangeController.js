@@ -18,12 +18,64 @@
  */
 
 const Room = require('../models/room');
+
+/**
+ * 시간이 금지 시간대와 겹치는지 확인
+ * @param {string} startTime - HH:MM 형식
+ * @param {string} endTime - HH:MM 형식
+ * @param {Array} blockedTimes - 금지 시간 배열
+ * @returns {Object|null} 겹치는 금지 시간 객체 또는 null
+ */
+const isTimeInBlockedRange = (startTime, endTime, blockedTimes) => {
+  if (!blockedTimes || blockedTimes.length === 0) return null;
+
+  const slotStart = timeToMinutes(startTime);
+  const slotEnd = timeToMinutes(endTime);
+
+  for (const blocked of blockedTimes) {
+    const blockedStart = timeToMinutes(blocked.startTime);
+    const blockedEnd = timeToMinutes(blocked.endTime);
+
+    if (
+      (slotStart >= blockedStart && slotStart < blockedEnd) ||
+      (slotEnd > blockedStart && slotEnd <= blockedEnd) ||
+      (slotStart <= blockedStart && slotEnd >= blockedEnd)
+    ) {
+      return blocked;
+    }
+  }
+
+  return null;
+};
+
+/**
+ * 시간을 분 단위로 변환
+ * @param {string} time - HH:MM 형식
+ * @returns {number} 분 단위
+ */
+const timeToMinutes = (time) => {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+};
+
+/**
+ * 시간에 분을 더함
+ * @param {string} time - HH:MM 형식
+ * @param {number} minutesToAdd - 더할 분
+ * @returns {string} HH:MM 형식
+ */
+const addMinutes = (time, minutesToAdd) => {
+  const totalMinutes = timeToMinutes(time) + minutesToAdd;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
 const ActivityLog = require('../models/ActivityLog');
 const { parseMessage } = require('./coordinationExchangeController/services/geminiService');
 const { handleDateChange } = require('./coordinationExchangeController/services/dateChangeService');
 const { validateRoomExists, validateIsMember, validateMessage } = require('./coordinationExchangeController/validators/roomValidator');
 const { DAY_MAP_KO_TO_EN } = require('./coordinationExchangeController/constants/dayMappings');
-const { addHours, getHoursDifference } = require('./coordinationExchangeController/utils/timeUtils');
+const { addHours, getHoursDifference, timeToMinutes: timeToMinutesUtil, minutesToTime } = require('./coordinationExchangeController/utils/timeUtils');
 
 /**
  * Parse natural language exchange request using Gemini
@@ -314,6 +366,21 @@ exports.smartExchange = async (req, res) => {
       }
 
       console.log(`✅ [방장 검증] 통과: ${targetTime}은 방장의 선호시간 내에 있습니다.`);
+    }
+
+    // 금지 시간 검증
+    const blockedTimes = room.settings?.blockedTimes || [];
+    if (blockedTimes.length > 0) {
+      // targetTime부터 최소 10분 슬롯을 가정하여 검증
+      const targetEndTime = addMinutes(targetTime, 10);
+      const blockedTime = isTimeInBlockedRange(targetTime, targetEndTime, blockedTimes);
+      if (blockedTime) {
+        return res.status(400).json({
+          success: false,
+          message: `${blockedTime.name || '금지 시간'}(${blockedTime.startTime}-${blockedTime.endTime})에는 일정을 배정할 수 없습니다.`
+        });
+      }
+      console.log(`✅ [금지시간 검증] 통과: ${targetTime}은 금지 시간에 포함되지 않습니다.`);
     }
 
     // Find requester's current slots
@@ -674,15 +741,29 @@ exports.smartExchange = async (req, res) => {
         if (index !== -1) room.timeSlots.splice(index, 1);
       }
 
-      // Create new slots
+      // Create new slots (10분 단위)
       const totalMinutes = (parseInt(finalNewEndTime.split(':')[0]) * 60 + parseInt(finalNewEndTime.split(':')[1])) -
                           (parseInt(finalNewStartTime.split(':')[0]) * 60 + parseInt(finalNewStartTime.split(':')[1]));
-      const numSlots = Math.ceil(totalMinutes / 30);
+      const numSlots = Math.ceil(totalMinutes / 10); // 10분 단위로 슬롯 개수 계산
+
+      console.log('🔍 [슬롯 생성 디버깅]');
+      console.log('  targetDate:', targetDate.toISOString());
+      console.log('  targetDay:', targetDay, '→', targetDayEnglish);
+      console.log('  finalNewStartTime:', finalNewStartTime);
+      console.log('  finalNewEndTime:', finalNewEndTime);
+      console.log('  totalMinutes:', totalMinutes);
+      console.log('  numSlots:', numSlots);
+
       const newSlots = [];
-      let currentTime = finalNewStartTime;
+      let currentTimeMinutes = timeToMinutesUtil(finalNewStartTime);
 
       for (let i = 0; i < numSlots; i++) {
-        const slotEndTime = addHours(currentTime, 0.5);
+        const slotEndTimeMinutes = currentTimeMinutes + 10; // 10분 추가
+        const currentTime = minutesToTime(currentTimeMinutes);
+        const slotEndTime = minutesToTime(slotEndTimeMinutes);
+
+        console.log(`  생성 슬롯 ${i + 1}/${numSlots}: ${currentTime}-${slotEndTime} on ${targetDate.toISOString().split('T')[0]} (${targetDayEnglish})`);
+
         newSlots.push({
           user: req.user.id,
           date: targetDate,
@@ -695,7 +776,7 @@ exports.smartExchange = async (req, res) => {
           assignedAt: new Date(),
           status: 'confirmed'
         });
-        currentTime = slotEndTime;
+        currentTimeMinutes = slotEndTimeMinutes;
       }
 
       room.timeSlots.push(...newSlots);
@@ -764,7 +845,7 @@ exports.smartExchange = async (req, res) => {
             foundSlot = { start: currentStart, end: currentEnd };
             break;
           }
-          currentStart += 30;
+          currentStart += 10; // 10분 단위로 이동
         }
         if (foundSlot) break;
       }
@@ -779,22 +860,29 @@ exports.smartExchange = async (req, res) => {
           if (index !== -1) room.timeSlots.splice(index, 1);
         }
 
-        let currentTime = autoStartTime;
-        for (let i = 0; i < allSlotsInBlock.length; i++) {
-          const slotEndTime = addHours(currentTime, 0.5);
+        // 10분 단위로 슬롯 생성
+        const autoTotalMinutes = foundSlot.end - foundSlot.start;
+        const autoNumSlots = Math.ceil(autoTotalMinutes / 10);
+        let currentTimeMinutes = foundSlot.start;
+
+        for (let i = 0; i < autoNumSlots; i++) {
+          const slotEndTimeMinutes = currentTimeMinutes + 10;
+          const currentTime = minutesToTime(currentTimeMinutes);
+          const slotEndTime = minutesToTime(slotEndTimeMinutes);
+
           room.timeSlots.push({
             user: req.user.id,
             date: targetDate,
             startTime: currentTime,
             endTime: slotEndTime,
             day: targetDayEnglish,
-            priority: allSlotsInBlock[i].priority || 3,
+            priority: allSlotsInBlock[i % allSlotsInBlock.length].priority || 3,
             subject: '자동 배정',
             assignedBy: room.owner._id,
             assignedAt: new Date(),
             status: 'confirmed'
           });
-          currentTime = slotEndTime;
+          currentTimeMinutes = slotEndTimeMinutes;
         }
 
         await room.save();

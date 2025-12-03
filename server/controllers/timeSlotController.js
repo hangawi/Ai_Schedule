@@ -1,5 +1,45 @@
 const Room = require('../models/room');
 
+/**
+ * 시간이 금지 시간대와 겹치는지 확인
+ * @param {string} startTime - HH:MM 형식
+ * @param {string} endTime - HH:MM 형식
+ * @param {Array} blockedTimes - 금지 시간 배열
+ * @returns {Object|null} 겹치는 금지 시간 객체 또는 null
+ */
+const isTimeInBlockedRange = (startTime, endTime, blockedTimes) => {
+  if (!blockedTimes || blockedTimes.length === 0) return null;
+
+  const slotStart = timeToMinutes(startTime);
+  const slotEnd = timeToMinutes(endTime);
+
+  for (const blocked of blockedTimes) {
+    const blockedStart = timeToMinutes(blocked.startTime);
+    const blockedEnd = timeToMinutes(blocked.endTime);
+
+    // 겹치는지 확인 (시작 시간이 금지 범위 안에 있거나, 종료 시간이 금지 범위 안에 있거나, 금지 범위를 완전히 포함하는 경우)
+    if (
+      (slotStart >= blockedStart && slotStart < blockedEnd) ||
+      (slotEnd > blockedStart && slotEnd <= blockedEnd) ||
+      (slotStart <= blockedStart && slotEnd >= blockedEnd)
+    ) {
+      return blocked;
+    }
+  }
+
+  return null;
+};
+
+/**
+ * 시간을 분 단위로 변환
+ * @param {string} time - HH:MM 형식
+ * @returns {number} 분 단위
+ */
+const timeToMinutes = (time) => {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+};
+
 // @desc    Submit time slots for a room
   // @route   POST /api/coordination/rooms/:roomId/timeslots
   // @access  Private
@@ -19,7 +59,18 @@ const Room = require('../models/room');
 
         // 사용자가 제출한 새 슬롯만 추가합니다. (기존 슬롯은 그대로 둡니다)
         if (Array.isArray(slots)) {
-          slots.forEach(slot => {
+          // 금지 시간 검증
+          const blockedTimes = room.settings?.blockedTimes || [];
+
+          for (const slot of slots) {
+            // 금지 시간과 겹치는지 확인
+            const blockedTime = isTimeInBlockedRange(slot.startTime, slot.endTime, blockedTimes);
+            if (blockedTime) {
+              return res.status(400).json({
+                msg: `${blockedTime.name || '금지 시간'}(${blockedTime.startTime}-${blockedTime.endTime})에는 일정을 배정할 수 없습니다.`
+              });
+            }
+
              // 이미 해당 시간대에 슬롯이 있는지 확인
              const existingSlot = room.timeSlots.find(s =>
                   s.user.toString() === req.user.id &&
@@ -40,7 +91,7 @@ const Room = require('../models/room');
                     status: 'confirmed',
                  });
              }
-          });
+          }
         }
 
         await room.save();
@@ -99,6 +150,15 @@ exports.assignTimeSlot = async (req, res) => {
       }
 
       const { day, startTime, endTime, userId } = req.body;
+
+      // 금지 시간 검증
+      const blockedTimes = room.settings?.blockedTimes || [];
+      const blockedTime = isTimeInBlockedRange(startTime, endTime, blockedTimes);
+      if (blockedTime) {
+        return res.status(400).json({
+          msg: `${blockedTime.name || '금지 시간'}(${blockedTime.startTime}-${blockedTime.endTime})에는 일정을 배정할 수 없습니다.`
+        });
+      }
 
       // Check if the target user is a member
       const isMember = room.members.some(member =>
