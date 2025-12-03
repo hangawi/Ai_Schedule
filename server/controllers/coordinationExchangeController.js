@@ -295,7 +295,7 @@ exports.smartExchange = async (req, res) => {
       });
 
       const fitsInOwnerSchedule = ownerMergedBlocks.some(block =>
-        targetTimeMinutes >= block.start
+        targetTimeMinutes >= block.start && targetTimeMinutes < block.end
       );
 
       if (!fitsInOwnerSchedule) {

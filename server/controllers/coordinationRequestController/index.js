@@ -307,6 +307,38 @@ exports.handleRequest = async (req, res) => {
 
                            console.log(`   🔍 Checking: ${DAY_NAMES[candidate.dayOfWeek]} ${toTimeString(newStartMinutes)}-${toTimeString(newEndMinutes)} (${newDateStr})`);
 
+                           // 🔒 방장 스케줄 검증 추가
+                           const ownerSchedule = [
+                              ...(room.owner.defaultSchedule || []),
+                              ...(room.owner.scheduleExceptions || [])
+                           ];
+
+                           const candidateDayOfWeek = candidate.date.getUTCDay();
+                           const ownerAvailableAtTime = ownerSchedule.some(schedule => {
+                              // specificDate가 있으면 날짜로 매칭
+                              if (schedule.specificDate) {
+                                 const scheduleDate = new Date(schedule.specificDate).toISOString().split('T')[0];
+                                 if (scheduleDate !== newDateStr) return false;
+                              }
+                              // specificDate가 없으면 요일로 매칭
+                              else if (schedule.dayOfWeek !== candidateDayOfWeek) {
+                                 return false;
+                              }
+
+                              // 시간 범위 체크
+                              const scheduleStart = toMinutes(schedule.startTime);
+                              const scheduleEnd = toMinutes(schedule.endTime);
+
+                              // 후보 시간이 방장 스케줄 범위 내에 완전히 포함되는지 확인
+                              return newStartMinutes >= scheduleStart && newEndMinutes <= scheduleEnd;
+                           });
+
+                           if (!ownerAvailableAtTime) {
+                              console.log(`   ❌ Owner not available at this time, skipping...`);
+                              continue;
+                           }
+                           console.log(`   ✅ Owner is available at this time`);
+
                            const hasConflict = room.timeSlots.some(slot => {
                               const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
                               if (slotDateStr !== newDateStr) return false;
