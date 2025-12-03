@@ -18,9 +18,36 @@ export const useEventDelete = (setEventAddedKey) => {
     const currentUser = auth.currentUser;
     if (!currentUser) return { success: false, message: '인증이 필요합니다.' };
 
-    // "전부 삭제" 키워드 체크 - 선호시간/개인일정 구분 없이 모두 삭제
+    // 타입별 필터링 플래그 ("전부" 키워드 불필요!)
+    let deleteOnlyPreferredTime = false;
+    let deleteOnlyPersonalTime = false;
+
+    // "선호시간" 키워드만으로 선호시간 타입 필터링 (title 무시!)
+    if (message.includes('선호시간') || message.includes('선호 시간')) {
+      deleteOnlyPreferredTime = true;
+      // LLM이 추론한 title 무시 (사용자가 명시적으로 "선호시간"이라고 했음)
+      if (chatResponse.title) {
+        console.log('🔍 "선호시간 삭제" 감지 → title 무시:', chatResponse.title);
+        delete chatResponse.title;
+      }
+      console.log('🔍 "선호시간 삭제" 감지 → 선호시간만 삭제');
+    }
+    // "개인일정" 키워드만으로 개인일정 타입 필터링 (title 무시!)
+    else if (message.includes('개인일정') || message.includes('개인 일정')) {
+      deleteOnlyPersonalTime = true;
+      // LLM이 추론한 title 무시 (사용자가 명시적으로 "개인일정"이라고 했음)
+      if (chatResponse.title) {
+        console.log('🔍 "개인일정 삭제" 감지 → title 무시:', chatResponse.title);
+        delete chatResponse.title;
+      }
+      console.log('🔍 "개인일정 삭제" 감지 → 개인일정만 삭제');
+    }
+
+    // "전부 삭제" 키워드 체크
     const hasDeleteAllKeyword = DELETE_ALL_KEYWORDS.some(keyword => message.includes(keyword));
-    if (hasDeleteAllKeyword && !chatResponse.title) {
+
+    if (hasDeleteAllKeyword && !chatResponse.title && !deleteOnlyPreferredTime && !deleteOnlyPersonalTime) {
+      // "일정 전부" → 모든 일정 삭제
       chatResponse.title = '전체';
       console.log('🔍 "전부 삭제" 키워드 감지 → title을 "전체"로 설정');
     }
@@ -107,6 +134,15 @@ export const useEventDelete = (setEventAddedKey) => {
       dayOfWeek: e.dayOfWeek,
       priority: e.priority
     })));
+
+    // 타입별 필터링 적용
+    if (deleteOnlyPreferredTime) {
+      matchingEvents = matchingEvents.filter(e => e.isDefaultSchedule || (!e.isPersonalTime && e.priority !== undefined));
+      console.log('🔵 선호시간만 필터링:', matchingEvents.length, '개');
+    } else if (deleteOnlyPersonalTime) {
+      matchingEvents = matchingEvents.filter(e => e.isPersonalTime);
+      console.log('🔴 개인일정만 필터링:', matchingEvents.length, '개');
+    }
 
     if (matchingEvents.length === 0) {
       console.log('❌ 매칭된 이벤트 없음');

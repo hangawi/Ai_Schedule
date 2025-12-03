@@ -11,9 +11,12 @@ import { createSingleProfilePersonalTime } from '../utils/apiRequestUtils';
 
 export const useEventAdd = (eventActions, setEventAddedKey) => {
   const handleEventAdd = useCallback(async (chatResponse, context) => {
-    if (!eventActions || !eventActions.addEvent) {
+    // 프로필 탭에서는 eventActions 불필요 (직접 API 호출)
+    if (context.context !== 'profile' && (!eventActions || !eventActions.addEvent)) {
       return { success: false, message: '일정 추가 기능이 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.' };
     }
+
+    console.log('📅 [일정 추가] 시작:', { title: chatResponse.title, startDateTime: chatResponse.startDateTime });
 
     if (!chatResponse.title) chatResponse.title = '약속';
     if (!chatResponse.endDateTime && chatResponse.startDateTime) {
@@ -122,19 +125,16 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
         break;
       case 'local':
         if (context.context === 'profile') {
-          let currentSchedule;
-
-          if (window.__profileEditingState) {
-            currentSchedule = window.__profileEditingState;
-          } else {
-            const currentScheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-              headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
-            });
-            if (!currentScheduleResponse.ok) {
-              throw new Error('현재 스케줄을 가져올 수 없습니다.');
-            }
-            currentSchedule = await currentScheduleResponse.json();
+          // 🔥 항상 최신 상태 가져오기 (복합 명령어 race condition 방지)
+          console.log('📥 [프로필 탭] 최신 스케줄 가져오기 중...');
+          const currentScheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+            headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
+          });
+          if (!currentScheduleResponse.ok) {
+            throw new Error('현재 스케줄을 가져올 수 없습니다.');
           }
+          const currentSchedule = await currentScheduleResponse.json();
+          console.log('📥 [프로필 탭] 현재 defaultSchedule 개수:', currentSchedule.defaultSchedule?.length || 0);
 
           const startDateTimeStr = eventData.startDateTime;
           const endDateTimeStr = eventData.endDateTime;
@@ -147,6 +147,8 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
           const existingPersonalTimes = Array.isArray(currentSchedule.personalTimes)
             ? [...currentSchedule.personalTimes]
             : [];
+
+          console.log('📅 [프로필 탭] personalTimes에 일정 추가:', { title: eventData.title, specificDate, startTime, endTime });
 
           apiEndpoint = `${API_BASE_URL}/api/users/profile/schedule`;
           requestBody = {
@@ -192,6 +194,8 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
 
     const responseData = await response.json();
 
+    console.log('✅ [일정 추가] 성공:', { title: chatResponse.title, responseData });
+
     if (context.tabType === 'local') {
       if (context.context === 'profile') {
         const updateEvent = new CustomEvent('calendarUpdate', {
@@ -202,6 +206,7 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
           }
         });
         window.dispatchEvent(updateEvent);
+        console.log('📡 calendarUpdate 이벤트 발송 (프로필 탭)');
       }
       setEventAddedKey(prevKey => prevKey + 1);
     } else {

@@ -32,13 +32,18 @@ import { useEventDelete } from './hooks/useEventDelete';
 import { useRangeDeletion } from './hooks/useRangeDeletion';
 import { useEventEdit } from './hooks/useEventEdit';
 
-// Handlers
+// 🆕 Enhanced Hooks (선호시간/개인시간)
+import { usePreferredTimeAdd } from './hooks/enhanced/usePreferredTimeAdd';
+import { usePersonalTimeAdd } from './hooks/enhanced/usePersonalTimeAdd';
+import { useRecurringPreferredTimeAdd } from './hooks/enhanced/useRecurringPreferredTimeAdd';
+
+// Handlers (신버전 - 복합 명령어 지원)
 import {
-  createIntentRouter,
-  processAIPrompt,
+  createEnhancedIntentRouter,
+  processEnhancedAIPrompt,
   validateApiKey,
   handleError
-} from './handlers/createIntentHandlers';
+} from './handlers/enhancedIntentHandlers';
 
 /**
  * 채팅 메시지 처리 훅
@@ -56,6 +61,11 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
   const { handleEventDelete } = useEventDelete(setEventAddedKey);
   const { handleRangeDeletion } = useRangeDeletion(setEventAddedKey);
   const { handleEventEdit } = useEventEdit(setEventAddedKey);
+
+  // 🆕 Enhanced 훅 초기화 (선호시간/개인시간)
+  const { handlePreferredTimeAdd } = usePreferredTimeAdd(setEventAddedKey);
+  const { handlePersonalTimeAdd } = usePersonalTimeAdd(setEventAddedKey);
+  const { handleRecurringPreferredTimeAdd } = useRecurringPreferredTimeAdd(setEventAddedKey);
 
   /**
    * 채팅 메시지 처리 함수
@@ -86,16 +96,20 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
     }
 
     try {
-      // ===== AI 프롬프트 처리 =====
-      const chatResponse = await processAIPrompt(message, context, API_KEY);
+      // ===== AI 프롬프트 처리 (Enhanced) =====
+      const chatResponse = await processEnhancedAIPrompt(message, context, API_KEY);
 
-      // ===== Intent별 핸들러 라우팅 =====
-      const intentRouter = createIntentRouter({
+      // ===== Intent별 핸들러 라우팅 (Enhanced - 복합 명령어 지원) =====
+      const intentRouter = createEnhancedIntentRouter({
         handleRecurringEventAdd,
         handleRangeDeletion,
         handleEventAdd,
         handleEventDelete,
-        handleEventEdit
+        handleEventEdit,
+        // 🆕 선호시간/개인시간 핸들러
+        handlePreferredTimeAdd,
+        handlePersonalTimeAdd,
+        handleRecurringPreferredTimeAdd
       });
 
       return await intentRouter(chatResponse, context, message);
@@ -111,7 +125,11 @@ export const useChat = (isLoggedIn, setEventAddedKey, eventActions) => {
     handleRangeDeletion,
     handleEventAdd,
     handleEventDelete,
-    handleEventEdit
+    handleEventEdit,
+    // 🆕 Enhanced 핸들러
+    handlePreferredTimeAdd,
+    handlePersonalTimeAdd,
+    handleRecurringPreferredTimeAdd
   ]);
 
   return { handleChatMessage };

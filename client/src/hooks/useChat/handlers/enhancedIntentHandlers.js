@@ -22,66 +22,132 @@ import { generateEnhancedPrompt } from '../prompts/unifiedPrompt';
  */
 export const createEnhancedIntentRouter = (handlers) => {
   return async (chatResponse, context, message) => {
-    const { intent } = chatResponse;
+    // 🆕 복합 명령어 처리 (actions 배열)
+    if (chatResponse.actions && Array.isArray(chatResponse.actions)) {
+      console.log('🔀 [복합 명령어] 감지:', chatResponse.actions.length, '개 액션');
+
+      const results = [];
+      let successCount = 0;
+      let failCount = 0;
+
+      for (let i = 0; i < chatResponse.actions.length; i++) {
+        const action = chatResponse.actions[i];
+        console.log(`\n📌 [액션 ${i + 1}/${chatResponse.actions.length}]`, action.intent);
+
+        try {
+          // 각 액션을 개별적으로 처리
+          const actionResult = await routeSingleAction(action, context, message, handlers);
+          results.push(actionResult);
+
+          if (actionResult.success) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch (error) {
+          console.error(`❌ [액션 ${i + 1}] 오류:`, error);
+          failCount++;
+          results.push({ success: false, message: error.message });
+        }
+      }
+
+      console.log(`\n✅ [복합 명령어 완료] 성공: ${successCount}개, 실패: ${failCount}개`);
+
+      // 통합 응답 생성
+      if (successCount === chatResponse.actions.length) {
+        return {
+          success: true,
+          message: chatResponse.response || `${successCount}개의 일정을 처리했어요!`,
+          data: { results, successCount, failCount }
+        };
+      } else if (successCount > 0) {
+        return {
+          success: true,
+          message: `${successCount}개는 성공했지만, ${failCount}개는 실패했어요.`,
+          data: { results, successCount, failCount }
+        };
+      } else {
+        return {
+          success: false,
+          message: '모든 액션이 실패했어요.',
+          data: { results, successCount, failCount }
+        };
+      }
+    }
+
+    // 단일 명령어 처리 (기존 로직)
+    return await routeSingleAction(chatResponse, context, message, handlers);
+  };
+};
+
+/**
+ * 단일 액션 라우팅
+ * @param {Object} action - 액션 객체
+ * @param {Object} context - 컨텍스트
+ * @param {string} message - 원본 메시지
+ * @param {Object} handlers - 핸들러 객체
+ * @returns {Object} 처리 결과
+ */
+async function routeSingleAction(action, context, message, handlers) {
+    const { intent } = action;
 
     // 🆕 선호시간 추가
-    if (intent === 'add_preferred_time' && chatResponse.startDateTime) {
-      return await handlers.handlePreferredTimeAdd(chatResponse, context);
+    if (intent === 'add_preferred_time' && action.startDateTime) {
+      return await handlers.handlePreferredTimeAdd(action, context);
     }
 
     // 🆕 반복 선호시간 추가
-    if (intent === 'add_recurring_preferred_time' && chatResponse.dates) {
-      return await handlers.handleRecurringPreferredTimeAdd(chatResponse, context);
+    if (intent === 'add_recurring_preferred_time' && action.dates) {
+      return await handlers.handleRecurringPreferredTimeAdd(action, context);
     }
 
     // 🆕 개인시간 추가
-    if (intent === 'add_personal_time' && chatResponse.startDateTime) {
-      return await handlers.handlePersonalTimeAdd(chatResponse, context);
+    if (intent === 'add_personal_time' && action.startDateTime) {
+      return await handlers.handlePersonalTimeAdd(action, context);
     }
 
     // 기존 반복 일정 추가
-    if (intent === 'add_recurring_event' && chatResponse.dates && chatResponse.dates.length > 0) {
-      return await handlers.handleRecurringEventAdd(chatResponse, context);
+    if (intent === 'add_recurring_event' && action.dates && action.dates.length > 0) {
+      return await handlers.handleRecurringEventAdd(action, context);
     }
 
     // 기존 범위 삭제
-    if (intent === 'delete_range' && chatResponse.startDate && chatResponse.endDate) {
-      return await handlers.handleRangeDeletion(chatResponse, context);
+    if (intent === 'delete_range' && action.startDate && action.endDate) {
+      return await handlers.handleRangeDeletion(action, context);
     }
 
     // 기존 일정 추가
-    if (intent === 'add_event' && chatResponse.startDateTime) {
-      return await handlers.handleEventAdd(chatResponse, context);
+    if (intent === 'add_event' && action.startDateTime) {
+      return await handlers.handleEventAdd(action, context);
     }
 
     // 기존 일정 삭제
-    if ((intent === 'delete_event' || intent === 'delete_range') && (chatResponse.startDateTime || chatResponse.date)) {
-      return await handlers.handleEventDelete(chatResponse, context, message);
+    if ((intent === 'delete_event' || intent === 'delete_range') && (action.startDateTime || action.date)) {
+      return await handlers.handleEventDelete(action, context, message);
     }
 
     // 기존 일정 수정
-    if (intent === 'edit_event' && (chatResponse.originalDate || chatResponse.startDateTime)) {
-      return await handlers.handleEventEdit(chatResponse, context);
+    if (intent === 'edit_event' && (action.originalDate || action.startDateTime)) {
+      return await handlers.handleEventEdit(action, context);
     }
 
     // 명확화 요청
     if (intent === 'clarification') {
-      return { success: true, message: chatResponse.response };
+      return { success: true, message: action.response };
     }
 
     // 오류 처리
     if (intent === 'error') {
-      return { success: false, message: chatResponse.response };
+      return { success: false, message: action.response };
     }
 
     // 기본 응답
     return {
       success: true,
-      message: chatResponse.response || '처리했어요!',
-      data: chatResponse
+      message: action.response || '처리했어요!',
+      data: action
     };
-  };
-};
+}
 
 /**
  * 강화된 AI 프롬프트 처리 및 응답 파싱

@@ -11,12 +11,25 @@ import { toTimeString } from '../utils/dateUtils';
 
 export const useEventEdit = (setEventAddedKey) => {
   const handleEventEdit = useCallback(async (chatResponse, context) => {
+    console.log('✏️ [EDIT] 시작 =================');
+    console.log('📝 chatResponse:', JSON.stringify(chatResponse, null, 2));
+    console.log('🏷️ context:', JSON.stringify(context, null, 2));
+
     const currentUser = auth.currentUser;
     if (!currentUser) return { success: false, message: '인증이 필요합니다.' };
 
-    if (!chatResponse.originalTitle || !chatResponse.originalDate) {
-      return { success: false, message: '수정할 일정의 제목과 날짜가 필요합니다.' };
+    // 프로필 탭에서는 originalTitle 없이도 가능 (선호시간/개인시간)
+    const isProfileTab = context.context === 'profile' && context.tabType === 'local';
+
+    if (!chatResponse.originalDate) {
+      return { success: false, message: '수정할 일정의 날짜가 필요합니다.' };
     }
+
+    if (!isProfileTab && !chatResponse.originalTitle) {
+      return { success: false, message: '수정할 일정의 제목이 필요합니다.' };
+    }
+
+    console.log('✅ 검증 통과:', isProfileTab ? '프로필 탭' : '일정 탭');
 
     try {
       // 1. 기존 일정 찾기
@@ -72,12 +85,42 @@ export const useEventEdit = (setEventAddedKey) => {
 
       // 제목으로 일정 찾기
       const targetDate = new Date(chatResponse.originalDate);
-      const matchingEvents = filterEventsByDate(events, targetDate, chatResponse.originalTitle, context);
+      const searchTitle = chatResponse.originalTitle || '';
+      console.log('🔍 검색 조건:', {
+        targetDate: targetDate.toISOString(),
+        searchTitle,
+        originalStartTime: chatResponse.originalStartTime
+      });
+
+      let matchingEvents = filterEventsByDate(events, targetDate, searchTitle, context);
+      console.log('🎯 매칭된 이벤트:', matchingEvents.length, '개');
+
+      // originalStartTime이 있으면 추가 필터링
+      if (chatResponse.originalStartTime && matchingEvents.length > 1) {
+        const targetHour = parseInt(chatResponse.originalStartTime.split(':')[0]);
+        matchingEvents = matchingEvents.filter(e => {
+          if (e.startTime) {
+            const eventHour = new Date(e.startTime).getHours();
+            return eventHour === targetHour;
+          }
+          return false;
+        });
+        console.log('⏰ 시간 필터링 후:', matchingEvents.length, '개');
+      }
+
       const eventToEdit = matchingEvents[0];
 
       if (!eventToEdit) {
-        return { success: false, message: `"${chatResponse.originalTitle}" 일정을 찾을 수 없어요.` };
+        const titleMsg = chatResponse.originalTitle ? `"${chatResponse.originalTitle}" ` : '';
+        return { success: false, message: `${titleMsg}일정을 찾을 수 없어요.` };
       }
+
+      console.log('✅ 수정 대상:', {
+        _id: eventToEdit._id,
+        title: eventToEdit.title,
+        isDefaultSchedule: eventToEdit.isDefaultSchedule,
+        isPersonalTime: eventToEdit.isPersonalTime
+      });
 
       // 2. 일정 수정 수행 (각 탭별로 다르게)
       if (context.context === 'profile' && context.tabType === 'local') {
