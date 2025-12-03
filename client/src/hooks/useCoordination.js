@@ -142,8 +142,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       setCurrentRoom(newRoomState);
       return joinedRoom;
     } catch (err) {
-      // joinRoom error - silently handle error
-      setError(err.message);
+      // joinRoom error - let modal handle it, don't set global error
       throw err;
     }
   }, [setCurrentRoom]);

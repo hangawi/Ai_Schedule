@@ -6,20 +6,20 @@ const RoomJoinModal = ({ onClose, onJoinRoom }) => {
   const [inviteCode, setInviteCode] = useState('');
 
   // CustomAlert 상태
-  const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
-  const showAlert = (message) => setCustomAlert({ show: true, message });
-  const closeAlert = () => setCustomAlert({ show: false, message: '' });
+  const [customAlert, setCustomAlert] = useState({ show: false, message: '', title: '' });
+  const showAlert = (message, title = '알림') => setCustomAlert({ show: true, message, title });
+  const closeAlert = () => setCustomAlert({ show: false, message: '', title: '' });
 
   const handleSubmit = async () => {
     if (inviteCode.trim() === '') {
-      showAlert('초대 코드를 입력해주세요.');
+      showAlert('초대 코드를 입력해주세요.', '입력 필요');
       return;
     }
     try {
       await onJoinRoom(inviteCode);
       onClose();
     } catch (error) {
-      showAlert(error.message || '방 참여에 실패했습니다.');
+      showAlert(error.message || '방 참여에 실패했습니다.', '참여 실패');
     }
   };
 
@@ -49,9 +49,11 @@ const RoomJoinModal = ({ onClose, onJoinRoom }) => {
 
         {/* CustomAlert Modal */}
         <CustomAlertModal
-          show={customAlert.show}
+          isOpen={customAlert.show}
           onClose={closeAlert}
+          title={customAlert.title}
           message={customAlert.message}
+          type="error"
         />
       </div>
     </div>
