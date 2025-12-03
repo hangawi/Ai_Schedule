@@ -170,25 +170,20 @@ export const filterEventsByRange = (events, startDate, endDate, searchTitle, con
 
     if (context.context === 'profile' && context.tabType === 'local') {
       if (event.isDefaultSchedule) {
-        // defaultSchedule: 범위 내의 모든 해당 요일을 체크
         eventTitle = event.title;
-        const targetDayOfWeek = event.dayOfWeek;
 
-        // 범위 내에 해당 요일이 있는지 확인
-        let currentDate = new Date(startDate);
-        let foundInRange = false;
-
-        while (currentDate <= endDate) {
-          const currentDayOfWeek = currentDate.getDay() === 0 ? 7 : currentDate.getDay();
-          if (currentDayOfWeek === targetDayOfWeek) {
-            foundInRange = true;
-            break;
-          }
-          currentDate.setDate(currentDate.getDate() + 1);
+        // 🔧 매우 중요! specificDate가 없는 defaultSchedule은 매주 반복이므로 범위 삭제 대상이 아님
+        if (!event.specificDate) {
+          console.log('🚫 [범위 삭제] 매주 반복 일정 제외:', event.title, event.dayOfWeek);
+          return false; // 매주 반복 일정은 범위 삭제에서 제외
         }
 
-        if (!foundInRange) return false;
-        eventDate = new Date(startDate); // 범위 시작일로 설정
+        // specificDate가 있는 경우만 범위에 포함
+        const eventSpecificDate = new Date(event.specificDate + 'T00:00:00+09:00');
+        if (eventSpecificDate < startDate || eventSpecificDate > endDate) {
+          return false;
+        }
+        eventDate = eventSpecificDate;
       } else if (event.isPersonalTime) {
         eventTitle = event.title;
         if (event.specificDate) {
