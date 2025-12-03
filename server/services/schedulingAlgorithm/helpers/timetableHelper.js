@@ -214,6 +214,45 @@ const removeOwnerPersonalTimes = (ownerAvailableSlots, owner, rangeStart, rangeE
 };
 
 /**
+ * 방 설정의 금지 시간대를 ownerAvailableSlots에서 제거
+ * @param {Set} ownerAvailableSlots - 방장의 가능한 슬롯 Set
+ * @param {Array} blockedTimes - 금지 시간대 배열 (매일 반복)
+ * @param {Date} rangeStart - 시작 날짜
+ * @param {Date} rangeEnd - 종료 날짜
+ */
+const removeBlockedTimes = (ownerAvailableSlots, blockedTimes, rangeStart, rangeEnd) => {
+  if (!blockedTimes || !Array.isArray(blockedTimes) || blockedTimes.length === 0) return;
+
+  console.log('\n🚫 [금지시간] 제거 시작:', blockedTimes.length, '개');
+
+  blockedTimes.forEach(blockedTime => {
+    if (!blockedTime.startTime || !blockedTime.endTime) return;
+
+    // 모든 날짜에 대해 금지 시간 제거 (매일 반복)
+    const currentDate = new Date(rangeStart);
+    let removedCount = 0;
+    while (currentDate < rangeEnd) {
+      const slots = generateTimeSlots(blockedTime.startTime, blockedTime.endTime);
+      const dateKey = currentDate.toISOString().split('T')[0];
+
+      slots.forEach(slotTime => {
+        const slotKey = createSlotKey(dateKey, slotTime);
+        if (ownerAvailableSlots.has(slotKey)) {
+          ownerAvailableSlots.delete(slotKey);
+          removedCount++;
+        }
+      });
+
+      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+    }
+
+    console.log(`  🚫 ${blockedTime.name || '금지시간'} (${blockedTime.startTime}-${blockedTime.endTime}):`, removedCount, '슬롯 제거');
+  });
+
+  console.log('✅ [금지시간] 제거 완료\n');
+};
+
+/**
  * 타임테이블에서 특정 날짜의 슬롯 필터링
  * @param {Object} timetable - 타임테이블 객체
  * @param {string} dateStr - YYYY-MM-DD 형식 날짜
@@ -248,6 +287,7 @@ module.exports = {
   removeMemberFromSlot,
   createOwnerAvailableSlots,
   removeOwnerPersonalTimes,
+  removeBlockedTimes,
   getSlotsByDate,
   calculateTimetableStats
 };

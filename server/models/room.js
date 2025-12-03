@@ -276,7 +276,7 @@ const RoomSchema = new mongoose.Schema({
     minHoursPerWeek: {
       type: Number,
       default: 3,
-      min: 1,
+      min: 0.167, // 10분 = 0.167시간
       max: 10
     }
   },

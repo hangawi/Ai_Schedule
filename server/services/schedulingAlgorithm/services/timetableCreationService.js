@@ -7,7 +7,7 @@ const { generateTimeSlots, createSlotKey } = require('../utils/slotUtils');
 const { getHourFromSettings } = require('../utils/timeUtils');
 const { convertToOneIndexedDay } = require('../utils/dateUtils');
 const { filterValidSchedules, isWeekendDay, isScheduleApplicableToDate } = require('../validators/scheduleValidator');
-const { addOrUpdateSlot, addMemberAvailability, removeMemberFromSlot, createOwnerAvailableSlots, removeOwnerPersonalTimes } = require('../helpers/timetableHelper');
+const { addOrUpdateSlot, addMemberAvailability, removeMemberFromSlot, createOwnerAvailableSlots, removeOwnerPersonalTimes, removeBlockedTimes } = require('../helpers/timetableHelper');
 const { getMemberPriority } = require('../helpers/memberHelper');
 
 /**
@@ -46,6 +46,11 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
 
   // Step 1.5: 방장의 개인시간 제거
   removeOwnerPersonalTimes(ownerAvailableSlots, owner, ownerRangeStart, ownerRangeEnd);
+
+  // Step 1.6: 방 설정의 금지 시간 제거 (점심시간 등)
+  if (roomSettings.ownerBlockedTimes && roomSettings.ownerBlockedTimes.length > 0) {
+    removeBlockedTimes(ownerAvailableSlots, roomSettings.ownerBlockedTimes, ownerRangeStart, ownerRangeEnd);
+  }
 
   // Step 2: 조원들의 개인 시간표 추가 (방장 가능 시간대와 겹치는 것만)
   members.forEach(member => {

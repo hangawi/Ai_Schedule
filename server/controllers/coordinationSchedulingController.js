@@ -45,8 +45,8 @@ exports.runAutoSchedule = async (req, res) => {
          return false;
       });
 
-      if (minHoursPerWeek < 1 || minHoursPerWeek > 10) {
-         return res.status(400).json({ msg: '주당 최소 할당 시간은 1-10시간 사이여야 합니다.' });
+      if (minHoursPerWeek < 0.167 || minHoursPerWeek > 10) {
+         return res.status(400).json({ msg: '주당 최소 할당 시간은 10분-10시간 사이여야 합니다.' });
       }
 
       if (!room.settings.ownerPreferences) {
@@ -109,8 +109,8 @@ exports.runAutoSchedule = async (req, res) => {
         });
       }
 
-      // 방장의 차단 시간은 개인 시간표에서 자동으로 처리되므로 별도 처리 불필요
-      const ownerBlockedTimes = [];
+      // 방 설정의 금지 시간(점심시간 등) 적용
+      const ownerBlockedTimes = room.settings.blockedTimes || [];
 
       const existingCarryOvers = [];
       for (const member of room.members) {
