@@ -218,12 +218,21 @@ const DetailTimeGrid = ({
       }
       return null;
     } else {
-      return currentSchedule.find(
-        s => {
-          const dateMatches = s.specificDate ? s.specificDate === dateStr : s.dayOfWeek === dayOfWeek;
-          return dateMatches && s.startTime === startTime;
+      // 분할 모드에서도 시간 범위 체크 (병합 모드와 동일한 로직)
+      for (const slot of currentSchedule) {
+        const dateMatches = slot.specificDate ? slot.specificDate === dateStr : slot.dayOfWeek === dayOfWeek;
+        
+        if (dateMatches) {
+          const slotStartMinutes = timeToMinutes(slot.startTime);
+          const slotEndMinutes = timeToMinutes(slot.endTime);
+          const currentTimeMinutes = timeToMinutes(startTime);
+
+          if (currentTimeMinutes >= slotStartMinutes && currentTimeMinutes < slotEndMinutes) {
+            return slot;
+          }
         }
-      );
+      }
+      return null;
     }
   };
 
