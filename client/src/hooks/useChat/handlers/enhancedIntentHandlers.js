@@ -55,12 +55,12 @@ export const createEnhancedIntentRouter = (handlers) => {
     }
 
     // 기존 일정 삭제
-    if ((intent === 'delete_event' || intent === 'delete_range') && chatResponse.startDateTime) {
+    if ((intent === 'delete_event' || intent === 'delete_range') && (chatResponse.startDateTime || chatResponse.date)) {
       return await handlers.handleEventDelete(chatResponse, context, message);
     }
 
     // 기존 일정 수정
-    if (intent === 'edit_event') {
+    if (intent === 'edit_event' && (chatResponse.originalDate || chatResponse.startDateTime)) {
       return await handlers.handleEventEdit(chatResponse, context);
     }
 

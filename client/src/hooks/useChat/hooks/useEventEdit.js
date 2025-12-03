@@ -47,9 +47,23 @@ export const useEventEdit = (setEventAddedKey) => {
       let events;
 
       if (context.context === 'profile' && context.tabType === 'local') {
+        const originalDate = new Date(chatResponse.originalDate);
+        const originalDayOfWeek = originalDate.getDay() === 0 ? 7 : originalDate.getDay();
+
         const exceptions = (eventsData.scheduleExceptions || []).filter(exc => exc.specificDate === chatResponse.originalDate);
         const personalTimes = (eventsData.personalTimes || []).filter(pt => pt.specificDate === chatResponse.originalDate);
-        events = [...exceptions, ...personalTimes.map(pt => ({ ...pt, isPersonalTime: true }))];
+        const defaultScheduleForDay = (eventsData.defaultSchedule || []).filter(ds => ds.dayOfWeek === originalDayOfWeek);
+
+        events = [
+          ...exceptions,
+          ...personalTimes.map(pt => ({ ...pt, isPersonalTime: true })),
+          ...defaultScheduleForDay.map((ds, index) => ({
+            ...ds,
+            _id: `default-${ds.dayOfWeek}-${eventsData.defaultSchedule.indexOf(ds)}`,
+            isDefaultSchedule: true,
+            title: `우선순위 ${ds.priority}`
+          }))
+        ];
       } else if (context.tabType === 'local') {
         events = eventsData.events || eventsData;
       } else {
@@ -70,6 +84,7 @@ export const useEventEdit = (setEventAddedKey) => {
         // 프로필 탭 - 로컬 일정 수정
         let updatedPersonalTimes = [...(eventsData.personalTimes || [])];
         let updatedExceptions = [...(eventsData.scheduleExceptions || [])];
+        let updatedDefaultSchedule = [...(eventsData.defaultSchedule || [])];
 
         if (eventToEdit.isPersonalTime) {
           const index = updatedPersonalTimes.findIndex(pt =>
@@ -83,6 +98,21 @@ export const useEventEdit = (setEventAddedKey) => {
               specificDate: chatResponse.newDate || updatedPersonalTimes[index].specificDate,
               startTime: chatResponse.newStartTime || updatedPersonalTimes[index].startTime,
               endTime: chatResponse.newEndTime || updatedPersonalTimes[index].endTime
+            };
+          }
+        } else if (eventToEdit.isDefaultSchedule) {
+          // defaultSchedule 수정
+          const dsIndex = eventsData.defaultSchedule.findIndex((ds, idx) => {
+            const matchId = `default-${ds.dayOfWeek}-${idx}`;
+            return matchId === eventToEdit._id;
+          });
+
+          if (dsIndex !== -1) {
+            updatedDefaultSchedule[dsIndex] = {
+              ...updatedDefaultSchedule[dsIndex],
+              priority: chatResponse.newPriority !== undefined ? chatResponse.newPriority : updatedDefaultSchedule[dsIndex].priority,
+              startTime: chatResponse.newStartTime || updatedDefaultSchedule[dsIndex].startTime,
+              endTime: chatResponse.newEndTime || updatedDefaultSchedule[dsIndex].endTime
             };
           }
         } else {
@@ -116,6 +146,7 @@ export const useEventEdit = (setEventAddedKey) => {
 
             updatedExceptions[index] = {
               ...updatedExceptions[index],
+              priority: chatResponse.newPriority !== undefined ? chatResponse.newPriority : updatedExceptions[index].priority,
               title: chatResponse.newTitle || updatedExceptions[index].title,
               specificDate: chatResponse.newDate || updatedExceptions[index].specificDate,
               startTime: newStartTime.toISOString(),
@@ -131,7 +162,7 @@ export const useEventEdit = (setEventAddedKey) => {
             'Authorization': `Bearer ${await currentUser.getIdToken()}`
           },
           body: JSON.stringify({
-            defaultSchedule: eventsData.defaultSchedule || [],
+            defaultSchedule: updatedDefaultSchedule,
             scheduleExceptions: updatedExceptions,
             personalTimes: updatedPersonalTimes
           })

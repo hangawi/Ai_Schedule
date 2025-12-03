@@ -37,7 +37,14 @@ export const matchesTitle = (eventTitle, searchTitle) => {
  * @returns {Date|null}
  */
 export const getEventDateForProfile = (event, targetDate) => {
-  if (event.isPersonalTime) {
+  if (event.isDefaultSchedule) {
+    // defaultSchedule: dayOfWeek 매칭 (일요일: 0 -> 7)
+    const targetDayOfWeek = targetDate.getDay() === 0 ? 7 : targetDate.getDay();
+    if (event.dayOfWeek === targetDayOfWeek) {
+      return targetDate;
+    }
+    return null;
+  } else if (event.isPersonalTime) {
     const eventTitle = event.title;
     if (event.specificDate) {
       const eventSpecificDate = new Date(event.specificDate + 'T00:00:00+09:00');
@@ -185,10 +192,20 @@ export const filterEventsByRange = (events, startDate, endDate, searchTitle, con
 export const convertProfileEvents = (eventsData) => {
   const exceptions = eventsData.scheduleExceptions || [];
   const personalTimes = eventsData.personalTimes || [];
+  const defaultSchedule = eventsData.defaultSchedule || [];
+
   const convertedPersonalTimes = personalTimes.map(pt => ({
     ...pt,
     _id: pt.id,
     isPersonalTime: true
   }));
-  return [...exceptions, ...convertedPersonalTimes];
+
+  const convertedDefaultSchedule = defaultSchedule.map((ds, index) => ({
+    ...ds,
+    _id: `default-${ds.dayOfWeek}-${index}`,
+    isDefaultSchedule: true,
+    title: `우선순위 ${ds.priority}`
+  }));
+
+  return [...exceptions, ...convertedPersonalTimes, ...convertedDefaultSchedule];
 };
