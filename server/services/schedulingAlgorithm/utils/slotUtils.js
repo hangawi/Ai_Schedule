@@ -78,7 +78,7 @@ const getPreviousSlotKey = (key) => {
   let prevM = m - MINUTES_PER_SLOT;
 
   if (prevM < 0) {
-    prevM = 30;
+    prevM = 60 - MINUTES_PER_SLOT;
     prevH = h - 1;
   }
 

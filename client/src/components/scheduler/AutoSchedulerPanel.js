@@ -22,6 +22,30 @@ const AutoSchedulerPanel = ({
     }
   };
 
+  // 시간/분 입력 처리 (10분 단위 올림)
+  const handleTimeChange = (field, value) => {
+    const hours = field === 'hours' ? Number(value) : (options.hours || 0);
+    const minutes = field === 'minutes' ? Number(value) : (options.minutes || 0);
+
+    // 분을 10분 단위로 올림
+    const roundedMinutes = Math.ceil(minutes / 10) * 10;
+
+    // 60분 이상이면 시간으로 변환
+    const extraHours = Math.floor(roundedMinutes / 60);
+    const finalMinutes = roundedMinutes % 60;
+    const finalHours = hours + extraHours;
+
+    // 시간 단위로 변환 (minHoursPerWeek)
+    const totalHours = finalHours + (finalMinutes / 60);
+
+    setOptions(prev => ({
+      ...prev,
+      hours: finalHours,
+      minutes: finalMinutes,
+      minHoursPerWeek: totalHours
+    }));
+  };
+
   return (
     <div className="bg-gradient-to-br from-white to-gray-50 p-3 rounded-lg shadow-md mb-3 w-full">
       <h3 className="text-base font-bold text-gray-800 mb-2 flex items-center">
@@ -30,16 +54,38 @@ const AutoSchedulerPanel = ({
       </h3>
       <div className="space-y-3">
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">주당 최소 시간</label>
-          <input
-            type="number"
-            name="minHoursPerWeek"
-            value={options.minHoursPerWeek}
-            onChange={handleInputChange}
-            className="w-full p-1.5 text-sm border rounded-md"
-            min="1"
-            max="10"
-          />
+          <label className="block text-xs font-medium text-gray-700 mb-1">주당 최소 시간 (10분 단위 자동 올림)</label>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <input
+                type="number"
+                value={options.hours || 0}
+                onChange={(e) => handleTimeChange('hours', e.target.value)}
+                className="w-full p-1.5 text-sm border rounded-md"
+                min="0"
+                max="10"
+                placeholder="시간"
+              />
+              <span className="text-xs text-gray-500 mt-0.5 block">시간</span>
+            </div>
+            <div className="flex-1">
+              <input
+                type="number"
+                value={options.minutes || 0}
+                onChange={(e) => handleTimeChange('minutes', e.target.value)}
+                className="w-full p-1.5 text-sm border rounded-md"
+                min="0"
+                max="59"
+                placeholder="분"
+              />
+              <span className="text-xs text-gray-500 mt-0.5 block">분</span>
+            </div>
+          </div>
+          {options.minHoursPerWeek > 0 && (
+            <p className="text-xs text-blue-600 mt-1">
+              = {options.minHoursPerWeek.toFixed(2)}시간
+            </p>
+          )}
         </div>
 
         <div>

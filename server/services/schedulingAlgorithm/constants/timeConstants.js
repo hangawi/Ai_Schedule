@@ -3,8 +3,8 @@
  */
 
 // 시간 단위 상수
-const MINUTES_PER_SLOT = 30; // 30분 = 1슬롯
-const SLOTS_PER_HOUR = 2; // 1시간 = 2슬롯
+const MINUTES_PER_SLOT = 10; // 10분 = 1슬롯
+const SLOTS_PER_HOUR = 6; // 1시간 = 6슬롯
 const MINUTES_PER_HOUR = 60;
 const HOURS_PER_DAY = 24;
 
@@ -25,7 +25,7 @@ const FOCUS_TIME_RANGES = {
 
 // 시간 포맷팅 상수
 const TIME_FORMAT_PATTERN = /^\d{1,2}:\d{2}$/;
-const VALID_MINUTE_VALUES = [0, 30]; // 정시(00분) 또는 반(30분)만 허용
+const VALID_MINUTE_VALUES = [0, 10, 20, 30, 40, 50]; // 10분 단위만 허용
 
 module.exports = {
   MINUTES_PER_SLOT,
