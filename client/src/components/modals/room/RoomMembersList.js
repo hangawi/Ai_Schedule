@@ -2,15 +2,17 @@ import React, { useState } from "react";
 import { UserMinus, LogOut, FileText } from "lucide-react";
 import MemberLogsModal from '../MemberLogsModal';
 
-const RoomMembersList = ({ room, removeMember, leaveRoom, currentUserId }) => {
+const RoomMembersList = ({ room, removeMember, leaveRoom, currentUserId, isOwner: isCurrentUserOwnerProp }) => {
   // 멤버 로그 모달 상태
   const [selectedMember, setSelectedMember] = useState(null);
 
   // Determine the owner ID (handle both object and string formats)
   const ownerIdValue = room.owner?._id?.toString() || room.owner?.id?.toString() || room.owner?.toString() || room.owner;
 
-  // Check if current user is owner (using Firebase UID)
-  const isCurrentUserOwner = currentUserId && room.owner?.firebaseUid === currentUserId;
+  // Check if current user is owner (prefer prop, fallback to Firebase UID)
+  const isCurrentUserOwner = isCurrentUserOwnerProp !== undefined 
+    ? isCurrentUserOwnerProp 
+    : (currentUserId && room.owner?.firebaseUid === currentUserId);
 
   // Debug logging
   console.log('====== DEBUG - RoomMembersList ======');
@@ -24,7 +26,7 @@ const RoomMembersList = ({ room, removeMember, leaveRoom, currentUserId }) => {
 
   return (
     <>
-      <div className="space-y-2">
+      <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
         {room.members?.map((member, index) => {
           const userData = member.user;
           if (!userData) return null;

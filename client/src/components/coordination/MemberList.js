@@ -653,13 +653,13 @@ const MemberList = ({
   showAlert
 }) => {
   return (
-    <div className="bg-white rounded-xl shadow-lg p-3 sm:p-4 w-full">
-      <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+    <div className="bg-white rounded-xl shadow-lg p-3 sm:p-4 w-full flex-1 flex flex-col min-h-0">
+      <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center flex-shrink-0">
         <Users size={20} className="mr-2 text-blue-600" />
         조원 목록 ({(currentRoom.members || []).length}명)
       </h3>
 
-      <div className="space-y-3">
+      <div className="space-y-3 flex-1 overflow-y-auto pr-2 min-h-0">
         {(currentRoom.members || []).map((member, index) => (
           <MemberItem
             key={member.user?._id || member._id || index}

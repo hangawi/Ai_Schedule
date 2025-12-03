@@ -59,7 +59,7 @@ const RoomManagementModal = ({
   // 방장인지 확인
   const currentUserId = getCurrentUserId();
   const roomOwnerId = typeof room?.ownerId === 'object' ? room?.ownerId?._id : room?.ownerId;
-  const roomOwnerUid = room?.owner?.uid || room?.ownerId?.uid;
+  const roomOwnerUid = room?.owner?.firebaseUid || room?.owner?.uid || room?.ownerId?.firebaseUid || room?.ownerId?.uid;
   const isOwner = roomOwnerId === currentUserId || roomOwnerUid === currentUserId;
 
   console.log('isOwner check:', { currentUserId, roomOwnerId, roomOwnerUid, isOwner, room });
@@ -296,6 +296,7 @@ const RoomManagementModal = ({
       removeMember={removeMember}
       leaveRoom={leaveRoom}
       currentUserId={getCurrentUserId()}
+      isOwner={isOwner}
     />
   );
 

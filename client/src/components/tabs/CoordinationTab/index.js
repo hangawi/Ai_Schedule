@@ -437,9 +437,9 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           onLeaveRoom={handleLeaveRoom}
         />
 
-        <div className="flex gap-2">
-            {/* Left sidebar */}
-            <div className="flex-shrink-0">
+        <div className="flex gap-2 items-start">
+          {/* Left sidebar */}
+          <div className="flex-shrink-0 flex flex-col" style={{height: 'calc(100vh - 200px)'}}>
               {/* 숨겨진 더미 텍스트로 사이드바 크기 강제 */}
               <div className="invisible h-0 overflow-hidden whitespace-nowrap">
                 00000000000000000000000000000000000000000000000000000000
@@ -491,7 +491,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
             <UnassignedMembersAlert unassignedMembersInfo={unassignedMembersInfo} />
             <ConflictSuggestionsAlert conflictSuggestions={conflictSuggestions} />
 
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 max-h-[300px] overflow-auto wfull">
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 w-full" style={{height: 'calc(100vh - 200px)', overflow: 'auto'}}>
               <TimetableControls
                 viewMode={viewMode}
                 setViewMode={setViewMode}
