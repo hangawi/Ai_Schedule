@@ -50,11 +50,11 @@ ${conversationContext}
   "type": "응답 타입 (time_change, date_change, confirm, reject 중 하나)",
   "sourceWeekOffset": "소스 주 오프셋 (지지난주=-2, 저번주=-1, 이번주=0, 다음주=1. 소스가 명시되지 않으면 null)",
   "sourceDay": "소스 요일/날짜 (time_change: 요일 문자열 예: '월요일'. date_change: 숫자 예: 11)",
-  "sourceTime": "소스 시간 (시간이 명시된 경우, HH:00 형식, 예: '1시' → '13:00'. 명시되지 않으면 null)",
+  "sourceTime": "소스 시간 (시간이 명시된 경우, HH:MM 형식, 예: '1시' → '13:00', '1시 30분' → '13:30'. 명시되지 않으면 null)",
   "sourceMonth": "출발 월 (예: 11. 명시되지 않으면 null)",
   "sourceYear": "출발 년도 (예: 2025, 2026. 명시되지 않으면 null)",
   "targetDay": "목표 요일 (time_change일 때만, 예: 월요일~금요일. date_change일 때는 null)",
-  "targetTime": "타겟 시간 (HH:00 형식, 예: 14:00. 명시되지 않으면 null)",
+  "targetTime": "타겟 시간 (HH:MM 형식, 예: 09:40, 14:00, 14:30. 명시되지 않으면 null)",
   "weekNumber": "주차 (1~5. 명시되지 않으면 null)",
   "weekOffset": "목표 주 오프셋 (이번주=0, 다음주=1, 다다음주=2. 명시되지 않으면 null)",
   "targetMonth": "목표 월 (예: 11. 명시되지 않으면 null)",
@@ -108,13 +108,14 @@ ${conversationContext}
 5. 소스 요일이 명시되면 sourceDay에 요일 추출 (예: "저번주 월요일" → sourceDay="월요일")
 6. "둘째 주", "셋째 주" 등: weekNumber 사용 (1~5)
 7. **월+주차 조합**: "11월 둘째주 월요일" → targetMonth=11, weekNumber=2, targetDay="월요일"
-8. 시간은 24시간 형식 (오후 2시 → 14:00, 오전 9시 → 09:00)
+8. 시간은 24시간 HH:MM 형식 (오후 2시 → 14:00, 오전 9시 → 09:00, 오전 9시 40분 → 09:40, 오후 2시 30분 → 14:30)
+   **중요**: "9시 40분"은 09:40으로, "2시 20분"은 14:20으로 반드시 분까지 포함!
 
 **date_change 세부 규칙 (sourceDay와 targetDate는 반드시 숫자!):**
 1. "11월 11일을 14일로" → sourceMonth=11, sourceDay=11, targetMonth=11, targetDate=14
 2. "오늘 일정을 15일로" → sourceMonth=null, sourceDay=null, targetMonth=현재월, targetDate=15
 3. 월이 명시되지 않으면 현재 월로 간주
-4. 시간이 명시되면 sourceTime/targetTime에 HH:00 형식으로 저장 (1시→13:00, 오후 3시→15:00)
+4. 시간이 명시되면 sourceTime/targetTime에 HH:MM 형식으로 저장 (1시→13:00, 1시 30분→13:30, 오후 3시→15:00, 오후 3시 40분→15:40)
 
 **date_change에서 상대적 표현을 실제 날짜로 계산:**
 현재: ${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
@@ -165,6 +166,8 @@ ${conversationContext}
 - "저번주 월요일 일정 수요일로" -> {"type": "time_change", "sourceWeekOffset": -1, "sourceDay": "월요일", "targetDay": "수요일", "weekOffset": 0}
 - "오늘 일정 금요일로" -> {"type": "time_change", "sourceWeekOffset": 0, "sourceDay": "${['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'][new Date().getDay()]}", "targetDay": "금요일", "weekOffset": 0}
 - "어제 일정 금요일 오전 9시로" -> {"type": "time_change", "sourceWeekOffset": 0, "sourceDay": "${['토요일', '일요일', '월요일', '화요일', '수요일', '목요일', '금요일'][new Date().getDay()]}", "targetDay": "금요일", "targetTime": "09:00", "weekOffset": 0}
+- "수요일 일정 화요일 오전 9시 40분으로" -> {"type": "time_change", "sourceDay": "수요일", "targetDay": "화요일", "targetTime": "09:40", "weekOffset": 0}
+- "월요일 일정 목요일 오후 2시 30분으로" -> {"type": "time_change", "sourceDay": "월요일", "targetDay": "목요일", "targetTime": "14:30", "weekOffset": 0}
 - "내일 일정 목요일로" -> {"type": "time_change", "sourceWeekOffset": 0, "sourceDay": "${['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'][new Date().getDay()]}", "targetDay": "목요일", "weekOffset": 0}
 - "11월 둘째주 월요일로" -> {"type": "time_change", "targetDay": "월요일", "targetMonth": 11, "weekNumber": 2}
 - "내일 일정 11월 둘째주 월요일로" -> {"type": "time_change", "sourceWeekOffset": 0, "sourceDay": "${['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'][new Date().getDay()]}", "targetDay": "월요일", "targetMonth": 11, "weekNumber": 2}

@@ -368,21 +368,6 @@ exports.smartExchange = async (req, res) => {
       console.log(`✅ [방장 검증] 통과: ${targetTime}은 방장의 선호시간 내에 있습니다.`);
     }
 
-    // 금지 시간 검증
-    const blockedTimes = room.settings?.blockedTimes || [];
-    if (blockedTimes.length > 0) {
-      // targetTime부터 최소 10분 슬롯을 가정하여 검증
-      const targetEndTime = addMinutes(targetTime, 10);
-      const blockedTime = isTimeInBlockedRange(targetTime, targetEndTime, blockedTimes);
-      if (blockedTime) {
-        return res.status(400).json({
-          success: false,
-          message: `${blockedTime.name || '금지 시간'}(${blockedTime.startTime}-${blockedTime.endTime})에는 일정을 배정할 수 없습니다.`
-        });
-      }
-      console.log(`✅ [금지시간 검증] 통과: ${targetTime}은 금지 시간에 포함되지 않습니다.`);
-    }
-
     // Find requester's current slots
     const requesterCurrentSlots = room.timeSlots.filter(slot => {
       const slotUserId = (slot.user._id || slot.user).toString();
@@ -545,7 +530,22 @@ exports.smartExchange = async (req, res) => {
     const newStartTime = targetTime || blockStartTime;
     const newEndTime = addHours(newStartTime, totalHours);
 
+    console.log(`🔍 [일정 길이] ${blockStartTime}-${blockEndTime} (${totalHours}시간) → ${newStartTime}-${newEndTime}`);
+
     // ✅ Owner validation already done above (lines 240-267) - removed duplicate
+
+    // 금지 시간 검증 (전체 일정 길이 확인)
+    const blockedTimes = room.settings?.blockedTimes || [];
+    if (blockedTimes.length > 0) {
+      const blockedTime = isTimeInBlockedRange(newStartTime, newEndTime, blockedTimes);
+      if (blockedTime) {
+        return res.status(400).json({
+          success: false,
+          message: `${blockedTime.name || '금지 시간'}(${blockedTime.startTime}-${blockedTime.endTime})에는 일정을 배정할 수 없습니다. ${newStartTime}-${newEndTime} 일정이 겹칩니다.`
+        });
+      }
+      console.log(`✅ [금지시간 검증] 통과: ${newStartTime}-${newEndTime}은 금지 시간에 포함되지 않습니다.`);
+    }
 
     // Check MEMBER's preferred schedule
     const requesterUser = memberData.user;
