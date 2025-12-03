@@ -47,8 +47,8 @@ exports.removeMember = async (req, res) => {
 
     // 8. Save room
     await room.save();
-    await room.populate('owner', 'firstName lastName email');
-    await room.populate('members.user', 'firstName lastName email');
+    await room.populate('owner', 'firstName lastName email firebaseUid');
+    await room.populate('members.user', 'firstName lastName email firebaseUid');
 
     // 활동 로그 기록
     try {
@@ -123,8 +123,8 @@ exports.leaveRoom = async (req, res) => {
 
     // 6. Save room
     await room.save();
-    await room.populate('owner', 'firstName lastName email');
-    await room.populate('members.user', 'firstName lastName email');
+    await room.populate('owner', 'firstName lastName email firebaseUid');
+    await room.populate('members.user', 'firstName lastName email firebaseUid');
 
     // 활동 로그 기록
     try {
