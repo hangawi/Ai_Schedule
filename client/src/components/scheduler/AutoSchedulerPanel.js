@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Zap, WandSparkles, MessageSquare, Clock, Calendar, X, RefreshCw, History } from 'lucide-react';
 
 const AutoSchedulerPanel = ({
@@ -13,6 +13,7 @@ const AutoSchedulerPanel = ({
   onClearAllCarryOverHistories,
   currentWeekStartDate
 }) => {
+  const [shouldRun, setShouldRun] = useState(false);
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'ownerFocusTime') {
@@ -22,10 +23,35 @@ const AutoSchedulerPanel = ({
     }
   };
 
-  // 시간/분 입력 처리 (10분 단위 올림)
+  // 시간/분 입력 처리 (입력값 그대로 저장)
   const handleTimeChange = (field, value) => {
-    const hours = field === 'hours' ? Number(value) : (options.hours || 0);
-    const minutes = field === 'minutes' ? Number(value) : (options.minutes || 0);
+    const numValue = value === '' ? 0 : Number(value);
+    const hours = field === 'hours' ? numValue : (options.hours || 0);
+    const minutes = field === 'minutes' ? numValue : (options.minutes || 0);
+
+    // 시간 단위로 변환 (올림 없이 정확한 값)
+    const totalHours = hours + (minutes / 60);
+
+    setOptions(prev => ({
+      ...prev,
+      hours: hours,
+      minutes: minutes,
+      minHoursPerWeek: totalHours
+    }));
+  };
+
+  // 상태 업데이트 후 자동 실행
+  useEffect(() => {
+    if (shouldRun) {
+      setShouldRun(false);
+      onRun();
+    }
+  }, [shouldRun, onRun]);
+
+  // 자동 배정 실행 시 10분 단위 올림 처리
+  const handleRunWithRounding = () => {
+    const hours = options.hours || 0;
+    const minutes = options.minutes || 0;
 
     // 분을 10분 단위로 올림
     const roundedMinutes = Math.ceil(minutes / 10) * 10;
@@ -35,15 +61,19 @@ const AutoSchedulerPanel = ({
     const finalMinutes = roundedMinutes % 60;
     const finalHours = hours + extraHours;
 
-    // 시간 단위로 변환 (minHoursPerWeek)
+    // 시간 단위로 변환
     const totalHours = finalHours + (finalMinutes / 60);
 
+    // 올림된 값으로 업데이트
     setOptions(prev => ({
       ...prev,
       hours: finalHours,
       minutes: finalMinutes,
       minHoursPerWeek: totalHours
     }));
+
+    // 상태 업데이트 후 실행하도록 플래그 설정
+    setShouldRun(true);
   };
 
   return (
@@ -59,33 +89,28 @@ const AutoSchedulerPanel = ({
             <div className="flex-1">
               <input
                 type="number"
-                value={options.hours || 0}
+                value={options.hours ?? ''}
                 onChange={(e) => handleTimeChange('hours', e.target.value)}
                 className="w-full p-1.5 text-sm border rounded-md"
                 min="0"
                 max="10"
-                placeholder="시간"
+                placeholder="0"
               />
               <span className="text-xs text-gray-500 mt-0.5 block">시간</span>
             </div>
             <div className="flex-1">
               <input
                 type="number"
-                value={options.minutes || 0}
+                value={options.minutes ?? ''}
                 onChange={(e) => handleTimeChange('minutes', e.target.value)}
                 className="w-full p-1.5 text-sm border rounded-md"
                 min="0"
                 max="59"
-                placeholder="분"
+                placeholder="0"
               />
               <span className="text-xs text-gray-500 mt-0.5 block">분</span>
             </div>
           </div>
-          {options.minHoursPerWeek > 0 && (
-            <p className="text-xs text-blue-600 mt-1">
-              = {options.minHoursPerWeek.toFixed(2)}시간
-            </p>
-          )}
         </div>
 
         <div>
@@ -108,7 +133,7 @@ const AutoSchedulerPanel = ({
       <div className="space-y-2 mt-2">
         {/* 메인 버튼 */}
         <button
-          onClick={onRun}
+          onClick={handleRunWithRounding}
           disabled={isLoading}
           className="w-full bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-3 rounded-lg font-medium hover:from-purple-600 hover:to-purple-700 disabled:from-purple-300 disabled:to-purple-400 transition-all duration-200 shadow-md flex items-center justify-center text-sm"
         >

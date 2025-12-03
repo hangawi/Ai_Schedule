@@ -13,6 +13,16 @@ const { timeToMinutes, minutesToTime } = require('./timeUtils');
  * @returns {string[]} 슬롯 시간 배열
  */
 const generateTimeSlots = (startTime, endTime) => {
+  // 입력 검증
+  if (!startTime || !endTime) {
+    console.error('❌ [generateTimeSlots] 시간 값이 undefined:', { startTime, endTime });
+    return [];
+  }
+  if (typeof startTime !== 'string' || typeof endTime !== 'string') {
+    console.error('❌ [generateTimeSlots] 시간 값이 문자열이 아님:', { startTime, endTime });
+    return [];
+  }
+
   const slots = [];
   const [startHour, startMin] = startTime.split(':').map(Number);
   const [endHour, endMin] = endTime.split(':').map(Number);
