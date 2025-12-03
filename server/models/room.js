@@ -210,7 +210,7 @@ const RoomSchema = new mongoose.Schema({
     type: Number,
     default: 100,
     min: 2,
-    max: 100
+    max: 300
   },
   timeSlots: [TimeSlotSchema],
   requests: [RequestSchema],

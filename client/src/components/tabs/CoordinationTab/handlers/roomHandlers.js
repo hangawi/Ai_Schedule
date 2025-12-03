@@ -17,11 +17,15 @@ export const createHandleCreateRoom = (createRoom, closeCreateRoomModal, fetchMy
 /**
  * Create handler for room join
  */
-export const createHandleJoinRoom = (joinRoom, closeJoinRoomModal, fetchMyRooms) => {
+export const createHandleJoinRoom = (joinRoom, closeJoinRoomModal, fetchMyRooms, showAlert) => {
   return async (inviteCode) => {
-    await joinRoom(inviteCode);
-    closeJoinRoomModal();
-    fetchMyRooms();
+    try {
+      await joinRoom(inviteCode);
+      closeJoinRoomModal();
+      fetchMyRooms();
+    } catch (error) {
+      showAlert(error.message || '방 참여에 실패했습니다.');
+    }
   };
 };
 

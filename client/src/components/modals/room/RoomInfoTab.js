@@ -56,7 +56,7 @@ const RoomInfoTab = ({
                 setFormData({ ...formData, maxMembers: Number(e.target.value) })
               }
               min="2"
-              max="20"
+              max="300"
             />
           </div>
 

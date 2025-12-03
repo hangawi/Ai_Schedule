@@ -10,13 +10,17 @@ const RoomJoinModal = ({ onClose, onJoinRoom }) => {
   const showAlert = (message) => setCustomAlert({ show: true, message });
   const closeAlert = () => setCustomAlert({ show: false, message: '' });
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (inviteCode.trim() === '') {
       showAlert('초대 코드를 입력해주세요.');
       return;
     }
-    onJoinRoom(inviteCode);
-    onClose();
+    try {
+      await onJoinRoom(inviteCode);
+      onClose();
+    } catch (error) {
+      showAlert(error.message || '방 참여에 실패했습니다.');
+    }
   };
 
   return (
