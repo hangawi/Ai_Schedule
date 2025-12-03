@@ -1,0 +1,747 @@
+================================================================================
+자동 배정 모드 종합 문서 (v3 - 2025-12-03)
+================================================================================
+
+📌 주요 변경사항:
+- UI 위치 변경: 방 생성 시 → 자동 배정 패널로 이동
+- 새 모드 추가: "오늘 기준 배정 모드" (과거 날짜 제외)
+- 연속 배정 모드 삭제
+- 기본값: 보통 모드
+- 총 3가지 모드 운영
+
+================================================================================
+
+
+================================================================================
+                    PART 1: 배정 모드 개념 정리
+================================================================================
+
+
+================================================================================
+                           배정 모드 3가지
+================================================================================
+
+## 1. 보통 모드 (Normal Mode) - 기본값 ⭕
+
+### 개념
+- 모든 멤버가 동시에 공평하게 시작
+- 방에 들어온 순서 무시
+- 전체 기간(과거+미래) 모두 배정 가능
+
+### 배정 우선순위
+1. **우선순위(priority)** 높은 멤버 먼저
+2. 우선순위 같으면 → **가능한 시간 적은 멤버** 우선 (최소 유연성)
+
+### 예시
+- 월 13-17에 a, b 모두 가능
+- 둘 다 우선순위 2
+- a는 가능 시간 20슬롯, b는 22슬롯
+- **a가 먼저 배정** (선택지 적음)
+
+---
+
+## 2. 선착순 모드 (First-Come-First-Served Mode) ⚪
+
+### 개념
+- 방에 들어온 순서대로 우선권
+- 먼저 들어온 멤버가 시간대 우선 선택
+- 우선순위가 더 높으면 순서 무시
+
+### 배정 우선순위
+1. **우선순위(priority)** 높은 멤버 최우선
+2. 우선순위 같으면 → **방 입장 순서(joinedAt)** 빠른 순
+
+### 예시
+- a 먼저 입장, 우선순위 2
+- b 나중 입장, 우선순위 2
+- **a가 먼저 배정** (먼저 들어옴)
+
+---
+
+## 🆕 3. 오늘 기준 배정 모드 (From-Today Mode) ⚪
+
+### 개념
+- **오늘 날짜부터만 배정**
+- 과거 날짜는 모두 제외
+- 예: 오늘이 수요일 → 월/화 무시, 수요일부터 배정
+
+### 배정 우선순위
+1. **우선순위(priority)** 높은 멤버 먼저
+2. 우선순위 같으면 → **가능한 시간 적은 멤버** 우선
+
+### 날짜 필터링
+```javascript
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+
+// 타임테이블에서 오늘 이후 날짜만 필터링
+const futureTimetable = Object.keys(timetable)
+  .filter(slotKey => {
+    const slotDate = extractDateFromSlotKey(slotKey);
+    return slotDate >= today;
+  })
+  .reduce((acc, key) => {
+    acc[key] = timetable[key];
+    return acc;
+  }, {});
+```
+
+### 예시 (오늘 = 2025-12-04 수요일)
+**멤버 a의 선호시간:**
+- 월요일 12/2: 9-12시 ❌ (과거 - 무시)
+- 화요일 12/3: 13-17시 ❌ (과거 - 무시)
+- 수요일 12/4: 9-12시 ✅ (오늘 - 배정 가능)
+- 목요일 12/5: 13-17시 ✅ (미래 - 배정 가능)
+
+**배정 결과:**
+- 월/화 무시됨
+- 수/목만 배정됨
+
+### 유스케이스
+- 학기 중간부터 시작
+- 과거 보정 불필요
+- 실시간 배정 시작
+
+
+================================================================================
+                           UI 변경사항
+================================================================================
+
+## 변경 전 (기존)
+
+### 위치: RoomCreationModal (방 생성 시)
+```
+┌─────────────────────────────┐
+│   방 생성                    │
+├─────────────────────────────┤
+│ 방 이름: [________]          │
+│ 설명: [________]             │
+│ 최대 인원: [100]             │
+│                              │
+│ ⭕ 보통 모드                 │
+│ ⚪ 선착순 모드               │
+│                              │
+│ [취소] [생성]                │
+└─────────────────────────────┘
+```
+
+## 변경 후 (신규)
+
+### 위치: AutoSchedulerPanel (자동 배정 패널)
+```
+┌─────────────────────────────┐
+│   자동 시간 배정             │
+├─────────────────────────────┤
+│ [자동시간배정 실행]          │
+│                              │
+│ 📋 배정 모드 선택 ▼          │  ← 클릭하면 드롭다운
+│   ├─ ⭕ 보통 모드           │
+│   ├─ ⚪ 선착순 모드         │
+│   └─ ⚪ 오늘 기준 배정      │
+│                              │
+│ 주당 필요 시간: 3시간         │
+└─────────────────────────────┘
+```
+
+**위치**: "자동시간배정" 버튼 바로 아래
+**기존 "방장 선호시간" 옵션바** → **"배정 모드 선택"**으로 대체
+
+
+================================================================================
+                    PART 2: 구현 계획 (Implementation Plan)
+================================================================================
+
+목표: AutoSchedulerPanel에서 배정 모드 선택 + 오늘 기준 모드 추가
+총 예상 시간: 약 2시간 25분
+
+
+================================================================================
+                           Step 1: Room 모델 업데이트
+================================================================================
+
+파일: server/models/room.js
+
+작업:
+- enum에 'from_today' 추가
+- 'consecutive' 제거
+
+변경 전:
+```javascript
+assignmentMode: {
+  type: String,
+  enum: ['normal', 'first_come_first_served', 'consecutive'],
+  default: 'normal'
+}
+```
+
+변경 후:
+```javascript
+assignmentMode: {
+  type: String,
+  enum: ['normal', 'first_come_first_served', 'from_today'],
+  default: 'normal'
+}
+```
+
+예상 시간: 5분
+
+
+================================================================================
+                    Step 2: RoomCreationModal 정리
+================================================================================
+
+파일: client/src/components/modals/RoomCreationModal.js
+
+작업:
+1. assignmentMode 관련 useState 제거
+2. settings 객체에서 assignmentMode 제거
+3. 배정 모드 라디오 버튼 UI 전체 삭제
+
+변경 사항:
+```javascript
+// 제거할 부분
+const [assignmentMode, setAssignmentMode] = useState('normal');
+
+// settings 객체
+const roomData = {
+  name: name.trim(),
+  description: description.trim(),
+  maxMembers,
+  settings: {
+    // assignmentMode 제거 ← 이 줄 삭제
+    startHour,
+    endHour,
+    // ...
+  }
+};
+
+// UI에서 제거
+{/* 배정 모드 선택 라디오 버튼 전체 삭제 */}
+```
+
+이유: 방 생성 시점에는 배정 모드 불필요. 자동 배정 실행할 때 선택.
+
+예상 시간: 10분
+
+
+================================================================================
+                Step 3: AutoSchedulerPanel UI 구현 (핵심!)
+================================================================================
+
+파일: client/src/components/scheduler/AutoSchedulerPanel.js
+
+### 3-1. 상태 추가
+
+```javascript
+const [assignmentMode, setAssignmentMode] = useState('normal');
+const [showModeDropdown, setShowModeDropdown] = useState(false);
+```
+
+### 3-2. 모드 레이블 함수
+
+```javascript
+const getModeLabel = (mode) => {
+  const labels = {
+    normal: '보통 모드',
+    first_come_first_served: '선착순 모드',
+    from_today: '오늘 기준 배정'
+  };
+  return labels[mode] || '보통 모드';
+};
+```
+
+### 3-3. 드롭다운 외부 클릭 처리
+
+```javascript
+useEffect(() => {
+  const handleClickOutside = (e) => {
+    if (showModeDropdown && !e.target.closest('.mode-dropdown')) {
+      setShowModeDropdown(false);
+    }
+  };
+
+  document.addEventListener('click', handleClickOutside);
+  return () => document.removeEventListener('click', handleClickOutside);
+}, [showModeDropdown]);
+```
+
+### 3-4. UI 추가 (자동시간배정 버튼 아래)
+
+```jsx
+{/* 자동시간배정 버튼 */}
+<button
+  onClick={handleAutoSchedule}
+  className="w-full bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+>
+  자동시간배정 실행
+</button>
+
+{/* 배정 모드 선택 드롭다운 */}
+<div className="mt-4 mode-dropdown">
+  <button
+    onClick={() => setShowModeDropdown(!showModeDropdown)}
+    className="w-full flex items-center justify-between px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+  >
+    <span className="font-medium text-gray-700">📋 배정 모드</span>
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-blue-600 font-medium">
+        {getModeLabel(assignmentMode)}
+      </span>
+      <span className="text-gray-400">
+        {showModeDropdown ? '▲' : '▼'}
+      </span>
+    </div>
+  </button>
+
+  {showModeDropdown && (
+    <div className="mt-2 border border-gray-200 rounded-lg bg-white shadow-lg overflow-hidden">
+      {/* 보통 모드 */}
+      <label className="flex items-start px-4 py-3 hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-100">
+        <input
+          type="radio"
+          name="assignmentMode"
+          value="normal"
+          checked={assignmentMode === 'normal'}
+          onChange={(e) => {
+            setAssignmentMode(e.target.value);
+            setShowModeDropdown(false);
+          }}
+          className="mt-1 mr-3"
+        />
+        <div className="flex-1">
+          <div className="font-medium text-gray-900">보통 모드</div>
+          <div className="text-xs text-gray-500 mt-1">
+            가능한 시간이 적은 멤버를 우선 배정
+          </div>
+        </div>
+        {assignmentMode === 'normal' && (
+          <span className="text-blue-600 text-xl">✓</span>
+        )}
+      </label>
+
+      {/* 선착순 모드 */}
+      <label className="flex items-start px-4 py-3 hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-100">
+        <input
+          type="radio"
+          name="assignmentMode"
+          value="first_come_first_served"
+          checked={assignmentMode === 'first_come_first_served'}
+          onChange={(e) => {
+            setAssignmentMode(e.target.value);
+            setShowModeDropdown(false);
+          }}
+          className="mt-1 mr-3"
+        />
+        <div className="flex-1">
+          <div className="font-medium text-gray-900">선착순 모드</div>
+          <div className="text-xs text-gray-500 mt-1">
+            방에 먼저 들어온 멤버를 우선 배정
+          </div>
+        </div>
+        {assignmentMode === 'first_come_first_served' && (
+          <span className="text-blue-600 text-xl">✓</span>
+        )}
+      </label>
+
+      {/* 오늘 기준 배정 모드 (신규) */}
+      <label className="flex items-start px-4 py-3 hover:bg-blue-50 cursor-pointer transition-colors">
+        <input
+          type="radio"
+          name="assignmentMode"
+          value="from_today"
+          checked={assignmentMode === 'from_today'}
+          onChange={(e) => {
+            setAssignmentMode(e.target.value);
+            setShowModeDropdown(false);
+          }}
+          className="mt-1 mr-3"
+        />
+        <div className="flex-1">
+          <div className="font-medium text-gray-900">
+            🆕 오늘 기준 배정
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            오늘 날짜부터만 배정, 과거 날짜는 제외
+          </div>
+        </div>
+        {assignmentMode === 'from_today' && (
+          <span className="text-blue-600 text-xl">✓</span>
+        )}
+      </label>
+    </div>
+  )}
+</div>
+```
+
+### 3-5. 자동 배정 실행 시 모드 전달
+
+```javascript
+const handleAutoSchedule = async () => {
+  try {
+    setIsLoading(true);
+
+    const response = await fetch(`${API_BASE_URL}/api/coordination/scheduling/${roomId}/auto-schedule`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${await auth.currentUser.getIdToken()}`
+      },
+      body: JSON.stringify({
+        assignmentMode,  // ← 선택된 모드 전달
+        minHoursPerWeek,
+        startDate,
+        endDate
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('배정 실패');
+    }
+
+    const result = await response.json();
+    // 성공 처리
+  } catch (error) {
+    console.error('Auto schedule error:', error);
+  } finally {
+    setIsLoading(false);
+  }
+};
+```
+
+예상 시간: 30분
+
+
+================================================================================
+              Step 4: 서버 API - assignmentMode 파라미터 받기
+================================================================================
+
+파일: server/controllers/coordinationSchedulingController.js
+
+### 4-1. 요청 파라미터 추출
+
+```javascript
+exports.runAutoSchedule = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const {
+      assignmentMode,      // ← 새로 추가
+      minHoursPerWeek,
+      startDate,
+      endDate
+    } = req.body;
+
+    // assignmentMode 검증
+    const validModes = ['normal', 'first_come_first_served', 'from_today'];
+    const mode = assignmentMode && validModes.includes(assignmentMode)
+      ? assignmentMode
+      : 'normal';
+
+    // Room 조회
+    const room = await Room.findById(roomId)
+      .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes')
+      .populate('members.user', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes');
+
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    // 권한 확인
+    if (room.owner._id.toString() !== req.user.id) {
+      return res.status(403).json({ msg: '방장만 자동 배정을 실행할 수 있습니다.' });
+    }
+
+    // Room 설정 업데이트 (선택사항 - 마지막 사용 모드 저장)
+    room.settings.assignmentMode = mode;
+    await room.save();
+
+    // 알고리즘 실행
+    const result = await schedulingAlgorithm.runAutoSchedule(room, {
+      assignmentMode: mode,  // ← 알고리즘에 전달
+      minHoursPerWeek,
+      startDate,
+      endDate,
+      userId: req.user.id
+    });
+
+    res.json({
+      success: true,
+      assignmentMode: mode,
+      ...result
+    });
+
+  } catch (error) {
+    console.error('Auto schedule error:', error);
+    res.status(500).json({ msg: 'Server error', error: error.message });
+  }
+};
+```
+
+예상 시간: 15분
+
+
+================================================================================
+          Step 5: 알고리즘 - 오늘 기준 날짜 필터링 (from_today)
+================================================================================
+
+파일: server/services/schedulingAlgorithm/services/timetableCreationService.js
+
+### 5-1. 날짜 필터링 함수 추가
+
+```javascript
+/**
+ * 오늘 이후 날짜만 필터링
+ * @param {Object} timetable - 전체 타임테이블
+ * @returns {Object} 필터링된 타임테이블
+ */
+const filterFutureDates = (timetable) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const futureTimetable = {};
+
+  Object.keys(timetable).forEach(slotKey => {
+    // slotKey 형식: "2025-12-04_wednesday_09:00-09:30"
+    const dateStr = slotKey.split('_')[0]; // "2025-12-04"
+    const slotDate = new Date(dateStr);
+    slotDate.setHours(0, 0, 0, 0);
+
+    // 오늘 이후 날짜만 포함
+    if (slotDate >= today) {
+      futureTimetable[slotKey] = timetable[slotKey];
+    }
+  });
+
+  return futureTimetable;
+};
+
+module.exports = {
+  createEmptyTimetable,
+  filterFutureDates  // ← export
+};
+```
+
+### 5-2. 메인 알고리즘에서 적용
+
+파일: server/services/schedulingAlgorithm/index.js
+
+```javascript
+const { createEmptyTimetable, filterFutureDates } = require('./services/timetableCreationService');
+
+const runAutoSchedule = async (room, options = {}) => {
+  const {
+    assignmentMode = 'normal',
+    minHoursPerWeek,
+    startDate,
+    endDate
+  } = options;
+
+  // 1. 타임테이블 생성
+  let timetable = createEmptyTimetable(room, startDate, endDate);
+
+  // 2. 오늘 기준 모드: 과거 날짜 제외
+  if (assignmentMode === 'from_today') {
+    timetable = filterFutureDates(timetable);
+    console.log(`[from_today] Filtered to ${Object.keys(timetable).length} future slots`);
+  }
+
+  // 3. 나머지 알고리즘 진행
+  // ...
+};
+```
+
+예상 시간: 20분
+
+
+================================================================================
+              Step 6: 알고리즘 - 선착순 모드 정렬 구현
+================================================================================
+
+파일: server/services/schedulingAlgorithm/services/slotAssignmentService.js
+
+### 6-1. 멤버 정렬 함수 추가
+
+```javascript
+/**
+ * 배정 모드에 따라 멤버 정렬
+ */
+const sortMembersByMode = (
+  memberIds,
+  assignmentMode,
+  members,
+  memberAvailableSlots,
+  memberMaxPriority
+) => {
+  return memberIds.sort((a, b) => {
+    // 1순위: 우선순위 (모든 모드 공통)
+    const priorityDiff = memberMaxPriority[b] - memberMaxPriority[a];
+    if (priorityDiff !== 0) return priorityDiff;
+
+    // 2순위: 모드별 정렬
+    switch (assignmentMode) {
+      case 'first_come_first_served': {
+        // 선착순: joinedAt 빠른 순
+        const memberA = members.find(m => {
+          const mId = m.user?._id?.toString() || m.user?.toString();
+          return mId === a;
+        });
+        const memberB = members.find(m => {
+          const mId = m.user?._id?.toString() || m.user?.toString();
+          return mId === b;
+        });
+
+        if (!memberA || !memberB) return 0;
+
+        const dateA = new Date(memberA.joinedAt || 0);
+        const dateB = new Date(memberB.joinedAt || 0);
+        return dateA - dateB;
+      }
+
+      case 'from_today':
+      case 'normal':
+      default:
+        // 보통/오늘 기준: 가용 슬롯 적은 순
+        return memberAvailableSlots[a] - memberAvailableSlots[b];
+    }
+  });
+};
+```
+
+### 6-2. 기존 정렬 코드 교체
+
+```javascript
+// 변경 전
+const remainingMembers = Object.keys(memberAvailableSlots)
+  .sort((a, b) => {
+    const priorityDiff = memberMaxPriority[b] - memberMaxPriority[a];
+    if (priorityDiff !== 0) return priorityDiff;
+    return memberAvailableSlots[a] - memberAvailableSlots[b];
+  });
+
+// 변경 후
+const remainingMembers = sortMembersByMode(
+  Object.keys(memberAvailableSlots),
+  assignmentMode,
+  members,
+  memberAvailableSlots,
+  memberMaxPriority
+);
+```
+
+예상 시간: 25분
+
+
+================================================================================
+                       Step 7: 테스트 및 검증
+================================================================================
+
+### 테스트 1: UI 동작 확인
+- [ ] AutoSchedulerPanel에서 드롭다운 정상 작동
+- [ ] 모드 선택 시 체크마크 표시
+- [ ] 선택 후 드롭다운 자동 닫힘
+- [ ] 외부 클릭 시 드롭다운 닫힘
+
+### 테스트 2: 보통 모드
+- [ ] 가용 슬롯 적은 멤버 먼저 배정
+- [ ] 우선순위 높은 멤버 우선
+
+### 테스트 3: 선착순 모드
+- [ ] 먼저 들어온 멤버 우선 배정
+- [ ] 우선순위 높으면 순서 무시
+
+### 테스트 4: 오늘 기준 모드 (신규)
+- [ ] 과거 날짜 슬롯 제외 확인
+- [ ] 오늘/미래 날짜만 배정
+- [ ] 로그 출력 확인
+
+예상 시간: 1시간
+
+
+================================================================================
+                           총 예상 시간
+================================================================================
+
+Step 1: Room 모델 - 5분
+Step 2: RoomCreationModal - 10분
+Step 3: AutoSchedulerPanel UI - 30분
+Step 4: 서버 API - 15분
+Step 5: 날짜 필터링 - 20분
+Step 6: 선착순 정렬 - 25분
+Step 7: 테스트 - 60분
+
+총 예상 시간: 약 2시간 25분
+
+
+================================================================================
+                           구현 체크리스트
+================================================================================
+
+Phase 1: 모델 & 정리
+- [ ] Room 모델 enum 업데이트 (from_today 추가, consecutive 제거)
+- [ ] RoomCreationModal assignmentMode 제거
+
+Phase 2: UI 구현
+- [ ] AutoSchedulerPanel 상태 추가
+- [ ] 드롭다운 UI 구현 (3가지 모드만)
+- [ ] 외부 클릭 처리
+- [ ] 자동 배정 실행 시 모드 전달
+
+Phase 3: 백엔드
+- [ ] API에서 assignmentMode 파라미터 받기
+- [ ] validModes = ['normal', 'first_come_first_served', 'from_today']
+- [ ] Room 설정 업데이트
+- [ ] 알고리즘에 모드 전달
+
+Phase 4: 알고리즘
+- [ ] 오늘 기준 날짜 필터링 (filterFutureDates)
+- [ ] 선착순 정렬 함수 (sortMembersByMode)
+- [ ] 모드별 분기 처리
+
+Phase 5: 테스트
+- [ ] UI 테스트
+- [ ] 각 모드별 테스트 (3가지)
+- [ ] 통합 테스트
+
+
+================================================================================
+                           주의사항
+================================================================================
+
+1. **기존 방 호환성**
+   - 기존 방은 assignmentMode가 없거나 'consecutive'일 수 있음
+   - 기본값 'normal'로 처리
+
+2. **오늘 기준 모드 제한**
+   - 과거 날짜에 이미 배정된 슬롯은 유지
+   - 새로 배정할 때만 과거 제외
+
+3. **드롭다운 닫기**
+   - 모드 선택 후 자동으로 드롭다운 닫기
+   - 외부 클릭 시 닫기 처리
+
+4. **권한 체크**
+   - 배정 모드 변경은 방장만 가능
+   - 일반 멤버는 보기만 가능
+
+
+================================================================================
+                           예상 질문 & 답변
+================================================================================
+
+**Q: 오늘 기준 모드와 보통 모드의 차이는?**
+A: 보통 모드는 전체 기간 배정, 오늘 기준은 오늘부터만 배정
+
+**Q: 이미 과거에 배정된 슬롯은?**
+A: 유지됨. 새 배정에만 날짜 필터 적용
+
+**Q: 중간에 모드 변경 가능?**
+A: 가능. 다음 자동 배정 실행 시 새 모드 적용
+
+**Q: 연속 배정 모드는 왜 삭제됐나요?**
+A: 사용성 개선을 위해 핵심 3가지 모드로 단순화
+
+
+================================================================================
+작성일: 2025-12-03
+작성자: AI Assistant
+버전: v3 (연속 배정 모드 제거, 3가지 모드 최종 확정)
+================================================================================
