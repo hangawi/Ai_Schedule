@@ -10,16 +10,31 @@ import { createLocalEventUpdateBody, createGoogleEventUpdateBody } from '../util
 import { toTimeString } from '../utils/dateUtils';
 
 export const useEventEdit = (setEventAddedKey) => {
-  const handleEventEdit = useCallback(async (chatResponse, context) => {
+  const handleEventEdit = useCallback(async (chatResponse, context, message = '') => {
     console.log('✏️ [EDIT] 시작 =================');
     console.log('📝 chatResponse:', JSON.stringify(chatResponse, null, 2));
     console.log('🏷️ context:', JSON.stringify(context, null, 2));
+    console.log('💬 message:', message);
 
     const currentUser = auth.currentUser;
     if (!currentUser) return { success: false, message: '인증이 필요합니다.' };
 
     // 프로필 탭에서는 originalTitle 없이도 가능 (선호시간/개인시간)
     const isProfileTab = context.context === 'profile' && context.tabType === 'local';
+
+    // 🆕 타입별 필터링 (Delete와 동일한 로직)
+    const isPreferredTimeEdit = message.includes('선호시간') || message.includes('선호 시간');
+    const isPersonalTimeEdit = message.includes('개인일정') || message.includes('개인 일정');
+
+    if (isPreferredTimeEdit || isPersonalTimeEdit) {
+      // LLM이 추론한 title 무시
+      if (chatResponse.originalTitle || chatResponse.title) {
+        console.log('✏️ [EDIT] 타입 명시 감지 → title 무시:', chatResponse.originalTitle || chatResponse.title);
+        delete chatResponse.originalTitle;
+        delete chatResponse.title;
+      }
+      console.log(isPreferredTimeEdit ? '🔍 "선호시간 수정" 감지' : '🔍 "개인일정 수정" 감지');
+    }
 
     if (!chatResponse.originalDate) {
       return { success: false, message: '수정할 일정의 날짜가 필요합니다.' };
@@ -94,6 +109,17 @@ export const useEventEdit = (setEventAddedKey) => {
 
       let matchingEvents = filterEventsByDate(events, targetDate, searchTitle, context);
       console.log('🎯 매칭된 이벤트:', matchingEvents.length, '개');
+
+      // 🆕 타입별 필터링 적용
+      if (isPreferredTimeEdit) {
+        matchingEvents = matchingEvents.filter(e =>
+          e.isDefaultSchedule || (!e.isPersonalTime && e.priority !== undefined)
+        );
+        console.log('🔵 선호시간만 필터링:', matchingEvents.length, '개');
+      } else if (isPersonalTimeEdit) {
+        matchingEvents = matchingEvents.filter(e => e.isPersonalTime);
+        console.log('🔴 개인일정만 필터링:', matchingEvents.length, '개');
+      }
 
       // originalStartTime이 있으면 추가 필터링
       if (chatResponse.originalStartTime && matchingEvents.length > 1) {

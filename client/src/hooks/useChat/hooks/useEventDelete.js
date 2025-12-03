@@ -118,14 +118,15 @@ export const useEventDelete = (setEventAddedKey) => {
       const endDate = new Date(chatResponse.endDateTime);
       console.log('📅 범위 삭제:', startDate, '~', endDate);
       matchingEvents = filterEventsByRange(events, startDate, endDate, chatResponse.title, context);
+      console.log('🎯 범위 매칭된 이벤트:', matchingEvents.length, '개');
     } else {
       const targetDate = new Date(chatResponse.startDateTime);
       console.log('📅 타겟 날짜:', targetDate);
       console.log('📅 요일:', targetDate.getDay() === 0 ? 7 : targetDate.getDay());
       matchingEvents = filterEventsByDate(events, targetDate, chatResponse.title, context);
+      console.log('🎯 날짜 매칭된 이벤트:', matchingEvents.length, '개');
     }
 
-    console.log('🎯 매칭된 이벤트:', matchingEvents.length, '개');
     console.log('📋 매칭된 이벤트 상세:', matchingEvents.map(e => ({
       _id: e._id,
       title: e.title,
@@ -135,7 +136,7 @@ export const useEventDelete = (setEventAddedKey) => {
       priority: e.priority
     })));
 
-    // 타입별 필터링 적용
+    // 타입별 필터링 적용 (단일 삭제 및 범위 삭제 모두)
     if (deleteOnlyPreferredTime) {
       matchingEvents = matchingEvents.filter(e => e.isDefaultSchedule || (!e.isPersonalTime && e.priority !== undefined));
       console.log('🔵 선호시간만 필터링:', matchingEvents.length, '개');

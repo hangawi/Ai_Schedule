@@ -159,10 +159,36 @@ export const filterEventsByRange = (events, startDate, endDate, searchTitle, con
     let eventTitle;
 
     if (context.context === 'profile' && context.tabType === 'local') {
-      if (event.isPersonalTime) {
+      if (event.isDefaultSchedule) {
+        // defaultSchedule: 범위 내의 모든 해당 요일을 체크
         eventTitle = event.title;
-        eventDate = startDate; // TODO: 실제로는 더 정교한 로직 필요
+        const targetDayOfWeek = event.dayOfWeek;
+
+        // 범위 내에 해당 요일이 있는지 확인
+        let currentDate = new Date(startDate);
+        let foundInRange = false;
+
+        while (currentDate <= endDate) {
+          const currentDayOfWeek = currentDate.getDay() === 0 ? 7 : currentDate.getDay();
+          if (currentDayOfWeek === targetDayOfWeek) {
+            foundInRange = true;
+            break;
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        if (!foundInRange) return false;
+        eventDate = new Date(startDate); // 범위 시작일로 설정
+      } else if (event.isPersonalTime) {
+        eventTitle = event.title;
+        if (event.specificDate) {
+          eventDate = new Date(event.specificDate + 'T00:00:00+09:00');
+        } else {
+          // specificDate가 없으면 포함시키지 않음
+          return false;
+        }
       } else {
+        // scheduleExceptions
         if (!event.startTime) return false;
         eventDate = new Date(event.startTime);
         eventTitle = event.title;

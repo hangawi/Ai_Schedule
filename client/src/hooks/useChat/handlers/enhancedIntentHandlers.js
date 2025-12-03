@@ -128,7 +128,7 @@ async function routeSingleAction(action, context, message, handlers) {
 
     // 기존 일정 수정
     if (intent === 'edit_event' && (action.originalDate || action.startDateTime)) {
-      return await handlers.handleEventEdit(action, context);
+      return await handlers.handleEventEdit(action, context, message);
     }
 
     // 명확화 요청
