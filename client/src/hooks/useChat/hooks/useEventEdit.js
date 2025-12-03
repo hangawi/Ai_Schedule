@@ -80,7 +80,24 @@ export const useEventEdit = (setEventAddedKey) => {
 
         const exceptions = (eventsData.scheduleExceptions || []).filter(exc => exc.specificDate === chatResponse.originalDate);
         const personalTimes = (eventsData.personalTimes || []).filter(pt => pt.specificDate === chatResponse.originalDate);
-        const defaultScheduleForDay = (eventsData.defaultSchedule || []).filter(ds => ds.dayOfWeek === originalDayOfWeek);
+
+        // 🔧 defaultSchedule 필터링: specificDate가 있으면 날짜로, 없으면 요일로
+        const defaultScheduleForDay = (eventsData.defaultSchedule || []).filter(ds => {
+          if (ds.specificDate) {
+            // 채팅으로 추가된 선호시간 (specificDate 있음)
+            return ds.specificDate === chatResponse.originalDate;
+          } else {
+            // 버튼으로 추가된 선호시간 (specificDate 없음, 매주 반복)
+            return ds.dayOfWeek === originalDayOfWeek;
+          }
+        });
+
+        console.log('🔍 [EDIT] defaultSchedule 필터링:', {
+          전체: eventsData.defaultSchedule?.length || 0,
+          특정날짜: defaultScheduleForDay.filter(ds => ds.specificDate).length,
+          반복요일: defaultScheduleForDay.filter(ds => !ds.specificDate).length,
+          최종: defaultScheduleForDay.length
+        });
 
         events = [
           ...exceptions,
@@ -109,6 +126,14 @@ export const useEventEdit = (setEventAddedKey) => {
 
       let matchingEvents = filterEventsByDate(events, targetDate, searchTitle, context);
       console.log('🎯 매칭된 이벤트:', matchingEvents.length, '개');
+      console.log('📋 매칭된 이벤트 상세:', matchingEvents.map(e => ({
+        _id: e._id,
+        title: e.title,
+        startTime: e.startTime,
+        isDefaultSchedule: e.isDefaultSchedule,
+        isPersonalTime: e.isPersonalTime,
+        priority: e.priority
+      })));
 
       // 🆕 타입별 필터링 적용
       if (isPreferredTimeEdit) {
@@ -116,22 +141,43 @@ export const useEventEdit = (setEventAddedKey) => {
           e.isDefaultSchedule || (!e.isPersonalTime && e.priority !== undefined)
         );
         console.log('🔵 선호시간만 필터링:', matchingEvents.length, '개');
+        console.log('📋 필터링 후:', matchingEvents.map(e => ({
+          _id: e._id,
+          title: e.title,
+          startTime: e.startTime,
+          priority: e.priority
+        })));
       } else if (isPersonalTimeEdit) {
         matchingEvents = matchingEvents.filter(e => e.isPersonalTime);
         console.log('🔴 개인일정만 필터링:', matchingEvents.length, '개');
       }
 
-      // originalStartTime이 있으면 추가 필터링
-      if (chatResponse.originalStartTime && matchingEvents.length > 1) {
+      // originalStartTime이 있으면 추가 필터링 (1개여도 검증)
+      if (chatResponse.originalStartTime && matchingEvents.length >= 1) {
+        console.log('⏰ 시간 필터링 시작, originalStartTime:', chatResponse.originalStartTime);
         const targetHour = parseInt(chatResponse.originalStartTime.split(':')[0]);
+        const beforeFilter = matchingEvents.length;
+
         matchingEvents = matchingEvents.filter(e => {
           if (e.startTime) {
-            const eventHour = new Date(e.startTime).getHours();
+            let eventHour;
+
+            // 🔧 defaultSchedule의 startTime은 "HH:MM" 형식, scheduleExceptions는 ISO 형식
+            if (e.isDefaultSchedule) {
+              // "09:00", "11:00" 같은 형식에서 시간 추출
+              eventHour = parseInt(e.startTime.split(':')[0]);
+            } else {
+              // ISO datetime에서 시간 추출
+              eventHour = new Date(e.startTime).getHours();
+            }
+
+            console.log(`  - 이벤트 시간 체크: ${e.title}, startTime: ${e.startTime}, hour: ${eventHour}, target: ${targetHour}`);
             return eventHour === targetHour;
           }
+          console.log(`  - 이벤트 시간 없음: ${e.title}`);
           return false;
         });
-        console.log('⏰ 시간 필터링 후:', matchingEvents.length, '개');
+        console.log(`⏰ 시간 필터링 후: ${beforeFilter}개 → ${matchingEvents.length}개`);
       }
 
       const eventToEdit = matchingEvents[0];

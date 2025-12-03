@@ -38,12 +38,22 @@ export const matchesTitle = (eventTitle, searchTitle) => {
  */
 export const getEventDateForProfile = (event, targetDate) => {
   if (event.isDefaultSchedule) {
-    // defaultSchedule: dayOfWeek 매칭 (일요일: 0 -> 7)
-    const targetDayOfWeek = targetDate.getDay() === 0 ? 7 : targetDate.getDay();
-    if (event.dayOfWeek === targetDayOfWeek) {
-      return targetDate;
+    // 🔧 specificDate가 있으면 날짜 매칭, 없으면 요일 매칭
+    if (event.specificDate) {
+      // 채팅으로 추가된 선호시간 (특정 날짜)
+      const targetDateStr = targetDate.toISOString().split('T')[0];
+      if (event.specificDate === targetDateStr) {
+        return targetDate;
+      }
+      return null;
+    } else {
+      // 버튼으로 추가된 선호시간 (매주 반복)
+      const targetDayOfWeek = targetDate.getDay() === 0 ? 7 : targetDate.getDay();
+      if (event.dayOfWeek === targetDayOfWeek) {
+        return targetDate;
+      }
+      return null;
     }
-    return null;
   } else if (event.isPersonalTime) {
     const eventTitle = event.title;
     if (event.specificDate) {
