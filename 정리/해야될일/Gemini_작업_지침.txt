@@ -111,28 +111,28 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 2. 관리자 (Admin) 컴포넌트 (4개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] client/src/components/admin/AdminCodeModal.js
-[ ] client/src/components/admin/AdminDashboard.js
-[ ] client/src/components/admin/AdminRoomManagement.js
-[ ] client/src/components/admin/AdminUserManagement.js
+[x] client/src/components/admin/AdminCodeModal.js
+[x] client/src/components/admin/AdminDashboard.js
+[x] client/src/components/admin/AdminRoomManagement.js
+[x] client/src/components/admin/AdminUserManagement.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 3. 인증 (Auth) 컴포넌트 (4개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] client/src/components/auth/AuthScreen.js
-[ ] client/src/components/auth/LoginForm.js
-[ ] client/src/components/auth/RegisterForm.js
-[ ] client/src/components/auth/SocialLoginButtons.js
+[x] client/src/components/auth/AuthScreen.js
+[x] client/src/components/auth/LoginForm.js
+[x] client/src/components/auth/RegisterForm.js
+[x] client/src/components/auth/SocialLoginButtons.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 4. 캘린더 (Calendar) 컴포넌트 (14개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] client/src/components/calendar/Calendar.js
-[ ] client/src/components/calendar/CalendarView.js
-[ ] client/src/components/calendar/CoordinationCalendarView.js
+[x] client/src/components/calendar/Calendar.js
+[x] client/src/components/calendar/CalendarView.js
+[x] client/src/components/calendar/CoordinationCalendarView.js
 [ ] client/src/components/calendar/CoordinationDetailGrid.js
 [ ] client/src/components/calendar/DetailTimeGrid/index.js
-[ ] client/src/components/calendar/DetailTimeGrid/constants/priorityConfig.js
+[x] client/src/components/calendar/DetailTimeGrid/constants/priorityConfig.js
 [ ] client/src/components/calendar/DetailTimeGrid/handlers/copyHandler.js
 [ ] client/src/components/calendar/DetailTimeGrid/handlers/slotHelpers.js
 [ ] client/src/components/calendar/DetailTimeGrid/utils/dateFormatters.js

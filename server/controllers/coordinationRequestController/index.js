@@ -286,23 +286,27 @@ exports.handleRequest = async (req, res) => {
                            return pref.startTime <= timeSlot.startTime && pref.endTime >= timeSlot.endTime;
                         });
 
-                        // Check if requester's slots (overlappingSlots that requester wants) are in target's preferred times
-                        const areTargetSlotsInRequesterPreferred = overlappingSlots.every(slot => {
-                           return targetPreferredTimes.some(pref => {
-                              if (pref.priority < 2) return false;
-                              if (pref.dayOfWeek !== slot.day &&
-                                  DAY_NAMES[pref.dayOfWeek] !== slot.day) return false;
-                              return pref.startTime <= slot.startTime && pref.endTime >= slot.endTime;
+                        // 🔧 FIX: Check if requester's ORIGINAL slots are in target's preferred times
+                        // (Before: was checking if target's current slots are in target's preferred times - always true!)
+                        let areRequesterSlotsInTargetPreferred = true;
+                        if (request.requesterSlots && request.requesterSlots.length > 0) {
+                           areRequesterSlotsInTargetPreferred = request.requesterSlots.every(reqSlot => {
+                              return targetPreferredTimes.some(pref => {
+                                 if (pref.priority < 2) return false;
+                                 if (pref.dayOfWeek !== reqSlot.day &&
+                                     DAY_NAMES[pref.dayOfWeek] !== reqSlot.day) return false;
+                                 return pref.startTime <= reqSlot.startTime && pref.endTime >= reqSlot.endTime;
+                              });
                            });
-                        });
+                        }
 
                         console.log('🔍 Stage 1 Results:', {
                            isTargetSlotInRequesterPreferred,
-                           areTargetSlotsInRequesterPreferred
+                           areRequesterSlotsInTargetPreferred
                         });
 
                         // If both conditions are met, execute direct exchange
-                        if (isTargetSlotInRequesterPreferred && areTargetSlotsInRequesterPreferred) {
+                        if (isTargetSlotInRequesterPreferred && areRequesterSlotsInTargetPreferred) {
                            console.log('✅ Stage 1: Direct exchange possible! Both users have mutual preferred times.');
                            console.log('🔄 Executing direct exchange...');
                            console.log('📊 Before exchange - Total timeSlots:', room.timeSlots.length);

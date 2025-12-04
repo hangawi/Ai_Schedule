@@ -1,9 +1,57 @@
+/**
+ * ===================================================================================================
+ * RegisterForm.js - 회원가입 폼 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/auth/RegisterForm.js
+ *
+ * 🎯 주요 기능:
+ *    - 이메일/비밀번호 기반 회원가입
+ *    - 실시간 유효성 검사 (이름, 성, 이메일, 비밀번호)
+ *    - 비밀번호 일치 확인
+ *    - 필드별 오류 메시지 표시
+ *    - 회원가입 성공 시 로그인 화면으로 이동
+ *
+ * 🔗 연결된 파일:
+ *    - ../modals/CustomAlertModal.js - 커스텀 알림 모달
+ *    - /api/auth/register - 회원가입 API
+ *    - lucide-react - 아이콘 라이브러리 (ArrowLeft)
+ *
+ * 💡 UI 위치:
+ *    - 화면: AuthScreen에서 표시되는 회원가입 폼
+ *    - 접근: 로그인 화면에서 "회원가입" 버튼 클릭
+ *    - 섹션: 이름/성/이메일/비밀번호 입력, 유효성 검사 메시지, 회원가입 버튼
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 회원가입 폼 UI 및 유효성 검사 로직 변경
+ *    - 유효성 검사 규칙 변경: validateForm 함수 내부 조건 수정
+ *    - 필드 추가: state, validateForm, handleRegister, JSX에 모두 추가 필요
+ *
+ * 📝 참고사항:
+ *    - 모든 필드는 실시간 유효성 검사 적용
+ *    - touched 상태로 필드 focus 후 blur 시에만 오류 메시지 표시
+ *    - 비밀번호는 6-128자, 이름은 2-50자, 성은 1-5자 제한
+ *    - Enter 키로 회원가입 가능 (handleKeyPress)
+ *
+ * ===================================================================================================
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import CustomAlertModal from '../modals/CustomAlertModal';
 
 const API_BASE_URL = (process.env.REACT_APP_API_BASE_URL ? process.env.REACT_APP_API_BASE_URL.trim().replace(/^"|"$/g, '') : 'http://localhost:5000');
 
+/**
+ * RegisterForm - 회원가입 폼 컴포넌트
+ *
+ * @param {Object} props - 컴포넌트 props
+ * @param {Function} props.onClose - 폼 닫기 핸들러
+ * @param {Function} props.onRegisterSuccess - 회원가입 성공 시 콜백
+ * @param {Function} props.onLoginClick - 로그인 화면으로 이동 핸들러
+ *
+ * @returns {JSX.Element} 회원가입 폼 UI
+ */
 const RegisterForm = ({ onClose, onRegisterSuccess, onLoginClick }) => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -33,7 +81,16 @@ const RegisterForm = ({ onClose, onRegisterSuccess, onLoginClick }) => {
     onConfirm: null
   });
 
-  // Alert 표시 유틸리티 함수
+  /**
+   * showAlert - 알림 모달 표시 함수
+   *
+   * @description CustomAlertModal을 통해 알림 메시지를 표시
+   * @param {string} message - 표시할 메시지
+   * @param {string} type - 알림 타입 (info, success, warning, error)
+   * @param {string} title - 알림 제목
+   * @param {boolean} showCancel - 취소 버튼 표시 여부
+   * @param {Function} onConfirm - 확인 버튼 클릭 시 콜백 함수
+   */
   const showAlert = useCallback((message, type = 'info', title = '', showCancel = false, onConfirm = null) => {
     setAlertModal({
       isOpen: true,
@@ -45,12 +102,21 @@ const RegisterForm = ({ onClose, onRegisterSuccess, onLoginClick }) => {
     });
   }, []);
 
-  // Alert 닫기 함수
+  /**
+   * closeAlert - 알림 모달 닫기 함수
+   *
+   * @description 열려있는 알림 모달을 닫음
+   */
   const closeAlert = useCallback(() => {
     setAlertModal(prev => ({ ...prev, isOpen: false }));
   }, []);
 
-  // 유효성 검사 로직을 별도 함수로 분리
+  /**
+   * validateForm - 폼 유효성 검사 함수
+   *
+   * @description 모든 입력 필드의 유효성을 검사하고 오류 메시지를 설정
+   * @returns {Object} 유효성 검사 오류 객체 (필드명: 오류 메시지)
+   */
   const validateForm = useCallback(() => {
     const errors = {};
 
@@ -101,6 +167,11 @@ const RegisterForm = ({ onClose, onRegisterSuccess, onLoginClick }) => {
     validateForm();
   }, [firstName, lastName, email, password, password2, validateForm]);
 
+  /**
+   * handleRegister - 회원가입 처리 함수
+   *
+   * @description 유효성 검사 후 회원가입 API 호출, 성공 시 로그인 화면으로 이동
+   */
   const handleRegister = async () => {
     // 모든 필드를 touched 상태로 만들어서 모든 오류 메시지를 표시
     setTouched({
@@ -173,13 +244,24 @@ const RegisterForm = ({ onClose, onRegisterSuccess, onLoginClick }) => {
   // isFormValid는 모든 필드가 채워지고, 유효성 검사 오류가 없어야 함
   const isFormValid = firstName && lastName && email && password && password2 && !passwordMatchError && Object.keys(validationErrors).length === 0;
 
+  /**
+   * handleKeyPress - Enter 키 입력 처리
+   *
+   * @description Enter 키 입력 시 회원가입 실행
+   * @param {KeyboardEvent} event - 키보드 이벤트
+   */
   const handleKeyPress = (event) => {
     if (event.key === 'Enter') {
       handleRegister();
     }
   };
 
-  // onBlur 핸들러: 필드를 벗어났을 때 해당 필드를 touched 상태로 변경
+  /**
+   * handleBlur - 필드 focus 해제 처리
+   *
+   * @description 필드를 벗어날 때 해당 필드를 touched 상태로 변경하여 오류 메시지 표시
+   * @param {string} field - 필드명 (firstName, lastName, email, password, password2)
+   */
   const handleBlur = (field) => {
     setTouched(prev => ({ ...prev, [field]: true }));
   };

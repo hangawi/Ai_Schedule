@@ -1,6 +1,62 @@
+/**
+ * ===================================================================================================
+ * CalendarView.js - 월간 캘린더 뷰 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/calendar/CalendarView.js
+ *
+ * 🎯 주요 기능:
+ *    - 월간 캘린더 그리드 표시
+ *    - 일정, 예외, 개인 시간을 날짜별로 시각화
+ *    - 휴무일 표시
+ *    - 월 이동 및 오늘 날짜로 이동
+ *    - 날짜 클릭 시 상세 정보 표시
+ *    - 일정 개수 카운팅 및 병합
+ *
+ * 🔗 연결된 파일:
+ *    - lucide-react - 아이콘 라이브러리 (ChevronLeft, ChevronRight)
+ *
+ * 💡 UI 위치:
+ *    - 화면: 프로필 탭 > 일정 관리
+ *    - 접근: 프로필 탭에서 자동 표시
+ *    - 섹션: 월 선택, 캘린더 그리드
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 월간 캘린더 표시 방식 변경
+ *    - 일정 표시 색상 변경: renderMonthView의 colorMap 수정
+ *    - 캘린더 그리드 크기 변경: totalDays 값 수정 (현재 42 = 6주)
+ *    - 일정 병합 로직 변경: getScheduleCount, getExceptionCount 함수 수정
+ *
+ * 📝 참고사항:
+ *    - 일요일 시작 기준 (0=일요일, 6=토요일)
+ *    - 일정은 파란색, 예외는 우선순위별 파란색 톤, 개인 시간은 빨간색으로 표시
+ *    - 휴무일은 회색 배경에 "휴무일" 뱃지 표시
+ *    - 최대 9개까지 막대로 표시, 초과 시 "+더보기" 표시
+ *
+ * ===================================================================================================
+ */
+
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
+/**
+ * CalendarView - 월간 캘린더 뷰 메인 컴포넌트
+ *
+ * @param {Object} props - 컴포넌트 props
+ * @param {Array} props.schedule - 일정 배열
+ * @param {Function} props.setSchedule - 일정 업데이트 함수
+ * @param {boolean} props.readOnly - 읽기 전용 모드
+ * @param {Array} props.exceptions - 예외 배열
+ * @param {Array} props.personalTimes - 개인 시간 배열
+ * @param {Function} props.onRemoveException - 예외 삭제 핸들러
+ * @param {Function} props.onDateClick - 날짜 클릭 핸들러
+ * @param {Date} props.selectedDate - 선택된 날짜
+ * @param {Function} props.onShowAlert - 알림 표시 함수
+ * @param {Function} props.onAutoSave - 자동 저장 함수
+ * @param {Function} props.onMonthChange - 월 변경 핸들러
+ *
+ * @returns {JSX.Element} 월간 캘린더 UI
+ */
 const CalendarView = ({
   schedule,
   setSchedule,
@@ -42,10 +98,18 @@ const CalendarView = ({
     };
   }, [schedule, exceptions, personalTimes]);
 
+  /**
+   * generateCalendarDates - 캘린더 날짜 데이터 생성
+   */
   const generateCalendarDates = () => {
     generateMonthDates();
   };
 
+  /**
+   * generateMonthDates - 월간 캘린더 날짜 배열 생성
+   *
+   * @description 현재 월의 모든 날짜와 일정/예외/개인시간 정보를 포함한 배열 생성
+   */
   const generateMonthDates = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -275,6 +339,11 @@ const CalendarView = ({
     });
   };
 
+  /**
+   * navigateMonth - 월 이동 처리
+   *
+   * @param {number} direction - 이동 방향 (-1: 이전 달, 1: 다음 달)
+   */
   const navigateMonth = (direction) => {
     const newDate = new Date(currentDate);
     newDate.setMonth(currentDate.getMonth() + direction);
@@ -284,7 +353,9 @@ const CalendarView = ({
     }
   };
 
-
+  /**
+   * goToToday - 오늘 날짜로 이동
+   */
   const goToToday = () => {
     const today = new Date();
     setCurrentDate(today);
@@ -293,6 +364,11 @@ const CalendarView = ({
     }
   };
 
+  /**
+   * handleDateClick - 날짜 클릭 처리
+   *
+   * @param {Date} date - 클릭한 날짜
+   */
   const handleDateClick = (date) => {
     if (onDateClick) {
       onDateClick(date);

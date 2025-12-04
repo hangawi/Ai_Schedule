@@ -1,3 +1,42 @@
+/**
+ * ===================================================================================================
+ * LoginForm.js - 로그인 폼 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/auth/LoginForm.js
+ *
+ * 🎯 주요 기능:
+ *    - 이메일/비밀번호 로그인
+ *    - Google 소셜 로그인
+ *    - Firebase 인증 처리
+ *    - MongoDB 사용자 생성/조회
+ *    - 로그인 성공 시 콜백 호출
+ *
+ * 🔗 연결된 파일:
+ *    - ../../config/firebaseConfig.js - Firebase 설정 (auth, googleProvider)
+ *    - ./SocialLoginButtons.js - 소셜 로그인 버튼 컴포넌트
+ *    - ../modals/CustomAlertModal.js - 커스텀 알림 모달
+ *    - /api/auth/login - 이메일 로그인 API
+ *    - /api/auth/google - Google 로그인 API
+ *
+ * 💡 UI 위치:
+ *    - 화면: AuthScreen에서 표시되는 로그인 폼
+ *    - 접근: 비로그인 상태에서 기본 표시
+ *    - 섹션: 이메일/비밀번호 입력, 로그인 버튼, 회원가입 버튼, Google 로그인 버튼
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 로그인 폼 UI 및 로그인 처리 로직 변경
+ *    - 소셜 로그인 추가: handleGoogleLogin과 유사한 함수 생성 및 SocialLoginButtons에 전달
+ *    - 유효성 검증 추가: handleLogin 내부에 검증 로직 추가
+ *
+ * 📝 참고사항:
+ *    - Firebase 인증 후 MongoDB에 사용자 정보 저장/조회
+ *    - Enter 키로 로그인 가능 (handleKeyPress)
+ *    - Google 로그인 성공 시 localStorage에 'googleConnected' 저장
+ *
+ * ===================================================================================================
+ */
+
 import React, { useState, useCallback } from 'react';
 import { signInWithPopup, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, googleProvider } from '../../config/firebaseConfig';
@@ -8,6 +47,16 @@ const API_BASE_URL = process.env.REACT_APP_API_BASE_URL
    ? process.env.REACT_APP_API_BASE_URL.trim().replace(/^"|"$/g, '')
    : 'http://localhost:5000';
 
+/**
+ * LoginForm - 로그인 폼 컴포넌트
+ *
+ * @param {Object} props - 컴포넌트 props
+ * @param {Function} props.onClose - 폼 닫기 핸들러
+ * @param {Function} props.onRegisterClick - 회원가입 버튼 클릭 핸들러
+ * @param {Function} props.onLoginSuccess - 로그인 성공 시 콜백 (user, loginType)
+ *
+ * @returns {JSX.Element} 로그인 폼 UI
+ */
 const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
    const [email, setEmail] = useState('');
    const [password, setPassword] = useState('');
@@ -22,7 +71,16 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
       onConfirm: null,
    });
 
-   // Alert 표시 유틸리티 함수
+   /**
+    * showAlert - 알림 모달 표시 함수
+    *
+    * @description CustomAlertModal을 통해 알림 메시지를 표시
+    * @param {string} message - 표시할 메시지
+    * @param {string} type - 알림 타입 (info, success, warning, error)
+    * @param {string} title - 알림 제목
+    * @param {boolean} showCancel - 취소 버튼 표시 여부
+    * @param {Function} onConfirm - 확인 버튼 클릭 시 콜백 함수
+    */
    const showAlert = useCallback((message, type = 'info', title = '', showCancel = false, onConfirm = null) => {
       setAlertModal({
          isOpen: true,
@@ -34,11 +92,20 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
       });
    }, []);
 
-   // Alert 닫기 함수
+   /**
+    * closeAlert - 알림 모달 닫기 함수
+    *
+    * @description 열려있는 알림 모달을 닫음
+    */
    const closeAlert = useCallback(() => {
       setAlertModal(prev => ({ ...prev, isOpen: false }));
    }, []);
 
+   /**
+    * handleLogin - 이메일/비밀번호 로그인 처리
+    *
+    * @description Firebase 인증 후 MongoDB에 사용자 정보 저장/조회하여 로그인 처리
+    */
    const handleLogin = async () => {
       if (!email || !password) {
          showAlert('이메일과 비밀번호를 입력해주세요.', 'warning', '입력 오류');
@@ -75,6 +142,11 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
       }
    };
 
+   /**
+    * handleGoogleLogin - Google 소셜 로그인 처리
+    *
+    * @description Firebase Google 인증 후 MongoDB에 사용자 정보 저장/조회하여 로그인 처리
+    */
    const handleGoogleLogin = async () => {
       try {
          // Sign in with Google using Firebase
@@ -109,6 +181,12 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
       }
    };
 
+   /**
+    * handleKeyPress - Enter 키 입력 처리
+    *
+    * @description Enter 키 입력 시 로그인 실행
+    * @param {KeyboardEvent} event - 키보드 이벤트
+    */
    const handleKeyPress = event => {
       if (event.key === 'Enter') {
          handleLogin();

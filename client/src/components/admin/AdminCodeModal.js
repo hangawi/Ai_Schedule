@@ -1,13 +1,72 @@
+/**
+ * ===================================================================================================
+ * AdminCodeModal.js - 관리자 인증 코드 입력 모달
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/admin/AdminCodeModal.js
+ *
+ * 🎯 주요 기능:
+ *    - 관리자 인증 코드 입력 폼 제공
+ *    - 코드 검증 및 관리자 권한 부여
+ *    - 인증 성공 시 페이지 새로고침하여 관리자 UI 활성화
+ *    - 에러 메시지 표시
+ *
+ * 🔗 연결된 파일:
+ *    - ../../contexts/AdminContext.js - 관리자 컨텍스트 (verifyAdminCode 함수)
+ *    - lucide-react - 아이콘 라이브러리 (Shield, Key, X)
+ *
+ * 💡 UI 위치:
+ *    - 모달: 관리자 코드 입력 모달 (중앙 팝업)
+ *    - 트리거: AdminDashboard에서 호출 (관리자 메뉴 접근 시)
+ *    - 경로: 헤더 > 관리자 메뉴 클릭 → 이 모달 표시
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 관리자 인증 UI 및 동작 방식 변경
+ *    - 코드 검증 로직 변경: AdminContext의 verifyAdminCode 함수 수정
+ *    - 모달 디자인 변경: return 문 내 JSX 및 Tailwind 클래스 수정
+ *    - 인증 후 동작 변경: handleSubmit 함수의 성공 처리 로직 수정
+ *
+ * 📝 참고사항:
+ *    - 인증 성공 시 window.location.reload()로 페이지 새로고침
+ *    - 관리자 코드는 비밀번호 형식으로 입력됨 (type="password")
+ *    - 코드가 비어있으면 인증 버튼 비활성화
+ *    - 인증 실패 시 에러 메시지 표시
+ *
+ * ===================================================================================================
+ */
+
 import React, { useState } from 'react';
 import { X, Shield, Key } from 'lucide-react';
 import { useAdmin } from '../../contexts/AdminContext';
 
+/**
+ * AdminCodeModal - 관리자 인증 코드 입력 모달 컴포넌트
+ *
+ * @param {Object} props - 컴포넌트 props
+ * @param {boolean} props.isOpen - 모달 표시 여부
+ * @param {Function} props.onClose - 모달 닫기 핸들러
+ *
+ * @returns {JSX.Element|null} 모달 UI (isOpen이 false면 null 반환)
+ *
+ * @example
+ * <AdminCodeModal
+ *   isOpen={showAdminModal}
+ *   onClose={() => setShowAdminModal(false)}
+ * />
+ */
 const AdminCodeModal = ({ isOpen, onClose }) => {
-  const [code, setCode] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  // 상태 관리
+  const [code, setCode] = useState('');  // 입력된 관리자 코드
+  const [error, setError] = useState('');  // 에러 메시지
+  const [loading, setLoading] = useState(false);  // 로딩 상태
   const { verifyAdminCode } = useAdmin();
 
+  /**
+   * handleSubmit - 관리자 코드 검증 처리
+   *
+   * @description 입력된 코드를 검증하고, 성공 시 페이지 새로고침
+   * @param {Event} e - 폼 제출 이벤트
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');

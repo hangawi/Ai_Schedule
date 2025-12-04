@@ -1,7 +1,54 @@
+/**
+ * ===================================================================================================
+ * AdminUserManagement.js - 관리자 회원 관리 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/admin/AdminUserManagement.js
+ *
+ * 🎯 주요 기능:
+ *    - 전체 회원 목록 조회 및 검색 (이름, 이메일)
+ *    - 회원 삭제 (관리자 권한)
+ *    - 회원 관리자 승급/강등
+ *    - 회원 정보 표시 (이름, 이메일, 연락처, 주소, 역할, 가입일)
+ *    - 페이지네이션 (20명씩)
+ *
+ * 🔗 연결된 파일:
+ *    - ../../config/firebaseConfig.js - Firebase 인증
+ *    - /api/admin/users - 회원 목록 조회 API
+ *    - /api/admin/users/:id - 회원 삭제 API
+ *    - /api/admin/users/:id/promote - 관리자 승급 API
+ *    - /api/admin/users/:id/demote - 관리자 강등 API
+ *    - lucide-react - 아이콘 라이브러리
+ *
+ * 💡 UI 위치:
+ *    - 화면: 관리자 > 회원 관리
+ *    - 접근: 헤더 > 관리자 메뉴 > 회원 관리
+ *    - 섹션: 검색 바, 회원 목록 테이블, 페이지네이션
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 관리자 회원 관리 화면 전체가 변경됨
+ *    - 테이블 컬럼 추가: thead와 tbody의 tr 내부에 th/td 추가
+ *    - 페이지당 항목 수 변경: fetchUsers의 limit 파라미터 수정
+ *    - 역할 관리 로직 변경: handlePromote, handleDemote 함수 수정
+ *
+ * 📝 참고사항:
+ *    - 관리자 권한 필요
+ *    - 회원 삭제 및 강등은 되돌릴 수 없음 (확인 메시지 표시)
+ *    - 구글 로그인 사용자는 별도 뱃지로 표시
+ *    - 테이블 형식으로 회원 정보 표시
+ *
+ * ===================================================================================================
+ */
+
 import React, { useState, useEffect } from 'react';
 import { Users, Search, Trash2, Shield, ShieldOff, RefreshCw } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 
+/**
+ * AdminUserManagement - 관리자 회원 관리 메인 컴포넌트
+ *
+ * @returns {JSX.Element} 관리자 회원 관리 UI
+ */
 const AdminUserManagement = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -11,6 +58,12 @@ const AdminUserManagement = () => {
 
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
+  /**
+   * fetchUsers - 회원 목록 조회
+   *
+   * @description 페이지네이션과 검색어를 적용하여 회원 목록을 가져옴
+   * @param {number} page - 조회할 페이지 번호 (기본값: 1)
+   */
   const fetchUsers = async (page = 1) => {
     try {
       setLoading(true);
@@ -45,11 +98,24 @@ const AdminUserManagement = () => {
     fetchUsers();
   }, []);
 
+  /**
+   * handleSearch - 검색 폼 제출 처리
+   *
+   * @description 검색어 입력 후 첫 페이지부터 회원 목록 재조회
+   * @param {Event} e - 폼 제출 이벤트
+   */
   const handleSearch = (e) => {
     e.preventDefault();
     fetchUsers(1);
   };
 
+  /**
+   * handleDelete - 회원 삭제 처리
+   *
+   * @description 관리자 권한으로 회원을 영구 삭제 (확인 메시지 표시)
+   * @param {string} userId - 삭제할 회원의 ID
+   * @param {string} userName - 삭제할 회원의 이름 (확인 메시지용)
+   */
   const handleDelete = async (userId, userName) => {
     if (!window.confirm(`정말로 "${userName}" 회원을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) {
       return;
@@ -75,6 +141,13 @@ const AdminUserManagement = () => {
     }
   };
 
+  /**
+   * handlePromote - 회원 관리자 승급 처리
+   *
+   * @description 일반 회원을 관리자로 승급 (확인 메시지 표시)
+   * @param {string} userId - 승급할 회원의 ID
+   * @param {string} userName - 승급할 회원의 이름 (확인 메시지용)
+   */
   const handlePromote = async (userId, userName) => {
     if (!window.confirm(`"${userName}" 회원을 관리자로 승급하시겠습니까?`)) {
       return;
@@ -100,6 +173,13 @@ const AdminUserManagement = () => {
     }
   };
 
+  /**
+   * handleDemote - 관리자 강등 처리
+   *
+   * @description 관리자를 일반 회원으로 강등 (확인 메시지 표시)
+   * @param {string} userId - 강등할 관리자의 ID
+   * @param {string} userName - 강등할 관리자의 이름 (확인 메시지용)
+   */
   const handleDemote = async (userId, userName) => {
     if (!window.confirm(`"${userName}" 관리자를 일반 사용자로 강등하시겠습니까?`)) {
       return;
@@ -125,6 +205,13 @@ const AdminUserManagement = () => {
     }
   };
 
+  /**
+   * formatDate - 날짜 포맷팅 (년월일)
+   *
+   * @description 날짜 문자열을 한국어 형식으로 변환 (예: 2025년 1월 1일)
+   * @param {string} dateString - ISO 형식의 날짜 문자열
+   * @returns {string} 포맷팅된 날짜 문자열
+   */
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('ko-KR', {

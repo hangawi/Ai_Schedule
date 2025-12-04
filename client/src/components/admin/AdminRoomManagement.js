@@ -1,8 +1,56 @@
+/**
+ * ===================================================================================================
+ * AdminRoomManagement.js - 관리자 방 관리 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/admin/AdminRoomManagement.js
+ *
+ * 🎯 주요 기능:
+ *    - 전체 방 목록 조회 및 검색
+ *    - 방 삭제 (관리자 권한)
+ *    - 방별 활동 로그 조회 (전체, 멤버 활동, 자동배정, 변경 요청, 자리 관리)
+ *    - 방 멤버 목록 조회
+ *    - 개별 멤버 활동 로그 조회
+ *    - 활동 로그 초기화
+ *    - 페이지네이션 (20개씩)
+ *
+ * 🔗 연결된 파일:
+ *    - ../../config/firebaseConfig.js - Firebase 인증
+ *    - ../modals/MemberLogsModal.js - 멤버 로그 모달
+ *    - /api/admin/rooms - 방 목록 조회 API
+ *    - /api/admin/rooms/:id/logs - 방 로그 조회 API
+ *    - /api/admin/users/:id - 사용자 정보 조회 API
+ *
+ * 💡 UI 위치:
+ *    - 화면: 관리자 > 방 관리
+ *    - 접근: 헤더 > 관리자 메뉴 > 방 관리
+ *    - 섹션: 검색 바, 방 목록, 로그 모달, 멤버 목록
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 관리자 방 관리 화면 전체가 변경됨
+ *    - 로그 카테고리 추가: activeLogTab 조건 및 필터 로직 추가
+ *    - 페이지당 항목 수 변경: fetchRooms의 limit 파라미터 수정
+ *    - 방 카드 UI 변경: 방 목록 렌더링 JSX 수정
+ *
+ * 📝 참고사항:
+ *    - 관리자 권한 필요
+ *    - 방 삭제는 되돌릴 수 없음 (확인 메시지 표시)
+ *    - 로그는 탭별로 필터링 가능 (전체, 멤버, 자동배정, 변경, 자리)
+ *    - 멤버별 상세 로그는 MemberLogsModal에서 표시
+ *
+ * ===================================================================================================
+ */
+
 import React, { useState, useEffect } from 'react';
 import { Building2, Search, Trash2, RefreshCw, Users, Clock, ChevronDown, ChevronUp, X, FileText } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 import MemberLogsModal from '../modals/MemberLogsModal';
 
+/**
+ * AdminRoomManagement - 관리자 방 관리 메인 컴포넌트
+ *
+ * @returns {JSX.Element} 관리자 방 관리 UI
+ */
 const AdminRoomManagement = () => {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,6 +68,12 @@ const AdminRoomManagement = () => {
 
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
+  /**
+   * fetchRooms - 방 목록 조회
+   *
+   * @description 페이지네이션과 검색어를 적용하여 방 목록을 가져옴
+   * @param {number} page - 조회할 페이지 번호 (기본값: 1)
+   */
   const fetchRooms = async (page = 1) => {
     try {
       setLoading(true);
@@ -54,11 +108,24 @@ const AdminRoomManagement = () => {
     fetchRooms();
   }, []);
 
+  /**
+   * handleSearch - 검색 폼 제출 처리
+   *
+   * @description 검색어 입력 후 첫 페이지부터 방 목록 재조회
+   * @param {Event} e - 폼 제출 이벤트
+   */
   const handleSearch = (e) => {
     e.preventDefault();
     fetchRooms(1);
   };
 
+  /**
+   * handleDelete - 방 삭제 처리
+   *
+   * @description 관리자 권한으로 방을 영구 삭제 (확인 메시지 표시)
+   * @param {string} roomId - 삭제할 방의 ID
+   * @param {string} roomName - 삭제할 방의 이름 (확인 메시지용)
+   */
   const handleDelete = async (roomId, roomName) => {
     if (!window.confirm(`정말로 "${roomName}" 방을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) {
       return;
@@ -84,6 +151,13 @@ const AdminRoomManagement = () => {
     }
   };
 
+  /**
+   * fetchLogs - 방 활동 로그 조회
+   *
+   * @description 특정 방의 활동 로그를 가져오고, 멤버 정보도 함께 로드
+   * @param {string} roomId - 로그를 조회할 방의 ID
+   * @param {Object|null} roomObj - 방 객체 (멤버 정보 포함, 선택적)
+   */
   const fetchLogs = async (roomId, roomObj = null) => {
     try {
       setLogsLoading(true);
@@ -127,6 +201,12 @@ const AdminRoomManagement = () => {
     }
   };
 
+  /**
+   * fetchMembersUserInfo - 멤버 상세 정보 조회
+   *
+   * @description 각 멤버의 userId로 사용자 정보를 조회하여 state에 저장
+   * @param {Array} members - 멤버 배열 (user 필드 포함)
+   */
   const fetchMembersUserInfo = async (members) => {
     try {
       const currentUser = auth.currentUser;
@@ -163,6 +243,12 @@ const AdminRoomManagement = () => {
     }
   };
 
+  /**
+   * clearLogs - 방 로그 초기화
+   *
+   * @description 특정 방의 모든 활동 로그를 영구 삭제 (확인 메시지 표시)
+   * @param {string} roomId - 로그를 삭제할 방의 ID
+   */
   const clearLogs = async (roomId) => {
     if (!window.confirm('정말로 이 방의 모든 로그를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
       return;
@@ -191,6 +277,13 @@ const AdminRoomManagement = () => {
     }
   };
 
+  /**
+   * formatDate - 날짜 포맷팅 (년월일)
+   *
+   * @description 날짜 문자열을 한국어 형식으로 변환 (예: 2025년 1월 1일)
+   * @param {string} dateString - ISO 형식의 날짜 문자열
+   * @returns {string} 포맷팅된 날짜 문자열
+   */
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('ko-KR', {
@@ -200,6 +293,13 @@ const AdminRoomManagement = () => {
     });
   };
 
+  /**
+   * formatDateTime - 날짜시간 포맷팅 (월일시분)
+   *
+   * @description 날짜 문자열을 한국어 형식으로 변환 (예: 1월 1일 오후 3:45)
+   * @param {string} dateString - ISO 형식의 날짜 문자열
+   * @returns {string} 포맷팅된 날짜시간 문자열
+   */
   const formatDateTime = (dateString) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleString('ko-KR', {
@@ -210,6 +310,13 @@ const AdminRoomManagement = () => {
     });
   };
 
+  /**
+   * getActionLabel - 활동 타입 레이블 변환
+   *
+   * @description 영문 활동 타입을 한국어 레이블로 변환
+   * @param {string} action - 활동 타입 코드
+   * @returns {string} 한국어 활동 레이블
+   */
   const getActionLabel = (action) => {
     const labels = {
       auto_assign: '자동배정 실행',
@@ -229,6 +336,13 @@ const AdminRoomManagement = () => {
     return labels[action] || action;
   };
 
+  /**
+   * getActionColor - 활동 타입별 색상 클래스 반환
+   *
+   * @description 활동 타입에 따라 Tailwind CSS 색상 클래스 반환
+   * @param {string} action - 활동 타입 코드
+   * @returns {string} Tailwind CSS 색상 클래스
+   */
   const getActionColor = (action) => {
     const colors = {
       auto_assign: 'bg-blue-100 text-blue-700',
