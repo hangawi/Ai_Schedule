@@ -692,8 +692,187 @@ exports.respondToExchangeRequest = async (req, res) => {
             requesterSlots: request.requesterSlots
          });
 
-         // Calculate required hours from requester's slots
+         // 🎯 Stage 1: Check if direct exchange is possible (mutual preferred time compatibility)
+         console.log('🔍 Stage 1: Checking mutual preferred time compatibility...');
+
+         // Get requester ID (will be used in both Stage 1 and Stage 2)
+         const requesterId = (request.requester._id || request.requester).toString();
+         const requesterMember = room.members.find(m =>
+            (m.user._id || m.user).toString() === requesterId
+         );
+         const targetMember = room.members.find(m =>
+            (m.user._id || m.user).toString() === targetUserId
+         );
+
+         if (!requesterMember || !targetMember) {
+            return res.status(404).json({
+               success: false,
+               message: '요청자 또는 대상자를 찾을 수 없습니다.'
+            });
+         }
+
+         // Get preferred schedules
+         const requesterPreferredTimes = requesterMember.user.defaultSchedule || [];
+         const targetPreferredTimes = targetMember.user.defaultSchedule || [];
+
+         // Check if target's slot is in requester's preferred times
+         const targetSlot = request.targetSlot;
+         const targetSlotDay = targetSlot.day;
+         const targetSlotStart = targetSlot.startTime;
+         const targetSlotEnd = targetSlot.endTime;
+
+         const isTargetSlotInRequesterPreferred = requesterPreferredTimes.some(pref => {
+            if (pref.priority < 2) return false; // Only consider preferred times (priority >= 2)
+            if (pref.dayOfWeek !== targetSlotDay) return false;
+            // Check if target slot time is within preferred time range
+            return pref.startTime <= targetSlotStart && pref.endTime >= targetSlotEnd;
+         });
+
+         // Get requester's slots (will be used in both Stage 1 and Stage 2)
          const requesterSlots = request.requesterSlots;
+
+         // Check if requester's slots are all in target's preferred times
+         const areRequesterSlotsInTargetPreferred = requesterSlots.every(slot => {
+            return targetPreferredTimes.some(pref => {
+               if (pref.priority < 2) return false;
+               if (pref.dayOfWeek !== slot.day) return false;
+               return pref.startTime <= slot.startTime && pref.endTime >= slot.endTime;
+            });
+         });
+
+         console.log('🔍 Stage 1 Results:', {
+            isTargetSlotInRequesterPreferred,
+            areRequesterSlotsInTargetPreferred
+         });
+
+         // If both conditions are met, execute direct exchange
+         if (isTargetSlotInRequesterPreferred && areRequesterSlotsInTargetPreferred) {
+            console.log('✅ Stage 1: Direct exchange possible! Both users have mutual preferred times.');
+            console.log('🔄 Executing direct exchange...');
+            console.log('📊 Before exchange - Total timeSlots:', room.timeSlots.length);
+
+            // Step 1: Remove requester's current slots (C's slots)
+            console.log('🗑️ Removing requester slots...');
+            const beforeLength = room.timeSlots.length;
+
+            for (const reqSlot of requesterSlots) {
+               const index = room.timeSlots.findIndex(slot => {
+                  const slotDate = new Date(slot.date).toISOString().split('T')[0];
+                  const reqDate = new Date(reqSlot.date).toISOString().split('T')[0];
+                  const slotUserId = (slot.user._id || slot.user).toString();
+                  const reqUserId = (reqSlot.user._id || reqSlot.user).toString();
+                  return slotDate === reqDate &&
+                         slot.startTime === reqSlot.startTime &&
+                         slot.endTime === reqSlot.endTime &&
+                         slotUserId === reqUserId;
+               });
+               if (index !== -1) {
+                  console.log(`  ✓ Removing slot at index ${index}: ${reqSlot.day} ${reqSlot.startTime}-${reqSlot.endTime}`);
+                  room.timeSlots.splice(index, 1);
+               }
+            }
+
+            console.log(`🗑️ Removed ${beforeLength - room.timeSlots.length} requester slots`);
+
+            // Step 2: Remove target's slots (D's slots)
+            console.log(`🗑️ Removing target's slots: ${requesterSlots.length} slots starting from ${targetSlot.day} ${targetSlot.startTime}`);
+
+            let removedTargetCount = 0;
+            for (let i = 0; i < requesterSlots.length; i++) {
+               const currentStartTime = addHours(targetSlot.startTime, i * 0.5);
+               const currentEndTime = addHours(currentStartTime, 0.5);
+
+               const index = room.timeSlots.findIndex(slot => {
+                  const slotDate = new Date(slot.date).toISOString().split('T')[0];
+                  const targetDate = new Date(targetSlot.date).toISOString().split('T')[0];
+                  const slotUserId = (slot.user._id || slot.user).toString();
+                  const targetUserIdStr = (targetSlot.user._id || targetSlot.user).toString();
+                  return slotDate === targetDate &&
+                         slot.startTime === currentStartTime &&
+                         slot.endTime === currentEndTime &&
+                         slotUserId === targetUserIdStr;
+               });
+
+               if (index !== -1) {
+                  console.log(`  ✓ Removing target's slot at index ${index}: ${targetSlot.day} ${currentStartTime}-${currentEndTime}`);
+                  room.timeSlots.splice(index, 1);
+                  removedTargetCount++;
+               }
+            }
+
+            console.log(`🗑️ Removed ${removedTargetCount} of target's slots`);
+
+            // Step 3: Add requester to target's position (C goes to D's slot)
+            console.log(`➕ Creating ${requesterSlots.length} slots for requester at target location...`);
+            const newRequesterSlots = [];
+            let requesterCurrentTime = targetSlot.startTime;
+
+            for (let i = 0; i < requesterSlots.length; i++) {
+               const slotEnd = addHours(requesterCurrentTime, 0.5);
+               newRequesterSlots.push({
+                  user: requesterId,
+                  date: targetSlot.date,
+                  startTime: requesterCurrentTime,
+                  endTime: slotEnd,
+                  day: targetSlot.day,
+                  subject: '교환 결과',
+                  status: 'confirmed',
+                  assignedBy: req.user.id,
+                  assignedAt: new Date()
+               });
+               requesterCurrentTime = slotEnd;
+            }
+
+            room.timeSlots.push(...newRequesterSlots);
+            console.log(`➕ Added ${newRequesterSlots.length} slots for requester at ${targetSlot.day} ${targetSlot.startTime}`);
+
+            // Step 4: Add target user to requester's position (D goes to C's slots)
+            console.log(`➕ Creating ${requesterSlots.length} slots for target user at requester's original location...`);
+            const newTargetSlots = [];
+
+            for (const reqSlot of requesterSlots) {
+               newTargetSlots.push({
+                  user: targetUserId,
+                  date: reqSlot.date,
+                  startTime: reqSlot.startTime,
+                  endTime: reqSlot.endTime,
+                  day: reqSlot.day,
+                  subject: '교환 결과',
+                  status: 'confirmed',
+                  assignedBy: req.user.id,
+                  assignedAt: new Date()
+               });
+            }
+
+            room.timeSlots.push(...newTargetSlots);
+            console.log(`➕ Added ${newTargetSlots.length} slots for target user at requester's original location`);
+
+            // Step 5: Update request status
+            request.status = 'approved';
+            request.respondedAt = new Date();
+            request.respondedBy = req.user.id;
+            request.response = `수락되었습니다. 직접 교환이 완료되었습니다.`;
+
+            console.log('📊 After exchange - Total timeSlots:', room.timeSlots.length);
+            console.log('💾 Saving room changes...');
+
+            room.markModified('timeSlots');
+            await room.save();
+            await room.populate('timeSlots.user', '_id firstName lastName email');
+
+            console.log('✅ Stage 1: Direct exchange completed successfully!');
+
+            return res.json({
+               success: true,
+               message: '요청을 수락했습니다. 직접 교환이 완료되었습니다.',
+               request,
+               exchangeType: 'direct'
+            });
+         }
+
+         console.log('⚠️ Stage 1: Direct exchange not possible. Proceeding to Stage 2...');
+
+         // Calculate required hours from requester's slots (requesterSlots already declared above)
          const firstSlot = requesterSlots[0];
          const lastSlot = requesterSlots[requesterSlots.length - 1];
          const requiredHours = getHoursDifference(firstSlot.startTime, lastSlot.endTime);
@@ -846,7 +1025,7 @@ exports.respondToExchangeRequest = async (req, res) => {
          console.log('  Alternative slots:', alternativeSlots.map(s => `${s.day} ${s.startTime}-${s.endTime}`));
 
          // Step 4: Move B (requester) to target slot (A's original position)
-         const requesterId = (request.requester._id || request.requester).toString();
+         // requesterId already declared above
          console.log(`➕ Creating ${requesterSlots.length} slots for B (requester) at target location...`);
          const newRequesterSlots = [];
          let requesterCurrentTime = request.targetSlot.startTime;

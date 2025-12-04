@@ -265,7 +265,147 @@ exports.handleRequest = async (req, res) => {
                         return sum + (end - start);
                      }, 0);
 
-                     console.log(`🔍 Checking if B has empty time BEFORE modifying any slots...`);
+                     // 🎯 Stage 1: Check if direct exchange is possible (mutual preferred time compatibility)
+                     console.log('🔍 Stage 1: Checking mutual preferred time compatibility...');
+
+                     // Get requester's member data
+                     const requesterMember = room.members.find(m =>
+                        (m.user._id || m.user).toString() === (requester._id || requester).toString()
+                     );
+
+                     if (requesterMember && requesterMember.user.defaultSchedule && targetUser.defaultSchedule) {
+                        const requesterPreferredTimes = requesterMember.user.defaultSchedule || [];
+                        const targetPreferredTimes = targetUser.defaultSchedule || [];
+
+                        // Check if target's slot is in requester's preferred times
+                        const isTargetSlotInRequesterPreferred = requesterPreferredTimes.some(pref => {
+                           if (pref.priority < 2) return false; // Only consider preferred times (priority >= 2)
+                           if (pref.dayOfWeek !== timeSlot.day &&
+                               DAY_NAMES[pref.dayOfWeek] !== timeSlot.day) return false;
+                           // Check if target slot time is within preferred time range
+                           return pref.startTime <= timeSlot.startTime && pref.endTime >= timeSlot.endTime;
+                        });
+
+                        // Check if requester's slots (overlappingSlots that requester wants) are in target's preferred times
+                        const areTargetSlotsInRequesterPreferred = overlappingSlots.every(slot => {
+                           return targetPreferredTimes.some(pref => {
+                              if (pref.priority < 2) return false;
+                              if (pref.dayOfWeek !== slot.day &&
+                                  DAY_NAMES[pref.dayOfWeek] !== slot.day) return false;
+                              return pref.startTime <= slot.startTime && pref.endTime >= slot.endTime;
+                           });
+                        });
+
+                        console.log('🔍 Stage 1 Results:', {
+                           isTargetSlotInRequesterPreferred,
+                           areTargetSlotsInRequesterPreferred
+                        });
+
+                        // If both conditions are met, execute direct exchange
+                        if (isTargetSlotInRequesterPreferred && areTargetSlotsInRequesterPreferred) {
+                           console.log('✅ Stage 1: Direct exchange possible! Both users have mutual preferred times.');
+                           console.log('🔄 Executing direct exchange...');
+                           console.log('📊 Before exchange - Total timeSlots:', room.timeSlots.length);
+
+                           // Step 1: Remove requester's current slots (if any)
+                           console.log('🗑️ Removing requester\'s original slots...');
+                           if (request.requesterSlots && request.requesterSlots.length > 0) {
+                              request.requesterSlots.forEach(reqSlot => {
+                                 const reqDateStr = reqSlot.date ? new Date(reqSlot.date).toISOString().split('T')[0] : null;
+                                 const index = room.timeSlots.findIndex(slot => {
+                                    const slotUserId = slot.user._id || slot.user;
+                                    if (slotUserId.toString() !== requester._id.toString()) return false;
+                                    if (slot.startTime !== reqSlot.startTime) return false;
+                                    if (slot.endTime !== reqSlot.endTime) return false;
+                                    if (!slot.date) return false;
+                                    if (reqDateStr) {
+                                       const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
+                                       if (slotDateStr !== reqDateStr) return false;
+                                    } else {
+                                       return false;
+                                    }
+                                    return true;
+                                 });
+                                 if (index !== -1) {
+                                    room.timeSlots.splice(index, 1);
+                                    console.log(`   ❌ Removed requester's slot: ${reqSlot.startTime}-${reqSlot.endTime}`);
+                                 }
+                              });
+                              room.markModified('timeSlots');
+                           }
+
+                           // Step 2: Remove target's slots (overlappingSlots)
+                           console.log(`🗑️ Removing ${overlappingSlots.length} target's slots...`);
+                           overlappingSlots.forEach(slot => {
+                              const index = room.timeSlots.findIndex(s => s._id.equals(slot._id));
+                              if (index !== -1) {
+                                 room.timeSlots.splice(index, 1);
+                                 console.log(`   ❌ Removed target's slot: ${new Date(slot.date).toISOString().split('T')[0]} ${slot.startTime}-${slot.endTime}`);
+                              }
+                           });
+                           room.markModified('timeSlots');
+
+                           // Step 3: Add requester to target's position (requester gets overlappingSlots)
+                           console.log(`➕ Adding requester to target's position...`);
+                           overlappingSlots.forEach(slot => {
+                              room.timeSlots.push({
+                                 user: requester._id,
+                                 date: slot.date,
+                                 startTime: slot.startTime,
+                                 endTime: slot.endTime,
+                                 day: slot.day,
+                                 subject: '직접 교환',
+                                 status: 'confirmed',
+                                 assignedBy: req.user.id,
+                                 assignedAt: new Date()
+                              });
+                           });
+                           console.log(`   ✅ Added ${overlappingSlots.length} slots for requester`);
+
+                           // Step 4: Add target user to requester's original position (if requesterSlots exists)
+                           if (request.requesterSlots && request.requesterSlots.length > 0) {
+                              console.log(`➕ Adding target user to requester's original position...`);
+                              request.requesterSlots.forEach(reqSlot => {
+                                 room.timeSlots.push({
+                                    user: targetUser._id,
+                                    date: reqSlot.date,
+                                    startTime: reqSlot.startTime,
+                                    endTime: reqSlot.endTime,
+                                    day: reqSlot.day,
+                                    subject: '직접 교환',
+                                    status: 'confirmed',
+                                    assignedBy: req.user.id,
+                                    assignedAt: new Date()
+                                 });
+                              });
+                              console.log(`   ✅ Added ${request.requesterSlots.length} slots for target user`);
+                           }
+
+                           // Step 5: Update request status
+                           request.status = 'approved';
+                           request.respondedAt = now;
+                           request.respondedBy = req.user.id;
+                           request.response = '직접 교환이 완료되었습니다.';
+
+                           console.log('📊 After exchange - Total timeSlots:', room.timeSlots.length);
+                           room.markModified('timeSlots');
+                           room.markModified('requests');
+
+                           await room.save();
+
+                           console.log('✅ Stage 1: Direct exchange completed successfully!');
+
+                           return res.json({
+                              success: true,
+                              message: '요청을 수락했습니다. 직접 교환이 완료되었습니다.',
+                              room
+                           });
+                        }
+
+                        console.log('⚠️ Stage 1: Direct exchange not possible. Proceeding to Stage 2...');
+                     }
+
+                     console.log(`🔍 Stage 2: Checking if B has empty time BEFORE modifying any slots...`);
 
                      // ✅ Include both defaultSchedule AND scheduleExceptions
                      const targetUserSchedule = [
