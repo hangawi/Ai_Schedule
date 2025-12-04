@@ -14,8 +14,41 @@ const dayMap = {
   'friday': '금요일'
 };
 
+// Helper function to check if slots are in user's preferred times
+const checkIfSlotsInPreferredTimes = (slots, userPreferredTimes) => {
+  if (!slots || slots.length === 0 || !userPreferredTimes || userPreferredTimes.length === 0) {
+    return false;
+  }
+
+  // Day mapping for comparison
+  const DAY_NAMES = {
+    'monday': 'monday',
+    'tuesday': 'tuesday',
+    'wednesday': 'wednesday',
+    'thursday': 'thursday',
+    'friday': 'friday',
+    'saturday': 'saturday',
+    'sunday': 'sunday'
+  };
+
+  return slots.every(slot => {
+    return userPreferredTimes.some(pref => {
+      // Only consider preferred times (priority >= 2)
+      if (pref.priority < 2) return false;
+
+      // Check day match
+      if (pref.dayOfWeek !== slot.day && DAY_NAMES[pref.dayOfWeek] !== slot.day) {
+        return false;
+      }
+
+      // Check if slot time is within preferred time range
+      return pref.startTime <= slot.startTime && pref.endTime >= slot.endTime;
+    });
+  });
+};
+
 // Helper function to generate improved request messages
-const generateRequestMessage = (request, currentRoom) => {
+const generateRequestMessage = (request, currentRoom, currentUser) => {
   // If message already contains useful info, use it
   if (request.message && (
     request.message.includes('이동하고 싶어합니다') ||
@@ -39,13 +72,11 @@ const generateRequestMessage = (request, currentRoom) => {
     case 'time_change':
       // Find where the target will move to (requester's current slots)
       let targetDestinationInfo = '';
+      let requesterSlots = [];
 
       // First, check if requesterSlots is available in the request
       if (request.requesterSlots && request.requesterSlots.length > 0) {
-        const firstSlot = request.requesterSlots[0];
-        const lastSlot = request.requesterSlots[request.requesterSlots.length - 1];
-        const slotDayKorean = dayMap[firstSlot.day?.toLowerCase()] || firstSlot.day;
-        targetDestinationInfo = ` 회원님은 ${slotDayKorean} ${firstSlot.startTime}-${lastSlot.endTime}로 이동하게 됩니다.`;
+        requesterSlots = request.requesterSlots;
       } else if (currentRoom && currentRoom.timeSlots && request.requester) {
         // Otherwise, try to find requester's current slots from currentRoom
         const requesterId = request.requester._id || request.requester;
@@ -62,26 +93,52 @@ const generateRequestMessage = (request, currentRoom) => {
         });
 
         if (requesterCurrentSlots.length > 0) {
-          // Group by date
-          const slotsByDate = {};
-          requesterCurrentSlots.forEach(slot => {
-            const dateKey = new Date(slot.date).toISOString().split('T')[0];
-            if (!slotsByDate[dateKey]) slotsByDate[dateKey] = [];
-            slotsByDate[dateKey].push(slot);
-          });
+          requesterSlots = requesterCurrentSlots;
+        }
+      }
 
-          // Get first date group
-          const firstDateSlots = Object.values(slotsByDate)[0];
-          if (firstDateSlots && firstDateSlots.length > 0) {
-            firstDateSlots.sort((a, b) => {
-              const [aH, aM] = a.startTime.split(':').map(Number);
-              const [bH, bM] = b.startTime.split(':').map(Number);
-              return (aH * 60 + aM) - (bH * 60 + bM);
+      // Now check if requester's slots are in target's preferred times
+      if (requesterSlots.length > 0) {
+        // Group by date
+        const slotsByDate = {};
+        requesterSlots.forEach(slot => {
+          const dateKey = new Date(slot.date).toISOString().split('T')[0];
+          if (!slotsByDate[dateKey]) slotsByDate[dateKey] = [];
+          slotsByDate[dateKey].push(slot);
+        });
+
+        // Get first date group
+        const firstDateSlots = Object.values(slotsByDate)[0];
+        if (firstDateSlots && firstDateSlots.length > 0) {
+          firstDateSlots.sort((a, b) => {
+            const [aH, aM] = a.startTime.split(':').map(Number);
+            const [bH, bM] = b.startTime.split(':').map(Number);
+            return (aH * 60 + aM) - (bH * 60 + bM);
+          });
+          const firstSlot = firstDateSlots[0];
+          const lastSlot = firstDateSlots[firstDateSlots.length - 1];
+          const slotDayKorean = dayMap[firstSlot.day?.toLowerCase()] || firstSlot.day;
+
+          // Check if these slots are in target's preferred times
+          let targetCanDirectlyMove = false;
+          if (currentUser && currentUser.id && currentRoom && currentRoom.members) {
+            const targetMember = currentRoom.members.find(m => {
+              const userId = m.user._id || m.user.id || m.user;
+              return userId && userId.toString() === currentUser.id.toString();
             });
-            const firstSlot = firstDateSlots[0];
-            const lastSlot = firstDateSlots[firstDateSlots.length - 1];
-            const slotDayKorean = dayMap[firstSlot.day?.toLowerCase()] || firstSlot.day;
+
+            if (targetMember && targetMember.user && targetMember.user.defaultSchedule) {
+              targetCanDirectlyMove = checkIfSlotsInPreferredTimes(
+                firstDateSlots,
+                targetMember.user.defaultSchedule
+              );
+            }
+          }
+
+          if (targetCanDirectlyMove) {
             targetDestinationInfo = ` 회원님은 ${slotDayKorean} ${firstSlot.startTime}-${lastSlot.endTime}로 이동하게 됩니다.`;
+          } else {
+            targetDestinationInfo = ` (승인 시 연쇄 교환이 필요할 수 있습니다)`;
           }
         }
       }
@@ -110,6 +167,7 @@ const generateRequestMessage = (request, currentRoom) => {
 
 const RequestSection = ({
   currentRoom,
+  currentUser,
   requestViewMode,
   setRequestViewMode,
   receivedRequests,
@@ -156,6 +214,7 @@ const RequestSection = ({
         {requestViewMode === 'received' && (
           <ReceivedRequestsView
             currentRoom={currentRoom}
+            currentUser={currentUser}
             receivedRequests={receivedRequests}
             showAllRequests={showAllRequests}
             setShowAllRequests={setShowAllRequests}
@@ -169,6 +228,7 @@ const RequestSection = ({
         {requestViewMode === 'sent' && (
           <SentRequestsView
             currentRoom={currentRoom}
+            currentUser={currentUser}
             sentRequests={sentRequests}
             showAllRequests={showAllRequests}
             setShowAllRequests={setShowAllRequests}
@@ -184,6 +244,7 @@ const RequestSection = ({
 
 const ReceivedRequestsView = ({
   currentRoom,
+  currentUser,
   receivedRequests,
   showAllRequests,
   setShowAllRequests,
@@ -257,7 +318,7 @@ const ReceivedRequestsView = ({
                     <div className="text-xs font-medium text-blue-100 mb-2">
                       {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
                     </div>
-                    <p className="text-xs text-white italic mb-2 line-clamp-2">"{generateRequestMessage(request, currentRoom)}"</p>
+                    <p className="text-xs text-white italic mb-2 line-clamp-2">"{generateRequestMessage(request, currentRoom, currentUser)}"</p>
                     <div className="flex justify-end space-x-2 mt-2">
                       <button
                         onClick={() => handleRequestWithUpdate(request._id, 'approved', request)}
@@ -368,6 +429,7 @@ const ReceivedRequestsView = ({
 
 const SentRequestsView = ({
   currentRoom,
+  currentUser,
   sentRequests,
   showAllRequests,
   setShowAllRequests,
@@ -507,7 +569,7 @@ const SentRequestsView = ({
                     <div className="text-xs font-medium text-gray-700 !text-gray-700 mb-2">
                       {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
                     </div>
-                    <p className="text-xs text-white italic mb-2 line-clamp-2">"{generateRequestMessage(request, currentRoom)}"</p>
+                    <p className="text-xs text-white italic mb-2 line-clamp-2">"{generateRequestMessage(request, currentRoom, currentUser)}"</p>
                     <div className="flex justify-end">
                       <button
                         onClick={() => handleCancelRequest(request._id)}

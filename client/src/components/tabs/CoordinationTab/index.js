@@ -471,6 +471,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
               {!isOwner && (
                 <RequestSection
                   currentRoom={currentRoom}
+                  currentUser={user}
                   requestViewMode={requestViewMode}
                   setRequestViewMode={setRequestViewMode}
                   receivedRequests={receivedRequests}
