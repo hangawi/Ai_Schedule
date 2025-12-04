@@ -115,7 +115,12 @@ async function handleDateChange(req, res, room, memberData, params) {
     const slotDate = new Date(slot.date).toISOString().split('T')[0];
     const isUserSlot = slotUserId === req.user.id.toString();
     const isSourceDate = slotDate === sourceDateStr;
-    const isValidSubject = slot.subject === '자동 배정' || slot.subject === '교환 결과';
+    const isValidSubject = slot.subject === '자동 배정' ||
+                           slot.subject === '교환 결과' ||
+                           slot.subject === '자동 재배치' ||
+                           slot.subject === '연쇄 교환 결과' ||
+                           slot.subject === '연쇄 조정 결과' ||
+                           slot.subject === '직접 교환';
     return isUserSlot && isSourceDate && isValidSubject;
   });
 

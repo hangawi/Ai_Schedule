@@ -15,7 +15,12 @@ function findUserSlots(room, userId) {
   return room.timeSlots.filter(slot => {
     const slotUserId = (slot.user._id || slot.user).toString();
     const isUserSlot = slotUserId === userId.toString();
-    const isValidSubject = slot.subject === '자동 배정' || slot.subject === '교환 결과';
+    const isValidSubject = slot.subject === '자동 배정' ||
+                           slot.subject === '교환 결과' ||
+                           slot.subject === '자동 재배치' ||
+                           slot.subject === '연쇄 교환 결과' ||
+                           slot.subject === '연쇄 조정 결과' ||
+                           slot.subject === '직접 교환';
     return isUserSlot && isValidSubject;
   });
 }
@@ -34,7 +39,12 @@ function findSlotsOnDate(room, userId, date) {
     const slotDate = dateToString(new Date(slot.date));
     const isUserSlot = slotUserId === userId.toString();
     const isTargetDate = slotDate === dateStr;
-    const isValidSubject = slot.subject === '자동 배정' || slot.subject === '교환 결과';
+    const isValidSubject = slot.subject === '자동 배정' ||
+                           slot.subject === '교환 결과' ||
+                           slot.subject === '자동 재배치' ||
+                           slot.subject === '연쇄 교환 결과' ||
+                           slot.subject === '연쇄 조정 결과' ||
+                           slot.subject === '직접 교환';
     return isUserSlot && isTargetDate && isValidSubject;
   });
 }

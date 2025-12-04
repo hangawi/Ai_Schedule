@@ -376,7 +376,8 @@ exports.smartExchange = async (req, res) => {
                              slot.subject === '교환 결과' ||
                              slot.subject === '자동 재배치' ||
                              slot.subject === '연쇄 교환 결과' ||
-                             slot.subject === '연쇄 조정 결과';
+                             slot.subject === '연쇄 조정 결과' ||
+                             slot.subject === '직접 교환';
       return isUserSlot && isValidSubject;
     });
 
