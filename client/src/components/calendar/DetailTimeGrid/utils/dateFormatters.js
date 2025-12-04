@@ -36,6 +36,15 @@ export const formatDate = (date) => {
   return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일 (${days[date.getDay()]})`;
 };
 
+/**
+ * getDateString - 날짜를 YYYY-MM-DD 형식으로 변환
+ *
+ * @param {Date} date - 변환할 날짜
+ * @returns {string} "YYYY-MM-DD" 형식 문자열
+ *
+ * @example
+ * getDateString(new Date(2025, 0, 1)); // "2025-01-01"
+ */
 // 날짜를 YYYY-MM-DD 형식의 문자열로 변환
 export const getDateString = (date) => {
   const year = date.getFullYear();

@@ -131,11 +131,11 @@
 [x] client/src/components/calendar/CalendarView.js
 [x] client/src/components/calendar/CoordinationCalendarView.js
 [x] client/src/components/calendar/CoordinationDetailGrid.js
-[ ] client/src/components/calendar/DetailTimeGrid/index.js
+[x] client/src/components/calendar/DetailTimeGrid/index.js
 [x] client/src/components/calendar/DetailTimeGrid/constants/priorityConfig.js
-[ ] client/src/components/calendar/DetailTimeGrid/handlers/copyHandler.js
-[ ] client/src/components/calendar/DetailTimeGrid/handlers/slotHelpers.js
-[ ] client/src/components/calendar/DetailTimeGrid/utils/dateFormatters.js
+[x] client/src/components/calendar/DetailTimeGrid/handlers/copyHandler.js
+[x] client/src/components/calendar/DetailTimeGrid/handlers/slotHelpers.js
+[x] client/src/components/calendar/DetailTimeGrid/utils/dateFormatters.js
 [ ] client/src/components/calendar/DetailTimeGrid/utils/timeCalculations.js
 [ ] client/src/components/calendar/DetailTimeGrid/utils/timeSlotMerger.js
 
@@ -833,16 +833,20 @@
 4. [ ] 관련 파일 연결 정보 작성
 5. [ ] 수정 가이드 작성 완료
 6. [ ] 코드 실행하여 오류 없음 확인
+7. [ ] ⚠️ 체크리스트에서 해당 파일을 [x]로 체크 (필수!)
+8. [ ] ⚠️ 아래 "📊 진행률 추적" 섹션 업데이트 (필수!)
+
+🚨 중요: 7번과 8번은 파일 하나 완료할 때마다 반드시 업데이트해야 함!
 
 
 ## 📊 진행률 추적
 
 - 전체 파일 수: 341개 (클라이언트: 223개, 서버: 118개)
-- 완료한 파일: 66 / 341
-- 진행률: 19.4%
+- 완료한 파일: 70 / 341
+- 진행률: 20.5%
 
 ### 세부 진행률
-- 클라이언트: 66 / 223 (29.6%)
+- 클라이언트: 70 / 223 (31.4%)
 - 서버: 0 / 118 (0%)
   - nview 폴더: 0 / 11
   - scheduleOptimizer 폴더: 0 / 14
