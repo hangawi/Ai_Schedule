@@ -32,7 +32,7 @@ const {
 const { processDeferredAssignments } = require('./helpers/carryOverHelper');
 
 // Services
-const { createTimetableFromPersonalSchedules } = require('./services/timetableCreationService');
+const { createTimetableFromPersonalSchedules, filterFutureDates } = require('./services/timetableCreationService');
 const { identifyConflictsBeforeAssignment } = require('./services/conflictIdentificationService');
 const { assignByTimeOrder, assignUndisputedSlots, iterativeAssignment } = require('./services/slotAssignmentService');
 const { resolveConflictsWithOwner, resolveConflictsByOwnerTakingSlot } = require('./services/conflictResolutionService');
@@ -69,7 +69,9 @@ class SchedulingAlgorithm {
       ownerPreferences = {},
       roomSettings = {},
       fullRangeStart,
-      fullRangeEnd
+      fullRangeEnd,
+      assignmentMode = 'normal',
+      clientToday
     } = options;
 
     // 다중 주 스케줄링
@@ -98,9 +100,7 @@ class SchedulingAlgorithm {
     const startDate = currentWeek ? new Date(currentWeek) : new Date('2025-09-16T00:00:00.000Z');
 
     // 타임테이블 생성
-    // 타임테이블 생성 로그는 timetableCreationService에서 출력
-    
-    const timetable = createTimetableFromPersonalSchedules(
+    let timetable = createTimetableFromPersonalSchedules(
       members,
       owner,
       startDate,
@@ -109,6 +109,12 @@ class SchedulingAlgorithm {
       fullRangeStart,
       fullRangeEnd
     );
+    
+    // "오늘 기준" 모드: 과거 날짜 필터링
+    if (assignmentMode === 'from_today') {
+      timetable = filterFutureDates(timetable, clientToday);
+      console.log(`[from_today] Filtered to ${Object.keys(timetable).length} future slots using client date: ${clientToday}`);
+    }
 
     // 타임테이블이 비어있으면 빠르게 종료 (성능 최적화)
     const timetableSize = Object.keys(timetable).length;
@@ -151,7 +157,7 @@ class SchedulingAlgorithm {
     // Negotiation blocks feature removed
 
     // 새로운 배정 전략: 시간 순서 우선 배정 (1시간 블록씩)
-    assignByTimeOrder(timetable, assignments, memberRequiredSlots, ownerId);
+    assignByTimeOrder(timetable, assignments, memberRequiredSlots, ownerId, members, assignmentMode);
 
     // 기존 Phase 2, 3 비활성화 (단독 슬롯 우선 배정 제거)
     // Phase 2: 논쟁 없는 슬롯 배정 (고우선순위)

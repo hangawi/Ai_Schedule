@@ -305,7 +305,35 @@ const createTimetable = (roomTimeSlots, startDate, numWeeks, roomSettings = {}, 
   return timetable;
 };
 
+/**
+ * 오늘 이후 날짜만 필터링
+ * @param {Object} timetable - 전체 타임테이블
+ * @returns {Object} 필터링된 타임테이블
+ */
+const filterFutureDates = (timetable, todayString) => {
+  // Use client-provided date string for consistency, with a fallback to server's UTC date.
+  const today = new Date(todayString || new Date().toISOString().slice(0, 10));
+  console.log(`[filterFutureDates] Filtering based on date: ${today.toISOString()}`);
+
+  const futureTimetable = {};
+
+  for (const slotKey in timetable) {
+    if (Object.prototype.hasOwnProperty.call(timetable, slotKey)) {
+      const slotData = timetable[slotKey];
+      if (slotData && slotData.date) {
+        const slotDate = new Date(slotData.date);
+        if (slotDate >= today) {
+          futureTimetable[slotKey] = slotData;
+        }
+      }
+    }
+  }
+  console.log(`[filterFutureDates] Original timetable slots: ${Object.keys(timetable).length}. Filtered to: ${Object.keys(futureTimetable).length}`);
+  return futureTimetable;
+};
+
 module.exports = {
   createTimetableFromPersonalSchedules,
-  createTimetable
+  createTimetable,
+  filterFutureDates
 };

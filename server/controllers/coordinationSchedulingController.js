@@ -9,11 +9,17 @@ const schedulingAlgorithm = require('../services/schedulingAlgorithm');
 exports.runAutoSchedule = async (req, res) => {
    try {
       const { roomId } = req.params;
-      const { minHoursPerWeek = 3, numWeeks = 4, currentWeek, ownerFocusTime = 'none' } = req.body;
+      const { minHoursPerWeek = 3, numWeeks = 4, currentWeek, assignmentMode } = req.body;
+      
+      const validModes = ['normal', 'first_come_first_served', 'from_today'];
+      const mode = assignmentMode && validModes.includes(assignmentMode)
+        ? assignmentMode
+        : 'normal';
+
       const startDate = currentWeek ? new Date(currentWeek) : new Date();
       
       console.log('🔍 ===== [서버] 자동배정 요청 받음 =====');
-      console.log('📥 받은 파라미터:', { minHoursPerWeek, numWeeks, currentWeek: currentWeek ? currentWeek : 'undefined', ownerFocusTime });
+      console.log('📥 받은 파라미터:', { minHoursPerWeek, numWeeks, currentWeek: currentWeek ? currentWeek : 'undefined', assignmentMode: mode });
       console.log('📅 계산된 startDate:', startDate.toISOString().split('T')[0]);
       console.log('🔍 ===================================\n');
 
@@ -48,14 +54,10 @@ exports.runAutoSchedule = async (req, res) => {
       if (minHoursPerWeek < 0.167 || minHoursPerWeek > 10) {
          return res.status(400).json({ msg: '주당 최소 할당 시간은 10분-10시간 사이여야 합니다.' });
       }
-
-      if (!room.settings.ownerPreferences) {
-         room.settings.ownerPreferences = {};
-      }
-      room.settings.ownerPreferences.focusTimeType = ownerFocusTime;
-
-      // Save minHoursPerWeek for future auto-schedules (when members join)
+      
+      // Save settings to room
       room.settings.minHoursPerWeek = minHoursPerWeek;
+      room.settings.assignmentMode = mode;
 
       await room.save();
 
@@ -136,10 +138,10 @@ exports.runAutoSchedule = async (req, res) => {
          room.owner,
          room.timeSlots, // 💡 협의로 배정된 기존 슬롯 전달 (이미 충족된 멤버 제외용)
          {
+            assignmentMode: mode,
             minHoursPerWeek,
             numWeeks,
             currentWeek,
-            ownerPreferences: room.settings.ownerPreferences || {},
             roomSettings: {
                ...room.settings,
                ownerBlockedTimes: ownerBlockedTimes
@@ -366,6 +368,7 @@ exports.runAutoSchedule = async (req, res) => {
          room: freshRoom,
          unassignedMembersInfo: result.unassignedMembersInfo,
          conflictSuggestions: conflictSuggestions,
+         assignmentMode: mode,
       });
    } catch (error) {
 

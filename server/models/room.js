@@ -270,7 +270,7 @@ const RoomSchema = new mongoose.Schema({
     // 배정 모드 설정 (방장 선호시간 대체)
     assignmentMode: {
       type: String,
-      enum: ['normal', 'first_come_first_served', 'consecutive'],
+      enum: ['normal', 'first_come_first_served', 'from_today'],
       default: 'normal'
     },
     minHoursPerWeek: {

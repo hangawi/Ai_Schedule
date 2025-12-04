@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Zap, WandSparkles, MessageSquare, Clock, Calendar, X, RefreshCw, History } from 'lucide-react';
 
 const AutoSchedulerPanel = ({
@@ -14,13 +14,36 @@ const AutoSchedulerPanel = ({
   currentWeekStartDate
 }) => {
   const [shouldRun, setShouldRun] = useState(false);
+  const [showModeDropdown, setShowModeDropdown] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowModeDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const getModeLabel = (mode) => {
+    const labels = {
+      normal: '기본 모드',
+      first_come_first_served: '선착순 모드',
+      from_today: '오늘 기준 배정'
+    };
+    return labels[mode] || '기본 모드';
+  };
+
+  const handleModeChange = (mode) => {
+    setOptions(prev => ({ ...prev, assignmentMode: mode }));
+    setShowModeDropdown(false);
+  };
+  
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    if (name === 'ownerFocusTime') {
-      setOptions(prev => ({ ...prev, [name]: value }));
-    } else {
-      setOptions(prev => ({ ...prev, [name]: Number(value) }));
-    }
+    setOptions(prev => ({ ...prev, [name]: Number(value) }));
   };
 
   // 시간/분 입력 처리 (입력값 그대로 저장)
@@ -47,6 +70,13 @@ const AutoSchedulerPanel = ({
       onRun();
     }
   }, [shouldRun, onRun]);
+  
+  // 기본 assignmentMode 설정
+  useEffect(() => {
+    if (!options.assignmentMode) {
+      setOptions(prev => ({ ...prev, assignmentMode: 'normal' }));
+    }
+  }, []);
 
   // 자동 배정 실행 시 10분 단위 올림 처리
   const handleRunWithRounding = () => {
@@ -69,7 +99,8 @@ const AutoSchedulerPanel = ({
       ...prev,
       hours: finalHours,
       minutes: finalMinutes,
-      minHoursPerWeek: totalHours
+      minHoursPerWeek: totalHours,
+      assignmentMode: prev.assignmentMode || 'normal' // 실행 시 모드 보장
     }));
 
     // 상태 업데이트 후 실행하도록 플래그 설정
@@ -112,22 +143,6 @@ const AutoSchedulerPanel = ({
             </div>
           </div>
         </div>
-
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">방장 선호 시간</label>
-          <select
-            name="ownerFocusTime"
-            value={options.ownerFocusTime || 'none'}
-            onChange={handleInputChange}
-            className="w-full p-1.5 text-sm border rounded-md"
-          >
-            <option value="none">선호도 없음</option>
-            <option value="morning">오전 (09-12시)</option>
-            <option value="lunch">점심 (12-14시)</option>
-            <option value="afternoon">오후 (14-17시)</option>
-            <option value="evening">저녁 (17-20시)</option>
-          </select>
-        </div>
       </div>
 
       <div className="space-y-2 mt-2">
@@ -140,9 +155,96 @@ const AutoSchedulerPanel = ({
           <WandSparkles size={16} className="mr-2" />
           {isLoading ? '배정 중...' : '자동 배정 실행'}
         </button>
+        
+        {/* 배정 모드 선택 드롭다운 */}
+        <div className="mt-4 mode-dropdown" ref={dropdownRef}>
+          <button
+            onClick={() => setShowModeDropdown(!showModeDropdown)}
+            className="w-full flex items-center justify-between px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-gray-700">📋</span>
+              <span className="font-medium text-blue-600">
+                {getModeLabel(options.assignmentMode)}
+              </span>
+            </div>
+            <span className="text-gray-400">
+              {showModeDropdown ? '▲' : '▼'}
+            </span>
+          </button>
+
+          {showModeDropdown && (
+            <div className="mt-2 border border-gray-200 rounded-lg bg-white shadow-lg overflow-hidden">
+              {/* 보통 모드 */}
+              <label className="flex items-start px-4 py-3 hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-100">
+                <input
+                  type="radio"
+                  name="assignmentMode"
+                  value="normal"
+                  checked={options.assignmentMode === 'normal'}
+                  onChange={(e) => handleModeChange(e.target.value)}
+                  className="mt-1 mr-3"
+                />
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900">기본 모드</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    가능한 시간이 적은 멤버를 우선 배정
+                  </div>
+                </div>
+                {options.assignmentMode === 'normal' && (
+                  <span className="text-blue-600 text-xl">✓</span>
+                )}
+              </label>
+
+              {/* 선착순 모드 */}
+              <label className="flex items-start px-4 py-3 hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-100">
+                <input
+                  type="radio"
+                  name="assignmentMode"
+                  value="first_come_first_served"
+                  checked={options.assignmentMode === 'first_come_first_served'}
+                  onChange={(e) => handleModeChange(e.target.value)}
+                  className="mt-1 mr-3"
+                />
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900">선착순 모드</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    방에 먼저 들어온 멤버를 우선 배정
+                  </div>
+                </div>
+                {options.assignmentMode === 'first_come_first_served' && (
+                  <span className="text-blue-600 text-xl">✓</span>
+                )}
+              </label>
+
+              {/* 오늘 기준 배정 모드 (신규) */}
+              <label className="flex items-start px-4 py-3 hover:bg-blue-50 cursor-pointer transition-colors">
+                <input
+                  type="radio"
+                  name="assignmentMode"
+                  value="from_today"
+                  checked={options.assignmentMode === 'from_today'}
+                  onChange={(e) => handleModeChange(e.target.value)}
+                  className="mt-1 mr-3"
+                />
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900">
+                    🆕 오늘 기준 배정
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    오늘 날짜부터만 배정, 과거 날짜는 제외
+                  </div>
+                </div>
+                {options.assignmentMode === 'from_today' && (
+                  <span className="text-blue-600 text-xl">✓</span>
+                )}
+              </label>
+            </div>
+          )}
+        </div>
 
         {/* 소형 버튼들 그리드 - 2열 2행 */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 mt-4">
           {/* 1열 */}
           <button
             onClick={onResetCarryOverTimes}

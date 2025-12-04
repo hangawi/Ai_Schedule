@@ -200,14 +200,17 @@ export const handleRunAutoSchedule = async (
       ...scheduleOptions,
       currentWeek: uiCurrentWeek,
       numWeeks,
-      travelMode // Add travelMode to options
+      travelMode, // Add travelMode to options
+      clientToday: new Date().toISOString().slice(0, 10)
     };
     
     console.log('🔍 ===== [클라이언트] 자동배정 요청 전송 =====');
     console.log('📤 보내는 파라미터:', {
       currentWeek: uiCurrentWeek ? uiCurrentWeek.toISOString().split('T')[0] : 'undefined',
       numWeeks,
-      minHoursPerWeek: finalOptions.minHoursPerWeek
+      minHoursPerWeek: finalOptions.minHoursPerWeek,
+      assignmentMode: finalOptions.assignmentMode,
+      clientToday: finalOptions.clientToday
     });
     console.log('🔍 ==========================================');
     const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = await coordinationService.runAutoSchedule(currentRoom._id, finalOptions);

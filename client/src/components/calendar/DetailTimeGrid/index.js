@@ -436,32 +436,21 @@ const DetailTimeGrid = ({
       });
       setSchedule(filteredSchedule);
     } else {
-      // 없으면 특정 날짜에 10분 단위로 슬롯들을 추가
-      const newSlots = [];
+      // 전체 시간 범위를 하나의 슬롯으로 추가 (채팅 방식과 동일)
+      const newSlot = {
+        _id: Date.now().toString() + Math.random(), // Add unique ID
+        dayOfWeek: dayOfWeek,
+        startTime: `${String(startHour).padStart(2, '0')}:00`,
+        endTime: `${String(endHour).padStart(2, '0')}:00`,
+        priority: priority,
+        specificDate: dateStr // 특정 날짜 지정
+      };
       
-      for (let hour = startHour; hour < endHour; hour++) {
-        for (let minute = 0; minute < 60; minute += 10) {
-          const startTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-          const nextMinute = minute + 10;
-          const nextHour = nextMinute >= 60 ? hour + 1 : hour;
-          const adjustedMinute = nextMinute >= 60 ? 0 : nextMinute;
-          const endTime = `${String(nextHour).padStart(2, '0')}:${String(adjustedMinute).padStart(2, '0')}`;
-          
-          newSlots.push({
-            _id: Date.now().toString() + Math.random(), // Add unique ID
-            dayOfWeek: dayOfWeek,
-            startTime: startTime,
-            endTime: endTime,
-            priority: priority,
-            specificDate: dateStr // 특정 날짜 지정
-          });
-        }
-      }
-      setSchedule([...schedule, ...newSlots]);
+      setSchedule([...schedule, newSlot]);
 
       // 복사 옵션이 선택된 경우에만 추가 날짜에 적용
       if (copyOptions.copyType !== 'none') {
-        applyCopyOptionsToSchedule(newSlots);
+        applyCopyOptionsToSchedule([newSlot]);
       }
     }
 

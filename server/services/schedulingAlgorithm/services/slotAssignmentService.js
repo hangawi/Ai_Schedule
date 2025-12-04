@@ -9,13 +9,53 @@ const { assignSlot, isMemberFullyAssigned } = require('../helpers/assignmentHelp
 const { getMemberPriority, findMemberById } = require('../helpers/memberHelper');
 
 /**
+ * 배정 모드에 따라 멤버 정렬
+ */
+const sortMembersByMode = (
+  memberIds,
+  assignmentMode,
+  members,
+  memberAvailableSlots,
+  memberMaxPriority
+) => {
+  return memberIds.sort((a, b) => {
+    // 1순위: 우선순위 (모든 모드 공통)
+    const priorityDiff = memberMaxPriority[b] - memberMaxPriority[a];
+    if (priorityDiff !== 0) return priorityDiff;
+
+    // 2순위: 모드별 정렬
+    switch (assignmentMode) {
+      case 'first_come_first_served': {
+        // 선착순: joinedAt 빠른 순
+        const memberA = members.find(m => (m.user?._id?.toString() || m.user?.toString()) === a);
+        const memberB = members.find(m => (m.user?._id?.toString() || m.user?.toString()) === b);
+
+        if (!memberA || !memberB) return 0;
+
+        const dateA = new Date(memberA.joinedAt || 0);
+        const dateB = new Date(memberB.joinedAt || 0);
+        return dateA - dateB;
+      }
+
+      case 'from_today':
+      case 'normal':
+      default:
+        // 보통/오늘 기준: 가용 슬롯 적은 순
+        return memberAvailableSlots[a] - memberAvailableSlots[b];
+    }
+  });
+};
+
+/**
  * 시간 순서 우선 배정 (연속 블록 단위로 배정)
  * @param {Object} timetable - 타임테이블 객체
  * @param {Object} assignments - assignments 객체
  * @param {Object} memberRequiredSlots - 필요 슬롯 정보
  * @param {string} ownerId - 방장 ID
+ * @param {Array} members - 전체 멤버 객체 배열
+ * @param {string} assignmentMode - 배정 모드
  */
-const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId) => {
+const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId, members, assignmentMode = 'normal') => {
   const sortedKeys = Object.keys(timetable).sort();
   const hasSlots = sortedKeys.length > 0;
 
@@ -90,24 +130,23 @@ const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId)
     memberMaxPriority[memberId] = maxPriority;
   });
 
-  // 가용 슬롯이 적은 멤버부터 처리 (선택지가 적은 멤버 우선)
-  const membersByAvailability = Object.keys(assignments)
+  const membersToProcess = Object.keys(assignments)
     .filter(memberId => {
       const assignedHours = assignments[memberId]?.assignedHours || 0;
       const requiredSlots = memberRequiredSlots[memberId] || DEFAULT_REQUIRED_SLOTS;
       return assignedHours < requiredSlots;
-    })
-    .sort((a, b) => {
-      // 우선순위가 다르면 우선순위 높은 순
-      const priorityDiff = memberMaxPriority[b] - memberMaxPriority[a];
-      if (priorityDiff !== 0) return priorityDiff;
-
-      // 우선순위가 같으면 가용 슬롯 적은 순 (선택지 적은 순)
-      return memberAvailableSlots[a] - memberAvailableSlots[b];
     });
 
+  const membersByAvailability = sortMembersByMode(
+    membersToProcess,
+    assignmentMode,
+    members,
+    memberAvailableSlots,
+    memberMaxPriority
+  );
+
   if (hasSlots && membersByAvailability.length > 0) {
-    console.log("📊 멤버 처리 순서 (우선순위 높음→가용슬롯 적음):");
+    console.log("📊 멤버 처리 순서 (배정 모드:", assignmentMode,"):");
     membersByAvailability.forEach(memberId => {
       console.log(`   ${memberId.substring(0,6)}: 우선순위 ${memberMaxPriority[memberId]}, 가용 ${memberAvailableSlots[memberId]}슬롯`);
     });
