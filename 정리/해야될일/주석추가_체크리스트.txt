@@ -130,7 +130,7 @@
 [x] client/src/components/calendar/Calendar.js
 [x] client/src/components/calendar/CalendarView.js
 [x] client/src/components/calendar/CoordinationCalendarView.js
-[ ] client/src/components/calendar/CoordinationDetailGrid.js
+[x] client/src/components/calendar/CoordinationDetailGrid.js
 [ ] client/src/components/calendar/DetailTimeGrid/index.js
 [x] client/src/components/calendar/DetailTimeGrid/constants/priorityConfig.js
 [ ] client/src/components/calendar/DetailTimeGrid/handlers/copyHandler.js
@@ -838,14 +838,14 @@
 ## 📊 진행률 추적
 
 - 전체 파일 수: 341개 (클라이언트: 223개, 서버: 118개)
-- 완료한 파일: ____ / 341
-- 진행률: ____%
+- 완료한 파일: 66 / 341
+- 진행률: 19.4%
 
 ### 세부 진행률
-- 클라이언트: ____ / 223 (___%)
-- 서버: ____ / 118 (___%)
-  - nview 폴더: ____ / 11
-  - scheduleOptimizer 폴더: ____ / 14
+- 클라이언트: 66 / 223 (29.6%)
+- 서버: 0 / 118 (0%)
+  - nview 폴더: 0 / 11
+  - scheduleOptimizer 폴더: 0 / 14
 
 
 ================================================================================
