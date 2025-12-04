@@ -136,19 +136,19 @@
 [x] client/src/components/calendar/DetailTimeGrid/handlers/copyHandler.js
 [x] client/src/components/calendar/DetailTimeGrid/handlers/slotHelpers.js
 [x] client/src/components/calendar/DetailTimeGrid/utils/dateFormatters.js
-[ ] client/src/components/calendar/DetailTimeGrid/utils/timeCalculations.js
-[ ] client/src/components/calendar/DetailTimeGrid/utils/timeSlotMerger.js
+[x] client/src/components/calendar/DetailTimeGrid/utils/timeCalculations.js
+[x] client/src/components/calendar/DetailTimeGrid/utils/timeSlotMerger.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 5. 채팅 (Chat) 컴포넌트 (26개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] client/src/components/chat/ChatBox.js
-[ ] client/src/components/chat/TimetableUploadBox.js
-[ ] client/src/components/chat/TimetableUploadWithChat.js
-[ ] client/src/components/chat/components/ChatHeader.js
-[ ] client/src/components/chat/components/ChatInput.js
-[ ] client/src/components/chat/components/ChatSection.js
-[ ] client/src/components/chat/components/ConflictActions.js
+[x] client/src/components/chat/ChatBox.js
+[x] client/src/components/chat/TimetableUploadBox.js
+[x] client/src/components/chat/TimetableUploadWithChat.js
+[x] client/src/components/chat/components/ChatHeader.js
+[x] client/src/components/chat/components/ChatInput.js
+[x] client/src/components/chat/components/ChatSection.js
+[x] client/src/components/chat/components/ConflictActions.js
 [ ] client/src/components/chat/components/DuplicateModal.js
 [ ] client/src/components/chat/components/ExtractedSchedules.js
 [ ] client/src/components/chat/components/ImagePreviewGrid.js
@@ -842,11 +842,11 @@
 ## 📊 진행률 추적
 
 - 전체 파일 수: 341개 (클라이언트: 223개, 서버: 118개)
-- 완료한 파일: 70 / 341
-- 진행률: 20.5%
+- 완료한 파일: 79 / 341
+- 진행률: 23.2%
 
 ### 세부 진행률
-- 클라이언트: 70 / 223 (31.4%)
+- 클라이언트: 79 / 223 (35.4%)
 - 서버: 0 / 118 (0%)
   - nview 폴더: 0 / 11
   - scheduleOptimizer 폴더: 0 / 14

@@ -1,14 +1,38 @@
 /**
- * ============================================================================
- * TimetableUploadWithChat.js - 시간표 이미지 업로드 + 채팅 필터링 컴포넌트
- * ============================================================================
+ * ===================================================================================================
+ * [TimetableUploadWithChat.js] - 이미지 업로드와 채팅 필터링을 결합한 시간표 추출 컴포넌트
+ * ===================================================================================================
  *
- * 기능:
- * 1. 이미지 업로드
- * 2. 채팅으로 원하는 반 선택
- * 3. OCR 분석 후 바로 AI 최적 시간표 모달 띄우기
+ * 📍 위치: [프론트엔드] > client/src/components/chat/TimetableUploadWithChat.js
+ *
+ * 🎯 주요 기능:
+ *    - 시간표 이미지 업로드 UI 제공 (분석 전)
+ *    - 이미지 OCR 분석 후, 추출된 스케줄을 필터링하기 위한 채팅 UI 제공 (분석 후)
+ *    - 전체 워크플로우(이미지 선택 -> OCR 처리 -> 채팅 필터링 -> 최종 결과)를 관리
+ *    - 분석된 시간표를 시각적으로 보여주고, 채팅을 통해 동적으로 필터링
+ *    - 중복 이미지 업로드 시 처리 모달(DuplicateModal) 관리
+ *
+ * 🔗 연결된 파일:
+ *    - ./hooks/*.js: `useImageUpload`, `useChatState` 등 다양한 커스텀 훅을 통해 상태 로직을 분리
+ *    - ./handlers/*.js: 이미지 처리, OCR, 채팅 전송 등 복잡한 이벤트 핸들러 로직을 분리
+ *    - ./components/*.js: `UploadSection`, `ChatSection` 등 UI를 구성하는 하위 컴포넌트
+ *
+ * 💡 UI 위치:
+ *    - `ChatBox.js` 내의 특정 액션(예: 시간표 업로드 버튼)을 통해 모달 형태로 표시됨
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 컴포넌트는 여러 커스텀 훅과 핸들러의 조합으로 동작하므로, 특정 기능을 수정하려면 해당 훅이나 핸들러 파일을 수정해야 합니다.
+ *    - (예: 이미지 업로드 로직 수정 -> `useImageUpload.js`, `./handlers/imageHandlers.js`)
+ *    - (예: OCR 처리 로직 수정 -> `./handlers/ocrHandlers.js`)
+ *    - (예: 채팅 필터링 로직 수정 -> `./handlers/chatHandlers.js`)
+ *    - UI 레이아웃(분석 전/후 화면 전환, 좌우 분할 등)을 변경하려면 이 파일의 JSX 구조를 직접 수정합니다.
+ *
+ * 📝 참고사항:
+ *    - '관심사의 분리' 원칙에 따라 복잡한 상태 로직과 이벤트 핸들러가 각각 커스텀 훅과 핸들러 팩토리 함수로 모듈화되어 있습니다.
+ *    - 분석 전에는 업로드 UI만 보이고, 분석이 완료되면 화면이 '시간표 뷰 + 채팅 뷰'로 전환됩니다.
+ *
+ * ===================================================================================================
  */
-
 import React from 'react';
 import { X, ArrowLeft } from 'lucide-react';
 
@@ -34,6 +58,15 @@ import DuplicateModal from './components/DuplicateModal';
 import ProgressBar from './components/ProgressBar';
 import ScheduleView from './components/ScheduleView';
 
+/**
+ * TimetableUploadWithChat
+ *
+ * @description 시간표 이미지 업로드, OCR 분석, 채팅을 통한 결과 필터링, 최종 스케줄 확정까지의 전체 과정을 담당하는 고수준 컴포넌트.
+ * @param {object} props - 컴포넌트 props
+ * @param {function} props.onSchedulesExtracted - 최종 확정된 스케줄을 상위 컴포넌트로 전달하는 콜백 함수.
+ * @param {function} props.onClose - 모달을 닫을 때 호출되는 함수.
+ * @returns {JSX.Element}
+ */
 const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
   // ========================================
   // 상태 관리 (커스텀 훅)

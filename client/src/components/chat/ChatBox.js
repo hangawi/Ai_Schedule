@@ -1,45 +1,38 @@
 /**
  * ===================================================================================================
- * ChatBox Component (챗봇 컴포넌트)
+ * [ChatBox.js] - AI 일정 도우미 채팅 UI 컴포넌트
  * ===================================================================================================
  *
- * 설명: AI 챗봇 인터페이스
+ * 📍 위치: [프론트엔드] > client/src/components/chat/ChatBox.js
  *
- * 주요 기능:
- * - 사용자 메시지 입력
- * - AI 응답 표시
- * - 자동 스크롤
- * - 메시지 히스토리
+ * 🎯 주요 기능:
+ *    - 모든 탭에서 공통으로 사용되는 플로팅 채팅 인터페이스 제공
+ *    - 사용자 메시지 입력 및 AI 응답 표시
+ *    - 시간표 이미지 업로드 및 스케줄 최적화 모달 트리거
+ *    - 탭별 컨텍스트에 맞는 채팅 기능 위임 (onSendMessage)
  *
- * 지원 명령:
- * - 시간 변경: "화요일로 바꿔줘"
- * - 빈 시간 확인: "수요일에 시간 있어?"
- * - 선호시간 추가: "화요일 9시부터 12시 추가"
+ * 🔗 연결된 파일:
+ *    - ./TimetableUploadWithChat.js - 시간표 업로드 및 분석 채팅 컴포넌트
+ *    - ../modals/ScheduleOptimizationModal.js - 최적 스케줄 제안 모달
+ *    - ./hooks/useChatState.js - 채팅 관련 UI 상태 관리 훅
+ *    - ./handlers/*.js - 메시지 전송, 스케줄 추가 등 이벤트 핸들러
+ *    - ../../SchedulingSystem.js - 앱의 메인 컴포넌트에서 이 ChatBox를 렌더링하고 `onSendMessage` 콜백을 제공
  *
- * 관련 파일:
- * - server/controllers/chatbotController.js
- * - client/src/components/chat/ChatInterface.js
+ * 💡 UI 위치:
+ *    - 화면 우측 하단에 고정된 플로팅 버튼
+ *    - 버튼 클릭 시 채팅창이 열림
+ *
+ * ✏️ 수정 가이드:
+ *    - 채팅창의 전체적인 레이아웃이나 크기를 변경하려면: 이 파일의 JSX 구조 및 `CHAT_SIZE` 상수를 수정합니다.
+ *    - 메시지 전송, 스케줄 추출 등 핵심 로직을 수정하려면: ./handlers/ 폴더의 관련 핸들러 파일을 수정합니다.
+ *    - 채팅 UI(헤더, 입력창, 메시지 버블)를 수정하려면: ./components/ 폴더의 각 하위 컴포넌트를 수정합니다.
+ *
+ * 📝 참고사항:
+ *    - 이 컴포넌트는 UI의 뼈대를 담당하며, 실제 채팅 로직(AI와의 통신 등)은 `onSendMessage` prop을 통해 상위 컴포넌트(SchedulingSystem)로부터 주입받습니다.
+ *    - 모바일과 데스크탑 환경에 따라 동적으로 스타일이 변경됩니다.
  *
  * ===================================================================================================
  */
-
-/**
- * ============================================================================
- * ChatBox.js - AI 일정 도우미 채팅 UI (리팩토링 완료)
- * ============================================================================
- *
- * 모든 탭에서 사용되는 메인 채팅 컴포넌트
- * - 오른쪽 하단 고정 버튼으로 표시
- * - 헤더: "AI 일정 도우미"
- *
- * [탭별 기능]
- * - profile: 내 프로필 일정 관리
- * - events: 나의 일정 관리
- * - googleCalendar: Google 캘린더 관리
- * - coordination: 배정 시간 변경 (실제 로직은 useChat.js에서 처리)
- * ============================================================================
- */
-
 import React from 'react';
 import { MessageCircle } from 'lucide-react';
 import TimetableUploadWithChat from './TimetableUploadWithChat';
@@ -56,6 +49,17 @@ import { createConflictChoiceHandler, createTimeSelectionHandler } from './handl
 import { createSendHandler, createKeyPressHandler } from './handlers/messageHandlers';
 import { addSchedulesToCalendar } from './utils/scheduleUtils';
 
+/**
+ * ChatBox
+ *
+ * @description AI 챗봇의 전체 UI를 구성하고 사용자 상호작용을 처리하는 메인 컨테이너 컴포넌트입니다.
+ * @param {object} props - 컴포넌트 props
+ * @param {function} props.onSendMessage - 메시지 전송 시 호출되는 콜백 함수. 실제 AI 통신 로직을 담고 있음.
+ * @param {function} props.speak - TTS(Text-to-Speech) 함수 (현재는 사용되지 않음).
+ * @param {string} props.currentTab - 현재 활성화된 탭의 ID.
+ * @param {function} props.onEventUpdate - 스케줄이 추가/변경되었을 때 상위 컴포넌트에 알리는 콜백.
+ * @returns {JSX.Element}
+ */
 const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
   // 상태 관리
   const {

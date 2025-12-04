@@ -1,11 +1,44 @@
 /**
- * ============================================================================
- * DuplicateModal.js - 중복 이미지 확인 모달 컴포넌트
- * ============================================================================
+ * ===================================================================================================
+ * [DuplicateModal.js] - 중복 이미지 업로드 확인 모달 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: [프론트엔드] > client/src/components/chat/components/DuplicateModal.js
+ *
+ * 🎯 주요 기능:
+ *    - 이미지 업로드 시 중복이 감지되었을 때 사용자에게 알림
+ *    - 어떤 이미지가 어떤 이미지와 얼마나 유사한지 정보를 표시
+ *    - '중복 제거하고 계속' 또는 '중복 무시하고 계속' 액션 버튼 제공
+ *
+ * 🔗 연결된 파일:
+ *    - ../TimetableUploadWithChat.js: 이 모달을 호출하고, 모달의 액션에 대한 핸들러(`handleDuplicateRemove`, `handleDuplicateIgnore`)를 제공
+ *
+ * 💡 UI 위치:
+ *    - '시간표 이미지 업로드' 과정에서 중복 이미지가 발견될 경우 모달 형태로 화면 중앙에 표시됨
+ *
+ * ✏️ 수정 가이드:
+ *    - 모달의 텍스트나 스타일을 변경하려면 이 파일의 JSX 구조를 직접 수정합니다.
+ *    - 버튼 클릭 시의 동작을 변경하려면 상위 컴포넌트인 `TimetableUploadWithChat.js`에 주입된 핸들러 함수들을 수정해야 합니다.
+ *
+ * 📝 참고사항:
+ *    - `showDuplicateModal` prop이 true일 때만 모달이 표시됩니다.
+ *
+ * ===================================================================================================
  */
-
 import React from 'react';
 
+/**
+ * DuplicateModal
+ *
+ * @description 중복된 이미지가 감지되었을 때, 사용자에게 확인을 요청하는 모달 UI를 렌더링합니다.
+ * @param {object} props - 컴포넌트 props
+ * @param {boolean} props.showDuplicateModal - 모달의 표시 여부를 결정하는 boolean 값.
+ * @param {object|null} props.duplicateInfo - 중복 이미지에 대한 정보 객체.
+ * @param {Array<object>} props.duplicateInfo.duplicates - 중복된 파일 정보 배열. 각 객체는 { filename, duplicateWith, similarity }를 포함.
+ * @param {function} props.handleDuplicateRemove - '중복 제거' 버튼 클릭 시 실행될 콜백 함수.
+ * @param {function} props.handleDuplicateIgnore - '중복 무시' 버튼 클릭 시 실행될 콜백 함수.
+ * @returns {JSX.Element|null} `showDuplicateModal`이 false이거나 `duplicateInfo`가 없으면 null을 반환.
+ */
 const DuplicateModal = ({
   showDuplicateModal,
   duplicateInfo,
