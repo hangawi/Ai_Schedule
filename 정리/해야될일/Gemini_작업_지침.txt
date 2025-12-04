@@ -1,60 +1,51 @@
 ================================================================================
-                      Gemini AI 작업 지침서
+프로젝트 전체 파일 주석 추가 작업 가이드
 ================================================================================
 
 📅 작성일: 2025-12-04
-🎯 담당 AI: Gemini
-📌 작업 내용: Ai_Schedule 프로젝트 전체 파일 주석 추가
-🔢 작업 범위: 341개 파일 (완료: 2개, 남은 작업: 339개)
+📌 목적: 모든 파일에 기능 설명, 위치, 수정 방법 주석 추가
+🎯 목표: 프로젝트 유지보수성 향상 및 코드 이해도 증가
 
 ================================================================================
 
 
 ================================================================================
-                            📋 작업 개요
+                    ⛔ 절대 하지 말아야 할 것 (매우 중요!)
 ================================================================================
 
-당신은 Ai_Schedule 프로젝트의 모든 파일에 한국어 주석을 추가하는 작업을 맡았습니다.
-이 프로젝트는 AI 기반 일정 관리 시스템으로, 프론트엔드(React)와 백엔드(Node.js/Express)로 구성되어 있습니다.
+🚨 경고: 이 작업은 **주석 추가만**입니다. 코드를 절대 수정하지 마세요!
 
-✅ 완료된 파일 (2개):
-- client/src/App.js
-- client/src/index.js
+❌ 금지 사항:
+  1. 코드 리팩터링 (변수명, 함수명 변경 등)
+  2. 함수 구조 변경 (함수 분리, 통합 등)
+  3. 코드 로직 수정
+  4. 파일 이동/삭제/이름 변경
+  5. import/export 경로 변경
+  6. 새 기능 추가
+  7. 기존 기능 삭제
+  8. 버그 수정
+  9. 성능 최적화
+  10. 코드 포맷 변경 (들여쓰기, 공백 등)
 
-🔄 남은 파일 (339개):
-- 클라이언트: 221개
-- 서버: 118개
+✅ 허용 사항:
+  - 주석 추가만!
+  - 기존 코드는 1글자도 변경하지 않음
 
-📂 프로젝트 위치:
-C:\Users\예상\OneDrive\Desktop\프로젝트\Ai_Schedule
-
-
-================================================================================
-                        🎯 작업 목표 및 원칙
-================================================================================
-
-1. **완전성**: 모든 341개 파일에 주석 추가 (예외 없음)
-2. **일관성**: 동일한 템플릿과 스타일 사용
-3. **명확성**: 개발자가 코드를 쉽게 이해할 수 있도록 작성
-4. **한국어**: 모든 주석은 한국어로 작성
-5. **실용성**: 실제 유지보수에 도움이 되는 정보 제공
+🚨 중요: 위 규칙 위반 시 프로젝트 전체가 망가질 수 있습니다!
 
 
 ================================================================================
-                      📐 주석 템플릿 (필수 준수)
+                           주석 템플릿 규칙
 ================================================================================
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1️⃣ 파일 헤더 주석 (모든 파일 최상단)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 📋 모든 파일 공통 헤더 주석
 
 /**
  * ===================================================================================================
  * [파일명] - [간단한 설명]
  * ===================================================================================================
  *
- * 📍 위치: [프론트엔드/백엔드] > [폴더 경로]
- *
+ * 📍 위치: [프론트/백엔드] > [폴더 경로]
  * 🎯 주요 기능:
  *    - [기능 1]
  *    - [기능 2]
@@ -64,9 +55,10 @@ C:\Users\예상\OneDrive\Desktop\프로젝트\Ai_Schedule
  *    - [관련 파일 1] - [관계 설명]
  *    - [관련 파일 2] - [관계 설명]
  *
- * 💡 UI 위치: (프론트엔드인 경우만)
- *    - [화면상 어디에 표시되는지]
- *    - [어떤 탭/섹션에 있는지]
+ * 💡 UI 위치: (프론트엔드인 경우)
+ *    - 탭: [어느 탭]
+ *    - 섹션: [어느 부분]
+ *    - 경로: [화면 접근 경로]
  *
  * ✏️ 수정 가이드:
  *    - 이 파일을 수정하면: [어떤 부분이 바뀌는지]
@@ -80,14 +72,12 @@ C:\Users\예상\OneDrive\Desktop\프로젝트\Ai_Schedule
  */
 
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-2️⃣ 함수/컴포넌트 주석 (주요 함수/컴포넌트)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 📋 함수/컴포넌트별 주석
 
 /**
  * [함수/컴포넌트명]
  *
- * @description [무엇을 하는 함수/컴포넌트인지 설명]
+ * @description [무엇을 하는 함수/컴포넌트인지]
  * @param {타입} 파라미터명 - [파라미터 설명]
  * @returns {타입} [반환값 설명]
  *
@@ -102,270 +92,776 @@ C:\Users\예상\OneDrive\Desktop\프로젝트\Ai_Schedule
 
 
 ================================================================================
-                        ✅ 완료된 예시 (참고용)
+                        작업 대상 파일 체크리스트 (전체)
+================================================================================
+※ 총 파일 수: 341개 (클라이언트: 223개, 서버: 118개)
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    🎨 프론트엔드 (Client) - 223개 파일                      │
+└─────────────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 1. 메인 파일 (3개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[x] client/src/App.js
+[x] client/src/index.js
+[x] client/src/SchedulingSystem.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 2. 관리자 (Admin) 컴포넌트 (4개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/components/admin/AdminCodeModal.js
+[ ] client/src/components/admin/AdminDashboard.js
+[ ] client/src/components/admin/AdminRoomManagement.js
+[ ] client/src/components/admin/AdminUserManagement.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 3. 인증 (Auth) 컴포넌트 (4개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/components/auth/AuthScreen.js
+[ ] client/src/components/auth/LoginForm.js
+[ ] client/src/components/auth/RegisterForm.js
+[ ] client/src/components/auth/SocialLoginButtons.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 4. 캘린더 (Calendar) 컴포넌트 (14개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/components/calendar/Calendar.js
+[ ] client/src/components/calendar/CalendarView.js
+[ ] client/src/components/calendar/CoordinationCalendarView.js
+[ ] client/src/components/calendar/CoordinationDetailGrid.js
+[ ] client/src/components/calendar/DetailTimeGrid/index.js
+[ ] client/src/components/calendar/DetailTimeGrid/constants/priorityConfig.js
+[ ] client/src/components/calendar/DetailTimeGrid/handlers/copyHandler.js
+[ ] client/src/components/calendar/DetailTimeGrid/handlers/slotHelpers.js
+[ ] client/src/components/calendar/DetailTimeGrid/utils/dateFormatters.js
+[ ] client/src/components/calendar/DetailTimeGrid/utils/timeCalculations.js
+[ ] client/src/components/calendar/DetailTimeGrid/utils/timeSlotMerger.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 5. 채팅 (Chat) 컴포넌트 (26개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/components/chat/ChatBox.js
+[ ] client/src/components/chat/TimetableUploadBox.js
+[ ] client/src/components/chat/TimetableUploadWithChat.js
+[ ] client/src/components/chat/components/ChatHeader.js
+[ ] client/src/components/chat/components/ChatInput.js
+[ ] client/src/components/chat/components/ChatSection.js
+[ ] client/src/components/chat/components/ConflictActions.js
+[ ] client/src/components/chat/components/DuplicateModal.js
+[ ] client/src/components/chat/components/ExtractedSchedules.js
+[ ] client/src/components/chat/components/ImagePreviewGrid.js
+[ ] client/src/components/chat/components/MessageBubble.js
+[ ] client/src/components/chat/components/ProgressBar.js
+[ ] client/src/components/chat/components/ScheduleButtons.js
+[ ] client/src/components/chat/components/ScheduleView.js
+[ ] client/src/components/chat/components/TimeRecommendations.js
+[ ] client/src/components/chat/components/UploadSection.js
+[ ] client/src/components/chat/constants/apiConfig.js
+[ ] client/src/components/chat/constants/chatConstants.js
+[ ] client/src/components/chat/handlers/chatHandlers.js
+[ ] client/src/components/chat/handlers/conflictHandlers.js
+[ ] client/src/components/chat/handlers/imageHandlers.js
+[ ] client/src/components/chat/handlers/messageHandlers.js
+[ ] client/src/components/chat/handlers/modalHandlers.js
+[ ] client/src/components/chat/handlers/ocrHandlers.js
+[ ] client/src/components/chat/handlers/scheduleHandlers.js
+[ ] client/src/components/chat/hooks/useChatScroll.js
+[ ] client/src/components/chat/hooks/useChatState.js
+[ ] client/src/components/chat/hooks/useImageUpload.js
+[ ] client/src/components/chat/hooks/useMobileDetection.js
+[ ] client/src/components/chat/hooks/useModalState.js
+[ ] client/src/components/chat/hooks/useOcrProcessing.js
+[ ] client/src/components/chat/hooks/useScheduleState.js
+[ ] client/src/components/chat/hooks/useScrollToBottom.js
+[ ] client/src/components/chat/utils/chatUtils.js
+[ ] client/src/components/chat/utils/imageUtils.js
+[ ] client/src/components/chat/utils/scheduleUtils.js
+[ ] client/src/components/chat/utils/scrollUtils.js
+[ ] client/src/components/chat/utils/timeRecommendation.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 6. 공통 (Common) 컴포넌트 (1개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/components/common/AddressAutocomplete.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 7. 조율 (Coordination) 컴포넌트 (9개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/components/coordination/AiSchedulingResults.js
+[ ] client/src/components/coordination/ChainExchangeRequestModal.js
+[ ] client/src/components/coordination/CurrentEventNavigator.js
+[ ] client/src/components/coordination/ExchangeRequestModal.js
+[ ] client/src/components/coordination/MemberList.js
+[ ] client/src/components/coordination/RequestManagement.js
+[ ] client/src/components/coordination/RoomList.js
+[ ] client/src/components/coordination/TravelModeButtons.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 8. 폼 (Forms) 컴포넌트 (3개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/components/forms/CreateProposalModal.js
+[ ] client/src/components/forms/EventFormModal.js
+[ ] client/src/components/forms/TimeSelectionModal.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 9. 가이드 (Guides) 컴포넌트 (1개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/components/guides/BackgroundGuide.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 10. 표시기 (Indicators) 컴포넌트 (2개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/components/indicators/BackgroundCallIndicator.js
+[ ] client/src/components/indicators/MobileStatusIndicator.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 11. 레이아웃 (Layout) 컴포넌트 (3개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/components/layout/Header.js
+[ ] client/src/components/layout/MainContent.js
+[ ] client/src/components/layout/Sidebar.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 12. 모달 (Modals) 컴포넌트 (40개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[x] client/src/components/modals/Modal.js
+[x] client/src/components/modals/AddEventModal.js
+[x] client/src/components/modals/AssignSlotModal.js
+[x] client/src/components/modals/AutoDetectedScheduleModal.js
+[x] client/src/components/modals/ChangeRequestModal.js
+[x] client/src/components/modals/CommandModal.js
+[x] client/src/components/modals/CoordinationRequestModal.js
+[x] client/src/components/modals/CopiedTextModal.js
+[x] client/src/components/modals/CustomAlertModal.js
+[x] client/src/components/modals/EditEventModal.js
+[x] client/src/components/modals/EventDetailsModal.js
+[x] client/src/components/modals/MemberLogsModal.js
+[x] client/src/components/modals/MemberScheduleModal.js
+[x] client/src/components/modals/MemberStatsModal.js
+[x] client/src/components/modals/MobileGuideModal.js
+[x] client/src/components/modals/NotificationModal.js
+[x] client/src/components/modals/OriginalScheduleModal.js
+[x] client/src/components/modals/RequestSlotModal.js
+[x] client/src/components/modals/RoomCreationModal.js
+[x] client/src/components/modals/RoomJoinModal.js
+[x] client/src/components/modals/RoomManagementModal.js
+[x] client/src/components/modals/ScheduleOptimizationModal.js
+[x] client/src/components/modals/ScheduleOptimizerModal.js
+[x] client/src/components/modals/SharedTextModal.js
+[x] client/src/components/modals/components/ApplyScopeSelector.js
+[x] client/src/components/modals/components/ChatArea.js
+[x] client/src/components/modals/components/ChatMessage.js
+[x] client/src/components/modals/components/ScheduleCard.js
+[x] client/src/components/modals/components/ScheduleGrid.js
+[x] client/src/components/modals/components/ScheduleHeader.js
+[x] client/src/components/modals/components/ScheduleLegend.js
+[x] client/src/components/modals/constants/modalConstants.js
+[ ] client/src/components/modals/handlers/chatHandlers.js
+[x] client/src/components/modals/handlers/chatModalHandlers.js
+[x] client/src/components/modals/handlers/conflictModalHandlers.js
+[x] client/src/components/modals/handlers/optimizerHandlers.js
+[x] client/src/components/modals/handlers/scheduleModalHandlers.js
+[x] client/src/components/modals/hooks/useChatScroll.js
+[x] client/src/components/modals/hooks/useModalState.js
+[ ] client/src/components/modals/room/RoomInfoTab.js
+[ ] client/src/components/modals/room/RoomMembersList.js
+[ ] client/src/components/modals/utils/commandParser.js
+[ ] client/src/components/modals/utils/scheduleOperations.js
+[ ] client/src/components/modals/utils/scheduleTransform.js
+[ ] client/src/components/modals/utils/scheduleUtils.js
+[ ] client/src/components/modals/utils/timeUtils.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 13. 프로필 (Profile) 컴포넌트 (1개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/components/profile/PersonalInfoEdit.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 14. 스케줄 (Schedule) 컴포넌트 (3개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/components/schedule/FixedScheduleDisplay.js
+[ ] client/src/components/schedule/PersonalTimeManager.js
+[ ] client/src/components/schedule/ScheduleExceptionEditor.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 15. 스케줄러 (Scheduler) 컴포넌트 (1개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/components/scheduler/AutoSchedulerPanel.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 16. 탭 (Tabs) 컴포넌트 (46개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/components/tabs/AgentTab.js
+[ ] client/src/components/tabs/DashboardTab.js
+[ ] client/src/components/tabs/EventsTab.js
+[ ] client/src/components/tabs/OptimalRouteTab.js
+[ ] client/src/components/tabs/ProposalsTab.js
+
+# CoordinationTab 폴더 (20개)
+[ ] client/src/components/tabs/CoordinationTab/index.js
+[ ] client/src/components/tabs/CoordinationTab/components/index.js
+[ ] client/src/components/tabs/CoordinationTab/components/RequestSection.js
+[ ] client/src/components/tabs/CoordinationTab/components/RoomHeader.js
+[ ] client/src/components/tabs/CoordinationTab/components/RoomList.js
+[ ] client/src/components/tabs/CoordinationTab/components/ScheduleAlerts.js
+[ ] client/src/components/tabs/CoordinationTab/components/TimetableControls.js
+[ ] client/src/components/tabs/CoordinationTab/constants/index.js
+[ ] client/src/components/tabs/CoordinationTab/handlers/index.js
+[ ] client/src/components/tabs/CoordinationTab/handlers/requestHandlers.js
+[ ] client/src/components/tabs/CoordinationTab/handlers/roomHandlers.js
+[ ] client/src/components/tabs/CoordinationTab/handlers/slotHandlers.js
+[ ] client/src/components/tabs/CoordinationTab/hooks/index.js
+[ ] client/src/components/tabs/CoordinationTab/hooks/useAlertState.js
+[ ] client/src/components/tabs/CoordinationTab/hooks/useRequests.js
+[ ] client/src/components/tabs/CoordinationTab/hooks/useSchedulerState.js
+[ ] client/src/components/tabs/CoordinationTab/hooks/useViewState.js
+[ ] client/src/components/tabs/CoordinationTab/utils/dateUtils.js
+[ ] client/src/components/tabs/CoordinationTab/utils/index.js
+[ ] client/src/components/tabs/CoordinationTab/utils/requestUtils.js
+[ ] client/src/components/tabs/CoordinationTab/utils/syncUtils.js
+
+# ProfileTab 폴더 (15개)
+[x] client/src/components/tabs/ProfileTab/index.js
+[ ] client/src/components/tabs/ProfileTab/components/ErrorState.js
+[ ] client/src/components/tabs/ProfileTab/components/LoadingState.js
+[x] client/src/components/tabs/ProfileTab/components/PreferenceTimeSection.js
+[x] client/src/components/tabs/ProfileTab/components/ProfileHeader.js
+[ ] client/src/components/tabs/ProfileTab/constants/dayMapping.js
+[ ] client/src/components/tabs/ProfileTab/constants/messages.js
+[ ] client/src/components/tabs/ProfileTab/constants/priorityConfig.js
+[x] client/src/components/tabs/ProfileTab/handlers/createAutoSaveHandler.js
+[x] client/src/components/tabs/ProfileTab/handlers/createCancelHandler.js
+[x] client/src/components/tabs/ProfileTab/handlers/createSaveHandler.js
+[x] client/src/components/tabs/ProfileTab/hooks/useCalendarUpdate.js
+[x] client/src/components/tabs/ProfileTab/hooks/useEditingState.js
+[x] client/src/components/tabs/ProfileTab/hooks/useFilteredSchedule.js
+[x] client/src/components/tabs/ProfileTab/hooks/useScheduleData.js
+[x] client/src/components/tabs/ProfileTab/utils/dateFormatter.js
+[ ] client/src/components/tabs/ProfileTab/utils/ownerRoomSync.js
+[x] client/src/components/tabs/ProfileTab/utils/scheduleGrouper.js
+[x] client/src/components/tabs/ProfileTab/utils/slotMerger.js
+
+# ScheduleGridSelector 폴더 (16개)
+[ ] client/src/components/tabs/ScheduleGridSelector/index.js
+[ ] client/src/components/tabs/ScheduleGridSelector/components/DateDetailModal.js
+[ ] client/src/components/tabs/ScheduleGridSelector/components/DetailedWeekView.js
+[ ] client/src/components/tabs/ScheduleGridSelector/components/MergedWeekView.js
+[ ] client/src/components/tabs/ScheduleGridSelector/components/MonthView.js
+[ ] client/src/components/tabs/ScheduleGridSelector/components/ViewControls.js
+[ ] client/src/components/tabs/ScheduleGridSelector/constants/scheduleConstants.js
+[ ] client/src/components/tabs/ScheduleGridSelector/handlers/navigationHandlers.js
+[ ] client/src/components/tabs/ScheduleGridSelector/hooks/useDateDetail.js
+[ ] client/src/components/tabs/ScheduleGridSelector/hooks/useMonthNavigation.js
+[ ] client/src/components/tabs/ScheduleGridSelector/hooks/useTimeSlots.js
+[ ] client/src/components/tabs/ScheduleGridSelector/hooks/useViewMode.js
+[ ] client/src/components/tabs/ScheduleGridSelector/hooks/useWeekNavigation.js
+[ ] client/src/components/tabs/ScheduleGridSelector/utils/scheduleFilters.js
+[ ] client/src/components/tabs/ScheduleGridSelector/utils/timeUtils.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 17. 타임테이블 (Timetable) 컴포넌트 (6개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/components/timetable/MonthView.js
+[ ] client/src/components/timetable/TimeSlot.js
+[ ] client/src/components/timetable/TimetableControls.js
+[ ] client/src/components/timetable/TimetableGrid.js
+[ ] client/src/components/timetable/TravelTimeSlot.js
+[ ] client/src/components/timetable/WeekView.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 18. 설정 & 컨텍스트 (2개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/config/firebaseConfig.js
+[ ] client/src/contexts/AdminContext.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 19. 상수 (Constants) (2개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/constants/coordination.js
+[ ] client/src/constants/scheduleConstants.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 20. 훅스 (Hooks) (20개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/hooks/useAudioManager.js
+[ ] client/src/hooks/useAuth.js
+[ ] client/src/hooks/useBackgroundMonitoring.js
+[ ] client/src/hooks/useCoordination.js
+[ ] client/src/hooks/useCoordinationModals.js
+[ ] client/src/hooks/useIntegratedVoiceSystem.js
+[ ] client/src/hooks/useSharedAudioStream.js
+[ ] client/src/hooks/useTravelMode.js
+[ ] client/src/hooks/useVoiceCommands.js
+
+# useChat 폴더 (11개)
+[ ] client/src/hooks/useChat/index.js
+[ ] client/src/hooks/useChat/enhanced.js
+[ ] client/src/hooks/useChat/constants/apiConstants.js
+[ ] client/src/hooks/useChat/constants/keywordConstants.js
+[ ] client/src/hooks/useChat/handlers/createIntentHandlers.js
+[ ] client/src/hooks/useChat/handlers/enhancedIntentHandlers.js
+[ ] client/src/hooks/useChat/hooks/enhanced/usePersonalTimeAdd.js
+[ ] client/src/hooks/useChat/hooks/enhanced/usePreferredTimeAdd.js
+[ ] client/src/hooks/useChat/hooks/enhanced/useRecurringPreferredTimeAdd.js
+[ ] client/src/hooks/useChat/hooks/useCoordinationExchange.js
+[ ] client/src/hooks/useChat/hooks/useDirectEventDeletion.js
+[ ] client/src/hooks/useChat/hooks/useEventAdd.js
+[ ] client/src/hooks/useChat/hooks/useEventDelete.js
+[ ] client/src/hooks/useChat/hooks/useEventEdit.js
+[ ] client/src/hooks/useChat/hooks/useRangeDeletion.js
+[ ] client/src/hooks/useChat/hooks/useRecurringEventAdd.js
+[ ] client/src/hooks/useChat/prompts/unifiedPrompt.js
+[ ] client/src/hooks/useChat/utils/apiRequestUtils.js
+[ ] client/src/hooks/useChat/utils/dateUtils.js
+[ ] client/src/hooks/useChat/utils/eventFilterUtils.js
+[ ] client/src/hooks/useChat/utils/responseUtils.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 21. 서비스 (Services) (5개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/services/coordinationService.js
+[ ] client/src/services/userService.js
+[ ] client/src/services/travelModeService.js
+[ ] client/src/services/travelScheduleCalculator.js
+[ ] client/src/services/fixedSchedule/fixedScheduleAPI.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 22. 유틸리티 (Utils) (21개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] client/src/utils.js
+[ ] client/src/utils/apiClient.js
+[ ] client/src/utils/coordinationHandlers.js
+[ ] client/src/utils/coordinationModeUtils.js
+[ ] client/src/utils/coordinationUtils.js
+[ ] client/src/utils/dateUtils.js
+[ ] client/src/utils/scheduleOptimizer.js
+[ ] client/src/utils/scheduleUtils.js
+[ ] client/src/utils/timeUtils.js
+[ ] client/src/utils/timetableConstants.js
+[ ] client/src/utils/timetableHelpers.js
+[ ] client/src/utils/validationUtils.js
+[ ] client/src/utils/scheduleAnalysis/assignScheduleColors.js
+
+# ocrUtils 폴더 (10개)
+[ ] client/src/utils/ocrUtils/index.js
+[ ] client/src/utils/ocrUtils/api/ocrApiClient.js
+[ ] client/src/utils/ocrUtils/constants/dayConstants.js
+[ ] client/src/utils/ocrUtils/constants/gradeLevelConstants.js
+[ ] client/src/utils/ocrUtils/utils/ageUtils.js
+[ ] client/src/utils/ocrUtils/utils/conflictUtils.js
+[ ] client/src/utils/ocrUtils/utils/dayUtils.js
+[ ] client/src/utils/ocrUtils/utils/formatUtils.js
+[ ] client/src/utils/ocrUtils/utils/optimizationUtils.js
+[ ] client/src/utils/ocrUtils/utils/scheduleProcessingUtils.js
+[ ] client/src/utils/ocrUtils/utils/timeUtils.js
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     ⚙️ 백엔드 (Server) - 118개 파일                        │
+└─────────────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 1. 메인 & 설정 (10개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] server/index.js
+[ ] server/add_members_to_room_direct.js
+[ ] server/add_preference_time_to_users.js
+[ ] server/add_timeslots_to_members.js
+[ ] server/check_slots.js
+[ ] server/create_users_and_join_room.js
+[ ] server/join_all_to_room.js
+[ ] server/config/firebaseAdmin.js
+[ ] server/config/db.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 2. 미들웨어 (Middleware) (2개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] server/middleware/adminAuth.js
+[ ] server/middleware/auth.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 3. 모델 (Models) (4개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] server/models/ActivityLog.js
+[ ] server/models/event.js
+[ ] server/models/room.js
+[ ] server/models/user.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 4. 컨트롤러 (Controllers) (33개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] server/controllers/adminController.js
+[ ] server/controllers/authController.js
+[ ] server/controllers/calendarController.js
+[ ] server/controllers/callAnalysisController.js
+[ ] server/controllers/chatbotController.js
+[ ] server/controllers/conflictResolutionController.js
+[ ] server/controllers/coordinationController.js
+[ ] server/controllers/coordinationExchangeController.js
+[ ] server/controllers/coordinationExchangeRequestController.js
+[ ] server/controllers/coordinationMemberController.js
+[ ] server/controllers/coordinationSchedulingController.js
+[ ] server/controllers/eventController.js
+[ ] server/controllers/ocrChatController.js
+[ ] server/controllers/ocrController.js
+[ ] server/controllers/roomController.js
+[ ] server/controllers/timeSlotController.js
+[ ] server/controllers/userController.js
+
+# analysis 폴더 (3개)
+[ ] server/controllers/analysis/callTranscriptAnalysisController.js
+[ ] server/controllers/analysis/clipboardAnalysisController.js
+[ ] server/controllers/analysis/keywordDetectionController.js
+
+# coordinationExchangeController 폴더 (14개)
+[ ] server/controllers/coordinationExchangeController/constants/dayMappings.js
+[ ] server/controllers/coordinationExchangeController/constants/errorMessages.js
+[ ] server/controllers/coordinationExchangeController/constants/timeFormats.js
+[ ] server/controllers/coordinationExchangeController/constants/weekOffsets.js
+[ ] server/controllers/coordinationExchangeController/utils/dateUtils.js
+[ ] server/controllers/coordinationExchangeController/utils/slotMerger.js
+[ ] server/controllers/coordinationExchangeController/utils/timeUtils.js
+[ ] server/controllers/coordinationExchangeController/validators/dayValidator.js
+[ ] server/controllers/coordinationExchangeController/validators/roomValidator.js
+[ ] server/controllers/coordinationExchangeController/validators/scheduleValidator.js
+[ ] server/controllers/coordinationExchangeController/validators/timeRangeValidator.js
+[ ] server/controllers/coordinationExchangeController/helpers/activityLogger.js
+[ ] server/controllers/coordinationExchangeController/helpers/autoPlacement.js
+[ ] server/controllers/coordinationExchangeController/helpers/scheduleOverlap.js
+[ ] server/controllers/coordinationExchangeController/helpers/slotFinder.js
+[ ] server/controllers/coordinationExchangeController/services/dateChangeService.js
+[ ] server/controllers/coordinationExchangeController/services/geminiService.js
+
+# coordinationRequestController 폴더 (9개)
+[ ] server/controllers/coordinationRequestController/index.js
+[ ] server/controllers/coordinationRequestController/constants/dayNames.js
+[ ] server/controllers/coordinationRequestController/constants/errorMessages.js
+[ ] server/controllers/coordinationRequestController/utils/slotComparator.js
+[ ] server/controllers/coordinationRequestController/utils/timeConverter.js
+[ ] server/controllers/coordinationRequestController/validators/validatePermission.js
+[ ] server/controllers/coordinationRequestController/validators/validateRequest.js
+[ ] server/controllers/coordinationRequestController/helpers/buildScheduleByDay.js
+[ ] server/controllers/coordinationRequestController/helpers/findCandidates.js
+[ ] server/controllers/coordinationRequestController/helpers/findOverlappingSlots.js
+[ ] server/controllers/coordinationRequestController/services/activityLogService.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 5. 프롬프트 (Prompts) (6개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] server/prompts/confirmationRules.js
+[ ] server/prompts/conversationalScheduleRecommender.js
+[ ] server/prompts/fixedSchedulePrompts.js
+[ ] server/prompts/ocrChatFilter.js
+[ ] server/prompts/ocrPrompts.js
+[ ] server/prompts/scheduleOptimizer.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 6. 라우트 (Routes) (40개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] server/routes/admin.js
+[ ] server/routes/auth.js
+[ ] server/routes/calendar.js
+[ ] server/routes/callAnalysis.js
+[ ] server/routes/chatbot.js
+[ ] server/routes/conflict.js
+[ ] server/routes/coordination.js
+[ ] server/routes/events.js
+[ ] server/routes/fixedSchedule.js
+[ ] server/routes/kakao.js
+[ ] server/routes/nview.js
+[ ] server/routes/ocr.js
+[ ] server/routes/ocrChat.js
+[ ] server/routes/profile.js
+[ ] server/routes/scheduleOptimizer.js
+[ ] server/routes/users.js
+
+# nview 폴더 (10개)
+[ ] server/routes/nview/constants/fallbackQuestions.js
+[ ] server/routes/nview/constants/typeMapping.js
+[ ] server/routes/nview/constants/promptTemplates.js
+[ ] server/routes/nview/utils/dateUtils.js
+[ ] server/routes/nview/utils/streakCalculator.js
+[ ] server/routes/nview/validators/requestValidator.js
+[ ] server/routes/nview/helpers/statsCalculator.js
+[ ] server/routes/nview/helpers/weaknessAnalyzer.js
+[ ] server/routes/nview/helpers/rankingCalculator.js
+[ ] server/routes/nview/services/geminiService.js
+
+# scheduleOptimizer 폴더 (14개)
+[ ] server/routes/scheduleOptimizer/constants/dayMappings.js
+[ ] server/routes/scheduleOptimizer/constants/keywords.js
+[ ] server/routes/scheduleOptimizer/constants/modelNames.js
+[ ] server/routes/scheduleOptimizer/utils/jsonParser.js
+[ ] server/routes/scheduleOptimizer/utils/statistics.js
+[ ] server/routes/scheduleOptimizer/utils/timeParser.js
+[ ] server/routes/scheduleOptimizer/validators/deletionValidator.js
+[ ] server/routes/scheduleOptimizer/validators/scheduleValidator.js
+[ ] server/routes/scheduleOptimizer/helpers/aiResponseHandler.js
+[ ] server/routes/scheduleOptimizer/helpers/conflictDetector.js
+[ ] server/routes/scheduleOptimizer/helpers/promptGenerator.js
+[ ] server/routes/scheduleOptimizer/helpers/scheduleFilter.js
+[ ] server/routes/scheduleOptimizer/services/aiService.js
+[ ] server/routes/scheduleOptimizer/services/customScheduleService.js
+[ ] server/routes/scheduleOptimizer/services/optimizationService.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 7. 서비스 (Services) (19개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] server/services/schedulingAlgorithm.js
+[ ] server/services/schedulingAnalysisService.js
+[ ] server/services/travelScheduler.js
+[ ] server/services/fixedSchedule/scheduleReoptimizer.js
+
+# schedulingAlgorithm 폴더 (18개)
+[ ] server/services/schedulingAlgorithm/index.js
+[ ] server/services/schedulingAlgorithm/constants/errorMessages.js
+[ ] server/services/schedulingAlgorithm/constants/priorityConstants.js
+[ ] server/services/schedulingAlgorithm/constants/schedulingConstants.js
+[ ] server/services/schedulingAlgorithm/constants/timeConstants.js
+[ ] server/services/schedulingAlgorithm/utils/arrayUtils.js
+[ ] server/services/schedulingAlgorithm/utils/dateUtils.js
+[ ] server/services/schedulingAlgorithm/utils/slotUtils.js
+[ ] server/services/schedulingAlgorithm/utils/timeUtils.js
+[ ] server/services/schedulingAlgorithm/validators/conflictValidator.js
+[ ] server/services/schedulingAlgorithm/validators/inputValidator.js
+[ ] server/services/schedulingAlgorithm/validators/scheduleValidator.js
+[ ] server/services/schedulingAlgorithm/helpers/assignmentHelper.js
+[ ] server/services/schedulingAlgorithm/helpers/carryOverHelper.js
+[ ] server/services/schedulingAlgorithm/helpers/conflictMerger.js
+[ ] server/services/schedulingAlgorithm/helpers/memberHelper.js
+[ ] server/services/schedulingAlgorithm/helpers/timetableHelper.js
+[ ] server/services/schedulingAlgorithm/services/conflictIdentificationService.js
+[ ] server/services/schedulingAlgorithm/services/conflictResolutionService.js
+[ ] server/services/schedulingAlgorithm/services/multiWeekSchedulingService.js
+[ ] server/services/schedulingAlgorithm/services/scoringService.js
+[ ] server/services/schedulingAlgorithm/services/slotAssignmentService.js
+[ ] server/services/schedulingAlgorithm/services/timetableCreationService.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 8. 유틸리티 (Utils) (11개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] server/utils/colorUtils.js
+[ ] server/utils/fixedScheduleHandler.js
+[ ] server/utils/imageHasher.js
+[ ] server/utils/imageProcessing.js
+[ ] server/utils/scheduleAutoOptimizer.js
+[ ] server/utils/scheduleMoveHandler.js
+[ ] server/utils/scheduleProcessing.js
+[ ] server/utils/scheduleAnalysis/detectBaseSchedule.js
+[ ] server/utils/scheduleAnalysis/generateScheduleTitle.js
+
+
+
+
+
+================================================================================
+                           작업 진행 가이드
 ================================================================================
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-예시 1: client/src/App.js
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 📝 작업 순서
+
+### Phase 1: 핵심 컴포넌트 (우선순위 높음)
+1. [ ] 탭 컴포넌트 (ProfileTab, CoordinationTab, ScheduleTab)
+2. [ ] 모달 컴포넌트 (전체)
+3. [ ] 메인 시스템 파일 (App.js, SchedulingSystem.js)
+
+### Phase 2: 기능별 컴포넌트
+4. [ ] 캘린더/그리드 컴포넌트
+5. [ ] 스케줄러 컴포넌트
+6. [ ] 채팅 컴포넌트
+
+### Phase 3: 로직 및 유틸리티
+7. [ ] 훅스 (useCoordination, useAuth, useSchedule 등)
+8. [ ] 서비스 (API 호출)
+9. [ ] 유틸리티 함수들
+
+### Phase 4: 백엔드
+10. [ ] 모델 (스키마)
+11. [ ] 컨트롤러 (API 로직)
+12. [ ] 스케줄링 알고리즘
+13. [ ] 유틸리티 & 라우트
+
+
+## ✅ 주석 작성 체크포인트
+
+각 파일 작업 시 다음을 확인:
+
+- [ ] 파일 헤더 주석 추가 (위치, 기능, UI 위치, 수정 가이드)
+- [ ] 주요 함수/컴포넌트별 주석 추가
+- [ ] 복잡한 로직에 설명 주석 추가
+- [ ] 관련 파일 연결 정보 작성
+- [ ] 수정 시 영향받는 부분 명시
+
+
+## 📌 주의사항
+
+1. **일관성 유지**
+   - 모든 파일에 동일한 형식의 주석 적용
+   - 한글/영어 혼용 시 규칙 통일
+
+2. **간결하되 명확하게**
+   - 너무 장황하지 않게
+   - 핵심 정보만 포함
+
+3. **실제 동작 기준**
+   - 현재 코드의 실제 동작을 정확히 설명
+   - 추측이 아닌 확인된 정보만 작성
+
+4. **지속적 업데이트**
+   - 코드 수정 시 주석도 함께 업데이트
+   - 오래된 주석은 삭제 또는 수정
+
+
+================================================================================
+                           주석 예시
+================================================================================
+
+## 예시 1: 탭 컴포넌트
 
 /**
  * ===================================================================================================
- * App.js - React 애플리케이션 최상위 컴포넌트
+ * ProfileTab - 사용자 프로필 및 선호시간 관리 탭
  * ===================================================================================================
  *
- * 📍 위치: 프론트엔드 > client/src/App.js
- *
+ * 📍 위치: 프론트엔드 > components > tabs > ProfileTab
  * 🎯 주요 기능:
- *    - React Router 기반 라우팅 설정 (/auth, /)
- *    - 전역 상태 관리 (AdminContext Provider)
- *    - Google Maps API 로딩 (LoadScript)
- *    - 인증 상태 관리 및 보호된 라우트
- *    - 클립보드 모니터링 및 일정 자동 감지
- *    - 음성 인식 설정 관리
- *    - 공유 텍스트 처리 (URL 파라미터)
+ *    - 사용자 정보 표시 및 수정
+ *    - 선호시간 설정 (버튼 클릭 또는 챗봇)
+ *    - 개인시간 설정 (수면, 식사 등)
+ *    - 주소 설정 (지도 API 연동)
  *
  * 🔗 연결된 파일:
- *    - ./SchedulingSystem.js - 메인 스케줄링 시스템
- *    - ./components/auth/AuthScreen.js - 로그인/회원가입 화면
- *    - ./contexts/AdminContext.js - 관리자 컨텍스트
- *    - ./hooks/useAuth.js - 인증 훅
- *    - ./hooks/useChat.js - 챗봇 훅
+ *    - components/PreferenceTimeSection.js - 선호시간 섹션
+ *    - components/PersonalTimeSection.js - 개인시간 섹션
+ *    - components/DetailTimeGrid/index.js - 시간표 그리드
+ *    - hooks/useSchedule.js - 시간표 상태 관리
  *
  * 💡 UI 위치:
- *    - 앱 전체의 루트 컴포넌트
- *    - 라우트: /auth (로그인), / (메인 앱)
+ *    - 탭: 내프로필 (좌측 첫 번째 탭)
+ *    - 섹션: 프로필 정보, 선호시간, 개인시간
+ *    - 경로: 앱 실행 > 내프로필 탭
  *
  * ✏️ 수정 가이드:
- *    - 이 파일을 수정하면: 전체 앱의 라우팅 및 최상위 상태 관리가 변경됨
- *    - 새 라우트 추가: Routes 내에 <Route> 추가
- *    - 전역 기능 추가: App 컴포넌트 내 상태 및 로직 추가
- *    - 클립보드 모니터링 로직: analyzeClipboard, readClipboard 함수 수정
+ *    - 이 파일을 수정하면: 프로필 탭 전체 레이아웃 및 동작 변경
+ *    - 선호시간 추가 방식 변경: PreferenceTimeSection.js의 addQuickTimeSlot 수정
+ *    - 시간표 그리드 UI 변경: DetailTimeGrid/index.js 수정
+ *    - 프로필 데이터 저장: handleSaveProfile 함수 수정
  *
  * 📝 참고사항:
- *    - 클립보드 모니터링은 isClipboardMonitoring 상태로 ON/OFF 가능
- *    - 음성 인식은 localStorage에 설정 저장됨
- *    - 로그인하지 않으면 /auth로 리다이렉트
- *    - Google Maps API 키는 환경변수 REACT_APP_MY_GOOGLE_KEY 사용
+ *    - 선호시간은 자동 배정에 사용됨
+ *    - 개인시간은 배정 금지 시간으로 사용됨
+ *    - 주소 정보는 이동시간 계산에 사용됨
  *
  * ===================================================================================================
  */
 
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-예시 2: client/src/index.js
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 예시 2: API 컨트롤러
 
 /**
  * ===================================================================================================
- * index.js - React 애플리케이션 엔트리 포인트
+ * coordinationSchedulingController - 자동 배정 API 컨트롤러
  * ===================================================================================================
  *
- * 📍 위치: 프론트엔드 > client/src/index.js
- *
+ * 📍 위치: 백엔드 > controllers
  * 🎯 주요 기능:
- *    - React 애플리케이션을 DOM에 마운트
- *    - React.StrictMode로 개발 모드 검사 활성화
- *    - 전역 CSS 스타일 로드
+ *    - 자동 시간 배정 실행
+ *    - 배정 모드별 처리 (기본/선착순/오늘기준)
+ *    - 타임슬롯 관리
  *
  * 🔗 연결된 파일:
- *    - ./App.js - 최상위 App 컴포넌트
- *    - ./index.css - 전역 CSS 스타일
- *    - public/index.html - HTML 템플릿 (root div)
- *
- * 💡 UI 위치:
- *    - 앱의 시작점, 모든 화면의 기반
+ *    - services/schedulingAlgorithm/index.js - 배정 알고리즘
+ *    - models/room.js - 방 모델
+ *    - client/utils/coordinationHandlers.js - 클라이언트 핸들러
  *
  * ✏️ 수정 가이드:
- *    - 이 파일을 수정하면: 앱 초기화 방식이 변경됨
- *    - 전역 Provider 추가: App을 감싸는 Provider 추가
- *    - StrictMode 제거: 개발 모드 검사를 비활성화할 경우
+ *    - 배정 로직 변경: runAutoSchedule 함수 수정
+ *    - 새 배정 모드 추가: assignmentMode validation 수정
+ *    - 배정 전 검증 추가: runAutoSchedule 함수 내 validation 로직 추가
  *
  * 📝 참고사항:
- *    - React 18+ createRoot API 사용
- *    - StrictMode는 개발 모드에서만 작동 (프로덕션에서는 영향 없음)
- *    - HTML의 'root' id를 가진 div에 앱이 렌더링됨
+ *    - 방장만 자동 배정 실행 가능
+ *    - 모든 멤버가 선호시간을 설정해야 함
+ *    - 기존 '협의' 슬롯은 유지됨
  *
  * ===================================================================================================
  */
 
-
-================================================================================
-                        📋 작업 진행 방법
-================================================================================
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Step 1: 파일 읽기
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. 체크리스트에서 [ ] 표시된 파일 선택
-2. 해당 파일의 코드를 읽고 이해
-3. import 문, export 문, 주요 함수/컴포넌트 파악
-
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Step 2: 주석 작성
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. 파일 최상단에 헤더 주석 추가
-2. 주요 함수/컴포넌트에 설명 주석 추가
-3. 복잡한 로직에는 인라인 주석 추가
-
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Step 3: 체크리스트 업데이트
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. 작업 완료 후 체크리스트에서 [ ] → [x]로 변경
-2. 주석_추가_작업_가이드.txt 파일을 업데이트
-3. 진행 상황 기록
-
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Step 4: 반복
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-- 모든 파일 (341개)이 [x] 표시될 때까지 반복
+/**
+ * runAutoSchedule - 자동 배정 실행
+ *
+ * @description 방의 모든 멤버에게 주당 최소 시간을 배정
+ * @route POST /api/coordination/rooms/:roomId/auto-schedule
+ * @access Private (방장만)
+ *
+ * @param {Object} req.params.roomId - 방 ID
+ * @param {Object} req.body.minHoursPerWeek - 주당 최소 시간 (기본 3시간)
+ * @param {Object} req.body.assignmentMode - 배정 모드 (normal/first_come_first_served/from_today)
+ * @param {Object} req.body.numWeeks - 배정 주 수
+ * @param {Object} req.body.currentWeek - 시작 날짜
+ *
+ * @returns {Object} 배정된 방 정보, 미배정 멤버 정보, 충돌 제안사항
+ *
+ * @example
+ * POST /api/coordination/rooms/123/auto-schedule
+ * {
+ *   "minHoursPerWeek": 3,
+ *   "assignmentMode": "from_today",
+ *   "numWeeks": 4
+ * }
+ *
+ * @note
+ * - 기존 자동배정 슬롯은 모두 삭제됨 (협의 슬롯 제외)
+ * - 이월시간이 있는 멤버 우선 처리
+ * - 배정 실패 시 이월시간에 추가됨
+ */
 
 
 ================================================================================
-                        🎨 작업 우선순위 (Phase별)
+                           작업 완료 기준
 ================================================================================
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Phase 1: 핵심 시스템 파일 (최우선)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## ✅ 완료 체크리스트
 
-✅ App.js (완료)
-✅ index.js (완료)
-❌ SchedulingSystem.js (다음 작업)
-❌ 탭 컴포넌트 (ProfileTab, CoordinationTab 등)
-❌ 주요 모달 컴포넌트
+각 파일 작업 완료 시 다음을 확인:
 
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Phase 2: 기능별 컴포넌트
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-- Calendar 컴포넌트
-- Chat 컴포넌트
-- Coordination 컴포넌트
-- Form 컴포넌트
-- Modal 컴포넌트
+1. [ ] 파일 헤더 주석 작성 완료
+2. [ ] 모든 export 함수/컴포넌트에 주석 추가
+3. [ ] 복잡한 로직 부분에 설명 추가
+4. [ ] 관련 파일 연결 정보 작성
+5. [ ] 수정 가이드 작성 완료
+6. [ ] 코드 실행하여 오류 없음 확인
 
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Phase 3: 훅스 및 유틸리티
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 📊 진행률 추적
 
-- Hooks 폴더
-- Utils 폴더
-- Services 폴더
-- Contexts 폴더
+- 전체 파일 수: 341개 (클라이언트: 223개, 서버: 118개)
+- 완료한 파일: ____ / 341
+- 진행률: ____%
 
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Phase 4: 백엔드 파일
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-- Controllers
-- Routes
-- Services
-- Models
-- Middleware
+### 세부 진행률
+- 클라이언트: ____ / 223 (___%)
+- 서버: ____ / 118 (___%)
+  - nview 폴더: ____ / 11
+  - scheduleOptimizer 폴더: ____ / 14
 
 
 ================================================================================
-                        ⚠️ 중요 주의사항
+                           마무리
 ================================================================================
 
-1. 📌 **템플릿 준수**
-   - 반드시 제공된 템플릿 형식 사용
-   - 이모지 (📍🎯🔗💡✏️📝) 정확히 사용
-   - 구분선 (===) 형식 유지
+이 가이드를 기반으로 모든 파일에 주석을 추가하면:
 
-2. 📌 **한국어 사용**
-   - 모든 주석은 한국어로 작성
-   - 기술 용어는 영어 병기 가능 (예: "라우팅 (Routing)")
+✅ 새로운 개발자가 빠르게 프로젝트 이해 가능
+✅ 유지보수 시간 대폭 단축
+✅ 버그 수정 및 기능 추가가 쉬워짐
+✅ 코드 품질 향상
 
-3. 📌 **코드 분석**
-   - 파일을 읽고 실제 기능을 파악한 후 주석 작성
-   - 추측하지 말고 코드 기반으로 작성
-
-4. 📌 **연결 파일**
-   - import 문을 확인하여 연결된 파일 파악
-   - 실제로 사용되는 파일만 기재
-
-5. 📌 **UI 위치** (프론트엔드만)
-   - 실제 화면에서 어디에 표시되는지 명확히 기재
-   - 탭, 섹션, 모달 등 구체적으로 설명
-
-6. 📌 **수정 가이드**
-   - 실용적인 정보 제공
-   - "이 파일을 수정하면 어떻게 되는지" 명확히 기재
-
-7. 📌 **체크리스트 업데이트**
-   - 작업 완료 후 반드시 [ ] → [x] 업데이트
-   - 주석_추가_작업_가이드.txt 파일 수정
-
+작업 시작 전 이 가이드를 숙지하고, 작업 중 참고하세요!
 
 ================================================================================
-                        🔍 품질 체크리스트
-================================================================================
-
-작업 완료 전 각 파일마다 다음을 확인하세요:
-
-□ 파일 최상단에 헤더 주석이 있는가?
-□ 📍위치가 정확한가?
-□ 🎯주요 기능이 3개 이상 기재되었는가?
-□ 🔗연결된 파일이 실제 import와 일치하는가?
-□ 💡UI 위치가 명확한가? (프론트엔드만)
-□ ✏️수정 가이드가 실용적인가?
-□ 📝참고사항이 도움이 되는가?
-□ 주요 함수/컴포넌트에 주석이 있는가?
-□ 템플릿 형식을 정확히 따랐는가?
-□ 체크리스트를 [x]로 업데이트했는가?
-
-
-================================================================================
-                        📊 진행 상황 추적
-================================================================================
-
-작업을 진행하면서 다음 정보를 기록하세요:
-
-- 시작 시간: [기록]
-- 완료된 파일 수: [기록]
-- 남은 파일 수: [기록]
-- 예상 완료 시간: [기록]
-- 발견된 이슈: [기록]
-
-
-================================================================================
-                        📁 참고 파일 위치
-================================================================================
-
-1. **전체 체크리스트**
-   C:\Users\예상\OneDrive\Desktop\프로젝트\Ai_Schedule\정리\해야될일\주석_추가_작업_가이드.txt
-
-2. **프로젝트 루트**
-   C:\Users\예상\OneDrive\Desktop\프로젝트\Ai_Schedule
-
-3. **완료된 예시 파일**
-   - C:\Users\예상\OneDrive\Desktop\프로젝트\Ai_Schedule\client\src\App.js
-   - C:\Users\예상\OneDrive\Desktop\프로젝트\Ai_Schedule\client\src\index.js
-
-
-================================================================================
-                        🚀 시작 가이드
-================================================================================
-
-1. 주석_추가_작업_가이드.txt 파일을 열어 전체 체크리스트 확인
-2. [ ] 표시된 첫 번째 파일부터 시작 (SchedulingSystem.js)
-3. 위의 템플릿과 예시를 참고하여 주석 작성
-4. 작업 완료 후 체크리스트 업데이트 ( [ ] → [x] )
-5. 다음 파일로 이동하여 반복
-
-
-💪 화이팅! 총 339개 파일이 남았습니다!
-
+작성: 2025-12-04
+버전: v1.0
 ================================================================================
