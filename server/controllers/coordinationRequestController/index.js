@@ -58,7 +58,8 @@ exports.createRequest = async (req, res) => {
       return res.status(validationError.status).json({ msg: validationError.msg });
     }
 
-    const room = await Room.findById(roomId);
+    const room = await Room.findById(roomId)
+      .populate('members.user', 'firstName lastName email');
     if (!room) {
       return res.status(404).json({ msg: ERROR_MESSAGES.ROOM_NOT_FOUND });
     }
@@ -73,16 +74,90 @@ exports.createRequest = async (req, res) => {
       return res.status(400).json({ msg: ERROR_MESSAGES.DUPLICATE_REQUEST, duplicateRequest: true });
     }
 
+    // Generate descriptive message if not provided
+    let finalMessage = message || '';
+    if (!message && (type === 'time_request' || type === 'time_change') && targetUserId) {
+      const requesterMember = room.members.find(m =>
+        (m.user._id || m.user).toString() === req.user.id
+      );
+      const requesterName = requesterMember?.user?.firstName && requesterMember?.user?.lastName
+        ? `${requesterMember.user.firstName} ${requesterMember.user.lastName}`
+        : requesterMember?.user?.firstName || '요청자';
+
+      const dayMapKorean = {
+        'monday': '월요일',
+        'tuesday': '화요일',
+        'wednesday': '수요일',
+        'thursday': '목요일',
+        'friday': '금요일'
+      };
+      const dayKorean = dayMapKorean[timeSlot.day] || timeSlot.day;
+
+      // Find requester's current slots to inform target where they'll move
+      const requesterCurrentSlots = room.timeSlots.filter(slot => {
+        const slotUserId = (slot.user._id || slot.user).toString();
+        return slotUserId === req.user.id;
+      });
+
+      let targetDestinationInfo = '';
+      if (requesterCurrentSlots.length > 0) {
+        // Group by date and get time range
+        const slotsByDate = {};
+        requesterCurrentSlots.forEach(slot => {
+          const dateKey = new Date(slot.date).toISOString().split('T')[0];
+          if (!slotsByDate[dateKey]) slotsByDate[dateKey] = [];
+          slotsByDate[dateKey].push(slot);
+        });
+
+        // Get first date group for the message
+        const firstDateSlots = Object.values(slotsByDate)[0];
+        if (firstDateSlots && firstDateSlots.length > 0) {
+          firstDateSlots.sort((a, b) => {
+            const [aH, aM] = a.startTime.split(':').map(Number);
+            const [bH, bM] = b.startTime.split(':').map(Number);
+            return (aH * 60 + aM) - (bH * 60 + bM);
+          });
+          const firstSlot = firstDateSlots[0];
+          const lastSlot = firstDateSlots[firstDateSlots.length - 1];
+          const slotDayKorean = dayMapKorean[firstSlot.day] || firstSlot.day;
+          targetDestinationInfo = ` 회원님은 ${slotDayKorean} ${firstSlot.startTime}-${lastSlot.endTime}로 이동하게 됩니다.`;
+        }
+      }
+
+      finalMessage = `${requesterName}님이 회원님의 ${dayKorean} ${timeSlot.startTime}-${timeSlot.endTime} 자리로 이동하고 싶어합니다.${targetDestinationInfo}`;
+    } else if (!message && type === 'slot_swap' && targetUserId && targetSlot) {
+      // For slot_swap requests
+      const requesterMember = room.members.find(m =>
+        (m.user._id || m.user).toString() === req.user.id
+      );
+      const requesterName = requesterMember?.user?.firstName && requesterMember?.user?.lastName
+        ? `${requesterMember.user.firstName} ${requesterMember.user.lastName}`
+        : requesterMember?.user?.firstName || '요청자';
+
+      const dayMapKorean = {
+        'monday': '월요일',
+        'tuesday': '화요일',
+        'wednesday': '수요일',
+        'thursday': '목요일',
+        'friday': '금요일'
+      };
+
+      const targetDayKorean = dayMapKorean[targetSlot.day] || targetSlot.day;
+      const timeSlotDayKorean = dayMapKorean[timeSlot.day] || timeSlot.day;
+
+      finalMessage = `${requesterName}님이 회원님과 자리를 교환하고 싶어합니다. ${requesterName}님은 ${targetDayKorean} ${targetSlot.startTime}-${targetSlot.endTime}에서 ${timeSlotDayKorean} ${timeSlot.startTime}-${timeSlot.endTime}로, 회원님은 ${timeSlotDayKorean} ${timeSlot.startTime}-${timeSlot.endTime}에서 ${targetDayKorean} ${targetSlot.startTime}-${targetSlot.endTime}로 이동합니다.`;
+    }
+
     const requestData = {
       requester: req.user.id,
       type,
       timeSlot,
-      message: message || '',
+      message: finalMessage,
       status: 'pending',
       createdAt: new Date(),
     };
 
-    if ((type === 'slot_swap' || type === 'time_request') && targetUserId) {
+    if ((type === 'slot_swap' || type === 'time_request' || type === 'time_change') && targetUserId) {
       requestData.targetUser = targetUserId;
       if (targetSlot) {
         requestData.targetSlot = targetSlot;
@@ -684,7 +759,7 @@ exports.handleRequest = async (req, res) => {
                                  startTime: candidateStartTime,
                                  endTime: candidateEndTime
                               },
-                              message: `${targetUser.firstName || 'B'}님이 일정 조정을 위해 ${dayMapKorean[candidateSlot.day] || candidateSlot.day} ${candidateStartTime}-${candidateEndTime} 자리를 요청합니다. 남아있는 빈 시간으로 이동해주실 수 있나요?`,
+                              message: `[연쇄 요청] ${targetUser.firstName && targetUser.lastName ? `${targetUser.firstName} ${targetUser.lastName}` : targetUser.firstName || '알수없음'}님이 다른 멤버에게 자리를 양보하기 위해 회원님의 ${dayMapKorean[candidateSlot.day] || candidateSlot.day} ${candidateStartTime}-${candidateEndTime} 자리가 필요합니다. 회원님은 빈 시간으로 이동하게 됩니다. 수락하시겠습니까?`,
                               status: 'pending',
                               createdAt: new Date(),
                               chainData: {
@@ -1227,7 +1302,7 @@ exports.handleChainConfirmation = async (req, res) => {
             startTime: firstCandidate.slot.startTime,
             endTime: firstCandidate.slot.endTime
          },
-         message: `${targetUser.firstName}님이 일정 조정을 위해 ${firstCandidate.slot.day} ${firstCandidate.slot.startTime} 자리를 요청합니다. 남아있는 빈 시간으로 이동해주실 수 있나요?`,
+         message: `[연쇄 요청] ${targetUser.firstName && targetUser.lastName ? `${targetUser.firstName} ${targetUser.lastName}` : targetUser.firstName || '알수없음'}님이 다른 멤버에게 자리를 양보하기 위해 회원님의 ${firstCandidate.slot.day} ${firstCandidate.slot.startTime}-${firstCandidate.slot.endTime || ''} 자리가 필요합니다. 회원님은 빈 시간으로 이동하게 됩니다. 수락하시겠습니까?`,
          chainData: {
             originalRequestId: request._id,
             originalRequester: request.requester._id || request.requester,

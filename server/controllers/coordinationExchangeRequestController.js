@@ -106,9 +106,12 @@ function findChainCandidates(room, userId, excludeUsers = []) {
          );
 
          if (!existingCandidate) {
+            const userName = slot.user?.firstName && slot.user?.lastName
+               ? `${slot.user.firstName} ${slot.user.lastName}`
+               : slot.user?.firstName || slot.user?.lastName || '알수없음';
             candidates.push({
                userId: slotUserId,
-               userName: slot.user?.firstName || 'Unknown',
+               userName: userName,
                slot: slot,
                date: targetDate,
                daysDiff: Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24))
@@ -176,7 +179,9 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
       const dateKey = new Date(slot.date).toISOString().split('T')[0];
       if (!groupedSlots[dateKey]) groupedSlots[dateKey] = [];
       const slotUserId = (slot.user._id || slot.user).toString();
-      const slotUserName = slot.user?.firstName || 'Unknown';
+      const slotUserName = slot.user?.firstName && slot.user?.lastName
+         ? `${slot.user.firstName} ${slot.user.lastName}`
+         : slot.user?.firstName || slot.user?.lastName || '알수없음';
       groupedSlots[dateKey].push({
          time: `${slot.startTime}-${slot.endTime}`,
          user: `${slotUserName} (${slotUserId.substring(0, 8)}...)`,
@@ -409,7 +414,9 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
 
                // Get the user ID of this slot
                const slotUserId = (slot.user._id || slot.user).toString();
-               const slotUserName = slot.user?.firstName || 'Unknown';
+               const slotUserName = slot.user?.firstName && slot.user?.lastName
+                  ? `${slot.user.firstName} ${slot.user.lastName}`
+                  : slot.user?.firstName || slot.user?.lastName || '알수없음';
 
                // Check if this slot is one of the slots being freed by requester
                const isBeingFreed = slotsToIgnore.some(ignoreSlot => {
@@ -1195,7 +1202,7 @@ async function createChainExchangeRequest(room, originalRequest, intermediateUse
          subject: chainCandidate.slot.subject,
          user: chainCandidate.slot.user._id || chainCandidate.slot.user
       },
-      message: `${intermediateUser?.user?.firstName || 'Unknown'}님이 일정 조정을 위해 ${chainCandidate.slot.day} ${chainCandidate.slot.startTime} 자리를 요청합니다. 남아있는 빈 시간으로 이동해주실 수 있나요?`,
+      message: `[연쇄 요청] ${intermediateUser?.user?.firstName && intermediateUser?.user?.lastName ? `${intermediateUser.user.firstName} ${intermediateUser.user.lastName}` : intermediateUser?.user?.firstName || '알수없음'}님이 다른 멤버에게 자리를 양보하기 위해 회원님의 ${chainCandidate.slot.day} ${chainCandidate.slot.startTime}-${chainCandidate.slot.endTime} 자리가 필요합니다. 회원님은 빈 시간으로 이동하게 됩니다. 수락하시겠습니까?`,
       chainData: {
          originalRequestId: originalRequest._id,
          originalRequester: originalRequesterId, // A
@@ -1299,13 +1306,20 @@ exports.respondToChainExchangeRequest = async (req, res) => {
             request.response = '거절됨 - 다음 후보에게 요청 중';
 
             // 새로운 연쇄 요청 생성
+            const intermediateUserMember = room.members.find(m =>
+               (m.user._id || m.user).toString() === request.chainData.intermediateUser.toString()
+            );
+            const intermediateUserName = intermediateUserMember?.user?.firstName && intermediateUserMember?.user?.lastName
+               ? `${intermediateUserMember.user.firstName} ${intermediateUserMember.user.lastName}`
+               : intermediateUserMember?.user?.firstName || '알수없음';
+
             const newChainRequest = {
                requester: request.chainData.intermediateUser,
                type: 'chain_exchange_request',
                targetUser: nextCandidate.user,
                requesterSlots: request.requesterSlots,
                targetSlot: nextCandidate.slot,
-               message: `일정 조정을 위해 ${nextCandidate.slot.day} ${nextCandidate.slot.startTime} 자리를 요청합니다. 남아있는 빈 시간으로 이동해주실 수 있나요?`,
+               message: `[연쇄 요청] ${intermediateUserName}님이 다른 멤버에게 자리를 양보하기 위해 회원님의 ${nextCandidate.slot.day} ${nextCandidate.slot.startTime}-${nextCandidate.slot.endTime} 자리가 필요합니다. 회원님은 빈 시간으로 이동하게 됩니다. 수락하시겠습니까?`,
                chainData: {
                   originalRequestId: request.chainData.originalRequestId,
                   originalRequester: request.chainData.originalRequester,

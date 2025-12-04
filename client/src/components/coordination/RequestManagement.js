@@ -192,7 +192,17 @@ const ExchangeRequestItem = ({ request, type, onCancel, onApprove, onReject, onC
             {type === 'sent' ? `To: ${userName}` : userName}
           </div>
           <div className={`text-xs px-2 py-1 rounded-full ${type === 'sent' ? 'bg-yellow-100 text-yellow-800' : 'text-blue-600'}`}>
-            {type === 'sent' ? '대기중' : (request.type === 'slot_swap' ? '자리 교환' : '알 수 없는 요청')}
+            {type === 'sent' ? '대기중' : (() => {
+              switch(request.type) {
+                case 'slot_swap': return '자리 교환';
+                case 'time_request':
+                case 'time_change': return '자리 요청';
+                case 'chain_request':
+                case 'chain_exchange_request': return '연쇄 요청';
+                case 'slot_release': return '자리 양보';
+                default: return '일정 요청';
+              }
+            })()}
           </div>
         </div>
         <div className={`text-xs mb-2 ${type === 'sent' ? 'text-gray-700' : 'text-blue-700'}`}>

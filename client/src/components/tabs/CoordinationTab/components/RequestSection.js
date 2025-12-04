@@ -14,6 +14,51 @@ const dayMap = {
   'friday': '금요일'
 };
 
+// Helper function to generate improved request messages
+const generateRequestMessage = (request, currentRoom) => {
+  // If message already contains useful info, use it
+  if (request.message && (
+    request.message.includes('이동하고 싶어합니다') ||
+    request.message.includes('연쇄 요청') ||
+    request.message.includes('교환하고 싶어합니다')
+  )) {
+    return request.message;
+  }
+
+  // Otherwise, generate a better message
+  const requester = request.requester;
+  const requesterName = requester?.firstName && requester?.lastName
+    ? `${requester.firstName} ${requester.lastName}`
+    : requester?.firstName || '요청자';
+
+  const dayKorean = dayMap[request.timeSlot?.day?.toLowerCase()] || request.timeSlot?.day || '';
+  const timeRange = `${request.timeSlot?.startTime || ''}-${request.timeSlot?.endTime || ''}`;
+
+  switch(request.type) {
+    case 'time_request':
+    case 'time_change':
+      return `${requesterName}님이 회원님의 ${dayKorean} ${timeRange} 자리로 이동하고 싶어합니다.`;
+
+    case 'chain_request':
+    case 'chain_exchange_request':
+      return `[연쇄 요청] ${requesterName}님이 다른 멤버에게 자리를 양보하기 위해 회원님의 ${dayKorean} ${timeRange} 자리가 필요합니다. 회원님은 빈 시간으로 이동하게 됩니다.`;
+
+    case 'slot_swap':
+      if (request.targetSlot) {
+        const targetDayKorean = dayMap[request.targetSlot.day?.toLowerCase()] || request.targetSlot.day;
+        const targetTimeRange = `${request.targetSlot.startTime}-${request.targetSlot.endTime}`;
+        return `${requesterName}님이 회원님과 자리를 교환하고 싶어합니다. (${targetDayKorean} ${targetTimeRange} ↔ ${dayKorean} ${timeRange})`;
+      }
+      return `${requesterName}님이 회원님과 ${dayKorean} ${timeRange} 자리를 교환하고 싶어합니다.`;
+
+    case 'slot_release':
+      return `${requesterName}님이 ${dayKorean} ${timeRange} 시간을 양보하려고 합니다.`;
+
+    default:
+      return request.message || `${requesterName}님이 ${dayKorean} ${timeRange} 일정을 요청합니다.`;
+  }
+};
+
 const RequestSection = ({
   currentRoom,
   requestViewMode,
@@ -147,15 +192,23 @@ const ReceivedRequestsView = ({
                     <div className="flex justify-between items-center mb-1">
                       <div className="text-xs font-semibold text-white">{requesterName}</div>
                       <div className="text-xs font-medium text-blue-100">
-                        {request.type === 'time_request' ? '자리 요청' : request.type === 'slot_swap' ? '교환 요청' : '알 수 없는 요청'}
+                        {(() => {
+                          switch(request.type) {
+                            case 'slot_swap': return '자리 교환';
+                            case 'time_request':
+                            case 'time_change': return '자리 요청';
+                            case 'chain_request':
+                            case 'chain_exchange_request': return '연쇄 요청';
+                            case 'slot_release': return '자리 양보';
+                            default: return '일정 요청';
+                          }
+                        })()}
                       </div>
                     </div>
                     <div className="text-xs font-medium text-blue-100 mb-2">
                       {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
                     </div>
-                    {request.message && (
-                      <p className="text-xs text-white italic mb-2 line-clamp-2">"{request.message}"</p>
-                    )}
+                    <p className="text-xs text-white italic mb-2 line-clamp-2">"{generateRequestMessage(request, currentRoom)}"</p>
                     <div className="flex justify-end space-x-2 mt-2">
                       <button
                         onClick={() => handleRequestWithUpdate(request._id, 'approved', request)}
@@ -405,9 +458,7 @@ const SentRequestsView = ({
                     <div className="text-xs font-medium text-gray-700 !text-gray-700 mb-2">
                       {(dayMap[request.timeSlot?.day.toLowerCase()] || request.timeSlot?.day)} {request.timeSlot?.startTime}-{request.timeSlot?.endTime}
                     </div>
-                    {request.message && (
-                      <p className="text-xs text-white italic mb-2 line-clamp-2">"{request.message}"</p>
-                    )}
+                    <p className="text-xs text-white italic mb-2 line-clamp-2">"{generateRequestMessage(request, currentRoom)}"</p>
                     <div className="flex justify-end">
                       <button
                         onClick={() => handleCancelRequest(request._id)}
