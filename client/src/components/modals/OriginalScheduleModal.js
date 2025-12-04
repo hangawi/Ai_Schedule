@@ -1,3 +1,35 @@
+/**
+ * ===================================================================================================
+ * OriginalScheduleModal.js - OCR로 추출된 원본 시간표를 보여주는 모달
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/modals/OriginalScheduleModal.js
+ *
+ * 🎯 주요 기능:
+ *    - OCR(이미지 텍스트 인식)을 통해 추출된, 아직 최적화되지 않은 원본 스케줄 데이터를 시각적으로 표시.
+ *    - `ScheduleGridSelector` 컴포넌트를 재사용하여 시간표를 그리드 형태로 보여줌.
+ *    - 원본 스케줄 데이터(`imageData`)를 `ScheduleGridSelector`가 요구하는 `personalTimes` 데이터 형식으로 변환.
+ *      (요일 문자 -> 숫자, 이미지별 고유 색상 할당 등)
+ *    - 표시할 스케줄의 시작/종료 시간에 맞춰 그리드의 시간 범위를 동적으로 조절.
+ *
+ * 🔗 연결된 파일:
+ *    - ../../chat/components/ScheduleView.js (추정) - 최적화된 시간표 뷰의 범례(legend)에서 원본 이미지를 클릭했을 때 이 모달을 호출.
+ *    - ../tabs/ScheduleGridSelector/index.js - 시간표 UI를 렌더링하는 핵심 재사용 컴포넌트.
+ *    - ../../utils/scheduleAnalysis/assignScheduleColors.js - 이미지 인덱스에 따라 고유한 색상을 반환.
+ *
+ * 💡 UI 위치:
+ *    - AI 채팅을 통해 시간표 이미지(OCR)를 올린 후, 최적화 결과 화면의 범례에서 특정 이미지 출처를 클릭하면 나타나는 팝업 모달.
+ *
+ * ✏️ 수정 가이드:
+ *    - 원본 스케줄 데이터(`imageData.schedules`)의 형식이 변경될 경우, `personalTimes`로 변환하는 `map` 로직을 수정해야 합니다.
+ *    - 그리드에 표시되는 시간대의 기본 범위를 변경하려면 `startHour`, `endHour`의 초기값을 수정합니다.
+ *
+ * 📝 참고사항:
+ *    - 이 모달은 사용자에게 AI의 데이터 추출 원본을 투명하게 보여줌으로써 신뢰를 높이는 역할을 합니다.
+ *    - 모든 데이터는 읽기 전용(`readOnly={true}`)으로 표시됩니다.
+ *
+ * ===================================================================================================
+ */
 import React from 'react';
 import { X } from 'lucide-react';
 import ScheduleGridSelector from '../tabs/ScheduleGridSelector';

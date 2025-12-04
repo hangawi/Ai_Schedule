@@ -1,6 +1,51 @@
+/**
+ * ===================================================================================================
+ * AutoDetectedScheduleModal.js - AI가 음성/텍스트에서 자동 감지한 일정 확인 모달
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/modals/AutoDetectedScheduleModal.js
+ *
+ * 🎯 주요 기능:
+ *    - 백그라운드 음성 모니터링 또는 클립보드 분석을 통해 AI가 감지한 일정 후보들을 사용자에게 제시.
+ *    - 각 일정 카드를 통해 제목, 날짜, 시간, 참여자, 장소 등 상세 정보 표시.
+ *    - AI의 예측 신뢰도(confidence)를 '높음', '보통', '낮음' 등급과 색상으로 시각화.
+ *    - 사용자는 각 일정을 '일정 추가' 하거나 '무시'할 수 있음.
+ *    - '일정 추가' 시, 실수를 방지하기 위해 요약 정보를 보여주는 2단계 확인 절차를 거침.
+ *    - 전체 대화 내용을 펼쳐볼 수 있는 기능 제공하여 사용자가 맥락을 파악할 수 있도록 지원.
+ *
+ * 🔗 연결된 파일:
+ *    - ../../hooks/useIntegratedVoiceSystem.js - 이 모달을 띄우고, 감지된 일정 데이터를 전달하는 주체.
+ *    - ./SchedulingSystem.js - 최종적으로 이 모달을 렌더링하는 최상위 컴포넌트 중 하나.
+ *
+ * 💡 UI 위치:
+ *    - 통화 종료 후 또는 클립보드에서 일정이 감지되었을 때 자동으로 화면 중앙에 나타나는 팝업 모달.
+ *
+ * ✏️ 수정 가이드:
+ *    - AI 신뢰도에 따른 색상이나 텍스트를 변경하려면 `getConfidenceColor`, `getConfidenceText` 함수를 수정합니다.
+ *    - 2단계 확인 절차에서 보여주는 요약 정보의 형식을 변경하려면 `generateScheduleSummary` 함수를 수정합니다.
+ *    - 카드 레이아웃이나 상세 정보 표시 방식을 변경하려면 JSX의 '일정 목록' 부분을 수정합니다.
+ *
+ * 📝 참고사항:
+ *    - 이 모달은 사용자가 AI의 제안을 검토하고 최종 결정을 내리는 중요한 상호작용 지점입니다.
+ *    - 클릭 이벤트 전파를 막기 위해 `e.stopPropagation()`이 사용된 부분이 있습니다.
+ *
+ * ===================================================================================================
+ */
 import React, { useState } from 'react';
 import { Calendar, Clock, Users, MapPin, CheckCircle, XCircle, Brain, Volume2, FileText } from 'lucide-react';
 
+/**
+ * AutoDetectedScheduleModal
+ * @description AI가 감지한 일정 목록을 보여주고, 사용자가 이를 확정하거나 무시할 수 있도록 하는 모달 컴포넌트.
+ * @param {object} props - 컴포넌트 props
+ * @param {Array<object>} props.detectedSchedules - AI가 감지한 일정 객체들의 배열.
+ * @param {function} props.onConfirm - 사용자가 특정 일정을 확정했을 때 호출되는 콜백 함수.
+ * @param {function} props.onDismiss - 사용자가 특정 일정을 무시했을 때 호출되는 콜백 함수.
+ * @param {function} props.onClose - 모달 전체를 닫을 때 호출되는 함수.
+ * @param {string} props.backgroundTranscript - 일정이 감지된 전체 대화 내용.
+ * @param {number} props.callStartTime - 통화 또는 모니터링이 시작된 시간의 타임스탬프.
+ * @returns {JSX.Element|null} 감지된 일정이 있을 경우에만 모달을 렌더링.
+ */
 const AutoDetectedScheduleModal = ({ 
    detectedSchedules, 
    onConfirm, 

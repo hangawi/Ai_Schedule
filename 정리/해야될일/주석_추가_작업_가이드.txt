@@ -81,7 +81,7 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 [x] client/src/App.js
 [x] client/src/index.js
-[ ] client/src/SchedulingSystem.js
+[x] client/src/SchedulingSystem.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 2. 관리자 (Admin) 컴포넌트 (4개)
@@ -201,40 +201,40 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 12. 모달 (Modals) 컴포넌트 (40개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] client/src/components/modals/Modal.js
-[ ] client/src/components/modals/AddEventModal.js
-[ ] client/src/components/modals/AssignSlotModal.js
-[ ] client/src/components/modals/AutoDetectedScheduleModal.js
-[ ] client/src/components/modals/ChangeRequestModal.js
-[ ] client/src/components/modals/CommandModal.js
-[ ] client/src/components/modals/CoordinationRequestModal.js
-[ ] client/src/components/modals/CopiedTextModal.js
-[ ] client/src/components/modals/CustomAlertModal.js
-[ ] client/src/components/modals/EditEventModal.js
-[ ] client/src/components/modals/EventDetailsModal.js
-[ ] client/src/components/modals/MemberLogsModal.js
-[ ] client/src/components/modals/MemberScheduleModal.js
-[ ] client/src/components/modals/MemberStatsModal.js
-[ ] client/src/components/modals/MobileGuideModal.js
-[ ] client/src/components/modals/NotificationModal.js
-[ ] client/src/components/modals/OriginalScheduleModal.js
-[ ] client/src/components/modals/RequestSlotModal.js
-[ ] client/src/components/modals/RoomCreationModal.js
-[ ] client/src/components/modals/RoomJoinModal.js
-[ ] client/src/components/modals/RoomManagementModal.js
-[ ] client/src/components/modals/ScheduleOptimizationModal.js
-[ ] client/src/components/modals/ScheduleOptimizerModal.js
-[ ] client/src/components/modals/SharedTextModal.js
-[ ] client/src/components/modals/components/ApplyScopeSelector.js
-[ ] client/src/components/modals/components/ChatArea.js
-[ ] client/src/components/modals/components/ChatMessage.js
-[ ] client/src/components/modals/components/ScheduleCard.js
-[ ] client/src/components/modals/components/ScheduleGrid.js
-[ ] client/src/components/modals/components/ScheduleHeader.js
-[ ] client/src/components/modals/components/ScheduleLegend.js
-[ ] client/src/components/modals/constants/modalConstants.js
+[x] client/src/components/modals/Modal.js
+[x] client/src/components/modals/AddEventModal.js
+[x] client/src/components/modals/AssignSlotModal.js
+[x] client/src/components/modals/AutoDetectedScheduleModal.js
+[x] client/src/components/modals/ChangeRequestModal.js
+[x] client/src/components/modals/CommandModal.js
+[x] client/src/components/modals/CoordinationRequestModal.js
+[x] client/src/components/modals/CopiedTextModal.js
+[x] client/src/components/modals/CustomAlertModal.js
+[x] client/src/components/modals/EditEventModal.js
+[x] client/src/components/modals/EventDetailsModal.js
+[x] client/src/components/modals/MemberLogsModal.js
+[x] client/src/components/modals/MemberScheduleModal.js
+[x] client/src/components/modals/MemberStatsModal.js
+[x] client/src/components/modals/MobileGuideModal.js
+[x] client/src/components/modals/NotificationModal.js
+[x] client/src/components/modals/OriginalScheduleModal.js
+[x] client/src/components/modals/RequestSlotModal.js
+[x] client/src/components/modals/RoomCreationModal.js
+[x] client/src/components/modals/RoomJoinModal.js
+[x] client/src/components/modals/RoomManagementModal.js
+[x] client/src/components/modals/ScheduleOptimizationModal.js
+[x] client/src/components/modals/ScheduleOptimizerModal.js
+[x] client/src/components/modals/SharedTextModal.js
+[x] client/src/components/modals/components/ApplyScopeSelector.js
+[x] client/src/components/modals/components/ChatArea.js
+[x] client/src/components/modals/components/ChatMessage.js
+[x] client/src/components/modals/components/ScheduleCard.js
+[x] client/src/components/modals/components/ScheduleGrid.js
+[x] client/src/components/modals/components/ScheduleHeader.js
+[x] client/src/components/modals/components/ScheduleLegend.js
+[x] client/src/components/modals/constants/modalConstants.js
 [ ] client/src/components/modals/handlers/chatHandlers.js
-[ ] client/src/components/modals/handlers/chatModalHandlers.js
+[x] client/src/components/modals/handlers/chatModalHandlers.js
 [ ] client/src/components/modals/handlers/conflictModalHandlers.js
 [ ] client/src/components/modals/handlers/optimizerHandlers.js
 [ ] client/src/components/modals/handlers/scheduleModalHandlers.js
@@ -298,25 +298,25 @@
 [ ] client/src/components/tabs/CoordinationTab/utils/syncUtils.js
 
 # ProfileTab 폴더 (15개)
-[ ] client/src/components/tabs/ProfileTab/index.js
+[x] client/src/components/tabs/ProfileTab/index.js
 [ ] client/src/components/tabs/ProfileTab/components/ErrorState.js
 [ ] client/src/components/tabs/ProfileTab/components/LoadingState.js
-[ ] client/src/components/tabs/ProfileTab/components/PreferenceTimeSection.js
-[ ] client/src/components/tabs/ProfileTab/components/ProfileHeader.js
+[x] client/src/components/tabs/ProfileTab/components/PreferenceTimeSection.js
+[x] client/src/components/tabs/ProfileTab/components/ProfileHeader.js
 [ ] client/src/components/tabs/ProfileTab/constants/dayMapping.js
 [ ] client/src/components/tabs/ProfileTab/constants/messages.js
 [ ] client/src/components/tabs/ProfileTab/constants/priorityConfig.js
-[ ] client/src/components/tabs/ProfileTab/handlers/createAutoSaveHandler.js
-[ ] client/src/components/tabs/ProfileTab/handlers/createCancelHandler.js
-[ ] client/src/components/tabs/ProfileTab/handlers/createSaveHandler.js
-[ ] client/src/components/tabs/ProfileTab/hooks/useCalendarUpdate.js
-[ ] client/src/components/tabs/ProfileTab/hooks/useEditingState.js
-[ ] client/src/components/tabs/ProfileTab/hooks/useFilteredSchedule.js
-[ ] client/src/components/tabs/ProfileTab/hooks/useScheduleData.js
-[ ] client/src/components/tabs/ProfileTab/utils/dateFormatter.js
+[x] client/src/components/tabs/ProfileTab/handlers/createAutoSaveHandler.js
+[x] client/src/components/tabs/ProfileTab/handlers/createCancelHandler.js
+[x] client/src/components/tabs/ProfileTab/handlers/createSaveHandler.js
+[x] client/src/components/tabs/ProfileTab/hooks/useCalendarUpdate.js
+[x] client/src/components/tabs/ProfileTab/hooks/useEditingState.js
+[x] client/src/components/tabs/ProfileTab/hooks/useFilteredSchedule.js
+[x] client/src/components/tabs/ProfileTab/hooks/useScheduleData.js
+[x] client/src/components/tabs/ProfileTab/utils/dateFormatter.js
 [ ] client/src/components/tabs/ProfileTab/utils/ownerRoomSync.js
-[ ] client/src/components/tabs/ProfileTab/utils/scheduleGrouper.js
-[ ] client/src/components/tabs/ProfileTab/utils/slotMerger.js
+[x] client/src/components/tabs/ProfileTab/utils/scheduleGrouper.js
+[x] client/src/components/tabs/ProfileTab/utils/slotMerger.js
 
 # ScheduleGridSelector 폴더 (16개)
 [ ] client/src/components/tabs/ScheduleGridSelector/index.js

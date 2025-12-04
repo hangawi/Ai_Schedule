@@ -1,15 +1,47 @@
 /**
- * ============================================================================
- * ScheduleOptimizationModal.js - 최적 시간표 모달 (리팩토링 완료)
- * ============================================================================
+ * ===================================================================================================
+ * ScheduleOptimizationModal.js - AI 기반 최적 시간표 제안 및 수정 인터페이스 모달
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/modals/ScheduleOptimizationModal.js
+ *
+ * 🎯 주요 기능:
+ *    - AI가 생성한 여러 시간표 조합(combinations)을 사용자에게 제시.
+ *    - 사용자는 좌/우 버튼으로 여러 조합을 탐색할 수 있음.
+ *    - 채팅 인터페이스를 통해 자연어 명령으로 현재 보고 있는 시간표를 동적으로 수정.
+ *    - 채팅 수정 중 충돌이 발생하면, 사용자에게 해결 옵션을 제시.
+ *    - '원본 보기' 기능을 통해 OCR로 추출된 원본 시간표를 확인할 수 있음.
+ *    - 최종적으로 마음에 드는 시간표를 선택하고 적용 범위를 지정하여 저장.
+ *
+ * 🔗 연결된 파일:
+ *    - ./utils/* - 데이터 변환(createInitialCombinations, convertToPersonalTimes) 및 시간 계산 로직.
+ *    - ./hooks/useModalState.js - 이 모달의 복잡한 모든 상태를 중앙에서 관리하는 커스텀 훅.
+ *    - ./handlers/* - 이전/다음, 선택, 충돌 해결, 채팅 제출 등 모든 이벤트 핸들러를 생성하는 팩토리 함수.
+ *    - ./components/* - 헤더, 범례, 그리드, 채팅 등 UI를 구성하는 하위 컴포넌트.
+ *
+ * 💡 UI 위치:
+ *    - AI 채팅을 통해 시간표 이미지(OCR)를 올리고 분석이 완료되면, 최적화된 시간표 후보들을 보여주기 위해 나타나는 핵심 모달.
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 컴포넌트는 UI 뼈대만 제공하고, 대부분의 로직은 `hooks`와 `handlers` 폴더의 파일들로 분리되어 있습니다.
+ *    - 상태 관리 로직을 변경하려면 `useModalState.js`를 수정합니다.
+ *    - 각 버튼의 동작 로직을 변경하려면 `handlers` 폴더 내의 해당 핸들러 생성 함수를 수정합니다.
+ *    - UI 레이아웃을 변경하려면 이 파일의 JSX나 `components` 폴더의 하위 컴포넌트를 수정합니다.
+ *
+ * 📝 참고사항:
+ *    - '리팩토링 완료'된 파일로, 관심사 분리(Separation of Concerns)가 잘 적용된 모범적인 사례입니다.
+ *    - `isEmbedded` prop을 통해 일반 모달 형태뿐만 아니라 페이지 전체를 차지하는 뷰로도 렌더링될 수 있습니다.
+ *    - Undo/Redo(실행 취소/다시 실행) 기능을 위해 `scheduleHistory`와 `redoStack` 상태를 관리합니다.
+ *
+ * ===================================================================================================
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { CheckCircle } from 'lucide-react';
 import OriginalScheduleModal from './OriginalScheduleModal';
 
 // Utils
-import { createInitialCombinations, convertToPersonalTimes, getTotalClassHours } from './utils/scheduleTransform';
+import { convertToPersonalTimes, getTotalClassHours } from './utils/scheduleTransform';
 import { getTimeRange } from './utils/timeUtils';
 
 // Hooks
@@ -20,7 +52,6 @@ import { useChatScroll } from './hooks/useChatScroll';
 import { createHandlePrevious, createHandleNext, createHandleSelectSchedule } from './handlers/scheduleModalHandlers';
 import { createHandleConflictResolution, createHandleOptionSelection } from './handlers/conflictModalHandlers';
 import { createHandleChatSubmit } from './handlers/chatModalHandlers';
-import { createHandleOpenOptimizer } from './handlers/optimizerHandlers';
 
 // Components
 import ScheduleHeader from './components/ScheduleHeader';
@@ -29,8 +60,26 @@ import ScheduleGrid from './components/ScheduleGrid';
 import ApplyScopeSelector from './components/ApplyScopeSelector';
 import ChatArea from './components/ChatArea';
 
+/**
+ * ScheduleOptimizationModal
+ * @description AI가 추천하는 여러 시간표 조합을 보여주고, 사용자가 채팅을 통해 수정하며 최종안을 선택할 수 있도록 하는 복합 모달.
+ * @param {object} props - 컴포넌트 props
+ * @param {Array} props.combinations - AI가 생성한 시간표 조합의 배열.
+ * @param {Array} props.initialSchedules - 최적화의 기반이 된 원본 스케줄 목록.
+ * @param {function} props.onSelect - 사용자가 최종 시간표를 선택했을 때 호출되는 콜백.
+ * @param {function} props.onClose - 모달을 닫는 함수.
+ * @param {function} props.onSchedulesApplied - '전체 적용' 또는 '빈 시간만 적용'이 선택된 후 호출되는 콜백.
+ * @param {number} props.userAge - 사용자 나이 (AI 프롬프트에 활용).
+ * @param {string} props.gradeLevel - 사용자 학년 (AI 프롬프트에 활용).
+ * @param {boolean} [props.isEmbedded=false] - 모달이 아닌 전체 페이지로 임베드되는지 여부.
+ * @param {Array|null} [props.schedulesByImage=null] - 이미지별로 그룹화된 스케줄 데이터 (범례 표시에 사용).
+ * @param {Array} [props.fixedSchedules=[]] - 사용자가 고정한 스케줄 목록.
+ * @param {Array} [props.customSchedulesForLegendProp=[]] - 범례에 표시할 커스텀 스케줄 목록.
+ * @param {string} [props.overallTitle='업로드된 시간표'] - 모달 상단에 표시될 전체 제목.
+ * @returns {JSX.Element|null}
+ */
 const ScheduleOptimizationModal = ({
-  combinations,
+  combinations: initialCombinations, // prop 이름 변경
   initialSchedules,
   onSelect,
   onClose,
@@ -43,16 +92,10 @@ const ScheduleOptimizationModal = ({
   customSchedulesForLegend: customSchedulesForLegendProp = [],
   overallTitle = '업로드된 시간표'
 }) => {
-  // 초기 조합 생성
-  const initialCombinations = useMemo(
-    () => createInitialCombinations(combinations, initialSchedules),
-    [combinations, initialSchedules]
-  );
-
-  const [modifiedCombinations, setModifiedCombinations] = useState(initialCombinations);
-
   // 상태 관리
   const {
+    modifiedCombinations,
+    setModifiedCombinations,
     currentIndex,
     setCurrentIndex,
     applyScope,
@@ -86,31 +129,25 @@ const ScheduleOptimizationModal = ({
   } = useModalState(
     initialCombinations,
     fixedSchedules,
-    customSchedulesForLegendProp,
-    modifiedCombinations
+    customSchedulesForLegendProp
   );
 
   // 자동 스크롤
   useChatScroll(chatContainerRef, chatMessages);
 
   // 현재 조합 가져오기
-  if (!modifiedCombinations || modifiedCombinations.length === 0) {
-    return null;
-  }
-
-  if (currentIndex >= modifiedCombinations.length) {
+  if (!modifiedCombinations || modifiedCombinations.length === 0 || currentIndex >= modifiedCombinations.length) {
     return null;
   }
 
   const currentCombination = modifiedCombinations[currentIndex];
-
   if (!currentCombination || !Array.isArray(currentCombination)) {
     return null;
   }
 
   // 변환
   const personalTimes = convertToPersonalTimes(currentCombination, hoveredImageIndex);
-  const timeRange = getTimeRange(currentCombination, personalTimes);
+  const timeRange = getTimeRange(currentCombination, personalTimes, currentFixedSchedules);
 
   // 핸들러 생성
   const handlePrevious = createHandlePrevious(currentIndex, setCurrentIndex);
@@ -164,18 +201,9 @@ const ScheduleOptimizationModal = ({
     setConflictState,
     setScheduleHistory,
     setRedoStack,
-    setAiOptimizationState
-  );
-
-  const handleOpenOptimizer = createHandleOpenOptimizer(
-    currentCombination,
-    originalSchedule,
-    modifiedCombinations,
-    currentIndex,
-    setOriginalSchedule,
-    setModifiedCombinations,
-    setChatMessages,
-    setAiOptimizationState
+    setAiOptimizationState,
+    gradeLevel, // 전달
+    userAge // 전달
   );
 
   const modalContent = (

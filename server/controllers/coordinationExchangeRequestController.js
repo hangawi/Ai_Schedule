@@ -208,14 +208,26 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
       .map(s => s.dayOfWeek)
    )].sort((a, b) => a - b);
 
-   // 현재 날짜 기준으로 선호 요일들을 가까운 순서로 정렬
+   // 🆕 개선: 같은 날짜 내 빈 시간 우선 체크 (불필요한 날짜 이동 방지)
    const daysToCheck = [];
    const today = new Date();
    const currentDayOfWeek = today.getUTCDay() === 0 ? 7 : today.getUTCDay();
 
-   // 이번 주와 다음 주의 선호 요일들을 수집
+   // excludeDate의 요일 계산
+   const excludedDayOfWeek = excludedDate.getUTCDay() === 0 ? 7 : excludedDate.getUTCDay();
+
+   // 1순위: excludeDate와 같은 요일을 먼저 체크 (같은 날짜 내 재배정 우선)
+   if (preferredDays.includes(excludedDayOfWeek)) {
+      daysToCheck.push(excludedDayOfWeek);
+      console.log(`🎯 [우선순위 1] 같은 요일 (${dayMap[excludedDayOfWeek]}) 먼저 체크 - 같은 날짜 내 재배정 시도`);
+   }
+
+   // 2순위: 나머지 선호 요일들을 시간적으로 가까운 순서로 정렬
    const candidates = [];
    for (const dayOfWeek of preferredDays) {
+      // 이미 daysToCheck에 있으면 건너뛰기
+      if (daysToCheck.includes(dayOfWeek)) continue;
+
       // 이번 주
       let daysUntil = dayOfWeek - currentDayOfWeek;
       if (daysUntil >= 0) {

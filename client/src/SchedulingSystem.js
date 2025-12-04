@@ -1,3 +1,48 @@
+/**
+ * ===================================================================================================
+ * SchedulingSystem.js - 애플리케이션의 메인 시스템 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/SchedulingSystem.js
+ *
+ * 🎯 주요 기능:
+ *    - 애플리케이션의 전체 레이아웃(헤더, 사이드바, 메인 콘텐츠) 구성
+ *    - 탭 기반 네비게이션 및 라우팅 관리 (대시보드, 프로필, 일정, 조율, 관리자 등)
+ *    - 전역 상태 관리 (모달, 이벤트, 제안, 알림 등)
+ *    - 핵심 기능 통합 (챗봇, 음성 인식, 클립보드 모니터링)
+ *    - API 연동을 통한 데이터 관리 (이벤트, 조율 요청 등)
+ *    - 사용자 인증 및 관리자 모드에 따른 UI 동적 변경
+ *
+ * 🔗 연결된 파일:
+ *    - ./components/tabs/* - 각 탭 화면 컴포넌트
+ *    - ./components/modals/* - 각종 모달 컴포넌트
+ *    - ./hooks/useChat.js, ./hooks/useChat/enhanced.js - 챗봇 기능 훅
+ *    - ./hooks/useIntegratedVoiceSystem.js - 통합 음성 인식 시스템 훅
+ *    - ./contexts/AdminContext.js - 관리자 상태 컨텍스트
+ *    - ./services/coordinationService.js - 조율 관련 API 서비스
+ *    - ./config/firebaseConfig.js - Firebase 인증 설정
+ *
+ * 💡 UI 위치:
+ *    - 로그인 후 표시되는 메인 애플리케이션 전체 화면
+ *    - 헤더, 사이드바, 그리고 중앙에 표시되는 각 탭의 콘텐츠 영역을 포함
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 앱의 전체 구조, 탭 관리, 핵심 상태 관리 로직이 변경될 수 있습니다.
+ *    - 새로운 탭 추가:
+ *      1. `NavItem` 목록에 새 탭 버튼 추가
+ *      2. 메인 콘텐츠 영역에 탭 컴포넌트 조건부 렌더링 추가
+ *      3. `enhancedSetActiveTab` 함수 로직에 필요시 특별 처리 추가
+ *    - 챗봇 동작 변경: `handleTabSpecificChatMessage` 함수 또는 `useChat` 관련 훅 수정
+ *    - 음성 인식/클립보드 기능 수정: `useIntegratedVoiceSystem` 훅 및 관련 컴포넌트 수정
+ *
+ * 📝 참고사항:
+ *    - `localStorage`를 사용하여 현재 활성 탭과 조율방 ID를 기억합니다.
+ *    - 브라우저의 `history` API를 사용하여 탭 이동을 관리합니다. (뒤로/앞으로 가기 지원)
+ *    - `USE_ENHANCED_CHAT` 상수를 통해 신규/기존 챗봇 시스템을 전환할 수 있습니다.
+ *    - 관리자(admin) 여부에 따라 사이드바 메뉴와 대시보드가 동적으로 변경됩니다.
+ *
+ * ===================================================================================================
+ */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
    Calendar,
@@ -46,7 +91,17 @@ import { useIntegratedVoiceSystem } from './hooks/useIntegratedVoiceSystem';
 import { useChat } from './hooks/useChat';
 import { useChatEnhanced } from './hooks/useChat/enhanced';
 
-// NavItem component
+/**
+ * NavItem
+ * @description 사이드바 네비게이션 메뉴 아이템 컴포넌트
+ * @param {object} props - { icon, label, active, onClick, badge }
+ * @property {JSX.Element} icon - 메뉴 아이콘
+ * @property {string} label - 메뉴 텍스트
+ * @property {boolean} active - 활성화 상태 여부
+ * @property {function} onClick - 클릭 이벤트 핸들러
+ * @property {string|number} [badge] - 우측에 표시할 배지 내용 (선택적)
+ * @returns {JSX.Element}
+ */
 const NavItem = ({ icon, label, active, onClick, badge }) => (
    <button
       className={`w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors ${
@@ -66,6 +121,13 @@ const NavItem = ({ icon, label, active, onClick, badge }) => (
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
+/**
+ * formatEventForClient
+ * @description 서버에서 받은 이벤트 데이터를 클라이언트에서 사용하기 좋은 형태로 변환합니다.
+ * @param {object} event - 서버로부터 받은 이벤트 객체
+ * @param {string} [color] - 이벤트에 지정할 색상 (선택적)
+ * @returns {object} 클라이언트용으로 포맷된 이벤트 객체
+ */
 const formatEventForClient = (event, color) => {
    if (!event || !event.startTime) {
       return { ...event, date: '', time: '' };
@@ -89,6 +151,21 @@ const formatEventForClient = (event, color) => {
 };
 
 
+/**
+ * SchedulingSystem
+ * @description 애플리케이션의 메인 UI 및 상태를 관리하는 최상위 시스템 컴포넌트
+ * @param {object} props - 컴포넌트에 전달되는 props
+ * @param {boolean} props.isLoggedIn - 사용자 로그인 상태
+ * @param {object} props.user - 현재 로그인된 사용자 정보
+ * @param {function} props.handleLogout - 로그아웃 처리 함수
+ * @param {function} props.speak - TTS(Text-to-Speech) 함수
+ * @param {boolean} props.isVoiceRecognitionEnabled - 음성 인식 활성화 여부
+ * @param {function} props.setIsVoiceRecognitionEnabled - 음성 인식 상태 변경 함수
+ * @param {boolean} props.isClipboardMonitoring - 클립보드 모니터링 활성화 여부
+ * @param {function} props.setIsClipboardMonitoring - 클립보드 모니터링 상태 변경 함수
+ * @param {string} props.loginMethod - 로그인 방식 (e.g., 'google')
+ * @returns {JSX.Element}
+ */
 const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled, isClipboardMonitoring, setIsClipboardMonitoring, loginMethod }) => {
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
    const [showAdminCodeModal, setShowAdminCodeModal] = useState(false);
@@ -115,18 +192,22 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
      }
    }, [isAdmin]);
 
-   // Enhanced setActiveTab that includes browser history management
+   /**
+    * enhancedSetActiveTab
+    * @description 활성 탭을 변경하고, 브라우저 히스토리에 상태를 저장하는 함수
+    * @param {string} newTab - 새로 활성화할 탭의 ID
+    */
    const enhancedSetActiveTab = useCallback((newTab) => {
      setActiveTab(newTab);
      localStorage.setItem('activeTab', newTab);
 
-     // Clear room state when switching away from coordination tab
+     // 'coordination' 탭을 벗어날 때 현재 방 정보를 로컬 스토리지에서 제거
      if (newTab !== 'coordination') {
        localStorage.removeItem('currentRoomId');
        localStorage.removeItem('currentRoomData');
      }
 
-     // Push new state to browser history
+     // 브라우저 히스토리에 새 상태 push
      window.history.pushState({ tab: newTab }, '', `#${newTab}`);
    }, []);
 
@@ -193,7 +274,15 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
      onConfirm: null
    });
 
-   // Alert 표시 유틸리티 함수
+   /**
+    * showAlert
+    * @description 전역 알림(Alert) 모달을 표시하는 유틸리티 함수
+    * @param {string} message - 알림 메시지
+    * @param {string} [type='info'] - 알림 종류 ('info', 'success', 'warning', 'error')
+    * @param {string} [title=''] - 알림 제목
+    * @param {boolean} [showCancel=false] - 취소 버튼 표시 여부
+    * @param {function|null} [onConfirm=null] - 확인 버튼 클릭 시 실행할 콜백 함수
+    */
    const showAlert = useCallback((message, type = 'info', title = '', showCancel = false, onConfirm = null) => {
      setAlertModal({
        isOpen: true,
@@ -205,7 +294,10 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
      });
    }, []);
 
-   // Alert 닫기 함수
+   /**
+    * closeAlert
+    * @description 열려있는 전역 알림(Alert) 모달을 닫는 함수
+    */
    const closeAlert = useCallback(() => {
      setAlertModal(prev => ({ ...prev, isOpen: false }));
    }, []);
@@ -271,6 +363,10 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
       setShowTimeSelectionModal(true);
    }, []);
 
+    /**
+    * fetchEvents
+    * @description 서버에서 사용자의 모든 이벤트를 가져와 상태에 저장합니다.
+    */
     const fetchEvents = useCallback(async () => {
       if (!isLoggedIn) return;
       try {
@@ -295,6 +391,14 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
       }
    }, [isLoggedIn, handleLogout]);
 
+   /**
+    * handleAddGlobalEvent
+    * @description 새 이벤트를 서버에 추가하고 전역 상태를 업데이트합니다.
+    * @description 챗봇 입력(`startDateTime`)과 폼 입력(`date`, `time`) 등 다양한 데이터 형식을 처리합니다.
+    * @param {object} eventData - 추가할 이벤트 데이터
+    * @returns {Promise<object>} 추가된 이벤트 객체
+    * @throws {Error} 이벤트 추가 실패 시 에러 발생
+    */
    const handleAddGlobalEvent = useCallback(async eventData => {
       try {
          // Handle different input formats
@@ -349,6 +453,11 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
       }
    }, [showAlert]);
 
+   /**
+    * handleDeleteEvent
+    * @description 특정 이벤트를 삭제 확인 후 서버와 클라이언트에서 제거합니다.
+    * @param {string} eventId - 삭제할 이벤트의 ID
+    */
    const handleDeleteEvent = useCallback(async eventId => {
       const performDelete = async () => {
          try {
@@ -388,6 +497,12 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
       setShowEditModal(true);
    }, []);
 
+   /**
+    * handleUpdateEvent
+    * @description 수정된 이벤트 정보를 서버에 업데이트하고 클라이언트 상태를 갱신합니다.
+    * @param {object} eventData - 수정된 이벤트 데이터
+    * @param {string} eventId - 수정할 이벤트 ID
+    */
    const handleUpdateEvent = useCallback(async (eventData, eventId) => {
       try {
          const currentUser = auth.currentUser;

@@ -1,3 +1,37 @@
+/**
+ * ===================================================================================================
+ * RoomManagementModal.js - 조율방의 모든 것을 관리하는 복합 모달
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/modals/RoomManagementModal.js
+ *
+ * 🎯 주요 기능:
+ *    - 탭(Tab) 기반 인터페이스를 통해 조율방의 다양한 정보를 관리.
+ *    - **방 정보 탭**: 방 이름, 설명, 운영 시간 등 기본 설정을 조회하고 수정. (방장만 수정 가능)
+ *    - **AI 학습 탭**: 외부 AI 학습 시스템 페이지(교사, 대시보드)로 연결.
+ *    - **로그 보기 탭**: 방에서 발생한 모든 활동 로그를 조회하고 카테고리별로 필터링. (방장만 초기화 가능)
+ *    - **멤버 관리 탭**: 방에 속한 멤버 목록을 보여주고, 멤버 강퇴(방장) 또는 방 나가기(멤버) 기능 제공.
+ *    - 현재 사용자가 방장인지(`isOwner`) 여부를 판별하여 특정 기능(방 삭제, 멤버 강퇴 등)에 대한 접근을 제어.
+ *
+ * 🔗 연결된 파일:
+ *    - ./room/RoomInfoTab.js - '방 정보' 탭의 UI와 로직을 담당하는 하위 컴포넌트.
+ *    - ./room/RoomMembersList.js - '멤버 관리' 탭의 UI와 로직을 담당하는 하위 컴포넌트.
+ *    - ../../services/coordinationService.js, ../../services/userService.js 등 (간접적) - API 호출 로직.
+ *
+ * 💡 UI 위치:
+ *    - '일정 맞추기' 탭에서 특정 조율방의 '관리' 버튼을 클릭했을 때 나타나는 팝업 모달.
+ *
+ * ✏️ 수정 가이드:
+ *    - 새로운 관리 탭을 추가하려면 `render...Tab` 함수를 새로 만들고, 탭 버튼과 렌더링 영역에 조건부로 추가해야 합니다.
+ *    - 방 정보 수정 로직을 변경하려면 `RoomInfoTab.js` 컴포넌트와 `handleUpdate` 함수를 확인해야 합니다.
+ *    - 멤버 관련 액션(강퇴, 나가기) 로직을 변경하려면 `RoomMembersList.js`와 `removeMember`, `leaveRoom` 함수를 수정합니다.
+ *
+ * 📝 참고사항:
+ *    - 이 모달은 하나의 컴포넌트가 여러 하위 컴포넌트와 API 호출 함수를 조합하여 복잡한 '관리' 기능을 수행하는 좋은 예시입니다.
+ *    - 방장 권한 확인(`isOwner`) 로직이 여러 곳에 사용되므로, 권한 정책 변경 시 주의가 필요합니다.
+ *
+ * ===================================================================================================
+ */
 import React, { useState, useEffect } from "react";
 import { X, Users, Settings, Trash2, GraduationCap, FileText } from "lucide-react";
 import CustomAlertModal from './CustomAlertModal';
@@ -5,6 +39,18 @@ import RoomInfoTab from './room/RoomInfoTab';
 import RoomMembersList from './room/RoomMembersList';
 import { auth } from '../../config/firebaseConfig';
 
+/**
+ * RoomManagementModal
+ * @description 조율방의 정보, 멤버, 로그, AI 학습 등 모든 것을 관리하는 탭 기반의 종합 관리 모달.
+ * @param {object} props - 컴포넌트 props
+ * @param {object} props.room - 관리할 방의 데이터 객체.
+ * @param {function} props.onClose - 모달을 닫는 함수.
+ * @param {function} props.onRoomUpdated - 방 정보가 업데이트되었을 때 호출되는 콜백.
+ * @param {function} props.updateRoom - 방 정보를 업데이트하는 API 호출 함수.
+ * @param {function} props.deleteRoom - 방을 삭제하는 API 호출 함수.
+ * @param {string} [props.defaultTab="info"] - 모달이 처음 열릴 때 기본으로 보여줄 탭.
+ * @returns {JSX.Element}
+ */
 const RoomManagementModal = ({
   room,
   onClose,
