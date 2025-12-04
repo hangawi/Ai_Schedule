@@ -1,21 +1,46 @@
 /**
  * ===================================================================================================
- * App Component (메인 앱 컴포넌트)
+ * App.js - React 애플리케이션 최상위 컴포넌트
  * ===================================================================================================
  *
- * 설명: React 애플리케이션의 최상위 컴포넌트
+ * 📍 위치: 프론트엔드 > client/src/App.js
  *
- * 주요 기능:
- * - 라우팅 설정 (React Router)
- * - 전역 상태 관리 (Context Providers)
- * - 인증 상태 확인
- * - 레이아웃 구조
+ * 🎯 주요 기능:
+ *    - React Router 기반 라우팅 설정 (/auth, /)
+ *    - 전역 상태 관리 (AdminContext Provider)
+ *    - Google Maps API 로딩 (LoadScript)
+ *    - 인증 상태 관리 및 보호된 라우트
+ *    - 클립보드 모니터링 및 일정 자동 감지
+ *    - 음성 인식 설정 관리
+ *    - 공유 텍스트 처리 (URL 파라미터)
  *
- * 라우트:
- * - / - 캘린더 (메인 페이지)
- * - /login - 로그인
- * - /register - 회원가입
- * - /coordination - 일정 조정
+ * 🔗 연결된 파일:
+ *    - ./SchedulingSystem.js - 메인 스케줄링 시스템
+ *    - ./components/auth/AuthScreen.js - 로그인/회원가입 화면
+ *    - ./contexts/AdminContext.js - 관리자 컨텍스트
+ *    - ./hooks/useAuth.js - 인증 훅
+ *    - ./hooks/useChat.js - 챗봇 훅
+ *    - ./components/modals/SharedTextModal.js - 공유 텍스트 모달
+ *    - ./components/modals/CopiedTextModal.js - 복사 텍스트 모달
+ *    - ./components/guides/BackgroundGuide.js - 백그라운드 가이드
+ *
+ * 💡 UI 위치:
+ *    - 앱 전체의 루트 컴포넌트
+ *    - 라우트: /auth (로그인), / (메인 앱)
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 전체 앱의 라우팅 및 최상위 상태 관리가 변경됨
+ *    - 새 라우트 추가: Routes 내에 <Route> 추가
+ *    - 전역 기능 추가: App 컴포넌트 내 상태 및 로직 추가
+ *    - 클립보드 모니터링 로직: analyzeClipboard, readClipboard 함수 수정
+ *    - Google Maps 설정: LoadScript의 googleMapsApiKey, libraries 수정
+ *
+ * 📝 참고사항:
+ *    - 클립보드 모니터링은 isClipboardMonitoring 상태로 ON/OFF 가능
+ *    - 음성 인식은 localStorage에 설정 저장됨
+ *    - 로그인하지 않으면 /auth로 리다이렉트
+ *    - Google Maps API 키는 환경변수 REACT_APP_MY_GOOGLE_KEY 사용
+ *    - 클립보드 일정 감지는 최소 2개 패턴 매칭 + 최소 10자 조건
  *
  * ===================================================================================================
  */
