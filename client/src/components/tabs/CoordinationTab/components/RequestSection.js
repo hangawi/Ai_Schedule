@@ -37,7 +37,56 @@ const generateRequestMessage = (request, currentRoom) => {
   switch(request.type) {
     case 'time_request':
     case 'time_change':
-      return `${requesterName}님이 회원님의 ${dayKorean} ${timeRange} 자리로 이동하고 싶어합니다.`;
+      // Find where the target will move to (requester's current slots)
+      let targetDestinationInfo = '';
+
+      // First, check if requesterSlots is available in the request
+      if (request.requesterSlots && request.requesterSlots.length > 0) {
+        const firstSlot = request.requesterSlots[0];
+        const lastSlot = request.requesterSlots[request.requesterSlots.length - 1];
+        const slotDayKorean = dayMap[firstSlot.day?.toLowerCase()] || firstSlot.day;
+        targetDestinationInfo = ` 회원님은 ${slotDayKorean} ${firstSlot.startTime}-${lastSlot.endTime}로 이동하게 됩니다.`;
+      } else if (currentRoom && currentRoom.timeSlots && request.requester) {
+        // Otherwise, try to find requester's current slots from currentRoom
+        const requesterId = request.requester._id || request.requester;
+        const requesterCurrentSlots = currentRoom.timeSlots.filter(slot => {
+          const slotUserId = (slot.user?._id || slot.user)?.toString();
+          const isRequesterSlot = slotUserId === requesterId.toString();
+          const isValidSubject = slot.subject === '자동 배정' ||
+                                 slot.subject === '교환 결과' ||
+                                 slot.subject === '자동 재배치' ||
+                                 slot.subject === '연쇄 교환 결과' ||
+                                 slot.subject === '연쇄 조정 결과' ||
+                                 slot.subject === '직접 교환';
+          return isRequesterSlot && isValidSubject;
+        });
+
+        if (requesterCurrentSlots.length > 0) {
+          // Group by date
+          const slotsByDate = {};
+          requesterCurrentSlots.forEach(slot => {
+            const dateKey = new Date(slot.date).toISOString().split('T')[0];
+            if (!slotsByDate[dateKey]) slotsByDate[dateKey] = [];
+            slotsByDate[dateKey].push(slot);
+          });
+
+          // Get first date group
+          const firstDateSlots = Object.values(slotsByDate)[0];
+          if (firstDateSlots && firstDateSlots.length > 0) {
+            firstDateSlots.sort((a, b) => {
+              const [aH, aM] = a.startTime.split(':').map(Number);
+              const [bH, bM] = b.startTime.split(':').map(Number);
+              return (aH * 60 + aM) - (bH * 60 + bM);
+            });
+            const firstSlot = firstDateSlots[0];
+            const lastSlot = firstDateSlots[firstDateSlots.length - 1];
+            const slotDayKorean = dayMap[firstSlot.day?.toLowerCase()] || firstSlot.day;
+            targetDestinationInfo = ` 회원님은 ${slotDayKorean} ${firstSlot.startTime}-${lastSlot.endTime}로 이동하게 됩니다.`;
+          }
+        }
+      }
+
+      return `${requesterName}님이 회원님의 ${dayKorean} ${timeRange} 자리로 이동하고 싶어합니다.${targetDestinationInfo}`;
 
     case 'chain_request':
     case 'chain_exchange_request':
