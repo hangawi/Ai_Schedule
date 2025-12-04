@@ -1,9 +1,38 @@
 /**
- * ============================================================================
- * MessageBubble.js - 메시지 버블 컴포넌트
- * ============================================================================
+ * ===================================================================================================
+ * [MessageBubble.js] - AI 채팅창의 메시지 버블 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: [프론트엔드] > client/src/components/chat/components/MessageBubble.js
+ *
+ * 🎯 주요 기능:
+ *    - 사용자 및 AI 메시지를 시각적으로 구분하여 표시
+ *    - 로딩, 성공, 오류 등 메시지 상태에 따른 시각적 피드백 제공
+ *    - 스케줄 충돌 해결, 시간 추천, 스케줄 추가/확인 버튼 등 다양한 인터랙티브 요소 포함
+ *    - 사용자 메시지에 이미지 미리보기 표시
+ *
+ * 🔗 연결된 파일:
+ *    - ../ChatBox.js: 메인 채팅창에서 AI와의 대화 메시지를 렌더링
+ *    - ../TimetableUploadWithChat.js: `SimpleMessageBubble`을 사용하여 시간표 업로드 모달 내 필터링 채팅 메시지를 렌더링
+ *    - ./ConflictActions.js: 스케줄 충돌 시 액션 버튼 제공
+ *    - ./TimeRecommendations.js, ./SuggestedTimes.js: AI 추천 시간 표시
+ *    - ./ScheduleButtons.js: 스케줄 관련 예/아니오 및 기타 액션 버튼 제공
+ *    - ./ExtractedSchedules.js: OCR로 추출된 스케줄 목록 표시
+ *
+ * 💡 UI 위치:
+ *    - AI 채팅창 내의 메시지 목록 영역
+ *
+ * ✏️ 수정 가이드:
+ *    - 메시지 버블의 기본 스타일(색상, 모서리 둥글기 등)을 변경하려면: `MESSAGE_STYLES` 상수를 수정합니다.
+ *    - 메시지 상태(로딩, 성공, 오류)에 따른 아이콘이나 애니메이션을 변경하려면: 해당 JSX 부분을 수정합니다.
+ *    - 포함된 서브 컴포넌트(ConflictActions, TimeRecommendations 등)의 레이아웃이나 기능을 변경하려면: 각 서브 컴포넌트 파일을 수정합니다.
+ *
+ * 📝 참고사항:
+ *    - `MessageBubble`은 복합적인 인터랙티브 메시지를 처리하며, `SimpleMessageBubble`은 간소화된 텍스트 메시지 전용입니다.
+ *    - 메시지 객체의 `_isScheduleMessage`, `_showButtons` 등 내부 플래그에 따라 동적으로 UI가 변경됩니다.
+ *
+ * ===================================================================================================
  */
-
 import React from 'react';
 import { MESSAGE_STYLES } from '../constants/chatConstants';
 import ConflictActions from './ConflictActions';
@@ -13,6 +42,10 @@ import ExtractedSchedules from './ExtractedSchedules';
 
 /**
  * 메시지 스타일 결정 함수
+ *
+ * @description 메시지 객체의 속성을 기반으로 메시지 버블에 적용할 Tailwind CSS 스타일을 결정합니다.
+ * @param {object} message - 메시지 객체
+ * @returns {string} 메시지 버블에 적용될 Tailwind CSS 클래스 문자열
  */
 const getMessageStyle = (message) => {
   if (message.sender === 'user') return MESSAGE_STYLES.USER;
@@ -25,6 +58,10 @@ const getMessageStyle = (message) => {
 
 /**
  * 타임스탬프 텍스트 색상 결정 함수
+ *
+ * @description 메시지 객체의 속성을 기반으로 타임스탬프 텍스트에 적용할 Tailwind CSS 색상 클래스를 결정합니다.
+ * @param {object} message - 메시지 객체
+ * @returns {string} 타임스탬프 텍스트에 적용될 Tailwind CSS 색상 클래스 문자열
  */
 const getTimestampColor = (message) => {
   if (message.sender === 'user') return 'text-blue-100';
@@ -34,7 +71,21 @@ const getTimestampColor = (message) => {
 };
 
 /**
- * 범용 메시지 버블 컴포넌트
+ * MessageBubble
+ *
+ * @description AI 채팅창에서 개별 메시지를 렌더링하는 컴포넌트. 메시지 유형에 따라 다양한 인터랙티브 요소를 포함할 수 있습니다.
+ * @param {object} props - 컴포넌트 props
+ * @param {object} props.message - 표시할 메시지 객체. sender, text, isLoading, success, actions, recommendations, suggestedTimes, extractedSchedules, _showButtons, _buttons, _nextStep, _scheduleData, _schedules 등의 속성을 포함할 수 있습니다.
+ * @param {function} props.onConflictChoice - 충돌 액션 버튼 클릭 시 호출되는 콜백 함수.
+ * @param {function} props.onTimeSelection - 시간 추천 선택 시 호출되는 콜백 함수.
+ * @param {function} props.onAddSchedules - 추출된 스케줄 추가 버튼 클릭 시 호출되는 콜백 함수.
+ * @param {function} props.onShowScheduleModal - 스케줄 최적화 모달 표시를 요청하는 콜백 함수.
+ * @param {function} props.setExtractedScheduleData - 추출된 스케줄 데이터를 설정하는 함수.
+ * @param {function} props.setShowScheduleModal - 스케줄 최적화 모달의 표시 여부를 설정하는 함수.
+ * @param {function} props.setMessages - 채팅 메시지 목록을 업데이트하는 함수.
+ * @param {function} props.setInputText - 채팅 입력 필드의 텍스트를 설정하는 함수.
+ * @param {function} props.handleSend - 메시지 전송을 처리하는 함수.
+ * @returns {JSX.Element}
  */
 const MessageBubble = ({
   message,
@@ -143,7 +194,12 @@ const MessageBubble = ({
 };
 
 /**
- * 간소화된 메시지 버블 컴포넌트 (TimetableUploadWithChat용)
+ * SimpleMessageBubble
+ *
+ * @description 간소화된 형태의 메시지 버블 컴포넌트. 주로 텍스트 메시지를 간단하게 표시할 때 사용됩니다.
+ * @param {object} props - 컴포넌트 props
+ * @param {object} props.message - 표시할 메시지 객체. sender, text 등의 속성을 포함.
+ * @returns {JSX.Element}
  */
 export const SimpleMessageBubble = ({ message }) => {
   return (

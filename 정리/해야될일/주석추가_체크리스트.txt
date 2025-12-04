@@ -149,16 +149,16 @@
 [x] client/src/components/chat/components/ChatInput.js
 [x] client/src/components/chat/components/ChatSection.js
 [x] client/src/components/chat/components/ConflictActions.js
-[ ] client/src/components/chat/components/DuplicateModal.js
-[ ] client/src/components/chat/components/ExtractedSchedules.js
-[ ] client/src/components/chat/components/ImagePreviewGrid.js
-[ ] client/src/components/chat/components/MessageBubble.js
-[ ] client/src/components/chat/components/ProgressBar.js
-[ ] client/src/components/chat/components/ScheduleButtons.js
-[ ] client/src/components/chat/components/ScheduleView.js
-[ ] client/src/components/chat/components/TimeRecommendations.js
-[ ] client/src/components/chat/components/UploadSection.js
-[ ] client/src/components/chat/constants/apiConfig.js
+[x] client/src/components/chat/components/DuplicateModal.js
+[x] client/src/components/chat/components/ExtractedSchedules.js
+[x] client/src/components/chat/components/ImagePreviewGrid.js
+[x] client/src/components/chat/components/MessageBubble.js
+[x] client/src/components/chat/components/ProgressBar.js
+[x] client/src/components/chat/components/ScheduleButtons.js
+[x] client/src/components/chat/components/ScheduleView.js
+[x] client/src/components/chat/components/TimeRecommendations.js
+[x] client/src/components/chat/components/UploadSection.js
+[x] client/src/components/chat/constants/apiConfig.js
 [ ] client/src/components/chat/constants/chatConstants.js
 [ ] client/src/components/chat/handlers/chatHandlers.js
 [ ] client/src/components/chat/handlers/conflictHandlers.js
@@ -842,11 +842,11 @@
 ## 📊 진행률 추적
 
 - 전체 파일 수: 341개 (클라이언트: 223개, 서버: 118개)
-- 완료한 파일: 79 / 341
-- 진행률: 23.2%
+- 완료한 파일: 89 / 341
+- 진행률: 26.1%
 
 ### 세부 진행률
-- 클라이언트: 79 / 223 (35.4%)
+- 클라이언트: 89 / 223 (39.9%)
 - 서버: 0 / 118 (0%)
   - nview 폴더: 0 / 11
   - scheduleOptimizer 폴더: 0 / 14
