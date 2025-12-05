@@ -61,7 +61,7 @@ const MonthView = ({
       const personalDays = p.days || [];
 
       // ⭐ specificDate가 있으면 정확한 날짜로 비교
-      if (p.specificDate && personalDays.length === 0) {
+      if (p.specificDate && p.isRecurring === false) {
         const scheduleDate = new Date(p.specificDate);
         const scheduleDateStr = `${scheduleDate.getFullYear()}-${String(scheduleDate.getMonth() + 1).padStart(2, '0')}-${String(scheduleDate.getDate()).padStart(2, '0')}`;
         return dateStr === scheduleDateStr;

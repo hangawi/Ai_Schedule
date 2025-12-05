@@ -39,8 +39,8 @@ const MergedWeekView = ({
     const personalFiltered = allPersonalTimes.filter(p => {
       const personalDays = p.days || [];
 
-      // ⭐ specificDate가 있으면 정확한 날짜로 비교 (병합모드는 날짜별로 독립적으로 호출됨)
-      if (p.specificDate && personalDays.length === 0) {
+      // ⭐ specificDate가 있고 반복되지 않는 일정이면 정확한 날짜로 비교
+      if (p.specificDate && p.isRecurring === false) {
         if (targetDate) {
           // targetDate와 정확히 비교
           const scheduleDate = new Date(p.specificDate);

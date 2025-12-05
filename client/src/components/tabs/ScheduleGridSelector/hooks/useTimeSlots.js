@@ -58,11 +58,20 @@ const useTimeSlots = (personalTimes, fixedSchedules, showFullDay, timeRange, set
 
   // ⭐ personalTimes와 fixedSchedules 합치기
   const allPersonalTimes = useMemo(() => {
+    // 🔍 디버깅 로그
+    console.log('============================================');
+    console.log('🔧 useTimeSlots - 입력 데이터:');
+    console.log('personalTimes 원본:', personalTimes);
+    console.log('personalTimes 개수:', (personalTimes || []).length);
+    console.log('fixedSchedules 개수:', (fixedSchedules || []).length);
+
     // personalTimes에 색상 추가 (없으면 보라색)
     const combined = (personalTimes || []).map(p => ({
       ...p,
       color: p.color || '#8b5cf6'
     }));
+
+    console.log('combined (personalTimes 처리 후) 개수:', combined.length);
 
     // 고정 일정을 personalTime 형식으로 변환해서 추가
     if (fixedSchedules && fixedSchedules.length > 0) {
@@ -115,6 +124,10 @@ const useTimeSlots = (personalTimes, fixedSchedules, showFullDay, timeRange, set
         });
       });
     }
+
+    console.log('combined (최종, fixedSchedules 포함) 개수:', combined.length);
+    console.log('combined (최종) 내용:', combined);
+    console.log('============================================');
 
     return combined;
   }, [personalTimes, fixedSchedules]);

@@ -88,7 +88,7 @@ const DateDetailModal = ({
         const personalSlots = allPersonalTimes.filter(p => {
           const personalDays = p.days || [];
 
-          if (p.specificDate && personalDays.length === 0) {
+          if (p.specificDate && p.isRecurring === false) {
             const dateObj = new Date(p.specificDate);
             const dateDay = dateObj.getDay();
 
@@ -458,7 +458,7 @@ const DateDetailModal = ({
                 const personalSlots = allPersonalTimes.filter(p => {
                   const personalDays = p.days || [];
 
-                  if (p.specificDate && personalDays.length === 0) {
+                  if (p.specificDate && p.isRecurring === false) {
                     const dateObj = new Date(p.specificDate);
                     const dateDay = dateObj.getDay();
 

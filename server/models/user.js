@@ -271,6 +271,19 @@ const UserSchema = new mongoose.Schema({
     specificDate: { type: String }, // YYYY-MM-DD 형식의 특정 날짜 (반복되지 않는 개인시간용)
     color: { type: String } // 색상 정보
   }],
+
+  // 방별로 삭제된 선호시간 추적 (확정 시 삭제된 defaultSchedule 백업)
+  deletedPreferencesByRoom: [{
+    roomId: { type: mongoose.Schema.Types.ObjectId, ref: 'Room', required: true },
+    deletedTimes: [{
+      dayOfWeek: { type: Number, required: true, min: 0, max: 6 },
+      startTime: { type: String, required: true },
+      endTime: { type: String, required: true },
+      priority: { type: Number, default: 2, enum: [1, 2, 3] },
+      specificDate: { type: String }
+    }],
+    deletedAt: { type: Date, default: Date.now }
+  }],
 }, {
   // 스키마 옵션
   timestamps: true, // createdAt, updatedAt 자동 관리

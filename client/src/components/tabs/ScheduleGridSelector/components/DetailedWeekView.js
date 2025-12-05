@@ -90,8 +90,8 @@ const DetailedWeekView = ({
               const personalSlot = allPersonalTimes.find(p => {
                 const personalDays = p.days || [];
 
-                // ⭐ specificDate가 있으면 정확한 날짜로 비교
-                if (p.specificDate && personalDays.length === 0) {
+                // ⭐ specificDate가 있고 반복되지 않는 일정이면 정확한 날짜로 비교
+                if (p.specificDate && p.isRecurring === false) {
                   if (p.specificDate === dateStr) {
                     const startMinutes = timeToMinutes(p.startTime);
                     const endMinutes = timeToMinutes(p.endTime);

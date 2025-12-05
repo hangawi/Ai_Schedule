@@ -414,29 +414,105 @@ exports.deleteAllTimeSlots = exports.deleteAllTimeSlots = async (req, res) => {
 
       await room.save();
 
-      // 확정된 개인일정도 삭제 (personalTimes 중 방 이름이 포함된 것)
+      // 확정된 개인일정 삭제 + 선호시간 복구
       const updatePromises = [];
-      
-      // 조원들의 personalTimes에서 해당 방 관련 항목 삭제
+
+      // 조원들의 personalTimes에서 해당 방 관련 항목 삭제 + 선호시간 복구
       for (const member of room.members) {
         const memberUser = await User.findById(member.user._id || member.user);
-        if (memberUser && memberUser.personalTimes) {
-          memberUser.personalTimes = memberUser.personalTimes.filter(pt => 
-            !pt.title || !pt.title.includes(room.name)
-          );
+        if (memberUser) {
+          // personalTimes에서 해당 방 관련 항목 삭제
+          if (memberUser.personalTimes) {
+            memberUser.personalTimes = memberUser.personalTimes.filter(pt =>
+              !pt.title || !pt.title.includes(room.name)
+            );
+          }
+
+          // 백업된 선호시간 복구
+          if (memberUser.deletedPreferencesByRoom) {
+            const backup = memberUser.deletedPreferencesByRoom.find(
+              item => item.roomId.toString() === roomId.toString()
+            );
+
+            if (backup && backup.deletedTimes && backup.deletedTimes.length > 0) {
+              // defaultSchedule 초기화 (없으면)
+              if (!memberUser.defaultSchedule) {
+                memberUser.defaultSchedule = [];
+              }
+
+              // 백업된 선호시간을 defaultSchedule에 다시 추가
+              backup.deletedTimes.forEach(deletedTime => {
+                // 중복 체크 (같은 dayOfWeek, startTime, endTime)
+                const isDuplicate = memberUser.defaultSchedule.some(schedule =>
+                  schedule.dayOfWeek === deletedTime.dayOfWeek &&
+                  schedule.startTime === deletedTime.startTime &&
+                  schedule.endTime === deletedTime.endTime &&
+                  schedule.specificDate === deletedTime.specificDate
+                );
+
+                if (!isDuplicate) {
+                  memberUser.defaultSchedule.push(deletedTime);
+                }
+              });
+
+              // 백업 삭제 (복구 완료)
+              memberUser.deletedPreferencesByRoom = memberUser.deletedPreferencesByRoom.filter(
+                item => item.roomId.toString() !== roomId.toString()
+              );
+            }
+          }
+
           updatePromises.push(memberUser.save());
         }
       }
-      
-      // 방장의 personalTimes에서 해당 방 관련 항목 삭제
+
+      // 방장의 personalTimes에서 해당 방 관련 항목 삭제 + 선호시간 복구
       const owner = await User.findById(room.owner._id || room.owner);
-      if (owner && owner.personalTimes) {
-        owner.personalTimes = owner.personalTimes.filter(pt => 
-          !pt.title || !pt.title.includes(room.name)
-        );
+      if (owner) {
+        // personalTimes에서 해당 방 관련 항목 삭제
+        if (owner.personalTimes) {
+          owner.personalTimes = owner.personalTimes.filter(pt =>
+            !pt.title || !pt.title.includes(room.name)
+          );
+        }
+
+        // 백업된 선호시간 복구
+        if (owner.deletedPreferencesByRoom) {
+          const backup = owner.deletedPreferencesByRoom.find(
+            item => item.roomId.toString() === roomId.toString()
+          );
+
+          if (backup && backup.deletedTimes && backup.deletedTimes.length > 0) {
+            // defaultSchedule 초기화 (없으면)
+            if (!owner.defaultSchedule) {
+              owner.defaultSchedule = [];
+            }
+
+            // 백업된 선호시간을 defaultSchedule에 다시 추가
+            backup.deletedTimes.forEach(deletedTime => {
+              // 중복 체크 (같은 dayOfWeek, startTime, endTime)
+              const isDuplicate = owner.defaultSchedule.some(schedule =>
+                schedule.dayOfWeek === deletedTime.dayOfWeek &&
+                schedule.startTime === deletedTime.startTime &&
+                schedule.endTime === deletedTime.endTime &&
+                schedule.specificDate === deletedTime.specificDate
+              );
+
+              if (!isDuplicate) {
+                owner.defaultSchedule.push(deletedTime);
+              }
+            });
+
+            // 백업 삭제 (복구 완료)
+            owner.deletedPreferencesByRoom = owner.deletedPreferencesByRoom.filter(
+              item => item.roomId.toString() !== roomId.toString()
+            );
+          }
+        }
+
         updatePromises.push(owner.save());
       }
-      
+
       await Promise.all(updatePromises);
 
       const updatedRoom = await Room.findById(room._id)
@@ -498,16 +574,20 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
     // 헬퍼 함수: 연속된 슬롯 병합
     const mergeConsecutiveSlots = (slots) => {
       if (slots.length === 0) return [];
-      
+
       // 시간순으로 정렬
       slots.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
-      
+
       const merged = [];
-      let current = { ...slots[0] };
-      
+      // Mongoose 문서의 속성을 명시적으로 복사
+      let current = {
+        startTime: slots[0].startTime,
+        endTime: slots[0].endTime
+      };
+
       for (let i = 1; i < slots.length; i++) {
         const slot = slots[i];
-        
+
         // 현재 슬롯의 끝 시간과 다음 슬롯의 시작 시간이 연속되는지 확인
         if (current.endTime === slot.startTime) {
           // 연속되면 병합 (끝 시간만 업데이트)
@@ -515,13 +595,16 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
         } else {
           // 연속되지 않으면 현재 블록을 결과에 추가하고 새 블록 시작
           merged.push(current);
-          current = { ...slot };
+          current = {
+            startTime: slot.startTime,
+            endTime: slot.endTime
+          };
         }
       }
-      
+
       // 마지막 블록 추가
       merged.push(current);
-      
+
       return merged;
     };
     
@@ -554,7 +637,8 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
       
       mergedSlots.forEach(slot => {
         mergedSlotsByUser[group.userId].push({
-          ...slot,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
           date: group.date,
           day: group.day
         });
@@ -575,36 +659,143 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
       return dayMap[day] || 1;
     };
     
-    // 헬퍼 함수: 선호시간 삭제 (defaultSchedule + scheduleExceptions에서)
-    const removePreferenceTimes = (user, slots) => {
+    // 헬퍼 함수: 선호시간에서 배정된 부분만 제거하고 나머지는 분할하여 유지 + 백업
+    const removePreferenceTimes = (user, slots, roomId) => {
+      const deletedTimes = [];
+      const newDefaultSchedule = [];
+
+      // 1. 슬롯을 날짜/요일별로 그룹화하고 병합된 시간 범위 계산
+      const assignedRangesByKey = {};
+
       slots.forEach(slot => {
         const dateStr = slot.date.toISOString().split('T')[0];
         const dayOfWeek = getDayOfWeekNumber(slot.day);
-        
-        // defaultSchedule에서 삭제 (해당 날짜의 선호시간)
-        if (user.defaultSchedule) {
-          user.defaultSchedule = user.defaultSchedule.filter(schedule => {
-            // specificDate가 있는 경우: 날짜가 일치하면 삭제
-            if (schedule.specificDate) {
-              return schedule.specificDate !== dateStr;
-            }
-            // specificDate가 없는 경우: dayOfWeek가 일치하면 삭제
-            // (주의: 요일은 0-6이고 우리는 1-7을 사용하므로 변환 필요)
-            const scheduleDayOfWeek = schedule.dayOfWeek === 0 ? 7 : schedule.dayOfWeek;
-            return scheduleDayOfWeek !== dayOfWeek;
-          });
+        const key = dateStr; // 날짜별로 그룹화
+
+        if (!assignedRangesByKey[key]) {
+          assignedRangesByKey[key] = {
+            dateStr,
+            dayOfWeek,
+            minStart: Infinity,
+            maxEnd: -Infinity
+          };
         }
-        
-        // scheduleExceptions에서 삭제 (해당 날짜의 예외 일정)
-        if (user.scheduleExceptions) {
+
+        const start = timeToMinutes(slot.startTime);
+        const end = timeToMinutes(slot.endTime);
+        assignedRangesByKey[key].minStart = Math.min(assignedRangesByKey[key].minStart, start);
+        assignedRangesByKey[key].maxEnd = Math.max(assignedRangesByKey[key].maxEnd, end);
+      });
+
+      // 2. 각 선호시간을 확인하고 배정 범위와 겹치면 분할
+      if (user.defaultSchedule) {
+        user.defaultSchedule.forEach(schedule => {
+          const scheduleDayOfWeek = schedule.dayOfWeek === 0 ? 7 : schedule.dayOfWeek;
+
+          // 이 선호시간과 겹치는 배정이 있는지 찾기
+          let hasOverlap = false;
+          let assignedRange = null;
+
+          for (const [key, range] of Object.entries(assignedRangesByKey)) {
+            // specificDate가 있으면 날짜로 매칭, 없으면 요일로 매칭
+            const matches = schedule.specificDate
+              ? schedule.specificDate === range.dateStr
+              : scheduleDayOfWeek === range.dayOfWeek;
+
+            if (matches) {
+              hasOverlap = true;
+              assignedRange = range;
+              break;
+            }
+          }
+
+          if (!hasOverlap) {
+            // 배정과 겹치지 않으면 그대로 유지
+            newDefaultSchedule.push(schedule);
+          } else {
+            // 배정과 겹침 - 분할 처리
+            const prefStart = timeToMinutes(schedule.startTime);
+            const prefEnd = timeToMinutes(schedule.endTime);
+            const assignedStart = assignedRange.minStart;
+            const assignedEnd = assignedRange.maxEnd;
+
+            // 겹치는 부분 계산
+            const overlapStart = Math.max(prefStart, assignedStart);
+            const overlapEnd = Math.min(prefEnd, assignedEnd);
+
+            if (overlapStart < overlapEnd) {
+              // 실제로 겹침 - 겹치는 부분을 백업
+              deletedTimes.push({
+                dayOfWeek: schedule.dayOfWeek,
+                startTime: minutesToTime(overlapStart),
+                endTime: minutesToTime(overlapEnd),
+                priority: schedule.priority,
+                specificDate: schedule.specificDate
+              });
+
+              // 선호시간의 앞부분이 배정보다 이전이면 유지
+              if (prefStart < assignedStart) {
+                newDefaultSchedule.push({
+                  dayOfWeek: schedule.dayOfWeek,
+                  startTime: schedule.startTime,
+                  endTime: minutesToTime(assignedStart),
+                  priority: schedule.priority,
+                  specificDate: schedule.specificDate
+                });
+              }
+
+              // 선호시간의 뒷부분이 배정보다 이후면 유지
+              if (prefEnd > assignedEnd) {
+                newDefaultSchedule.push({
+                  dayOfWeek: schedule.dayOfWeek,
+                  startTime: minutesToTime(assignedEnd),
+                  endTime: schedule.endTime,
+                  priority: schedule.priority,
+                  specificDate: schedule.specificDate
+                });
+              }
+            } else {
+              // 겹치지 않으면 그대로 유지
+              newDefaultSchedule.push(schedule);
+            }
+          }
+        });
+
+        // 분할된 새 선호시간으로 교체
+        user.defaultSchedule = newDefaultSchedule;
+      }
+
+      // scheduleExceptions에서 해당 날짜 삭제 (기존 로직 유지)
+      if (user.scheduleExceptions) {
+        slots.forEach(slot => {
+          const dateStr = slot.date.toISOString().split('T')[0];
           user.scheduleExceptions = user.scheduleExceptions.filter(exception => {
             if (exception.specificDate) {
               return exception.specificDate !== dateStr;
             }
-            return true; // specificDate가 없으면 유지
+            return true;
           });
+        });
+      }
+
+      // 백업된 삭제 시간을 user.deletedPreferencesByRoom에 저장
+      if (deletedTimes.length > 0) {
+        if (!user.deletedPreferencesByRoom) {
+          user.deletedPreferencesByRoom = [];
         }
-      });
+
+        // 기존에 이 방에 대한 백업이 있으면 제거 (새로 덮어쓰기)
+        user.deletedPreferencesByRoom = user.deletedPreferencesByRoom.filter(
+          item => item.roomId.toString() !== roomId.toString()
+        );
+
+        // 새 백업 추가
+        user.deletedPreferencesByRoom.push({
+          roomId: roomId,
+          deletedTimes: deletedTimes,
+          deletedAt: new Date()
+        });
+      }
     };
     
     // 5. 각 조원의 personalTimes에 추가 + 선호시간 삭제
@@ -620,9 +811,9 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
         user.personalTimes = [];
       }
       
-      // 선호시간 삭제 (원본 슬롯 사용)
+      // 선호시간 삭제 (원본 슬롯 사용) + 백업
       const originalSlots = autoAssignedSlots.filter(s => s.user.toString() === userId);
-      removePreferenceTimes(user, originalSlots);
+      removePreferenceTimes(user, originalSlots, roomId);
       
       // 다음 ID 계산
       const maxId = user.personalTimes.reduce((max, pt) => Math.max(max, pt.id || 0), 0);
@@ -665,8 +856,8 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
         owner.personalTimes = [];
       }
       
-      // 방장의 선호시간 삭제
-      removePreferenceTimes(owner, autoAssignedSlots);
+      // 방장의 선호시간 삭제 + 백업
+      removePreferenceTimes(owner, autoAssignedSlots, roomId);
       
       const maxId = owner.personalTimes.reduce((max, pt) => Math.max(max, pt.id || 0), 0);
       let nextId = maxId + 1;
