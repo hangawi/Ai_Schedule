@@ -16,6 +16,7 @@ const AutoSchedulerPanel = ({
 }) => {
   const [shouldRun, setShouldRun] = useState(false);
   const [showModeDropdown, setShowModeDropdown] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(null);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -78,6 +79,38 @@ const AutoSchedulerPanel = ({
       setOptions(prev => ({ ...prev, assignmentMode: 'normal' }));
     }
   }, []);
+
+  // 자동 확정 타이머
+  useEffect(() => {
+    if (!currentRoom?.autoConfirmAt) {
+      setTimeRemaining(null);
+      return;
+    }
+
+    const updateTimer = () => {
+      const now = new Date();
+      const confirmTime = new Date(currentRoom.autoConfirmAt);
+      const diff = confirmTime - now;
+
+      if (diff <= 0) {
+        // 시간 종료 - 자동 확정 실행 (skipConfirm=true로 모달 건너뛰기)
+        setTimeRemaining(0);
+        if (currentRoom?.timeSlots?.some(slot => slot.assignedBy && slot.status === 'confirmed')) {
+          onConfirmSchedule(true); // 자동 확정 시 확인 없이 바로 실행
+        }
+      } else {
+        // 남은 시간 계산
+        const minutes = Math.floor(diff / 60000);
+        const seconds = Math.floor((diff % 60000) / 1000);
+        setTimeRemaining({ minutes, seconds });
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [currentRoom?.autoConfirmAt, currentRoom?.timeSlots, onConfirmSchedule]);
 
   // 자동 배정 실행 시 10분 단위 올림 처리
   const handleRunWithRounding = () => {
@@ -157,6 +190,24 @@ const AutoSchedulerPanel = ({
           {isLoading ? '배정 중...' : '자동 배정 실행'}
         </button>
         
+        {/* 자동 확정 타이머 */}
+        {timeRemaining && timeRemaining !== 0 && (
+          <div className="w-full bg-gradient-to-r from-orange-50 to-yellow-50 border-2 border-orange-300 rounded-lg p-3 mb-2">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <Clock size={18} className="text-orange-600 animate-pulse" />
+              <span className="font-bold text-orange-700">자동 확정 대기 중</span>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-mono font-bold text-orange-600">
+                {String(timeRemaining.minutes).padStart(2, '0')}:{String(timeRemaining.seconds).padStart(2, '0')}
+              </div>
+              <div className="text-xs text-gray-600 mt-1">
+                {timeRemaining.minutes}분 {timeRemaining.seconds}초 후 자동 확정
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 확정 버튼 */}
         <button
           onClick={onConfirmSchedule}
@@ -164,7 +215,7 @@ const AutoSchedulerPanel = ({
           className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-2 px-3 rounded-lg font-medium hover:from-green-600 hover:to-green-700 disabled:from-gray-300 disabled:to-gray-400 transition-all duration-200 shadow-md flex items-center justify-center text-sm"
         >
           <CheckCircle size={16} className="mr-2" />
-          배정 시간 확정
+          {timeRemaining && timeRemaining !== 0 ? '지금 확정하기' : '배정 시간 확정'}
         </button>
         
         {/* 배정 모드 선택 드롭다운 */}

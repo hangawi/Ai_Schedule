@@ -1,4 +1,6 @@
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
@@ -141,9 +143,54 @@ app.use('*', (req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
+// Start auto-confirm cron job
+const { startAutoConfirmJob } = require('./jobs/autoConfirmSchedule');
+startAutoConfirmJob();
+
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, () => {
+// Create HTTP server
+const httpServer = http.createServer(app);
+
+// Setup Socket.io
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.CORS_ORIGIN?.split(',') || [
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      'http://localhost:3001',
+      'http://127.0.0.1:3001'
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
+  }
+});
+
+// Make io available globally
+global.io = io;
+
+// Socket.io connection handling
+io.on('connection', (socket) => {
+  console.log('📡 Client connected:', socket.id);
+
+  // Join room
+  socket.on('join-room', (roomId) => {
+    socket.join(`room-${roomId}`);
+    console.log(`📥 Client ${socket.id} joined room-${roomId}`);
+  });
+
+  // Leave room
+  socket.on('leave-room', (roomId) => {
+    socket.leave(`room-${roomId}`);
+    console.log(`📤 Client ${socket.id} left room-${roomId}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('📡 Client disconnected:', socket.id);
+  });
+});
+
+const server = httpServer.listen(PORT, () => {
   console.log(`MeetAgent Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });

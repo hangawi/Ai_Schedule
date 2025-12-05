@@ -1,6 +1,7 @@
 // CoordinationTab - Main component (Refactored)
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { io } from 'socket.io-client';
 import { auth } from '../../../config/firebaseConfig';
 import { useCoordination } from '../../../hooks/useCoordination';
 import { useCoordinationModals } from '../../../hooks/useCoordinationModals';
@@ -23,6 +24,7 @@ import CoordinationCalendarView from '../../calendar/CoordinationCalendarView';
 import CoordinationDetailGrid from '../../calendar/CoordinationDetailGrid';
 import MemberList from '../../coordination/MemberList';
 import AutoSchedulerPanel from '../../scheduler/AutoSchedulerPanel';
+import AutoConfirmBanner from '../../coordination/AutoConfirmBanner';
 
 // Modals
 import RoomCreationModal from '../../modals/RoomCreationModal';
@@ -34,6 +36,7 @@ import CustomAlertModal from '../../modals/CustomAlertModal';
 import NotificationModal from '../../modals/NotificationModal';
 import MemberStatsModal from '../../modals/MemberStatsModal';
 import MemberScheduleModal from '../../modals/MemberScheduleModal';
+import ConfirmScheduleModal from '../../modals/ConfirmScheduleModal';
 // 4.txt: 연쇄 교환 요청 모달
 import ChainExchangeRequestModal from '../../coordination/ChainExchangeRequestModal';
 
@@ -71,6 +74,10 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   // 4.txt: 연쇄 교환 요청 모달 상태
   const [showChainExchangeModal, setShowChainExchangeModal] = useState(false);
   const [selectedChainRequest, setSelectedChainRequest] = useState(null);
+
+  // 확정 모달 상태
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [slotsToConfirm, setSlotsToConfirm] = useState(0);
 
   const {
     myRooms, currentRoom, isLoading, error,
@@ -143,6 +150,40 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       syncOwnerPersonalTimes(currentRoom, user, fetchRoomDetails, showAlert);
     }
   }, [currentRoom?._id, user?.personalTimes, fetchRoomDetails, showAlert]);
+
+  // Socket.io 연결 및 실시간 업데이트
+  useEffect(() => {
+    if (!currentRoom?._id) return;
+
+    const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+    const socket = io(API_BASE_URL, {
+      transports: ['websocket', 'polling']
+    });
+
+    // 방에 참여
+    socket.emit('join-room', currentRoom._id);
+    console.log(`📡 Socket joined room: ${currentRoom._id}`);
+
+    // 자동 확정 이벤트 수신
+    socket.on('schedule-confirmed', async (data) => {
+      console.log('📡 Schedule confirmed event received:', data);
+      
+      // 방 정보 다시 가져오기
+      try {
+        await fetchRoomDetails(currentRoom._id);
+        showAlert('자동배정 시간이 확정되었습니다! 페이지가 업데이트되었습니다.', 'success');
+      } catch (error) {
+        console.error('Failed to refresh room after auto-confirm:', error);
+      }
+    });
+
+    // cleanup
+    return () => {
+      socket.emit('leave-room', currentRoom._id);
+      socket.disconnect();
+      console.log(`📡 Socket disconnected from room: ${currentRoom._id}`);
+    };
+  }, [currentRoom?._id, fetchRoomDetails, showAlert]);
 
   // 방장 시간표 정보 캐시 업데이트
   useEffect(() => {
@@ -373,44 +414,38 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
   const handleDeleteAllSlots = () => setShowDeleteConfirm(true);
 
-  const handleConfirmSchedule = async () => {
+  const handleConfirmSchedule = async (skipConfirm = false) => {
     if (!currentRoom?._id) return;
-    
+
     // 자동배정된 슬롯 확인
-    const autoAssignedSlots = currentRoom.timeSlots?.filter(slot => 
+    const autoAssignedSlots = currentRoom.timeSlots?.filter(slot =>
       slot.assignedBy && slot.status === 'confirmed'
     ) || [];
-    
+
     if (autoAssignedSlots.length === 0) {
       showAlert('확정할 자동배정 시간이 없습니다.');
       return;
     }
-    
-    if (!window.confirm(
-      `자동배정된 ${autoAssignedSlots.length}개의 시간을 각 조원과 방장의 개인일정으로 확정하시겠습니까?
 
-` +
-      `확정된 시간은 조원들과 방장의 프로필 탭 > 개인시간에 추가되며,
-` +
-      `해당 선호시간은 삭제됩니다.
-
-` +
-      `이후 자동배정에서 해당 시간은 제외됩니다.`
-    )) {
+    // skipConfirm이 false이면 모달 표시
+    if (!skipConfirm) {
+      setSlotsToConfirm(autoAssignedSlots.length);
+      setShowConfirmModal(true);
       return;
     }
-    
+
+    // skipConfirm이 true이거나 모달에서 확인된 경우 실행
     try {
       const result = await coordinationService.confirmSchedule(currentRoom._id);
-      
+
       showAlert(
         `${result.confirmedSlotsCount}개의 시간이 ${result.affectedMembersCount}명의 조원과 방장의 개인일정으로 확정되었습니다.`,
         'success'
       );
-      
+
       // 방 정보 새로고침
       await fetchRoomDetails(currentRoom._id);
-      
+
     } catch (error) {
       showAlert(`확정 처리 실패: ${error.message}`, 'error');
     }
@@ -535,6 +570,14 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
             <ScheduleErrorAlert scheduleError={scheduleError} />
             <UnassignedMembersAlert unassignedMembersInfo={unassignedMembersInfo} />
             <ConflictSuggestionsAlert conflictSuggestions={conflictSuggestions} />
+
+            {/* 자동 확정 타이머 배너 (모든 사용자에게 표시) */}
+            {currentRoom?.autoConfirmAt && (
+              <AutoConfirmBanner
+                autoConfirmAt={currentRoom.autoConfirmAt}
+                isOwner={isOwner}
+              />
+            )}
 
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 w-full" style={{height: 'calc(100vh - 200px)', overflow: 'auto'}}>
               <TimetableControls
@@ -688,6 +731,14 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
             onClose={() => { setShowMemberScheduleModal(false); setSelectedMemberId(null); }}
           />
         )}
+
+        {/* 확정 모달 */}
+        <ConfirmScheduleModal
+          show={showConfirmModal}
+          onClose={() => setShowConfirmModal(false)}
+          onConfirm={() => handleConfirmSchedule(true)}
+          slotsCount={slotsToConfirm}
+        />
 
         {/* 4.txt: 연쇄 교환 요청 모달 */}
         <ChainExchangeRequestModal

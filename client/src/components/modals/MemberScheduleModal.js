@@ -91,16 +91,6 @@ const MemberScheduleModal = ({ memberId, onClose }) => {
         // Process personalTimes (personal blocked times)
         const personalTimes = data.personalTimes || [];
 
-        // 🔍 디버깅 로그
-        console.log('============================================');
-        console.log('📊 MemberScheduleModal - 받은 데이터:');
-        console.log('조원 이름:', `${data.firstName || ''} ${data.lastName || ''}`.trim());
-        console.log('defaultSchedule 개수:', allDefaultSchedule.length);
-        console.log('scheduleExceptions 개수:', (data.scheduleExceptions || []).length);
-        console.log('personalTimes 개수:', personalTimes.length);
-        console.log('personalTimes 내용:', JSON.stringify(personalTimes, null, 2));
-        console.log('============================================');
-
         // Separate schedule data for display
         setMemberSchedule(weekdaySchedule);
         setMemberExceptions(exceptions);

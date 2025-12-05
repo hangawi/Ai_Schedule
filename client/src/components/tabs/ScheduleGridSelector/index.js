@@ -74,17 +74,6 @@ const ScheduleGridSelector = ({
     getCurrentTimeSlots
   } = useTimeSlots(personalTimes, fixedSchedules, showFullDay, timeRange, setTimeRange);
 
-  // 🔍 디버깅 로그
-  React.useEffect(() => {
-    console.log('============================================');
-    console.log('📅 ScheduleGridSelector - Props:');
-    console.log('personalTimes 개수:', personalTimes.length);
-    console.log('personalTimes:', personalTimes);
-    console.log('allPersonalTimes 개수:', allPersonalTimes.length);
-    console.log('allPersonalTimes:', allPersonalTimes);
-    console.log('============================================');
-  }, [personalTimes, allPersonalTimes]);
-
   // 날짜 상세 모달 (selectedDateForDetail, showDateDetailModal, openDateDetail, closeDateDetail)
   const {
     selectedDateForDetail,

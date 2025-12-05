@@ -301,6 +301,11 @@ const RoomSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.Mixed,
       default: {}
     }
+  },
+  // 자동 확정 예정 시간 (자동배정 후 설정됨)
+  autoConfirmAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true

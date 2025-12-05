@@ -332,6 +332,10 @@ exports.runAutoSchedule = async (req, res) => {
       }
       console.log('🔍 ===================================\n');
 
+      // 자동 확정 타이머 설정 (1분 후 - 실험용, 프로덕션에서는 48시간)
+      const autoConfirmDelay = 1 * 60 * 1000; // 1분 = 60,000ms
+      room.autoConfirmAt = new Date(Date.now() + autoConfirmDelay);
+
       await room.save();
 
       // 활동 로그 기록
@@ -408,6 +412,9 @@ exports.deleteAllTimeSlots = exports.deleteAllTimeSlots = async (req, res) => {
 
       // Clear the timeSlots array
       room.timeSlots = [];
+
+      // 자동 확정 타이머 해제 (전체 비우기)
+      room.autoConfirmAt = null;
 
       // Also clear non-pending requests as they are linked to slots
       room.requests = room.requests.filter(r => r.status === 'pending');
@@ -799,12 +806,18 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
     };
     
     // 5. 각 조원의 personalTimes에 추가 + 선호시간 삭제
-    const updatePromises = [];
+    // User 객체를 Map으로 관리하여 중복 저장 방지 (VersionError 해결)
+    const userMap = new Map();
     const ownerName = `${room.owner.firstName || ''} ${room.owner.lastName || ''}`.trim() || '방장';
     
+    // 5-1. 조원들 처리
     for (const [userId, mergedSlots] of Object.entries(mergedSlotsByUser)) {
-      const user = await User.findById(userId);
-      if (!user) continue;
+      let user = userMap.get(userId);
+      if (!user) {
+        user = await User.findById(userId);
+        if (!user) continue;
+        userMap.set(userId, user);
+      }
       
       // personalTimes 배열이 없으면 초기화
       if (!user.personalTimes) {
@@ -845,12 +858,18 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
           });
         }
       });
-      
-      updatePromises.push(user.save());
     }
     
-    // 6. 방장의 personalTimes에도 추가 (각 조원별로 개별 수업 시간) + 선호시간 삭제
-    const owner = await User.findById(room.owner._id || room.owner);
+    // 5-2. 방장 처리
+    const ownerId = (room.owner._id || room.owner).toString();
+    let owner = userMap.get(ownerId);
+    if (!owner) {
+      owner = await User.findById(ownerId);
+      if (owner) {
+        userMap.set(ownerId, owner);
+      }
+    }
+    
     if (owner) {
       if (!owner.personalTimes) {
         owner.personalTimes = [];
@@ -901,12 +920,75 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
           }
         });
       }
-      
-      updatePromises.push(owner.save());
     }
     
-    await Promise.all(updatePromises);
+    // 5-3. 모든 사용자 한 번에 저장 (각 사용자는 한 번만 저장됨) with retry logic
+    const saveUserWithRetry = async (user, maxRetries = 3) => {
+      let currentUser = user;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          await currentUser.save();
+          return; // 성공
+        } catch (error) {
+          if (error.name === 'VersionError' && attempt < maxRetries) {
+            console.log(`⚠️ VersionError for user ${user._id}, retrying (${attempt}/${maxRetries})...`);
+            
+            // 최신 버전 다시 조회
+            const freshUser = await User.findById(user._id);
+            if (!freshUser) {
+              throw new Error(`User ${user._id} not found during retry`);
+            }
+            
+            // 변경사항 재적용
+            freshUser.personalTimes = user.personalTimes;
+            freshUser.defaultSchedule = user.defaultSchedule;
+            if (user.deletedPreferencesByRoom) {
+              freshUser.deletedPreferencesByRoom = user.deletedPreferencesByRoom;
+            }
+            
+            currentUser = freshUser;
+            // 잠시 대기 후 재시도 (동시성 충돌 완화)
+            await new Promise(resolve => setTimeout(resolve, 100 * attempt));
+          } else {
+            throw error;
+          }
+        }
+      }
+    };
     
+    const updatePromises = Array.from(userMap.values()).map(user => saveUserWithRetry(user));
+    await Promise.all(updatePromises);
+
+    // 자동 확정 타이머 해제 (수동 확정 완료) with retry logic
+    room.autoConfirmAt = null;
+    
+    let roomSaved = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await room.save();
+        roomSaved = true;
+        break;
+      } catch (error) {
+        if (error.name === 'VersionError' && attempt < 3) {
+          console.log(`⚠️ VersionError for room ${roomId}, retrying (${attempt}/3)...`);
+          // 최신 버전 다시 조회
+          const freshRoom = await Room.findById(roomId);
+          if (freshRoom) {
+            freshRoom.autoConfirmAt = null;
+            room = freshRoom;
+          }
+          await new Promise(resolve => setTimeout(resolve, 100 * attempt));
+        } else {
+          throw error;
+        }
+      }
+    }
+    
+    if (!roomSaved) {
+      throw new Error('Failed to save room after multiple retries');
+    }
+
     // 7. 활동 로그 기록
     await ActivityLog.logActivity(
       roomId,
