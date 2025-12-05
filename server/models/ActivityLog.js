@@ -21,6 +21,7 @@ const ActivityLogSchema = new mongoose.Schema({
     required: true,
     enum: [
       'auto_assign',           // 자동배정 실행
+      'confirm_schedule',      // 배정 시간 확정
       'slot_request',          // 자리 요청
       'slot_yield',            // 자리 양보
       'slot_swap',             // 자리 교환

@@ -431,6 +431,27 @@ export const coordinationService = {
     return await res.json();
   },
 
+  /**
+   * 자동배정된 시간을 각 조원과 방장의 개인일정으로 확정
+   */
+  async confirmSchedule(roomId) {
+    const token = await getAuthToken();
+    const res = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/confirm-schedule`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || 'Failed to confirm schedule');
+    }
+
+    return await res.json();
+  },
+
   async clearAllCarryOverHistories(roomId) {
     const token = await getAuthToken();
     const res = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/all-carry-over-history`, {

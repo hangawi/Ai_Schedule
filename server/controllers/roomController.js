@@ -406,7 +406,7 @@ exports.getRoomDetails = async (req, res) => {
    try {
       const room = await Room.findById(req.params.roomId)
          .populate('owner', '_id firstName lastName email firebaseUid defaultSchedule scheduleExceptions personalTimes address addressDetail addressLat addressLng')
-         .populate('members.user', '_id firstName lastName email firebaseUid defaultSchedule address addressDetail addressLat addressLng')
+         .populate('members.user', '_id firstName lastName email firebaseUid defaultSchedule personalTimes address addressDetail addressLat addressLng')
          .populate('timeSlots.user', '_id firstName lastName email firebaseUid')
          .populate('requests.requester', '_id firstName lastName email firebaseUid')
          .populate('requests.targetUser', '_id firstName lastName email firebaseUid');

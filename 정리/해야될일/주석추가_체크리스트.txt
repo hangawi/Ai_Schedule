@@ -270,13 +270,13 @@
 [x] client/src/components/modals/utils/commandParser.js
 [x] client/src/components/modals/utils/scheduleOperations.js
 [x] client/src/components/modals/utils/scheduleTransform.js
-[ ] client/src/components/modals/utils/scheduleUtils.js
-[ ] client/src/components/modals/utils/timeUtils.js
+[x] client/src/components/modals/utils/scheduleUtils.js
+[x] client/src/components/modals/utils/timeUtils.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 13. 프로필 (Profile) 컴포넌트 (1개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] client/src/components/profile/PersonalInfoEdit.js
+[x] client/src/components/profile/PersonalInfoEdit.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 14. 스케줄 (Schedule) 컴포넌트 (3개)
@@ -842,11 +842,11 @@
 ## 📊 진행률 추적
 
 - 전체 파일 수: 341개 (클라이언트: 223개, 서버: 118개)
-- 완료한 파일: 134 / 341
-- 진행률: 39.3%
+- 완료한 파일: 137 / 341
+- 진행률: 40.2%
 
 ### 세부 진행률
-- 클라이언트: 134 / 223 (60.1%)
+- 클라이언트: 137 / 223 (61.4%)
 - 서버: 0 / 118 (0%)
   - nview 폴더: 0 / 11
   - scheduleOptimizer 폴더: 0 / 14

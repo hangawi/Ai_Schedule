@@ -58,10 +58,6 @@ const TimetableControls = ({
               <span>금지 시간</span>
             </div>
             <div className="flex items-center">
-              <div className="w-3 h-3 rounded-sm bg-yellow-500 mr-1"></div>
-              <span>협의 중</span>
-            </div>
-            <div className="flex items-center">
               <div className="w-3 h-3 rounded-sm bg-green-500 mr-1"></div>
               <span>이동시간</span>
             </div>

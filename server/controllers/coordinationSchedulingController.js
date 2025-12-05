@@ -391,10 +391,12 @@ exports.runAutoSchedule = async (req, res) => {
 // @desc    Delete all time slots in a room
 // @route   DELETE /api/coordination/rooms/:roomId/timeslots
 // @access  Private (Room Owner only)
-exports.deleteAllTimeSlots = async (req, res) => {
+exports.deleteAllTimeSlots = exports.deleteAllTimeSlots = async (req, res) => {
    try {
       const { roomId } = req.params;
-      const room = await Room.findById(roomId);
+      const room = await Room.findById(roomId)
+        .populate('owner', 'personalTimes')
+        .populate('members.user', 'personalTimes');
 
       if (!room) {
          return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
@@ -410,8 +412,32 @@ exports.deleteAllTimeSlots = async (req, res) => {
       // Also clear non-pending requests as they are linked to slots
       room.requests = room.requests.filter(r => r.status === 'pending');
 
-
       await room.save();
+
+      // 확정된 개인일정도 삭제 (personalTimes 중 방 이름이 포함된 것)
+      const updatePromises = [];
+      
+      // 조원들의 personalTimes에서 해당 방 관련 항목 삭제
+      for (const member of room.members) {
+        const memberUser = await User.findById(member.user._id || member.user);
+        if (memberUser && memberUser.personalTimes) {
+          memberUser.personalTimes = memberUser.personalTimes.filter(pt => 
+            !pt.title || !pt.title.includes(room.name)
+          );
+          updatePromises.push(memberUser.save());
+        }
+      }
+      
+      // 방장의 personalTimes에서 해당 방 관련 항목 삭제
+      const owner = await User.findById(room.owner._id || room.owner);
+      if (owner && owner.personalTimes) {
+        owner.personalTimes = owner.personalTimes.filter(pt => 
+          !pt.title || !pt.title.includes(room.name)
+        );
+        updatePromises.push(owner.save());
+      }
+      
+      await Promise.all(updatePromises);
 
       const updatedRoom = await Room.findById(room._id)
          .populate('owner', 'firstName lastName email address addressLat addressLng')
@@ -421,6 +447,294 @@ exports.deleteAllTimeSlots = async (req, res) => {
       res.json(updatedRoom);
 
    } catch (error) {
+      console.error('Error deleting all time slots:', error);
       res.status(500).json({ msg: 'Server error' });
    }
+};
+
+// @desc    자동배정된 시간을 각 조원과 방장의 개인일정으로 확정
+// @route   POST /api/coordination/rooms/:roomId/confirm-schedule
+// @access  Private (Room Owner only)
+exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    
+    // 1. 방 조회 (populate members)
+    const room = await Room.findById(roomId)
+      .populate('owner', 'firstName lastName email personalTimes defaultSchedule scheduleExceptions')
+      .populate('members.user', '_id firstName lastName email personalTimes defaultSchedule scheduleExceptions');
+    
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+    
+    // 2. 방장 권한 확인
+    if (!room.isOwner(req.user.id)) {
+      return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
+    }
+    
+    // 3. 자동배정된 슬롯 필터링 (assignedBy가 있고 status가 'confirmed'인 것)
+    const autoAssignedSlots = room.timeSlots.filter(slot => 
+      slot.assignedBy && slot.status === 'confirmed'
+    );
+    
+    if (autoAssignedSlots.length === 0) {
+      return res.status(400).json({ msg: '확정할 자동배정 시간이 없습니다.' });
+    }
+    
+    // 헬퍼 함수: 시간 문자열을 분 단위로 변환 (예: "09:30" -> 570)
+    const timeToMinutes = (timeStr) => {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+    
+    // 헬퍼 함수: 분을 시간 문자열로 변환 (예: 570 -> "09:30")
+    const minutesToTime = (minutes) => {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+    };
+    
+    // 헬퍼 함수: 연속된 슬롯 병합
+    const mergeConsecutiveSlots = (slots) => {
+      if (slots.length === 0) return [];
+      
+      // 시간순으로 정렬
+      slots.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+      
+      const merged = [];
+      let current = { ...slots[0] };
+      
+      for (let i = 1; i < slots.length; i++) {
+        const slot = slots[i];
+        
+        // 현재 슬롯의 끝 시간과 다음 슬롯의 시작 시간이 연속되는지 확인
+        if (current.endTime === slot.startTime) {
+          // 연속되면 병합 (끝 시간만 업데이트)
+          current.endTime = slot.endTime;
+        } else {
+          // 연속되지 않으면 현재 블록을 결과에 추가하고 새 블록 시작
+          merged.push(current);
+          current = { ...slot };
+        }
+      }
+      
+      // 마지막 블록 추가
+      merged.push(current);
+      
+      return merged;
+    };
+    
+    // 4. 조원별, 날짜별로 그룹화 후 병합
+    const slotsByUserAndDate = {};
+    autoAssignedSlots.forEach(slot => {
+      const userId = slot.user.toString();
+      const dateStr = slot.date.toISOString().split('T')[0];
+      const key = `${userId}_${dateStr}`;
+      
+      if (!slotsByUserAndDate[key]) {
+        slotsByUserAndDate[key] = {
+          userId,
+          date: slot.date,
+          day: slot.day,
+          slots: []
+        };
+      }
+      slotsByUserAndDate[key].slots.push(slot);
+    });
+    
+    // 각 그룹의 슬롯을 병합
+    const mergedSlotsByUser = {};
+    for (const [key, group] of Object.entries(slotsByUserAndDate)) {
+      const mergedSlots = mergeConsecutiveSlots(group.slots);
+      
+      if (!mergedSlotsByUser[group.userId]) {
+        mergedSlotsByUser[group.userId] = [];
+      }
+      
+      mergedSlots.forEach(slot => {
+        mergedSlotsByUser[group.userId].push({
+          ...slot,
+          date: group.date,
+          day: group.day
+        });
+      });
+    }
+    
+    // 헬퍼 함수: day 문자열을 숫자로 변환
+    const getDayOfWeekNumber = (day) => {
+      const dayMap = {
+        'monday': 1,
+        'tuesday': 2,
+        'wednesday': 3,
+        'thursday': 4,
+        'friday': 5,
+        'saturday': 6,
+        'sunday': 7
+      };
+      return dayMap[day] || 1;
+    };
+    
+    // 헬퍼 함수: 선호시간 삭제 (defaultSchedule + scheduleExceptions에서)
+    const removePreferenceTimes = (user, slots) => {
+      slots.forEach(slot => {
+        const dateStr = slot.date.toISOString().split('T')[0];
+        const dayOfWeek = getDayOfWeekNumber(slot.day);
+        
+        // defaultSchedule에서 삭제 (해당 날짜의 선호시간)
+        if (user.defaultSchedule) {
+          user.defaultSchedule = user.defaultSchedule.filter(schedule => {
+            // specificDate가 있는 경우: 날짜가 일치하면 삭제
+            if (schedule.specificDate) {
+              return schedule.specificDate !== dateStr;
+            }
+            // specificDate가 없는 경우: dayOfWeek가 일치하면 삭제
+            // (주의: 요일은 0-6이고 우리는 1-7을 사용하므로 변환 필요)
+            const scheduleDayOfWeek = schedule.dayOfWeek === 0 ? 7 : schedule.dayOfWeek;
+            return scheduleDayOfWeek !== dayOfWeek;
+          });
+        }
+        
+        // scheduleExceptions에서 삭제 (해당 날짜의 예외 일정)
+        if (user.scheduleExceptions) {
+          user.scheduleExceptions = user.scheduleExceptions.filter(exception => {
+            if (exception.specificDate) {
+              return exception.specificDate !== dateStr;
+            }
+            return true; // specificDate가 없으면 유지
+          });
+        }
+      });
+    };
+    
+    // 5. 각 조원의 personalTimes에 추가 + 선호시간 삭제
+    const updatePromises = [];
+    const ownerName = `${room.owner.firstName || ''} ${room.owner.lastName || ''}`.trim() || '방장';
+    
+    for (const [userId, mergedSlots] of Object.entries(mergedSlotsByUser)) {
+      const user = await User.findById(userId);
+      if (!user) continue;
+      
+      // personalTimes 배열이 없으면 초기화
+      if (!user.personalTimes) {
+        user.personalTimes = [];
+      }
+      
+      // 선호시간 삭제 (원본 슬롯 사용)
+      const originalSlots = autoAssignedSlots.filter(s => s.user.toString() === userId);
+      removePreferenceTimes(user, originalSlots);
+      
+      // 다음 ID 계산
+      const maxId = user.personalTimes.reduce((max, pt) => Math.max(max, pt.id || 0), 0);
+      let nextId = maxId + 1;
+      
+      // 병합된 각 슬롯을 personalTimes로 변환
+      mergedSlots.forEach(slot => {
+        const dayOfWeek = getDayOfWeekNumber(slot.day);
+        const dateStr = slot.date.toISOString().split('T')[0];
+        
+        // 중복 체크 (같은 날짜, 같은 시간)
+        const isDuplicate = user.personalTimes.some(pt => 
+          pt.specificDate === dateStr &&
+          pt.startTime === slot.startTime &&
+          pt.endTime === slot.endTime
+        );
+        
+        if (!isDuplicate) {
+          user.personalTimes.push({
+            id: nextId++,
+            title: `${room.name} - ${ownerName}`,
+            type: 'event',
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            days: [dayOfWeek],
+            isRecurring: false,
+            specificDate: dateStr,
+            color: '#10B981' // 초록색
+          });
+        }
+      });
+      
+      updatePromises.push(user.save());
+    }
+    
+    // 6. 방장의 personalTimes에도 추가 (각 조원별로 개별 수업 시간) + 선호시간 삭제
+    const owner = await User.findById(room.owner._id || room.owner);
+    if (owner) {
+      if (!owner.personalTimes) {
+        owner.personalTimes = [];
+      }
+      
+      // 방장의 선호시간 삭제
+      removePreferenceTimes(owner, autoAssignedSlots);
+      
+      const maxId = owner.personalTimes.reduce((max, pt) => Math.max(max, pt.id || 0), 0);
+      let nextId = maxId + 1;
+      
+      // 각 조원별로 병합된 슬롯을 방장의 개인일정으로 추가
+      for (const [userId, mergedSlots] of Object.entries(mergedSlotsByUser)) {
+        // 해당 조원 정보 찾기
+        const memberUser = room.members.find(m => 
+          m.user._id?.toString() === userId || 
+          m.user.toString() === userId
+        );
+        
+        if (!memberUser) continue;
+        
+        const memberName = `${memberUser.user.firstName || ''} ${memberUser.user.lastName || ''}`.trim() || '조원';
+        
+        mergedSlots.forEach(slot => {
+          const dayOfWeek = getDayOfWeekNumber(slot.day);
+          const dateStr = slot.date.toISOString().split('T')[0];
+          
+          // 중복 체크 (같은 날짜, 같은 시간, 같은 조원)
+          const isDuplicate = owner.personalTimes.some(pt => 
+            pt.specificDate === dateStr &&
+            pt.startTime === slot.startTime &&
+            pt.endTime === slot.endTime &&
+            pt.title.includes(memberName)
+          );
+          
+          if (!isDuplicate) {
+            owner.personalTimes.push({
+              id: nextId++,
+              title: `${room.name} - ${memberName}`,
+              type: 'event',
+              startTime: slot.startTime,
+              endTime: slot.endTime,
+              days: [dayOfWeek],
+              isRecurring: false,
+              specificDate: dateStr,
+              color: '#3B82F6' // 파란색 (방장 수업 시간)
+            });
+          }
+        });
+      }
+      
+      updatePromises.push(owner.save());
+    }
+    
+    await Promise.all(updatePromises);
+    
+    // 7. 활동 로그 기록
+    await ActivityLog.logActivity(
+      roomId,
+      req.user.id,
+      `${req.user.firstName} ${req.user.lastName}`,
+      'confirm_schedule',
+      `자동배정 시간 확정 완료 (${autoAssignedSlots.length}개 슬롯 → ${Object.values(mergedSlotsByUser).reduce((sum, slots) => sum + slots.length, 0)}개 병합, 조원 ${Object.keys(mergedSlotsByUser).length}명 + 방장)`
+    );
+    
+    // 8. 성공 응답
+    res.json({
+      msg: '배정 시간이 각 조원과 방장의 개인일정으로 확정되었습니다.',
+      confirmedSlotsCount: autoAssignedSlots.length,
+      mergedSlotsCount: Object.values(mergedSlotsByUser).reduce((sum, slots) => sum + slots.length, 0),
+      affectedMembersCount: Object.keys(mergedSlotsByUser).length
+    });
+    
+  } catch (error) {
+    console.error('Error confirming schedule:', error);
+    res.status(500).json({ msg: `확정 처리 중 오류가 발생했습니다: ${error.message}` });
+  }
 };

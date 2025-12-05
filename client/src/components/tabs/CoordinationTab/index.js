@@ -373,6 +373,49 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
   const handleDeleteAllSlots = () => setShowDeleteConfirm(true);
 
+  const handleConfirmSchedule = async () => {
+    if (!currentRoom?._id) return;
+    
+    // 자동배정된 슬롯 확인
+    const autoAssignedSlots = currentRoom.timeSlots?.filter(slot => 
+      slot.assignedBy && slot.status === 'confirmed'
+    ) || [];
+    
+    if (autoAssignedSlots.length === 0) {
+      showAlert('확정할 자동배정 시간이 없습니다.');
+      return;
+    }
+    
+    if (!window.confirm(
+      `자동배정된 ${autoAssignedSlots.length}개의 시간을 각 조원과 방장의 개인일정으로 확정하시겠습니까?
+
+` +
+      `확정된 시간은 조원들과 방장의 프로필 탭 > 개인시간에 추가되며,
+` +
+      `해당 선호시간은 삭제됩니다.
+
+` +
+      `이후 자동배정에서 해당 시간은 제외됩니다.`
+    )) {
+      return;
+    }
+    
+    try {
+      const result = await coordinationService.confirmSchedule(currentRoom._id);
+      
+      showAlert(
+        `${result.confirmedSlotsCount}개의 시간이 ${result.affectedMembersCount}명의 조원과 방장의 개인일정으로 확정되었습니다.`,
+        'success'
+      );
+      
+      // 방 정보 새로고침
+      await fetchRoomDetails(currentRoom._id);
+      
+    } catch (error) {
+      showAlert(`확정 처리 실패: ${error.message}`, 'error');
+    }
+  };
+
   const executeDeleteAllSlots = async () => {
     if (!currentRoom?._id) return;
     try {
@@ -456,6 +499,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
                   onResetCompletedTimes={handleResetCompletedTimesCallback}
                   onClearAllCarryOverHistories={handleClearAllCarryOverHistoriesCallback}
                   onDeleteAllSlots={handleDeleteAllSlots}
+                  onConfirmSchedule={handleConfirmSchedule}
                   currentWeekStartDate={currentWeekStartDate}
                 />
               )}

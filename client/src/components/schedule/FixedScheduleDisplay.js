@@ -1,13 +1,54 @@
+/**
+ * ===================================================================================================
+ * FixedScheduleDisplay.js - 고정된 일정을 표시하는 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/schedule
+ *
+ * 🎯 주요 기능:
+ *    - 사용자가 채팅을 통해 '고정'한 일정 목록을 시각적으로 표시
+ *    - 고정된 일정의 제목, 요일, 시간 정보를 보여줌
+ *    - '개인'적으로 추가된 일정인지 여부를 태그로 표시
+ *    - 고정된 일정이 없을 경우 아무것도 렌더링하지 않음
+ *
+ * 🔗 연결된 파일:
+ *    - ScheduleOptimizerModal.js - 이 컴포넌트를 사용하여 고정된 일정 목록을 사용자에게 보여줌
+ *
+ * 💡 UI 위치:
+ *    - '일정 최적화 모달' 내부
+ *
+ * ✏️ 수정 가이드:
+ *    - 고정 일정 아이템의 디자인 변경: `fixedSchedules.map(...)` 내부의 JSX 구조 및 스타일 수정
+ *    - "채팅으로 추가/삭제 가능" 안내 문구 변경: JSX 하단의 `<p>` 태그 내용 수정
+ *
+ * 📝 참고사항:
+ *    - 이 컴포넌트는 표시 전용(read-only)입니다. 실제 일정 고정/해제 로직은 챗봇 핸들러를 통해 처리됩니다.
+ *    - `fixedSchedules` 배열이 비어있으면 null을 반환하여 UI에 아무것도 표시하지 않습니다.
+ *
+ * ===================================================================================================
+ */
+
 import React from 'react';
-import { Pin, X } from 'lucide-react';
+import { Pin } from 'lucide-react';
 
 /**
- * 고정 일정 표시 컴포넌트 (표시 전용)
- * 추가/삭제는 채팅으로만 가능
+ * FixedScheduleDisplay
+ *
+ * @description 사용자가 채팅을 통해 고정한 일정 목록을 보여주는 표시 전용 컴포넌트입니다.
+ * @param {Object} props - 컴포넌트 프롭스
+ * @param {Array<Object>} [props.fixedSchedules=[]] - 고정된 일정 객체들의 배열
+ * @returns {JSX.Element | null} 고정 일정 목록 UI 또는 null
+ *
+ * @example
+ * const fixedSchedules = [
+ *   { id: 1, title: '팀 회의', days: ['월'], startTime: '10:00', endTime: '11:00' },
+ *   { id: 2, title: '요가', days: ['수'], startTime: '19:00', endTime: '20:00', type: 'custom' }
+ * ];
+ * <FixedScheduleDisplay fixedSchedules={fixedSchedules} />
  */
 const FixedScheduleDisplay = ({ fixedSchedules = [] }) => {
-  if (fixedSchedules.length === 0) {
-    return null; // 고정 일정이 없으면 아예 표시 안 함
+  if (!fixedSchedules || fixedSchedules.length === 0) {
+    return null;
   }
 
   return (

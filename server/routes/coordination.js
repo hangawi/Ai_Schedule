@@ -22,6 +22,7 @@
 const express = require('express');
 const router = express.Router();
 const coordinationController = require('../controllers/coordinationController');
+const coordinationSchedulingController = require('../controllers/coordinationSchedulingController');
 const timeSlotController = require('../controllers/timeSlotController');
 const exchangeRequestController = require('../controllers/coordinationExchangeRequestController');
 const auth = require('../middleware/auth');
@@ -56,6 +57,7 @@ router.delete('/rooms/:roomId/time-slots', auth, coordinationController.deleteAl
 // AI-based scheduling
 router.post('/rooms/:roomId/find-common-slots', auth, coordinationController.findCommonSlots);
 router.post('/rooms/:roomId/run-schedule', auth, coordinationController.runAutoSchedule);
+router.post('/rooms/:roomId/confirm-schedule', auth, coordinationSchedulingController.confirmSchedule);
 
 // Request management
 router.post('/requests', auth, coordinationController.createRequest);
