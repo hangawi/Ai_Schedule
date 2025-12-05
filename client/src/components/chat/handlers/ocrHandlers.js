@@ -1,13 +1,78 @@
 /**
- * ============================================================================
+ * ===================================================================================================
  * ocrHandlers.js - OCR 처리 관련 이벤트 핸들러 팩토리 함수들
- * ============================================================================
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/chat/handlers
+ *
+ * 🎯 주요 기능:
+ *    - 사용자가 업로드한 이미지로부터 OCR을 통해 시간표 데이터를 추출
+ *    - 이미지 유효성 검사 및 중복 이미지 감지 처리
+ *    - 추출된 시간표 데이터를 상태로 관리 및 채팅 이력에 결과 메시지 추가
+ *    - OCR 처리 과정의 진행 상태 (로딩, 에러, 진행률) 업데이트
+ *
+ * 🔗 연결된 파일:
+ *    - ../../../utils/ocrUtils - OCR 유틸리티 함수 (extractSchedulesFromImages)
+ *    - ../../hooks/useOcrProcessing - 이 핸들러를 사용하는 훅
+ *    - ../../components/chat/TimetableUploadWithChat - 이 훅이 사용되는 컴포넌트
+ *
+ * 💡 UI 위치:
+ *    - 챗봇 화면 > 이미지 업로드 후 OCR 분석 진행 과정, 중복 이미지 모달
+ *
+ * ✏️ 수정 가이드:
+ *    - OCR 처리 로직 변경: `extractSchedulesFromImages` 함수 내부 수정
+ *    - 중복 이미지 처리 방식 변경: `if (result.hasDuplicates)` 블록 수정
+ *    - 추출된 시간표 데이터를 가공하는 로직 변경: `setExtractedSchedules` 호출 전 로직 수정
+ *    - OCR 분석 완료 후 챗봇 메시지 내용 변경: `botMessage.text` 수정
+ *
+ * 📝 참고사항:
+ *    - `skipDuplicateCheck` 파라미터를 통해 중복 검사 건너뛰기 가능
+ *    - `originalSchedule`, `baseSchedules`, `overallTitle` 등 다양한 일정 관련 상태를 관리
+ *    - 사용자에게 친화적인 진행률 및 메시지를 제공하여 OCR 처리 과정을 명확히 전달
+ *
+ * ===================================================================================================
  */
 
 import { extractSchedulesFromImages } from '../../../utils/ocrUtils';
 
 /**
- * OCR 이미지 처리 핸들러 생성
+ * createHandleProcessImages
+ *
+ * @description OCR을 통해 선택된 이미지에서 시간표를 추출하고, 추출 결과를 처리하는 비동기 핸들러를 생성합니다.
+ *              이미지 유효성 검사, OCR 진행 상태 업데이트, 중복 이미지 처리, 추출된 시간표 상태 관리를 포함합니다.
+ * @param {Object} params - 핸들러 생성에 필요한 파라미터 객체
+ * @param {Array<File>} params.selectedImages - 현재 선택된 이미지 파일 목록 상태
+ * @param {Function} params.setError - 에러 메시지 상태 셋터 함수
+ * @param {Function} params.setIsProcessing - OCR 처리 진행 중 여부 상태 셋터 함수
+ * @param {Function} params.setProgress - OCR 진행률 상태 셋터 함수 ({ current, total, message } 형식)
+ * @param {Function} params.setExtractedSchedules - 추출된 시간표 목록 상태 셋터 함수
+ * @param {Function} params.setSchedulesByImage - 이미지별로 정리된 시간표 목록 상태 셋터 함수
+ * @param {Object | null} params.originalSchedule - 원본 전체 시간표 (수정 전) 상태
+ * @param {Function} params.setOriginalSchedule - 원본 전체 시간표 상태 셋터 함수
+ * @param {Function} params.setBaseSchedules - 기본 베이스 스케줄 목록 상태 셋터 함수
+ * @param {Function} params.setOverallTitle - 전체 시간표의 제목 상태 셋터 함수
+ * @param {Function} params.setFilteredSchedules - 필터링된 시간표 목록 상태 셋터 함수
+ * @param {Function} params.setChatHistory - 채팅 이력 상태 셋터 함수
+ * @param {Function} params.setDuplicateInfo - 중복 이미지 정보 상태 셋터 함수
+ * @param {Function} params.setShowDuplicateModal - 중복 이미지 모달 표시 여부 상태 셋터 함수
+ * @param {Function} params.setSelectedImages - 선택된 이미지 파일 목록 상태 셋터 함수 (중복 처리 시 사용)
+ * @param {Function} params.setImagePreviews - 이미지 미리보기 목록 상태 셋터 함수 (중복 처리 시 사용)
+ * @param {Array<string>} params.imagePreviews - 이미지 미리보기 URL/Base64 목록 상태
+ * @returns {Function} 이미지 OCR 처리 함수 (skipDuplicateCheck 불리언 인자를 받음)
+ *
+ * @example
+ * // useOcrProcessing 훅 내에서 사용 예시
+ * const handleProcessImages = createHandleProcessImages({
+ *   selectedImages, setError, setIsProcessing, setProgress, ...
+ * });
+ * <Button onClick={() => handleProcessImages(false)}>OCR 시작</Button>
+ *
+ * @note
+ * - `selectedImages`가 비어있으면 에러를 설정하고 즉시 종료합니다.
+ * - `extractSchedulesFromImages` 함수를 호출하여 실제 OCR 작업을 수행합니다.
+ * - 중복 이미지가 감지되면 `setDuplicateInfo`와 `setShowDuplicateModal`을 통해 사용자에게 중복 모달을 띄웁니다.
+ * - 추출된 시간표 데이터는 `sourceImageIndex`를 재할당하여 일관성을 유지합니다.
+ * - OCR 분석이 완료되면 챗봇 메시지를 생성하여 채팅 이력에 추가하고, 추출된 시간표에 대한 사용자의 추가 입력을 유도합니다.
  */
 export const createHandleProcessImages = ({
   selectedImages,
@@ -65,10 +130,9 @@ export const createHandleProcessImages = ({
       );
 
       // 실제로 선택된 스케줄이 있는 이미지만 유지
-      const imagesWithSchedules = filteredSchedulesByImage.filter(img => {
-        const imageSchedules = schedulesToUse.filter(s => s.sourceImage === img.fileName);
-        return imageSchedules.length > 0;
-      });
+      const imagesWithSchedules = filteredSchedulesByImage.filter(img =>
+        schedulesToUse.some(s => s.sourceImage === img.fileName)
+      );
 
       filteredSchedulesByImage = imagesWithSchedules;
 
@@ -183,3 +247,4 @@ export const createHandleProcessImages = ({
     }
   };
 };
+

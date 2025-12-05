@@ -1,11 +1,52 @@
+/**
+ * ===================================================================================================
+ * TravelModeButtons.js - 이동 수단 선택 버튼 그룹 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/coordination
+ *
+ * 🎯 주요 기능:
+ *    - '일반', '대중교통', '자동차', '자전거', '도보' 등 다양한 이동 수단을 선택하는 버튼 그룹 제공
+ *    - 현재 선택된 이동 수단을 시각적으로 강조하여 표시
+ *    - 각 버튼 클릭 시 선택된 모드를 부모 컴포넌트로 전달
+ *    - `disabled` prop을 통해 버튼 그룹 전체를 비활성화하는 기능
+ *
+ * 🔗 연결된 파일:
+ *    - CoordinationTab/index.js - 이 컴포넌트를 사용하여 이동 수단 모드를 변경
+ *    - lucide-react: 아이콘 라이브러리
+ *
+ * 💡 UI 위치:
+ *    - 조율 탭 > 타임테이블 상단의 컨트롤 영역
+ *
+ * ✏️ 수정 가이드:
+ *    - 새로운 이동 수단 추가: `modes` 배열에 새로운 모드 객체({ id, label, icon, color }) 추가
+ *    - 버튼 스타일 변경: `getButtonClasses` 함수 내의 Tailwind CSS 클래스 수정
+ *
+ * 📝 참고사항:
+ *    - '일반' 모드는 이동 시간을 고려하지 않는 기본 상태를 의미합니다.
+ *    - 각 이동 수단은 서로 다른 색상 테마를 가지고 있어 시각적 구분이 용이합니다.
+ *    - `disabled` 상태일 때는 모든 버튼이 비활성화되고, 사용자에게 툴팁으로 안내 메시지를 보여줍니다.
+ *
+ * ===================================================================================================
+ */
+
 import React from 'react';
 import { Car, Train, Bike, Footprints, Zap } from 'lucide-react';
 
 /**
- * 이동 수단 선택 버튼 컴포넌트
- * @param {string} selectedMode - 현재 선택된 모드 ('normal', 'transit', 'driving', 'bicycling', 'walking')
- * @param {function} onModeChange - 모드 변경 핸들러
- * @param {boolean} disabled - 버튼 비활성화 여부 (자동배정 전)
+ * TravelModeButtons
+ *
+ * @description 이동 시간 계산에 사용될 이동 수단을 선택하는 버튼 그룹 컴포넌트입니다.
+ * @param {Object} props - 컴포넌트 프롭스
+ * @param {string} [props.selectedMode='normal'] - 현재 선택된 이동 수단 모드
+ *        ('normal', 'transit', 'driving', 'bicycling', 'walking')
+ * @param {Function} props.onModeChange - 이동 수단 모드가 변경될 때 호출되는 콜백 함수. 새 모드의 id를 인자로 받습니다.
+ * @param {boolean} [props.disabled=false] - 버튼을 비활성화할지 여부
+ * @returns {JSX.Element} 이동 수단 선택 버튼 그룹 UI
+ *
+ * @example
+ * const [mode, setMode] = useState('normal');
+ * <TravelModeButtons selectedMode={mode} onModeChange={setMode} disabled={false} />
  */
 const TravelModeButtons = ({ selectedMode = 'normal', onModeChange, disabled = false }) => {
   const modes = [
@@ -24,21 +65,11 @@ const TravelModeButtons = ({ selectedMode = 'normal', onModeChange, disabled = f
     }
 
     const colorMap = {
-      purple: selectedMode === mode.id
-        ? 'bg-purple-500 text-white shadow-md'
-        : 'bg-purple-50 text-purple-600 hover:bg-purple-100',
-      blue: selectedMode === mode.id
-        ? 'bg-blue-500 text-white shadow-md'
-        : 'bg-blue-50 text-blue-600 hover:bg-blue-100',
-      green: selectedMode === mode.id
-        ? 'bg-green-500 text-white shadow-md'
-        : 'bg-green-50 text-green-600 hover:bg-green-100',
-      orange: selectedMode === mode.id
-        ? 'bg-orange-500 text-white shadow-md'
-        : 'bg-orange-50 text-orange-600 hover:bg-orange-100',
-      gray: selectedMode === mode.id
-        ? 'bg-gray-500 text-white shadow-md'
-        : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+      purple: selectedMode === mode.id ? 'bg-purple-500 text-white shadow-md' : 'bg-purple-50 text-purple-600 hover:bg-purple-100',
+      blue: selectedMode === mode.id ? 'bg-blue-500 text-white shadow-md' : 'bg-blue-50 text-blue-600 hover:bg-blue-100',
+      green: selectedMode === mode.id ? 'bg-green-500 text-white shadow-md' : 'bg-green-50 text-green-600 hover:bg-green-100',
+      orange: selectedMode === mode.id ? 'bg-orange-500 text-white shadow-md' : 'bg-orange-50 text-orange-600 hover:bg-orange-100',
+      gray: selectedMode === mode.id ? 'bg-gray-500 text-white shadow-md' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
     };
 
     return `${baseClasses} ${colorMap[mode.color]}`;

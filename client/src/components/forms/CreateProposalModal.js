@@ -1,8 +1,45 @@
+/**
+ * ===================================================================================================
+ * CreateProposalModal.js - 새 일정 조율 제안을 생성하는 모달 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/forms
+ *
+ * 🎯 주요 기능:
+ *    - 새 일정 조율 제안을 생성하기 위한 폼 제공 (제목, 설명, 소요 시간, 선호 시간 등)
+ *    - 내부/외부 참가자 추가 기능
+ *    - 폼 데이터 유효성 검사 및 서버 전송
+ *    - API 요청 결과(성공/실패)를 사용자에게 알림
+ *
+ * 🔗 연결된 파일:
+ *    - ../modals/CustomAlertModal - API 응답 메시지를 표시하기 위한 커스텀 알림 모달
+ *    - ../../config/firebaseConfig - 사용자 인증 정보 확인을 위해 사용
+ *
+ * 💡 UI 위치:
+ *    - 'Proposals' 탭 또는 다른 관련 UI에서 '새 제안 생성' 버튼 클릭 시 표시됨
+ *
+ * ✏️ 수정 가이드:
+ *    - 폼 필드 추가/제거: `useState`를 사용하여 새 상태를 추가하고 JSX에 해당 필드를 렌더링
+ *    - 참가자 검색 로직 변경: `handleSearchChange` 함수에서 `dummyUsers` 대신 실제 API를 호출하도록 수정
+ *    - 서버 전송 데이터 형식 변경: `handleSubmit` 함수 내 `proposalData` 객체의 구조 수정
+ *
+ * 📝 참고사항:
+ *    - 현재 내부 참가자 검색은 `dummyUsers`라는 더미 데이터를 사용하고 있습니다. 실제 구현 시에는 백엔드 API를 호출해야 합니다.
+ *    - `CustomAlertModal`을 사용하여 사용자에게 피드백을 제공합니다. 이는 `showAlert` 유틸리티 함수를 통해 제어됩니다.
+ *    - API 요청 시 Firebase 인증 토큰을 헤더에 포함시켜 전송합니다.
+ *
+ * ===================================================================================================
+ */
+
 import React, { useState, useCallback } from 'react';
 import { X, UserPlus } from 'lucide-react';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import { auth } from '../../config/firebaseConfig';
 
+/**
+ * ParticipantChip
+ * @description 선택된 참가자를 표시하는 작은 칩 UI 컴포넌트
+ */
 const ParticipantChip = ({ name, onRemove }) => (
    <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center">
       {name}
@@ -10,6 +47,21 @@ const ParticipantChip = ({ name, onRemove }) => (
    </div>
 );
 
+/**
+ * CreateProposalModal
+ *
+ * @description 새 일정 조율 제안을 생성하는 전체 모달 컴포넌트입니다.
+ * @param {Object} props - 컴포넌트 프롭스
+ * @param {Function} props.onClose - 모달을 닫는 함수
+ * @param {Function} props.onProposalCreated - 제안 생성이 성공적으로 완료되었을 때 호출되는 콜백 함수
+ * @returns {JSX.Element} 새 일정 조율 제안 생성 모달 UI
+ *
+ * @example
+ * <CreateProposalModal
+ *   onClose={() => setModalOpen(false)}
+ *   onProposalCreated={(newProposal) => console.log(newProposal)}
+ * />
+ */
 const CreateProposalModal = ({ onClose, onProposalCreated }) => {
    const [title, setTitle] = useState('');
    const [description, setDescription] = useState('');
@@ -20,30 +72,12 @@ const CreateProposalModal = ({ onClose, onProposalCreated }) => {
    const [externalParticipants, setExternalParticipants] = useState('');
    const [searchQuery, setSearchQuery] = useState('');
    const [searchResults, setSearchResults] = useState([]);
+   const [alertModal, setAlertModal] = useState({ isOpen: false, title: '', message: '', type: 'info', showCancel: false, onConfirm: null });
 
-   // CustomAlert 상태
-   const [alertModal, setAlertModal] = useState({
-     isOpen: false,
-     title: '',
-     message: '',
-     type: 'info',
-     showCancel: false,
-     onConfirm: null
-   });
-
-   // Alert 표시 유틸리티 함수
    const showAlert = useCallback((message, type = 'info', title = '', showCancel = false, onConfirm = null) => {
-     setAlertModal({
-       isOpen: true,
-       title,
-       message,
-       type,
-       showCancel,
-       onConfirm
-     });
+     setAlertModal({ isOpen: true, title, message, type, showCancel, onConfirm });
    }, []);
 
-   // Alert 닫기 함수
    const closeAlert = useCallback(() => {
      setAlertModal(prev => ({ ...prev, isOpen: false }));
    }, []);
@@ -97,7 +131,7 @@ const CreateProposalModal = ({ onClose, onProposalCreated }) => {
          priority: parseInt(priority),
       };
       try {
-         const response = await fetch('http://localhost:5000/api/proposals', {
+         const response = await fetch(`${process.env.REACT_APP_API_URL}/api/proposals`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
             body: JSON.stringify(proposalData),
@@ -112,7 +146,6 @@ const CreateProposalModal = ({ onClose, onProposalCreated }) => {
            onClose();
          });
       } catch (error) {
-         // Error creating proposal - silently handle error
          showAlert(`일정 조율 요청 실패: ${error.message}`, 'error', '생성 실패');
       }
    };

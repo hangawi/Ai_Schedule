@@ -1,6 +1,48 @@
+/**
+ * ===================================================================================================
+ * BackgroundGuide.js - 백그라운드 대화 감지 기능 가이드 모달 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/guides
+ *
+ * 🎯 주요 기능:
+ *    - 백그라운드 대화 감지 기능의 사용법을 단계별로 안내하는 가이드 제공
+ *    - 사용자가 '다음'/'이전' 버튼을 통해 각 단계를 탐색할 수 있음
+ *    - 각 단계별로 아이콘, 제목, 내용, 팁을 시각적으로 구분하여 표시
+ *    - 마지막 단계에서 '완료' 버튼을 누르면 모달이 닫힘
+ *
+ * 🔗 연결된 파일:
+ *    - 이 컴포넌트를 호출하는 상위 컴포넌트 (예: 백그라운드 감지 기능 최초 사용 시)
+ *    - lucide-react: 아이콘 라이브러리
+ *
+ * 💡 UI 위치:
+ *    - 백그라운드 감지 기능에 대한 안내가 필요할 때 화면 전체를 덮는 모달로 표시됨
+ *
+ * ✏️ 수정 가이드:
+ *    - 가이드 내용 추가/수정: `steps` 배열에 새로운 단계 객체를 추가하거나 기존 객체의 내용을 수정
+ *    - UI 디자인 변경: 컴포넌트의 JSX 구조 및 Tailwind CSS 클래스 수정
+ *
+ * 📝 참고사항:
+ *    - `steps` 배열에 정의된 내용을 기반으로 동적으로 가이드가 생성됩니다.
+ *    - `useState`를 사용하여 현재 사용자가 보고 있는 단계를 관리합니다.
+ *
+ * ===================================================================================================
+ */
+
 import React, { useState } from 'react';
 import { X, Info, Mic, Phone, Brain, Calendar } from 'lucide-react';
 
+/**
+ * BackgroundGuide
+ *
+ * @description 백그라운드 대화 감지 기능의 사용법을 단계별로 안내하는 모달 컴포넌트입니다.
+ * @param {Object} props - 컴포넌트 프롭스
+ * @param {Function} props.onClose - 모달을 닫는 함수
+ * @returns {JSX.Element} 백그라운드 감지 가이드 모달 UI
+ *
+ * @example
+ * <BackgroundGuide onClose={() => setShowGuide(false)} />
+ */
 const BackgroundGuide = ({ onClose }) => {
    const [currentStep, setCurrentStep] = useState(0);
 
@@ -92,9 +134,7 @@ const BackgroundGuide = ({ onClose }) => {
                      {steps.map((_, index) => (
                         <div
                            key={index}
-                           className={`w-2 h-2 rounded-full ${
-                              index === currentStep ? 'bg-blue-500' : 'bg-gray-300'
-                           }`}
+                           className={`w-2 h-2 rounded-full ${ index === currentStep ? 'bg-blue-500' : 'bg-gray-300'}`}
                         />
                      ))}
                   </div>

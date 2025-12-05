@@ -159,69 +159,69 @@
 [x] client/src/components/chat/components/TimeRecommendations.js
 [x] client/src/components/chat/components/UploadSection.js
 [x] client/src/components/chat/constants/apiConfig.js
-[ ] client/src/components/chat/constants/chatConstants.js
-[ ] client/src/components/chat/handlers/chatHandlers.js
-[ ] client/src/components/chat/handlers/conflictHandlers.js
-[ ] client/src/components/chat/handlers/imageHandlers.js
-[ ] client/src/components/chat/handlers/messageHandlers.js
-[ ] client/src/components/chat/handlers/modalHandlers.js
-[ ] client/src/components/chat/handlers/ocrHandlers.js
-[ ] client/src/components/chat/handlers/scheduleHandlers.js
-[ ] client/src/components/chat/hooks/useChatScroll.js
-[ ] client/src/components/chat/hooks/useChatState.js
-[ ] client/src/components/chat/hooks/useImageUpload.js
-[ ] client/src/components/chat/hooks/useMobileDetection.js
-[ ] client/src/components/chat/hooks/useModalState.js
-[ ] client/src/components/chat/hooks/useOcrProcessing.js
-[ ] client/src/components/chat/hooks/useScheduleState.js
-[ ] client/src/components/chat/hooks/useScrollToBottom.js
-[ ] client/src/components/chat/utils/chatUtils.js
-[ ] client/src/components/chat/utils/imageUtils.js
-[ ] client/src/components/chat/utils/scheduleUtils.js
-[ ] client/src/components/chat/utils/scrollUtils.js
-[ ] client/src/components/chat/utils/timeRecommendation.js
+[x] client/src/components/chat/constants/chatConstants.js
+[x] client/src/components/chat/handlers/chatHandlers.js
+[x] client/src/components/chat/handlers/conflictHandlers.js
+[x] client/src/components/chat/handlers/imageHandlers.js
+[x] client/src/components/chat/handlers/messageHandlers.js
+[x] client/src/components/chat/handlers/modalHandlers.js
+[x] client/src/components/chat/handlers/ocrHandlers.js
+[x] client/src/components/chat/handlers/scheduleHandlers.js
+[x] client/src/components/chat/hooks/useChatScroll.js
+[x] client/src/components/chat/hooks/useChatState.js
+[x] client/src/components/chat/hooks/useImageUpload.js
+[x] client/src/components/chat/hooks/useMobileDetection.js
+[x] client/src/components/chat/hooks/useModalState.js
+[x] client/src/components/chat/hooks/useOcrProcessing.js
+[x] client/src/components/chat/hooks/useScheduleState.js
+[x] client/src/components/chat/hooks/useScrollToBottom.js
+[x] client/src/components/chat/utils/chatUtils.js
+[x] client/src/components/chat/utils/imageUtils.js
+[x] client/src/components/chat/utils/scheduleUtils.js
+[x] client/src/components/chat/utils/scrollUtils.js
+[x] client/src/components/chat/utils/timeRecommendation.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 6. 공통 (Common) 컴포넌트 (1개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] client/src/components/common/AddressAutocomplete.js
+[x] client/src/components/common/AddressAutocomplete.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 7. 조율 (Coordination) 컴포넌트 (9개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] client/src/components/coordination/AiSchedulingResults.js
-[ ] client/src/components/coordination/ChainExchangeRequestModal.js
-[ ] client/src/components/coordination/CurrentEventNavigator.js
-[ ] client/src/components/coordination/ExchangeRequestModal.js
-[ ] client/src/components/coordination/MemberList.js
-[ ] client/src/components/coordination/RequestManagement.js
-[ ] client/src/components/coordination/RoomList.js
-[ ] client/src/components/coordination/TravelModeButtons.js
+[x] client/src/components/coordination/AiSchedulingResults.js
+[x] client/src/components/coordination/ChainExchangeRequestModal.js
+[x] client/src/components/coordination/CurrentEventNavigator.js
+[x] client/src/components/coordination/ExchangeRequestModal.js
+[x] client/src/components/coordination/MemberList.js
+[x] client/src/components/coordination/RequestManagement.js
+[x] client/src/components/coordination/RoomList.js
+[x] client/src/components/coordination/TravelModeButtons.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 8. 폼 (Forms) 컴포넌트 (3개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] client/src/components/forms/CreateProposalModal.js
-[ ] client/src/components/forms/EventFormModal.js
-[ ] client/src/components/forms/TimeSelectionModal.js
+[x] client/src/components/forms/CreateProposalModal.js
+[x] client/src/components/forms/EventFormModal.js
+[x] client/src/components/forms/TimeSelectionModal.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 9. 가이드 (Guides) 컴포넌트 (1개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] client/src/components/guides/BackgroundGuide.js
+[x] client/src/components/guides/BackgroundGuide.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 10. 표시기 (Indicators) 컴포넌트 (2개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] client/src/components/indicators/BackgroundCallIndicator.js
-[ ] client/src/components/indicators/MobileStatusIndicator.js
+[x] client/src/components/indicators/BackgroundCallIndicator.js
+[x] client/src/components/indicators/MobileStatusIndicator.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 11. 레이아웃 (Layout) 컴포넌트 (3개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] client/src/components/layout/Header.js
-[ ] client/src/components/layout/MainContent.js
-[ ] client/src/components/layout/Sidebar.js
+[x] client/src/components/layout/Header.js
+[x] client/src/components/layout/MainContent.js
+[x] client/src/components/layout/Sidebar.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 12. 모달 (Modals) 컴포넌트 (40개)
@@ -258,18 +258,18 @@
 [x] client/src/components/modals/components/ScheduleHeader.js
 [x] client/src/components/modals/components/ScheduleLegend.js
 [x] client/src/components/modals/constants/modalConstants.js
-[ ] client/src/components/modals/handlers/chatHandlers.js
+[x] client/src/components/modals/handlers/chatHandlers.js
 [x] client/src/components/modals/handlers/chatModalHandlers.js
 [x] client/src/components/modals/handlers/conflictModalHandlers.js
 [x] client/src/components/modals/handlers/optimizerHandlers.js
 [x] client/src/components/modals/handlers/scheduleModalHandlers.js
 [x] client/src/components/modals/hooks/useChatScroll.js
 [x] client/src/components/modals/hooks/useModalState.js
-[ ] client/src/components/modals/room/RoomInfoTab.js
-[ ] client/src/components/modals/room/RoomMembersList.js
-[ ] client/src/components/modals/utils/commandParser.js
-[ ] client/src/components/modals/utils/scheduleOperations.js
-[ ] client/src/components/modals/utils/scheduleTransform.js
+[x] client/src/components/modals/room/RoomInfoTab.js
+[x] client/src/components/modals/room/RoomMembersList.js
+[x] client/src/components/modals/utils/commandParser.js
+[x] client/src/components/modals/utils/scheduleOperations.js
+[x] client/src/components/modals/utils/scheduleTransform.js
 [ ] client/src/components/modals/utils/scheduleUtils.js
 [ ] client/src/components/modals/utils/timeUtils.js
 
@@ -842,11 +842,11 @@
 ## 📊 진행률 추적
 
 - 전체 파일 수: 341개 (클라이언트: 223개, 서버: 118개)
-- 완료한 파일: 89 / 341
-- 진행률: 26.1%
+- 완료한 파일: 134 / 341
+- 진행률: 39.3%
 
 ### 세부 진행률
-- 클라이언트: 89 / 223 (39.9%)
+- 클라이언트: 134 / 223 (60.1%)
 - 서버: 0 / 118 (0%)
   - nview 폴더: 0 / 11
   - scheduleOptimizer 폴더: 0 / 14

@@ -1,15 +1,42 @@
 /**
- * ============================================================================
- * conflictHandlers.js - 충돌 처리 핸들러 함수들
- * ============================================================================
+ * ===================================================================================================
+ * [conflictHandlers.js] - 채팅 내 스케줄 충돌 처리 관련 이벤트 핸들러
+ * ===================================================================================================
+ *
+ * 📍 위치: [프론트엔드] > client/src/components/chat/handlers/conflictHandlers.js
+ *
+ * 🎯 주요 기능:
+ *    - `createConflictChoiceHandler`: 사용자가 충돌 해결 옵션("다른 시간 추천" 또는 "기존 일정 변경")을 선택했을 때의 로직을 처리하는 핸들러를 생성합니다.
+ *    - `createTimeSelectionHandler`: 사용자가 제안된 대체 시간 중 하나를 선택했을 때의 로직을 처리하는 핸들러를 생성합니다.
+ *    - 스케줄 충돌 해결을 위한 복잡한 다단계 상호작용(삭제 -> 추가 -> 재추천)을 오케스트레이션합니다.
+ *    - 현재 탭(로컬 vs 백엔드 연동)에 따라 다른 처리 방식을 적용합니다.
+ *
+ * 🔗 연결된 파일:
+ *    - ../ChatBox.js: 이 팩토리 함수들을 호출하여 생성된 핸들러를 `MessageBubble` 컴포넌트에 props로 전달합니다.
+ *    - ../utils/timeRecommendation.js: 대체 시간을 추천하고 메시지를 생성하기 위해 사용합니다.
+ *
+ * ✏️ 수정 가이드:
+ *    - "기존 일정 변경" 선택 시의 상세 로직(삭제, 추가, 재추천 순서 등)을 변경하려면 `handleRescheduleForProfileTab` 또는 `handleRescheduleForOtherTabs` 함수를 수정합니다.
+ *    - 사용자가 최종 시간을 선택했을 때의 동작을 수정하려면 `createTimeSelectionHandler` 내부 로직을 수정합니다.
+ *
+ * 📝 참고사항:
+ *    - 이 파일은 채팅을 통한 스케줄 충돌 해결이라는 특정 시나리오의 비즈니스 로직을 담당합니다.
+ *    - 여러 비동기 작업과 사용자 피드백(로딩 메시지 등)이 순차적으로 이루어지므로, 로직의 흐름을 이해하는 것이 중요합니다.
+ *
+ * ===================================================================================================
  */
-
 import { API_BASE_URL } from '../constants/chatConstants';
 import { generateAlternativeTimeRecommendations, generateRescheduleTimeRecommendations, createRecommendationMessage } from '../utils/timeRecommendation';
 import { auth } from '../../../config/firebaseConfig';
 
 /**
- * 충돌 선택 핸들러 생성 함수
+ * createConflictChoiceHandler (팩토리 함수)
+ * @description 사용자가 초기 충돌 해결 옵션("다른 시간 추천" vs "기존 일정 변경")을 선택했을 때의 로직을 처리하는 핸들러 함수를 생성합니다.
+ * @param {string} currentTab - 현재 활성화된 탭 ID
+ * @param {function} onSendMessage - 메시지 전송 함수
+ * @param {function} setMessages - 메시지 목록 상태 설정 함수
+ * @param {function} onEventUpdate - 이벤트 업데이트 콜백 함수
+ * @returns {function(choice: number, pendingEvent: object, conflictingEvent: object): Promise<void>} 충돌 해결 옵션 선택을 처리하는 핸들러
  */
 export const createConflictChoiceHandler = (
   currentTab,
@@ -75,7 +102,14 @@ export const createConflictChoiceHandler = (
 };
 
 /**
- * 프로필/이벤트 탭의 일정 변경 처리
+ * handleRescheduleForProfileTab
+ * @description '프로필' 또는 '나의 일정' 탭에서 "기존 일정 변경"을 선택했을 때의 다단계 프로세스를 처리합니다.
+ *              (1. 기존 일정 삭제 -> 2. 새 일정 추가 -> 3. 기존 일정에 대한 대체 시간 추천)
+ * @param {object} pendingEvent - 새로 추가하려던 일정
+ * @param {object} conflictingEvent - 충돌이 발생한 기존 일정
+ * @param {function} onSendMessage - 메시지 전송 함수
+ * @param {function} setMessages - 메시지 목록 상태 설정 함수
+ * @param {string} currentTab - 현재 탭 ID
  */
 const handleRescheduleForProfileTab = async (
   pendingEvent,
@@ -146,7 +180,12 @@ const handleRescheduleForProfileTab = async (
 };
 
 /**
- * 다른 탭의 일정 변경 처리 (백엔드 API 사용)
+ * handleRescheduleForOtherTabs
+ * @description Google 캘린더와 같은 백엔드 연동 탭에서 "기존 일정 변경"을 선택했을 때의 로직을 처리합니다.
+ *              모든 과정을 백엔드 API 호출을 통해 수행합니다.
+ * @param {object} pendingEvent - 새로 추가하려던 일정
+ * @param {object} conflictingEvent - 충돌이 발생한 기존 일정
+ * @param {function} setMessages - 메시지 목록 상태 설정 함수
  */
 const handleRescheduleForOtherTabs = async (
   pendingEvent,
@@ -237,7 +276,10 @@ const handleRescheduleForOtherTabs = async (
 };
 
 /**
- * 최신 일정 목록 가져오기 (프로필 탭용)
+ * fetchUpdatedEvents
+ * @description 프로필 탭의 일정 변경 후, 대체 시간 추천에 사용할 최신 일정 데이터를 가져옵니다.
+ * @param {object} conflictingEvent - 기준이 되는 기존 일정
+ * @returns {Promise<Array<object>>} 최신 일정 이벤트 배열
  */
 const fetchUpdatedEvents = async (conflictingEvent) => {
   try {
@@ -272,7 +314,13 @@ const fetchUpdatedEvents = async (conflictingEvent) => {
 };
 
 /**
- * 시간 선택 핸들러 생성 함수
+ * createTimeSelectionHandler (팩토리 함수)
+ * @description 사용자가 추천된 대체 시간 중 하나를 선택했을 때의 로직을 처리하는 핸들러 함수를 생성합니다.
+ * @param {string} currentTab - 현재 활성화된 탭 ID
+ * @param {function} onSendMessage - 메시지 전송 함수
+ * @param {function} setMessages - 메시지 목록 상태 설정 함수
+ * @param {function} onEventUpdate - 이벤트 업데이트 콜백 함수
+ * @returns {function(selectedTime: object, pendingEvent: object, conflictingEvent: object, action: string, nextStep: string): Promise<void>} 시간 선택을 처리하는 핸들러
  */
 export const createTimeSelectionHandler = (
   currentTab,

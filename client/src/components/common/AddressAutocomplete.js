@@ -1,6 +1,59 @@
+/**
+ * ===================================================================================================
+ * AddressAutocomplete.js - Google Places API를 이용한 주소 자동완성 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/common
+ *
+ * 🎯 주요 기능:
+ *    - Google Places Autocomplete API를 사용하여 주소 입력 시 자동완성 기능 제공
+ *    - 사용자가 주소를 선택하면 주소 문자열, 위도, 경도, 장소 ID를 부모 컴포넌트로 전달
+ *    - 한국(kr) 주소로 검색 제한
+ *    - 엔터 키 입력 시 첫 번째 추천 항목을 자동으로 선택하는 편의 기능 제공
+ *    - Google Maps API 로딩 상태를 표시하는 스피너 기능
+ *
+ * 🔗 연결된 파일:
+ *    - 이 컴포넌트를 사용하는 부모 컴포넌트 (예: 프로필 수정, 이벤트 생성 모달 등)
+ *
+ * 💡 UI 위치:
+ *    - 사용자 프로필 탭 > 개인정보 수정 섹션 > 주소 입력 필드
+ *    - 이벤트 생성/수정 모달 > 장소 입력 필드
+ *
+ * ✏️ 수정 가이드:
+ *    - 검색 국가 변경: `componentRestrictions: { country: 'kr' }` 부분 수정
+ *    - 검색 결과 타입 변경: `types: ['geocode']` 부분 수정 (예: 'establishment' 추가)
+ *    - 엔터 키 동작 변경: `handleKeyDown` 함수의 로직 수정
+ *
+ * 📝 참고사항:
+ *    - 이 컴포넌트가 제대로 동작하려면 상위 컴포넌트 트리에서 Google Maps API 스크립트가 로드되어 있어야 합니다.
+ *      (보통 `App.js`의 `LoadScript` 컴포넌트를 통해 로드됩니다)
+ *    - `window.google.maps.places.Autocomplete` 초기화 시 발생하는 경고는
+ *      React의 라이프사이클과 Google Maps API의 로드 방식 차이로 인한 것으로, 현재 로직에서는 무시해도 기능상 문제가 없습니다.
+ *
+ * ===================================================================================================
+ */
+
 import React, { useEffect, useRef, useState } from 'react';
 import { MapPin } from 'lucide-react';
 
+/**
+ * AddressAutocomplete
+ *
+ * @description Google Places API를 사용하여 주소 자동완성 기능을 제공하는 입력 필드 컴포넌트입니다.
+ * @param {Object} props - 컴포넌트 프롭스
+ * @param {string} props.value - 입력 필드의 현재 값 (주소 문자열)
+ * @param {Function} props.onChange - 주소가 변경될 때 호출되는 콜백 함수.
+ *                                    선택된 주소 정보({ address, lat, lng, placeId })를 인자로 받습니다.
+ * @param {string} [props.placeholder="주소를 입력하세요"] - 입력 필드의 플레이스홀더 텍스트
+ * @returns {JSX.Element} 주소 자동완성 입력 필드 컴포넌트
+ *
+ * @example
+ * const [location, setLocation] = useState({ address: '', lat: null, lng: null });
+ * <AddressAutocomplete
+ *   value={location.address}
+ *   onChange={(newLocation) => setLocation(newLocation)}
+ * />
+ */
 const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력하세요" }) => {
   const inputRef = useRef(null);
   const autocompleteRef = useRef(null);
@@ -27,7 +80,7 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
     if (!isLoaded || !inputRef.current) return;
 
     try {
-      // Autocomplete 초기화 (기존 방식 유지 - 경고는 무시)
+      // Autocomplete 초기화
       autocompleteRef.current = new window.google.maps.places.Autocomplete(
         inputRef.current,
         {
@@ -55,6 +108,10 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
       return () => {
         if (listener) {
           window.google.maps.event.removeListener(listener);
+        }
+        // Autocomplete 인스턴스 정리
+        if (autocompleteRef.current) {
+          window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
         }
       };
     } catch (error) {

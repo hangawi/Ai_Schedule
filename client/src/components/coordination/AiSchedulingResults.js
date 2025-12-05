@@ -1,3 +1,37 @@
+/**
+ * ===================================================================================================
+ * AiSchedulingResults.js - AI 스케줄링 결과 표시 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/coordination
+ *
+ * 🎯 주요 기능:
+ *    - AI 스케줄링 API의 응답 결과를 시각적으로 표시
+ *    - 성공 시: 모든 참여자가 가능한 공통 시간대 목록을 보여주고 선택 기능 제공
+ *    - 실패 시: 공통 시간대를 찾지 못했음을 알리고, AI가 제안하는 대안(빈 시간대 추천, 양보 요청 등)을 제시
+ *    - 사용자가 시간대를 선택하거나 양보를 요청하는 등의 상호작용 처리
+ *
+ * 🔗 연결된 파일:
+ *    - 이 컴포넌트를 사용하는 상위 페이지 또는 컴포넌트 (예: 일정 조율 탭)
+ *    - lucide-react: 아이콘 라이브러리
+ *
+ * 💡 UI 위치:
+ *    - 일정 조율 탭 > 'AI 자동 제안' 실행 후 결과가 표시되는 영역
+ *
+ * ✏️ 수정 가이드:
+ *    - 성공/실패 시 UI 레이아웃 변경: 각 조건부 렌더링 블록 내부의 JSX 구조 수정
+ *    - 날짜/시간 형식 변경: `formatDateTime`, `formatDuration` 함수 수정
+ *    - 대안 제안 카드 디자인 변경: '실패한 경우' 블록 내부의 각 대안 카드 스타일 수정
+ *    - 새로운 대안 타입 추가: `if (!results.success && results.alternatives)` 블록 내에 새로운 대안을 렌더링하는 로직 추가
+ *
+ * 📝 참고사항:
+ *    - `results` prop의 구조에 따라 동적으로 다른 UI를 렌더링합니다. (`results.success` 값 기준)
+ *    - `useCallback`을 사용하여 부모로부터 전달받은 콜백 함수들을 메모이제이션합니다.
+ *    - 각 카드(성공, 빈 시간 추천, 양보 요청 등)는 시각적 구분을 위해 다른 색상 테마(green, blue, yellow)를 사용합니다.
+ *
+ * ===================================================================================================
+ */
+
 import React, { useCallback } from 'react';
 import { 
   CheckCircle, 
@@ -8,6 +42,32 @@ import {
   RefreshCw
 } from 'lucide-react';
 
+/**
+ * AiSchedulingResults
+ *
+ * @description AI 스케줄링 API의 결과를 받아 성공 또는 실패 시나리오에 맞는 UI를 렌더링하는 컴포넌트입니다.
+ * @param {Object} props - 컴포넌트 프롭스
+ * @param {Object | null} props.results - AI 스케줄링 API의 응답 결과 객체
+ * @param {boolean} props.results.success - 성공 여부
+ * @param {Array<Object>} [props.results.commonSlots] - 성공 시 공통 시간대 목록
+ * @param {Object} [props.results.alternatives] - 실패 시 대안 목록
+ * @param {Function} props.onSelectTimeSlot - 사용자가 시간대를 선택했을 때 호출될 콜백 함수
+ * @param {Function} props.onRequestConcession - 사용자가 양보를 요청했을 때 호출될 콜백 함수
+ * @param {Function} props.onRetry - '다시 검색' 버튼 클릭 시 호출될 콜백 함수
+ * @returns {JSX.Element | null} AI 스케줄링 결과 UI 또는 null
+ *
+ * @example
+ * // 성공 시
+ * <AiSchedulingResults results={successData} onSelectTimeSlot={handleSelect} />
+ *
+ * // 실패 시
+ * <AiSchedulingResults
+ *   results={failureData}
+ *   onSelectTimeSlot={handleSelect}
+ *   onRequestConcession={handleConcession}
+ *   onRetry={handleRetry}
+ * />
+ */
 const AiSchedulingResults = ({ results, onSelectTimeSlot, onRequestConcession, onRetry }) => {
 
   const formatDateTime = (isoString) => {

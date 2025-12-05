@@ -1,17 +1,70 @@
-import React, { useState } from 'react';
+/**
+ * ===================================================================================================
+ * EventFormModal.js - 간단한 일정 추가/수정 모달 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/forms
+ *
+ * 🎯 주요 기능:
+ *    - 간단한 일정(제목, 날짜, 시간, 색상)을 추가하거나 수정하는 폼을 제공
+ *    - '수정 모드'와 '추가 모드'를 구분하여 UI 텍스트(제목, 버튼)를 동적으로 변경
+ *    - 폼 제출 시 입력 데이터 유효성 검사
+ *    - 유효한 데이터를 부모 컴포넌트의 `onSubmitEvent` 콜백 함수로 전달
+ *
+ * 🔗 연결된 파일:
+ *    - ../modals/CustomAlertModal - 유효성 검사 실패 시 경고 메시지를 표시하기 위해 사용
+ *
+ * 💡 UI 위치:
+ *    - 'Events' 탭에서 '새 이벤트 추가' 버튼을 클릭하거나 기존 이벤트를 클릭했을 때 표시됨
+ *
+ * ✏️ 수정 가이드:
+ *    - 새로운 폼 필드 추가: `useState`로 새 상태를 관리하고 JSX에 해당 필드를 렌더링
+ *    - 색상 옵션 변경: `select` 태그 내의 `<option>` 목록 수정
+ *    - 유효성 검사 로직 변경: `handleSubmit` 함수 내의 조건문 수정
+ *
+ * 📝 참고사항:
+ *    - `event` prop의 유무에 따라 '수정 모드'와 '추가 모드'가 결정됩니다.
+ *    - `onSubmitEvent` 콜백은 비동기 함수일 수 있으며, 컴포넌트는 해당 함수의 완료를 기다립니다.
+ *
+ * ===================================================================================================
+ */
+
+import React, { useState, useCallback } from 'react';
 import { X } from 'lucide-react';
 import CustomAlertModal from '../modals/CustomAlertModal';
 
+/**
+ * EventFormModal
+ *
+ * @description 간단한 이벤트를 추가하거나 수정하는 폼을 담은 모달 컴포넌트입니다.
+ * @param {Object} props - 컴포넌트 프롭스
+ * @param {Function} props.onClose - 모달을 닫는 함수
+ * @param {Function} props.onSubmitEvent - 폼 제출 시 호출될 콜백 함수. 이벤트 데이터와 (수정 시)이벤트 ID를 인자로 받습니다.
+ * @param {Object} [props.event] - 수정할 이벤트 데이터. 이 prop이 있으면 '수정 모드'로 작동합니다.
+ * @returns {JSX.Element} 이벤트 폼 모달 UI
+ *
+ * @example
+ * // 새 이벤트 추가
+ * <EventFormModal onClose={handleClose} onSubmitEvent={handleCreate} />
+ *
+ * // 기존 이벤트 수정
+ * <EventFormModal onClose={handleClose} onSubmitEvent={handleUpdate} event={existingEvent} />
+ */
 const EventFormModal = ({ onClose, onSubmitEvent, event }) => {
    const [title, setTitle] = useState(event ? event.title : '');
    const [date, setDate] = useState(event ? event.date : '');
    const [time, setTime] = useState(event ? event.time : '');
    const [color, setColor] = useState(event ? event.color : 'blue');
 
-   // CustomAlert 상태
-   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
-   const showAlert = (message) => setCustomAlert({ show: true, message });
-   const closeAlert = () => setCustomAlert({ show: false, message: '' });
+   const [alertModal, setAlertModal] = useState({ isOpen: false, message: '' });
+
+   const showAlert = useCallback((message) => {
+     setAlertModal({ isOpen: true, message });
+   }, []);
+
+   const closeAlert = useCallback(() => {
+     setAlertModal({ isOpen: false, message: '' });
+   }, []);
 
    const isEditMode = !!event;
 
@@ -59,11 +112,11 @@ const EventFormModal = ({ onClose, onSubmitEvent, event }) => {
             </div>
          </div>
 
-         {/* CustomAlert Modal */}
          <CustomAlertModal
-           show={customAlert.show}
+           isOpen={alertModal.isOpen}
            onClose={closeAlert}
-           message={customAlert.message}
+           message={alertModal.message}
+           type="warning"
          />
       </div>
    );

@@ -1,7 +1,62 @@
+/**
+ * ===================================================================================================
+ * ExchangeRequestModal.js - 시간 교환 요청 모달 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/coordination
+ *
+ * 🎯 주요 기능:
+ *    - 다른 사용자로부터 받은 시간 교환 요청의 상세 내용을 표시
+ *    - 요청 수락/거절 버튼을 통해 사용자의 응답을 처리
+ *    - API를 호출하여 서버에 사용자의 응답(수락/거절)을 전송
+ *    - API 응답 후 처리 상태 및 메시지를 사용자에게 표시
+ *
+ * 🔗 연결된 파일:
+ *    - ../../config/firebaseConfig - Firebase 인증 토큰을 가져오기 위해 사용
+ *    - CoordinationTab/index.js - 이 모달을 호출하고 관리하는 상위 컴포넌트
+ *
+ * 💡 UI 위치:
+ *    - 조율 탭 > '요청 관리' 섹션 > 받은 요청 목록에서 '시간 교환 요청'을 클릭했을 때 표시
+ *
+ * ✏️ 수정 가이드:
+ *    - API 엔드포인트 변경: `axios.post`의 URL 주소 수정
+ *    - 모달 UI/UX 디자인 변경: JSX 구조 및 Tailwind CSS 클래스 수정
+ *    - 수락/거절 시 서버로 보내는 데이터 변경: `axios.post`의 body({ action }) 수정
+ *
+ * 📝 참고사항:
+ *    - 이 모달은 'A <-> B' 형태의 1:1 시간 교환 요청을 처리합니다.
+ *    - 사용자가 '수락'하면, 백엔드에서 두 사용자의 시간 슬롯을 맞바꾸고,
+ *      요청을 받은 사용자는 자동으로 다른 빈 시간으로 재배치될 수 있습니다.
+ *    - API 요청 시 Firebase 인증 토큰을 헤더에 포함하여 보냅니다.
+ *
+ * ===================================================================================================
+ */
+
 import React, { useState } from 'react';
 import axios from 'axios';
 import { auth } from '../../config/firebaseConfig';
 
+/**
+ * ExchangeRequestModal
+ *
+ * @description 다른 사용자로부터 받은 시간 교환 요청을 표시하고, 수락/거절 응답을 처리하는 모달 컴포넌트입니다.
+ * @param {Object} props - 컴포넌트 프롭스
+ * @param {boolean} props.isOpen - 모달의 열림/닫힘 상태
+ * @param {Function} props.onClose - 모달을 닫는 함수
+ * @param {Object | null} props.request - 표시할 시간 교환 요청 데이터 객체
+ * @param {string} props.roomId - 현재 방의 ID
+ * @param {Function} props.onRequestHandled - 요청 처리가 완료된 후 호출될 콜백 함수 (데이터 새로고침용)
+ * @returns {JSX.Element | null} 시간 교환 요청 모달 또는 null
+ *
+ * @example
+ * <ExchangeRequestModal
+ *   isOpen={isModalOpen}
+ *   onClose={() => setIsModalOpen(false)}
+ *   request={selectedRequest}
+ *   roomId={currentRoomId}
+ *   onRequestHandled={fetchRequests}
+ * />
+ */
 const ExchangeRequestModal = ({ isOpen, onClose, request, roomId, onRequestHandled }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [responseMessage, setResponseMessage] = useState('');
@@ -30,7 +85,7 @@ const ExchangeRequestModal = ({ isOpen, onClose, request, roomId, onRequestHandl
         }
       );
 
-      const { success, message, alternativeSlot } = response.data;
+      const { success, message } = response.data;
 
       if (success) {
         setResponseMessage(message);
