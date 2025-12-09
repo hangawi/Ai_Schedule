@@ -90,8 +90,8 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
         inputRef.current,
         {
           componentRestrictions: { country: 'kr' }, // 한국으로 제한
-          fields: ['formatted_address', 'geometry', 'name', 'place_id'],
-          types: ['geocode'] // 주소만
+          fields: ['formatted_address', 'geometry', 'name', 'place_id']
+          // types 제거 - 주소, 역, 건물 등 모든 장소 검색 가능
         }
       );
 

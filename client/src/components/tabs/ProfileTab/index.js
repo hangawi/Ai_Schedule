@@ -156,7 +156,7 @@ const ProfileTab = ({ onEditingChange }) => {
         const user = auth.currentUser;
         if (!user) return;
 
-        const myRooms = await coordinationService.getMyRooms();
+        const myRooms = await coordinationService.fetchMyRooms();
         if (!mounted) return;
 
         // Socket.IO 연결
@@ -207,15 +207,15 @@ const ProfileTab = ({ onEditingChange }) => {
    *              (예: 서버가 꺼졌다가 다시 켜진 경우, 네트워크 끊김 등)
    */
   useEffect(() => {
-    // 편집 중일 때는 폴링하지 않음 (사용자가 편집 중인 데이터를 덮어쓰지 않기 위해)
-    if (isEditing) return;
+    // 편집 중이거나 개인정보 수정 중일 때는 폴링하지 않음 (사용자가 편집 중인 데이터를 덮어쓰지 않기 위해)
+    if (isEditing || showPersonalInfo) return;
 
     const pollInterval = setInterval(() => {
       fetchSchedule();
     }, 30000); // 30초마다 새로고침
 
     return () => clearInterval(pollInterval);
-  }, [fetchSchedule, isEditing]);
+  }, [fetchSchedule, isEditing, showPersonalInfo]);
 
   /**
    * [useEffect - 탭 활성화 시 프로필 새로고침]
@@ -224,8 +224,8 @@ const ProfileTab = ({ onEditingChange }) => {
    */
   useEffect(() => {
     const handleVisibilityChange = () => {
-      // 탭이 활성화되고, 편집 중이 아닐 때만 새로고침
-      if (!document.hidden && !isEditing) {
+      // 탭이 활성화되고, 편집 중이거나 개인정보 수정 중이 아닐 때만 새로고침
+      if (!document.hidden && !isEditing && !showPersonalInfo) {
         fetchSchedule();
       }
     };
@@ -235,7 +235,7 @@ const ProfileTab = ({ onEditingChange }) => {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [fetchSchedule, isEditing]);
+  }, [fetchSchedule, isEditing, showPersonalInfo]);
 
   // 핸들러 생성
   const handleSave = createSaveHandler(
