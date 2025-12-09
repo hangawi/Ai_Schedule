@@ -10,6 +10,7 @@
  *    - 사용자가 주소를 선택하면 주소 문자열, 위도, 경도, 장소 ID를 부모 컴포넌트로 전달
  *    - 한국(kr) 주소로 검색 제한
  *    - 엔터 키 입력 시 첫 번째 추천 항목을 자동으로 선택하는 편의 기능 제공
+ *    - 자동완성 목록이 없을 때 Geocoding API로 좌표 찾기
  *    - Google Maps API 로딩 상태를 표시하는 스피너 기능
  *
  * 🔗 연결된 파일:
@@ -80,6 +81,10 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
     if (!isLoaded || !inputRef.current) return;
 
     try {
+      // 기존 pac-container 제거 (중복 방지)
+      const existingContainers = document.querySelectorAll('.pac-container');
+      existingContainers.forEach(container => container.remove());
+
       // Autocomplete 초기화
       autocompleteRef.current = new window.google.maps.places.Autocomplete(
         inputRef.current,
@@ -95,24 +100,40 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
         const place = autocompleteRef.current.getPlace();
 
         if (place && place.formatted_address) {
+          const lat = place.geometry?.location?.lat();
+          const lng = place.geometry?.location?.lng();
+
+          console.log('🎯 [주소선택]', {
+            address: place.formatted_address,
+            lat: lat,
+            lng: lng,
+            hasGeometry: !!place.geometry
+          });
+
           setInputValue(place.formatted_address);
           onChange({
             address: place.formatted_address,
-            lat: place.geometry?.location?.lat(),
-            lng: place.geometry?.location?.lng(),
+            lat: lat,
+            lng: lng,
             placeId: place.place_id
           });
         }
       });
 
       return () => {
+        // 리스너 제거
         if (listener) {
           window.google.maps.event.removeListener(listener);
         }
-        // Autocomplete 인스턴스 정리
+
+        // autocomplete 인스턴스의 모든 이벤트 제거
         if (autocompleteRef.current) {
           window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
         }
+
+        // pac-container 제거
+        const pacContainers = document.querySelectorAll('.pac-container');
+        pacContainers.forEach(container => container.remove());
       };
     } catch (error) {
       console.error('Autocomplete 초기화 오류:', error);
@@ -121,37 +142,83 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
 
   const handleInputChange = (e) => {
     setInputValue(e.target.value);
-    // 사용자가 직접 입력할 때
-    onChange({
-      address: e.target.value,
-      lat: null,
-      lng: null,
-      placeId: null
-    });
   };
 
   const handleKeyDown = (e) => {
-    // 엔터키를 누르면 첫 번째 추천 항목을 자동으로 선택
     if (e.key === 'Enter') {
-      e.preventDefault();
+      console.log('⌨️ [엔터키] 감지');
 
-      // Google Maps Autocomplete의 첫 번째 항목을 선택하기 위해
-      // PAC container에서 첫 번째 항목을 찾아 클릭 이벤트 트리거
-      setTimeout(() => {
-        const pacContainer = document.querySelector('.pac-container');
-        if (pacContainer) {
-          const firstItem = pacContainer.querySelector('.pac-item:first-child');
-          if (firstItem) {
-            // 첫 번째 항목에 마우스 다운 이벤트 트리거
-            const mouseDownEvent = new MouseEvent('mousedown', {
-              bubbles: true,
-              cancelable: true,
-              view: window
-            });
-            firstItem.dispatchEvent(mouseDownEvent);
-          }
+      // pac-container 찾기
+      const pacContainer = document.querySelector('.pac-container');
+      const pacItems = document.querySelectorAll('.pac-item');
+
+      console.log('📋 [자동완성 상태]', {
+        containerExists: !!pacContainer,
+        itemCount: pacItems.length,
+        inputValue: inputValue
+      });
+
+      // 자동완성 항목이 있으면 첫 번째 항목 선택
+      if (pacItems && pacItems.length > 0) {
+        console.log('✅ [첫번째 항목 선택]');
+        e.preventDefault();
+
+        // pac-container가 숨겨져 있으면 보이게 만들기
+        if (pacContainer && pacContainer.style.display === 'none') {
+          pacContainer.style.display = 'block';
         }
-      }, 100);
+
+        // 첫 번째 항목 클릭 시뮬레이션
+        const firstItem = pacItems[0];
+        const clickEvent = new MouseEvent('mousedown', {
+          view: window,
+          bubbles: true,
+          cancelable: true
+        });
+        firstItem.dispatchEvent(clickEvent);
+      } else {
+        // 자동완성 목록이 없으면 Geocoding API로 좌표 찾기
+        console.log('🔎 [엔터키] 자동완성 목록 없음 - Geocoding으로 좌표 찾기');
+
+        if (inputValue && inputValue.trim()) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          console.log('🌍 [Geocoding] 주소 검색 중:', inputValue);
+
+          const geocoder = new window.google.maps.Geocoder();
+          geocoder.geocode(
+            {
+              address: inputValue,
+              componentRestrictions: { country: 'kr' }
+            },
+            (results, status) => {
+              if (status === 'OK' && results[0]) {
+                const result = results[0];
+                const lat = result.geometry.location.lat();
+                const lng = result.geometry.location.lng();
+
+                console.log('✅ [Geocoding 성공]', {
+                  address: result.formatted_address,
+                  lat: lat,
+                  lng: lng
+                });
+
+                setInputValue(result.formatted_address);
+                onChange({
+                  address: result.formatted_address,
+                  lat: lat,
+                  lng: lng,
+                  placeId: result.place_id
+                });
+              } else {
+                console.error('❌ [Geocoding 실패]', status);
+                alert('주소를 찾을 수 없습니다. 자동완성 목록에서 선택해주세요.');
+              }
+            }
+          );
+        }
+      }
     }
   };
 

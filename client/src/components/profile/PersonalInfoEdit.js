@@ -161,7 +161,25 @@ const PersonalInfoEdit = () => {
             </div>
             <div>
               <label className="flex items-center text-sm font-medium text-gray-700 mb-2"><MapPin size={16} className="mr-2" />주소</label>
-              <AddressAutocomplete value={userInfo.address} onChange={(data) => setUserInfo(p => ({...p, ...data}))} />
+              <AddressAutocomplete 
+                value={userInfo.address} 
+                onChange={(data) => {
+                  console.log('📍 [좌표받음]', {
+                    address: data.address,
+                    lat: data.lat,
+                    lng: data.lng,
+                    isValid: !!(data.lat && data.lng)
+                  });
+                  
+                  setUserInfo(p => ({
+                    ...p, 
+                    address: data.address,
+                    addressLat: data.lat,
+                    addressLng: data.lng,
+                    addressPlaceId: data.placeId
+                  }));
+                }} 
+              />
               {userInfo.addressLat && <p className="text-xs text-green-600 mt-1">✓ 위치 좌표: {userInfo.addressLat.toFixed(6)}, {userInfo.addressLng.toFixed(6)}</p>}
             </div>
             <div>
