@@ -146,6 +146,150 @@ const calculateSlotCount = (startTime, endTime) => {
   return calculateDurationMinutes(startTime, endTime) / MINUTES_PER_SLOT;
 };
 
+/**
+ * 예외시간(개인시간)과 충돌하는지 확인
+ * @param {string} startTime - 시작 시간 (HH:MM)
+ * @param {string} endTime - 종료 시간 (HH:MM)
+ * @param {Array} personalTimes - 개인시간 배열 [{startTime, endTime, type}]
+ * @param {string} dayOfWeek - 요일 (월, 화, 수 등)
+ * @returns {Object|null} 충돌하는 개인시간 객체 또는 null
+ */
+const findConflictingPersonalTime = (startTime, endTime, personalTimes, dayOfWeek) => {
+  if (!personalTimes || personalTimes.length === 0) return null;
+
+  for (const personalTime of personalTimes) {
+    // 해당 요일에 적용되는 개인시간인지 확인
+    if (personalTime.days && !personalTime.days.includes(dayOfWeek)) continue;
+
+    const ptStart = personalTime.startTime;
+    const ptEnd = personalTime.endTime;
+
+    // 시간 충돌 확인
+    if (isTimeOverlapping(startTime, endTime, ptStart, ptEnd)) {
+      return personalTime;
+    }
+  }
+
+  return null;
+};
+
+/**
+ * 예외시간 이후의 다음 가능한 시작 시간 찾기
+ * @param {string} arrivalTime - 도착 시간 (HH:MM)
+ * @param {number} classDurationMinutes - 수업 시간 (분)
+ * @param {Array} personalTimes - 개인시간 배열
+ * @param {string} dayOfWeek - 요일
+ * @param {string} preferenceEnd - 선호시간 종료 (HH:MM)
+ * @returns {Object} { startTime, endTime, waitTime } 또는 { impossible: true }
+ */
+const findNextAvailableSlot = (
+  arrivalTime,
+  classDurationMinutes,
+  personalTimes,
+  dayOfWeek,
+  preferenceEnd
+) => {
+  const arrivalMinutes = timeToMinutes(arrivalTime);
+  const classEndMinutes = arrivalMinutes + classDurationMinutes;
+  const classEndTime = minutesToTime(classEndMinutes);
+
+  // 1. 도착시간부터 바로 시작 가능한지 확인
+  const conflict = findConflictingPersonalTime(arrivalTime, classEndTime, personalTimes, dayOfWeek);
+
+  if (!conflict) {
+    // 충돌 없음 - 바로 배정 가능
+    const prefEndMinutes = timeToMinutes(preferenceEnd);
+    if (classEndMinutes <= prefEndMinutes) {
+      return {
+        startTime: arrivalTime,
+        endTime: classEndTime,
+        waitTime: 0
+      };
+    } else {
+      // 선호시간 초과
+      return { impossible: true, reason: '선호시간 초과' };
+    }
+  }
+
+  // 2. 충돌 있음 - 예외시간 이후로 이동
+  const afterExceptionMinutes = timeToMinutes(conflict.endTime);
+  const newEndMinutes = afterExceptionMinutes + classDurationMinutes;
+  const prefEndMinutes = timeToMinutes(preferenceEnd);
+
+  if (newEndMinutes <= prefEndMinutes) {
+    // 예외시간 이후 배정 가능
+    return {
+      startTime: conflict.endTime,
+      endTime: minutesToTime(newEndMinutes),
+      waitTime: afterExceptionMinutes - arrivalMinutes
+    };
+  } else {
+    // 예외시간 이후도 선호시간 초과
+    return { impossible: true, reason: '예외시간 이후 선호시간 부족' };
+  }
+};
+
+/**
+ * 이동시간 + 수업시간이 선호시간 및 예외시간을 고려하여 적합한지 확인
+ * @param {string} currentEndTime - 현재 수업 종료 시간 (HH:MM)
+ * @param {number} travelTimeMinutes - 이동 시간 (분)
+ * @param {number} classDurationMinutes - 수업 시간 (분)
+ * @param {string} preferenceStart - 선호시간 시작 (HH:MM)
+ * @param {string} preferenceEnd - 선호시간 종료 (HH:MM)
+ * @param {Array} personalTimes - 개인시간 배열
+ * @param {string} dayOfWeek - 요일
+ * @returns {Object} { isValid: boolean, slot?: {startTime, endTime, waitTime}, reason?: string }
+ */
+const validateTimeSlotWithTravel = (
+  currentEndTime,
+  travelTimeMinutes,
+  classDurationMinutes,
+  preferenceStart,
+  preferenceEnd,
+  personalTimes,
+  dayOfWeek
+) => {
+  // 1. 도착 시간 계산
+  const currentEndMinutes = timeToMinutes(currentEndTime);
+  const arrivalMinutes = currentEndMinutes + travelTimeMinutes;
+  const arrivalTime = minutesToTime(arrivalMinutes);
+
+  // 2. 선호시간 시작 이전 도착 확인
+  const prefStartMinutes = timeToMinutes(preferenceStart);
+  if (arrivalMinutes < prefStartMinutes) {
+    // 선호시간 시작 이전 도착 → 선호시간 시작부터 배정
+    const actualStartTime = preferenceStart;
+    const result = findNextAvailableSlot(
+      actualStartTime,
+      classDurationMinutes,
+      personalTimes,
+      dayOfWeek,
+      preferenceEnd
+    );
+
+    if (result.impossible) {
+      return { isValid: false, reason: result.reason };
+    }
+
+    return { isValid: true, slot: result };
+  }
+
+  // 3. 선호시간 내 도착 → 예외시간 확인
+  const result = findNextAvailableSlot(
+    arrivalTime,
+    classDurationMinutes,
+    personalTimes,
+    dayOfWeek,
+    preferenceEnd
+  );
+
+  if (result.impossible) {
+    return { isValid: false, reason: result.reason };
+  }
+
+  return { isValid: true, slot: result };
+};
+
 module.exports = {
   calculateEndTime,
   timeToMinutes,
@@ -157,5 +301,8 @@ module.exports = {
   formatTimeString,
   isTimeOverlapping,
   calculateDurationMinutes,
-  calculateSlotCount
+  calculateSlotCount,
+  findConflictingPersonalTime,
+  findNextAvailableSlot,
+  validateTimeSlotWithTravel
 };

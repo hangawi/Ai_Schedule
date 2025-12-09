@@ -37,6 +37,7 @@ const { identifyConflictsBeforeAssignment } = require('./services/conflictIdenti
 const { assignByTimeOrder, assignUndisputedSlots, iterativeAssignment } = require('./services/slotAssignmentService');
 const { resolveConflictsWithOwner, resolveConflictsByOwnerTakingSlot } = require('./services/conflictResolutionService');
 const { runMultiWeekSchedule } = require('./services/multiWeekSchedulingService');
+const { assignByPublicTransport } = require('./services/publicTransportAssignmentService');
 
 /**
  * 스케줄링 알고리즘 클래스
@@ -52,7 +53,7 @@ class SchedulingAlgorithm {
    * @param {Array} deferredAssignments - 지연 배정 배열
    * @returns {Object} 스케줄링 결과
    */
-  runAutoSchedule(members, owner, roomTimeSlots, options, deferredAssignments = []) {
+  async runAutoSchedule(members, owner, roomTimeSlots, options, deferredAssignments = []) {
     // Input validation
     if (!members || !Array.isArray(members)) {
       throw new Error('Invalid members data provided to scheduling algorithm');
@@ -71,12 +72,14 @@ class SchedulingAlgorithm {
       fullRangeStart,
       fullRangeEnd,
       assignmentMode = 'normal',
-      clientToday
+      clientToday,
+      transportMode = 'normal', // 'public', 'driving', 'walking', 'normal'
+      minClassDurationMinutes = 60 // 최소 수업 시간 (분)
     } = options;
 
     // 다중 주 스케줄링
     if (numWeeks > 1) {
-      return runMultiWeekSchedule({
+      return await runMultiWeekSchedule({
         members,
         owner,
         roomTimeSlots,
@@ -156,8 +159,17 @@ class SchedulingAlgorithm {
     const conflictingSlots = conflicts;
     // Negotiation blocks feature removed
 
-    // 새로운 배정 전략: 시간 순서 우선 배정 (1시간 블록씩)
-    assignByTimeOrder(timetable, assignments, memberRequiredSlots, ownerId, members, assignmentMode);
+    // 배정 전략 선택: 대중교통 모드 vs 시간 순서 배정
+    if (transportMode === 'public' || transportMode === 'driving' || transportMode === 'walking') {
+      // 대중교통/이동수단 모드: 최단거리 우선 배정
+      await assignByPublicTransport(timetable, assignments, memberRequiredSlots, ownerId, members, {
+        transportMode,
+        minClassDurationMinutes
+      });
+    } else {
+      // 일반 모드: 시간 순서 우선 배정 (1시간 블록씩)
+      assignByTimeOrder(timetable, assignments, memberRequiredSlots, ownerId, members, assignmentMode);
+    }
 
     // 기존 Phase 2, 3 비활성화 (단독 슬롯 우선 배정 제거)
     // Phase 2: 논쟁 없는 슬롯 배정 (고우선순위)

@@ -133,7 +133,7 @@ exports.runAutoSchedule = async (req, res) => {
       room.timeSlots = [];
 
       // 개인 시간표 기반 자동배정으로 변경
-      const result = schedulingAlgorithm.runAutoSchedule(
+      const result = await schedulingAlgorithm.runAutoSchedule(
          membersOnly,
          room.owner,
          room.timeSlots, // 💡 협의로 배정된 기존 슬롯 전달 (이미 충족된 멤버 제외용)

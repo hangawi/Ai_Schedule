@@ -362,4 +362,8 @@ RoomSchema.methods.getUserColor = function(userId) {
   return member ? member.color : null;
 };
 
+// 인덱스 정의
+// autoConfirmAt 필드에 인덱스 추가 (Cron Job 성능 최적화)
+RoomSchema.index({ autoConfirmAt: 1 });
+
 module.exports = mongoose.models.Room || mongoose.model('Room', RoomSchema);

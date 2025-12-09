@@ -290,7 +290,7 @@ exports.joinRoom = async (req, res) => {
                remainingTimeSlotsCount: room.timeSlots.length
             });
 
-            const result = schedulingAlgorithm.runAutoSchedule(
+            const result = await schedulingAlgorithm.runAutoSchedule(
                membersOnly,
                room.owner,
                room.timeSlots,

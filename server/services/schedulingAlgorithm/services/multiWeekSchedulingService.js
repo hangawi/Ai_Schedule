@@ -9,9 +9,9 @@ const { filterNonOwnerMembers, extractMemberId } = require('../helpers/memberHel
  * 다중 주 스케줄링 실행
  * @param {Object} params - 스케줄링 파라미터
  * @param {Function} runSingleWeekSchedule - 단일 주 스케줄링 함수
- * @returns {Object} 스케줄링 결과
+ * @returns {Promise<Object>} 스케줄링 결과
  */
-const runMultiWeekSchedule = (params, runSingleWeekSchedule) => {
+const runMultiWeekSchedule = async (params, runSingleWeekSchedule) => {
   const { members, owner, roomTimeSlots, options, deferredAssignments } = params;
   const { minHoursPerWeek, numWeeks, currentWeek, ownerPreferences, roomSettings } = options;
 
@@ -61,7 +61,7 @@ const runMultiWeekSchedule = (params, runSingleWeekSchedule) => {
     };
 
     // 기존 슬롯 제외하고 배정
-    const result = runSingleWeekSchedule(members, owner, allSlots, weekOptions, deferredAssignments);
+    const result = await runSingleWeekSchedule(members, owner, allSlots, weekOptions, deferredAssignments);
 
     // 결과 병합
     Object.keys(result.assignments).forEach(memberId => {
