@@ -1,0 +1,496 @@
+================================================================================
+                대중교통 모드 버그 수정 계획서
+================================================================================
+
+📅 작성일: 2025-12-09
+🎯 목표: 실제 테스트에서 발견된 3가지 버그 수정
+
+================================================================================
+1. 문제 요약
+================================================================================
+
+[문제 1] 조원 간 거리 계산 누락
+  - A → B는 계산되지만 B → C는 계산되지 않음
+  - 방장과 조원 간 거리만 계산되고, 조원끼리의 거리는 계산 안 됨
+
+[문제 2] 방 레벨 금지시간(점심시간) 침범 🔴 높음
+  - 방장이 설정한 금지시간(12:00-13:00)을 무시하고 12:20까지 침범
+  - 개인 예외시간은 회피하지만 방 레벨 금지시간은 무시됨
+
+[문제 3] 첫 번째 배정 시 거리 순서 무시
+  - 방장에서 가장 가까운 멤버부터 배정되어야 하는데
+  - unassignedMembers 배열 순서대로 배정됨
+  - 예: C가 더 가까운데 B가 먼저 배정됨
+
+
+================================================================================
+2. 우선순위 및 작업 순서
+================================================================================
+
+1️⃣ [높음] 문제 2 - 방 레벨 금지시간 침범 수정
+   → 기능적 오류, 실제 사용 불가능한 시간 배정
+
+2️⃣ [중간] 문제 3 - 첫 배정 거리 순서 수정
+   → 최적화 문제, 전체 효율성에 영향
+
+3️⃣ [중간] 문제 1 - 조원 간 거리 계산 디버깅
+   → 로그 추가하여 원인 파악 필요
+
+
+================================================================================
+3. 문제 1 해결 방안 - 조원 간 거리 계산 누락
+================================================================================
+
+[원인 분석]
+────────────────────────────────────────────────────────────────────
+가능성 1: sortMembersByDistance에서 거리 계산 실패
+  - calculateTravelTime 함수가 실패하고 기본값 반환
+  - Google Maps API 호출 오류
+
+가능성 2: 캐시 문제
+  - travelTimeCache에 잘못된 값이 저장됨
+  - 이전 거리가 재사용됨
+
+가능성 3: currentLocation 업데이트 실패
+  - publicTransportAssignmentService에서 위치 업데이트가 안 됨
+  - 계속 방장 위치를 사용
+
+[해결 방법]
+────────────────────────────────────────────────────────────────────
+Step 1: 로그 추가하여 원인 파악
+  📄 파일: assignmentHelper.js - sortMembersByDistance()
+
+  추가할 로그:
+  ```javascript
+  console.log(`\n🔍 [거리 계산 디버깅]`);
+  console.log(`   출발지: ${origin.address || `${origin.lat},${origin.lng}`}`);
+  console.log(`   후보 멤버 수: ${candidateMembers.length}`);
+
+  // 각 멤버별 거리 계산 후
+  console.log(`   ${memberName}: ${travelTimeMinutes}분 (캐시: ${fromCache ? 'HIT' : 'MISS'})`);
+  ```
+
+Step 2: calculateTravelTime 함수 검증
+  - API 호출 성공 여부 확인
+  - 실패 시 기본값 대신 에러 로그 출력
+  - 캐시 HIT/MISS 로그 추가
+
+Step 3: currentLocation 업데이트 검증
+  📄 파일: publicTransportAssignmentService.js
+
+  추가할 로그:
+  ```javascript
+  console.log(`   📍 위치 업데이트: ${currentLocation.address} → ${member.user.address}`);
+  console.log(`      좌표: ${currentLocation.lat},${currentLocation.lng} → ${member.user.addressLat},${member.user.addressLng}`);
+  ```
+
+[테스트 시나리오]
+────────────────────────────────────────────────────────────────────
+1. A(방장) → B(1시간) → C(10분) 시나리오 실행
+2. 로그에서 각 단계 거리 계산 확인
+3. B → C 이동 시 거리가 10분으로 계산되는지 확인
+
+
+================================================================================
+4. 문제 2 해결 방안 - 방 레벨 금지시간 침범 🔴
+================================================================================
+
+[원인 분석]
+────────────────────────────────────────────────────────────────────
+현재 코드:
+  - validateTimeSlotWithTravel에서 member.user.personalTimes만 확인
+  - room.settings.blockedTimes는 확인하지 않음
+  - room.settings.roomExceptions도 확인하지 않음
+
+데이터 구조:
+  room.settings.blockedTimes: [
+    { name: '점심시간', startTime: '12:00', endTime: '13:00' }
+  ]
+
+  room.settings.roomExceptions: [
+    {
+      type: 'daily_recurring',
+      name: '점심',
+      dayOfWeek: 1-5,
+      startTime: '12:00',
+      endTime: '13:00'
+    }
+  ]
+
+[해결 방법]
+────────────────────────────────────────────────────────────────────
+Step 1: publicTransportAssignmentService에 room 정보 전달
+  📄 파일: schedulingAlgorithm/index.js
+
+  변경:
+  ```javascript
+  // BEFORE
+  await assignByPublicTransport(
+    timetable,
+    assignments,
+    memberRequiredSlots,
+    ownerId,
+    members,
+    { transportMode, minClassDurationMinutes }
+  );
+
+  // AFTER
+  await assignByPublicTransport(
+    timetable,
+    assignments,
+    memberRequiredSlots,
+    ownerId,
+    members,
+    {
+      transportMode,
+      minClassDurationMinutes,
+      roomBlockedTimes: roomTimeSlots?.settings?.blockedTimes || [],
+      roomExceptions: roomTimeSlots?.settings?.roomExceptions || []
+    }
+  );
+  ```
+
+Step 2: publicTransportAssignmentService에서 방 금지시간 전달
+  📄 파일: publicTransportAssignmentService.js
+
+  변경:
+  ```javascript
+  const result = await findNearestMemberWithSufficientTime({
+    currentLocation,
+    currentEndTime: currentEndTime || '09:00',
+    candidateMembers: unassignedMembers,
+    currentDay: DAY_MAP[dayOfWeek],
+    classDurationMinutes: minClassDurationMinutes,
+    transportMode,
+    roomBlockedTimes: options.roomBlockedTimes || [],  // 추가
+    roomExceptions: options.roomExceptions || []        // 추가
+  });
+  ```
+
+Step 3: findNearestMemberWithSufficientTime에서 방 금지시간 전달
+  📄 파일: assignmentHelper.js
+
+  변경:
+  ```javascript
+  const findNearestMemberWithSufficientTime = async ({
+    currentLocation,
+    currentEndTime,
+    candidateMembers,
+    currentDay,
+    classDurationMinutes,
+    transportMode = 'public',
+    roomBlockedTimes = [],  // 추가
+    roomExceptions = []     // 추가
+  }) => {
+    // ...
+
+    const validation = validateTimeSlotWithTravel(
+      currentEndTime,
+      travelTimeMinutes,
+      classDurationMinutes,
+      preferenceStart,
+      preferenceEnd,
+      personalTimes,
+      currentDay,
+      roomBlockedTimes,  // 추가
+      roomExceptions     // 추가
+    );
+  };
+  ```
+
+Step 4: validateTimeSlotWithTravel에서 방 금지시간 병합
+  📄 파일: timeUtils.js
+
+  변경:
+  ```javascript
+  const validateTimeSlotWithTravel = (
+    currentEndTime,
+    travelTimeMinutes,
+    classDurationMinutes,
+    preferenceStart,
+    preferenceEnd,
+    personalTimes,
+    currentDay,
+    roomBlockedTimes = [],  // 추가
+    roomExceptions = []     // 추가
+  ) => {
+    // 방 레벨 금지시간을 personalTimes 형식으로 변환하여 병합
+    const allBlockedTimes = [
+      ...personalTimes,
+      ...convertRoomBlockedTimes(roomBlockedTimes, currentDay),
+      ...convertRoomExceptions(roomExceptions, currentDay)
+    ];
+
+    // 기존 로직은 allBlockedTimes 사용
+    const conflict = findConflictingPersonalTime(
+      arrivalTime,
+      classEndTime,
+      allBlockedTimes,  // 변경
+      dayOfWeek
+    );
+  };
+  ```
+
+Step 5: 변환 함수 추가
+  📄 파일: timeUtils.js
+
+  새로운 함수:
+  ```javascript
+  /**
+   * 방 레벨 금지시간을 personalTimes 형식으로 변환
+   */
+  const convertRoomBlockedTimes = (blockedTimes, currentDay) => {
+    return blockedTimes.map(bt => ({
+      type: 'room_blocked',
+      title: bt.name,
+      startTime: bt.startTime,
+      endTime: bt.endTime,
+      days: ['월', '화', '수', '목', '금'], // 매일 반복
+      isRecurring: true
+    }));
+  };
+
+  /**
+   * 방 레벨 예외시간을 personalTimes 형식으로 변환
+   */
+  const convertRoomExceptions = (roomExceptions, currentDay) => {
+    return roomExceptions
+      .filter(ex => {
+        if (ex.type === 'daily_recurring') {
+          // dayOfWeek 체크 (1=월, 5=금)
+          const dayMap = { '월': 1, '화': 2, '수': 3, '목': 4, '금': 5 };
+          const currentDayNum = dayMap[currentDay];
+          return ex.dayOfWeek === currentDayNum;
+        }
+        return true; // date_specific은 나중에 처리
+      })
+      .map(ex => ({
+        type: 'room_exception',
+        title: ex.name,
+        startTime: ex.startTime,
+        endTime: ex.endTime,
+        days: [currentDay],
+        isRecurring: ex.type === 'daily_recurring'
+      }));
+  };
+  ```
+
+[테스트 시나리오]
+────────────────────────────────────────────────────────────────────
+1. 방 생성 시 점심시간 12:00-13:00 설정
+2. A(11:10 종료) → B(30분 이동, 11:40 도착) 배정 시도
+3. 예상 결과: 13:00-14:00에 배정 (점심시간 이후)
+4. 실제 결과: 12:20에 침범하지 않는지 확인
+
+
+================================================================================
+5. 문제 3 해결 방안 - 첫 배정 거리 순서 무시
+================================================================================
+
+[원인 분석]
+────────────────────────────────────────────────────────────────────
+현재 문제:
+  - findNearestMemberWithSufficientTime이 정상 호출됨
+  - sortMembersByDistance가 거리 순으로 정렬함
+  - 하지만 첫 번째 배정이 거리 순이 아님
+
+예상 원인:
+  - findNearestMemberWithSufficientTime은 정상 작동
+  - 문제는 그 이전에 unassignedMembers 배열이 이미 정렬되어 있지 않음
+  - 또는 일반 모드와 대중교통 모드가 혼재
+
+[해결 방법]
+────────────────────────────────────────────────────────────────────
+Step 1: 첫 배정 전에도 거리 순으로 초기 정렬
+  📄 파일: publicTransportAssignmentService.js
+
+  추가 (라인 76-89 사이):
+  ```javascript
+  // 첫 번째 배정 전, 방장 위치 기준으로 멤버 정렬
+  console.log(`\n📍 [초기화] 방장 위치 기준 거리 순 정렬`);
+  const { sortMembersByDistance } = require('../helpers/assignmentHelper');
+
+  const initialSorted = await sortMembersByDistance(
+    currentLocation,
+    unassignedMembers,
+    transportMode
+  );
+
+  // 거리 순으로 재정렬
+  unassignedMembers = initialSorted.map(item => item.member);
+
+  console.log(`   정렬 결과:`);
+  initialSorted.forEach((item, idx) => {
+    const name = item.member.user.displayName || 'Unknown';
+    console.log(`   ${idx + 1}. ${name}: ${item.travelTimeMinutes}분`);
+  });
+  ```
+
+Step 2: 로그 개선
+  - 첫 배정 시 어떤 멤버가 선택되었는지 명확히 표시
+  - 거리 정보와 함께 출력
+
+[테스트 시나리오]
+────────────────────────────────────────────────────────────────────
+1. 방장 위치: 서울역
+2. B 위치: 강남역 (1시간)
+3. C 위치: 신촌역 (20분)
+4. 예상 결과: C → B 순서로 배정
+5. 실제 결과: 첫 배정이 C인지 확인
+
+
+================================================================================
+6. 수정할 파일 목록
+================================================================================
+
+[필수 수정]
+────────────────────────────────────────────────────────────────────
+1. server/services/schedulingAlgorithm/index.js
+   - assignByPublicTransport 호출 시 roomBlockedTimes, roomExceptions 전달
+
+2. server/services/schedulingAlgorithm/services/publicTransportAssignmentService.js
+   - options에 roomBlockedTimes, roomExceptions 추가
+   - findNearestMemberWithSufficientTime 호출 시 전달
+   - 초기 거리 순 정렬 추가
+
+3. server/services/schedulingAlgorithm/helpers/assignmentHelper.js
+   - findNearestMemberWithSufficientTime 매개변수 추가
+   - validateTimeSlotWithTravel 호출 시 전달
+   - 디버깅 로그 추가
+
+4. server/services/schedulingAlgorithm/utils/timeUtils.js
+   - validateTimeSlotWithTravel 매개변수 추가
+   - convertRoomBlockedTimes 함수 추가
+   - convertRoomExceptions 함수 추가
+   - 방 금지시간 병합 로직 추가
+
+[선택적 수정]
+────────────────────────────────────────────────────────────────────
+5. server/services/schedulingAlgorithm/utils/travelTimeCache.js
+   - 캐시 HIT/MISS 로그 추가
+
+
+================================================================================
+7. 테스트 계획
+================================================================================
+
+[테스트 1] 방 금지시간 회피
+────────────────────────────────────────────────────────────────────
+시나리오:
+  - 방 설정: 점심시간 12:00-13:00
+  - A(11:10 종료) → B(30분, 11:40 도착)
+
+예상 결과:
+  - 13:00-14:00에 배정 ✅
+  - 12:00-13:00은 회피 ✅
+
+확인사항:
+  - 로그에 "예외시간 이후 배정" 메시지
+  - 대기시간 1시간 20분 표시
+
+
+[테스트 2] 첫 배정 거리 순서
+────────────────────────────────────────────────────────────────────
+시나리오:
+  - 방장: 서울역
+  - B: 강남역 (1시간)
+  - C: 신촌역 (20분)
+
+예상 결과:
+  - C → B 순서로 배정 ✅
+
+확인사항:
+  - 초기 정렬 로그 확인
+  - 첫 배정이 C인지 확인
+
+
+[테스트 3] 조원 간 거리 계산
+────────────────────────────────────────────────────────────────────
+시나리오:
+  - A(방장) → B(1시간) → C(B에서 10분)
+
+예상 결과:
+  - B → C 이동시간 10분으로 계산 ✅
+
+확인사항:
+  - 디버깅 로그에서 거리 계산 확인
+  - 캐시 HIT/MISS 확인
+  - currentLocation 업데이트 확인
+
+
+================================================================================
+8. 구현 순서
+================================================================================
+
+Phase 1: 방 금지시간 수정 (문제 2) 🔴
+────────────────────────────────────────────────────────────────────
+1. timeUtils.js에 변환 함수 추가
+2. validateTimeSlotWithTravel 매개변수 추가
+3. assignmentHelper.js 매개변수 전달
+4. publicTransportAssignmentService.js 매개변수 전달
+5. index.js에서 방 정보 전달
+6. 테스트 및 검증
+
+예상 소요 시간: 30분
+
+
+Phase 2: 첫 배정 거리 순서 수정 (문제 3) 🟡
+────────────────────────────────────────────────────────────────────
+1. publicTransportAssignmentService.js에 초기 정렬 추가
+2. 로그 개선
+3. 테스트 및 검증
+
+예상 소요 시간: 15분
+
+
+Phase 3: 조원 간 거리 디버깅 (문제 1) 🟡
+────────────────────────────────────────────────────────────────────
+1. sortMembersByDistance에 디버깅 로그 추가
+2. calculateTravelTime에 로그 추가
+3. publicTransportAssignmentService에 위치 업데이트 로그 추가
+4. 실제 테스트 실행하여 로그 확인
+5. 원인 파악 후 수정
+
+예상 소요 시간: 30분 (디버깅 포함)
+
+
+================================================================================
+9. 완료 기준
+================================================================================
+
+✅ 체크리스트:
+────────────────────────────────────────────────────────────────────
+□ 문제 2: 방 금지시간 12:00-13:00을 회피하고 13:00 이후에 배정
+□ 문제 3: 방장에서 가장 가까운 멤버부터 배정 (C → B 순서)
+□ 문제 1: 조원 간 거리(B → C 10분)가 정확히 계산됨
+□ 모든 로그가 명확하게 출력됨
+□ 기존 일반 모드는 정상 작동
+□ 코드 리뷰 완료
+
+
+================================================================================
+10. 주의사항
+================================================================================
+
+⚠️  중요:
+────────────────────────────────────────────────────────────────────
+1. 기존 일반 모드에 영향을 주지 않도록 주의
+   - 조건 분기 철저히 확인
+   - transportMode === 'normal'일 때는 기존 로직 유지
+
+2. 매개변수 전달 체인 확인
+   - index.js → publicTransportAssignmentService → assignmentHelper → timeUtils
+   - 모든 단계에서 누락 없이 전달
+
+3. room 정보 접근
+   - index.js에서 roomTimeSlots로 접근 가능
+   - null 체크 필수 (|| [] 기본값)
+
+4. 테스트 데이터
+   - 실제 주소 데이터 필요
+   - Google Maps API 키 확인
+
+
+================================================================================
+END OF PLAN
+================================================================================
