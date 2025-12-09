@@ -1,21 +1,80 @@
+/**
+ * ===================================================================================================
+ * MergedWeekView.js - 주간 병합 뷰 컴포넌트 (병합 모드)
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/tabs/ScheduleGridSelector/components
+ *
+ * 🎯 주요 기능:
+ *    - 같은 제목의 연속된 시간 블록 병합하여 표시
+ *    - 겹치는 일정은 옆으로 나란히 배치 (세그먼트 분할)
+ *    - 자정 넘는 일정 자동 분할 (오늘 밤 + 내일 새벽)
+ *    - 개인시간/선호시간/예외시간 병합 표시
+ *    - absolute 포지셔닝으로 정확한 시간 위치 표현
+ *    - 블록 높이에 따라 텍스트 표시 방식 동적 변경
+ *
+ * 🔗 연결된 파일:
+ *    - ../index.js - 이 컴포넌트를 렌더링하여 병합 모드 제공
+ *    - ../utils/timeUtils.js - timeToMinutes, minutesToTime, getEndTimeForBlock 함수 사용
+ *    - ../constants/scheduleConstants.js - PRIORITY_CONFIG 상수 사용
+ *    - ../hooks/useTimeSlots.js - allPersonalTimes, getCurrentTimeSlots 제공
+ *
+ * 💡 UI 위치:
+ *    - 탭: 프로필 탭
+ *    - 섹션: 스케줄 그리드 > 주간 뷰 > 병합 모드
+ *    - 경로: 앱 실행 > 프로필 탭 > 스케줄 그리드 > 병합 버튼 클릭
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 병합 모드 시간표의 UI와 병합 로직이 변경됨
+ *    - 병합 조건 변경: getDaySchedules 함수의 병합 로직 수정
+ *    - 세그먼트 계산 변경: segments 생성 로직 수정
+ *    - 텍스트 표시 기준 변경: duration >= 60 조건 수정
+ *    - 겹침 처리 변경: overlapIndex, overlapCount 계산 수정
+ *
+ * 📝 참고사항:
+ *    - 병합 기준: 제목 + 강사명 + 타입 + sourceImageIndex 동일
+ *    - 세그먼트: 겹치는 구간별로 분할하여 나란히 배치
+ *    - 60분 이상: 4줄(학원/과목/반/시간), 60분 미만: 2줄(과목/시간)
+ *    - absolute 포지셔닝: top(시작 위치), height(지속 시간), left/width(겹침 처리)
+ *    - 1분 = 1.6px (blockHeight 계산)
+ *
+ * ===================================================================================================
+ */
+
 import React from 'react';
 import { timeToMinutes, minutesToTime, getEndTimeForBlock } from '../utils/timeUtils';
 import { PRIORITY_CONFIG } from '../constants/scheduleConstants';
 
 /**
- * 병합 주간 뷰 컴포넌트
- * - 같은 제목의 연속된 시간 블록을 병합하여 표시
- * - 겹치는 일정은 옆으로 나란히 배치
- * - 각 날짜별 독립적인 컬럼으로 렌더링
+ * MergedWeekView - 주간 병합 뷰 컴포넌트 (병합 모드)
  *
- * @param {Object} props
+ * @description 같은 제목의 연속된 시간 블록을 병합하고 겹치는 일정은 옆으로 나란히 배치하는 컴포넌트
+ * @param {Object} props - 컴포넌트 props
  * @param {Array} props.allPersonalTimes - 개인 시간 배열 (personalTimes + fixedSchedules)
- * @param {Array} props.schedule - 기본 일정 (선호 시간)
+ * @param {Array} props.schedule - 기본 일정 (선호 시간, 반복 일정)
  * @param {Array} props.exceptions - 특정 날짜 예외 일정
- * @param {Array} props.weekDates - 주간 날짜 배열
- * @param {Function} props.getCurrentTimeSlots - 현재 시간 슬롯 가져오기 함수
+ * @param {Array} props.weekDates - 주간 날짜 배열 (7개 요소, 일요일~토요일)
+ * @param {Function} props.getCurrentTimeSlots - 현재 시간 슬롯 배열 반환 함수
  * @param {boolean} props.showFullDay - 24시간 모드 여부
- * @param {Object} props.priorityConfig - 우선순위 설정 객체
+ * @param {Object} props.priorityConfig - 우선순위 설정 객체 (색상 및 레이블)
+ * @returns {JSX.Element} 병합 모드 시간표 UI
+ *
+ * @example
+ * <MergedWeekView
+ *   allPersonalTimes={allPersonalTimes}
+ *   schedule={schedule}
+ *   exceptions={exceptions}
+ *   weekDates={weekDates}
+ *   getCurrentTimeSlots={getCurrentTimeSlots}
+ *   showFullDay={showFullDay}
+ *   priorityConfig={PRIORITY_CONFIG}
+ * />
+ *
+ * @note
+ * - 병합 기준: title + instructor + type + sourceImageIndex 모두 같아야 함
+ * - 세그먼트: 겹치는 일정을 옆으로 나란히 배치 (overlapIndex, overlapCount)
+ * - absolute 포지셔닝: top(시작), height(지속), left/width(겹침)
+ * - 60분 이상: 4줄, 60분 미만: 2줄 표시
  */
 const MergedWeekView = ({
   allPersonalTimes,
@@ -27,14 +86,37 @@ const MergedWeekView = ({
   priorityConfig
 }) => {
   /**
-   * 각 요일별 일정 가져오기
-   * personalTimes, schedule, exceptions를 병합하고 같은 제목끼리 연속된 시간 블록 병합
+   * getDaySchedules - 각 요일별 일정 가져오기 및 병합
    *
-   * @param {number} dayOfWeek - JavaScript 요일 (0=일, 1=월, ...)
+   * @description personalTimes, schedule, exceptions를 병합하고 같은 제목끼리 연속된 시간 블록 병합
+   * @param {number} dayOfWeek - JavaScript 요일 (0=일, 1=월, ..., 6=토)
    * @param {Date} targetDate - 대상 날짜
    * @returns {Array} 병합된 일정 배열
+   *
+   * @process
+   * 1. personalTimes에서 해당 요일/날짜 필터링 + 색상 추가
+   * 2. schedule에서 해당 요일 필터링 + priority 색상 변환
+   * 3. exceptions에서 해당 날짜 필터링 + ISO datetime → HH:MM 변환
+   * 4. 세 배열 합치기 + 자정 넘는 일정 분할
+   * 5. 같은 제목끼리 그룹화 (title + instructor + type + sourceImageIndex)
+   * 6. 연속된 시간대만 병합 (중간에 다른 일정 없는지 확인)
+   *
+   * @note
+   * - specificDate가 있고 isRecurring이 false면 특정 날짜로 비교
+   * - days 배열: JavaScript 형식(0=일) 또는 DB 형식(7=일) 모두 지원
+   * - 수면시간 제외: title에 '수면' 포함 또는 22:00 이후 시작 (기본 모드만)
+   * - 자정 넘김: 오늘 밤(~23:50) + 내일 새벽(00:00~) 두 블록으로 분할
    */
   const getDaySchedules = (dayOfWeek, targetDate) => {
+    /**
+     * 1. personalTimes 필터링
+     *
+     * @description 해당 요일/날짜의 개인시간 필터링 및 색상 추가
+     * @note
+     * - specificDate + isRecurring=false: 특정 날짜 일정
+     * - days 배열: 반복 일정 (JavaScript 0=일 또는 DB 7=일)
+     * - 수면시간 제외: 기본 모드에서만 (showFullDay=false)
+     */
     // 1. personalTimes에서 해당 요일 필터링 + 색상 추가
     const personalFiltered = allPersonalTimes.filter(p => {
       const personalDays = p.days || [];
@@ -83,6 +165,15 @@ const MergedWeekView = ({
       return !isSleepTime;
     });
 
+    /**
+     * 2. schedule 필터링
+     *
+     * @description 기본 일정(선호 시간)에서 해당 요일 필터링 및 색상 변환
+     * @note
+     * - priority 색상을 hex 코드로 변환 (priorityColorMap)
+     * - title이 없으면 priority 레이블 사용
+     * - days: JavaScript 요일 → DB 요일 변환 (0 → 7)
+     */
     // 2. schedule (defaultSchedule)에서 해당 요일 필터링 - 선호도를 색상으로 표시
     const priorityColorMap = {
       'bg-blue-600': '#2563eb',  // 선호 (priority 3)
@@ -97,6 +188,16 @@ const MergedWeekView = ({
       isRecurring: true
     }));
 
+    /**
+     * 3. exceptions 필터링
+     *
+     * @description 특정 날짜 예외 일정 필터링 및 ISO datetime → HH:MM 변환
+     * @note
+     * - specificDate와 targetDate 비교 (YYYY-MM-DD 형식)
+     * - ISO 형식(T 포함): new Date()로 파싱하여 HH:MM 추출
+     * - HH:MM 형식: 그대로 사용
+     * - title: '휴무/휴일'이면 그대로, 아니면 priority 레이블
+     */
     // 3. exceptions (선호시간 with specificDate)에서 해당 날짜 필터링
     const exceptionsFiltered = exceptions.filter(e => {
       if (e.specificDate && targetDate) {
@@ -133,6 +234,16 @@ const MergedWeekView = ({
       };
     });
 
+    /**
+     * 4. 자정 넘는 일정 분할
+     *
+     * @description 세 배열 합친 후 자정을 넘나드는 일정을 오늘 밤 + 내일 새벽으로 분할
+     * @note
+     * - endMin <= startMin: 자정 넘김
+     * - 오늘 밤: startTime ~ 23:50
+     * - 내일 새벽: 00:00 ~ endTime
+     * - 정상: 그대로 추가
+     */
     // 4. 세 배열 합치기 (자정 넘는 일정 분할)
     const allSchedules = [...personalFiltered, ...scheduleFiltered, ...exceptionsFiltered];
 
@@ -164,6 +275,14 @@ const MergedWeekView = ({
     // 디버깅: 이고은 원장 일정 확인
     const debugSchedules = filteredSchedules.filter(s => s.title?.includes('이고은') || s.instructor?.includes('이고은'));
 
+    /**
+     * 5. 같은 제목끼리 그룹화
+     *
+     * @description title + instructor + type + sourceImageIndex로 그룹화
+     * @note
+     * - sourceImageIndex도 포함하여 서로 다른 이미지의 같은 제목은 병합 안 함
+     * - key: `${title}_${instructor}_${type}_${sourceImageIndex}`
+     */
     // 같은 제목끼리 그룹화 (sourceImageIndex도 포함하여 서로 다른 이미지의 같은 제목은 병합 안함)
     const groupedByTitle = {};
     filteredSchedules.forEach(schedule => {
@@ -174,6 +293,23 @@ const MergedWeekView = ({
       groupedByTitle[key].push(schedule);
     });
 
+    /**
+     * 6. 연속된 시간대만 병합
+     *
+     * @description 각 그룹 내에서 실제로 연속되고 중간에 다른 일정이 없을 때만 병합
+     *
+     * @process
+     * 1. 시작 시간 기준 정렬
+     * 2. 현재 블록의 endTime과 다음 블록의 startTime이 같은지 확인
+     * 3. 중간에 다른 일정이 있는지 확인 (hasConflict)
+     * 4. 충돌 없으면 병합 (current.endTime = next.endTime)
+     * 5. 충돌 있으면 병합 안 함 (current 저장하고 next로 이동)
+     *
+     * @note
+     * - 연속 조건: currentEndMinutes === nextStartMinutes
+     * - 충돌 조건: 다른 일정이 현재-다음 사이에 겹침
+     * - 병합 결과: 연속된 블록들의 startTime~endTime 합쳐짐
+     */
     // 각 그룹에서 시간대를 병합 (실제로 연속되고 중간에 다른 일정이 없을 때만)
     const mergedSchedules = [];
     Object.values(groupedByTitle).forEach(group => {
@@ -236,9 +372,21 @@ const MergedWeekView = ({
   const timeSlots = getCurrentTimeSlots();
 
   /**
-   * 시간 슬롯별 위치 계산을 위한 헬퍼 함수
+   * getTimeSlotIndex - 시간 슬롯 인덱스 계산
+   *
+   * @description 시간 문자열을 시간 슬롯 배열의 인덱스로 변환
    * @param {string} time - 시간 (HH:MM 형식)
    * @returns {number} 시간 슬롯 인덱스
+   *
+   * @process
+   * 1. 정확히 일치하는 슬롯 찾기 (findIndex)
+   * 2. 없으면 분 단위로 계산 (10분 단위 슬롯 인덱스)
+   * 3. Math.max(0, index)로 음수 방지
+   *
+   * @note
+   * - 10분 단위 슬롯 가정 (TIME_SLOT_INTERVAL=10)
+   * - startMinutes: timeSlots[0]의 분 단위 값
+   * - index: (timeMinutes - startMinutes) / 10
    */
   const getTimeSlotIndex = (time) => {
     // 정확히 일치하는 슬롯 찾기
@@ -285,6 +433,24 @@ const MergedWeekView = ({
             const daySchedules = getDaySchedules(dateInfo.dayOfWeek, dateInfo.fullDate);
             const totalHeight = timeSlots.length * 16; // 전체 컬럼 높이 (h-4 = 16px)
 
+            /**
+             * 세그먼트 생성
+             *
+             * @description 각 일정을 겹치는 구간별로 분할하여 세그먼트 생성
+             *
+             * @process
+             * 1. 각 일정의 시작/끝 시간 확인
+             * 2. 모든 경계점 찾기 (이 일정 + 겹치는 일정들의 시작/끝)
+             * 3. 경계점 사이를 세그먼트로 생성
+             * 4. 각 세그먼트마다 겹치는 일정 개수 계산 (overlapCount)
+             * 5. 현재 일정이 몇 번째인지 계산 (overlapIndex)
+             *
+             * @note
+             * - boundaries: 세그먼트 경계점 배열 (정렬됨)
+             * - overlapping: 현재 세그먼트와 겹치는 모든 일정
+             * - overlapIndex: 겹치는 일정 중 현재 일정의 순서 (0부터 시작)
+             * - overlapCount: 겹치는 일정의 총 개수
+             */
             // 각 일정을 세그먼트로 분할 (겹치는 구간별로)
             const segments = [];
 
@@ -337,6 +503,21 @@ const MergedWeekView = ({
                   const startIndex = getTimeSlotIndex(startTime);
                   const topPosition = startIndex * 16;
 
+                  /**
+                   * 색상 결정 로직
+                   *
+                   * @description Tailwind 클래스를 hex 코드로 변환하여 배경색 결정
+                   *
+                   * @priority
+                   * 1. seg.schedule.color (이미 hex 또는 Tailwind 클래스)
+                   * 2. sourceImageIndex 기반 색상
+                   * 3. 기본 보라색 (#8b5cf6)
+                   *
+                   * @note
+                   * - tailwindToHex: Tailwind 클래스 → hex 코드 매핑
+                   * - rawColor: 원본 색상 (hex 또는 Tailwind)
+                   * - bgColor: 최종 hex 코드
+                   */
                   // ⭐ 스케줄의 색상 사용 (우선순위: backgroundColor → sourceImageIndex → 기본 보라색)
                   // Tailwind 클래스를 hex 색상으로 변환
                   const tailwindToHex = {
@@ -361,14 +542,14 @@ const MergedWeekView = ({
 
                   // ⭐ 색상 결정 로직 개선
                   let rawColor = seg.schedule.color; // 먼저 스케줄의 color 필드 확인
-                  
+
                   // 🎨 디버깅: MergedWeekView 색상 적용
                   console.log(`🎨 [MergedWeekView] ${seg.schedule.title} 렌더링:`, {
                     color: seg.schedule.color,
                     backgroundColor: seg.schedule.backgroundColor,
                     sourceImageIndex: seg.schedule.sourceImageIndex
                   });
-                  
+
                   // color가 없으면 sourceImageIndex 기반으로 색상 할당
                   if (!rawColor && seg.schedule.sourceImageIndex !== undefined) {
                     const { getColorForImageIndex } = require('../../../../utils/scheduleAnalysis/assignScheduleColors');
@@ -376,7 +557,7 @@ const MergedWeekView = ({
                     rawColor = colorInfo.border; // 이미지 인덱스 색상 사용
                     console.log(`  📊 fallback to sourceImageIndex: ${seg.schedule.sourceImageIndex} → ${rawColor}`);
                   }
-                  
+
                   // 그래도 없으면 기본 보라색
                   if (!rawColor) {
                     rawColor = '#8b5cf6';
@@ -384,12 +565,39 @@ const MergedWeekView = ({
                   } else {
                     console.log(`  ✅ 최종 색상: ${rawColor}`);
                   }
-                  
+
                   const bgColor = tailwindToHex[rawColor] || rawColor;
 
+                  /**
+                   * 겹침 처리 - 너비 및 위치 계산
+                   *
+                   * @description 겹치는 일정을 옆으로 나란히 배치
+                   * @note
+                   * - columnWidth: 100% / overlapCount (겹치는 개수로 나눔)
+                   * - leftPosition: (100% / overlapCount) * overlapIndex (순서대로 배치)
+                   * - overlapCount=1: 전체 너비 사용
+                   * - overlapCount=2: 각 50% 너비, 0%/50% 위치
+                   */
                   const columnWidth = seg.overlapCount > 1 ? `${100 / seg.overlapCount}%` : '100%';
                   const leftPosition = seg.overlapCount > 1 ? `${(100 / seg.overlapCount) * seg.overlapIndex}%` : '0%';
 
+                  /**
+                   * border 클래스 동적 생성
+                   *
+                   * @description 같은 일정의 연속 세그먼트인지 확인하여 border 제어
+                   *
+                   * @process
+                   * 1. 같은 일정의 모든 세그먼트 찾기
+                   * 2. 가장 큰 세그먼트 찾기 (텍스트 표시용)
+                   * 3. 위/아래에 같은 일정이 있는지 확인
+                   * 4. 같으면 border 제거, 다르면 border 추가
+                   *
+                   * @note
+                   * - hasSameAbove: 위에 같은 일정 세그먼트가 연속됨
+                   * - hasSameBelow: 아래에 같은 일정 세그먼트가 연속됨
+                   * - isLargestSegment: 가장 큰 세그먼트에만 텍스트 표시
+                   * - borderClasses: border-t, border-b 동적 추가
+                   */
                   // 같은 일정의 연속 세그먼트인지 확인 (같은 스케줄이면 overlapIndex 달라도 OK)
                   const prevSeg = segIndex > 0 ? segments[segIndex - 1] : null;
                   const nextSeg = segIndex < segments.length - 1 ? segments[segIndex + 1] : null;
@@ -448,6 +656,23 @@ const MergedWeekView = ({
                       }}
                       title={`${seg.schedule.academyName ? seg.schedule.academyName + ' - ' : ''}${seg.schedule.subjectName ? seg.schedule.subjectName + ' - ' : ''}${seg.schedule.title}${seg.schedule.instructor ? ` (${seg.schedule.instructor})` : ''}${seg.schedule.floor ? ` (${seg.schedule.floor}층)` : ''} (${seg.schedule.startTime}~${seg.schedule.endTime})`}
                     >
+                      {/**
+                       * 텍스트 표시 로직
+                       *
+                       * @description 블록 높이에 따라 표시 방식 변경
+                       *
+                       * @case1: duration >= 60 (60분 이상)
+                       * - 4줄 표시: 학원명 / 과목명 / 반이름(강사명)(층) / 시간
+                       * - 학원명: 8px, 과목명: 9px, 반: 10px, 시간: 9px
+                       *
+                       * @case2: duration < 60 (60분 미만)
+                       * - 2줄 표시: 과목명 / 시간
+                       * - 과목명: 11px, 시간: 10px
+                       *
+                       * @note
+                       * - isLargestSegment: 가장 큰 세그먼트에만 텍스트 표시
+                       * - whitespace-nowrap overflow-hidden text-ellipsis: 넘치면 ...
+                       */}
                       {isLargestSegment && (
                         <div className="text-xs leading-tight flex flex-col items-center justify-center h-full overflow-hidden">
                           <div className="w-full px-1 text-center">

@@ -1,8 +1,67 @@
+/**
+ * ===================================================================================================
+ * useBackgroundMonitoring.js - 백그라운드 음성 모니터링 및 일정 자동 감지 React Hook
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/hooks
+ *
+ * 🎯 주요 기능:
+ *    - 사용자의 음성 입력을 백그라운드에서 모니터링
+ *    - 음성 감지 시 실시간으로 텍스트로 변환(transcript) 및 버퍼링
+ *    - 일정 관련 키워드 및 패턴을 분석하여 잠재적인 일정 자동 감지
+ *    - 감지된 일정을 Google Calendar에 추가하는 기능 (`confirmSchedule`)
+ *    - 음성 녹음 상태(`voiceStatus`) 및 분석 상태(`isAnalyzing`) 관리
+ *
+ * 🔗 연결된 파일:
+ *    - src/App.js - 앱 최상위 레벨에서 이 훅을 사용하여 백그라운드 모니터링 활성화/비활성화
+ *    - src/config/firebaseConfig.js - Firebase 인증 인스턴스 `auth` 사용
+ *    - src/components/indicators/BackgroundCallIndicator.js - `isCallDetected` 상태를 사용하여 UI 표시
+ *    - src/components/modals/AutoDetectedScheduleModal.js - `detectedSchedules`를 사용하여 감지된 일정 표시
+ *    - 백엔드 API (`/api/call-analysis/analyze`, `/api/calendar/events/google`)와 통신
+ *
+ * ✏️ 수정 가이드:
+ *    - 음성 분석 로직 변경: `analyzeFullTranscript` 함수 내부의 백엔드 API 호출 방식 또는 데이터 처리 수정
+ *    - 일정 감지 로직 개선: `processTranscript` 함수 내부의 버퍼링 및 분석 트리거 조건 수정
+ *    - 일정 확인/거부 액션 변경: `confirmSchedule` 및 `dismissSchedule` 함수 수정
+ *    - 침묵 감지 시간 변경: `processTranscript` 내 `setTimeout` 시간 조절
+ *
+ * 📝 참고사항:
+ *    - Firebase 인증 (`auth.currentUser`)이 필요합니다.
+ *    - 백엔드 API (`/api/call-analysis/analyze`)를 통해 실제 분석이 이루어집니다.
+ *    - `eventActions` prop을 통해 외부에서 제공되는 이벤트 처리 함수를 사용합니다.
+ *    - `notification` 상태를 통해 사용자에게 작업 결과를 알릴 수 있습니다.
+ *
+ * ===================================================================================================
+ */
 import { useState, useCallback, useRef } from 'react';
 import { auth } from '../config/firebaseConfig';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
+/**
+ * useBackgroundMonitoring - 백그라운드에서 음성을 모니터링하고 일정을 자동 감지하는 커스텀 훅
+ *
+ * @param {object} eventActions - 외부에서 제공되는 이벤트 관련 액션 함수들
+ * @param {Function} eventActions.addEvent - 일정을 추가하는 함수
+ * @param {Function} setEventAddedKey - 일정 추가 시 UI 업데이트를 위한 키 설정 함수
+ *
+ * @returns {object} 백그라운드 모니터링 관련 상태 및 함수를 포함하는 객체
+ * @property {boolean} isBackgroundMonitoring - 백그라운드 모니터링 활성화 여부
+ * @property {boolean} isCallDetected - 음성 통화(또는 음성 입력) 감지 여부
+ * @property {number|null} callStartTime - 음성 통화 감지 시작 시간 (타임스탬프)
+ * @property {Array<object>} detectedSchedules - 감지된 일정 목록
+ * @property {string} backgroundTranscript - 현재까지 버퍼링된 또는 실시간으로 표시되는 음성 텍스트
+ * @property {string} voiceStatus - 음성 처리 상태 ('waiting', 'recording', 'ending', 'analyzing')
+ * @property {boolean} isAnalyzing - 백엔드에서 음성을 분석 중인지 여부
+ * @property {object|null} notification - 사용자에게 표시할 알림 메시지 객체
+ * @property {Function} toggleBackgroundMonitoring - 백그라운드 모니터링 활성화/비활성화 함수
+ * @property {Function} confirmSchedule - 감지된 일정을 확인하고 Google Calendar에 추가하는 함수
+ * @property {Function} dismissSchedule - 감지된 일정을 목록에서 제거하는 함수
+ * @property {Function} processTranscript - 실시간 음성 텍스트를 처리하는 함수
+ *   @param {string} transcript - 음성 인식 결과 텍스트
+ *   @param {boolean} [isFinal=true] - 최종 음성 인식 결과인지 여부
+ * @property {Function} clearNotification - 현재 알림을 지우는 함수
+ */
 export const useBackgroundMonitoring = (eventActions, setEventAddedKey) => {
   const [isBackgroundMonitoring, setIsBackgroundMonitoring] = useState(false);
   const [isCallDetected, setIsCallDetected] = useState(false);

@@ -1,10 +1,54 @@
-// Room header component
-
+/**
+ * ===================================================================================================
+ * [파일명] RoomHeader.js - 협업 방 상세 뷰의 헤더 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: [프론트엔드] > [client/src/components/tabs/CoordinationTab/components/RoomHeader.js]
+ *
+ * 🎯 주요 기능:
+ *    - 현재 선택된 협업 방의 주요 정보(이름, 설명, 초대코드, 멤버 수 등)를 표시.
+ *    - 사용자의 역할(방장/멤버)에 따라 다른 액션 버튼을 조건부로 렌더링.
+ *    - 방장에게는 '방 관리', '로그 보기' 버튼을 제공.
+ *    - 일반 멤버에게는 '방 나가기' 버튼을 제공.
+ *    - 모든 사용자에게 '방 목록으로 돌아가기' 기능을 제공.
+ *
+ * 🔗 연결된 파일:
+ *    - ../index.js (CoordinationTab): 이 컴포넌트를 사용하며 모든 데이터와 핸들러를 props로 제공.
+ *    - ../../../../utils/coordinationUtils.js: 사용자가 방장인지 판별하는 `isRoomOwner` 유틸리티 함수.
+ *
+ * 💡 UI 위치:
+ *    - [협업] 탭 > (방 선택 후) > 페이지 최상단
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 방 상세 뷰의 헤더 정보 및 버튼 레이아웃이 변경됩니다.
+ *    - 새로운 방 정보 추가: JSX 내에 새로운 정보를 표시하는 엘리먼트를 추가합니다.
+ *    - 새로운 액션 버튼 추가: 부모 컴포넌트(`CoordinationTab`)로부터 새로운 핸들러를 props로 받아와 버튼과 연결합니다.
+ *
+ * 📝 참고사항:
+ *    - 이 컴포넌트는 데이터를 받아 표시하고, 이벤트 발생 시 상위로 콜백을 전달하는 Presentational Component입니다.
+ *    - `isOwner` prop을 통해 사용자의 역할에 따라 UI가 동적으로 변경되는 것이 핵심입니다.
+ *    - `translateEnglishDays` 유틸리티를 사용하여 방 이름이나 설명에 포함된 영어 요일을 한국어로 번역하여 표시합니다.
+ *
+ * ===================================================================================================
+ */
 import React from 'react';
 import { FileText } from 'lucide-react';
 import { translateEnglishDays } from '../../../../utils';
 import { isRoomOwner } from '../../../../utils/coordinationUtils';
 
+/**
+ * [RoomHeader]
+ * @description 현재 선택된 협업 방의 상세 정보와 관련 액션 버튼들을 담고 있는 헤더 컴포넌트.
+ *              사용자의 권한(방장 여부)에 따라 다른 버튼을 보여줍니다.
+ * @param {object} currentRoom - 현재 방의 정보 객체.
+ * @param {object} user - 현재 로그인한 사용자 정보 객체.
+ * @param {boolean} isOwner - 현재 사용자가 방장인지 여부.
+ * @param {function} onManageRoom - '방 관리' 버튼 클릭 시 호출될 핸들러.
+ * @param {function} onOpenLogs - '로그 보기' 버튼 클릭 시 호출될 핸들러.
+ * @param {function} onBackToRoomList - '방 목록으로 돌아가기' 버튼 클릭 시 호출될 핸들러.
+ * @param {function} onLeaveRoom - '방 나가기' 버튼 클릭 시 호출될 핸들러.
+ * @returns {JSX.Element} 방 헤더 컴포넌트의 JSX 엘리먼트.
+ */
 const RoomHeader = ({
   currentRoom,
   user,

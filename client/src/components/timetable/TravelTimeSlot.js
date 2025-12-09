@@ -1,10 +1,58 @@
 /**
- * 이동 시간 슬롯 시각화 컴포넌트
+ * ===================================================================================================
+ * TravelTimeSlot.js - 이동 시간 슬롯 시각화 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/timetable
+ *
+ * 🎯 주요 기능:
+ *    - 이동 시간 슬롯을 시각적으로 렌더링
+ *    - 이동 수단(자동차, 대중교통 등)에 따라 다른 아이콘과 색상 표시
+ *    - 'compact' 모드와 '상세' 모드의 두 가지 뷰 제공
+ *
+ * 🔗 연결된 파일:
+ *    - ./WeekView.js - 주간 뷰에서 이 컴포넌트를 사용하여 이동 시간을 표시
+ *    - ./TimetableGrid.js - 이 컴포넌트를 간접적으로 사용
+ *
+ * 💡 UI 위치:
+ *    - 탭: 조율 탭 (CoordinationTab)
+ *    - 섹션: 타임테이블 그리드 내 이동 시간 슬롯
+ *
+ * ✏️ 수정 가이드:
+ *    - 새로운 이동 수단을 추가하려면: getModeIcon, getModeColor, getModeName 함수에 case 추가
+ *    - 'compact' 모드 UI 변경: compact prop이 true일 때의 JSX 수정
+ *    - '상세' 모드 UI 변경: compact prop이 false일 때의 JSX 수정
+ *
+ * 📝 참고사항:
+ *    - travelSlot prop이 없거나 travelSlot.travelInfo가 없으면 아무것도 렌더링하지 않음
+ *    - compact 모드는 주간/월간 뷰와 같이 공간이 제한된 곳에 사용하기 적합
+ *
+ * ===================================================================================================
  */
 
 import React from 'react';
 import { Car, Train, Bike, Footprints, ArrowRight, Clock } from 'lucide-react';
 
+/**
+ * TravelTimeSlot - 이동 시간 슬롯을 시각화하는 컴포넌트
+ *
+ * @description 이동 수단, 출발지, 도착지, 소요 시간 등의 정보를 바탕으로 이동 시간 슬롯을 표시합니다.
+ *              'compact' prop을 통해 간단한 버전과 상세 버전을 선택할 수 있습니다.
+ *
+ * @component
+ *
+ * @param {Object} props - 컴포넌트 props
+ * @param {Object} props.travelSlot - 이동 시간 슬롯 데이터
+ * @param {string} props.travelSlot.from - 출발지
+ * @param {string} props.travelSlot.to - 도착지
+ * @param {Object} props.travelSlot.travelInfo - 이동 정보 (Google Maps API 응답)
+ * @param {string} props.travelSlot.travelInfo.durationText - 소요 시간 텍스트 (예: "15분")
+ * @param {string} [props.travelSlot.travelInfo.distanceText] - 이동 거리 텍스트 (예: "5.3 km")
+ * @param {string} props.travelSlot.travelMode - 이동 수단 ('driving', 'transit', 'bicycling', 'walking')
+ * @param {boolean} [props.compact=false] - compact 모드 여부. true이면 간단한 버전으로 표시됩니다.
+ *
+ * @returns {JSX.Element|null} 이동 시간 슬롯 UI 또는 null
+ */
 const TravelTimeSlot = ({ travelSlot, compact = false }) => {
   if (!travelSlot || !travelSlot.travelInfo) {
     return null;

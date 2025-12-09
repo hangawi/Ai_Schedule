@@ -1,5 +1,43 @@
-// CoordinationTab - Main component (Refactored)
-
+/**
+ * ===================================================================================================
+ * [파일명] CoordinationTab/index.js - '협업' 탭의 메인 컨테이너 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: [프론트엔드] > [client/src/components/tabs/CoordinationTab/index.js]
+ *
+ * 🎯 주요 기능:
+ *    - '협업' 기능의 전체적인 상태 관리 및 UI 렌더링을 담당하는 최상위 컴포넌트.
+ *    - 사용자의 방 목록을 보여주거나, 특정 방에 들어갔을 때의 상세 뷰를 조건부로 렌더링.
+ *    - 방 생성, 참여, 관리, 나가기 등 방 관련 모든 기능 조율.
+ *    - 시간표 보기(주별/월별), 시간 제출, 자동 배정 실행, 스케줄 확정 등 스케줄링 관련 기능 총괄.
+ *    - 교환 요청(일반/연쇄) 관리, 알림, 멤버 관리 등 모든 사용자 상호작용을 처리.
+ *    - Socket.IO를 통한 실시간 이벤트 수신 및 폴링을 통한 데이터 동기화.
+ *
+ * 🔗 연결된 파일:
+ *    - ./hooks/*: 대부분의 로직을 위임받는 커스텀 훅들 (useCoordination, useRequests, useViewState 등).
+ *    - ./components/*: RoomHeader, MemberList 등 이 컴포넌트 내부에서 사용되는 UI 조각들.
+ *    - ../../modals/*: 기능 수행에 필요한 모든 모달 컴포넌트들.
+ *    - ../../services/coordinationService.js: 백엔드 API와 직접 통신.
+ *    - ../../hooks/useCoordination.js: 핵심적인 백엔드 연동 로직을 담고 있는 훅.
+ *
+ * 💡 UI 위치:
+ *    - [협업] 탭: 앱의 핵심 기능인 일정 조율을 수행하는 주 화면.
+ *    - 초기에는 방 목록을 표시하고, 방을 선택하면 해당 방의 상세 관리 화면으로 전환됨.
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: '협업' 탭의 전체적인 동작 방식과 상태 흐름에 영향을 미칩니다.
+ *    - 새로운 기능 추가: 관련된 상태와 핸들러를 적절한 커스텀 훅에 추가하거나 새로운 훅을 만들어 연결해야 합니다.
+ *    - 데이터 흐름 변경: `useCoordination` 훅과 `useEffect` 훅들의 의존성 배열을 주의 깊게 수정해야 합니다.
+ *    - UI 레이아웃 변경: `Room List View`와 `In-Room View`의 JSX 렌더링 부분을 수정합니다.
+ *
+ * 📝 참고사항:
+ *    - 이 컴포넌트는 '협업' 기능의 '갓 컴포넌트(God Component)' 역할을 하며, 수많은 상태와 로직을 관장합니다.
+ *    - 복잡성을 관리하기 위해 대부분의 로직이 커스텀 훅으로 분리되어 있습니다. (useCoordination, useRequests 등)
+ *    - 실시간 통신을 위해 Socket.IO를 사용하며, 보조적으로 5초마다 폴링하여 데이터를 동기화합니다.
+ *    - 전역 이벤트를 사용하여 다른 컴포넌트와의 통신을 일부 수행합니다. (예: `restoreRoom` 이벤트)
+ *
+ * ===================================================================================================
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { auth } from '../../../config/firebaseConfig';
@@ -37,7 +75,6 @@ import NotificationModal from '../../modals/NotificationModal';
 import MemberStatsModal from '../../modals/MemberStatsModal';
 import MemberScheduleModal from '../../modals/MemberScheduleModal';
 import ConfirmScheduleModal from '../../modals/ConfirmScheduleModal';
-// 4.txt: 연쇄 교환 요청 모달
 import ChainExchangeRequestModal from '../../coordination/ChainExchangeRequestModal';
 
 // Local modules
@@ -66,6 +103,15 @@ import {
   ErrorDisplay
 } from './components';
 
+/**
+ * [CoordinationTab]
+ * @description '협업' 기능 전체를 관장하는 메인 컨테이너 컴포넌트.
+ *              방 목록 뷰와 방 상세 뷰 사이를 전환하며, 모든 데이터 페칭, 상태 관리,
+ *              사용자 상호작용 핸들링, 모달 관리 등을 총괄합니다.
+ * @param {object} user - 현재 로그인된 사용자 정보 객체
+ * @param {function} onExchangeRequestCountChange - 상위 컴포넌트로 교환 요청 개수 변경을 알리는 콜백 함수
+ * @returns {JSX.Element} '협업' 탭의 JSX 엘리먼트
+ */
 const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   // Custom hooks - order matters for dependencies
   const { customAlert, showAlert, closeAlert } = useAlertState();
@@ -151,7 +197,12 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     }
   }, [currentRoom?._id, user?.personalTimes, fetchRoomDetails, showAlert]);
 
-  // Socket.io 연결 및 실시간 업데이트
+  /**
+   * [useEffect - Socket.io 연결 및 실시간 업데이트]
+   * @description `currentRoom`이 존재할 때 Socket.IO 서버에 연결하고 해당 방의 'join-room' 이벤트를 emit합니다.
+   *              서버로부터 'schedule-confirmed' (자동 확정 완료) 이벤트를 수신하면, 방 정보를 다시 불러와 UI를 업데이트합니다.
+   *              컴포넌트 언마운트 시 소켓 연결을 해제하는 클린업 함수를 포함합니다.
+   */
   useEffect(() => {
     if (!currentRoom?._id) return;
 
@@ -236,13 +287,16 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         loadRoomExchangeCounts();
         loadSentRequests();
         loadReceivedRequests();
-        // 4.txt: 연쇄 교환 요청 로드
         loadChainExchangeRequests();
       }, 100);
     }
   }, [user?.id]);
 
-  // 🆕 Polling for sent requests (to detect needs_chain_confirmation status)
+  /**
+   * [useEffect - Polling for requests]
+   * @description 5초마다 주기적으로 서버에 새로운 요청(일반/연쇄)이 있는지 폴링하여 데이터를 동기화합니다.
+   *              주로 사용자가 다른 기기에서 요청을 수락했을 때의 상태 변경을 감지하기 위해 사용됩니다.
+   */
   useEffect(() => {
     if (!user?.id) return;
 
@@ -417,7 +471,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   const handleConfirmSchedule = async (skipConfirm = false) => {
     if (!currentRoom?._id) return;
 
-    // 자동배정된 슬롯 확인
     const autoAssignedSlots = currentRoom.timeSlots?.filter(slot =>
       slot.assignedBy && slot.status === 'confirmed'
     ) || [];
@@ -427,14 +480,12 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       return;
     }
 
-    // skipConfirm이 false이면 모달 표시
     if (!skipConfirm) {
       setSlotsToConfirm(autoAssignedSlots.length);
       setShowConfirmModal(true);
       return;
     }
 
-    // skipConfirm이 true이거나 모달에서 확인된 경우 실행
     try {
       const result = await coordinationService.confirmSchedule(currentRoom._id);
 
@@ -443,7 +494,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         'success'
       );
 
-      // 방 정보 새로고침
       await fetchRoomDetails(currentRoom._id);
 
     } catch (error) {
@@ -498,7 +548,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   if (isLoading) return <LoadingSpinner />;
   if (error) return <ErrorDisplay error={error} />;
 
-  // Room view
+  // In-Room View
   if (currentRoom) {
     const isOwner = isRoomOwner(user, currentRoom);
     const scheduleData = getCurrentScheduleData();
@@ -516,9 +566,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         />
 
         <div className="flex gap-2 items-start">
-          {/* Left sidebar */}
           <div className="flex-shrink-0 flex flex-col" style={{height: 'calc(100vh - 200px)'}}>
-              {/* 숨겨진 더미 텍스트로 사이드바 크기 강제 */}
               <div className="invisible h-0 overflow-hidden whitespace-nowrap">
                 00000000000000000000000000000000000000000000000000000000
               </div>
@@ -565,13 +613,11 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
               )}
             </div>
 
-            {/* Main content */}
             <div className="flex-grow">
             <ScheduleErrorAlert scheduleError={scheduleError} />
             <UnassignedMembersAlert unassignedMembersInfo={unassignedMembersInfo} />
             <ConflictSuggestionsAlert conflictSuggestions={conflictSuggestions} />
 
-            {/* 자동 확정 타이머 배너 (모든 사용자에게 표시) */}
             {currentRoom?.autoConfirmAt && (
               <AutoConfirmBanner
                 autoConfirmAt={currentRoom.autoConfirmAt}
@@ -598,7 +644,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
               <TravelErrorAlert travelError={travelError} />
 
-              {/* Timetable view */}
               {viewMode === 'week' ? (
                 <TimetableGrid
                   key={`week-${effectiveShowFullDay ? 'full' : 'basic'}-${showMerged ? 'merged' : 'split'}-${travelMode}`}
@@ -732,7 +777,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           />
         )}
 
-        {/* 확정 모달 */}
         <ConfirmScheduleModal
           show={showConfirmModal}
           onClose={() => setShowConfirmModal(false)}
@@ -740,7 +784,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           slotsCount={slotsToConfirm}
         />
 
-        {/* 4.txt: 연쇄 교환 요청 모달 */}
         <ChainExchangeRequestModal
           isOpen={showChainExchangeModal}
           onClose={() => { setShowChainExchangeModal(false); setSelectedChainRequest(null); }}
@@ -752,7 +795,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     );
   }
 
-  // Room list view
+  // Room List View
   return (
     <>
       <RoomList
@@ -786,7 +829,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         showCancel={false}
       />
 
-      {/* 4.txt: 연쇄 교환 요청 모달 (Room list view에서도 표시) */}
       <ChainExchangeRequestModal
         isOpen={showChainExchangeModal}
         onClose={() => { setShowChainExchangeModal(false); setSelectedChainRequest(null); }}

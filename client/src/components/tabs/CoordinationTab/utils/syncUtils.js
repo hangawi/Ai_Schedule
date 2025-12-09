@@ -1,4 +1,42 @@
-// Sync utility functions for CoordinationTab
+/**
+ * ===================================================================================================
+ * syncUtils.js - CoordinationTab 동기화 유틸리티 함수
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/tabs/CoordinationTab/utils
+ *
+ * 🎯 주요 기능:
+ *    - 방장의 개인시간을 방 설정(roomExceptions)으로 동기화
+ *    - 개인시간 일정 예외(scheduleExceptions)를 시간대별로 병합
+ *    - 반복되는 개인시간(personalTimes)을 방 예외로 변환
+ *    - 자정을 넘나드는 시간을 분할 처리
+ *
+ * 🔗 연결된 파일:
+ *    - ../../../../services/coordinationService.js - 방 업데이트 API
+ *    - ../../../../services/userService.js - 사용자 스케줄 조회 API
+ *    - ../../../../utils/coordinationUtils.js - isRoomOwner 유틸리티
+ *    - ../constants/index.js - DAY_OF_WEEK_MAP 상수
+ *    - ../index.js (CoordinationTab) - 방 선택 시 호출
+ *
+ * 💡 UI 위치:
+ *    - 탭: 조율 탭 (CoordinationTab)
+ *    - 섹션: 방 선택 시 자동 실행 (백그라운드)
+ *    - 경로: 앱 실행 > 조율 탭 > 방 선택
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 방장의 개인시간이 방에 반영되는 방식 변경
+ *    - 동기화 주기 변경: 호출하는 곳(CoordinationTab)에서 조정
+ *    - 예외 형식 변경: syncedExceptions 생성 로직 수정
+ *    - 병합 로직 변경: mergedRanges 계산 로직 수정
+ *
+ * 📝 참고사항:
+ *    - 동기화는 방장만 실행 가능 (isRoomOwner 체크)
+ *    - 기존 isSynced=true 또는 "(방장)" 포함 예외는 삭제 후 재생성
+ *    - 동기화 실패 시 에러 로그만 출력 (사용자 알림 없음)
+ *    - 자정 넘나드는 시간은 00:00 기준으로 분할됨
+ *
+ * ===================================================================================================
+ */
 
 import { coordinationService } from '../../../../services/coordinationService';
 import { userService } from '../../../../services/userService';
@@ -6,11 +44,37 @@ import { isRoomOwner } from '../../../../utils/coordinationUtils';
 import { DAY_OF_WEEK_MAP } from '../constants';
 
 /**
- * Sync owner's personal times to room settings
- * @param {Object} currentRoom - Current room object
- * @param {Object} user - Current user
- * @param {Function} fetchRoomDetails - Function to fetch room details
- * @param {Function} showAlert - Function to show alert
+ * syncOwnerPersonalTimes - 방장의 개인시간을 방 설정으로 동기화
+ *
+ * @description 방장의 개인시간(personalTimes, scheduleExceptions)을 방 예외(roomExceptions)로 동기화
+ * @param {Object} currentRoom - 현재 선택된 방 객체
+ * @param {string} currentRoom._id - 방 ID
+ * @param {Object} user - 현재 사용자 객체
+ * @param {Function} fetchRoomDetails - 방 세부정보 새로고침 함수
+ * @param {Function} showAlert - 알림 표시 함수 (현재 미사용)
+ *
+ * @example
+ * await syncOwnerPersonalTimes(
+ *   currentRoom,
+ *   user,
+ *   fetchRoomDetails,
+ *   showAlert
+ * );
+ *
+ * @note
+ * - 방장이 아니면 즉시 반환 (권한 체크)
+ * - 기존에 동기화된 예외들(isSynced=true, "(방장)" 포함)은 모두 삭제 후 재생성
+ * - scheduleExceptions는 시간대별로 병합되어 중복 방지
+ * - personalTimes는 반복 일정으로 각 요일별로 생성됨
+ * - 자정을 넘나드는 시간(23:00~07:00)은 두 개로 분할됨:
+ *   1. 해당 요일 시작~23:50
+ *   2. 다음 요일 00:00~종료시간
+ * - 동기화 성공 시 알림 없음 (silent sync)
+ * - 동기화 실패 시 콘솔 에러만 출력
+ * - defaultSchedule은 roomExceptions에 추가되지 않음 (ownerOriginalSchedule로 별도 렌더링)
+ *
+ * @async
+ * @returns {Promise<void>}
  */
 export const syncOwnerPersonalTimes = async (currentRoom, user, fetchRoomDetails, showAlert) => {
   if (!currentRoom || !isRoomOwner(user, currentRoom)) {

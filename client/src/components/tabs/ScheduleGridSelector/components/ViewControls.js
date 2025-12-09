@@ -1,15 +1,53 @@
+/**
+ * ===================================================================================================
+ * ViewControls.js - 스케줄 그리드 뷰 컨트롤 버튼 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/tabs/ScheduleGridSelector/components
+ *
+ * 🎯 주요 기능:
+ *    - 뷰 모드 전환 버튼 (주간/월간)
+ *    - 시간 범위 토글 버튼 (기본 9-18시 ↔ 24시간)
+ *    - 병합/분할 모드 토글 버튼
+ *    - 네비게이션 버튼 (이전/다음, 오늘)
+ *    - 현재 날짜 표시 (YYYY년 MM월)
+ *
+ * 🔗 연결된 파일:
+ *    - ../index.js - 이 컴포넌트를 렌더링하여 뷰 컨트롤 제공
+ *    - ../constants/scheduleConstants.js - MONTH_NAMES 상수 사용
+ *    - ../hooks/useViewMode.js - 뷰 모드 상태 관리
+ *    - ../hooks/useWeekNavigation.js - 주간 네비게이션 함수
+ *    - ../hooks/useMonthNavigation.js - 월간 네비게이션 함수
+ *
+ * 💡 UI 위치:
+ *    - 탭: 프로필 탭
+ *    - 섹션: 스케줄 그리드 상단 컨트롤 바
+ *    - 경로: 앱 실행 > 프로필 탭 > 스케줄 그리드 > 상단 버튼들
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 뷰 컨트롤 버튼의 UI와 동작이 변경됨
+ *    - 버튼 스타일 변경: className의 Tailwind 클래스 수정
+ *    - 버튼 추가/제거: 버튼 섹션 추가/삭제
+ *    - 아이콘 변경: lucide-react 아이콘 import 수정
+ *
+ * 📝 참고사항:
+ *    - lucide-react 아이콘 사용 (Grid, Calendar, Clock, Merge, Split, ChevronLeft, ChevronRight)
+ *    - 주간/월간 모드에 따라 네비게이션 함수 다르게 호출
+ *    - 월간 뷰는 enableMonthView prop으로 활성화 제어
+ *    - Tailwind CSS로 스타일링 (반응형 flex-wrap 사용)
+ *
+ * ===================================================================================================
+ */
+
 import React from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Grid, Clock, Merge, Split } from 'lucide-react';
 import { MONTH_NAMES } from '../constants/scheduleConstants';
 
 /**
- * 뷰 컨트롤 버튼들을 렌더링하는 컴포넌트
- * - 주간/월간 모드 전환
- * - 시간 범위 토글 (기본 9-18시 ↔ 24시간)
- * - 병합/분할 모드 토글
- * - 네비게이션 버튼 (이전/다음, 오늘)
+ * ViewControls - 스케줄 그리드 뷰 컨트롤 버튼 컴포넌트
  *
- * @param {Object} props
+ * @description 스케줄 그리드의 뷰 모드, 시간 범위, 병합 모드를 제어하는 버튼들을 렌더링
+ * @param {Object} props - 컴포넌트 props
  * @param {string} props.viewMode - 현재 뷰 모드 ('week' | 'month')
  * @param {Function} props.setViewMode - 뷰 모드 설정 함수
  * @param {boolean} props.enableMonthView - 월간 뷰 활성화 여부
@@ -18,9 +56,31 @@ import { MONTH_NAMES } from '../constants/scheduleConstants';
  * @param {boolean} props.showMerged - 병합 모드 여부
  * @param {Function} props.setShowMerged - 병합 모드 설정 함수
  * @param {Date} props.currentDate - 현재 날짜
- * @param {Function} props.navigateMonth - 월 네비게이션 함수
- * @param {Function} props.navigateWeek - 주 네비게이션 함수
+ * @param {Function} props.navigateMonth - 월 네비게이션 함수 (direction: 1 | -1)
+ * @param {Function} props.navigateWeek - 주 네비게이션 함수 (direction: 1 | -1)
  * @param {Function} props.goToToday - 오늘로 이동 함수
+ * @returns {JSX.Element} 뷰 컨트롤 버튼 UI
+ *
+ * @example
+ * <ViewControls
+ *   viewMode="week"
+ *   setViewMode={setViewMode}
+ *   enableMonthView={false}
+ *   showFullDay={false}
+ *   toggleTimeRange={toggleTimeRange}
+ *   showMerged={true}
+ *   setShowMerged={setShowMerged}
+ *   currentDate={new Date()}
+ *   navigateMonth={navigateMonth}
+ *   navigateWeek={navigateWeek}
+ *   goToToday={goToToday}
+ * />
+ *
+ * @note
+ * - 왼쪽: 뷰 모드 버튼, 시간 범위 버튼, 병합/분할 버튼
+ * - 오른쪽: 이전/다음 버튼, 현재 날짜, 오늘 버튼
+ * - 주간 모드: 파란색, 월간 모드: 파란색, 24시간: 보라색, 병합: 초록색
+ * - 월간 뷰 비활성화 시 "개발 중" 표시
  */
 const ViewControls = ({
   viewMode,

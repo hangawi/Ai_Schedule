@@ -1,20 +1,77 @@
+/**
+ * ===================================================================================================
+ * DetailedWeekView.js - 주간 상세 뷰 컴포넌트 (분할 모드)
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/tabs/ScheduleGridSelector/components
+ *
+ * 🎯 주요 기능:
+ *    - 10분 단위 세부 시간표 그리드 표시
+ *    - 시간 슬롯별로 각 일정을 개별 셀에 표시
+ *    - 개인시간, 선호시간, 예외시간을 색상으로 구분
+ *    - 우선순위: 예외 일정 > 개인 시간 > 반복 일정
+ *    - 반복 일정 vs 특정 날짜 일정 구분
+ *
+ * 🔗 연결된 파일:
+ *    - ../index.js - 이 컴포넌트를 렌더링하여 분할 모드 제공
+ *    - ../utils/timeUtils.js - timeToMinutes 함수 사용
+ *    - ../constants/scheduleConstants.js - DAYS, PRIORITY_CONFIG 상수 사용
+ *    - ../hooks/useTimeSlots.js - allPersonalTimes, getCurrentTimeSlots 제공
+ *
+ * 💡 UI 위치:
+ *    - 탭: 프로필 탭
+ *    - 섹션: 스케줄 그리드 > 주간 뷰 > 분할 모드
+ *    - 경로: 앱 실행 > 프로필 탭 > 스케줄 그리드 > 분할 버튼 클릭
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 분할 모드 시간표의 UI와 색상 로직이 변경됨
+ *    - 셀 높이 변경: h-8 값 수정
+ *    - 색상 우선순위 변경: exceptionSlot > personalSlot > recurringSlot 순서 변경
+ *    - Tailwind 색상 매핑 변경: tailwindToHex 테이블 수정
+ *
+ * 📝 참고사항:
+ *    - 10분 단위 그리드 (TIME_SLOT_INTERVAL=10)
+ *    - 예외 일정: priority 색상, 개인 시간: 커스텀 hex 색상 (투명도 CC)
+ *    - 반복 일정: priority 색상
+ *    - 자정 넘김 처리: endMinutes <= startMinutes 확인
+ *    - 9시간(54슬롯) 넘으면 maxHeight 60vh, 아니면 70vh
+ *
+ * ===================================================================================================
+ */
+
 import React from 'react';
 import { timeToMinutes } from '../utils/timeUtils';
 import { DAYS, PRIORITY_CONFIG } from '../constants/scheduleConstants';
 
 /**
- * 상세 주간 뷰 컴포넌트 (분할 모드)
- * - 시간 슬롯별로 각 일정을 개별 셀에 표시
- * - 10분 단위 그리드 형태
- * - 개인시간, 선호시간, 예외시간을 색상으로 구분
+ * DetailedWeekView - 주간 상세 뷰 컴포넌트 (분할 모드)
  *
- * @param {Object} props
- * @param {Array} props.allPersonalTimes - 개인 시간 배열
- * @param {Array} props.schedule - 기본 일정 (선호 시간)
+ * @description 10분 단위로 세부 시간표를 그리드 형태로 표시하는 컴포넌트
+ * @param {Object} props - 컴포넌트 props
+ * @param {Array} props.allPersonalTimes - 개인 시간 배열 (personalTimes + fixedSchedules)
+ * @param {Array} props.schedule - 기본 일정 (선호 시간, 반복 일정)
  * @param {Array} props.exceptions - 특정 날짜 예외 일정
- * @param {Array} props.weekDates - 주간 날짜 배열
- * @param {Function} props.getCurrentTimeSlots - 현재 시간 슬롯 가져오기 함수
- * @param {Object} props.priorityConfig - 우선순위 설정 객체
+ * @param {Array} props.weekDates - 주간 날짜 배열 (7개 요소, 일요일~토요일)
+ * @param {Function} props.getCurrentTimeSlots - 현재 시간 슬롯 배열 반환 함수
+ * @param {Object} props.priorityConfig - 우선순위 설정 객체 (색상 및 레이블)
+ * @returns {JSX.Element} 분할 모드 시간표 UI
+ *
+ * @example
+ * <DetailedWeekView
+ *   allPersonalTimes={allPersonalTimes}
+ *   schedule={schedule}
+ *   exceptions={exceptions}
+ *   weekDates={weekDates}
+ *   getCurrentTimeSlots={getCurrentTimeSlots}
+ *   priorityConfig={PRIORITY_CONFIG}
+ * />
+ *
+ * @note
+ * - 우선순위: exceptionSlot (예외 일정) > personalSlot (개인 시간) > recurringSlot (반복 일정)
+ * - 개인 시간 색상: hex 코드 + CC (투명도 80%)
+ * - 예외/반복 일정 색상: PRIORITY_CONFIG에서 가져옴
+ * - 자정 넘김 처리: endMinutes <= startMinutes 확인
+ * - 반복 일정: days 배열로 요일 판단, 특정 날짜: specificDate로 판단
  */
 const DetailedWeekView = ({
   allPersonalTimes,
@@ -59,10 +116,31 @@ const DetailedWeekView = ({
 
               const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-              // 1. 반복 일정 (schedule) 확인
+              /**
+               * 1. 반복 일정 (schedule) 확인
+               *
+               * @description 요일과 시작 시간이 일치하는 반복 일정 찾기
+               * @note
+               * - dayOfWeek로 요일 확인
+               * - startTime이 현재 time과 정확히 일치해야 함
+               */
               const recurringSlot = schedule.find(s => s.dayOfWeek === day.dayOfWeek && s.startTime === time);
 
-              // 2. 예외 일정 (exceptions) 확인
+              /**
+               * 2. 예외 일정 (exceptions) 확인
+               *
+               * @description 특정 날짜에 지정된 예외 일정 찾기
+               *
+               * @process
+               * 1. specificDate가 dateStr과 일치하는지 확인
+               * 2. startTime이 ISO 형식 또는 HH:MM 형식인지 확인
+               * 3. 현재 time이 시작~종료 시간 범위에 있는지 확인
+               *
+               * @note
+               * - ISO 형식: new Date()로 파싱하여 시간 추출
+               * - HH:MM 형식: timeToMinutes로 변환
+               * - currentMinutes >= startMins && currentMinutes < endMins
+               */
               const exceptionSlot = exceptions.find(e => {
                 if (e.specificDate !== dateStr) return false;
 
@@ -86,7 +164,22 @@ const DetailedWeekView = ({
                 return currentMinutes >= startMins && currentMinutes < endMins;
               });
 
-              // 3. 개인 시간 (personalTimes) 확인
+              /**
+               * 3. 개인 시간 (personalTimes) 확인
+               *
+               * @description 개인시간 또는 고정일정 찾기 (반복 일정 또는 특정 날짜)
+               *
+               * @process
+               * 1. specificDate가 있고 isRecurring이 false면 특정 날짜로 비교
+               * 2. 없으면 반복 일정으로 판단 (days 배열로 요일 확인)
+               * 3. 시작~종료 시간 범위에 현재 time이 있는지 확인
+               * 4. 자정 넘김 처리 (endMinutes <= startMinutes)
+               *
+               * @note
+               * - days 배열의 7은 0(일요일)으로 변환
+               * - 자정 넘김: currentMinutes >= startMinutes || currentMinutes < endMinutes
+               * - 일반: currentMinutes >= startMinutes && currentMinutes < endMinutes
+               */
               const personalSlot = allPersonalTimes.find(p => {
                 const personalDays = p.days || [];
 
@@ -128,6 +221,22 @@ const DetailedWeekView = ({
                 return false;
               });
 
+              /**
+               * 셀 스타일 및 내용 결정
+               *
+               * @description 우선순위에 따라 셀의 색상과 내용 결정
+               *
+               * @priority
+               * 1. exceptionSlot (예외 일정) - 가장 높은 우선순위
+               * 2. personalSlot (개인 시간) - 두 번째 우선순위
+               * 3. recurringSlot (반복 일정) - 가장 낮은 우선순위
+               *
+               * @note
+               * - exceptionSlot: priorityConfig 색상 사용
+               * - personalSlot: hex 색상 + CC (투명도 80%)
+               * - recurringSlot: priorityConfig 색상 사용
+               * - Tailwind 클래스를 hex 코드로 변환 (tailwindToHex 매핑)
+               */
               // 우선순위: exceptionSlot > personalSlot > recurringSlot
               let slotClass = 'bg-white hover:bg-blue-50';
               let content = null;

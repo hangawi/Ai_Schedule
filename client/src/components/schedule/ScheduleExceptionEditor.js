@@ -1,7 +1,69 @@
+/**
+ * ===================================================================================================
+ * ScheduleExceptionEditor.js - 예외 일정 (특정 날짜 선호시간) 관리 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/schedule/ScheduleExceptionEditor.js
+ *
+ * 🎯 주요 기능:
+ *    - 예외 일정 추가/수정/삭제 (특정 날짜에만 적용되는 선호시간)
+ *    - 휴가, 시험, 출장 등 일회성 일정 관리
+ *    - 특정 날짜 및 시간대 설정
+ *    - 예외 일정 목록 표시 (날짜 및 시간 포맷팅)
+ *    - 편집 모드에서만 추가/수정/삭제 가능
+ *
+ * 🔗 연결된 파일:
+ *    - ../modals/CustomAlertModal.js - 알림 모달
+ *    - lucide-react - 아이콘 라이브러리 (Calendar, Plus, Edit, Trash2 등)
+ *
+ * 💡 UI 위치:
+ *    - 탭: 내프로필 > 선호시간 섹션 하단
+ *    - 섹션: 프로필 탭의 "예외 일정 관리" 카드
+ *    - 경로: 앱 실행 > 내프로필 탭 > 선호시간 아래
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 예외 일정 관리 UI 및 동작이 변경됨
+ *    - 폼 제출 로직 변경: handleFormSubmit 함수 수정 (line 38-66)
+ *    - 삭제 로직 변경: handleRemoveException 함수 수정 (line 68-74)
+ *    - 날짜/시간 표시 형식 변경: formatDate, formatTime 함수 수정 (line 92-93)
+ *    - 기본값 변경: newException 초기 state 수정 (line 6-12)
+ *
+ * 📝 참고사항:
+ *    - 예외 일정은 특정 날짜에만 적용되는 선호시간 (챗봇으로 추가됨)
+ *    - 기본 선호시간과 달리 특정 날짜(date)를 가짐
+ *    - 편집 모드(isEditing)가 true일 때만 추가/수정/삭제 가능
+ *    - 서버 DB 스키마에 type, description 필드는 없지만 클라이언트에서 사용
+ *    - 시간은 ISO 8601 형식으로 저장 (YYYY-MM-DDTHH:mm:ss.sssZ)
+ *    - 종료 시간은 시작 시간보다 늦어야 함 (같은 날짜 내)
+ *
+ * ===================================================================================================
+ */
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { Calendar, Plus, Trash2, Edit, X } from 'lucide-react';
 import CustomAlertModal from '../modals/CustomAlertModal';
 
+/**
+ * ScheduleExceptionEditor - 예외 일정 관리 컴포넌트
+ *
+ * @description 휴가, 시험 등 특정 날짜에만 적용되는 선호시간 관리
+ * @param {Array} exceptions - 예외 일정 목록 배열
+ * @param {Function} setExceptions - 예외 일정 목록 업데이트 함수
+ * @param {Boolean} isEditing - 편집 모드 활성화 여부
+ *
+ * @example
+ * <ScheduleExceptionEditor
+ *   exceptions={user.scheduleExceptions}
+ *   setExceptions={setExceptions}
+ *   isEditing={isEditing}
+ * />
+ *
+ * @note
+ * - exceptions 각 항목 구조: { _id, title, startTime, endTime, type, description }
+ * - startTime, endTime: ISO 8601 형식 (YYYY-MM-DDTHH:mm:ss.sssZ)
+ * - type: 'unavailable' 등 (클라이언트 전용, DB 스키마에는 없음)
+ * - 자동배정 시 해당 날짜에 이 시간을 선호시간으로 사용
+ */
 const ScheduleExceptionEditor = ({ exceptions = [], setExceptions, isEditing }) => {
   const [newException, setNewException] = useState({
     title: '',
@@ -35,6 +97,17 @@ const ScheduleExceptionEditor = ({ exceptions = [], setExceptions, isEditing }) 
     setCustomAlert({ show: false, message: '', title: '' });
   }, []);
 
+  /**
+   * handleFormSubmit - 예외 일정 추가/수정 폼 제출 핸들러
+   *
+   * @description 유효성 검증 후 예외 일정을 추가하거나 수정
+   * @returns {void}
+   *
+   * @note
+   * - editingId가 있으면 수정, 없으면 추가
+   * - 시간을 ISO 8601 형식으로 변환하여 저장
+   * - 제출 후 폼 초기화
+   */
   const handleFormSubmit = useCallback(() => {
     if (!newException.title.trim() || !newException.date || !newException.startTime || !newException.endTime) {
       showAlert('모든 필드를 입력해주세요.');
@@ -65,6 +138,13 @@ const ScheduleExceptionEditor = ({ exceptions = [], setExceptions, isEditing }) 
     setNewException({ title: '', date: new Date().toISOString().split('T')[0], startTime: '09:00', endTime: '10:00', type: 'unavailable' });
   }, [newException, exceptions, setExceptions, showAlert, editingId]);
 
+  /**
+   * handleRemoveException - 예외 일정 삭제 핸들러
+   *
+   * @description 예외 일정을 삭제하고, 편집 중인 항목이면 편집 상태 초기화
+   * @param {Number|String} id - 삭제할 예외 일정의 _id
+   * @returns {void}
+   */
   const handleRemoveException = useCallback((id) => {
     setExceptions(exceptions.filter(exc => exc._id !== id));
     if (id === editingId) {

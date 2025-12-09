@@ -998,7 +998,17 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
       `자동배정 시간 확정 완료 (${autoAssignedSlots.length}개 슬롯 → ${Object.values(mergedSlotsByUser).reduce((sum, slots) => sum + slots.length, 0)}개 병합, 조원 ${Object.keys(mergedSlotsByUser).length}명 + 방장)`
     );
     
-    // 8. 성공 응답
+    // 8. Socket.io로 실시간 알림 전송
+    if (global.io) {
+      global.io.to(`room-${roomId}`).emit('schedule-confirmed', {
+        roomId: roomId,
+        message: '자동배정 시간이 확정되었습니다.',
+        timestamp: new Date()
+      });
+      console.log(`📡 [수동확정] Socket 이벤트 전송: room-${roomId}`);
+    }
+    
+    // 9. 성공 응답
     res.json({
       msg: '배정 시간이 각 조원과 방장의 개인일정으로 확정되었습니다.',
       confirmedSlotsCount: autoAssignedSlots.length,

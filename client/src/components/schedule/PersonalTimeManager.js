@@ -1,7 +1,73 @@
+/**
+ * ===================================================================================================
+ * PersonalTimeManager.js - 개인 시간 관리 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/components/schedule/PersonalTimeManager.js
+ *
+ * 🎯 주요 기능:
+ *    - 개인 시간 추가/수정/삭제 (수면, 식사, 출퇴근, 학습, 휴식, 기타)
+ *    - 반복 일정 및 특정 날짜 일정 관리
+ *    - 요일별 개인시간 설정
+ *    - 시간 범위 유효성 검증 (수면시간은 다음날까지 허용)
+ *    - 자동 저장 및 달력 업데이트
+ *    - 개인시간 목록 표시 및 정렬 (일회성 먼저, 시간순)
+ *
+ * 🔗 연결된 파일:
+ *    - ../modals/CustomAlertModal.js - 알림 모달
+ *    - lucide-react - 아이콘 라이브러리 (Clock, Plus, Edit, Trash2 등)
+ *
+ * 💡 UI 위치:
+ *    - 탭: 내프로필 > 개인시간 섹션
+ *    - 섹션: 프로필 탭 하단의 "개인 시간 관리" 카드
+ *    - 경로: 앱 실행 > 내프로필 탭 > 스크롤 하단
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 개인시간 관리 UI 및 동작이 변경됨
+ *    - 새 개인시간 유형 추가: personalTimeTypes 객체에 type 추가 (line 32-39)
+ *    - 시간 검증 로직 변경: validateTimeRange 함수 수정 (line 72-87)
+ *    - 자동 저장 동작 변경: handleFormSubmit, handleRemovePersonalTime의 onAutoSave 호출 부분 수정
+ *    - 날짜 표시 형식 변경: formatDays 함수 수정 (line 226-248)
+ *
+ * 📝 참고사항:
+ *    - 개인시간은 자동 배정 시 제외되는 시간대
+ *    - 수면시간(sleep)은 다음 날까지 이어질 수 있음 (22:00 - 08:00)
+ *    - 편집 모드(isEditing)가 true일 때만 추가/수정/삭제 가능
+ *    - 편집 모드가 아닐 때 추가/삭제 시 자동 저장됨 (onAutoSave)
+ *    - 달력 업데이트를 위해 CustomEvent 'calendarUpdate' 발행
+ *    - 일회성 개인시간(specificDate)과 반복 개인시간(days) 구분
+ *
+ * ===================================================================================================
+ */
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { Clock, Plus, Trash2, Edit, X, Moon, Utensils, Car, BookOpen, Coffee, Settings } from 'lucide-react';
 import CustomAlertModal from '../modals/CustomAlertModal';
 
+/**
+ * PersonalTimeManager - 개인 시간 관리 컴포넌트
+ *
+ * @description 수면, 식사, 출퇴근 등 개인적인 시간을 설정하여 자동 배정에서 제외
+ * @param {Array} personalTimes - 개인시간 목록 배열
+ * @param {Function} setPersonalTimes - 개인시간 목록 업데이트 함수
+ * @param {Boolean} isEditing - 편집 모드 활성화 여부
+ * @param {Function} onAutoSave - 자동 저장 콜백 함수
+ *
+ * @example
+ * <PersonalTimeManager
+ *   personalTimes={user.personalTimes}
+ *   setPersonalTimes={setPersonalTimes}
+ *   isEditing={isEditing}
+ *   onAutoSave={handleAutoSave}
+ * />
+ *
+ * @note
+ * - personalTimes 각 항목 구조: { id, title, type, startTime, endTime, days, isRecurring, specificDate, color }
+ * - type: 'sleep', 'meal', 'commute', 'study', 'break', 'custom'
+ * - days: 반복 일정의 요일 배열 [1=월, 2=화, ..., 7=일]
+ * - isRecurring: true면 반복, false면 일회성
+ * - specificDate: 일회성 일정의 날짜 (YYYY-MM-DD)
+ */
 const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, onAutoSave }) => {
   const [newPersonalTime, setNewPersonalTime] = useState({
     title: '',
@@ -50,6 +116,12 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
     setCustomAlert({ show: false, message: '', title: '' });
   }, []);
 
+  /**
+   * handleTypeChange - 개인시간 유형 변경 핸들러
+   *
+   * @description 유형 변경 시 해당 유형의 기본 시간 및 제목으로 자동 설정
+   * @param {String} type - 'sleep', 'meal', 'commute', 'study', 'break', 'custom' 중 하나
+   */
   const handleTypeChange = (type) => {
     const typeConfig = personalTimeTypes[type];
     setNewPersonalTime({
@@ -69,6 +141,16 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
     setNewPersonalTime({ ...newPersonalTime, days: newDays });
   };
 
+  /**
+   * validateTimeRange - 시간 범위 유효성 검증
+   *
+   * @description 종료 시간이 시작 시간보다 늦은지 검증 (수면시간은 다음날 허용)
+   * @param {String} startTime - 시작 시간 (HH:mm)
+   * @param {String} endTime - 종료 시간 (HH:mm)
+   * @returns {Boolean} 유효하면 true, 아니면 false
+   *
+   * @note 수면시간(type='sleep')의 경우 endTime < startTime 허용 (예: 22:00 - 08:00)
+   */
   const validateTimeRange = (startTime, endTime) => {
     if (!startTime || !endTime) return false;
 
@@ -86,6 +168,18 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
     return endMinutes > startMinutes;
   };
 
+  /**
+   * handleFormSubmit - 개인시간 추가/수정 폼 제출 핸들러
+   *
+   * @description 유효성 검증 후 개인시간을 추가하거나 수정하고 자동 저장 및 달력 업데이트
+   * @returns {Promise<void>}
+   *
+   * @note
+   * - editingId가 있으면 수정, 없으면 추가
+   * - 편집 모드가 아닐 때(isEditing=false) 자동 저장 실행
+   * - CustomEvent 'calendarUpdate' 발행하여 달력 새로고침
+   * - 수정 완료 시 폼 초기화, 추가 시에는 제목만 비움
+   */
   const handleFormSubmit = useCallback(async () => {
     if (!newPersonalTime.title.trim()) {
       showAlert('제목을 입력해주세요.');
@@ -161,6 +255,18 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
 
   }, [newPersonalTime, personalTimes, setPersonalTimes, showAlert, editingId, onAutoSave]);
 
+  /**
+   * handleRemovePersonalTime - 개인시간 삭제 핸들러
+   *
+   * @description 개인시간을 삭제하고 자동 저장 및 달력 업데이트
+   * @param {Number} id - 삭제할 개인시간의 ID
+   * @returns {Promise<void>}
+   *
+   * @note
+   * - 편집 중인 항목을 삭제하면 편집 상태 초기화
+   * - 편집 모드가 아닐 때(isEditing=false) 자동 저장 실행 (100ms 지연)
+   * - CustomEvent 'calendarUpdate' 발행하여 달력 새로고침
+   */
   const handleRemovePersonalTime = useCallback(async (id) => {
 
     const updatedPersonalTimes = personalTimes.filter(pt => pt.id !== id);
@@ -223,6 +329,22 @@ const PersonalTimeManager = ({ personalTimes = [], setPersonalTimes, isEditing, 
     });
   };
 
+  /**
+   * formatDays - 개인시간의 요일/날짜 표시 문자열 포맷팅
+   *
+   * @description 일회성 일정은 날짜 표시, 반복 일정은 요일 표시
+   * @param {Object} personalTime - 개인시간 객체
+   * @returns {String} 포맷된 날짜/요일 문자열
+   *
+   * @example
+   * // 일회성: "12월 25일 (월)"
+   * // 반복 (매일): "매일"
+   * // 반복 (평일): "평일"
+   * // 반복 (주말): "주말"
+   * // 반복 (특정요일): "월, 수, 금"
+   *
+   * @note YYYY-MM-DD 형식의 날짜를 로컬 시간대로 파싱하여 UTC 문제 해결
+   */
   const formatDays = useCallback((personalTime) => {
     // 특정 날짜의 개인시간인 경우
     if (personalTime.isRecurring === false && personalTime.specificDate) {

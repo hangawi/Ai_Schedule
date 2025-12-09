@@ -37,7 +37,10 @@
  * ===================================================================================================
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { io } from 'socket.io-client';
+import { auth } from '../../../config/firebaseConfig';
+import { coordinationService } from '../../../services/coordinationService';
 import CalendarView from '../../calendar/CalendarView';
 import DetailTimeGrid from '../../calendar/DetailTimeGrid';
 import PersonalTimeManager from '../../schedule/PersonalTimeManager';
@@ -135,6 +138,104 @@ const ProfileTab = ({ onEditingChange }) => {
     setScheduleExceptions,
     setDefaultSchedule
   );
+
+  /**
+   * [useEffect - Socket.IO 연결 및 실시간 프로필 업데이트]
+   * @description 사용자가 속한 모든 방의 Socket.IO room에 join하고,
+   *              'schedule-confirmed' 이벤트를 수신하면 프로필을 자동으로 새로고침합니다.
+   *              이를 통해 사용자가 프로필 탭에 있을 때도 자동 확정/수동 확정 시
+   *              개인일정이 실시간으로 업데이트됩니다.
+   */
+  useEffect(() => {
+    let socket = null;
+    let mounted = true;
+
+    const setupSocketConnection = async () => {
+      try {
+        // 현재 사용자의 방 목록 가져오기
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const myRooms = await coordinationService.getMyRooms();
+        if (!mounted) return;
+
+        // Socket.IO 연결
+        const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+        socket = io(API_BASE_URL, {
+          transports: ['websocket', 'polling']
+        });
+
+        // 모든 방에 join
+        const allRooms = [...(myRooms.owned || []), ...(myRooms.joined || [])];
+        allRooms.forEach(room => {
+          socket.emit('join-room', room._id);
+          console.log(`📡 [프로필탭] Socket joined room: ${room._id}`);
+        });
+
+        // 자동 확정 이벤트 수신
+        socket.on('schedule-confirmed', async (data) => {
+          console.log('📡 [프로필탭] Schedule confirmed event received:', data);
+          
+          // 프로필 정보 다시 가져오기
+          if (mounted) {
+            await fetchSchedule();
+            showAlert('자동배정 시간이 확정되어 개인일정이 업데이트되었습니다!', '알림');
+          }
+        });
+
+      } catch (error) {
+        console.error('[프로필탭] Socket 연결 실패:', error);
+      }
+    };
+
+    setupSocketConnection();
+
+    // cleanup
+    return () => {
+      mounted = false;
+      if (socket) {
+        socket.disconnect();
+        console.log('📡 [프로필탭] Socket disconnected');
+      }
+    };
+  }, [fetchSchedule, showAlert]);
+
+  /**
+   * [useEffect - 주기적인 프로필 데이터 폴링]
+   * @description Socket.IO 이벤트를 놓칠 수 있는 경우를 대비하여
+   *              30초마다 프로필 데이터를 자동으로 새로고침합니다.
+   *              (예: 서버가 꺼졌다가 다시 켜진 경우, 네트워크 끊김 등)
+   */
+  useEffect(() => {
+    // 편집 중일 때는 폴링하지 않음 (사용자가 편집 중인 데이터를 덮어쓰지 않기 위해)
+    if (isEditing) return;
+
+    const pollInterval = setInterval(() => {
+      fetchSchedule();
+    }, 30000); // 30초마다 새로고침
+
+    return () => clearInterval(pollInterval);
+  }, [fetchSchedule, isEditing]);
+
+  /**
+   * [useEffect - 탭 활성화 시 프로필 새로고침]
+   * @description 사용자가 다른 탭에 있다가 프로필 탭으로 돌아올 때
+   *              자동으로 최신 데이터를 가져옵니다.
+   */
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      // 탭이 활성화되고, 편집 중이 아닐 때만 새로고침
+      if (!document.hidden && !isEditing) {
+        fetchSchedule();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchSchedule, isEditing]);
 
   // 핸들러 생성
   const handleSave = createSaveHandler(

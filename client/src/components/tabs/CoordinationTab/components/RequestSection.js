@@ -1,5 +1,35 @@
-// Request management section component for non-owners
-
+/**
+ * ===================================================================================================
+ * [파일명] RequestSection.js - 자리 요청 관리 섹션 컴포넌트
+ * ===================================================================================================
+ *
+ * 📍 위치: [프론트엔드] > [client/src/components/tabs/CoordinationTab/components/RequestSection.js]
+ *
+ * 🎯 주요 기능:
+ *    - 방에 소속된 일반 멤버에게 '자리 요청관리' UI를 제공.
+ *    - '받은 요청'과 '보낸 요청'을 탭으로 구분하여 보여줌.
+ *    - 각 요청의 상태(대기중, 승인됨, 거절됨, 연쇄 조정중 등)에 따라 시각적으로 다르게 표시.
+ *    - 요청에 대한 상호작용(승인, 거절, 요청 취소) 버튼 제공.
+ *    - 요청 데이터를 기반으로 사용자 친화적인 설명 메시지를 동적으로 생성.
+ *
+ * 🔗 연결된 파일:
+ *    - ../index.js (CoordinationTab): 이 컴포넌트에 필요한 모든 데이터(requests)와 핸들러 함수(handleRequestWithUpdate 등)를 props로 전달.
+ *
+ * 💡 UI 위치:
+ *    - [협업] 탭 > (방 선택 후) > 좌측 사이드바 (방장이 아닌 멤버에게 표시됨)
+ *
+ * ✏️ 수정 가이드:
+ *    - 이 파일을 수정하면: 멤버의 요청 관리 UI 및 표시 방식이 변경됩니다.
+ *    - 요청 메시지 생성 로직 변경: `generateRequestMessage` 함수의 내용을 수정하여 사용자에게 보여지는 메시지를 변경할 수 있습니다.
+ *    - 새로운 요청 상태 UI 추가: `ReceivedRequestsView` 또는 `SentRequestsView` 내부에서 새로운 status에 대한 분기 처리 및 CSS 클래스를 추가합니다.
+ *
+ * 📝 참고사항:
+ *    - 이 컴포넌트는 UI 렌더링에만 집중하는 Presentational Component입니다. 실제 로직은 모두 props를 통해 상위 컴포넌트(`CoordinationTab`)에서 전달받습니다.
+ *    - `generateRequestMessage` 헬퍼 함수는 단순 요청 외에도, 사용자의 이동 가능성, 연쇄 교환 필요성 등을 고려하여 상당히 지능적인 메시지를 생성하는 핵심 로직을 포함합니다.
+ *    - 'waiting_for_chain'(연쇄 조정 진행중), 'needs_chain_confirmation'(연쇄 조정 확인 필요) 등 복잡한 연쇄 교환 상태를 시각적으로 처리하는 로직이 포함되어 있습니다.
+ *
+ * ===================================================================================================
+ */
 import React from 'react';
 import { Users, AlertTriangle } from 'lucide-react';
 import { auth } from '../../../../config/firebaseConfig';
@@ -14,7 +44,13 @@ const dayMap = {
   'friday': '금요일'
 };
 
-// Helper function to check if slots are in user's preferred times
+/**
+ * [checkIfSlotsInPreferredTimes]
+ * @description 주어진 시간(slots)이 사용자의 선호 시간대(priority >= 2) 내에 포함되는지 확인하는 헬퍼 함수.
+ * @param {Array<object>} slots - 확인할 시간 슬롯 배열.
+ * @param {Array<object>} userPreferredTimes - 사용자의 전체 선호 시간(defaultSchedule) 배열.
+ * @returns {boolean} 모든 슬롯이 선호 시간대에 포함되면 true, 아니면 false.
+ */
 const checkIfSlotsInPreferredTimes = (slots, userPreferredTimes) => {
   if (!slots || slots.length === 0 || !userPreferredTimes || userPreferredTimes.length === 0) {
     return false;
@@ -47,7 +83,15 @@ const checkIfSlotsInPreferredTimes = (slots, userPreferredTimes) => {
   });
 };
 
-// Helper function to generate improved request messages
+/**
+ * [generateRequestMessage]
+ * @description 요청(request) 객체를 기반으로 사용자에게 보여줄 자연스러운 한글 메시지를 생성하는 헬퍼 함수.
+ *              요청 유형(자리 요청, 교환, 연쇄 요청 등)과 관련 데이터를 분석하여 상황에 맞는 상세한 설명을 제공합니다.
+ * @param {object} request - 메시지를 생성할 요청 객체.
+ * @param {object} currentRoom - 현재 방 정보.
+ * @param {object} currentUser - 현재 로그인한 사용자 정보.
+ * @returns {string} 생성된 설명 메시지.
+ */
 const generateRequestMessage = (request, currentRoom, currentUser) => {
   // If message already contains useful info, use it
   if (request.message && (
@@ -165,6 +209,12 @@ const generateRequestMessage = (request, currentRoom, currentUser) => {
   }
 };
 
+/**
+ * [RequestSection]
+ * @description 멤버의 '받은 요청'과 '보낸 요청'을 관리하는 전체 UI 섹션을 렌더링하는 메인 컴포넌트.
+ * @param {object} props - 컴포넌트에 전달되는 모든 props.
+ * @returns {JSX.Element} 자리 요청 관리 섹션 JSX 엘리먼트.
+ */
 const RequestSection = ({
   currentRoom,
   currentUser,
@@ -242,6 +292,12 @@ const RequestSection = ({
   );
 };
 
+/**
+ * [ReceivedRequestsView]
+ * @description '받은 요청' 목록을 '대기 중인 요청'과 '처리된 요청'으로 나누어 렌더링하는 컴포넌트.
+ * @param {object} props - 컴포넌트에 전달되는 모든 props.
+ * @returns {JSX.Element} 받은 요청 목록 뷰 JSX 엘리먼트.
+ */
 const ReceivedRequestsView = ({
   currentRoom,
   currentUser,
@@ -427,6 +483,12 @@ const ReceivedRequestsView = ({
   );
 };
 
+/**
+ * [SentRequestsView]
+ * @description '보낸 요청' 목록을 '대기 중인 요청'과 '처리된 요청'으로 나누어 렌더링하는 컴포넌트.
+ * @param {object} props - 컴포넌트에 전달되는 모든 props.
+ * @returns {JSX.Element} 보낸 요청 목록 뷰 JSX 엘리먼트.
+ */
 const SentRequestsView = ({
   currentRoom,
   currentUser,
