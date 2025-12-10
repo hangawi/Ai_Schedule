@@ -411,7 +411,9 @@ const findNearestMemberWithSufficientTime = async ({
   candidateMembers,
   currentDay,
   classDurationMinutes,
-  transportMode = 'public'
+  transportMode = 'public',
+  roomBlockedTimes = [],  // 추가
+  roomExceptions = []     // 추가
 }) => {
   // 1. 거리 순으로 정렬
   const sortedMembers = await sortMembersByDistance(currentLocation, candidateMembers, transportMode);
@@ -445,7 +447,9 @@ const findNearestMemberWithSufficientTime = async ({
         preferenceStart,
         preferenceEnd,
         personalTimes,
-        currentDay
+        currentDay,
+        roomBlockedTimes,  // 추가
+        roomExceptions     // 추가
       );
 
       if (validation.isValid) {

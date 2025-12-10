@@ -32,7 +32,9 @@ const assignByPublicTransport = async (
 ) => {
   const {
     transportMode = 'public',
-    minClassDurationMinutes = 60 // 최소 수업 시간 (기본 1시간)
+    minClassDurationMinutes = 60, // 최소 수업 시간 (기본 1시간)
+    roomBlockedTimes = [],  // 추가
+    roomExceptions = []     // 추가
   } = options;
 
   console.log('\n🚌 ===== 대중교통 모드 배정 시작 =====');
@@ -96,7 +98,9 @@ const assignByPublicTransport = async (
         candidateMembers: unassignedMembers,
         currentDay: DAY_MAP[dayOfWeek],
         classDurationMinutes: minClassDurationMinutes,
-        transportMode
+        transportMode,
+        roomBlockedTimes,  // 추가
+        roomExceptions     // 추가
       });
 
       if (!result) {

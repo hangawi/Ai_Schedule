@@ -147,6 +147,64 @@ const calculateSlotCount = (startTime, endTime) => {
 };
 
 /**
+ * 방 레벨 금지시간을 personalTimes 형식으로 변환
+ * @param {Array} blockedTimes - 방 금지시간 배열 [{ name, startTime, endTime }]
+ * @param {string} currentDay - 현재 요일 (월, 화, 수, 목, 금)
+ * @returns {Array} personalTimes 형식의 배열
+ */
+const convertRoomBlockedTimes = (blockedTimes, currentDay) => {
+  if (!blockedTimes || blockedTimes.length === 0) return [];
+  
+  return blockedTimes.map(bt => ({
+    type: 'room_blocked',
+    title: bt.name,
+    startTime: bt.startTime,
+    endTime: bt.endTime,
+    days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'], // 모든 요일 적용
+    isRecurring: true
+  }));
+};
+
+/**
+ * 방 레벨 예외시간을 personalTimes 형식으로 변환
+ * @param {Array} roomExceptions - 방 예외시간 배열
+ * @param {string} currentDay - 현재 요일 (월, 화, 수, 목, 금)
+ * @returns {Array} personalTimes 형식의 배열
+ */
+const convertRoomExceptions = (roomExceptions, currentDay) => {
+  if (!roomExceptions || roomExceptions.length === 0) return [];
+  
+  // currentDay는 'monday', 'tuesday' 등의 영문 요일
+  const dayMap = { 
+    'monday': 1, 
+    'tuesday': 2, 
+    'wednesday': 3, 
+    'thursday': 4, 
+    'friday': 5, 
+    'saturday': 6, 
+    'sunday': 0 
+  };
+  const currentDayNum = dayMap[currentDay];
+  
+  return roomExceptions
+    .filter(ex => {
+      if (ex.type === 'daily_recurring') {
+        // dayOfWeek 체크 (1=월, 5=금, 0=일)
+        return ex.dayOfWeek === currentDayNum;
+      }
+      return true; // date_specific은 나중에 처리
+    })
+    .map(ex => ({
+      type: 'room_exception',
+      title: ex.name,
+      startTime: ex.startTime,
+      endTime: ex.endTime,
+      days: [currentDay],
+      isRecurring: ex.type === 'daily_recurring'
+    }));
+};
+
+/**
  * 예외시간(개인시간)과 충돌하는지 확인
  * @param {string} startTime - 시작 시간 (HH:MM)
  * @param {string} endTime - 종료 시간 (HH:MM)
@@ -195,6 +253,11 @@ const findNextAvailableSlot = (
 
   // 1. 도착시간부터 바로 시작 가능한지 확인
   const conflict = findConflictingPersonalTime(arrivalTime, classEndTime, personalTimes, dayOfWeek);
+  
+  // 디버깅 로그
+  if (conflict) {
+    console.log(`   ⚠️  충돌 발견: ${arrivalTime}-${classEndTime} vs ${conflict.startTime}-${conflict.endTime} (${conflict.type || conflict.title || '개인시간'})`);
+  }
 
   if (!conflict) {
     // 충돌 없음 - 바로 배정 가능
@@ -247,8 +310,29 @@ const validateTimeSlotWithTravel = (
   preferenceStart,
   preferenceEnd,
   personalTimes,
-  dayOfWeek
+  dayOfWeek,
+  roomBlockedTimes = [],  // 추가
+  roomExceptions = []     // 추가
 ) => {
+  // 방 레벨 금지시간을 personalTimes 형식으로 변환하여 병합
+  const roomBlocked = convertRoomBlockedTimes(roomBlockedTimes, dayOfWeek);
+  const roomExcept = convertRoomExceptions(roomExceptions, dayOfWeek);
+  const allBlockedTimes = [
+    ...personalTimes,
+    ...roomBlocked,
+    ...roomExcept
+  ];
+  
+  // 디버깅 로그
+  if (roomBlockedTimes.length > 0 || roomExceptions.length > 0) {
+    console.log(`
+🚫 [방 금지시간 확인] 요일: ${dayOfWeek}`);
+    console.log(`   원본 roomBlockedTimes:`, roomBlockedTimes);
+    console.log(`   원본 roomExceptions:`, roomExceptions);
+    console.log(`   변환된 roomBlocked:`, roomBlocked);
+    console.log(`   변환된 roomExcept:`, roomExcept);
+    console.log(`   병합된 allBlockedTimes 개수:`, allBlockedTimes.length);
+  }
   // 1. 도착 시간 계산
   const currentEndMinutes = timeToMinutes(currentEndTime);
   const arrivalMinutes = currentEndMinutes + travelTimeMinutes;
@@ -262,7 +346,7 @@ const validateTimeSlotWithTravel = (
     const result = findNextAvailableSlot(
       actualStartTime,
       classDurationMinutes,
-      personalTimes,
+      allBlockedTimes,  // 변경
       dayOfWeek,
       preferenceEnd
     );
@@ -278,7 +362,7 @@ const validateTimeSlotWithTravel = (
   const result = findNextAvailableSlot(
     arrivalTime,
     classDurationMinutes,
-    personalTimes,
+    allBlockedTimes,  // 변경
     dayOfWeek,
     preferenceEnd
   );
@@ -304,5 +388,7 @@ module.exports = {
   calculateSlotCount,
   findConflictingPersonalTime,
   findNextAvailableSlot,
-  validateTimeSlotWithTravel
+  validateTimeSlotWithTravel,
+  convertRoomBlockedTimes,  // 추가
+  convertRoomExceptions     // 추가
 };

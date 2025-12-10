@@ -164,7 +164,9 @@ class SchedulingAlgorithm {
       // 대중교통/이동수단 모드: 최단거리 우선 배정
       await assignByPublicTransport(timetable, assignments, memberRequiredSlots, ownerId, members, {
         transportMode,
-        minClassDurationMinutes
+        minClassDurationMinutes,
+        roomBlockedTimes: roomTimeSlots?.settings?.blockedTimes || [],
+        roomExceptions: roomTimeSlots?.settings?.roomExceptions || []
       });
     } else {
       // 일반 모드: 시간 순서 우선 배정 (1시간 블록씩)
