@@ -456,63 +456,7 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
               </div>
             </div>
             
-            {/* 방장 개인시간 연동 및 roomExceptions 표시 */}
-            {ownerProfileSchedule && (
-              <div className="mt-4 border-t pt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-medium text-gray-700">방장 개인시간 연동 (배정 금지)</h4>
-                  <button
-                    type="button"
-                    onClick={handleSyncOwnerSchedule}
-                    className={`px-3 py-1 text-xs rounded-md ${
-                      syncOwnerSchedule ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
-                    } text-white`}
-                  >
-                    {syncOwnerSchedule ? '연동 해제' : '내 개인시간 연동하기'}
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 mb-2">
-                  💡 개인시간(수면, 식사 등)만 금지시간으로 연동됩니다. 선호시간은 조원 배정에 사용됩니다.
-                </p>
-                {settings.roomExceptions.length > 0 && (
-                  <div className="mb-3">
-                    <div className="text-sm text-gray-600 mb-2">
-                      금지시간 목록 ({settings.roomExceptions.length}개)
-                    </div>
-                    <div className="max-h-32 overflow-y-auto space-y-1 border border-gray-200 rounded p-2 bg-gray-50">
-                      {settings.roomExceptions.map((exception, index) => (
-                        <div key={index} className="flex items-center justify-between p-1 bg-white rounded text-xs">
-                          <div className="flex-1 truncate">
-                            <span className="font-medium text-gray-700">
-                              {exception.type === 'daily_recurring'
-                                ? `${dayOfWeekMap[exception.dayOfWeek]} ${exception.startTime}-${exception.endTime}`
-                                : `${new Date(exception.startDate).toLocaleDateString()} ${exception.startTime}-${exception.endTime}`
-                              }
-                            </span>
-                            {exception.isSynced && (
-                              <span className="text-blue-500 ml-1">(연동)</span>
-                            )}
-                          </div>
-                          {!exception.isSynced && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updatedExceptions = settings.roomExceptions.filter((_, i) => i !== index);
-                                setSettings({...settings, roomExceptions: updatedExceptions});
-                              }}
-                              className="text-red-500 hover:text-red-700 px-1"
-                              title="삭제"
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+
           </div>
         </div>
         
