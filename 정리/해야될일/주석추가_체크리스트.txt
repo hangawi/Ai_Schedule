@@ -466,25 +466,25 @@
 📂 1. 메인 & 설정 (10개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 [x] server/index.js
-[ ] server/add_members_to_room_direct.js
-[ ] server/add_preference_time_to_users.js
-[ ] server/add_timeslots_to_members.js
-[ ] server/check_slots.js
-[ ] server/create_users_and_join_room.js
-[ ] server/join_all_to_room.js
-[ ] server/config/firebaseAdmin.js
-[ ] server/config/db.js
+[x] server/add_members_to_room_direct.js
+[x] server/add_preference_time_to_users.js
+[x] server/add_timeslots_to_members.js
+[x] server/check_slots.js
+[x] server/create_users_and_join_room.js
+[x] server/join_all_to_room.js
+[x] server/config/firebaseAdmin.js
+[x] server/config/db.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 2. 미들웨어 (Middleware) (2개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] server/middleware/adminAuth.js
-[ ] server/middleware/auth.js
+[x] server/middleware/adminAuth.js
+[x] server/middleware/auth.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 3. 모델 (Models) (4개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] server/models/ActivityLog.js
+[x] server/models/ActivityLog.js
 [ ] server/models/event.js
 [ ] server/models/room.js
 [ ] server/models/user.js
@@ -842,12 +842,12 @@
 ## 📊 진행률 추적
 
 - 전체 파일 수: 341개 (클라이언트: 223개, 서버: 118개)
-- 완료한 파일: 201 / 341
-- 진행률: 59.0%
+- 완료한 파일: 213 / 341
+- 진행률: 62.5%
 
 ### 세부 진행률
 - 클라이언트: 201 / 223 (90.1%)
-- 서버: 0 / 118 (0%)
+- 서버: 12 / 118 (10.2%)
   - nview 폴더: 0 / 11
   - scheduleOptimizer 폴더: 0 / 14
 

@@ -191,9 +191,11 @@ const httpServer = http.createServer(app);
 
 // Socket.io 서버 설정
 const io = new Server(httpServer, {
-  cors: corsOptions.origin.map(o => o.replace(/\/$/, '')), // CORS 설정 재사용
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true
+  cors: {
+    origin: corsOptions.origin, // CORS 설정 재사용 (함수 전달)
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
+  }
 });
 
 // 다른 모듈에서 io 객체를 사용할 수 있도록 전역으로 설정
