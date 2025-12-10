@@ -343,10 +343,11 @@ const validateTimeSlotWithTravel = (
   if (arrivalMinutes < prefStartMinutes) {
     // 선호시간 시작 이전 도착 → 선호시간 시작부터 배정
     const actualStartTime = preferenceStart;
+    const totalDuration = travelTimeMinutes + classDurationMinutes; // 이동시간 + 수업시간
     const result = findNextAvailableSlot(
       actualStartTime,
-      classDurationMinutes,
-      allBlockedTimes,  // 변경
+      totalDuration,  // 전체 시간으로 체크
+      allBlockedTimes,
       dayOfWeek,
       preferenceEnd
     );
@@ -355,14 +356,26 @@ const validateTimeSlotWithTravel = (
       return { isValid: false, reason: result.reason };
     }
 
-    return { isValid: true, slot: result };
+    // 실제 수업 시작/종료 시간 계산
+    const classStartMinutes = timeToMinutes(result.startTime) + travelTimeMinutes;
+    const classEndMinutes = classStartMinutes + classDurationMinutes;
+    
+    return { 
+      isValid: true, 
+      slot: {
+        startTime: minutesToTime(classStartMinutes),  // 수업 시작 (도착 시간)
+        endTime: minutesToTime(classEndMinutes),      // 수업 종료
+        waitTime: result.waitTime
+      }
+    };
   }
 
-  // 3. 선호시간 내 도착 → 예외시간 확인
+  // 3. 선호시간 내 도착 → 이동시간 포함하여 전체 체크
+  const totalDuration = travelTimeMinutes + classDurationMinutes; // 이동시간 + 수업시간
   const result = findNextAvailableSlot(
-    arrivalTime,
-    classDurationMinutes,
-    allBlockedTimes,  // 변경
+    currentEndTime,  // 이동 시작 시간부터 체크
+    totalDuration,   // 전체 시간으로 체크
+    allBlockedTimes,
     dayOfWeek,
     preferenceEnd
   );
@@ -371,7 +384,18 @@ const validateTimeSlotWithTravel = (
     return { isValid: false, reason: result.reason };
   }
 
-  return { isValid: true, slot: result };
+  // 실제 수업 시작/종료 시간 계산
+  const classStartMinutes = timeToMinutes(result.startTime) + travelTimeMinutes;
+  const classEndMinutes = classStartMinutes + classDurationMinutes;
+  
+  return { 
+    isValid: true, 
+    slot: {
+      startTime: minutesToTime(classStartMinutes),  // 수업 시작 (도착 시간)
+      endTime: minutesToTime(classEndMinutes),      // 수업 종료
+      waitTime: result.waitTime
+    }
+  };
 };
 
 module.exports = {

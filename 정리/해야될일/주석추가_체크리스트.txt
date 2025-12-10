@@ -379,21 +379,21 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 19. 상수 (Constants) (2개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] client/src/constants/coordination.js
-[ ] client/src/constants/scheduleConstants.js
+[x] client/src/constants/coordination.js
+[x] client/src/constants/scheduleConstants.js
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📂 20. 훅스 (Hooks) (20개)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[ ] client/src/hooks/useAudioManager.js
-[ ] client/src/hooks/useAuth.js
-[ ] client/src/hooks/useBackgroundMonitoring.js
-[ ] client/src/hooks/useCoordination.js
-[ ] client/src/hooks/useCoordinationModals.js
-[ ] client/src/hooks/useIntegratedVoiceSystem.js
-[ ] client/src/hooks/useSharedAudioStream.js
-[ ] client/src/hooks/useTravelMode.js
-[ ] client/src/hooks/useVoiceCommands.js
+[x] client/src/hooks/useAudioManager.js
+[x] client/src/hooks/useAuth.js
+[x] client/src/hooks/useBackgroundMonitoring.js
+[x] client/src/hooks/useCoordination.js
+[x] client/src/hooks/useCoordinationModals.js
+[x] client/src/hooks/useIntegratedVoiceSystem.js
+[x] client/src/hooks/useSharedAudioStream.js
+[x] client/src/hooks/useTravelMode.js
+[x] client/src/hooks/useVoiceCommands.js
 
 # useChat 폴더 (11개)
 [ ] client/src/hooks/useChat/index.js
@@ -842,11 +842,11 @@
 ## 📊 진행률 추적
 
 - 전체 파일 수: 341개 (클라이언트: 223개, 서버: 118개)
-- 완료한 파일: 213 / 341
-- 진행률: 62.5%
+- 완료한 파일: 223 / 341
+- 진행률: 65.4%
 
 ### 세부 진행률
-- 클라이언트: 201 / 223 (90.1%)
+- 클라이언트: 211 / 223 (94.6%)
 - 서버: 12 / 118 (10.2%)
   - nview 폴더: 0 / 11
   - scheduleOptimizer 폴더: 0 / 14

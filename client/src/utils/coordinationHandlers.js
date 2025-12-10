@@ -200,7 +200,7 @@ export const handleRunAutoSchedule = async (
       ...scheduleOptions,
       currentWeek: uiCurrentWeek,
       numWeeks,
-      travelMode, // Add travelMode to options
+      transportMode: travelMode, // 서버가 기대하는 파라미터명: transportMode
       clientToday: new Date().toISOString().slice(0, 10)
     };
     
@@ -210,6 +210,7 @@ export const handleRunAutoSchedule = async (
       numWeeks,
       minHoursPerWeek: finalOptions.minHoursPerWeek,
       assignmentMode: finalOptions.assignmentMode,
+      transportMode: travelMode,  // 추가
       clientToday: finalOptions.clientToday
     });
     console.log('🔍 ==========================================');

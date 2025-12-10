@@ -162,7 +162,7 @@ class SchedulingAlgorithm {
     // 배정 전략 선택: 대중교통 모드 vs 시간 순서 배정
     if (transportMode === 'public' || transportMode === 'driving' || transportMode === 'walking') {
       // 대중교통/이동수단 모드: 최단거리 우선 배정
-      await assignByPublicTransport(timetable, assignments, memberRequiredSlots, ownerId, members, {
+      await assignByPublicTransport(timetable, assignments, memberRequiredSlots, ownerId, members, owner, {
         transportMode,
         minClassDurationMinutes,
         roomBlockedTimes: roomTimeSlots?.settings?.blockedTimes || [],

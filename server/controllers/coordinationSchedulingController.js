@@ -9,7 +9,14 @@ const schedulingAlgorithm = require('../services/schedulingAlgorithm');
 exports.runAutoSchedule = async (req, res) => {
    try {
       const { roomId } = req.params;
-      const { minHoursPerWeek = 3, numWeeks = 4, currentWeek, assignmentMode } = req.body;
+      const { 
+      minHoursPerWeek = 3, 
+      numWeeks = 4, 
+      currentWeek, 
+      assignmentMode,
+      transportMode = 'normal',           // 추가: 대중교통 모드 (기본값: normal)
+      minClassDurationMinutes = 60        // 추가: 최소 수업시간 (기본값: 60분)
+   } = req.body;
       
       const validModes = ['normal', 'first_come_first_served', 'from_today'];
       const mode = assignmentMode && validModes.includes(assignmentMode)
@@ -19,7 +26,14 @@ exports.runAutoSchedule = async (req, res) => {
       const startDate = currentWeek ? new Date(currentWeek) : new Date();
       
       console.log('🔍 ===== [서버] 자동배정 요청 받음 =====');
-      console.log('📥 받은 파라미터:', { minHoursPerWeek, numWeeks, currentWeek: currentWeek ? currentWeek : 'undefined', assignmentMode: mode });
+      console.log('📥 받은 파라미터:', { 
+         minHoursPerWeek, 
+         numWeeks, 
+         currentWeek: currentWeek ? currentWeek : 'undefined', 
+         assignmentMode: mode,
+         transportMode,              // 추가
+         minClassDurationMinutes     // 추가
+      });
       console.log('📅 계산된 startDate:', startDate.toISOString().split('T')[0]);
       console.log('🔍 ===================================\n');
 
@@ -146,6 +160,8 @@ exports.runAutoSchedule = async (req, res) => {
                ...room.settings,
                ownerBlockedTimes: ownerBlockedTimes
             },
+            transportMode,              // 추가: 이동수단 모드 전달
+            minClassDurationMinutes     // 추가: 최소 수업 시간 전달
          },
          existingCarryOvers,
       );

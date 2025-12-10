@@ -28,6 +28,7 @@ const assignByPublicTransport = async (
   memberRequiredSlots,
   ownerId,
   members,
+  owner,      // 추가: 방장 객체
   options = {}
 ) => {
   const {
@@ -77,8 +78,8 @@ const assignByPublicTransport = async (
     }
 
     // 첫 번째 학생은 가장 이른 시간에 배정 (방장 위치 기준)
-    const owner = members.find(m => m.user._id.toString() === ownerId);
-    if (!owner || !owner.user.addressLat || !owner.user.addressLng) {
+    // owner는 파라미터로 전달받음
+    if (!owner || !owner.user?.addressLat || !owner.user?.addressLng) {
       console.log('   ⚠️  방장 위치 정보 없음 - 대중교통 모드 사용 불가');
       return;
     }

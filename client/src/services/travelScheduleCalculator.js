@@ -113,17 +113,44 @@ class TravelScheduleCalculator {
 
             const slotStartMinutes = this.parseTime(mergedSlot.startTime);
             const slotEndMinutes = this.parseTime(mergedSlot.endTime);
-
-            const newTravelEndTimeMinutes = slotStartMinutes + travelDurationMinutes;
-            const newActivityStartTimeMinutes = newTravelEndTimeMinutes;
-            const newActivityEndTimeMinutes = slotEndMinutes + travelDurationMinutes;
-
             const activityDurationMinutes = slotEndMinutes - slotStartMinutes;
+
+            // 초기 시간 계산
+            let newTravelStartMinutes = slotStartMinutes;
+            let newTravelEndTimeMinutes = slotStartMinutes + travelDurationMinutes;
+            let newActivityStartTimeMinutes = newTravelEndTimeMinutes;
+            let newActivityEndTimeMinutes = slotEndMinutes + travelDurationMinutes;
+
+            // 방 금지시간 체크
+            const blockedTimes = currentRoom.settings?.blockedTimes || [];
+            for (const blocked of blockedTimes) {
+                const blockedStart = this.parseTime(blocked.startTime);
+                const blockedEnd = this.parseTime(blocked.endTime);
+
+                // 이동시간 또는 활동시간이 금지시간과 겹치는지 체크
+                const hasOverlap = (
+                    (newTravelStartMinutes < blockedEnd && newTravelEndTimeMinutes > blockedStart) ||
+                    (newActivityStartTimeMinutes < blockedEnd && newActivityEndTimeMinutes > blockedStart)
+                );
+
+                if (hasOverlap) {
+                    // 겹침! 금지시간 이후로 이동
+                    newActivityStartTimeMinutes = blockedEnd;
+                    newActivityEndTimeMinutes = blockedEnd + activityDurationMinutes;
+                    newTravelEndTimeMinutes = newActivityStartTimeMinutes;
+                    newTravelStartMinutes = newTravelEndTimeMinutes - travelDurationMinutes;
+                    
+                    console.log(`🚫 [금지시간 회피] ${blocked.name} (${blocked.startTime}-${blocked.endTime})`);
+                    console.log(`   원래: ${this.formatTime(slotStartMinutes)}-${this.formatTime(slotEndMinutes)}`);
+                    console.log(`   조정: 이동 ${this.formatTime(newTravelStartMinutes)}-${this.formatTime(newTravelEndTimeMinutes)}, 수업 ${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)}`);
+                    break; // 첫 번째 충돌만 처리 (여러 금지시간이 있을 경우 재귀 필요)
+                }
+            }
 
             const travelBlock = {
                 ...mergedSlot,
                 isTravel: true,
-                startTime: this.formatTime(slotStartMinutes),
+                startTime: this.formatTime(newTravelStartMinutes),  // 조정된 이동 시작 시간
                 endTime: this.formatTime(newTravelEndTimeMinutes),
                 subject: '이동시간',
                 travelInfo: { ...travelInfo, durationText: `${travelDurationMinutes}분` },

@@ -51,6 +51,37 @@ exports.createRoom = async (req, res) => {
       }
 
       await room.save();
+
+      // 방 금지시간을 방장 프로필에 동기화
+      if (settings && settings.blockedTimes && settings.blockedTimes.length > 0) {
+         try {
+            const owner = await User.findById(req.user.id);
+            if (owner) {
+               // 기존 방 금지시간 제거 (중복 방지)
+               owner.personalTimes = owner.personalTimes.filter(pt => pt.type !== 'room_blocked');
+               
+               // 새로운 방 금지시간 추가
+               settings.blockedTimes.forEach(bt => {
+                  owner.personalTimes.push({
+                     id: Date.now() + Math.floor(Math.random() * 1000), // 고유 ID 생성
+                     type: 'room_blocked',
+                     title: bt.name,
+                     startTime: bt.startTime,
+                     endTime: bt.endTime,
+                     days: [1, 2, 3, 4, 5, 6, 7], // 숫자 배열: 1=월요일, 7=일요일
+                     isRecurring: true
+                  });
+               });
+               
+               await owner.save();
+               console.log(`✅ [방 생성] ${settings.blockedTimes.length}개 금지시간을 방장 프로필에 동기화`);
+            }
+         } catch (syncError) {
+            console.error('❌ [방 생성] 금지시간 동기화 실패:', syncError);
+            // 동기화 실패해도 방 생성은 성공
+         }
+      }
+
       await room.populate('owner', 'firstName lastName email firebaseUid');
       await room.populate('members.user', 'firstName lastName email firebaseUid');
 
@@ -115,6 +146,40 @@ exports.updateRoom = async (req, res) => {
       if (maxMembers) room.maxMembers = maxMembers;
       if (settings) {
          room.settings = { ...room.settings.toObject(), ...settings };
+         
+         // 방 금지시간이 변경되면 방장 프로필에 동기화
+         if (settings.blockedTimes !== undefined) {
+            try {
+               const owner = await User.findById(room.owner);
+               if (owner) {
+                  // 기존 방 금지시간 제거
+                  owner.personalTimes = owner.personalTimes.filter(pt => pt.type !== 'room_blocked');
+                  
+                  // 새로운 방 금지시간 추가
+                  if (settings.blockedTimes && settings.blockedTimes.length > 0) {
+                     settings.blockedTimes.forEach(bt => {
+                        owner.personalTimes.push({
+                           id: Date.now() + Math.floor(Math.random() * 1000), // 고유 ID 생성
+                           type: 'room_blocked',
+                           title: bt.name,
+                           startTime: bt.startTime,
+                           endTime: bt.endTime,
+                           days: [1, 2, 3, 4, 5, 6, 7], // 숫자 배열: 1=월요일, 7=일요일
+                           isRecurring: true
+                        });
+                     });
+                     console.log(`✅ [방 수정] ${settings.blockedTimes.length}개 금지시간을 방장 프로필에 동기화`);
+                  } else {
+                     console.log(`✅ [방 수정] 금지시간 제거됨 - 방장 프로필에서도 제거`);
+                  }
+                  
+                  await owner.save();
+               }
+            } catch (syncError) {
+               console.error('❌ [방 수정] 금지시간 동기화 실패:', syncError);
+               // 동기화 실패해도 방 수정은 성공
+            }
+         }
       }
 
       await room.save();
