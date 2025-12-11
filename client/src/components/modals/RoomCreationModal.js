@@ -256,7 +256,7 @@ useEffect(() => {
           roomExceptions: finalExceptions
         };
       });
-
+    }
   }, [syncOwnerSchedule, ownerProfileSchedule]); // ownerProfileSchedule이 변경될 때도 재실행
 
   const handleSubmit = () => {

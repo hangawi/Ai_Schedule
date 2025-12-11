@@ -134,11 +134,11 @@ class TravelScheduleCalculator {
                 );
 
                 if (hasOverlap) {
-                    // 겹침! 금지시간 이후로 이동
-                    newActivityStartTimeMinutes = blockedEnd;
-                    newActivityEndTimeMinutes = blockedEnd + activityDurationMinutes;
-                    newTravelEndTimeMinutes = newActivityStartTimeMinutes;
-                    newTravelStartMinutes = newTravelEndTimeMinutes - travelDurationMinutes;
+                    // 겹침! 금지시간 이후로 이동 (이동 시작을 금지시간 끝으로 설정)
+                    newTravelStartMinutes = blockedEnd;
+                    newTravelEndTimeMinutes = blockedEnd + travelDurationMinutes;
+                    newActivityStartTimeMinutes = newTravelEndTimeMinutes;
+                    newActivityEndTimeMinutes = newActivityStartTimeMinutes + activityDurationMinutes;
                     
                     console.log(`🚫 [금지시간 회피] ${blocked.name} (${blocked.startTime}-${blocked.endTime})`);
                     console.log(`   원래: ${this.formatTime(slotStartMinutes)}-${this.formatTime(slotEndMinutes)}`);
