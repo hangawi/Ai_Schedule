@@ -271,15 +271,16 @@ const AutoSchedulerPanel = ({
           </div>
         )}
 
-        {/* 확정 버튼 */}
-        <button
-          onClick={onConfirmSchedule}
-          disabled={!currentRoom?.timeSlots?.some(slot => slot.assignedBy && slot.status === 'confirmed')}
-          className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-2 px-3 rounded-lg font-medium hover:from-green-600 hover:to-green-700 disabled:from-gray-300 disabled:to-gray-400 transition-all duration-200 shadow-md flex items-center justify-center text-sm"
-        >
-          <CheckCircle size={16} className="mr-2" />
-          {timeRemaining && timeRemaining !== 0 ? '지금 확정하기' : '배정 시간 확정'}
-        </button>
+        {/* 확정 버튼 - 자동배정 후에만 표시 */}
+        {currentRoom?.timeSlots?.some(slot => slot.assignedBy && slot.status === 'confirmed') && (
+          <button
+            onClick={onConfirmSchedule}
+            className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-2 px-3 rounded-lg font-medium hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm"
+          >
+            <CheckCircle size={16} className="mr-2" />
+            {timeRemaining && timeRemaining !== 0 ? '지금 확정하기' : '배정 시간 확정'}
+          </button>
+        )}
         
         {/* 배정 모드 선택 드롭다운 */}
         <div className="mt-4 mode-dropdown" ref={dropdownRef}>

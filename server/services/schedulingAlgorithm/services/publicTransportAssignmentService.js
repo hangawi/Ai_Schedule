@@ -91,6 +91,26 @@ const assignByPublicTransport = async (
     };
     let currentEndTime = null;
 
+    // Bug 6 수정: 첫 번째 배정 전, 방장 위치 기준으로 멤버 거리 순 정렬
+    console.log(`
+📍 [초기화] 방장 위치 기준 거리 순 정렬`);
+    const { sortMembersByDistance } = require('../helpers/assignmentHelper');
+
+    const initialSorted = await sortMembersByDistance(
+      currentLocation,
+      unassignedMembers,
+      transportMode
+    );
+
+    // 거리 순으로 재정렬
+    unassignedMembers = initialSorted.map(item => item.member);
+
+    console.log(`   정렬 결과:`);
+    initialSorted.forEach((item, idx) => {
+      const name = item.member.user.displayName || item.member.user._id.toString().substring(0, 8);
+      console.log(`   ${idx + 1}. ${name}: ${item.travelTimeMinutes}분`);
+    });
+
     // 순차적으로 가장 가까운 멤버 찾아서 배정
     while (unassignedMembers.length > 0) {
       const result = await findNearestMemberWithSufficientTime({

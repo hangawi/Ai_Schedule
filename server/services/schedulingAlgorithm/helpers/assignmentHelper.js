@@ -208,7 +208,9 @@ const calculateTravelTime = async (origin, destination, transportMode = 'transit
     // transportMode 매핑
     const modeMap = {
       'public': 'transit',
+      'transit': 'transit',
       'driving': 'driving',
+      'bicycling': 'bicycling',
       'walking': 'walking'
     };
     const mode = modeMap[transportMode] || 'transit';
@@ -280,7 +282,13 @@ const calculateTravelTimesBatch = async (origin, destinations, transportMode = '
     const originParam = `${origin.lat},${origin.lng}`;
 
     // 캐시되지 않은 목적지만 필터링
-    const modeMap = { 'public': 'transit', 'driving': 'driving', 'walking': 'walking' };
+    const modeMap = {
+      'public': 'transit',
+      'transit': 'transit',
+      'driving': 'driving',
+      'bicycling': 'bicycling',
+      'walking': 'walking'
+    };
     const mode = modeMap[transportMode] || 'transit';
 
     const uncachedDests = [];

@@ -246,7 +246,7 @@ export const handleRunAutoSchedule = async (
   } finally {
     setIsScheduling(false);
   }
-};
+};;
 
 /**
  * Handle cancel request

@@ -74,7 +74,7 @@ import CustomAlertModal from '../../modals/CustomAlertModal';
 import NotificationModal from '../../modals/NotificationModal';
 import MemberStatsModal from '../../modals/MemberStatsModal';
 import MemberScheduleModal from '../../modals/MemberScheduleModal';
-import ConfirmScheduleModal from '../../modals/ConfirmScheduleModal';
+
 import ChainExchangeRequestModal from '../../coordination/ChainExchangeRequestModal';
 
 // Local modules
@@ -121,9 +121,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   const [showChainExchangeModal, setShowChainExchangeModal] = useState(false);
   const [selectedChainRequest, setSelectedChainRequest] = useState(null);
 
-  // 확정 모달 상태
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [slotsToConfirm, setSlotsToConfirm] = useState(0);
+  
 
   const {
     myRooms, currentRoom, isLoading, error,
@@ -481,9 +479,9 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     }
 
     if (!skipConfirm) {
-      setSlotsToConfirm(autoAssignedSlots.length);
-      setShowConfirmModal(true);
-      return;
+      if (!window.confirm(`${autoAssignedSlots.length}개의 자동배정 시간을 개인일정으로 확정하시겠습니까?`)) {
+        return;
+      }
     }
 
     try {
@@ -506,6 +504,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     try {
       const updatedRoom = await coordinationService.deleteAllTimeSlots(currentRoom._id);
       setCurrentRoom(updatedRoom);
+      handleTravelModeChange('normal'); // 교통수단 상태 초기화
       showAlert('시간표가 모두 삭제되었습니다.');
     } catch (error) {
       showAlert(`시간표 삭제에 실패했습니다: ${error.message}`, 'error');
@@ -776,13 +775,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
             onClose={() => { setShowMemberScheduleModal(false); setSelectedMemberId(null); }}
           />
         )}
-
-        <ConfirmScheduleModal
-          show={showConfirmModal}
-          onClose={() => setShowConfirmModal(false)}
-          onConfirm={() => handleConfirmSchedule(true)}
-          slotsCount={slotsToConfirm}
-        />
 
         <ChainExchangeRequestModal
           isOpen={showChainExchangeModal}

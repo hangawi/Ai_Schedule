@@ -39,7 +39,7 @@ import travelScheduleCalculator from '../services/travelScheduleCalculator';
  *              계산된 데이터를 다양한 뷰(주간, 월간)에 맞게 가공하여 반환합니다.
  * @param {object|null} currentRoom - 현재 선택된 방 정보 객체
  * @returns {object} 이동 모드 상태 및 관련 함수들을 포함하는 객체
- * @property {string} travelMode - 현재 선택된 이동 모드 ('normal', 'public', 'driving')
+ * @property {string} travelMode - 현재 선택된 이동 모드 ('normal', 'transit', 'driving', 'bicycling', 'walking')
  * @property {Function} handleModeChange - 이동 모드를 변경하고 스케줄 재계산을 트리거하는 함수
  * @property {boolean} isCalculating - 이동 시간 계산이 진행 중인지 여부
  * @property {string|null} error - 계산 중 발생한 에러 메시지
