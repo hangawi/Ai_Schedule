@@ -64,7 +64,7 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
     endTime: '13:00'
   });
 
-  const [syncOwnerSchedule, setSyncOwnerSchedule] = useState(false); // 방장 시간표 연동 상태
+  const [syncOwnerSchedule] = useState(true); // 방장 시간표 자동 연동 (항상 활성화)
 
   // CustomAlert 상태
   const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
@@ -89,12 +89,7 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
     0: '일요일', 1: '월요일', 2: '화요일', 3: '수요일', 4: '목요일', 5: '금요일', 6: '토요일'
   };
 
-  // 방장 시간표 연동 토글 핸들러
-  const handleSyncOwnerSchedule = () => {
-    setSyncOwnerSchedule(prev => !prev);
-  };
-
-  useEffect(() => {
+useEffect(() => {
     if (syncOwnerSchedule && ownerProfileSchedule) {
       const syncedExceptions = [];
 
@@ -261,13 +256,7 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
           roomExceptions: finalExceptions
         };
       });
-    } else if (!syncOwnerSchedule) {
-      // 연동 해제 시, 연동된 예외만 제거
-      setSettings(prevSettings => ({
-        ...prevSettings,
-        roomExceptions: prevSettings.roomExceptions.filter(ex => !ex.isSynced)
-      }));
-    }
+
   }, [syncOwnerSchedule, ownerProfileSchedule]); // ownerProfileSchedule이 변경될 때도 재실행
 
   const handleSubmit = () => {
