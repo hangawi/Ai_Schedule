@@ -50,6 +50,103 @@ class TravelScheduleCalculator {
   }
 
   /**
+   * 도보 모드 검증 (1시간 초과 경로 체크)
+   * @param {Object} currentRoom - 현재 방 데이터
+   * @returns {Promise<Object>} - { isValid: boolean, message: string }
+   */
+  async validateWalkingMode(currentRoom) {
+    if (!currentRoom || !currentRoom.timeSlots || currentRoom.timeSlots.length === 0) {
+      return { isValid: false, message: '시간표 데이터가 없습니다.' };
+    }
+
+    const owner = currentRoom.owner;
+    if (!owner || !owner.addressLat || !owner.addressLng) {
+      return { isValid: false, message: '방장의 주소 정보가 필요합니다.' };
+    }
+
+    const memberLocations = {};
+    for (const member of currentRoom.members || []) {
+      if (member.user && member.user.addressLat && member.user.addressLng) {
+        const userId = member.user._id || member.user.id;
+        if (userId) {
+          memberLocations[userId.toString()] = {
+            lat: member.user.addressLat,
+            lng: member.user.addressLng,
+            name: `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim() || '사용자'
+          };
+        }
+      }
+    }
+
+    const mergedSlots = mergeConsecutiveTimeSlots(currentRoom.timeSlots);
+    const sortedMergedSlots = mergedSlots.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      if (dateA.getTime() !== dateB.getTime()) {
+        return dateA.getTime() - dateB.getTime();
+      }
+      return a.startTime.localeCompare(b.startTime);
+    });
+
+    let previousLocation = {
+      lat: owner.addressLat,
+      lng: owner.addressLng,
+      name: '방장'
+    };
+
+    let currentDate = null;
+
+    // 모든 경로 검증
+    for (const mergedSlot of sortedMergedSlots) {
+      const slotDate = new Date(mergedSlot.date).toISOString().split('T')[0];
+      if (slotDate !== currentDate) {
+        currentDate = slotDate;
+        previousLocation = {
+          lat: owner.addressLat,
+          lng: owner.addressLng,
+          name: '방장'
+        };
+      }
+
+      let userId = mergedSlot.user;
+      if (typeof userId === 'object' && userId !== null) {
+        userId = userId._id || userId.id;
+      }
+      if (!userId) continue;
+
+      const userIdStr = userId.toString();
+      const memberLocation = memberLocations[userIdStr];
+      if (!memberLocation) continue;
+
+      try {
+        const travelInfo = await travelModeService.calculateTravelTime(
+          { lat: previousLocation.lat, lng: previousLocation.lng },
+          { lat: memberLocation.lat, lng: memberLocation.lng },
+          'walking'
+        );
+
+        const travelDurationSeconds = travelInfo.duration || 0;
+        const travelDurationMinutes = Math.ceil(travelDurationSeconds / 60);
+
+        if (travelDurationMinutes > 60) {
+          return {
+            isValid: false,
+            message: `도보 이동 시간이 1시간을 초과하여 차단되었습니다.
+${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분`
+          };
+        }
+
+        previousLocation = memberLocation;
+      } catch (error) {
+        console.error('도보 모드 검증 중 오류:', error);
+        // 검증 중 오류는 통과시킴 (실제 계산에서 처리)
+      }
+    }
+
+    return { isValid: true, message: '도보 모드 사용 가능' };
+  }
+
+  /**
    * 기존 시간표에 이동 시간을 반영하여 재계산
    * @param {Object} currentRoom - 현재 방 데이터
    * @param {string} travelMode - 이동 수단 ('normal', 'transit', 'driving', 'bicycling', 'walking')

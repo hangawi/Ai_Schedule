@@ -271,8 +271,9 @@ const AutoSchedulerPanel = ({
           </div>
         )}
 
-        {/* 확정 버튼 - 자동배정 후에만 표시 */}
-        {currentRoom?.timeSlots?.some(slot => slot.assignedBy && slot.status === 'confirmed') && (
+        {/* 확정 버튼 - 자동배정 후에만 표시 (확정 완료 후에는 숨김) */}
+        {currentRoom?.timeSlots?.some(slot => slot.assignedBy && slot.status === 'confirmed') && 
+         currentRoom?.autoConfirmAt && (
           <button
             onClick={onConfirmSchedule}
             className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-2 px-3 rounded-lg font-medium hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm"

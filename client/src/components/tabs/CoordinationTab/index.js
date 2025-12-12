@@ -179,6 +179,8 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   const [roomModalDefaultTab, setRoomModalDefaultTab] = useState('info');
   const [selectedDate, setSelectedDate] = useState(null);
   const [showDetailGrid, setShowDetailGrid] = useState(false);
+  const [showWalkingErrorModal, setShowWalkingErrorModal] = useState(false);
+  const [walkingErrorMessage, setWalkingErrorMessage] = useState('');
 
   // Schedule time settings
   const scheduleStartHour = getHourFromSettings(currentRoom?.settings?.scheduleStart || currentRoom?.settings?.startHour, '9');
@@ -350,6 +352,14 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       setTimeout(() => handleTravelModeChange(travelMode), 100);
     }
   }, [currentRoom?.timeSlots]);
+
+  // Watch for walking mode validation errors and show modal
+  useEffect(() => {
+    if (travelError && travelError.includes('도보 이동 시간이 1시간을 초과')) {
+      setWalkingErrorMessage(travelError);
+      setShowWalkingErrorModal(true);
+    }
+  }, [travelError]);
 
   // Handler factories
   const handleRequestSlot = createHandleRequestSlot(currentRoom, createRequest, fetchRoomDetails, loadSentRequests, showAlert, closeChangeRequestModal);
@@ -543,6 +553,11 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     setSelectedDate(null);
   };
 
+  const handleCloseWalkingErrorModal = () => {
+    setShowWalkingErrorModal(false);
+    setWalkingErrorMessage('');
+  };
+
   // Loading/Error states
   if (isLoading) return <LoadingSpinner />;
   if (error) return <ErrorDisplay error={error} />;
@@ -651,7 +666,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
                 scheduleEndHour={scheduleEndHour}
               />
 
-              <TravelErrorAlert travelError={travelError} />
+              <TravelErrorAlert travelError={travelError && !travelError.includes('도보 이동 시간이 1시간을 초과') ? travelError : null} />
 
               {viewMode === 'week' ? (
                 <TimetableGrid
@@ -792,6 +807,15 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           request={selectedChainRequest}
           roomId={selectedChainRequest?.roomId}
           onRequestHandled={handleChainExchangeRequestHandled}
+        />
+
+        <CustomAlertModal
+          isOpen={showWalkingErrorModal}
+          onClose={handleCloseWalkingErrorModal}
+          title="도보 모드 사용 불가"
+          message={walkingErrorMessage}
+          type="warning"
+          showCancel={false}
         />
       </div>
     );

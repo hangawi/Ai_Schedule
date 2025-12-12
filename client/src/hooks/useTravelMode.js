@@ -70,6 +70,14 @@ export const useTravelMode = (currentRoom) => {
 
     setIsCalculating(true);
     try {
+      // 도보 모드일 때 먼저 검증
+      if (newMode === 'walking') {
+        const validation = await travelScheduleCalculator.validateWalkingMode(currentRoom);
+        if (!validation.isValid) {
+          throw new Error(validation.message);
+        }
+      }
+      
       const result = await travelScheduleCalculator.recalculateScheduleWithTravel(
         currentRoom,
         newMode
@@ -92,6 +100,8 @@ export const useTravelMode = (currentRoom) => {
       setEnhancedSchedule(result);
     } catch (err) {
       if (err.message.includes('주소 정보가 필요합니다')) {
+        setError(err.message);
+      } else if (err.message.includes('도보 이동 시간이 1시간을 초과') || err.message.includes('차단되었습니다')) {
         setError(err.message);
       } else {
         setError('이동 시간 계산 중 오류가 발생했습니다. 모든 사용자가 프로필에서 주소를 입력했는지 확인해주세요.');
