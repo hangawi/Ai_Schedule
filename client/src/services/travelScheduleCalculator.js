@@ -129,11 +129,20 @@ class TravelScheduleCalculator {
     console.log('🔍 [recalculateScheduleWithTravel] 시작:', {
         '전체_병합슬롯': sortedMergedSlots.length,
         '방장_ID': owner._id,
-        '멤버수': Object.keys(memberLocations).length
+        '멤버수': Object.keys(memberLocations).length,
+        '병합슬롯_목록': sortedMergedSlots.map(s => ({
+            날짜: new Date(s.date).toISOString().split('T')[0],
+            시간: `${s.startTime}-${s.endTime}`,
+            사용자: s.user?.firstName || s.userId,
+            과목: s.subject
+        }))
     });
     
     // 🆕 날짜별 previousLocation 초기화를 위한 변수
     let currentDate = null;
+    
+    // 🆕 이전 활동 종료 시간 추적 (분 단위, 날짜별로 리셋)
+    let previousActivityEndMinutes = 0;
 
     for (const mergedSlot of sortedMergedSlots) {
         // 🆕 날짜가 바뀌면 previousLocation을 방장으로 초기화
@@ -147,6 +156,7 @@ class TravelScheduleCalculator {
         });
         if (slotDate !== currentDate) {
             currentDate = slotDate;
+            previousActivityEndMinutes = 0;  // 🆕 날짜 변경 시 종료 시간도 리셋
             previousLocation = {
                 lat: owner.addressLat,
                 lng: owner.addressLng,
@@ -205,12 +215,13 @@ class TravelScheduleCalculator {
             const slotEndMinutes = this.parseTime(mergedSlot.endTime);
             const activityDurationMinutes = slotEndMinutes - slotStartMinutes;
 
-            // ✅ 수정: 이동시간이 슬롯을 차지하도록 수업을 뒤로 밀기
-            // 예: 원래 수업 09:00-10:00, 이동 10분 → 이동 09:00-09:10, 수업 09:10-10:10
-            let newTravelStartMinutes = slotStartMinutes; // 원래 수업 시작 시간에 이동 배치
-            let newTravelEndTimeMinutes = slotStartMinutes + travelDurationMinutes; // 이동 종료
+            // ✅ 수정: 이동시간 시작은 원본 시작 시간과 이전 활동 종료 시간 중 늦은 것
+            // 예1: 원본 09:00, 이전 종료 없음 → 이동 09:00 시작
+            // 예2: 원본 10:00, 이전 종료 11:00 → 이동 11:00 시작 (겹치지 않도록)
+            let newTravelStartMinutes = Math.max(slotStartMinutes, previousActivityEndMinutes);
+            let newTravelEndTimeMinutes = newTravelStartMinutes + travelDurationMinutes; // ✅ 조정된 시작 기준으로 종료 계산
             let newActivityStartTimeMinutes = newTravelEndTimeMinutes; // 이동 후 수업 시작
-            let newActivityEndTimeMinutes = newTravelEndTimeMinutes + activityDurationMinutes; // 수업 종료
+            let newActivityEndTimeMinutes = newActivityStartTimeMinutes + activityDurationMinutes; // 수업 종료
             
             console.log('✅ [이동시간 슬롯 차지]', {
                 출발지: previousLocation.name,
@@ -308,10 +319,15 @@ travelSlotsArray.push(travelSlotData);
                 원본: `${mergedSlot.startTime}-${mergedSlot.endTime}`,
                 이동: `${travelBlock.startTime}-${travelBlock.endTime}`,
                 조정된수업: `${activityBlock.startTime}-${activityBlock.endTime}`,
-                추가개수: travelSlots10min.length + activitySlots10min.length
+                추가개수: travelSlots10min.length + activitySlots10min.length,
+                이전종료: this.formatTime(previousActivityEndMinutes),
+                새종료: this.formatTime(newActivityEndTimeMinutes)
             });
 
             allResultSlots.push(...travelSlots10min, ...activitySlots10min);
+            
+            // 🆕 이전 활동 종료 시간 업데이트 (다음 학생은 이 시간 이후에 시작)
+            previousActivityEndMinutes = newActivityEndTimeMinutes;
 
             // 🆕 현재 위치를 이전 위치로 업데이트 (다음 학생은 여기서 출발)
             previousLocation = memberLocation;
