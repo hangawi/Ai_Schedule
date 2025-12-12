@@ -190,35 +190,44 @@ const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId,
       continue;
     }
 
-    // 🆕 블록 정렬: 1) 필요량 충족 블록 우선, 2) 긴 블록 우선, 3) 시간 순서
+    // 🆕 블록 정렬: 1) 시간 순서 우선, 2) 짧은 블록 우선 (1시간 단위), 3) 필요량 충족
     allPossibleBlocks.sort((a, b) => {
-      // 1순위: 필요한 만큼 채울 수 있는 블록 우선 (분할 최소화)
+      // 🆕 1순위: 시간 순서 (이른 시간부터) - 최우선!
+      const timeOrderDiff = a.startIndex - b.startIndex;
+      if (timeOrderDiff !== 0) return timeOrderDiff;
+
+      // 🆕 2순위: 짧은 블록 우선 (1시간=2슬롯 단위 배정)
+      const lengthDiff = a.block.length - b.block.length;
+      if (lengthDiff !== 0) return lengthDiff;
+
+      // 3순위: 필요량 충족 여부 (동일 시간대, 동일 길이일 때만)
       const aIsFull = a.block.length >= remainingSlots;
       const bIsFull = b.block.length >= remainingSlots;
       if (aIsFull !== bIsFull) return bIsFull ? 1 : -1;
 
-      // 2순위: 긴 블록 우선
-      const lengthDiff = b.block.length - a.block.length;
-      if (lengthDiff !== 0) return lengthDiff;
-
-      // 3순위: 시간 순서 (이른 시간부터)
-      return a.startIndex - b.startIndex;
+      return 0;
     });
 
-    console.log(`   📊 블록 후보 ${allPossibleBlocks.length}개 (필요량 충족 우선):`);
-    allPossibleBlocks.slice(0, 3).forEach((candidate, idx) => {
+    console.log(`   📊 블록 후보 ${allPossibleBlocks.length}개 (시간 순서 우선):`);
+    allPossibleBlocks.slice(0, 5).forEach((candidate, idx) => {
       const startKey = candidate.block[0];
       const dateStr = extractDateFromSlotKey(startKey);
       const timeStr = extractTimeFromSlotKey(startKey);
       console.log(`      ${idx+1}. ${dateStr} ${timeStr}~ (${candidate.block.length}슬롯)`);
     });
 
-    // 🆕 최적 블록 배정 (가장 이른 시간)
+    // 🆕 최적 블록 배정 (가장 이른 시간, 최대 1시간)
     const bestBlock = allPossibleBlocks[0];
     const assignedHoursBefore = assignments[memberId]?.assignedHours || 0;
     const stillNeeded = requiredSlots - assignedHoursBefore;
 
-    const blockToAssign = bestBlock.block.slice(0, Math.min(bestBlock.block.length, stillNeeded));
+    // 🆕 한 번에 최대 6슬롯(1시간=60분)만 배정 - 시간 순서 우선
+    const maxSlotsPerRound = 6;
+    const slotsToAssign = Math.min(bestBlock.block.length, stillNeeded, maxSlotsPerRound);
+    const blockToAssign = bestBlock.block.slice(0, slotsToAssign);
+    
+    console.log(`   🔍 [디버그] stillNeeded=${stillNeeded}, maxSlotsPerRound=${maxSlotsPerRound}, bestBlock.length=${bestBlock.block.length}, slotsToAssign=${slotsToAssign}`);
+    
     logAssignment(memberId, blockToAssign, '배정');
 
     for (const blockKey of blockToAssign) {
