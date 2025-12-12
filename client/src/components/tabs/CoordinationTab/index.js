@@ -551,6 +551,16 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   if (currentRoom) {
     const isOwner = isRoomOwner(user, currentRoom);
     const scheduleData = getCurrentScheduleData();
+    
+    console.log('🔍 [CoordinationTab] scheduleData:', {
+      timeSlots개수: scheduleData.timeSlots?.length,
+      travelSlots개수: scheduleData.travelSlots?.length,
+      travelMode: scheduleData.travelMode,
+      '수업_샘플': scheduleData.timeSlots?.filter(s => !s.isTravel).slice(0, 3).map(s => ({
+        시작: s.startTime,
+        종료: s.endTime
+      }))
+    });
 
     return (
       <div className="p-1">
@@ -650,7 +660,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
                   roomSettings={{ ...currentRoom.settings, startHour: effectiveShowFullDay ? 0 : scheduleStartHour, endHour: effectiveShowFullDay ? 24 : scheduleEndHour }}
                   timeSlots={scheduleData.timeSlots}
                   travelSlots={scheduleData.travelSlots || []}
-                  travelMode={travelMode}
+                  travelMode={scheduleData.travelMode}
                   members={currentRoom.members || []}
                   roomData={currentRoom}
                   currentUser={user}
@@ -670,7 +680,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
                   roomData={currentRoom}
                   timeSlots={scheduleData.timeSlots}
                   travelSlots={scheduleData.travelSlots || []}
-                  travelMode={travelMode}
+                  travelMode={scheduleData.travelMode}
                   members={currentRoom.members || []}
                   currentUser={user}
                   isRoomOwner={isOwner}
@@ -750,8 +760,8 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           <CoordinationDetailGrid
             selectedDate={selectedDate}
             timeSlots={scheduleData.timeSlots}
-            travelSlots={scheduleData.travelSlots || []}
-            travelMode={travelMode}
+                  travelSlots={scheduleData.travelSlots || []}
+                  travelMode={scheduleData.travelMode}
             members={currentRoom.members || []}
             currentUser={user}
             isRoomOwner={isOwner}

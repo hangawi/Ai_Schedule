@@ -347,24 +347,38 @@ const TimeSlot = ({
            */}
           {ownerInfo && (
             <span
-              className={`text-xs font-medium px-1 py-0.5 rounded ${showMerged && ownerInfo.isMergedSlot ? 'border-2' : ''}`}
+              className={`text-xs font-medium px-1 py-0.5 rounded ${
+                ownerInfo.isTravel ? 'border-2' : (showMerged && ownerInfo.isMergedSlot ? 'border-2' : '')
+              }`}
               style={{
                 color: '#000000',
-                backgroundColor: `${ownerInfo.color}CC`,
-                ...(showMerged && ownerInfo.isMergedSlot ? {
+                backgroundColor: ownerInfo.isTravel ? `${ownerInfo.color}99` : `${ownerInfo.color}CC`,  // 🆕 이동시간은 더 연하게
+                ...(ownerInfo.isTravel ? {
+                  borderColor: ownerInfo.color,
+                  borderStyle: 'dashed',  // 🆕 이동시간은 점선 테두리
+                  borderWidth: '2px'
+                } : (showMerged && ownerInfo.isMergedSlot ? {
                   borderColor: ownerInfo.color,
                   borderStyle: 'solid'
-                } : {})
+                } : {}))
               }}
-              title={ownerInfo.isTravel && ownerInfo.travelInfo ? `${ownerInfo.subject} (${ownerInfo.travelInfo.durationText})` :
+              title={ownerInfo.isTravel && ownerInfo.travelInfo ? `${ownerInfo.travelInfo.from || ''} → ${ownerInfo.travelInfo.to || ''} (${ownerInfo.travelInfo.durationText})` :
                 (showMerged && ownerInfo.isMergedSlot && ownerInfo.mergedDuration ?
                   `${ownerInfo.subject || ownerInfo.name} - 병합됨 (${ownerInfo.mergedDuration}분)` :
                   ownerInfo.subject || ownerInfo.name)
               }
             >
-              {ownerInfo.isTravel ? ownerInfo.subject : (ownerInfo.name.length > 6 ? ownerInfo.name.substring(0, 4) + '...' : ownerInfo.name)}
+              {ownerInfo.isTravel ? (
+                <>
+                  {/* 🆕 이동수단 이모지 추가 */}
+                  {ownerInfo.travelInfo?.travelMode === 'transit' ? '🚇' : 
+                   ownerInfo.travelInfo?.travelMode === 'driving' ? '🚗' : 
+                   ownerInfo.travelInfo?.travelMode === 'bicycling' ? '🚴' : 
+                   ownerInfo.travelInfo?.travelMode === 'walking' ? '🚶' : '🚗'} 이동
+                </>
+              ) : (ownerInfo.name.length > 6 ? ownerInfo.name.substring(0, 4) + '...' : ownerInfo.name)}
               {ownerInfo.isTravel && ownerInfo.travelInfo && (
-                <div className="text-xs text-gray-600">
+                <div className="text-xs font-semibold" style={{ color: '#374151' }}>
                   {ownerInfo.travelInfo.durationText}
                 </div>
               )}

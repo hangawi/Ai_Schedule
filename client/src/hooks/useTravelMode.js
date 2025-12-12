@@ -74,6 +74,21 @@ export const useTravelMode = (currentRoom) => {
         currentRoom,
         newMode
       );
+      
+      console.log('✅ [useTravelMode] enhancedSchedule 설정:', {
+        timeSlots개수: result.timeSlots?.length,
+        travelSlots개수: result.travelSlots?.length,
+        '이동시간_슬롯': result.timeSlots?.filter(s => s.isTravel).length,
+        '수업_슬롯': result.timeSlots?.filter(s => !s.isTravel).length,
+        '조정된_수업_샘플': result.timeSlots?.filter(s => !s.isTravel && s.startTime >= '09:00' && s.startTime <= '12:00').slice(0, 5).map(s => ({
+          날짜: s.date,
+          시작: s.startTime,
+          종료: s.endTime,
+          과목: s.subject,
+          사용자: s.user
+        }))
+      });
+      
       setEnhancedSchedule(result);
     } catch (err) {
       if (err.message.includes('주소 정보가 필요합니다')) {
@@ -91,14 +106,24 @@ export const useTravelMode = (currentRoom) => {
 
   const getCurrentScheduleData = useCallback(() => {
     if (travelMode === 'normal' || !enhancedSchedule) {
+      console.log('📋 [getCurrentScheduleData] 일반 모드 또는 enhancedSchedule 없음:', {
+        travelMode,
+        enhancedSchedule: !!enhancedSchedule,
+        원본timeSlots개수: currentRoom?.timeSlots?.length
+      });
       return {
         timeSlots: currentRoom?.timeSlots || [],
         travelSlots: [],
-        travelMode: 'normal'
+        travelMode: travelMode  // 하드코딩된 'normal' 대신 실제 travelMode 반환
       };
     }
+    console.log('📋 [getCurrentScheduleData] enhancedSchedule 사용:', {
+      travelMode,
+      timeSlots개수: enhancedSchedule.timeSlots?.length,
+      travelSlots개수: enhancedSchedule.travelSlots?.length
+    });
     return enhancedSchedule;
-  }, [travelMode, enhancedSchedule, currentRoom]);
+    }, [travelMode, enhancedSchedule, currentRoom, isCalculating]);
 
   const getWeekViewData = useCallback((weekStartDate) => {
     const scheduleData = getCurrentScheduleData();

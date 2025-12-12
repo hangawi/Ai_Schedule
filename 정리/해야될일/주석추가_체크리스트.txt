@@ -396,13 +396,13 @@
 [x] client/src/hooks/useVoiceCommands.js
 
 # useChat 폴더 (11개)
-[ ] client/src/hooks/useChat/index.js
-[ ] client/src/hooks/useChat/enhanced.js
-[ ] client/src/hooks/useChat/constants/apiConstants.js
+[x] client/src/hooks/useChat/index.js
+[x] client/src/hooks/useChat/enhanced.js
+[x] client/src/hooks/useChat/constants/apiConstants.js
 [ ] client/src/hooks/useChat/constants/keywordConstants.js
 [ ] client/src/hooks/useChat/handlers/createIntentHandlers.js
-[ ] client/src/hooks/useChat/handlers/enhancedIntentHandlers.js
-[ ] client/src/hooks/useChat/hooks/enhanced/usePersonalTimeAdd.js
+[x] client/src/hooks/useChat/handlers/enhancedIntentHandlers.js
+[x] client/src/hooks/useChat/hooks/enhanced/usePersonalTimeAdd.js
 [ ] client/src/hooks/useChat/hooks/enhanced/usePreferredTimeAdd.js
 [ ] client/src/hooks/useChat/hooks/enhanced/useRecurringPreferredTimeAdd.js
 [ ] client/src/hooks/useChat/hooks/useCoordinationExchange.js
@@ -842,11 +842,11 @@
 ## 📊 진행률 추적
 
 - 전체 파일 수: 341개 (클라이언트: 223개, 서버: 118개)
-- 완료한 파일: 223 / 341
-- 진행률: 65.4%
+- 완료한 파일: 228 / 341
+- 진행률: 66.9%
 
 ### 세부 진행률
-- 클라이언트: 211 / 223 (94.6%)
+- 클라이언트: 216 / 223 (96.9%)
 - 서버: 12 / 118 (10.2%)
   - nview 폴더: 0 / 11
   - scheduleOptimizer 폴더: 0 / 14

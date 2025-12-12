@@ -231,7 +231,8 @@ const WeekView = ({
       let slotData = null;
 
       // In travel mode, owner info (split travel/activity slots) takes precedence
-      if (travelMode !== 'normal' && ownerInfo) {
+      // ✅ 단, isTravel 슬롯은 travelSlots 배열로 별도 렌더링되므로 여기서는 제외
+      if (travelMode !== 'normal' && ownerInfo && !ownerInfo.isTravel) {
         slotType = 'owner';
         slotData = ownerInfo;
       }
@@ -407,6 +408,7 @@ const WeekView = ({
 
   // 병합 모드 렌더링 함수 - 각 날짜별 독립적 컬럼 렌더링
   const renderMergedView = () => {
+    // 🔍 현재 화면에 표시되는 날짜들 확인
     // 이동 슬롯을 날짜별로 그룹화
     const travelSlotsByDate = {};
     (travelSlots || []).forEach(slot => {
@@ -444,6 +446,7 @@ const WeekView = ({
 
         {/* 각 날짜별 컬럼 */}
         {weekDates.slice(0, 5).map((dateInfo, dayIndex) => {
+          const dateKey = dateInfo.fullDate.toISOString().split('T')[0];
           const blocks = dayBlocks[dayIndex];
           const totalHeight = filteredTimeSlotsInDay.length * 20; // 전체 컬럼 높이 (h-8 = 20px)
 
@@ -458,7 +461,7 @@ const WeekView = ({
                 return (
                   <div
                     key={`${date.toISOString().split('T')[0]}-${block.startTime}-${blockIndex}`}
-                    className={`absolute left-0 right-0 border-b border-gray-200 flex items-center justify-center text-center px-0.5
+                    className={`absolute left-0 right-0 border-b border-gray-200 flex items-center justify-center text-center px-0.5 z-0
                       ${block.type === 'blocked' ? 'cursor-not-allowed' : ''}
                       ${block.type === 'selected' ? 'bg-blue-200 border-2 border-blue-400' : ''}
                       ${block.type === 'empty' && currentUser ? 'hover:bg-blue-50 cursor-pointer' : ''}
@@ -532,7 +535,11 @@ const WeekView = ({
                   </div>
                 );
               })}
-              {(travelSlotsByDate[dateInfo.fullDate.toISOString().split('T')[0]] || []).map((travelSlot, travelIndex) => {
+              {(() => {
+                  const dateKey = dateInfo.fullDate.toISOString().split('T')[0];
+                  const slots = travelSlotsByDate[dateKey] || [];
+                  return slots;
+              })().map((travelSlot, travelIndex) => {
                   const travelStartMinutes = timeToMinutes(travelSlot.startTime);
                   const travelEndMinutes = timeToMinutes(travelSlot.endTime);
                   const scheduleStartMinutes = timeToMinutes(filteredTimeSlotsInDay[0] || '00:00');
@@ -542,25 +549,50 @@ const WeekView = ({
 
                   const topPosition = (topOffsetMinutes / 10) * 20;
                   const slotHeight = (durationMinutes / 10) * 20;
-
+                  
+                  console.log('🎨 [WeekView 렌더링]', {
+                      from: travelSlot.from,
+                      to: travelSlot.to,
+                      startTime: travelSlot.startTime,
+                      endTime: travelSlot.endTime,
+                      travelStartMinutes,
+                      travelEndMinutes,
+                      durationMinutes,
+                      slotHeight,
+                      '표시되는_duration': travelSlot.travelInfo?.durationText
+                  });
+                  
                   if (slotHeight <= 0) return null;
+
+                  // 🆕 사용자 색상 가져오기 (기본값: 하늘색)
+                  const userColor = travelSlot.color || '#87CEEB';
+                  // 🆕 이동수단별 이모지
+                  const modeIcon = {
+                    'transit': '🚇',
+                    'driving': '🚗',
+                    'bicycling': '🚴',
+                    'walking': '🚶'
+                  }[travelSlot.travelMode] || '🚗';
 
                   return (
                       <div
                           key={`travel-${dayIndex}-${travelIndex}`}
-                          className="absolute left-0 right-0 border-y border-dashed border-gray-400 z-10 p-1 flex flex-col justify-center opacity-90"
+                          className="absolute left-0 right-0 border-2 border-solid z-20 p-1 flex flex-col justify-center"
                           style={{
                               top: `${topPosition}px`,
                               height: `${slotHeight}px`,
-                              backgroundColor: 'rgba(135, 206, 235, 0.9)' // Sky blue
+                              backgroundColor: userColor,  // ✅ 100% 불투명으로 변경 (명확한 표시)
+                              borderColor: '#1F2937',  // ✅ 진한 테두리로 구분
+                              borderStyle: 'dashed',  // ✅ 점선 테두리로 구분
+                              borderWidth: '3px'  // ✅ 두께 증가 (2px → 3px)
                           }}
-                          title={`이동: ${travelSlot.from} → ${travelSlot.to}`}
+                          title={`${modeIcon} 이동: ${travelSlot.from} → ${travelSlot.to} (${travelSlot.travelInfo.durationText})`}
                       >
-                          <div className="text-xs text-gray-700 font-bold truncate text-center block">
-                            {travelSlot.from} → {travelSlot.to}
+                          <div className="text-xs font-bold truncate text-center block" style={{ color: '#FFFFFF', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                            {modeIcon} {travelSlot.from} → {travelSlot.to}
                           </div>
                           {slotHeight > 20 && (
-                            <div className="text-xs text-gray-600 text-center mt-1 block">
+                            <div className="text-xs text-center mt-0.5 block font-semibold" style={{ color: '#FFFFFF', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
                                 {travelSlot.travelInfo.durationText} ({travelSlot.travelInfo.distanceText})
                             </div>
                           )}

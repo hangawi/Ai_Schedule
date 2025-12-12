@@ -338,12 +338,20 @@ const TimetableGrid = ({
 
   // timeSlots가 변경될 때마다 병합된 슬롯 업데이트
   useEffect(() => {
-    if (travelMode !== 'normal') {
-      setMergedTimeSlots(timeSlots);
-      return;
-    }
+    // 이동시간 모드에서도 병합 수행 (10분 단위 슬롯을 연속된 블록으로 합침)
     const merged = mergeConsecutiveTimeSlots(timeSlots);
     setMergedTimeSlots(merged);
+    
+    console.log('🔄 [TimetableGrid] mergedTimeSlots 업데이트:', {
+      travelMode,
+      원본timeSlots: timeSlots.length,
+      병합후: merged.length,
+      '병합된_수업_샘플': merged.filter(s => !s.isTravel).slice(0, 3).map(s => ({
+        시작: s.startTime,
+        종료: s.endTime,
+        과목: s.subject
+      }))
+    });
   }, [timeSlots, showMerged, travelMode]);
 
   // ===================================================================================================
