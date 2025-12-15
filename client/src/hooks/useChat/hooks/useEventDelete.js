@@ -1,14 +1,62 @@
 /**
- * 일정 삭제 훅
+ * ===================================================================================================
+ * useEventDelete.js - 챗봇을 통한 일정 삭제 처리를 위한 커스텀 훅
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/hooks/useChat/hooks/useEventDelete.js
+ *
+ * 🎯 주요 기능:
+ *    - 'delete_event' 또는 'delete_range' 인텐트를 처리하여 일정을 삭제.
+ *    - 사용자 메시지에 포함된 키워드("선호시간", "개인일정", "전부")를 분석하여 삭제 대상을 필터링.
+ *    - 날짜 또는 시간 범위를 기반으로 삭제할 이벤트를 검색.
+ *    - 컨텍스트('profile', 'events') 및 탭 타입('local')에 따라 다른 방식으로 이벤트를 불러오고 삭제를 처리.
+ *    - 삭제할 이벤트가 여러 개이고 "전부" 키워드가 없으면 사용자에게 재확인 요청.
+ *
+ * 🔗 연결된 파일:
+ *    - client/src/hooks/useChat/index.js: 이 훅을 사용하여 삭제 관련 인텐트를 처리.
+ *    - client/src/hooks/useChat/constants/keywordConstants.js: 'DELETE_ALL_KEYWORDS' 등 삭제 관련 키워드를 가져옴.
+ *    - client/src/hooks/useChat/utils/eventFilterUtils.js: 날짜, 범위, 타입에 따라 이벤트를 필터링하는 유틸리티 함수를 사용.
+ *
+ * 💡 UI 위치:
+ *    - 직접적인 UI 요소는 없으나, 채팅창을 통해 일정을 삭제하는 기능의 핵심 로직.
+ *
+ * ✏️ 수정 가이드:
+ *    - 삭제 대상 필터링 로직 변경 시: `deleteOnlyPreferredTime`, `deleteOnlyPersonalTime` 플래그 설정 로직 및 `matchingEvents.filter` 부분을 수정.
+ *    - 'profile' 탭의 다중/단일 삭제 로직 변경 시: `remainingExceptions`, `remainingPersonalTimes`, `remainingDefaultSchedule`을 계산하고 PUT 요청을 보내는 부분을 검토.
+ *
+ * 📝 참고사항:
+ *    - '내 프로필' 탭에서의 삭제는 전체 스케줄을 가져와서 필터링한 후 다시 전체를 업데이트하는 방식으로 동작. (API 개선 필요)
+ *    - '선호시간' 또는 '개인일정' 같은 타입 키워드가 있을 경우, AI가 추론한 `title`은 무시하고 타입 기준으로 필터링함.
+ *
+ * ===================================================================================================
  */
-
 import { useCallback } from 'react';
 import { auth } from '../../../config/firebaseConfig';
 import { API_BASE_URL } from '../constants/apiConstants';
 import { DELETE_ALL_KEYWORDS } from '../constants/keywordConstants';
 import { filterEventsByDate, filterEventsByRange, convertProfileEvents } from '../utils/eventFilterUtils';
 
+/**
+ * useEventDelete
+ *
+ * @description 챗봇을 통해 이벤트를 삭제하는 로직을 관리하는 커스텀 훅.
+ * @param {Function} setEventAddedKey - 이벤트 삭제 후 상위 컴포넌트의 리렌더링을 유발하기 위한 상태 설정 함수.
+ * @returns {{handleEventDelete: Function}} AI 응답과 컨텍스트를 받아 이벤트를 삭제하는 `handleEventDelete` 함수를 포함하는 객체.
+ *
+ * @example
+ * const { handleEventDelete } = useEventDelete(setSomeKey);
+ * // useChat 훅 등에서 호출됨
+ * const result = await handleEventDelete(chatResponse, context, "오늘 저녁 약속 삭제해줘");
+ */
 export const useEventDelete = (setEventAddedKey) => {
+  /**
+   * handleEventDelete
+   * @description AI 응답과 사용자 메시지를 분석하여 조건에 맞는 이벤트를 찾아 삭제합니다.
+   * @param {Object} chatResponse - AI가 파싱한 사용자 의도 및 시간/날짜 정보.
+   * @param {Object} context - 현재 탭, 탭 타입 등 필요한 컨텍스트 정보.
+   * @param {string} message - 사용자가 입력한 원본 메시지.
+   * @returns {Promise<Object>} 작업 성공 여부와 메시지를 담은 결과 객체를 반환합니다.
+   */
   const handleEventDelete = useCallback(async (chatResponse, context, message) => {
     console.log('🗑️ [DELETE] 시작 =================');
     console.log('📝 chatResponse:', JSON.stringify(chatResponse, null, 2));
@@ -22,37 +70,23 @@ export const useEventDelete = (setEventAddedKey) => {
     let deleteOnlyPreferredTime = false;
     let deleteOnlyPersonalTime = false;
 
-    // "선호시간" 키워드만으로 선호시간 타입 필터링 (title 무시!)
     if (message.includes('선호시간') || message.includes('선호 시간')) {
       deleteOnlyPreferredTime = true;
-      // LLM이 추론한 title 무시 (사용자가 명시적으로 "선호시간"이라고 했음)
-      if (chatResponse.title) {
-        console.log('🔍 "선호시간 삭제" 감지 → title 무시:', chatResponse.title);
-        delete chatResponse.title;
-      }
+      if (chatResponse.title) delete chatResponse.title;
       console.log('🔍 "선호시간 삭제" 감지 → 선호시간만 삭제');
-    }
-    // "개인일정" 키워드만으로 개인일정 타입 필터링 (title 무시!)
-    else if (message.includes('개인일정') || message.includes('개인 일정')) {
+    } else if (message.includes('개인일정') || message.includes('개인 일정')) {
       deleteOnlyPersonalTime = true;
-      // LLM이 추론한 title 무시 (사용자가 명시적으로 "개인일정"이라고 했음)
-      if (chatResponse.title) {
-        console.log('🔍 "개인일정 삭제" 감지 → title 무시:', chatResponse.title);
-        delete chatResponse.title;
-      }
+      if (chatResponse.title) delete chatResponse.title;
       console.log('🔍 "개인일정 삭제" 감지 → 개인일정만 삭제');
     }
 
-    // "전부 삭제" 키워드 체크
     const hasDeleteAllKeyword = DELETE_ALL_KEYWORDS.some(keyword => message.includes(keyword));
 
     if (hasDeleteAllKeyword && !chatResponse.title && !deleteOnlyPreferredTime && !deleteOnlyPersonalTime) {
-      // "일정 전부" → 모든 일정 삭제
       chatResponse.title = '전체';
       console.log('🔍 "전부 삭제" 키워드 감지 → title을 "전체"로 설정');
     }
 
-    // 시작 시간 설정
     if (!chatResponse.startDateTime && chatResponse.date) {
       const time = chatResponse.time || '12:00';
       chatResponse.startDateTime = `${chatResponse.date}T${time}:00+09:00`;
@@ -78,285 +112,112 @@ export const useEventDelete = (setEventAddedKey) => {
       });
     }
 
-    if (!eventsResponse.ok) {
-      throw new Error('일정 목록을 가져올 수 없습니다.');
-    }
+    if (!eventsResponse.ok) throw new Error('일정 목록을 가져올 수 없습니다.');
 
     const eventsData = await eventsResponse.json();
-    console.log('📦 eventsData:', {
-      defaultSchedule: eventsData.defaultSchedule?.length || 0,
-      scheduleExceptions: eventsData.scheduleExceptions?.length || 0,
-      personalTimes: eventsData.personalTimes?.length || 0
-    });
-
+    
     let events;
     if (context.context === 'profile' && context.tabType === 'local') {
       events = convertProfileEvents(eventsData);
-      console.log('🔄 convertProfileEvents 결과:', events.length, '개 이벤트');
-      console.log('📋 events 샘플:', events.slice(0, 3).map(e => ({
-        _id: e._id,
-        title: e.title,
-        isDefaultSchedule: e.isDefaultSchedule,
-        isPersonalTime: e.isPersonalTime,
-        dayOfWeek: e.dayOfWeek,
-        specificDate: e.specificDate
-      })));
     } else if (context.tabType === 'local') {
       events = eventsData.events || eventsData;
     } else {
       events = eventsData;
     }
 
-    if (!events || !Array.isArray(events)) {
-      throw new Error('일정 목록 형식이 올바르지 않습니다.');
-    }
+    if (!events || !Array.isArray(events)) throw new Error('일정 목록 형식이 올바르지 않습니다.');
 
     let matchingEvents;
-
     if (chatResponse.intent === 'delete_range') {
-      const startDate = new Date(chatResponse.startDateTime);
-      const endDate = new Date(chatResponse.endDateTime);
-      console.log('📅 범위 삭제:', startDate, '~', endDate);
-      matchingEvents = filterEventsByRange(events, startDate, endDate, chatResponse.title, context);
-      console.log('🎯 범위 매칭된 이벤트:', matchingEvents.length, '개');
+      matchingEvents = filterEventsByRange(events, new Date(chatResponse.startDateTime), new Date(chatResponse.endDateTime), chatResponse.title, context);
     } else {
-      const targetDate = new Date(chatResponse.startDateTime);
-      console.log('📅 타겟 날짜:', targetDate);
-      console.log('📅 요일:', targetDate.getDay() === 0 ? 7 : targetDate.getDay());
-      matchingEvents = filterEventsByDate(events, targetDate, chatResponse.title, context);
-      console.log('🎯 날짜 매칭된 이벤트:', matchingEvents.length, '개');
+      matchingEvents = filterEventsByDate(events, new Date(chatResponse.startDateTime), chatResponse.title, context);
     }
 
-    console.log('📋 매칭된 이벤트 상세:', matchingEvents.map(e => ({
-      _id: e._id,
-      title: e.title,
-      isDefaultSchedule: e.isDefaultSchedule,
-      isPersonalTime: e.isPersonalTime,
-      dayOfWeek: e.dayOfWeek,
-      priority: e.priority
-    })));
-
-    // 타입별 필터링 적용 (단일 삭제 및 범위 삭제 모두)
     if (deleteOnlyPreferredTime) {
       matchingEvents = matchingEvents.filter(e => e.isDefaultSchedule || (!e.isPersonalTime && e.priority !== undefined));
-      console.log('🔵 선호시간만 필터링:', matchingEvents.length, '개');
     } else if (deleteOnlyPersonalTime) {
       matchingEvents = matchingEvents.filter(e => e.isPersonalTime);
-      console.log('🔴 개인일정만 필터링:', matchingEvents.length, '개');
     }
 
-    if (matchingEvents.length === 0) {
-      console.log('❌ 매칭된 이벤트 없음');
-      return { success: false, message: '해당 일정을 찾을 수 없어요.' };
-    }
+    if (matchingEvents.length === 0) return { success: false, message: '해당 일정을 찾을 수 없어요.' };
 
     const shouldDeleteAll = DELETE_ALL_KEYWORDS.some(keyword => message.includes(keyword));
-
     if (matchingEvents.length > 1 && !shouldDeleteAll) {
       return { success: false, message: `${matchingEvents.length}개의 일정이 있어요. "전부 삭제"라고 하시거나 더 구체적으로 말씀해 주세요.` };
     }
 
+    // 다중 삭제 처리
     if (matchingEvents.length > 1 && shouldDeleteAll) {
       let deletedCount = 0;
-
       if (context.context === 'profile' && context.tabType === 'local') {
-        console.log('🏢 프로필 탭 다중 삭제 시작');
-
-        const remainingExceptions = eventsData.scheduleExceptions.filter(ex =>
-          !matchingEvents.some(match => !match.isPersonalTime && !match.isDefaultSchedule && match._id === ex._id)
-        );
-        console.log('📊 Exception: 원본', eventsData.scheduleExceptions.length, '→ 남은', remainingExceptions.length);
-
-        const remainingPersonalTimes = eventsData.personalTimes.filter(pt =>
-          !matchingEvents.some(match => match.isPersonalTime && match._id === pt.id)
-        );
-        console.log('📊 PersonalTime: 원본', eventsData.personalTimes.length, '→ 남은', remainingPersonalTimes.length);
-
-        const remainingDefaultSchedule = eventsData.defaultSchedule.filter((ds, index) => {
-          const matchId = `default-${ds.dayOfWeek}-${index}`;
-          const shouldRemove = matchingEvents.some(match => match.isDefaultSchedule && match._id === matchId);
-          if (shouldRemove) {
-            console.log('🗑️ defaultSchedule 삭제:', ds.dayOfWeek, matchId);
-          }
-          return !shouldRemove;
-        });
-        console.log('📊 DefaultSchedule: 원본', eventsData.defaultSchedule.length, '→ 남은', remainingDefaultSchedule.length);
-
-        const updateBody = {
-          defaultSchedule: remainingDefaultSchedule,
-          scheduleExceptions: remainingExceptions,
-          personalTimes: remainingPersonalTimes
-        };
-        console.log('📤 API 요청 body:', JSON.stringify(updateBody, null, 2));
+        const remainingExceptions = eventsData.scheduleExceptions.filter(ex => !matchingEvents.some(match => !match.isPersonalTime && !match.isDefaultSchedule && match._id === ex._id));
+        const remainingPersonalTimes = eventsData.personalTimes.filter(pt => !matchingEvents.some(match => match.isPersonalTime && match._id === pt.id));
+        const remainingDefaultSchedule = eventsData.defaultSchedule.filter((ds, index) => !matchingEvents.some(match => match.isDefaultSchedule && match._id === `default-${ds.dayOfWeek}-${index}`));
 
         const updateResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${await currentUser.getIdToken()}`,
-          },
-          body: JSON.stringify(updateBody),
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
+          body: JSON.stringify({
+            defaultSchedule: remainingDefaultSchedule,
+            scheduleExceptions: remainingExceptions,
+            personalTimes: remainingPersonalTimes
+          }),
         });
 
-        console.log('📥 API 응답 상태:', updateResponse.status, updateResponse.statusText);
         if (updateResponse.ok) {
           deletedCount = matchingEvents.length;
-          const responseData = await updateResponse.json();
-
-          // 프로필 탭 전용 이벤트 발송
-          window.dispatchEvent(new CustomEvent('calendarUpdate', {
-            detail: {
-              type: 'delete',
-              data: responseData,
-              context: 'profile'
-            }
-          }));
-
-          // 전역 이벤트도 발송
-          window.dispatchEvent(new Event('calendarUpdate'));
-
-          console.log('✅ 다중 삭제 성공:', deletedCount, '개');
-          console.log('📡 calendarUpdate 이벤트 발송 완료');
-        } else {
-          const errorText = await updateResponse.text();
-          console.log('❌ API 오류:', errorText);
+          window.dispatchEvent(new CustomEvent('calendarUpdate', { detail: { type: 'delete', context: 'profile' } }));
         }
       } else {
+        // '나의 일정' 탭 또는 Google Calendar 에서의 다중 삭제
         for (const event of matchingEvents) {
-          try {
-            let deleteResponse;
-            if (context.tabType === 'local') {
-              deleteResponse = await fetch(`${API_BASE_URL}/api/events/${event._id || event.id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
-              });
-            } else {
-              deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${event.id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
-              });
-            }
-
-            if (deleteResponse.ok) {
-              deletedCount++;
-            }
-          } catch (error) {
-            // Continue with other deletions
-          }
+          const endpoint = context.tabType === 'local' ? `/api/events/${event._id || event.id}` : `/api/calendar/events/${event.id}`;
+          const deleteResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
+          });
+          if (deleteResponse.ok) deletedCount++;
         }
       }
-
       setEventAddedKey(prevKey => prevKey + 1);
-      return {
-        success: true,
-        message: `${deletedCount}개의 일정을 삭제했어요!`,
-        data: chatResponse
-      };
+      return { success: true, message: `${deletedCount}개의 일정을 삭제했어요!`, data: chatResponse };
     }
 
-    // 단일 이벤트 삭제
+    // 단일 삭제 처리
     const eventToDelete = matchingEvents[0];
-    console.log('🎯 단일 삭제 대상:', {
-      _id: eventToDelete._id,
-      title: eventToDelete.title,
-      isDefaultSchedule: eventToDelete.isDefaultSchedule,
-      isPersonalTime: eventToDelete.isPersonalTime,
-      dayOfWeek: eventToDelete.dayOfWeek
-    });
     let deleteResponse;
 
     if (context.context === 'profile' && context.tabType === 'local') {
-      console.log('🏢 프로필 탭 단일 삭제 시작');
-      let remainingExceptions = eventsData.scheduleExceptions;
-      let remainingPersonalTimes = eventsData.personalTimes;
-      let remainingDefaultSchedule = eventsData.defaultSchedule;
-
+      let { scheduleExceptions, personalTimes, defaultSchedule } = eventsData;
       if (eventToDelete.isPersonalTime) {
-        console.log('🔴 PersonalTime 삭제:', eventToDelete._id);
-        remainingPersonalTimes = eventsData.personalTimes.filter(pt =>
-          String(pt.id) !== String(eventToDelete._id)
-        );
-        console.log('📊 PersonalTime: 원본', eventsData.personalTimes.length, '→ 남은', remainingPersonalTimes.length);
+        personalTimes = personalTimes.filter(pt => String(pt.id) !== String(eventToDelete._id));
       } else if (eventToDelete.isDefaultSchedule) {
-        console.log('🟦 DefaultSchedule 삭제:', eventToDelete._id);
-        remainingDefaultSchedule = eventsData.defaultSchedule.filter((ds, index) => {
-          const matchId = `default-${ds.dayOfWeek}-${index}`;
-          console.log('  체크:', matchId, 'vs', eventToDelete._id, '→', matchId !== eventToDelete._id);
-          return matchId !== eventToDelete._id;
-        });
-        console.log('📊 DefaultSchedule: 원본', eventsData.defaultSchedule.length, '→ 남은', remainingDefaultSchedule.length);
+        defaultSchedule = defaultSchedule.filter((ds, index) => `default-${ds.dayOfWeek}-${index}` !== eventToDelete._id);
       } else {
-        console.log('🟢 Exception 삭제:', eventToDelete._id);
-        remainingExceptions = eventsData.scheduleExceptions.filter(ex =>
-          ex._id !== eventToDelete._id
-        );
-        console.log('📊 Exception: 원본', eventsData.scheduleExceptions.length, '→ 남은', remainingExceptions.length);
+        scheduleExceptions = scheduleExceptions.filter(ex => ex._id !== eventToDelete._id);
       }
-
-      const updateBody = {
-        defaultSchedule: remainingDefaultSchedule,
-        scheduleExceptions: remainingExceptions,
-        personalTimes: remainingPersonalTimes
-      };
-      console.log('📤 API 요청 body:', JSON.stringify(updateBody, null, 2));
-
       deleteResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await currentUser.getIdToken()}`,
-        },
-        body: JSON.stringify(updateBody),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
+        body: JSON.stringify({ defaultSchedule, scheduleExceptions, personalTimes }),
       });
-
-      console.log('📥 API 응답 상태:', deleteResponse.status, deleteResponse.statusText);
-      if (deleteResponse.ok) {
-        const responseData = await deleteResponse.json();
-        console.log('✅ 단일 삭제 성공, 응답:', responseData);
-
-        // 프로필 탭 전용 이벤트 발송
-        window.dispatchEvent(new CustomEvent('calendarUpdate', {
-          detail: {
-            type: 'delete',
-            data: responseData,
-            context: 'profile'
-          }
-        }));
-
-        // 전역 이벤트도 발송
-        window.dispatchEvent(new Event('calendarUpdate'));
-
-        console.log('📡 calendarUpdate 이벤트 발송 완료');
-      } else {
-        const errorText = await deleteResponse.text();
-        console.log('❌ API 오류:', errorText);
-      }
-    } else if (context.tabType === 'local') {
-      deleteResponse = await fetch(`${API_BASE_URL}/api/events/${eventToDelete._id || eventToDelete.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
-      });
+      if(deleteResponse.ok) window.dispatchEvent(new CustomEvent('calendarUpdate', { detail: { type: 'delete', context: 'profile' } }));
     } else {
-      deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${eventToDelete.id}`, {
+      const endpoint = context.tabType === 'local' ? `/api/events/${eventToDelete._id || eventToDelete.id}` : `/api/calendar/events/${eventToDelete.id}`;
+      deleteResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
       });
     }
 
-    if (!deleteResponse.ok) {
-      throw new Error('일정 삭제에 실패했습니다.');
-    }
+    if (!deleteResponse.ok) throw new Error('일정 삭제에 실패했습니다.');
 
-    console.log('🔄 setEventAddedKey 호출');
     setEventAddedKey(prevKey => prevKey + 1);
-
     const deletedTitle = (context.context === 'profile' && context.tabType === 'local') || context.tabType === 'local' ? eventToDelete.title : eventToDelete.summary;
+    
     console.log('✅ [DELETE] 완료 =================');
-    return {
-      success: true,
-      message: `${deletedTitle || '일정'}을 삭제했어요!`,
-      data: chatResponse
-    };
+    return { success: true, message: `${deletedTitle || '일정'}을 삭제했어요!`, data: chatResponse };
   }, [setEventAddedKey]);
 
   return { handleEventDelete };

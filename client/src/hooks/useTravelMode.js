@@ -30,6 +30,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import travelScheduleCalculator from '../services/travelScheduleCalculator';
+import { coordinationService } from '../services/coordinationService';
 
 /**
  * useTravelMode - 이동 시간 계산 모드를 관리하고, 모드에 따라 스케줄 데이터를 변환하여 제공하는 훅
@@ -38,6 +39,7 @@ import travelScheduleCalculator from '../services/travelScheduleCalculator';
  *              기존 스케줄에 이동 시간을 포함하여 재계산하고,
  *              계산된 데이터를 다양한 뷰(주간, 월간)에 맞게 가공하여 반환합니다.
  * @param {object|null} currentRoom - 현재 선택된 방 정보 객체
+ * @param {boolean} isOwner - 현재 사용자가 방장인지 여부 (기본값: true)
  * @returns {object} 이동 모드 상태 및 관련 함수들을 포함하는 객체
  * @property {string} travelMode - 현재 선택된 이동 모드 ('normal', 'transit', 'driving', 'bicycling', 'walking')
  * @property {Function} handleModeChange - 이동 모드를 변경하고 스케줄 재계산을 트리거하는 함수
@@ -48,7 +50,7 @@ import travelScheduleCalculator from '../services/travelScheduleCalculator';
  * @property {Function} getWeekViewData - 주간 뷰에 맞게 포맷된 스케줄 데이터를 반환하는 함수
  * @property {Function} getMonthViewData - 월간 뷰에 맞게 포맷된 스케줄 데이터를 반환하는 함수
  */
-export const useTravelMode = (currentRoom) => {
+export const useTravelMode = (currentRoom, isOwner = true) => {
   const [travelMode, setTravelMode] = useState('normal');
   const [enhancedSchedule, setEnhancedSchedule] = useState(null);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -77,12 +79,12 @@ export const useTravelMode = (currentRoom) => {
           throw new Error(validation.message);
         }
       }
-      
+
       const result = await travelScheduleCalculator.recalculateScheduleWithTravel(
         currentRoom,
         newMode
       );
-      
+
       console.log('✅ [useTravelMode] enhancedSchedule 설정:', {
         timeSlots개수: result.timeSlots?.length,
         travelSlots개수: result.travelSlots?.length,
@@ -96,8 +98,22 @@ export const useTravelMode = (currentRoom) => {
           사용자: s.user
         }))
       });
-      
+
       setEnhancedSchedule(result);
+
+      // ⏰ 이동수단 선택 시 타이머 시작 (방장이고, 아직 확정되지 않은 경우)
+      if (isOwner && !currentRoom.confirmedAt) {
+        try {
+          const timerResult = await coordinationService.startConfirmationTimer(
+            currentRoom._id,
+            newMode
+          );
+          console.log(`⏰ [타이머 ${timerResult.isReset ? '초기화' : '시작'}] ${timerResult.minutesRemaining}분 후 자동 확정`);
+        } catch (timerError) {
+          // 타이머 시작 실패는 중요하지 않으므로 경고만 출력
+          console.warn('⚠️ 타이머 시작 실패 (무시):', timerError.message);
+        }
+      }
     } catch (err) {
       if (err.message.includes('주소 정보가 필요합니다')) {
         setError(err.message);
@@ -130,10 +146,21 @@ export const useTravelMode = (currentRoom) => {
     console.log('📋 [getCurrentScheduleData] enhancedSchedule 사용:', {
       travelMode,
       timeSlots개수: enhancedSchedule.timeSlots?.length,
-      travelSlots개수: enhancedSchedule.travelSlots?.length
+      travelSlots개수: enhancedSchedule.travelSlots?.length,
+      isOwner
     });
+
+    // ✨ 조원이면 이동시간 블록 숨김 (방장의 이동시간 정보 보호)
+    if (!isOwner) {
+      return {
+        timeSlots: enhancedSchedule.timeSlots.filter(slot => !slot.isTravel),
+        travelSlots: [],
+        travelMode: travelMode
+      };
+    }
+
     return enhancedSchedule;
-    }, [travelMode, enhancedSchedule, currentRoom, isCalculating]);
+    }, [travelMode, enhancedSchedule, currentRoom, isCalculating, isOwner]);
 
   const getWeekViewData = useCallback((weekStartDate) => {
     const scheduleData = getCurrentScheduleData();

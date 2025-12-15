@@ -1,4 +1,5 @@
 const Room = require('../models/room');
+const { recalculateMultipleDates } = require('../services/scheduleRecalculator');
 
 // Helper: 시간 계산 함수들
 function addHours(timeStr, hours) {
@@ -870,11 +871,21 @@ exports.respondToExchangeRequest = async (req, res) => {
 
             console.log('✅ Stage 1: Direct exchange completed successfully!');
 
+            // 🔄 교환된 슬롯의 날짜에 대해 이동시간 재계산
+            const affectedDates = new Set();
+            affectedDates.add(new Date(targetSlot.date));
+            requesterSlots.forEach(slot => affectedDates.add(new Date(slot.date)));
+
+            console.log('🔄 재계산 시작: 영향받은 날짜', Array.from(affectedDates).map(d => d.toISOString().split('T')[0]));
+            await recalculateMultipleDates(roomId, Array.from(affectedDates));
+            console.log('✅ 이동시간 재계산 완료');
+
             return res.json({
                success: true,
                message: '요청을 수락했습니다. 직접 교환이 완료되었습니다.',
                request,
-               exchangeType: 'direct'
+               exchangeType: 'direct',
+               recalculatedDates: Array.from(affectedDates).map(d => d.toISOString().split('T')[0])
             });
          }
 
@@ -1074,6 +1085,16 @@ exports.respondToExchangeRequest = async (req, res) => {
          console.log('✅ Exchange completed successfully!');
          console.log('📊 Final timeSlots count:', room.timeSlots.length);
 
+         // 🔄 교환된 슬롯의 날짜에 대해 이동시간 재계산
+         const affectedDates = new Set();
+         affectedDates.add(new Date(request.targetSlot.date)); // 요청자가 이동한 날짜
+         affectedDates.add(new Date(alternativeSlot.date)); // 대상자가 이동한 날짜
+         requesterSlots.forEach(slot => affectedDates.add(new Date(slot.date))); // 요청자의 원래 슬롯 날짜들
+
+         console.log('🔄 재계산 시작: 영향받은 날짜', Array.from(affectedDates).map(d => d.toISOString().split('T')[0]));
+         await recalculateMultipleDates(roomId, Array.from(affectedDates));
+         console.log('✅ 이동시간 재계산 완료');
+
          return res.json({
             success: true,
             message: `요청을 수락했습니다. 당신은 ${alternativeSlot.day} ${alternativeSlot.startTime}로 이동합니다.`,
@@ -1082,7 +1103,8 @@ exports.respondToExchangeRequest = async (req, res) => {
                day: alternativeSlot.day,
                startTime: alternativeSlot.startTime,
                endTime: alternativeSlot.endTime
-            }
+            },
+            recalculatedDates: Array.from(affectedDates).map(d => d.toISOString().split('T')[0])
          });
       }
 

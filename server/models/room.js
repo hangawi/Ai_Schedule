@@ -65,6 +65,20 @@ const TimeSlotSchema = new mongoose.Schema({
   priority: {
     type: Number,
     default: 3
+  },
+  // 위치 정보 (이동시간 계산에 사용)
+  location: {
+    type: {
+      type: String,
+      enum: ['address', 'coordinates'],
+      required: false
+    },
+    address: String, // "서울시 강남구 ..."
+    coordinates: {
+      lat: Number,
+      lng: Number
+    },
+    description: String // "강남역 스터디카페"
   }
 });
 
@@ -307,6 +321,12 @@ const RoomSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // 현재 선택된 이동수단 모드 (확정 전 임시, 보기 버튼 선택 시)
+  currentTravelMode: {
+    type: String,
+    enum: ['normal', 'transit', 'driving', 'bicycling', 'walking', null],
+    default: null
+  },
   // 확정된 이동수단 모드 (확정 시 저장됨)
   confirmedTravelMode: {
     type: String,
@@ -317,6 +337,20 @@ const RoomSchema = new mongoose.Schema({
   confirmedAt: {
     type: Date,
     default: null
+  },
+  // 방장의 기준 위치 (이동시간 계산 시작점)
+  ownerHomeLocation: {
+    type: {
+      type: String,
+      enum: ['address', 'coordinates'],
+      required: false
+    },
+    address: String, // "서울시 강남구 ..."
+    coordinates: {
+      lat: Number,
+      lng: Number
+    },
+    description: String // "우리집", "사무실" 등
   }
 }, {
   timestamps: true

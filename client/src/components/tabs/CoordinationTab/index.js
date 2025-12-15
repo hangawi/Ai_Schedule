@@ -163,17 +163,27 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     closeRequestModal, openChangeRequestModal, closeChangeRequestModal
   } = useCoordinationModals();
 
-  // Travel mode
+  // Travel mode - 방장 여부 확인
+  const isOwner = currentRoom && user ? isRoomOwner(user, currentRoom) : false;
+
   const {
     travelMode,
     handleModeChange: handleTravelModeChange,
     isCalculating: isTravelCalculating,
     error: travelError,
     getCurrentScheduleData
-  } = useTravelMode(currentRoom);
+  } = useTravelMode(currentRoom, isOwner);
 
   // 방장 시간표 정보 캐시
   const [ownerScheduleCache, setOwnerScheduleCache] = useState(null);
+
+  // ✨ 조원일 때 방장의 currentTravelMode 자동 동기화
+  useEffect(() => {
+    if (!isOwner && currentRoom?.currentTravelMode && travelMode !== currentRoom.currentTravelMode) {
+      console.log(`🔄 [조원 동기화] 방장의 이동수단 모드 적용: ${currentRoom.currentTravelMode}`);
+      handleTravelModeChange(currentRoom.currentTravelMode);
+    }
+  }, [isOwner, currentRoom?.currentTravelMode, travelMode, handleTravelModeChange]);
 
   // Additional states
   const [roomModalDefaultTab, setRoomModalDefaultTab] = useState('info');
@@ -573,7 +583,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
   // In-Room View
   if (currentRoom) {
-    const isOwner = isRoomOwner(user, currentRoom);
+    // isOwner는 이미 167번 줄에서 계산됨
     const scheduleData = getCurrentScheduleData();
     
     console.log('🔍 [CoordinationTab] scheduleData:', {

@@ -517,4 +517,65 @@ export const coordinationService = {
 
     return await response.json();
   },
+
+  /**
+   * 조원이 선택 가능한 시간대 조회 (이동시간 고려)
+   * @param {string} roomId - 방 ID
+   * @param {string} date - 조회할 날짜 (YYYY-MM-DD)
+   * @param {object} memberLocation - 조원의 위치 정보 { type, address, coordinates, description }
+   * @returns {Promise<object>} { date, slots: [{ startTime, endTime, available }], travelMode }
+   */
+  async getAvailableSlots(roomId, date, memberLocation) {
+    const token = await getAuthToken();
+
+    const params = new URLSearchParams({
+      date,
+      memberLocation: JSON.stringify(memberLocation)
+    });
+
+    const response = await fetch(
+      `${API_BASE_URL}/api/coordination/rooms/${roomId}/available-slots?${params}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    );
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || '가능한 시간대 조회에 실패했습니다.');
+    }
+
+    return await response.json();
+  },
+
+  /**
+   * 이동수단 선택 시 자동 확정 타이머 시작
+   * @param {string} roomId - 방 ID
+   * @param {string} travelMode - 선택한 이동수단 (normal, transit, driving, bicycling, walking)
+   * @returns {Promise<object>} { msg, autoConfirmAt, travelMode, hoursRemaining }
+   */
+  async startConfirmationTimer(roomId, travelMode) {
+    const token = await getAuthToken();
+
+    const response = await fetch(
+      `${API_BASE_URL}/api/coordination/rooms/${roomId}/start-confirmation-timer`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ travelMode })
+      }
+    );
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || '타이머 시작에 실패했습니다.');
+    }
+
+    return await response.json();
+  },
 };

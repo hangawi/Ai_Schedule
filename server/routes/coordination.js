@@ -59,6 +59,12 @@ router.post('/rooms/:roomId/find-common-slots', auth, coordinationController.fin
 router.post('/rooms/:roomId/run-schedule', auth, coordinationController.runAutoSchedule);
 router.post('/rooms/:roomId/confirm-schedule', auth, coordinationSchedulingController.confirmSchedule);
 
+// Dynamic travel time - Available slots (조원용 시간대 조회)
+router.get('/rooms/:roomId/available-slots', auth, coordinationSchedulingController.getAvailableSlots);
+
+// Start confirmation timer when travel mode is selected
+router.post('/rooms/:roomId/start-confirmation-timer', auth, coordinationSchedulingController.startConfirmationTimer);
+
 // Request management
 router.post('/requests', auth, coordinationController.createRequest);
 // 🔧 더 구체적인 라우트를 먼저 배치

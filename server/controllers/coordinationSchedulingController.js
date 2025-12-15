@@ -2,6 +2,7 @@ const Room = require('../models/room');
 const User = require('../models/user');
 const ActivityLog = require('../models/ActivityLog');
 const schedulingAlgorithm = require('../services/schedulingAlgorithm');
+const dynamicTravelTimeCalculator = require('../services/dynamicTravelTimeCalculator');
 
 // @desc    Run auto-schedule algorithm for the room
 // @route   POST /api/coordination/rooms/:roomId/auto-schedule
@@ -1049,5 +1050,190 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
   } catch (error) {
     console.error('Error confirming schedule:', error);
     res.status(500).json({ msg: `확정 처리 중 오류가 발생했습니다: ${error.message}` });
+  }
+};
+
+/**
+ * 시간대 생성 헬퍼 함수
+ * @param {number} startHour - 시작 시간 (0-23)
+ * @param {number} endHour - 종료 시간 (1-24)
+ * @param {number} intervalMinutes - 간격 (분)
+ * @returns {Array} 생성된 시간 슬롯 배열 [{ startTime: "09:00", endTime: "09:30" }, ...]
+ */
+function generateTimeSlots(startHour, endHour, intervalMinutes = 30) {
+  const slots = [];
+  const startMinutes = startHour * 60;
+  const endMinutes = endHour * 60;
+
+  for (let minutes = startMinutes; minutes < endMinutes; minutes += intervalMinutes) {
+    const startTime = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+    const nextMinutes = minutes + intervalMinutes;
+    const endTime = `${String(Math.floor(nextMinutes / 60)).padStart(2, '0')}:${String(nextMinutes % 60).padStart(2, '0')}`;
+
+    slots.push({ startTime, endTime });
+  }
+
+  return slots;
+}
+
+/**
+ * 조원이 선택 가능한 시간대 조회
+ * @desc    조원이 특정 날짜에 선택할 수 있는 시간대를 반환 (이동시간 고려)
+ * @route   GET /api/coordination/rooms/:roomId/available-slots
+ * @access  Private (Room Members)
+ * @query   {string} date - 조회할 날짜 (YYYY-MM-DD)
+ * @query   {string} memberLocation - 조원의 위치 정보 (JSON string)
+ */
+exports.getAvailableSlots = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { date, memberLocation } = req.query;
+
+    // 1. 필수 파라미터 검증
+    if (!date) {
+      return res.status(400).json({ msg: '날짜를 지정해주세요.' });
+    }
+
+    if (!memberLocation) {
+      return res.status(400).json({ msg: '위치 정보를 지정해주세요.' });
+    }
+
+    // 2. 방 정보 조회
+    const room = await Room.findById(roomId);
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    // 3. 멤버 권한 확인
+    if (!room.isMember(req.user.id)) {
+      return res.status(403).json({ msg: '이 방의 멤버만 조회할 수 있습니다.' });
+    }
+
+    // 4. 위치 정보 파싱
+    let location;
+    try {
+      location = JSON.parse(memberLocation);
+    } catch (error) {
+      return res.status(400).json({ msg: '위치 정보 형식이 올바르지 않습니다.' });
+    }
+
+    // 5. 모든 가능한 시간대 생성
+    const allPossibleSlots = generateTimeSlots(
+      room.settings.startHour || 9,
+      room.settings.endHour || 18,
+      30 // 30분 간격
+    );
+
+    // 6. 각 시간대별 배치 가능 여부 검증
+    const availabilityResults = [];
+
+    for (const slot of allPossibleSlots) {
+      const validation = await dynamicTravelTimeCalculator.validateNewSlotPlacement(
+        roomId,
+        new Date(date),
+        slot.startTime,
+        slot.endTime,
+        location
+      );
+
+      availabilityResults.push({
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        available: validation.valid
+        // ❌ 주의: reason이나 details는 반환하지 않음 (방장의 이동시간 정보 보호)
+      });
+    }
+
+    // 7. 응답 반환
+    res.json({
+      date,
+      slots: availabilityResults,
+      travelMode: room.currentTravelMode || room.confirmedTravelMode || 'normal',
+      message: '시간대별 배치 가능 여부를 조회했습니다.'
+    });
+
+  } catch (error) {
+    console.error('❌ 가능한 시간대 조회 실패:', error);
+    res.status(500).json({ msg: '서버 오류가 발생했습니다.', error: error.message });
+  }
+};
+
+/**
+ * 이동수단 선택 시 자동 확정 타이머 시작
+ * @desc    방장이 이동수단을 선택하면 자동 확정 타이머를 시작
+ * @route   POST /api/coordination/rooms/:roomId/start-confirmation-timer
+ * @access  Private (Room Owner only)
+ */
+exports.startConfirmationTimer = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { travelMode } = req.body;
+
+    // 1. 방 정보 조회
+    const room = await Room.findById(roomId);
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    // 2. 방장 권한 확인
+    if (!room.isOwner(req.user.id)) {
+      return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
+    }
+
+    // 3. 자동배정이 실행되었는지 확인
+    if (!room.timeSlots || room.timeSlots.length === 0) {
+      return res.status(400).json({ msg: '자동배정을 먼저 실행해주세요.' });
+    }
+
+    // 4. 이미 확정되었는지 확인
+    if (room.confirmedAt) {
+      return res.status(400).json({ msg: '이미 확정된 스케줄입니다.' });
+    }
+
+    // 5. 타이머 초기화 여부 확인
+    let isTimerReset = false;
+    if (room.autoConfirmAt && new Date(room.autoConfirmAt) > new Date()) {
+      console.log(`🔄 [타이머 초기화] 기존: ${room.autoConfirmAt}, 새 모드: ${travelMode}`);
+      isTimerReset = true;
+    }
+
+    // 6. 타이머 설정 (테스트: 1분, 실제: 48시간)
+    const confirmTime = new Date();
+    confirmTime.setMinutes(confirmTime.getMinutes() + 1);  // 테스트용: 1분
+    // confirmTime.setHours(confirmTime.getHours() + 48);  // 실제용: 48시간
+
+    room.autoConfirmAt = confirmTime;
+
+    // 7. 선택된 이동수단 임시 저장 (확정 전까지는 변경 가능)
+    room.currentTravelMode = travelMode;  // 임시 모드 (조원들이 볼 수 있음)
+    room.confirmedTravelMode = null;       // 아직 확정 안됨
+
+    await room.save();
+
+    console.log(`⏰ [타이머 ${isTimerReset ? '재시작' : '시작'}] 방 ${roomId}: ${confirmTime.toISOString()}, 이동수단: ${travelMode}`);
+
+    // 8. Socket.io로 실시간 알림 전송
+    if (global.io) {
+      global.io.to(`room-${roomId}`).emit('timer-started', {
+        roomId: roomId,
+        autoConfirmAt: confirmTime,
+        travelMode: travelMode,
+        isReset: isTimerReset,
+        message: isTimerReset ? '타이머가 초기화되었습니다.' : '자동 확정 타이머가 시작되었습니다.',
+        timestamp: new Date()
+      });
+    }
+
+    res.json({
+      msg: isTimerReset ? '타이머가 초기화되었습니다.' : '자동 확정 타이머가 시작되었습니다.',
+      autoConfirmAt: confirmTime,
+      travelMode: travelMode,
+      minutesRemaining: 1,  // 테스트용: 1분
+      isReset: isTimerReset
+    });
+
+  } catch (error) {
+    console.error('❌ 타이머 시작 실패:', error);
+    res.status(500).json({ msg: '서버 오류가 발생했습니다.', error: error.message });
   }
 };
