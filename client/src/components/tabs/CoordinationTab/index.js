@@ -353,6 +353,14 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     }
   }, [currentRoom?.timeSlots]);
 
+  // 확정된 이동수단 모드 자동 적용
+  useEffect(() => {
+    if (currentRoom?.confirmedTravelMode && currentRoom.confirmedTravelMode !== 'normal') {
+      console.log(`✅ [확정된 모드 자동 적용] ${currentRoom.confirmedTravelMode}`);
+      handleTravelModeChange(currentRoom.confirmedTravelMode);
+    }
+  }, [currentRoom?._id, currentRoom?.confirmedTravelMode]);
+
   // Watch for walking mode validation errors and show modal
   useEffect(() => {
     if (travelError && travelError.includes('도보 이동 시간이 1시간을 초과')) {
@@ -495,7 +503,8 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     }
 
     try {
-      const result = await coordinationService.confirmSchedule(currentRoom._id);
+      // travelMode를 함께 전달
+      const result = await coordinationService.confirmSchedule(currentRoom._id, travelMode);
 
       showAlert(
         `${result.confirmedSlotsCount}개의 시간이 ${result.affectedMembersCount}명의 조원과 방장의 개인일정으로 확정되었습니다.`,

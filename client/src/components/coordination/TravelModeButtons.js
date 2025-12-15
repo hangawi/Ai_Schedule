@@ -42,13 +42,23 @@ import { Car, Train, Bike, Footprints, Zap } from 'lucide-react';
  *        ('normal', 'transit', 'driving', 'bicycling', 'walking')
  * @param {Function} props.onModeChange - 이동 수단 모드가 변경될 때 호출되는 콜백 함수. 새 모드의 id를 인자로 받습니다.
  * @param {boolean} [props.disabled=false] - 버튼을 비활성화할지 여부
+ * @param {boolean} [props.isOwner=false] - 방장 여부
+ * @param {string} [props.confirmedTravelMode=null] - 확정된 이동수단 모드
+ * @param {Object} [props.currentRoom=null] - 현재 방 정보
  * @returns {JSX.Element} 이동 수단 선택 버튼 그룹 UI
  *
  * @example
  * const [mode, setMode] = useState('normal');
- * <TravelModeButtons selectedMode={mode} onModeChange={setMode} disabled={false} />
+ * <TravelModeButtons selectedMode={mode} onModeChange={setMode} disabled={false} isOwner={true} confirmedTravelMode={null} currentRoom={currentRoom} />
  */
-const TravelModeButtons = ({ selectedMode = 'normal', onModeChange, disabled = false }) => {
+const TravelModeButtons = ({
+  selectedMode = 'normal',
+  onModeChange,
+  disabled = false,
+  isOwner = false,
+  confirmedTravelMode = null,
+  currentRoom = null
+}) => {
   const modes = [
     { id: 'normal', label: '일반', icon: Zap, color: 'purple' },
     { id: 'transit', label: '대중교통', icon: Train, color: 'blue' },
@@ -57,6 +67,43 @@ const TravelModeButtons = ({ selectedMode = 'normal', onModeChange, disabled = f
     { id: 'walking', label: '도보', icon: Footprints, color: 'gray' }
   ];
 
+  // 1. 조원이면 버튼 완전히 숨김
+  if (!isOwner) {
+    return null;
+  }
+
+  // 2. 방장이고 확정 후: 확정된 모드만 표시 (읽기 전용)
+  if (isOwner && confirmedTravelMode) {
+    const confirmedMode = modes.find(m => m.id === confirmedTravelMode);
+    if (!confirmedMode) return null;
+
+    const Icon = confirmedMode.icon;
+
+    return (
+      <div className="flex items-center gap-2 ml-4">
+        <div className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 ${
+          confirmedMode.color === 'blue' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
+          confirmedMode.color === 'green' ? 'bg-green-100 text-green-700 border border-green-300' :
+          confirmedMode.color === 'orange' ? 'bg-orange-100 text-orange-700 border border-orange-300' :
+          confirmedMode.color === 'gray' ? 'bg-gray-100 text-gray-700 border border-gray-300' :
+          'bg-purple-100 text-purple-700 border border-purple-300'
+        }`}>
+          <Icon size={16} />
+          <span>{confirmedMode.label} (확정)</span>
+        </div>
+        <span className="text-xs text-gray-500">
+          ✓ 이동수단이 확정되어 변경할 수 없습니다
+        </span>
+      </div>
+    );
+  }
+
+  // 3. 방장이고 확정 전이고 타임슬롯이 없으면: 숨김 (자동배정 실행 전)
+  if (isOwner && !confirmedTravelMode && (!currentRoom?.timeSlots || currentRoom.timeSlots.length === 0)) {
+    return null;
+  }
+
+  // 4. 방장이고 확정 전이고 타임슬롯이 있으면: 모든 버튼 표시 (자동배정 실행 후)
   const getButtonClasses = (mode) => {
     const baseClasses = "px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1.5";
 

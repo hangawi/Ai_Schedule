@@ -306,6 +306,17 @@ const RoomSchema = new mongoose.Schema({
   autoConfirmAt: {
     type: Date,
     default: null
+  },
+  // 확정된 이동수단 모드 (확정 시 저장됨)
+  confirmedTravelMode: {
+    type: String,
+    enum: ['normal', 'transit', 'driving', 'bicycling', 'walking', null],
+    default: null
+  },
+  // 확정 시간
+  confirmedAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true

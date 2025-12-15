@@ -432,6 +432,10 @@ exports.deleteAllTimeSlots = exports.deleteAllTimeSlots = async (req, res) => {
       // 자동 확정 타이머 해제 (전체 비우기)
       room.autoConfirmAt = null;
 
+      // 확정된 이동수단 모드 초기화
+      room.confirmedTravelMode = null;
+      room.confirmedAt = null;
+
       // Also clear non-pending requests as they are linked to slots
       room.requests = room.requests.filter(r => r.status === 'pending');
 
@@ -557,7 +561,8 @@ exports.deleteAllTimeSlots = exports.deleteAllTimeSlots = async (req, res) => {
 exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
   try {
     const { roomId } = req.params;
-    
+    const { travelMode } = req.body; // 클라이언트에서 전달받은 이동수단 모드
+
     // 1. 방 조회 (populate members)
     const room = await Room.findById(roomId)
       .populate('owner', 'firstName lastName email personalTimes defaultSchedule scheduleExceptions')
@@ -1005,6 +1010,14 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
       throw new Error('Failed to save room after multiple retries');
     }
 
+    // 6-1. 확정된 이동수단 모드 저장
+    if (travelMode) {
+      room.confirmedTravelMode = travelMode;
+      room.confirmedAt = new Date();
+      await room.save();
+      console.log(`✅ [확정] 이동수단 모드 저장: ${travelMode}`);
+    }
+
     // 7. 활동 로그 기록
     await ActivityLog.logActivity(
       roomId,
@@ -1029,7 +1042,8 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
       msg: '배정 시간이 각 조원과 방장의 개인일정으로 확정되었습니다.',
       confirmedSlotsCount: autoAssignedSlots.length,
       mergedSlotsCount: Object.values(mergedSlotsByUser).reduce((sum, slots) => sum + slots.length, 0),
-      affectedMembersCount: Object.keys(mergedSlotsByUser).length
+      affectedMembersCount: Object.keys(mergedSlotsByUser).length,
+      confirmedTravelMode: travelMode || 'normal' // 확정된 이동수단 모드
     });
     
   } catch (error) {

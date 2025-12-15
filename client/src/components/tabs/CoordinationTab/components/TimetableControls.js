@@ -81,6 +81,9 @@ const TimetableControls = ({
           selectedMode={travelMode}
           onModeChange={onTravelModeChange || (() => {})}
           disabled={!currentRoom || !currentRoom.timeSlots || currentRoom.timeSlots.length === 0}
+          isOwner={isOwner}
+          confirmedTravelMode={currentRoom?.confirmedTravelMode}
+          currentRoom={currentRoom}
         />
         {isTravelCalculating && (
           <span className="ml-2 text-sm text-gray-500">계산 중...</span>

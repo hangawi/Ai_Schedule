@@ -433,15 +433,18 @@ export const coordinationService = {
 
   /**
    * 자동배정된 시간을 각 조원과 방장의 개인일정으로 확정
+   * @param {string} roomId - 방 ID
+   * @param {string} travelMode - 현재 선택된 이동수단 모드 (normal, transit, driving, bicycling, walking)
    */
-  async confirmSchedule(roomId) {
+  async confirmSchedule(roomId, travelMode = 'normal') {
     const token = await getAuthToken();
     const res = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/confirm-schedule`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
-      }
+      },
+      body: JSON.stringify({ travelMode }) // 이동수단 모드 전달
     });
 
     if (!res.ok) {
