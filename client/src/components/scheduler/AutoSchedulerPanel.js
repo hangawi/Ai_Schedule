@@ -68,6 +68,7 @@ const AutoSchedulerPanel = ({
   const [shouldRun, setShouldRun] = useState(false);
   const [showModeDropdown, setShowModeDropdown] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(null);
+  const [showClearSlotsWarning, setShowClearSlotsWarning] = useState(false);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -177,6 +178,13 @@ const AutoSchedulerPanel = ({
    *       상태가 완전히 업데이트된 후 `onRun`이 호출되도록 보장합니다.
    */
   const handleRunWithRounding = () => {
+    // 🚨 확정 후 슬롯이 있으면 경고 모달 표시
+    const hasExistingSlots = currentRoom?.timeSlots && currentRoom.timeSlots.length > 0;
+    if (hasExistingSlots) {
+      setShowClearSlotsWarning(true);
+      return;
+    }
+
     const hours = options.hours || 0;
     const minutes = options.minutes || 0;
 
@@ -247,7 +255,13 @@ const AutoSchedulerPanel = ({
         <button
           onClick={handleRunWithRounding}
           disabled={isLoading}
-          className="w-full bg-gradient-to-r from-purple-500 to-purple-600 text-white py-2 px-3 rounded-lg font-medium hover:from-purple-600 hover:to-purple-700 disabled:from-purple-300 disabled:to-purple-400 transition-all duration-200 shadow-md flex items-center justify-center text-sm"
+          className={`w-full py-2 px-3 rounded-lg font-medium transition-all duration-200 shadow-md flex items-center justify-center text-sm ${
+            isLoading
+              ? 'bg-gradient-to-r from-purple-300 to-purple-400 cursor-not-allowed'
+              : (currentRoom?.timeSlots && currentRoom.timeSlots.length > 0)
+              ? 'bg-gradient-to-r from-gray-400 to-gray-500 text-white hover:from-gray-500 hover:to-gray-600 cursor-not-allowed'
+              : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700'
+          }`}
         >
           <WandSparkles size={16} className="mr-2" />
           {isLoading ? '배정 중...' : '자동 배정 실행'}
@@ -404,6 +418,40 @@ const AutoSchedulerPanel = ({
           </button>
         </div>
       </div>
+
+      {/* 경고 모달: 전체 비우기 먼저 실행 필요 */}
+      {showClearSlotsWarning && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md mx-4">
+            <div className="flex items-center mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mr-4">
+                <X size={24} className="text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">자동 배정 불가</h3>
+            </div>
+            <p className="text-gray-700 mb-6">
+              자동 배정을 실행하려면 먼저 <strong className="text-red-600">'전체 비우기'</strong> 버튼을 눌러주세요.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowClearSlotsWarning(false)}
+                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded-lg font-medium transition-colors"
+              >
+                확인
+              </button>
+              <button
+                onClick={() => {
+                  setShowClearSlotsWarning(false);
+                  onDeleteAllSlots();
+                }}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg font-medium transition-colors"
+              >
+                전체 비우기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
