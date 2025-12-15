@@ -207,11 +207,12 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
    // 시간적으로 가까운 순서로 요일 체크 (선호시간만 포함)
    const excludedDate = new Date(excludeDate);
 
-   // 사용자의 선호시간 요일들만 추출 (우선순위 2 이상)
+   // 사용자의 가능한 모든 요일 추출 (우선순위 무관)
    const preferredDays = [...new Set(userSchedule
-      .filter(s => s.priority >= 2)
       .map(s => s.dayOfWeek)
    )].sort((a, b) => a - b);
+   
+   console.log(`📅 [개선] 모든 가능 요일 체크 (우선순위 무관):`, preferredDays.map(d => dayMap[d]));
 
    // 🆕 개선: 같은 날짜 내 빈 시간 우선 체크 (불필요한 날짜 이동 방지)
    const daysToCheck = [];
@@ -257,7 +258,7 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
    for (const dayOfWeek of daysToCheck) {
       console.log(`\n➡️  Checking ${dayMap[dayOfWeek]} (dayOfWeek=${dayOfWeek})...`);
       const dayPreferences = userSchedule.filter(s =>
-         s.dayOfWeek === dayOfWeek && s.priority >= 2
+         s.dayOfWeek === dayOfWeek  // 우선순위 필터 제거 - 모든 가능시간 체크
       );
 
       if (dayPreferences.length === 0) continue;

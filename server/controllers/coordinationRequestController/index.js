@@ -354,7 +354,7 @@ exports.handleRequest = async (req, res) => {
 
                         // Check if target's slot is in requester's preferred times
                         const isTargetSlotInRequesterPreferred = requesterPreferredTimes.some(pref => {
-                           if (pref.priority < 2) return false; // Only consider preferred times (priority >= 2)
+                           // 우선순위 필터 제거 - 모든 가능시간 체크
                            if (pref.dayOfWeek !== timeSlot.day &&
                                DAY_NAMES[pref.dayOfWeek] !== timeSlot.day) return false;
                            // Check if target slot time is within preferred time range
