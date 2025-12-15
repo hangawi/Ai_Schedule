@@ -29,11 +29,12 @@ const AutoConfirmBanner = ({ autoConfirmAt, isOwner }) => {
       }
     };
 
+    // 즉시 업데이트 (리셋 효과)
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
 
     return () => clearInterval(interval);
-  }, [autoConfirmAt]);
+  }, [String(autoConfirmAt)]);
 
   if (!timeRemaining || timeRemaining === 0) return null;
 

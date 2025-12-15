@@ -168,11 +168,29 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
   const {
     travelMode,
-    handleModeChange: handleTravelModeChange,
+    handleModeChange: handleTravelModeChangeInternal,
     isCalculating: isTravelCalculating,
     error: travelError,
     getCurrentScheduleData
   } = useTravelMode(currentRoom, isOwner);
+
+  // 이동수단 모드 변경 핸들러 (타이머 리셋을 위해 방 정보 새로고침)
+  const handleTravelModeChange = useCallback(async (newMode) => {
+    await handleTravelModeChangeInternal(newMode);
+
+    // 타이머가 리셋되었으므로 방 정보를 다시 가져와서 UI 업데이트
+    if (isOwner && currentRoom?._id) {
+      const roomId = currentRoom._id;
+      setTimeout(async () => {
+        try {
+          await fetchRoomDetails(roomId);
+          console.log('🔄 [타이머 리셋] 방 정보 업데이트 완료');
+        } catch (error) {
+          console.error('방 정보 업데이트 실패:', error);
+        }
+      }, 500); // 서버 처리 시간을 위해 0.5초 대기
+    }
+  }, [handleTravelModeChangeInternal, isOwner, currentRoom?._id, fetchRoomDetails]);
 
   // 방장 시간표 정보 캐시
   const [ownerScheduleCache, setOwnerScheduleCache] = useState(null);
@@ -228,7 +246,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     // 자동 확정 이벤트 수신
     socket.on('schedule-confirmed', async (data) => {
       console.log('📡 Schedule confirmed event received:', data);
-      
+
       // 방 정보 다시 가져오기
       try {
         await fetchRoomDetails(currentRoom._id);
@@ -237,6 +255,12 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         console.error('Failed to refresh room after auto-confirm:', error);
       }
     });
+
+    // 타이머 시작/초기화 이벤트 수신 (주석: handleTravelModeChange에서 이미 처리하므로 중복 방지)
+    // socket.on('timer-started', async (data) => {
+    //   console.log('📡 Timer started/reset event received:', data);
+    //   // 방 정보는 handleTravelModeChange에서 이미 업데이트하므로 여기서는 하지 않음
+    // });
 
     // cleanup
     return () => {
@@ -663,6 +687,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
             {currentRoom?.autoConfirmAt && (
               <AutoConfirmBanner
+                key={new Date(currentRoom.autoConfirmAt).getTime()}
                 autoConfirmAt={currentRoom.autoConfirmAt}
                 isOwner={isOwner}
               />
