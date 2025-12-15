@@ -367,7 +367,7 @@ exports.handleRequest = async (req, res) => {
                         if (request.requesterSlots && request.requesterSlots.length > 0) {
                            areRequesterSlotsInTargetPreferred = request.requesterSlots.every(reqSlot => {
                               return targetPreferredTimes.some(pref => {
-                                 if (pref.priority < 2) return false;
+                                 // 우선순위 필터 제거 - 모든 가능시간 체크
                                  if (pref.dayOfWeek !== reqSlot.day &&
                                      DAY_NAMES[pref.dayOfWeek] !== reqSlot.day) return false;
                                  return pref.startTime <= reqSlot.startTime && pref.endTime >= reqSlot.endTime;
@@ -380,9 +380,11 @@ exports.handleRequest = async (req, res) => {
                            areRequesterSlotsInTargetPreferred
                         });
 
+                        // 🔧 교환 요청의 경우: 요청자가 이미 타겟 시간을 원한다고 명시했으므로
+                        // 타겟이 요청자의 시간을 받을 수 있는지만 확인하면 됨
                         // If both conditions are met, execute direct exchange
-                        if (isTargetSlotInRequesterPreferred && areRequesterSlotsInTargetPreferred) {
-                           console.log('✅ Stage 1: Direct exchange possible! Both users have mutual preferred times.');
+                        if (areRequesterSlotsInTargetPreferred) {
+                           console.log('✅ Stage 1: Direct exchange possible! Target can accept requester\'s time.');
                            console.log('🔄 Executing direct exchange...');
                            console.log('📊 Before exchange - Total timeSlots:', room.timeSlots.length);
 
