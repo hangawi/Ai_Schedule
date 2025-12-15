@@ -102,6 +102,52 @@ class SchedulingAlgorithm {
     // 시작 날짜 설정
     const startDate = currentWeek ? new Date(currentWeek) : new Date('2025-09-16T00:00:00.000Z');
 
+    // 🔍 멤버 선호시간 확인
+    console.log('\n🔍 ===== 멤버 선호시간 확인 =====');
+    console.log(`📅 자동배정 날짜 범위: ${startDate.toISOString().split('T')[0]} ~ (${numWeeks}주)`);
+    nonOwnerMembers.forEach((member, idx) => {
+      const memberId = (member.user?._id || member.user).toString();
+      const memberUser = member.user?._id ? member.user : members.find(m => m.user._id?.toString() === memberId)?.user;
+
+      console.log(`\n👤 멤버 ${idx + 1} (${memberId.substring(0, 8)}...):`);
+
+      // defaultSchedule 확인
+      const defaultSchedule = memberUser?.defaultSchedule || member.defaultSchedule || [];
+      console.log(`   📋 defaultSchedule (${defaultSchedule.length}개):`);
+
+      // 날짜별로 그룹화
+      const dateGroups = {};
+      defaultSchedule.forEach(schedule => {
+        if (schedule.specificDate) {
+          const dateStr = schedule.specificDate.toString().split('T')[0];
+          if (!dateGroups[dateStr]) dateGroups[dateStr] = [];
+          dateGroups[dateStr].push(`${schedule.startTime}~${schedule.endTime}`);
+        } else if (schedule.dayOfWeek !== undefined) {
+          const days = ['일', '월', '화', '수', '목', '금', '토'];
+          const key = `매주 ${days[schedule.dayOfWeek]}`;
+          if (!dateGroups[key]) dateGroups[key] = [];
+          dateGroups[key].push(`${schedule.startTime}~${schedule.endTime}`);
+        }
+      });
+
+      // 날짜 순으로 정렬하여 출력
+      const sortedDates = Object.keys(dateGroups).sort();
+      sortedDates.forEach(date => {
+        const times = dateGroups[date];
+        console.log(`      ${date}: ${times.join(', ')}`);
+      });
+
+      // scheduleExceptions 확인
+      const scheduleExceptions = memberUser?.scheduleExceptions || member.scheduleExceptions || [];
+      console.log(`   📋 scheduleExceptions (${scheduleExceptions.length}개):`);
+      scheduleExceptions.slice(0, 5).forEach((schedule, i) => {
+        if (schedule.specificDate) {
+          console.log(`      ${i + 1}. specificDate: ${schedule.specificDate}, ${schedule.startTime}~${schedule.endTime}`);
+        }
+      });
+    });
+    console.log('🔍 ==============================\n');
+
     // 타임테이블 생성
     let timetable = createTimetableFromPersonalSchedules(
       members,
@@ -147,6 +193,64 @@ class SchedulingAlgorithm {
       loadExistingSlots(roomTimeSlots, assignments, ownerId);
     }
 
+    // 🔍 타임테이블 슬롯 검증 (화요일 9-12시 확인)
+    console.log('\n🔍 ===== 타임테이블 슬롯 검증 =====');
+    const sortedSlotKeys = Object.keys(timetable).sort();
+    const debugNonOwnerMembers = members.filter(m => (m.user?._id || m.user).toString() !== ownerId);
+
+    debugNonOwnerMembers.forEach((member, idx) => {
+      const memberId = (member.user?._id || member.user).toString();
+      console.log(`\n👤 멤버 ${idx + 1} (${memberId.substring(0, 8)}...):`);
+
+      // 해당 멤버가 사용 가능한 모든 슬롯 찾기
+      const memberSlots = sortedSlotKeys.filter(key => {
+        const slot = timetable[key];
+        return slot.available.some(a => a.memberId === memberId && !a.isOwner);
+      });
+
+      if (memberSlots.length === 0) {
+        console.log('   ❌ 이 멤버는 타임테이블에 사용 가능한 슬롯이 하나도 없습니다!');
+        console.log('   → 원인: 선호시간이 현재 날짜 범위에 없거나, specificDate로만 설정되어 있을 수 있습니다.');
+        return;
+      }
+
+      // 날짜별로 그룹화
+      const slotsByDate = {};
+      memberSlots.forEach(key => {
+        const date = key.split('-').slice(0, 3).join('-');
+        if (!slotsByDate[date]) slotsByDate[date] = [];
+        slotsByDate[date].push(key);
+      });
+
+      // 모든 날짜 출력 (처음 10일)
+      const dates = Object.keys(slotsByDate).sort().slice(0, 10);
+      console.log(`   📊 총 ${memberSlots.length}개 슬롯, ${dates.length}일간 분포:`);
+      dates.forEach(date => {
+        const daySlots = slotsByDate[date];
+        const times = daySlots.map(k => k.split('-').slice(3).join(':')).sort();
+        const timeRanges = [];
+
+        // 연속 시간대를 범위로 표시
+        let rangeStart = times[0];
+        let prevTime = times[0];
+        for (let i = 1; i < times.length; i++) {
+          const [h, m] = times[i].split(':').map(Number);
+          const [ph, pm] = prevTime.split(':').map(Number);
+          const diff = (h * 60 + m) - (ph * 60 + pm);
+
+          if (diff > 10) {
+            timeRanges.push(rangeStart === prevTime ? rangeStart : `${rangeStart}~${prevTime}`);
+            rangeStart = times[i];
+          }
+          prevTime = times[i];
+        }
+        timeRanges.push(rangeStart === prevTime ? rangeStart : `${rangeStart}~${prevTime}`);
+
+        console.log(`   📅 ${date}: ${daySlots.length}슬롯 - ${timeRanges.join(', ')}`);
+      });
+    });
+    console.log('🔍 ==============================\n');
+
     // Phase 0: 지연 배정 처리
     processDeferredAssignments(timetable, assignments, deferredAssignments);
 
@@ -169,8 +273,8 @@ class SchedulingAlgorithm {
         roomExceptions: roomTimeSlots?.settings?.roomExceptions || []
       });
     } else {
-      // 일반 모드: 시간 순서 우선 배정 (1시간 블록씩)
-      assignByTimeOrder(timetable, assignments, memberRequiredSlots, ownerId, members, assignmentMode);
+      // 일반 모드: 시간 순서 우선 배정 (minClassDurationMinutes 기준)
+      assignByTimeOrder(timetable, assignments, memberRequiredSlots, ownerId, members, assignmentMode, minClassDurationMinutes);
     }
 
     // 기존 Phase 2, 3 비활성화 (단독 슬롯 우선 배정 제거)

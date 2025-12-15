@@ -196,11 +196,15 @@ export const handleRunAutoSchedule = async (
         console.log('📅 [Auto Schedule] dayOfWeek 기반 범위: 6개월 전부터 1년간 (52주)');
       }
     }
+    // minHoursPerWeek를 분 단위로 변환하여 minClassDurationMinutes로 설정
+    const minClassDurationMinutes = Math.ceil((scheduleOptions.minHoursPerWeek || 1) * 60);
+
     const finalOptions = {
       ...scheduleOptions,
       currentWeek: uiCurrentWeek,
       numWeeks,
       transportMode: travelMode, // 서버가 기대하는 파라미터명: transportMode
+      minClassDurationMinutes, // 추가: 연속 블록 크기 설정
       clientToday: new Date().toISOString().slice(0, 10)
     };
     
@@ -209,6 +213,7 @@ export const handleRunAutoSchedule = async (
       currentWeek: uiCurrentWeek ? uiCurrentWeek.toISOString().split('T')[0] : 'undefined',
       numWeeks,
       minHoursPerWeek: finalOptions.minHoursPerWeek,
+      minClassDurationMinutes: finalOptions.minClassDurationMinutes, // 추가
       assignmentMode: finalOptions.assignmentMode,
       transportMode: travelMode,  // 추가
       clientToday: finalOptions.clientToday

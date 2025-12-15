@@ -11,6 +11,128 @@ const { addOrUpdateSlot, addMemberAvailability, removeMemberFromSlot, createOwne
 const { getMemberPriority } = require('../helpers/memberHelper');
 
 /**
+ * 연속된 선호시간을 병합
+ * @param {Array} schedules - 스케줄 배열
+ * @returns {Array} 병합된 스케줄 배열
+ */
+const mergeConsecutiveSchedules = (schedules) => {
+  console.log(`🔄 [mergeConsecutiveSchedules] 입력: ${schedules.length}개 스케줄`);
+  if (!schedules || schedules.length === 0) {
+    console.log('🔄 [mergeConsecutiveSchedules] 빈 배열 반환');
+    return schedules;
+  }
+
+  // 1. specificDate와 dayOfWeek별로 그룹화
+  const groups = {};
+  
+  schedules.forEach(schedule => {
+    // startTime이나 endTime이 없는 스케줄은 건너뛰기
+    if (!schedule.startTime || !schedule.endTime) {
+      console.log('⚠️ [병합] startTime 또는 endTime이 없는 스케줄 건너뛰기:', schedule);
+      return;
+    }
+    
+    const key = schedule.specificDate 
+      ? `date-${schedule.specificDate}`
+      : `day-${schedule.dayOfWeek}`;
+    
+    if (!groups[key]) groups[key] = [];
+    // 스프레드 연산자 대신 직접 푸시 (Mongoose 객체 호환성)
+    groups[key].push(schedule);
+  });
+
+  // 2. 각 그룹 내에서 시간순 정렬 및 병합
+  const merged = [];
+  
+  console.log(`   📦 그룹 개수: ${Object.keys(groups).length}`);
+  Object.keys(groups).forEach((key, index) => {
+    const group = groups[key];
+    console.log(`   📦 그룹 ${index + 1} (${key}): ${group.length}개 스케줄`);
+    
+    if (group.length === 0) {
+      console.log(`      ⚠️ 그룹이 비어서 건너뜀`);
+      return;
+    }
+    
+    // 시작 시간순으로 정렬
+    group.sort((a, b) => {
+      // 방어 코드: startTime이 없는 경우 처리
+      if (!a.startTime || !b.startTime) {
+        console.log('⚠️ [병합 정렬] startTime이 없는 스케줄 발견:', { a, b });
+        return 0;
+      }
+      const timeA = parseInt(a.startTime.replace(':', ''));
+      const timeB = parseInt(b.startTime.replace(':', ''));
+      return timeA - timeB;
+    });
+
+    // 연속된 시간 병합 - 새 객체 생성하여 원본 보존
+    let current = {
+      specificDate: group[0].specificDate,
+      dayOfWeek: group[0].dayOfWeek,
+      startTime: group[0].startTime,
+      endTime: group[0].endTime,
+      priority: group[0].priority
+    };
+    
+    console.log(`      🔗 병합 시작: ${current.startTime}~${current.endTime}`);
+    
+    for (let i = 1; i < group.length; i++) {
+      const next = group[i];
+      
+      console.log(`      🔍 다음: ${next.startTime}~${next.endTime}, 현재 끝: ${current.endTime}`);
+      
+      // endTime과 startTime이 같거나 겹치면 병합
+      if (current.endTime >= next.startTime) {
+        console.log(`         ✅ 병합! (${current.endTime} >= ${next.startTime})`);
+        // endTime을 더 늦은 시간으로 업데이트
+        if (next.endTime > current.endTime) {
+          current.endTime = next.endTime;
+          console.log(`         → 끝시간 업데이트: ${current.startTime}~${current.endTime}`);
+        }
+      } else {
+        console.log(`         ❌ 병합 안됨 (${current.endTime} < ${next.startTime}), 새 블록 시작`);
+        // 병합 불가능 -> 현재 블록 저장 후 새 블록 시작
+        merged.push(current);
+        current = {
+          specificDate: next.specificDate,
+          dayOfWeek: next.dayOfWeek,
+          startTime: next.startTime,
+          endTime: next.endTime,
+          priority: next.priority
+        };
+      }
+    }
+    
+    // 마지막 블록 저장
+    merged.push(current);
+    console.log(`      ✅ ${key}에서 병합 완료: 최종 추가됨`);
+  });
+
+  console.log(`🔄 [mergeConsecutiveSchedules] 출력: ${merged.length}개 스케줄 (${schedules.length}개에서 병합)`);
+  
+  // 병합 전후 비교 로그
+  if (schedules.length !== merged.length) {
+    console.log(`   ✅ ${schedules.length - merged.length}개 스케줄이 병합되었습니다!`);
+    
+    // 병합된 결과 상세 출력 (날짜별로 그룹화하여 표시)
+    const mergedByDate = {};
+    merged.forEach(s => {
+      const key = s.specificDate || `매주 ${s.dayOfWeek}`;
+      if (!mergedByDate[key]) mergedByDate[key] = [];
+      mergedByDate[key].push(`${s.startTime}~${s.endTime}`);
+    });
+    
+    console.log('   📋 [병합 후] 스케줄:');
+    Object.keys(mergedByDate).sort().forEach(date => {
+      console.log(`      ${date}: ${mergedByDate[date].join(', ')}`);
+    });
+  }
+  
+  return merged;
+};
+
+/**
  * 개인 시간표 기반으로 타임테이블 생성
  * @param {Array} members - 멤버 배열
  * @param {Object} owner - 방장 객체
@@ -63,9 +185,51 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
 
     // 개인 시간표(defaultSchedule) 처리
     if (user.defaultSchedule && Array.isArray(user.defaultSchedule)) {
+      console.log(`
+   📋 [필터 전] ${userId.substring(0, 8)}... defaultSchedule: ${user.defaultSchedule.length}개`);
+      
       const validSchedules = filterValidSchedules(user.defaultSchedule);
+      
+      console.log(`   📋 [필터 후] ${userId.substring(0, 8)}... validSchedules: ${validSchedules.length}개`);
+      
+      // 필터링으로 제거된 스케줄이 있으면 상세 출력
+      if (user.defaultSchedule.length !== validSchedules.length) {
+        const removed = user.defaultSchedule.length - validSchedules.length;
+        console.log(`   ⚠️ ${removed}개 스케줄이 필터링으로 제거됨!`);
+        
+        // 2025-12-16만 상세 확인
+        const dec16Original = user.defaultSchedule.filter(s => 
+          s.specificDate && s.specificDate.toString().includes('2025-12-16')
+        );
+        const dec16Valid = validSchedules.filter(s => 
+          s.specificDate && s.specificDate.toString().includes('2025-12-16')
+        );
+        
+        if (dec16Original.length !== dec16Valid.length) {
+          console.log(`   🔍 2025-12-16 필터 전: ${dec16Original.length}개`);
+          dec16Original.forEach(s => {
+            console.log(`      - ${s.startTime}~${s.endTime}`);
+          });
+          console.log(`   🔍 2025-12-16 필터 후: ${dec16Valid.length}개`);
+          dec16Valid.forEach(s => {
+            console.log(`      - ${s.startTime}~${s.endTime}`);
+          });
+        }
+      }
 
-      validSchedules.forEach(schedule => {
+      // 🆕 선호시간 병합: 같은 날짜의 연속된 시간을 하나로 병합
+      const mergedSchedules = mergeConsecutiveSchedules(validSchedules);
+
+      // 병합 결과 로그 (디버깅용)
+      if (validSchedules.length !== mergedSchedules.length) {
+        console.log(`   🔄 [병합] ${userId.substring(0, 8)}... - ${validSchedules.length}개 → ${mergedSchedules.length}개로 병합됨`);
+      }
+
+      // ⚠️ 임시: 병합 문제 디버깅을 위해 원본 사용
+      const schedulesToUse = mergedSchedules.length > 0 ? mergedSchedules : validSchedules;
+      console.log(`   📊 [사용] ${schedulesToUse.length}개 스케줄 사용 (병합: ${mergedSchedules.length}, 원본: ${validSchedules.length})`);
+
+      schedulesToUse.forEach(schedule => {
         const { dayOfWeek, startTime, endTime, specificDate } = schedule;
         const schedulePriority = schedule.priority || priority;
 

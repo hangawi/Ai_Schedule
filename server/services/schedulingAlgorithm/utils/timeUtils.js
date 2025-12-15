@@ -71,7 +71,8 @@ const getHourFromSettings = (setting, defaultValue) => {
 const isValidSlotTime = (timeStr) => {
   if (!timeStr) return false;
   const minute = parseInt(timeStr.split(':')[1]);
-  return minute === 0 || minute === 30;
+  // 10분 단위 허용: 0, 10, 20, 30, 40, 50
+  return minute % 10 === 0;
 };
 
 /**
