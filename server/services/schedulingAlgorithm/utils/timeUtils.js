@@ -294,7 +294,7 @@ const findNextAvailableSlot = (
 };
 
 /**
- * 이동시간 + 수업시간이 선호시간 및 예외시간을 고려하여 적합한지 확인
+ * 이동시간 + 수업시간이 선호시간 및 예외시간을 고려하여 적합한지 확인 (수정된 로직)
  * @param {string} currentEndTime - 현재 수업 종료 시간 (HH:MM)
  * @param {number} travelTimeMinutes - 이동 시간 (분)
  * @param {number} classDurationMinutes - 수업 시간 (분)
@@ -312,89 +312,49 @@ const validateTimeSlotWithTravel = (
   preferenceEnd,
   personalTimes,
   dayOfWeek,
-  roomBlockedTimes = [],  // 추가
-  roomExceptions = []     // 추가
+  roomBlockedTimes = [],
+  roomExceptions = []
 ) => {
-  // 방 레벨 금지시간을 personalTimes 형식으로 변환하여 병합
+  // 1. 모든 금지시간(개인, 방)을 병합
   const roomBlocked = convertRoomBlockedTimes(roomBlockedTimes, dayOfWeek);
   const roomExcept = convertRoomExceptions(roomExceptions, dayOfWeek);
-  const allBlockedTimes = [
-    ...personalTimes,
-    ...roomBlocked,
-    ...roomExcept
-  ];
-  
-  // 디버깅 로그
-  if (roomBlockedTimes.length > 0 || roomExceptions.length > 0) {
-    console.log(`
-🚫 [방 금지시간 확인] 요일: ${dayOfWeek}`);
-    console.log(`   원본 roomBlockedTimes:`, roomBlockedTimes);
-    console.log(`   원본 roomExceptions:`, roomExceptions);
-    console.log(`   변환된 roomBlocked:`, roomBlocked);
-    console.log(`   변환된 roomExcept:`, roomExcept);
-    console.log(`   병합된 allBlockedTimes 개수:`, allBlockedTimes.length);
-  }
-  // 1. 도착 시간 계산
+  const allBlockedTimes = [...personalTimes, ...roomBlocked, ...roomExcept];
+
+  // 2. 도착 시간 계산
   const currentEndMinutes = timeToMinutes(currentEndTime);
   const arrivalMinutes = currentEndMinutes + travelTimeMinutes;
   const arrivalTime = minutesToTime(arrivalMinutes);
 
-  // 2. 선호시간 시작 이전 도착 확인
+  // 3. 선호시간 시작과 도착 시간 중 더 늦은 시간을 실제 시작 가능 시간으로 설정
   const prefStartMinutes = timeToMinutes(preferenceStart);
-  if (arrivalMinutes < prefStartMinutes) {
-    // 선호시간 시작 이전 도착 → 선호시간 시작부터 배정
-    const actualStartTime = preferenceStart;
-    const totalDuration = travelTimeMinutes + classDurationMinutes; // 이동시간 + 수업시간
-    const result = findNextAvailableSlot(
-      actualStartTime,
-      totalDuration,  // 전체 시간으로 체크
-      allBlockedTimes,
-      dayOfWeek,
-      preferenceEnd
-    );
+  const effectiveStartMinutes = Math.max(arrivalMinutes, prefStartMinutes);
+  const effectiveStartTime = minutesToTime(effectiveStartMinutes);
 
-    if (result.impossible) {
-      return { isValid: false, reason: result.reason };
-    }
-
-    // 실제 수업 시작/종료 시간 계산
-    const classStartMinutes = timeToMinutes(result.startTime) + travelTimeMinutes;
-    const classEndMinutes = classStartMinutes + classDurationMinutes;
-    
-    return { 
-      isValid: true, 
-      slot: {
-        startTime: minutesToTime(classStartMinutes),  // 수업 시작 (도착 시간)
-        endTime: minutesToTime(classEndMinutes),      // 수업 종료
-        waitTime: result.waitTime
-      }
-    };
-  }
-
-  // 3. 선호시간 내 도착 → 이동시간 포함하여 전체 체크
-  const totalDuration = travelTimeMinutes + classDurationMinutes; // 이동시간 + 수업시간
+  // 4. 다음 가능한 슬롯 찾기
+  //    - 수업 시간(classDurationMinutes)만큼의 시간이 필요.
+  //    - effectiveStartTime부터 슬롯 탐색 시작.
   const result = findNextAvailableSlot(
-    currentEndTime,  // 이동 시작 시간부터 체크
-    totalDuration,   // 전체 시간으로 체크
+    effectiveStartTime,
+    classDurationMinutes,
     allBlockedTimes,
     dayOfWeek,
     preferenceEnd
   );
 
+  // 5. 결과 반환
   if (result.impossible) {
-    return { isValid: false, reason: result.reason };
+    return { isValid: false, reason: `[${dayOfWeek}] ${preferenceStart}-${preferenceEnd}: ${result.reason}` };
   }
-
-  // 실제 수업 시작/종료 시간 계산
-  const classStartMinutes = timeToMinutes(result.startTime) + travelTimeMinutes;
-  const classEndMinutes = classStartMinutes + classDurationMinutes;
   
+  // 대기시간은 (실제 수업 시작 시간) - (원래 도착 시간)
+  const waitTime = timeToMinutes(result.startTime) - arrivalMinutes;
+
   return { 
     isValid: true, 
     slot: {
-      startTime: minutesToTime(classStartMinutes),  // 수업 시작 (도착 시간)
-      endTime: minutesToTime(classEndMinutes),      // 수업 종료
-      waitTime: result.waitTime
+      startTime: result.startTime,
+      endTime: result.endTime,
+      waitTime: Math.max(0, waitTime) // 대기시간은 음수가 될 수 없음
     }
   };
 };

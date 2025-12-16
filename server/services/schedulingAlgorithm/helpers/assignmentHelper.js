@@ -403,15 +403,9 @@ const sortMembersByDistance = async (currentLocation, candidateMembers, transpor
 };
 
 /**
- * 가장 가까우면서 시간이 충족되는 학생 찾기
- * @param {Object} params - 파라미터 객체
- * @param {Object} params.currentLocation - 현재 위치
- * @param {string} params.currentEndTime - 현재 수업 종료 시간
- * @param {Array} params.candidateMembers - 후보 멤버 배열
- * @param {string} params.currentDay - 현재 요일
- * @param {number} params.classDurationMinutes - 수업 시간 (분)
- * @param {string} params.transportMode - 이동 수단
- * @returns {Promise<Object|null>} {member, slot: {startTime, endTime, waitTime}, travelTime} 또는 null
+ * 가장 가까우면서 시간이 충족되는 학생 찾기 (수정 3: 부분 배정 로직 추가)
+ * 전체 시간이 안되면, 가능한 최대 시간으로 줄여서라도 배정을 시도합니다.
+ * @returns {Promise<Object|null>} {member, slot: {startTime, endTime, waitTime, assignedDuration}, travelTime, day} 또는 null
  */
 const findNearestMemberWithSufficientTime = async ({
   currentLocation,
@@ -420,64 +414,90 @@ const findNearestMemberWithSufficientTime = async ({
   currentDay,
   classDurationMinutes,
   transportMode = 'public',
-  roomBlockedTimes = [],  // 추가
-  roomExceptions = []     // 추가
+  roomBlockedTimes = [],
+  roomExceptions = []
 }) => {
   // 1. 거리 순으로 정렬
   const sortedMembers = await sortMembersByDistance(currentLocation, candidateMembers, transportMode);
-
-  console.log(`\n📍 [대중교통 모드] 가까운 순서로 ${sortedMembers.length}명 확인`);
+  console.log(`\n📍 [대중교통 모드] 가까운 순서로 ${sortedMembers.length}명 확인 (기준 요일: ${currentDay})`);
 
   // 2. 각 멤버에 대해 시간 충족 여부 확인
   for (const { member, travelTimeMinutes } of sortedMembers) {
     const memberId = member.user._id.toString();
     const memberName = member.user.displayName || memberId.substring(0, 8);
-
-    // 해당 요일의 선호시간 가져오기
-    const daySchedules = member.user.defaultSchedule.filter(s => s.day === currentDay);
-    if (daySchedules.length === 0) {
-      console.log(`   ⏭️  ${memberName}: ${currentDay} 선호시간 없음`);
-      continue;
-    }
-
-    // 개인시간 가져오기
     const personalTimes = member.user.personalTimes || [];
+    const allPreferredSchedules = member.user.defaultSchedule || [];
 
-    // 각 선호시간 범위에 대해 확인
-    for (const schedule of daySchedules) {
-      const preferenceStart = schedule.startTime;
-      const preferenceEnd = schedule.endTime;
+    // 모든 선호 시간대를 순회 (현재 요일 우선)
+    const schedulesToSearch = [
+        ...allPreferredSchedules.filter(s => s.day === currentDay),
+        ...allPreferredSchedules.filter(s => s.day !== currentDay),
+    ];
+    const processedSchedules = new Set(); // 중복된 스케줄 검사 방지
 
-      const validation = validateTimeSlotWithTravel(
-        currentEndTime,
-        travelTimeMinutes,
-        classDurationMinutes,
-        preferenceStart,
-        preferenceEnd,
-        personalTimes,
-        currentDay,
-        roomBlockedTimes,  // 추가
-        roomExceptions     // 추가
-      );
+    for (const schedule of schedulesToSearch) {
+        const scheduleKey = `${schedule.day}-${schedule.startTime}-${schedule.endTime}`;
+        if (processedSchedules.has(scheduleKey)) continue;
+        processedSchedules.add(scheduleKey);
 
-      if (validation.isValid) {
-        console.log(`   ✅ ${memberName}: 이동 ${travelTimeMinutes}분 → ${validation.slot.startTime}-${validation.slot.endTime}`);
-        if (validation.slot.waitTime > 0) {
-          console.log(`      (대기시간 ${validation.slot.waitTime}분 - 예외시간 이후 배정)`);
+        const dayToValidate = schedule.day;
+
+        // 2.1. (1순위) 전체 시간 배정 시도
+        const fullValidation = validateTimeSlotWithTravel(
+            currentEndTime, travelTimeMinutes, classDurationMinutes,
+            schedule.startTime, schedule.endTime, personalTimes, dayToValidate,
+            roomBlockedTimes, roomExceptions
+        );
+
+        if (fullValidation.isValid) {
+            console.log(`   ✅ [전체 배정] ${memberName}: 이동 ${travelTimeMinutes}분 → ${dayToValidate} ${fullValidation.slot.startTime}-${fullValidation.slot.endTime}`);
+            if (fullValidation.slot.waitTime > 0) {
+                console.log(`      (대기시간 ${fullValidation.slot.waitTime}분)`);
+            }
+            return {
+                member,
+                slot: { ...fullValidation.slot, assignedDuration: classDurationMinutes },
+                travelTimeMinutes,
+                day: dayToValidate
+            };
         }
 
-        return {
-          member,
-          slot: validation.slot,
-          travelTimeMinutes
-        };
-      } else {
-        console.log(`   ❌ ${memberName}: ${validation.reason}`);
-      }
+        // 2.2. (2순위) 전체 시간 실패 시, 부분 배정 시도
+        console.log(`   - [전체 실패] ${memberName}: ${dayToValidate} ${schedule.startTime}-${schedule.endTime}. (${fullValidation.reason})`);
+        console.log(`     -> 부분 배정을 시도합니다...`);
+
+        // 가능한 최대 시간을 찾기 위해 시간을 줄여가며 검사 (classDuration-30분부터 30분까지)
+        let largestPartialSlot = null;
+        for (let d = classDurationMinutes - 30; d >= 30; d -= 30) {
+            const partialValidation = validateTimeSlotWithTravel(
+                currentEndTime, travelTimeMinutes, d,
+                schedule.startTime, schedule.endTime, personalTimes, dayToValidate,
+                roomBlockedTimes, roomExceptions
+            );
+
+            if (partialValidation.isValid) {
+                console.log(`   ✨ [부분 배정] ${memberName}: ${d}분 배정 가능 → ${dayToValidate} ${partialValidation.slot.startTime}-${partialValidation.slot.endTime}`);
+                largestPartialSlot = {
+                    member,
+                    slot: { ...partialValidation.slot, assignedDuration: d },
+                    travelTimeMinutes,
+                    day: dayToValidate
+                };
+                // 찾았으면 바로 이 스케줄에 대한 탐색 종료하고 결과 반환
+                break;
+            }
+        }
+
+        if (largestPartialSlot) {
+            return largestPartialSlot;
+        } else {
+             console.log(`     -> ${dayToValidate} ${schedule.startTime}-${schedule.endTime} 내에 30분 이상의 부분 배정도 불가능합니다.`);
+        }
     }
+     console.log(`   -> '${memberName}'에 대한 모든 선호 시간 확인 완료. 다음 멤버로 이동.`);
   }
 
-  console.log(`   → 조건 충족하는 멤버 없음 (다음 날로 이월)`);
+  console.log(`\n   ➡️  모든 후보 학생 확인 완료. 조건 충족하는 멤버 없음.`);
   return null;
 };
 
