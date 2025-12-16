@@ -48,6 +48,7 @@ import { saveViewMode } from '../../../../utils/coordinationModeUtils';
  * @param {function} setShowMerged - 병합 보기를 토글하는 함수.
  * @param {string} travelMode - 현재 선택된 이동수단.
  * @param {function} onTravelModeChange - 이동수단 변경 시 호출될 함수.
+ * @param {function} onConfirmTravelMode - 이동수단 모드 확정 시 호출될 함수.
  * @param {boolean} isTravelCalculating - 이동 시간 계산 중인지 여부.
  * @param {object} currentRoom - 현재 방 정보.
  * @param {boolean} isOwner - 현재 사용자가 방장인지 여부.
@@ -64,6 +65,7 @@ const TimetableControls = ({
   setShowMerged,
   travelMode,
   onTravelModeChange,
+  onConfirmTravelMode,
   isTravelCalculating,
   currentRoom,
   isOwner,
@@ -80,6 +82,7 @@ const TimetableControls = ({
         <TravelModeButtons
           selectedMode={travelMode}
           onModeChange={onTravelModeChange || (() => {})}
+          onConfirm={!currentRoom?.confirmedTravelMode && onConfirmTravelMode ? onConfirmTravelMode : null}
           disabled={!currentRoom || !currentRoom.timeSlots || currentRoom.timeSlots.length === 0}
           isOwner={isOwner}
           confirmedTravelMode={currentRoom?.confirmedTravelMode}

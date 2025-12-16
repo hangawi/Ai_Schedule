@@ -1,19 +1,47 @@
 /**
- * 스마트 스케줄 최적화 시스템
+ * ===================================================================================================
+ * scheduleOptimizer.js - 겹치는 일정을 감지하고, 사용자 질문을 생성하며, GPT 기반으로 스케줄을 최적화하는 유틸리티 모음
+ * ===================================================================================================
  *
- * 기능:
- * 1. 겹치는 일정 자동 감지
- * 2. 사용자 맞춤 질문 생성
- * 3. GPT 기반 최적 스케줄 생성
- * 4. 충돌 해결 옵션 제시
+ * 📍 위치: 프론트엔드 > client/src/utils/scheduleOptimizer.js
+ *
+ * 🎯 주요 기능:
+ *    - 일정 목록에서 시간적으로 겹치는 부분을 감지 (`detectConflicts`).
+ *    - 감지된 충돌을 기반으로 사용자에게 필요한 맞춤형 질문을 동적으로 생성 (`generateOptimizationQuestions`).
+ *    - 사용자 답변과 스케줄 정보를 포함하여 GPT API를 호출하고 최적화된 스케줄 제안을 받음 (`optimizeScheduleWithGPT`).
+ *    - 충돌 발생 시, 사용자에게 제시할 해결 옵션(예: 일정 유지, 요일 변경 등)을 생성 (`generateConflictResolutionOptions`).
+ *    - 사용자 선호도에 따라 규칙 기반으로 스케줄을 자동 생성하고 구조화 (`generateAutoSchedule`).
+ *    - 스케줄 관련 통계 계산 (`calculateScheduleStatistics`).
+ *
+ * 🔗 연결된 파일:
+ *    - ../config/firebaseConfig.js: API 호출 시 Firebase 인증을 위해 사용.
+ *    - ../components/modals/ScheduleOptimizerModal.js: 스케줄 최적화 모달에서 이 유틸리티 함수들을 사용하여 충돌 감지, 질문 생성, 최적화 실행 등을 수행.
+ *
+ * 💡 UI 위치:
+ *    - 스케줄 최적화 모달(`ScheduleOptimizerModal`)의 백그라운드 로직으로 동작. UI에 직접적으로 표시되지 않으나, 모달에 표시될 질문, 옵션, 최종 결과를 생성하는 역할을 함.
+ *
+ * ✏️ 수정 가이드:
+ *    - 충돌 감지 로직을 변경할 경우: `detectConflicts` 함수의 시간 비교 로직을 수정.
+ *    - 사용자에게 보여줄 질문의 종류나 내용을 변경할 경우: `generateOptimizationQuestions` 함수의 로직을 수정.
+ *    - GPT API 호출 시 전달하는 데이터 형식을 변경할 경우: `optimizeScheduleWithGPT` 함수의 `body` 부분을 수정.
+ *    - 규칙 기반 자동 스케줄링 로직을 변경할 경우: `generateAutoSchedule` 및 하위 함수들(`resolveConflictsByPriority`, `structureWeeklySchedule`)을 수정.
+ *
+ * 📝 참고사항:
+ *    - 이 모듈은 규칙 기반 로직(예: `generateAutoSchedule`)과 AI 기반 로직(`optimizeScheduleWithGPT`)을 모두 포함하고 있음.
+ *    - `generateOptimizationQuestions`는 충돌 상황의 복잡도에 따라 동적으로 다른 질문을 생성 (예: 저녁 시간대 충돌 시에만 취침 시간 질문).
+ *    - API 호출은 모두 비동기(`async`)로 처리됨.
+ *
+ * ===================================================================================================
  */
-
 import { auth } from '../config/firebaseConfig';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 /**
- * 겹치는 일정 감지
+ * detectConflicts
+ * @description 제공된 스케줄 목록 내에서 시간적으로 겹치는 일정들을 찾아 배열로 반환합니다.
+ * @param {Array<object>} schedules - 검사할 스케줄 객체의 배열.
+ * @returns {Array<object>} 충돌 정보를 담은 객체의 배열.
  */
 export const detectConflicts = (schedules) => {
   const conflicts = [];
@@ -63,7 +91,11 @@ export const detectConflicts = (schedules) => {
 };
 
 /**
- * 맞춤형 질문 생성 (상황에 따라 필요한 질문만)
+ * generateOptimizationQuestions
+ * @description 스케줄과 충돌 정보를 기반으로 사용자에게 제시할 최적화 관련 질문들을 동적으로 생성합니다.
+ * @param {Array<object>} schedules - 전체 스케줄 목록.
+ * @param {Array<object>} conflicts - `detectConflicts`로 찾아낸 충돌 정보 배열.
+ * @returns {Array<object>} 사용자에게 표시할 질문 객체의 배열.
  */
 export const generateOptimizationQuestions = (schedules, conflicts) => {
   const questions = [];
@@ -165,7 +197,13 @@ export const generateOptimizationQuestions = (schedules, conflicts) => {
 };
 
 /**
- * GPT API를 통한 스케줄 최적화
+ * optimizeScheduleWithGPT
+ * @description 사용자 답변과 스케줄 정보를 GPT API로 전송하여 최적화된 스케줄을 요청하고 결과를 반환합니다.
+ * @param {Array<object>} schedules - 전체 스케줄 목록.
+ * @param {Array<object>} conflicts - 충돌 정보 배열.
+ * @param {object} userAnswers - `generateOptimizationQuestions`를 통해 받은 사용자의 답변.
+ * @returns {Promise<object>} 최적화된 스케줄, 대안, 설명 등을 포함하는 객체.
+ * @throws {Error} API 요청 실패 시 에러 발생.
  */
 export const optimizeScheduleWithGPT = async (schedules, conflicts, userAnswers) => {
   try {
@@ -201,7 +239,11 @@ export const optimizeScheduleWithGPT = async (schedules, conflicts, userAnswers)
 };
 
 /**
- * 충돌 해결 옵션 생성
+ * generateConflictResolutionOptions
+ * @description 단일 충돌에 대해 사용자가 선택할 수 있는 해결 옵션 목록을 생성합니다.
+ * @param {object} conflict - 해결할 단일 충돌 정보 객체.
+ * @param {object} userPreferences - 사용자의 선호도 정보.
+ * @returns {Array<object>} 해결 옵션 객체의 배열.
  */
 export const generateConflictResolutionOptions = (conflict, userPreferences) => {
   const { schedule1, schedule2, day } = conflict;
@@ -295,7 +337,11 @@ const getDayName = (dayCode) => {
 };
 
 /**
- * 자동 스케줄 생성 (규칙 기반)
+ * generateAutoSchedule
+ * @description 사용자 선호도를 기반으로 규칙 기반의 자동 스케줄을 생성합니다.
+ * @param {Array<object>} schedules - 필터링 및 정렬할 스케줄 목록.
+ * @param {object} userPreferences - 사용자 선호도 답변 객체.
+ * @returns {object} { schedules: Array, structured: object, statistics: object } 형태의 최종 스케줄 객체.
  */
 export const generateAutoSchedule = (schedules, userPreferences) => {
   const {

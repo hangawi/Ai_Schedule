@@ -169,28 +169,26 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   const {
     travelMode,
     handleModeChange: handleTravelModeChangeInternal,
+    confirmTravelMode: confirmTravelModeInternal,
     isCalculating: isTravelCalculating,
     error: travelError,
     getCurrentScheduleData
   } = useTravelMode(currentRoom, isOwner);
 
-  // 이동수단 모드 변경 핸들러 (타이머 리셋을 위해 방 정보 새로고침)
+  // 이동수단 모드 변경 핸들러
   const handleTravelModeChange = useCallback(async (newMode) => {
     await handleTravelModeChangeInternal(newMode);
+  }, [handleTravelModeChangeInternal]);
 
-    // 타이머가 리셋되었으므로 방 정보를 다시 가져와서 UI 업데이트
-    if (isOwner && currentRoom?._id) {
-      const roomId = currentRoom._id;
-      setTimeout(async () => {
-        try {
-          await fetchRoomDetails(roomId);
-          console.log('🔄 [타이머 리셋] 방 정보 업데이트 완료');
-        } catch (error) {
-          console.error('방 정보 업데이트 실패:', error);
-        }
-      }, 500); // 서버 처리 시간을 위해 0.5초 대기
+  // 이동수단 모드 확정 핸들러 (조원들에게 표시)
+  const handleConfirmTravelMode = useCallback(async () => {
+    const success = await confirmTravelModeInternal();
+    if (success) {
+      showAlert(`${travelMode === 'normal' ? '일반' : travelMode === 'transit' ? '대중교통' : travelMode === 'driving' ? '자동차' : travelMode === 'bicycling' ? '자전거' : '도보'} 모드가 조원들에게 적용되었습니다.`, 'success');
+      // 방 정보 다시 가져오기 (confirmedTravelMode 업데이트)
+      await fetchRoomDetails(currentRoom._id);
     }
-  }, [handleTravelModeChangeInternal, isOwner, currentRoom?._id, fetchRoomDetails]);
+  }, [confirmTravelModeInternal, travelMode, currentRoom, showAlert]);
 
   // 방장 시간표 정보 캐시
   const [ownerScheduleCache, setOwnerScheduleCache] = useState(null);
@@ -201,7 +199,8 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       console.log(`🔄 [조원 동기화] 방장의 이동수단 모드 적용: ${currentRoom.currentTravelMode}`);
       handleTravelModeChange(currentRoom.currentTravelMode);
     }
-  }, [isOwner, currentRoom?.currentTravelMode, travelMode, handleTravelModeChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner, currentRoom?.currentTravelMode, travelMode]);
 
   // Additional states
   const [roomModalDefaultTab, setRoomModalDefaultTab] = useState('info');
@@ -253,6 +252,43 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         showAlert('자동배정 시간이 확정되었습니다! 페이지가 업데이트되었습니다.', 'success');
       } catch (error) {
         console.error('Failed to refresh room after auto-confirm:', error);
+      }
+    });
+
+    // 🔥 이동시간 모드 변경 이벤트 수신 (조원용)
+    socket.on('travelModeChanged', async (data) => {
+      console.log('📡 [조원] travelModeChanged 이벤트 수신:', data);
+
+      if (!isOwner) {
+        // 조원만 처리 (방장은 이미 handleModeChange에서 처리함)
+        console.log(`🔄 [조원 동기화] 방장이 모드 변경: ${data.travelMode}`);
+
+        // 방 정보 다시 가져오기
+        try {
+          await fetchRoomDetails(currentRoom._id);
+          // travelMode 상태도 동기화
+          handleTravelModeChange(data.travelMode);
+          console.log(`✅ [조원 동기화] 완료: ${data.travelMode} 모드로 업데이트`);
+        } catch (error) {
+          console.error('⚠️ [조원 동기화] 실패:', error);
+        }
+      }
+    });
+
+    // 🔥 이동시간 모드 확정 이벤트 수신 (조원용)
+    socket.on('travelModeConfirmed', async (data) => {
+      console.log('📡 [조원] travelModeConfirmed 이벤트 수신:', data);
+
+      // 방 정보 다시 가져오기 (confirmedTravelMode 업데이트)
+      try {
+        await fetchRoomDetails(currentRoom._id);
+        // 확정된 모드로 화면 업데이트
+        if (data.confirmedTravelMode) {
+          handleTravelModeChange(data.confirmedTravelMode);
+        }
+        console.log(`✅ [조원 동기화] 확정 완료: ${data.confirmedTravelMode} 모드`);
+      } catch (error) {
+        console.error('⚠️ [조원 동기화] 실패:', error);
       }
     });
 
@@ -703,6 +739,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
                 setShowMerged={setShowMerged}
                 travelMode={travelMode}
                 onTravelModeChange={handleTravelModeChange}
+                onConfirmTravelMode={handleConfirmTravelMode}
                 isTravelCalculating={isTravelCalculating}
                 currentRoom={currentRoom}
                 isOwner={isOwner}

@@ -101,17 +101,19 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
 
       setEnhancedSchedule(result);
 
-      // ⏰ 이동수단 선택 시 타이머 시작 (방장이고, 아직 확정되지 않은 경우)
-      if (isOwner && !currentRoom.confirmedAt) {
+      // 🔥 서버에 이동시간 포함 스케줄 저장 (방장만)
+      if (isOwner && currentRoom._id) {
         try {
-          const timerResult = await coordinationService.startConfirmationTimer(
+          console.log(`📤 [applyTravelMode] 서버에 저장 중... 모드: ${newMode}`);
+          await coordinationService.applyTravelMode(
             currentRoom._id,
-            newMode
+            newMode,
+            result.timeSlots  // 이동시간 포함된 전체 슬롯
           );
-          console.log(`⏰ [타이머 ${timerResult.isReset ? '초기화' : '시작'}] ${timerResult.minutesRemaining}분 후 자동 확정`);
-        } catch (timerError) {
-          // 타이머 시작 실패는 중요하지 않으므로 경고만 출력
-          console.warn('⚠️ 타이머 시작 실패 (무시):', timerError.message);
+          console.log(`✅ [applyTravelMode] 서버 저장 완료`);
+        } catch (apiError) {
+          console.error('⚠️ [applyTravelMode] 서버 저장 실패:', apiError.message);
+          // 에러가 발생해도 화면 표시는 유지 (enhancedSchedule은 이미 설정됨)
         }
       }
     } catch (err) {
@@ -128,7 +130,7 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
       setIsCalculating(false);
     }
 
-  }, [currentRoom]);
+  }, [currentRoom, isOwner]);
 
   const getCurrentScheduleData = useCallback(() => {
     if (travelMode === 'normal' || !enhancedSchedule) {
@@ -179,6 +181,33 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
     );
   }, [getCurrentScheduleData]);
 
+  /**
+   * 현재 선택된 이동시간 모드를 확정합니다 (조원들에게 표시)
+   * 방장만 호출 가능
+   */
+  const confirmTravelMode = useCallback(async () => {
+    if (!isOwner) {
+      setError('방장만 모드를 확정할 수 있습니다.');
+      return false;
+    }
+
+    if (!currentRoom?._id) {
+      setError('방 정보가 없습니다.');
+      return false;
+    }
+
+    try {
+      console.log(`📤 [confirmTravelMode] 확정 중... 모드: ${travelMode}`);
+      const result = await coordinationService.confirmTravelMode(currentRoom._id, travelMode);
+      console.log(`✅ [confirmTravelMode] 확정 완료:`, result);
+      return true;
+    } catch (err) {
+      console.error('⚠️ [confirmTravelMode] 실패:', err.message);
+      setError('모드 확정에 실패했습니다.');
+      return false;
+    }
+  }, [currentRoom, travelMode, isOwner]);
+
   // 현재 방이 변경되면 모든 관련 상태를 초기화합니다.
   useEffect(() => {
     setTravelMode('normal');
@@ -189,6 +218,7 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
   return {
     travelMode,
     handleModeChange,
+    confirmTravelMode,
     isCalculating,
     error,
     enhancedSchedule,

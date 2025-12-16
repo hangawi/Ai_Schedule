@@ -1095,6 +1095,22 @@ exports.respondToExchangeRequest = async (req, res) => {
          await recalculateMultipleDates(roomId, Array.from(affectedDates));
          console.log('✅ 이동시간 재계산 완료');
 
+         // 📡 Socket.io로 실시간 스케줄 업데이트 알림
+         const io = req.app.get('io');
+         if (io) {
+            // 재계산 후 최신 방 정보 조회
+            const updatedRoom = await Room.findById(roomId)
+               .populate('timeSlots.user', '_id firstName lastName email');
+
+            io.to(`room-${roomId}`).emit('scheduleUpdated', {
+               roomId: roomId,
+               message: '교환 승인으로 인해 이동시간이 재계산되었습니다.',
+               timeSlots: updatedRoom.timeSlots,
+               recalculatedDates: Array.from(affectedDates).map(d => d.toISOString().split('T')[0])
+            });
+            console.log('📡 [Socket.io] scheduleUpdated 이벤트 전송 완료');
+         }
+
          return res.json({
             success: true,
             message: `요청을 수락했습니다. 당신은 ${alternativeSlot.day} ${alternativeSlot.startTime}로 이동합니다.`,
@@ -1562,6 +1578,33 @@ exports.respondToChainExchangeRequest = async (req, res) => {
          await room.populate('timeSlots.user', '_id firstName lastName email');
 
          console.log('✅ Chain exchange completed successfully!');
+
+         // 🔄 연쇄 교환된 슬롯의 날짜에 대해 이동시간 재계산
+         const affectedDates = new Set();
+         affectedDates.add(new Date(alternativeSlotForC.date)); // C가 이동한 날짜
+         affectedDates.add(new Date(request.chainData.chainSlot.date)); // B가 이동한 날짜
+         affectedDates.add(new Date(request.chainData.intermediateSlot.date)); // A가 이동한 날짜
+         request.requesterSlots.forEach(slot => affectedDates.add(new Date(slot.date))); // A의 원래 슬롯 날짜들
+
+         console.log('🔄 연쇄교환 재계산 시작: 영향받은 날짜', Array.from(affectedDates).map(d => d.toISOString().split('T')[0]));
+         await recalculateMultipleDates(roomId, Array.from(affectedDates));
+         console.log('✅ 연쇄교환 이동시간 재계산 완료');
+
+         // 📡 Socket.io로 실시간 스케줄 업데이트 알림
+         const io = req.app.get('io');
+         if (io) {
+            // 재계산 후 최신 방 정보 조회
+            const updatedRoom = await Room.findById(roomId)
+               .populate('timeSlots.user', '_id firstName lastName email');
+
+            io.to(`room-${roomId}`).emit('scheduleUpdated', {
+               roomId: roomId,
+               message: '연쇄 교환 승인으로 인해 이동시간이 재계산되었습니다.',
+               timeSlots: updatedRoom.timeSlots,
+               recalculatedDates: Array.from(affectedDates).map(d => d.toISOString().split('T')[0])
+            });
+            console.log('📡 [Socket.io] scheduleUpdated 이벤트 전송 완료 (연쇄교환)');
+         }
 
          return res.json({
             success: true,

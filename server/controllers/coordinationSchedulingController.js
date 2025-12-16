@@ -3,6 +3,14 @@ const User = require('../models/user');
 const ActivityLog = require('../models/ActivityLog');
 const schedulingAlgorithm = require('../services/schedulingAlgorithm');
 const dynamicTravelTimeCalculator = require('../services/dynamicTravelTimeCalculator');
+const { isTimeInBlockedRange } = require('../services/schedulingAlgorithm/validators/prohibitedTimeValidator');
+
+// 시간을 분으로 변환하는 유틸리티 함수
+const timeToMinutes = (timeString) => {
+  if (!timeString) return 0;
+  const [hours, minutes] = timeString.split(':').map(Number);
+  return hours * 60 + minutes;
+};
 
 // @desc    Run auto-schedule algorithm for the room
 // @route   POST /api/coordination/rooms/:roomId/auto-schedule
@@ -577,7 +585,13 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
     if (!room.isOwner(req.user.id)) {
       return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
     }
-    
+
+    // 2.5. 중복 확정 방지
+    if (room.confirmedAt) {
+      console.log('⚠️ [confirmSchedule] 이미 확정된 스케줄입니다');
+      return res.status(400).json({ msg: '이미 확정된 스케줄입니다.' });
+    }
+
     // 3. 자동배정된 슬롯 필터링 (assignedBy가 있고 status가 'confirmed'인 것)
     const autoAssignedSlots = room.timeSlots.filter(slot => 
       slot.assignedBy && slot.status === 'confirmed'
@@ -867,12 +881,13 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
         );
         
         if (!isDuplicate) {
+          // 조원: 수업시간만 저장 (이동시간 제외)
           user.personalTimes.push({
             id: nextId++,
             title: `${room.name} - ${ownerName}`,
             type: 'event',
-            startTime: slot.startTime,
-            endTime: slot.endTime,
+            startTime: slot.originalStartTime || slot.startTime,  // 원본 시간 사용
+            endTime: slot.originalEndTime || slot.endTime,
             days: [dayOfWeek],
             isRecurring: false,
             specificDate: dateStr,
@@ -928,11 +943,12 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
           );
           
           if (!isDuplicate) {
+            // 방장: 이동시간 포함하여 저장 (slot.startTime은 이미 이동시간 포함된 시간)
             owner.personalTimes.push({
               id: nextId++,
               title: `${room.name} - ${memberName}`,
               type: 'event',
-              startTime: slot.startTime,
+              startTime: slot.startTime,  // 이동시간 포함
               endTime: slot.endTime,
               days: [dayOfWeek],
               isRecurring: false,
@@ -1234,6 +1250,231 @@ exports.startConfirmationTimer = async (req, res) => {
 
   } catch (error) {
     console.error('❌ 타이머 시작 실패:', error);
+    res.status(500).json({ msg: '서버 오류가 발생했습니다.', error: error.message });
+  }
+};
+
+/**
+ * @route   POST /api/coordination/rooms/:roomId/apply-travel-mode
+ * @desc    이동시간 포함 스케줄을 서버에 저장
+ * @access  Private (Room Owner Only)
+ */
+exports.applyTravelMode = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { travelMode, enhancedSchedule } = req.body;
+
+    console.log(`📌 [applyTravelMode] 시작 - 방: ${roomId}, 모드: ${travelMode}`);
+
+    // 1. 방 조회
+    const room = await Room.findById(roomId).populate('members', 'name email').populate('owner', 'name email');
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    // 2. 방장 권한 확인
+    if (!room.owner._id.equals(req.user.id)) {
+      return res.status(403).json({ msg: '방장만 이동시간 모드를 변경할 수 있습니다.' });
+    }
+
+    // 3. enhancedSchedule 검증
+    if (!enhancedSchedule || !Array.isArray(enhancedSchedule)) {
+      return res.status(400).json({ msg: 'enhancedSchedule이 필요합니다.' });
+    }
+
+    console.log(`✅ [applyTravelMode] enhancedSchedule 개수: ${enhancedSchedule.length}`);
+
+    // 4. timeSlots 업데이트
+    if (travelMode === 'normal') {
+      // 🔄 일반 모드로 복원: originalStartTime이 있으면 그것으로 복원
+      room.timeSlots.forEach((slot, idx) => {
+        if (slot.originalStartTime) {
+          console.log(`   [복원 ${idx}] ${slot.subject}: ${slot.startTime} → ${slot.originalStartTime}`);
+          slot.startTime = slot.originalStartTime;
+          slot.endTime = slot.originalEndTime;
+          slot.adjustedForTravelTime = false;
+        }
+      });
+    } else {
+      // 🚗 이동시간 모드: enhancedSchedule 적용
+      room.timeSlots.forEach((slot, idx) => {
+        // 원본 저장 (첫 적용 시에만)
+        if (!slot.originalStartTime) {
+          slot.originalStartTime = slot.startTime;
+          slot.originalEndTime = slot.endTime;
+        }
+
+        // enhancedSchedule에서 매칭되는 슬롯 찾기
+        const slotDate = slot.date.toISOString().split('T')[0];
+        const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
+
+        const enhanced = enhancedSchedule.find(e => {
+          const eUserId = e.user._id ? e.user._id.toString() : e.user.toString();
+          const eDate = e.date instanceof Date ? e.date.toISOString().split('T')[0] : e.date;
+
+          return eUserId === slotUserId &&
+                 eDate === slotDate &&
+                 e.subject === slot.subject &&
+                 e.originalStartTime === slot.originalStartTime; // 원본 시간으로도 매칭
+        });
+
+        if (enhanced) {
+          // 이동시간 포함 시간으로 교체
+          slot.startTime = enhanced.startTime;
+          slot.endTime = enhanced.endTime;
+          slot.adjustedForTravelTime = true;
+
+          console.log(`   [적용 ${idx}] ${slot.subject}: ${slot.originalStartTime} → ${slot.startTime} (이동시간 ${timeToMinutes(slot.originalStartTime) - timeToMinutes(slot.startTime)}분)`);
+        } else {
+          console.log(`   [매칭 실패 ${idx}] ${slot.subject}: enhancedSchedule에서 찾을 수 없음`);
+        }
+      });
+    }
+
+    // 4-1. 🔒 금지시간 검증 (Step 4)
+    if (travelMode !== 'normal') {
+      const blockedTimes = room.settings?.blockedTimes || [];
+
+      if (blockedTimes.length > 0) {
+        console.log('🔒 [금지시간 검증] 시작...');
+        let violationCount = 0;
+
+        room.timeSlots.forEach((slot, idx) => {
+          if (slot.adjustedForTravelTime) {
+            const blockedTime = isTimeInBlockedRange(slot.startTime, slot.endTime, blockedTimes);
+
+            if (blockedTime) {
+              violationCount++;
+              console.log(`   ⚠️ [침범 감지 ${idx}] ${slot.subject} (${slot.startTime}-${slot.endTime})이(가) ${blockedTime.name || '금지 시간'}(${blockedTime.startTime}-${blockedTime.endTime})과 겹침`);
+
+              // 금지시간 이후로 이동 (자동 보정)
+              const blockedEndMinutes = timeToMinutes(blockedTime.endTime);
+              const slotDuration = timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime);
+              const newStartMinutes = blockedEndMinutes;
+              const newEndMinutes = blockedEndMinutes + slotDuration;
+
+              const minutesToTime = (minutes) => {
+                const hours = Math.floor(minutes / 60);
+                const mins = minutes % 60;
+                return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+              };
+
+              const correctedStart = minutesToTime(newStartMinutes);
+              const correctedEnd = minutesToTime(newEndMinutes);
+
+              console.log(`   🔧 [자동 보정] ${slot.startTime}-${slot.endTime} → ${correctedStart}-${correctedEnd}`);
+
+              slot.startTime = correctedStart;
+              slot.endTime = correctedEnd;
+            }
+          }
+        });
+
+        if (violationCount > 0) {
+          console.log(`⚠️ [금지시간 검증] 총 ${violationCount}개 침범 감지 및 자동 보정 완료`);
+        } else {
+          console.log(`✅ [금지시간 검증] 침범 없음`);
+        }
+      }
+    }
+
+    // 5. currentTravelMode 설정
+    room.currentTravelMode = travelMode;
+    await room.save();
+
+    console.log(`✅ [applyTravelMode] 완료 - ${travelMode} 모드 적용`);
+
+    // 🔍 디버깅: 저장된 timeSlots 검증
+    console.log('📊 [저장 후 검증] 첫 5개 슬롯:');
+    room.timeSlots.slice(0, 5).forEach((slot, idx) => {
+      console.log(`  [${idx}] ${slot.subject}:`, {
+        user: slot.user._id || slot.user,
+        date: slot.date,
+        originalStart: slot.originalStartTime,
+        adjustedStart: slot.startTime,
+        originalEnd: slot.originalEndTime,
+        adjustedEnd: slot.endTime,
+        isAdjusted: slot.adjustedForTravelTime || false
+      });
+    });
+
+    // 6. Socket.io로 모든 사용자에게 알림
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`room-${roomId}`).emit('travelModeChanged', {
+        roomId: room._id.toString(),
+        travelMode: travelMode,
+        timeSlots: room.timeSlots,
+        currentTravelMode: room.currentTravelMode
+      });
+      console.log(`📢 [Socket.io] travelModeChanged 이벤트 전송: 방 ${roomId}, 모드: ${travelMode}`);
+    }
+
+    res.json({
+      success: true,
+      travelMode: travelMode,
+      timeSlotsCount: room.timeSlots.length
+    });
+
+  } catch (error) {
+    console.error('❌ [applyTravelMode] 실패:', error);
+    res.status(500).json({ msg: '서버 오류가 발생했습니다.', error: error.message });
+  }
+};
+
+/**
+ * @desc    이동시간 모드 확정 (조원들에게 표시)
+ * @route   POST /api/coordination/rooms/:roomId/confirm-travel-mode
+ * @access  Private (Room Owner only)
+ */
+exports.confirmTravelMode = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { travelMode } = req.body; // 클라이언트에서 확정할 모드를 명시적으로 전달받음
+
+    console.log(`📌 [confirmTravelMode] 시작 - 방: ${roomId}, 모드: ${travelMode}`);
+
+    // 1. 방 조회
+    const room = await Room.findById(roomId).populate('members.user', 'name email').populate('owner', 'name email');
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    // 2. 방장 권한 확인
+    if (!room.owner._id.equals(req.user.id)) {
+      return res.status(403).json({ msg: '방장만 이동시간 모드를 확정할 수 있습니다.' });
+    }
+
+    // 3. 전달받은 travelMode를 confirmedTravelMode로 설정
+    const previousConfirmedMode = room.confirmedTravelMode;
+    room.confirmedTravelMode = travelMode;
+    room.currentTravelMode = travelMode; // currentTravelMode도 동기화
+    room.confirmedAt = new Date();
+
+    await room.save();
+
+    console.log(`✅ [confirmTravelMode] ${previousConfirmedMode || 'null'} → ${room.confirmedTravelMode} 확정 완료`);
+
+    // 4. Socket.io로 모든 사용자에게 알림 (조원들이 화면 업데이트)
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`room-${roomId}`).emit('travelModeConfirmed', {
+        roomId: room._id.toString(),
+        confirmedTravelMode: room.confirmedTravelMode,
+        confirmedAt: room.confirmedAt,
+        timeSlots: room.timeSlots
+      });
+      console.log(`📢 [Socket.io] travelModeConfirmed 이벤트 전송: ${room.confirmedTravelMode}`);
+    }
+
+    res.json({
+      success: true,
+      confirmedTravelMode: room.confirmedTravelMode,
+      confirmedAt: room.confirmedAt
+    });
+
+  } catch (error) {
+    console.error('❌ [confirmTravelMode] 실패:', error);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.', error: error.message });
   }
 };

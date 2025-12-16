@@ -1,5 +1,39 @@
 /**
- * Coordination API handlers and business logic
+ * ===================================================================================================
+ * coordinationHandlers.js - 조율(Coordination) 탭과 관련된 주요 비즈니스 로직 및 API 요청 핸들러 모음
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/utils/coordinationHandlers.js
+ *
+ * 🎯 주요 기능:
+ *    - 멤버들의 이월 시간 및 완료 시간 초기화 (`handleResetCarryOverTimes`, `handleResetCompletedTimes`).
+ *    - 자동 시간 배정 실행 및 결과 처리 (`handleRunAutoSchedule`).
+ *    - 보낸/받은 요청 취소 처리 (`handleCancelRequest`).
+ *    - 요청에 대한 승인/거절 처리 (`handleRequestWithUpdate`).
+ *    - 시간 변경/양보/취소 요청 데이터 생성 (`createChangeRequestData`).
+ *
+ * 🔗 연결된 파일:
+ *    - ../services/coordinationService.js: 조율 관련 API 호출을 위해 사용.
+ *    - ./coordinationUtils.js: 날짜 및 시간 계산 유틸리티 함수 사용.
+ *    - ../config/firebaseConfig.js: Firebase 인증 객체 `auth` 사용.
+ *    - ../components/tabs/CoordinationTab/: 조율 탭의 주요 기능들(버튼 클릭, 액션 실행)에서 이 핸들러 함수들을 호출.
+ *    - ../components/modals/RequestManagement.js: 요청 관리 모달에서 요청 취소 및 처리에 사용.
+ *
+ * 💡 UI 위치:
+ *    - '일정 맞추기' 탭 (`CoordinationTab`) 내의 '자동배정 실행', '이월시간 초기화' 등의 버튼 클릭 이벤트 핸들러.
+ *    - 요청 관리 모달(`RequestManagement`) 내의 '승인', '거절', '취소' 버튼 클릭 이벤트 핸들러.
+ *    - 타임슬롯 클릭 시 나타나는 메뉴의 '시간 양보', '시간 취소' 등의 액션 핸들러.
+ *
+ * ✏️ 수정 가이드:
+ *    - 자동 배정 로직(`handleRunAutoSchedule`) 변경 시: `coordinationService.runAutoSchedule`로 전달되는 `finalOptions` 객체의 구조와 내용을 확인하고 수정.
+ *    - 요청 처리 로직(`handleRequestWithUpdate`) 변경 시: 요청 타입(`exchange_request` 등)에 따른 API 분기 처리를 확인하고 수정.
+ *    - 새로운 요청 유형이 추가될 경우: `createChangeRequestData` 함수를 확장하여 새로운 요청 데이터 구조를 생성하도록 수정.
+ *
+ * 📝 참고사항:
+ *    - 대부분의 핸들러는 API 호출 후, `showAlert`를 통해 사용자에게 피드백을 제공하고, `setCurrentRoom` 또는 `fetchRoomDetails`를 호출하여 UI를 갱신함.
+ *    - `handleRunAutoSchedule`는 자동 배정 범위를 결정하기 위해 멤버들의 선호시간(`specificDate`)을 분석하는 로직을 포함하고 있음.
+ *
+ * ===================================================================================================
  */
 
 import { coordinationService } from '../services/coordinationService';
@@ -7,7 +41,12 @@ import { days, getDayIndex, calculateEndTime } from './coordinationUtils';
 import { auth } from '../config/firebaseConfig';
 
 /**
- * Handle reset carryover times
+ * handleResetCarryOverTimes
+ * @description 현재 방의 모든 멤버들의 이월 시간을 초기화합니다.
+ * @param {object} currentRoom - 현재 방 정보 객체.
+ * @param {function} fetchRoomDetails - 방 세부 정보를 다시 가져오는 함수.
+ * @param {function} setCurrentRoom - 현재 방 상태를 업데이트하는 함수.
+ * @param {function} showAlert - 사용자에게 알림을 표시하는 함수.
  */
 export const handleResetCarryOverTimes = async (currentRoom, fetchRoomDetails, setCurrentRoom, showAlert) => {
   if (!currentRoom?._id) return;
@@ -42,7 +81,12 @@ export const handleResetCarryOverTimes = async (currentRoom, fetchRoomDetails, s
 };
 
 /**
- * Handle reset completed times
+ * handleResetCompletedTimes
+ * @description 현재 방의 모든 멤버들의 완료 시간을 초기화합니다.
+ * @param {object} currentRoom - 현재 방 정보 객체.
+ * @param {function} fetchRoomDetails - 방 세부 정보를 다시 가져오는 함수.
+ * @param {function} setCurrentRoom - 현재 방 상태를 업데이트하는 함수.
+ * @param {function} showAlert - 사용자에게 알림을 표시하는 함수.
  */
 export const handleResetCompletedTimes = async (currentRoom, fetchRoomDetails, setCurrentRoom, showAlert) => {
   if (!currentRoom?._id) return;
@@ -77,7 +121,20 @@ export const handleResetCompletedTimes = async (currentRoom, fetchRoomDetails, s
 };
 
 /**
- * Handle auto-scheduling
+ * handleRunAutoSchedule
+ * @description 자동 시간 배정을 실행하고 그 결과를 처리합니다. 멤버들의 선호시간을 분석하여 배정 범위를 동적으로 결정합니다.
+ * @param {object} currentRoom - 현재 방 정보 객체.
+ * @param {Date} currentWeekStartDate - 현재 주의 시작 날짜.
+ * @param {object} user - 현재 로그인된 사용자 정보.
+ * @param {object} scheduleOptions - 자동 배정 옵션 (minHoursPerWeek, assignmentMode 등).
+ * @param {function} setIsScheduling - 스케줄링 진행 상태를 설정하는 함수.
+ * @param {function} setScheduleError - 스케줄링 에러 상태를 설정하는 함수.
+ * @param {function} setUnassignedMembersInfo - 미배정 멤버 정보를 설정하는 함수.
+ * @param {function} setConflictSuggestions - 충돌 제안 정보를 설정하는 함수.
+ * @param {function} setCurrentRoom - 현재 방 상태를 업데이트하는 함수.
+ * @param {function} showAlert - 사용자에게 알림을 표시하는 함수.
+ * @param {string} [viewMode='week'] - 현재 뷰 모드.
+ * @param {string} [travelMode='normal'] - 선택된 이동 수단.
  */
 export const handleRunAutoSchedule = async (
   currentRoom,
@@ -254,7 +311,16 @@ export const handleRunAutoSchedule = async (
 };;
 
 /**
- * Handle cancel request
+ * handleCancelRequest
+ * @description 보낸 요청 또는 받은 요청을 취소합니다. 낙관적 업데이트를 적용하여 UI에서 즉시 제거 후 API를 호출합니다.
+ * @param {string} requestId - 취소할 요청의 ID.
+ * @param {function} setSentRequests - 보낸 요청 목록 상태를 업데이트하는 함수.
+ * @param {function} setReceivedRequests - 받은 요청 목록 상태를 업데이트하는 함수.
+ * @param {function} cancelRequest - 요청 취소 API를 호출하는 서비스 함수.
+ * @param {function} loadSentRequests - 보낸 요청 목록을 다시 로드하는 함수.
+ * @param {function} loadReceivedRequests - 받은 요청 목록을 다시 로드하는 함수.
+ * @param {function} onRefreshExchangeCount - 교환 요청 카운트를 새로고침하는 함수.
+ * @param {function} showAlert - 사용자에게 알림을 표시하는 함수.
  */
 export const handleCancelRequest = async (
   requestId,
@@ -290,7 +356,19 @@ export const handleCancelRequest = async (
 };
 
 /**
- * Handle request with update
+ * handleRequestWithUpdate
+ * @description 교환 요청 또는 일반 요청에 대해 승인/거절 액션을 처리하고, 관련된 모든 데이터를 새로고침합니다.
+ * @param {string} requestId - 처리할 요청의 ID.
+ * @param {string} action - 수행할 액션 ('approved' 또는 'rejected').
+ * @param {object} request - 처리할 요청 객체.
+ * @param {function} handleRequest - 일반 요청 처리 API를 호출하는 서비스 함수.
+ * @param {object} currentRoom - 현재 방 정보 객체.
+ * @param {function} fetchRoomDetails - 방 세부 정보를 다시 가져오는 함수.
+ * @param {function} loadReceivedRequests - 받은 요청 목록을 다시 로드하는 함수.
+ * @param {function} loadSentRequests - 보낸 요청 목록을 다시 로드하는 함수.
+ * @param {function} loadRoomExchangeCounts - 방별 교환 요청 카운트를 다시 로드하는 함수.
+ * @param {function} onRefreshExchangeCount - 교환 요청 카운트를 새로고침하는 함수.
+ * @param {function} showAlert - 사용자에게 알림을 표시하는 함수.
  */
 export const handleRequestWithUpdate = async (
   requestId,
@@ -347,7 +425,12 @@ export const handleRequestWithUpdate = async (
 };
 
 /**
- * Create request data for slot changes
+ * createChangeRequestData
+ * @description 사용자가 타임슬롯에 대해 수행한 액션(시간 취소, 시간 요청)에 따라 API 요청에 필요한 데이터 객체를 생성합니다.
+ * @param {object} slotToChange - 변경 대상 슬롯 정보.
+ * @param {object} currentRoom - 현재 방 정보 객체.
+ * @param {object} user - 현재 로그인된 사용자 정보.
+ * @returns {object} API 요청에 사용될 데이터 객체.
  */
 export const createChangeRequestData = (slotToChange, currentRoom, user) => {
   // Helper function to get correct day index from Date object

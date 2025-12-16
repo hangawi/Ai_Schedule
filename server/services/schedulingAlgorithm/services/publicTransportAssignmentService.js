@@ -11,6 +11,7 @@ const { assignSlot } = require('../helpers/assignmentHelper');
 const { DAY_MAP, DEFAULT_REQUIRED_SLOTS } = require('../constants/schedulingConstants');
 const { timeToMinutes, minutesToTime } = require('../utils/timeUtils');
 const { SLOTS_PER_HOUR, MINUTES_PER_SLOT } = require('../constants/timeConstants');
+const { isTimeInBlockedRange } = require('../validators/prohibitedTimeValidator');
 
 /**
  * 대중교통 모드로 순차 배정
@@ -230,6 +231,21 @@ const assignTimeSlot = async (
     if (!canUse) {
       console.log(`      ⚠️  사용 불가 슬롯: ${slotTime}`);
       continue;
+    }
+
+    // 🔒 금지시간 검증 (Phase 4)
+    if (roomBlockedTimes && roomBlockedTimes.length > 0) {
+      // 슬롯의 시작/종료 시간 계산
+      const slotStartTime = slotTime;
+      const slotStartMinutes = timeToMinutes(slotStartTime);
+      const slotEndMinutes = slotStartMinutes + MINUTES_PER_SLOT;
+      const slotEndTime = minutesToTime(slotEndMinutes);
+
+      const blockedTime = isTimeInBlockedRange(slotStartTime, slotEndTime, roomBlockedTimes);
+      if (blockedTime) {
+        console.log(`      ⚠️  [금지시간 침범] ${slotStartTime}-${slotEndTime}이(가) ${blockedTime.name || '금지 시간'}(${blockedTime.startTime}-${blockedTime.endTime})과 겹침`);
+        continue; // 금지시간을 침범하는 슬롯은 건너뜀
+      }
     }
 
     // 슬롯 배정

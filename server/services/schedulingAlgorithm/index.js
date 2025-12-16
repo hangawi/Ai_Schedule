@@ -274,7 +274,8 @@ class SchedulingAlgorithm {
       });
     } else {
       // 일반 모드: 시간 순서 우선 배정 (minClassDurationMinutes 기준)
-      assignByTimeOrder(timetable, assignments, memberRequiredSlots, ownerId, members, assignmentMode, minClassDurationMinutes);
+      const blockedTimes = roomSettings.blockedTimes || [];
+      assignByTimeOrder(timetable, assignments, memberRequiredSlots, ownerId, members, assignmentMode, minClassDurationMinutes, blockedTimes);
     }
 
     // 기존 Phase 2, 3 비활성화 (단독 슬롯 우선 배정 제거)

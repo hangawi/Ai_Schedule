@@ -65,6 +65,12 @@ router.get('/rooms/:roomId/available-slots', auth, coordinationSchedulingControl
 // Start confirmation timer when travel mode is selected
 router.post('/rooms/:roomId/start-confirmation-timer', auth, coordinationSchedulingController.startConfirmationTimer);
 
+// Apply travel mode to schedule (save enhanced schedule to server)
+router.post('/rooms/:roomId/apply-travel-mode', auth, coordinationSchedulingController.applyTravelMode);
+
+// Confirm travel mode (make it visible to members)
+router.post('/rooms/:roomId/confirm-travel-mode', auth, coordinationSchedulingController.confirmTravelMode);
+
 // Request management
 router.post('/requests', auth, coordinationController.createRequest);
 // 🔧 더 구체적인 라우트를 먼저 배치

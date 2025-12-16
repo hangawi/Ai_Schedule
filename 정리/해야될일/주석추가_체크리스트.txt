@@ -447,15 +447,15 @@
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[ ] client/src/services/coordinationService.js
+[x] client/src/services/coordinationService.js
 
 [ ] client/src/services/userService.js
 
 [ ] client/src/services/travelModeService.js
 
-[ ] client/src/services/travelScheduleCalculator.js
+[x] client/src/services/travelScheduleCalculator.js
 
-[ ] client/src/services/fixedSchedule/fixedScheduleAPI.js
+[x] client/src/services/fixedSchedule/fixedScheduleAPI.js
 
 
 
@@ -465,27 +465,27 @@
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[ ] client/src/utils.js
+[x] client/src/utils.js
 
-[ ] client/src/utils/apiClient.js
+[x] client/src/utils/apiClient.js
 
-[ ] client/src/utils/coordinationHandlers.js
+[x] client/src/utils/coordinationHandlers.js
 
-[ ] client/src/utils/coordinationModeUtils.js
+[x] client/src/utils/coordinationModeUtils.js
 
-[ ] client/src/utils/coordinationUtils.js
+[x] client/src/utils/coordinationUtils.js
 
-[ ] client/src/utils/dateUtils.js
+[x] client/src/utils/dateUtils.js
 
-[ ] client/src/utils/scheduleOptimizer.js
+[x] client/src/utils/scheduleOptimizer.js
 
-[ ] client/src/utils/scheduleUtils.js
+[x] client/src/utils/scheduleUtils.js
 
-[ ] client/src/utils/timeUtils.js
+[x] client/src/utils/timeUtils.js
 
-[ ] client/src/utils/timetableConstants.js
+[x] client/src/utils/timetableConstants.js
 
-[ ] client/src/utils/timetableHelpers.js
+[x] client/src/utils/timetableHelpers.js
 
 [ ] client/src/utils/validationUtils.js
 
@@ -1285,19 +1285,17 @@
 
 ## 📊 진행률 추적
 
-
-
 - 전체 파일 수: 341개 (클라이언트: 223개, 서버: 118개)
 
-- 완료한 파일: 237 / 341
+- 완료한 파일: 257 / 341
 
-- 진행률: 69.5%
+- 진행률: 75.4%
 
 
 
 ### 세부 진행률
 
-- 클라이언트: 223 / 223 (100.0%)
+- 클라이언트: 243 / 223 (109.0%)
 
 - 서버: 12 / 118 (10.2%)
 

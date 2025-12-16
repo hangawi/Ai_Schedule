@@ -1,8 +1,46 @@
 /**
- * 이동 수단별 스케줄링 서비스
- * Google Directions API를 사용하여 실제 이동 시간/거리 계산
+ * ===================================================================================================
+ * travelModeService.js - Google Directions API를 활용하여 이동 시간 및 거리를 계산하고, 최적 경로 및 스케줄을 생성하는 서비스
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/services/travelModeService.js
+ *
+ * 🎯 주요 기능:
+ *    - Google Directions Service 초기화 (`initializeDirectionsService`).
+ *    - 두 지점 간의 이동 시간 및 거리 계산 (`calculateTravelTime`) (대중교통, 자동차, 자전거, 도보).
+ *    - Google Directions API 호출 실패 시 Haversine 공식을 이용한 대략적인 이동 시간 추정 (`estimateTravelTime`).
+ *    - 거리 계산 (`getDistance`).
+ *    - 초 단위 시간을 "X시간 Y분" 형식으로 변환 (`formatDuration`).
+ *    - 초 단위를 30분 단위 슬롯으로 변환 (`convertToSlots`).
+ *    - 방장 기준으로 멤버들의 최적 방문 순서를 계산 (`calculateOptimalOrder`) (Nearest Neighbor 알고리즘).
+ *    - 이동 시간을 반영하여 스케줄을 생성 (`generateScheduleWithTravel`).
+ *
+ * 🔗 연결된 파일:
+ *    - ../hooks/useTravelMode.js: 이동 모드 선택 및 관련 기능에서 이 서비스를 사용.
+ *    - SchedulingSystem.js: 일정 확정 시 이동 모드를 전달하는 데 사용.
+ *    - window.google.maps.DirectionsService: Google Maps API의 Directions Service를 직접 사용.
+ *
+ * 💡 UI 위치:
+ *    - '일정 맞추기' 탭 (`CoordinationTab`) 또는 관련 모달에서 이동 수단 선택 시, 또는 자동 배정 시 이동 시간을 고려하여 경로 및 스케줄을 시각화할 때 백그라운드에서 동작.
+ *
+ * ✏️ 수정 가이드:
+ *    - 새로운 이동 수단이 추가되거나 Google Directions API의 사용 방식이 변경될 경우: `calculateTravelTime` 및 `travelModeMap`을 업데이트.
+ *    - 이동 시간 추정 로직을 개선하거나 새로운 폴백(fallback) 로직을 추가할 경우: `estimateTravelTime` 또는 `getDistance` 함수를 수정.
+ *    - 최적 방문 순서 계산 알고리즘을 변경할 경우: `calculateOptimalOrder` 함수를 수정.
+ *    - 스케줄 생성 로직(특히 이동 시간 반영 부분)을 변경할 경우: `generateScheduleWithTravel` 함수를 수정.
+ *
+ * 📝 참고사항:
+ *    - `normal` 이동 모드의 경우 이동 시간 계산을 건너뛰고 0으로 처리함.
+ *    - Google Maps API가 로드되지 않았거나 호출에 실패할 경우, 자체적인 거리 계산 및 시간 추정 로직(`estimateTravelTime`)을 폴백(fallback)으로 사용.
+ *    - `calculateOptimalOrder`는 '가장 가까운 이웃(Nearest Neighbor)' 알고리즘을 사용하여 최적 경로를 탐색.
+ *
+ * ===================================================================================================
  */
 
+/**
+ * TravelModeService
+ * @description Google Directions API를 활용하여 이동 시간 및 거리를 계산하고, 최적 경로 및 스케줄을 생성하는 서비스 클래스.
+ */
 class TravelModeService {
   constructor() {
     this.directionsService = null;
@@ -84,9 +122,15 @@ class TravelModeService {
     }
   }
 
-  /**
-   * Haversine 공식으로 거리 계산 (백업용)
-   */
+/**
+ * getDistance
+ * @description 두 지점(위도, 경도) 사이의 거리를 Haversine 공식으로 계산합니다. (백업 및 추정용)
+ * @param {number} lat1 - 첫 번째 지점의 위도.
+ * @param {number} lon1 - 첫 번째 지점의 경도.
+ * @param {number} lat2 - 두 번째 지점의 위도.
+ * @param {number} lon2 - 두 번째 지점의 경도.
+ * @returns {number} 두 지점 사이의 거리 (킬로미터 단위).
+ */
   getDistance(lat1, lon1, lat2, lon2) {
     const R = 6371; // 지구 반지름 (km)
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -98,9 +142,14 @@ class TravelModeService {
     return R * 2 * Math.asin(Math.sqrt(a));
   }
 
-  /**
-   * API 실패 시 대략적인 이동 시간 추정
-   */
+/**
+ * estimateTravelTime
+ * @description Google Directions API 호출 실패 시, Haversine 공식을 통해 추정된 거리와 평균 속도를 기반으로 이동 시간을 추정합니다.
+ * @param {Object} origin - 출발지 {lat, lng}.
+ * @param {Object} destination - 목적지 {lat, lng}.
+ * @param {string} mode - 이동 수단 ('walking', 'bicycling', 'transit', 'driving').
+ * @returns {Object} {duration: seconds, distance: meters, durationText, distanceText}.
+ */
   estimateTravelTime(origin, destination, mode) {
     const distance = this.getDistance(origin.lat, origin.lng, destination.lat, destination.lng);
 
@@ -124,9 +173,12 @@ class TravelModeService {
     };
   }
 
-  /**
-   * 초를 "X시간 Y분" 형식으로 변환
-   */
+/**
+ * formatDuration
+ * @description 초 단위의 시간을 "X시간 Y분" 형식의 읽기 쉬운 문자열로 변환합니다.
+ * @param {number} seconds - 변환할 시간 (초 단위).
+ * @returns {string} "X시간 Y분" 형식의 문자열.
+ */
   formatDuration(seconds) {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -137,21 +189,25 @@ class TravelModeService {
     return `${minutes}분`;
   }
 
-  /**
-   * 초를 30분 단위 슬롯으로 변환
-   */
+/**
+ * convertToSlots
+ * @description 초 단위의 시간을 30분 단위의 스케줄 슬롯 개수로 변환합니다. (올림 처리)
+ * @param {number} seconds - 변환할 시간 (초 단위).
+ * @returns {number} 30분 단위 슬롯의 개수.
+ */
   convertToSlots(seconds) {
     const minutes = Math.ceil(seconds / 60);
     return Math.ceil(minutes / 30); // 30분 단위로 올림
   }
 
-  /**
-   * 방장 기준 최적 방문 순서 계산 (Nearest Neighbor)
-   * @param {Object} owner - 방장 정보 {lat, lng, ...}
-   * @param {Array} members - 멤버 배열
-   * @param {string} mode - 이동 수단
-   * @returns {Promise<Array>} - 정렬된 멤버 배열 with 이동 정보
-   */
+/**
+ * calculateOptimalOrder
+ * @description 방장 기준으로 멤버들의 최적 방문 순서를 계산합니다. (Nearest Neighbor 알고리즘 사용)
+ * @param {Object} owner - 방장 정보 {lat, lng, ...}.
+ * @param {Array} members - 멤버 배열 (각 멤버는 {user: {addressLat, addressLng}, ...} 형태).
+ * @param {string} mode - 이동 수단 ('transit', 'driving', 'bicycling', 'walking').
+ * @returns {Promise<Array>} 정렬된 멤버 배열 (각 멤버에 이동 정보 포함).
+ */
   async calculateOptimalOrder(owner, members, mode = 'transit') {
     if (members.length === 0) return [];
 
@@ -201,13 +257,14 @@ class TravelModeService {
     return orderedMembers;
   }
 
-  /**
-   * 이동 시간을 반영한 스케줄 생성
-   * @param {Array} orderedMembers - 정렬된 멤버 배열
-   * @param {Date} startTime - 시작 시간
-   * @param {number} minHoursPerMember - 멤버당 최소 시간 (시간 단위)
-   * @returns {Array} - 스케줄 배열
-   */
+/**
+ * generateScheduleWithTravel
+ * @description 이동 시간을 반영하여 스케줄을 생성합니다.
+ * @param {Array} orderedMembers - 최적화된 순서로 정렬된 멤버 배열.
+ * @param {Date} startTime - 스케줄 시작 시간 (Date 객체).
+ * @param {number} minHoursPerMember - 멤버당 최소 할당 시간 (시간 단위).
+ * @returns {Array} 생성된 스케줄 배열 (이동 시간 및 활동 포함).
+ */
   generateScheduleWithTravel(orderedMembers, startTime, minHoursPerMember = 1) {
     const schedule = [];
     let currentTime = new Date(startTime);

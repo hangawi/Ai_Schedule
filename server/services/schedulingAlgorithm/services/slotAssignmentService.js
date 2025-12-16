@@ -8,6 +8,7 @@ const { extractDateFromSlotKey, extractTimeFromSlotKey, areConsecutiveSlots } = 
 const { createConflictKeysSet, createConflictingMembersSet, getMemberConflicts, getMemberConflictDates, isMemberHighestPriority, isUniqueHighestPriority, getCoConflictingMembers } = require('../validators/conflictValidator');
 const { assignSlot, isMemberFullyAssigned } = require('../helpers/assignmentHelper');
 const { getMemberPriority, findMemberById } = require('../helpers/memberHelper');
+const { isTimeInBlockedRange } = require('../validators/prohibitedTimeValidator');
 
 /**
  * 배정 모드에 따라 멤버 정렬
@@ -55,8 +56,10 @@ const sortMembersByMode = (
  * @param {string} ownerId - 방장 ID
  * @param {Array} members - 전체 멤버 객체 배열
  * @param {string} assignmentMode - 배정 모드
+ * @param {number} minClassDurationMinutes - 최소 수업 시간 (분)
+ * @param {Array} blockedTimes - 금지 시간 배열
  */
-const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId, members, assignmentMode = 'normal', minClassDurationMinutes = 60) => {
+const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId, members, assignmentMode = 'normal', minClassDurationMinutes = 60, blockedTimes = []) => {
   const sortedKeys = Object.keys(timetable).sort();
   const hasSlots = sortedKeys.length > 0;
 
@@ -338,6 +341,27 @@ const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId,
     }
     
     logAssignment(memberId, blockToAssign, '배정');
+
+    // 🔒 금지시간 검증 (Phase 4)
+    if (blockedTimes && blockedTimes.length > 0 && blockToAssign.length > 0) {
+      const firstKey = blockToAssign[0];
+      const lastKey = blockToAssign[blockToAssign.length - 1];
+      const blockStartTime = extractTimeFromSlotKey(firstKey);
+      const blockEndTime = extractTimeFromSlotKey(lastKey);
+
+      // 30분 슬롯이므로 endTime에 30분 추가
+      const endMinutes = parseInt(blockEndTime.split(':')[0]) * 60 + parseInt(blockEndTime.split(':')[1]) + 30;
+      const blockEndTimeFinal = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+
+      const blockedTime = isTimeInBlockedRange(blockStartTime, blockEndTimeFinal, blockedTimes);
+
+      if (blockedTime) {
+        console.log(`      ⚠️  [금지시간 침범 감지] ${blockStartTime}-${blockEndTimeFinal}이(가) ${blockedTime.name || '금지 시간'}(${blockedTime.startTime}-${blockedTime.endTime})과 겹침`);
+        console.log(`      ⚠️  이 블록은 건너뜁니다. (금지시간 침범 방지)`);
+        // 금지시간을 침범하는 블록은 배정하지 않음
+        continue;
+      }
+    }
 
     for (const blockKey of blockToAssign) {
       assignSlot(timetable, assignments, blockKey, memberId);

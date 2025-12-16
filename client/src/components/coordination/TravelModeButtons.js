@@ -41,6 +41,7 @@ import { Car, Train, Bike, Footprints, Zap } from 'lucide-react';
  * @param {string} [props.selectedMode='normal'] - 현재 선택된 이동 수단 모드
  *        ('normal', 'transit', 'driving', 'bicycling', 'walking')
  * @param {Function} props.onModeChange - 이동 수단 모드가 변경될 때 호출되는 콜백 함수. 새 모드의 id를 인자로 받습니다.
+ * @param {Function} [props.onConfirm] - 이동 수단 모드를 확정할 때 호출되는 콜백 함수
  * @param {boolean} [props.disabled=false] - 버튼을 비활성화할지 여부
  * @param {boolean} [props.isOwner=false] - 방장 여부
  * @param {string} [props.confirmedTravelMode=null] - 확정된 이동수단 모드
@@ -49,11 +50,12 @@ import { Car, Train, Bike, Footprints, Zap } from 'lucide-react';
  *
  * @example
  * const [mode, setMode] = useState('normal');
- * <TravelModeButtons selectedMode={mode} onModeChange={setMode} disabled={false} isOwner={true} confirmedTravelMode={null} currentRoom={currentRoom} />
+ * <TravelModeButtons selectedMode={mode} onModeChange={setMode} onConfirm={handleConfirm} disabled={false} isOwner={true} confirmedTravelMode={null} currentRoom={currentRoom} />
  */
 const TravelModeButtons = ({
   selectedMode = 'normal',
   onModeChange,
+  onConfirm,
   disabled = false,
   isOwner = false,
   confirmedTravelMode = null,
@@ -139,6 +141,18 @@ const TravelModeButtons = ({
           </button>
         );
       })}
+
+      {/* 확정 버튼 (방장만, 확정 전에만) */}
+      {onConfirm && (
+        <button
+          onClick={onConfirm}
+          disabled={disabled}
+          className="px-4 py-1.5 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-all duration-200 shadow-md disabled:bg-gray-300 disabled:cursor-not-allowed ml-2"
+          title="선택한 모드를 조원들에게 표시"
+        >
+          적용
+        </button>
+      )}
     </div>
   );
 };

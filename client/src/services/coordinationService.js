@@ -578,4 +578,63 @@ export const coordinationService = {
 
     return await response.json();
   },
+
+  /**
+   * 이동시간 포함 스케줄을 서버에 저장
+   * @param {string} roomId - 방 ID
+   * @param {string} travelMode - 선택한 이동수단
+   * @param {Array} enhancedSchedule - 이동시간 포함 스케줄
+   * @returns {Promise<object>} { success, travelMode, timeSlotsCount }
+   */
+  async applyTravelMode(roomId, travelMode, enhancedSchedule) {
+    const token = await getAuthToken();
+
+    const response = await fetch(
+      `${API_BASE_URL}/api/coordination/rooms/${roomId}/apply-travel-mode`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ travelMode, enhancedSchedule })
+      }
+    );
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || '이동시간 모드 적용에 실패했습니다.');
+    }
+
+    return await response.json();
+  },
+
+  /**
+   * 이동시간 모드를 확정합니다 (조원들에게 표시)
+   * @param {string} roomId - 방 ID
+   * @param {string} travelMode - 확정할 이동수단 모드
+   * @returns {Promise<object>} { success, confirmedTravelMode, confirmedAt }
+   */
+  async confirmTravelMode(roomId, travelMode) {
+    const token = await getAuthToken();
+
+    const response = await fetch(
+      `${API_BASE_URL}/api/coordination/rooms/${roomId}/confirm-travel-mode`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ travelMode })
+      }
+    );
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || '이동시간 모드 확정에 실패했습니다.');
+    }
+
+    return await response.json();
+  },
 };

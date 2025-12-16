@@ -87,8 +87,28 @@ async function recalculateScheduleForDate(roomId, date) {
         room.currentTravelMode || room.confirmedTravelMode || 'transit'
       );
 
+      // 📝 원본 시간 저장 (처음 조정될 때만)
+      if (!slot.originalStartTime) {
+        slot.originalStartTime = slot.startTime;
+        slot.originalEndTime = slot.endTime;
+      }
+
+      // ⏰ 이동시간을 고려한 시작/종료 시간 재계산
+      const originalStartMinutes = timeToMinutes(slot.originalStartTime);
+      const travelStartMinutes = originalStartMinutes - travelTime;
+
+      // 음수 방지 (이동시간이 너무 길면 원본 시간 유지)
+      const adjustedStartMinutes = Math.max(0, travelStartMinutes);
+
+      const adjustedStartTime = `${String(Math.floor(adjustedStartMinutes / 60)).padStart(2, '0')}:${String(adjustedStartMinutes % 60).padStart(2, '0')}`;
+
+      // 🔄 시간 업데이트
+      slot.startTime = adjustedStartTime;
+      slot.adjustedForTravelTime = true;
+
       recalculatedSlots.push({
         slotId: slot._id,
+        originalStartTime: slot.originalStartTime,
         startTime: slot.startTime,
         endTime: slot.endTime,
         travelTimeBefore: travelTime,
@@ -98,10 +118,14 @@ async function recalculateScheduleForDate(roomId, date) {
       previousLocation = slot.location; // 다음 슬롯을 위해 현재 위치 저장
     }
 
-    // 3. 재계산 완료 로그
+    // 3. 데이터베이스에 저장
+    room.markModified('timeSlots');
+    await room.save();
+
+    // 4. 재계산 완료 로그
     console.log(`✅ [재계산 완료] ${date.toISOString().split('T')[0]}: ${slotsForDate.length}개 슬롯`);
     recalculatedSlots.forEach((slot, index) => {
-      console.log(`  ${index + 1}. ${slot.startTime}-${slot.endTime}: 이동시간 ${slot.travelTimeBefore}분 (from ${slot.previousLocation})`);
+      console.log(`  ${index + 1}. ${slot.originalStartTime} → ${slot.startTime}-${slot.endTime}: 이동시간 ${slot.travelTimeBefore}분 (from ${slot.previousLocation})`);
     });
 
     return {

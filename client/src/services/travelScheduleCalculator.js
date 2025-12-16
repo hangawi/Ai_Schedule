@@ -1,15 +1,53 @@
 /**
- * 이동 시간을 반영한 스케줄 재계산 서비스
- * 기존 자동배정 결과에 이동 시간을 추가하여 새로운 스케줄 생성
+ * ===================================================================================================
+ * travelScheduleCalculator.js - 기존 자동 배정 결과에 이동 시간을 추가하여 새로운 스케줄을 재계산하고 검증하는 서비스
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/services/travelScheduleCalculator.js
+ *
+ * 🎯 주요 기능:
+ *    - 분 단위를 시간 문자열로 변환 (`formatTime`).
+ *    - 시간 문자열을 분 단위로 변환 (`parseTime`).
+ *    - 하나의 스케줄 블록을 10분 단위 슬롯으로 분할 (`unmergeBlock`).
+ *    - 도보 이동 모드의 유효성 검증 (경로의 1시간 초과 여부 확인) (`validateWalkingMode`).
+ *    - 기존 시간표에 이동 시간을 반영하여 스케줄 재계산 (`recalculateScheduleWithTravel`).
+ *    - 이동 시간과 활동 시간을 결합하여 새로운 스케줄을 생성.
+ *
+ * 🔗 연결된 파일:
+ *    - ./travelModeService.js: 실제 이동 시간 계산을 위해 `travelModeService` 사용.
+ *    - ../utils/timetableHelpers.js: 연속된 시간 슬롯을 병합하기 위해 `mergeConsecutiveTimeSlots` 사용.
+ *
+ * 💡 UI 위치:
+ *    - '일정 맞추기' 탭 (`CoordinationTab`)에서 이동 수단을 선택하거나, 자동 배정된 스케줄에 이동 시간을 시각적으로 반영할 때 백그라운드에서 동작.
+ *
+ * ✏️ 수정 가이드:
+ *    - 시간 포맷팅 또는 파싱 로직 변경 시: `formatTime`, `parseTime` 함수를 수정.
+ *    - 스케줄 블록 분할 단위를 변경할 경우: `unmergeBlock` 함수의 로직을 수정.
+ *    - 도보 모드 유효성 검증 기준을 변경할 경우: `validateWalkingMode` 함수의 `travelDurationMinutes > 60` 조건을 수정.
+ *    - 이동 시간 재계산 로직(특히 이전 활동 종료 시간, 금지 시간 처리, 슬롯 병합 및 분할 로직)을 변경할 경우: `recalculateScheduleWithTravel` 함수 내부 로직을 수정.
+ *
+ * 📝 참고사항:
+ *    - `recalculateScheduleWithTravel`은 자동 배정된 시간표를 10분 단위로 잘게 나누고, 각 이동 구간에 소요되는 시간을 계산하여 스케줄에 반영함.
+ *    - 금지 시간(blockedTimes)을 고려하여 이동 시간 및 활동 시간이 겹치지 않도록 조정하는 로직이 포함됨.
+ *    - 콘솔 로그(`console.log`)를 통해 상세한 계산 과정을 디버깅할 수 있도록 구현되어 있음.
+ *
+ * ===================================================================================================
  */
 
 import travelModeService from './travelModeService';
 import { mergeConsecutiveTimeSlots } from '../utils/timetableHelpers';
 
+/**
+ * TravelScheduleCalculator
+ * @description 기존 자동 배정 결과에 이동 시간을 추가하여 새로운 스케줄을 재계산하고 검증하는 서비스 클래스.
+ */
 class TravelScheduleCalculator {
 
   /**
-   * 분 단위를 시간 문자열로 변환
+   * formatTime
+   * @description 분 단위의 시간을 HH:MM 형식의 시간 문자열로 변환합니다.
+   * @param {number} minutes - 변환할 시간 (분 단위).
+   * @returns {string} HH:MM 형식의 시간 문자열.
    */
   formatTime(minutes) {
     const hours = Math.floor(minutes / 60);
@@ -18,7 +56,10 @@ class TravelScheduleCalculator {
   }
 
   /**
-   * 시간 문자열을 분 단위로 변환
+   * parseTime
+   * @description HH:MM 형식의 시간 문자열을 분 단위 정수로 변환합니다.
+   * @param {string} timeString - HH:MM 형식의 시간 문자열.
+   * @returns {number} 분 단위 정수 (00:00은 0, 01:00은 60). 유효하지 않은 문자열일 경우 0을 반환.
    */
   parseTime(timeString) {
     if (!timeString || !timeString.includes(':')) {
@@ -29,7 +70,10 @@ class TravelScheduleCalculator {
   }
 
   /**
-   * 하나의 블록을 10분 단위 슬롯으로 분할
+   * unmergeBlock
+   * @description 병합된 스케줄 블록을 10분 단위의 개별 슬롯으로 분할합니다.
+   * @param {Object} block - 병합된 스케줄 블록 객체 ({startTime, endTime, ...}).
+   * @returns {Array<Object>} 10분 단위로 분할된 슬롯 배열.
    */
   unmergeBlock(block) {
       const slots = [];
@@ -50,9 +94,10 @@ class TravelScheduleCalculator {
   }
 
   /**
-   * 도보 모드 검증 (1시간 초과 경로 체크)
-   * @param {Object} currentRoom - 현재 방 데이터
-   * @returns {Promise<Object>} - { isValid: boolean, message: string }
+   * validateWalkingMode
+   * @description 도보 이동 모드의 유효성을 검증합니다. 특히 경로에 1시간을 초과하는 도보 이동이 있는지 확인합니다.
+   * @param {Object} currentRoom - 현재 방 데이터 (owner, members, timeSlots 포함).
+   * @returns {Promise<Object>} { isValid: boolean, message: string }. 도보 이동이 1시간을 초과하는 경로가 있으면 `isValid: false`를 반환.
    */
   async validateWalkingMode(currentRoom) {
     if (!currentRoom || !currentRoom.timeSlots || currentRoom.timeSlots.length === 0) {
@@ -146,12 +191,14 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     return { isValid: true, message: '도보 모드 사용 가능' };
   }
 
-  /**
-   * 기존 시간표에 이동 시간을 반영하여 재계산
-   * @param {Object} currentRoom - 현재 방 데이터
-   * @param {string} travelMode - 이동 수단 ('normal', 'transit', 'driving', 'bicycling', 'walking')
-   * @returns {Promise<Object>} - 재계산된 시간표 데이터
-   */
+/**
+ * recalculateScheduleWithTravel
+ * @description 기존에 자동 배정된 시간표 데이터에 이동 시간을 반영하여 새로운 스케줄을 재계산합니다.
+ * @param {Object} currentRoom - 현재 방 데이터 (방장, 멤버, 시간 슬롯 정보 포함).
+ * @param {string} travelMode - 적용할 이동 수단 ('normal', 'transit', 'driving', 'bicycling', 'walking').
+ * @returns {Promise<Object>} 재계산된 시간표 데이터 ({timeSlots, travelSlots, travelMode}).
+ * @throws {Error} 시간표 데이터가 없거나 방장의 주소 정보가 없을 경우 에러 발생.
+ */
   async recalculateScheduleWithTravel(currentRoom, travelMode = 'normal') {
     if (!currentRoom || !currentRoom.timeSlots || currentRoom.timeSlots.length === 0) {
         throw new Error('시간표 데이터가 없습니다.');

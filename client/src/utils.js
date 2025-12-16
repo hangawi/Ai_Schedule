@@ -1,4 +1,53 @@
-// 영어 요일을 한글로 변환하는 함수
+/**
+ * ===================================================================================================
+ * utils.js - 애플리케이션 전반에서 사용되는 다양한 유틸리티 함수 모음
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/utils.js
+ *
+ * 🎯 주요 기능:
+ *    - 영어 요일을 한글로 변환 (`translateEnglishDays`).
+ *    - 날짜를 지정된 형식의 문자열로 변환 (`formatDate`).
+ *    - 날짜에 특정 일/주를 더하거나 빼는 계산 (`addDays`, `addWeeks`).
+ *    - 특정 날짜가 속한 주의 시작/종료일 계산 (`startOfWeek`, `endOfWeek`).
+ *    - 특정 날짜가 속한 월의 시작/종료일 계산 (`startOfMonth`, `endOfMonth`).
+ *    - 주차 오프셋을 기반으로 특정 요일의 날짜를 계산 (`getWeekday`).
+ *    - 텍스트를 음성으로 변환하여 출력 (TTS) (`speak`).
+ *    - 챗봇 입력을 기반으로 AI 프롬프트를 생성 (`generateAIPrompt`).
+ *    - AI 응답(JSON 형식)을 파싱 (`parseAIResponse`).
+ *    - 일정 충돌 여부를 감지 (`checkScheduleConflict`).
+ *    - 빈 시간 슬롯을 검색 (`findAvailableTimeSlots`).
+ *
+ * 🔗 연결된 파일:
+ *    - SchedulingSystem.js: `speak` 함수를 사용하여 음성 피드백을 제공.
+ *    - hooks/useChat/enhanced.js: `generateAIPrompt`, `parseAIResponse`, `checkScheduleConflict`, `findAvailableTimeSlots` 등 챗봇 로직의 핵심 유틸리티로 사용.
+ *    - 다양한 UI 컴포넌트에서 날짜 형식 변환 및 계산을 위해 사용될 수 있음.
+ *
+ * 💡 UI 위치:
+ *    - `speak` 함수는 챗봇 응답 등에서 음성 출력을 담당.
+ *    - `generateAIPrompt` 및 `parseAIResponse`는 챗봇의 백그라운드 로직으로 UI에 직접 표시되지 않음.
+ *    - 날짜 관련 함수들은 캘린더, 대시보드 등에서 날짜 표시 및 계산에 사용.
+ *
+ * ✏️ 수정 가이드:
+ *    - 날짜/시간 포맷을 추가하거나 변경하려면: `formatDate` 함수 내의 `switch` 문을 수정.
+ *    - 주의 시작을 일요일로 변경하려면: `startOfWeek`, `endOfWeek` 함수의 로직을 수정.
+ *    - AI 프롬프트의 지침이나 규칙을 변경하려면: `generateAIPrompt` 함수의 문자열 템플릿을 수정.
+ *    - AI 응답 파싱 로직을 변경하려면: `parseAIResponse` 함수를 수정.
+ *    - 일정 충돌 감지 또는 빈 시간 검색 로직을 변경하려면: `checkScheduleConflict`, `findAvailableTimeSlots` 함수를 수정.
+ *
+ * 📝 참고사항:
+ *    - 날짜 관련 함수들은 기본적으로 한국 시간대(KST)를 기준으로 동작.
+ *    - `generateAIPrompt`는 AI가 사용자의 의도를 더 정확하게 파악할 수 있도록 상세한 규칙과 예시를 포함하고 있음.
+ *
+ * ===================================================================================================
+ */
+
+/**
+ * translateEnglishDays
+ * @description 텍스트에 포함된 영어 요일을 한글 요일로 변환합니다.
+ * @param {string} text - 변환할 텍스트.
+ * @returns {string} 영어 요일이 한글로 변환된 텍스트.
+ */
 export const translateEnglishDays = (text) => {
    const dayMap = {
       'monday': '월요일',
@@ -19,7 +68,13 @@ export const translateEnglishDays = (text) => {
    return translatedText;
 };
 
-// 날짜 유틸리티 함수들 - 이미 한국 시간으로 변환된 Date 객체 처리
+/**
+ * formatDate
+ * @description Date 객체를 지정된 형식의 문자열로 변환합니다.
+ * @param {Date} date - 포맷할 Date 객체.
+ * @param {string} [format='YYYY-MM-DD'] - 원하는 날짜 형식 ('YYYY-MM-DD', 'YYYY-MM-DD dddd', 'MM월 DD일', 'YYYY-MM-DD HH:mm:ss').
+ * @returns {string} 지정된 형식으로 변환된 날짜 문자열.
+ */
 const formatDate = (date, format = 'YYYY-MM-DD') => {
    // 이미 한국 시간대로 변환된 Date 객체를 그대로 사용
    const d = date;
@@ -45,16 +100,36 @@ const formatDate = (date, format = 'YYYY-MM-DD') => {
    }
 };
 
+/**
+ * addDays
+ * @description 주어진 날짜에 특정 일수를 더하거나 뺍니다.
+ * @param {Date} date - 기준이 되는 Date 객체.
+ * @param {number} days - 더하거나 뺄 일수.
+ * @returns {Date} 계산된 새로운 Date 객체.
+ */
 const addDays = (date, days) => {
    const result = new Date(date);
    result.setDate(result.getDate() + days);
    return result;
 };
 
+/**
+ * addWeeks
+ * @description 주어진 날짜에 특정 주수를 더하거나 뺍니다.
+ * @param {Date} date - 기준이 되는 Date 객체.
+ * @param {number} weeks - 더하거나 뺄 주수.
+ * @returns {Date} 계산된 새로운 Date 객체.
+ */
 const addWeeks = (date, weeks) => {
    return addDays(date, weeks * 7);
 };
 
+/**
+ * startOfWeek
+ * @description 주어진 날짜가 속한 주의 시작일(월요일)을 반환합니다.
+ * @param {Date} date - 기준이 되는 Date 객체.
+ * @returns {Date} 해당 주의 월요일 00:00:00 시점의 Date 객체.
+ */
 const startOfWeek = date => {
    const result = new Date(date);
    const day = result.getDay();
@@ -64,6 +139,12 @@ const startOfWeek = date => {
    return result;
 };
 
+/**
+ * endOfWeek
+ * @description 주어진 날짜가 속한 주의 종료일(일요일)을 반환합니다.
+ * @param {Date} date - 기준이 되는 Date 객체.
+ * @returns {Date} 해당 주의 일요일 23:59:59 시점의 Date 객체.
+ */
 const endOfWeek = date => {
    const result = startOfWeek(date);
    result.setDate(result.getDate() + 6);
@@ -71,6 +152,12 @@ const endOfWeek = date => {
    return result;
 };
 
+/**
+ * startOfMonth
+ * @description 주어진 날짜가 속한 월의 시작일(1일)을 반환합니다.
+ * @param {Date} date - 기준이 되는 Date 객체.
+ * @returns {Date} 해당 월의 1일 00:00:00 시점의 Date 객체.
+ */
 const startOfMonth = date => {
    const result = new Date(date);
    result.setDate(1);
@@ -78,6 +165,12 @@ const startOfMonth = date => {
    return result;
 };
 
+/**
+ * endOfMonth
+ * @description 주어진 날짜가 속한 월의 종료일(마지막 날)을 반환합니다.
+ * @param {Date} date - 기준이 되는 Date 객체.
+ * @returns {Date} 해당 월의 마지막 날 23:59:59 시점의 Date 객체.
+ */
 const endOfMonth = date => {
    const result = new Date(date);
    result.setMonth(result.getMonth() + 1);
@@ -86,9 +179,14 @@ const endOfMonth = date => {
    return result;
 };
 
-// ✅ 주차 오프셋을 지원하는 요일 계산
-// dayOfWeek: 월=1 ... 일=7
-// weekOffset: 0=이번주, 1=다음주, -1=저번주, 2=다다음주 ...
+/**
+ * getWeekday
+ * @description 주차 오프셋을 기준으로 특정 요일의 날짜를 계산합니다. (월요일=1, ... 일요일=7)
+ * @param {Date} date - 기준이 되는 Date 객체.
+ * @param {number} dayOfWeek - 계산할 요일 (1~7).
+ * @param {number} [weekOffset=0] - 주차 오프셋 (0: 이번 주, 1: 다음 주, -1: 저번 주).
+ * @returns {Date} 계산된 요일의 00:00:00 시점의 Date 객체.
+ */
 const getWeekday = (date, dayOfWeek, weekOffset = 0) => {
    const result = new Date(startOfWeek(date));
    result.setDate(result.getDate() + (dayOfWeek - 1) + weekOffset * 7);
@@ -96,7 +194,11 @@ const getWeekday = (date, dayOfWeek, weekOffset = 0) => {
    return result;
 };
 
-// 🔊 음성 출력
+/**
+ * speak
+ * @description 텍스트를 음성으로 변환하여 출력합니다 (TTS).
+ * @param {string} text - 음성으로 변환할 텍스트.
+ */
 export const speak = text => {
    if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -107,7 +209,13 @@ export const speak = text => {
    }
 };
 
-// 🧠 AI 프롬프트 생성
+/**
+ * generateAIPrompt
+ * @description 챗봇 입력을 기반으로 AI 프롬프트를 생성합니다.
+ * @param {string} command - 사용자가 입력한 챗봇 메시지.
+ * @param {Object} [context={}] - 현재 탭 등 컨텍스트 정보.
+ * @returns {string} 생성된 AI 프롬프트 문자열.
+ */
 export const generateAIPrompt = (command, context = {}) => {
    // 현재 로컬 시간을 그대로 사용 (이미 시스템이 한국 시간대이므로)
    const now = new Date();
@@ -467,7 +575,12 @@ export const generateAIPrompt = (command, context = {}) => {
    ].join('\n');
 };
 
-// 📝 AI 응답 파싱
+/**
+ * parseAIResponse
+ * @description AI가 생성한 텍스트 응답에서 JSON 문자열을 추출하고 파싱합니다.
+ * @param {string} text - AI의 응답 텍스트.
+ * @returns {Object} 파싱된 JSON 객체.
+ */
 export const parseAIResponse = text => {
    let jsonString = text.replace(/```json\n|\n```/g, '').trim();
    const jsonStart = jsonString.indexOf('{');
@@ -489,7 +602,14 @@ export const parseAIResponse = text => {
    return eventData;
 };
 
-// 🔍 일정 충돌 감지 함수
+/**
+ * checkScheduleConflict
+ * @description 새 일정과 기존 일정 목록 간의 시간 충돌을 확인합니다.
+ * @param {string} newStartDateTime - 새 일정의 시작 시간 (ISO 8601 형식).
+ * @param {string} newEndDateTime - 새 일정의 종료 시간 (ISO 8601 형식).
+ * @param {Array<Object>} existingEvents - 기존 일정 목록.
+ * @returns {{hasConflict: boolean, conflicts: Array<Object>}} 충돌 여부와 충돌된 일정 목록을 포함하는 객체.
+ */
 export const checkScheduleConflict = (newStartDateTime, newEndDateTime, existingEvents) => {
    const newStart = new Date(newStartDateTime);
    const newEnd = new Date(newEndDateTime);
@@ -527,7 +647,15 @@ export const checkScheduleConflict = (newStartDateTime, newEndDateTime, existing
    };
 };
 
-// 🔍 빈 시간 찾기 함수 (충돌한 시간 근처 우선 추천)
+/**
+ * findAvailableTimeSlots
+ * @description 특정 날짜에 주어진 기간만큼의 빈 시간 슬롯을 검색합니다.
+ * @param {Date} targetDate - 빈 시간을 검색할 날짜.
+ * @param {Array<Object>} events - 기존 일정 목록.
+ * @param {number} [duration=60] - 필요한 빈 시간의 길이 (분 단위).
+ * @param {number|null} [requestedTimeHour=null] - 사용자가 요청한 시간(소수점 시간)에 가까운 순서로 정렬하기 위한 기준.
+ * @returns {Array<Object>} 찾은 빈 시간 슬롯의 배열. 각 슬롯은 {start, end, date, duration, slotStartHour} 형태.
+ */
 export const findAvailableTimeSlots = (targetDate, events, duration = 60, requestedTimeHour = null) => {
    const date = new Date(targetDate);
    const dateStr = formatDate(date);

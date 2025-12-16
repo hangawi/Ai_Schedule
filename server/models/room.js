@@ -79,6 +79,19 @@ const TimeSlotSchema = new mongoose.Schema({
       lng: Number
     },
     description: String // "강남역 스터디카페"
+  },
+  // 이동시간 모드 적용 관련 필드
+  originalStartTime: {
+    type: String,
+    required: false  // 일반 모드 원본 시작 시간 (모드 전환 시 복원용)
+  },
+  originalEndTime: {
+    type: String,
+    required: false  // 일반 모드 원본 종료 시간 (모드 전환 시 복원용)
+  },
+  adjustedForTravelTime: {
+    type: Boolean,
+    default: false  // 이동시간이 적용된 슬롯인지 여부
   }
 });
 
