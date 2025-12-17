@@ -60,6 +60,13 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
   const prevRoomIdRef = useRef(null);
 
   const handleModeChange = useCallback(async (newMode) => {
+    // ⚠️ 확정된 방은 재계산하지 않음 (조회만 가능)
+    if (currentRoom?.confirmedAt) {
+      console.log('⚠️ [useTravelMode] 이미 확정된 방입니다. 재계산을 건너뜁니다.');
+      setTravelMode(newMode);
+      return;
+    }
+
     if (!currentRoom || !currentRoom.timeSlots || currentRoom.timeSlots.length === 0) {
       setError('시간표 데이터가 없습니다. 먼저 자동 배정을 실행해주세요.');
       return;

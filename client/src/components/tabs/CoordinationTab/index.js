@@ -276,6 +276,12 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
   // ✨ 조원일 때 방장의 currentTravelMode 자동 동기화
   useEffect(() => {
+    // ⚠️ 확정된 방은 자동 동기화 건너뛰기
+    if (currentRoom?.confirmedAt) {
+      console.log('⚠️ [조원 동기화] 이미 확정된 방입니다. 동기화를 건너뜁니다.');
+      return;
+    }
+    
     if (!isOwner && currentRoom?.currentTravelMode && travelMode !== currentRoom.currentTravelMode) {
       console.log(`🔄 [조원 동기화] 방장의 이동수단 모드 적용: ${currentRoom.currentTravelMode}`);
       handleTravelModeChange(currentRoom.currentTravelMode);
