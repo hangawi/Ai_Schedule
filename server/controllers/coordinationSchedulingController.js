@@ -60,9 +60,14 @@ exports.runAutoSchedule = async (req, res) => {
 
       // Clear previous auto-generated slots before running new schedule
       // 단, 협의로 배정된 슬롯(subject에 '협의'가 포함된 것)은 보존
+      // 🔒 확정된 슬롯도 보존 (중복 방지)
       room.timeSlots = room.timeSlots.filter(slot => {
          // assignedBy가 없으면 수동 배정 → 유지
          if (!slot.assignedBy) return true;
+         
+         // 🔒 개인 일정으로 확정된 슬롯 → 유지
+         if (slot.confirmedToPersonalCalendar) return true;
+         
          // 협의로 배정된 슬롯 → 유지
          if (slot.subject && (slot.subject.includes('협의') || slot.subject === '자동 배정')) {
             // '협의 결과', '협의 결과 (대체시간)', '협의 결과 (시간선택)' 등은 유지
@@ -149,11 +154,8 @@ exports.runAutoSchedule = async (req, res) => {
         }
       }
 
-      // 💡 자동배정 실행 전: 기존의 모든 timeSlots 삭제
-      const beforeSlotCount = room.timeSlots.length;
-
-      // 💡 모든 슬롯 삭제
-      room.timeSlots = [];
+      // 🔒 이미 위에서 확정된 슬롯을 제외하고 필터링했으므로
+      // 여기서는 추가 삭제 없이 바로 자동배정 진행
 
       // 개인 시간표 기반 자동배정으로 변경
       const result = await schedulingAlgorithm.runAutoSchedule(
@@ -593,10 +595,27 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
     }
 
     // 3. 자동배정된 슬롯 필터링 (assignedBy가 있고 status가 'confirmed'인 것)
-    const autoAssignedSlots = room.timeSlots.filter(slot => 
+    const autoAssignedSlots = room.timeSlots.filter(slot =>
       slot.assignedBy && slot.status === 'confirmed'
     );
-    
+
+    console.log(`📋 [confirmSchedule] Room 상태:`, {
+      timeSlots개수: room.timeSlots?.length || 0,
+      travelTimeSlots개수: room.travelTimeSlots?.length || 0,
+      confirmedTravelMode: room.confirmedTravelMode,
+      currentTravelMode: room.currentTravelMode
+    });
+    console.log(`📊 [confirmSchedule] 확정할 슬롯: ${autoAssignedSlots.length}개`);
+    console.log(`📊 [confirmSchedule] 이동시간 조정된 슬롯: ${autoAssignedSlots.filter(s => s.adjustedForTravelTime).length}개`);
+    console.log(`📊 [confirmSchedule] 첫 3개 슬롯:`, autoAssignedSlots.slice(0, 3).map(s => ({
+      user: s.user.toString().substring(0, 8),
+      subject: s.subject,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      adjustedForTravelTime: s.adjustedForTravelTime,
+      originalStartTime: s.originalStartTime
+    })));
+
     if (autoAssignedSlots.length === 0) {
       return res.status(400).json({ msg: '확정할 자동배정 시간이 없습니다.' });
     }
@@ -958,6 +977,47 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
           }
         });
       }
+      
+      // 방장의 이동시간 슬롯 추가 (travel mode only)
+      console.log(`🔍 [디버깅] room.travelTimeSlots 상태:`, {
+        존재여부: !!room.travelTimeSlots,
+        개수: room.travelTimeSlots?.length || 0,
+        샘플: room.travelTimeSlots?.slice(0, 2)
+      });
+      
+      if (room.travelTimeSlots && room.travelTimeSlots.length > 0) {
+        console.log(`   [방장 이동시간 추가] ${room.travelTimeSlots.length}개`);
+        
+        room.travelTimeSlots.forEach(travelSlot => {
+          const dayOfWeek = getDayOfWeekNumber(travelSlot.day);
+          const dateStr = travelSlot.date.toISOString().split('T')[0];
+          
+          // 중복 체크
+          const isDuplicate = owner.personalTimes.some(pt =>
+            pt.specificDate === dateStr &&
+            pt.startTime === travelSlot.startTime &&
+            pt.endTime === travelSlot.endTime &&
+            pt.title.includes('이동시간')
+          );
+          
+          if (!isDuplicate) {
+            console.log(`   ✅ [이동시간 추가] ${travelSlot.startTime}-${travelSlot.endTime} (${dateStr})`);
+            owner.personalTimes.push({
+              id: nextId++,
+              title: `${room.name} - 이동시간`,
+              type: 'event',
+              startTime: travelSlot.startTime,
+              endTime: travelSlot.endTime,
+              days: [dayOfWeek],
+              isRecurring: false,
+              specificDate: dateStr,
+              color: '#FFA500' // Orange color for travel time
+            });
+          } else {
+            console.log(`   ⚠️ [중복 스킵] ${travelSlot.startTime}-${travelSlot.endTime} (${dateStr})`);
+          }
+        });
+      }
     }
     
     // 5-3. 모든 사용자 한 번에 저장 (각 사용자는 한 번만 저장됨) with retry logic
@@ -1027,7 +1087,12 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
       throw new Error('Failed to save room after multiple retries');
     }
 
-    // 6-1. 확정된 이동수단 모드 저장
+    // 6-1. 확정된 슬롯 표시 (자동배정 시 중복 방지)
+    autoAssignedSlots.forEach(slot => {
+      slot.confirmedToPersonalCalendar = true; // 확정됨 표시
+    });
+
+    // 6-2. 확정된 이동수단 모드 저장
     if (travelMode) {
       room.confirmedTravelMode = travelMode;
       room.confirmedAt = new Date();
@@ -1277,58 +1342,95 @@ exports.applyTravelMode = async (req, res) => {
       return res.status(403).json({ msg: '방장만 이동시간 모드를 변경할 수 있습니다.' });
     }
 
+    // 2-1. 이미 확정된 스케줄인지 확인
+    if (room.confirmedAt) {
+      return res.status(400).json({
+        msg: '이미 확정된 스케줄입니다. 확정 이후에는 이동시간 모드를 변경할 수 없습니다.',
+        confirmedAt: room.confirmedAt
+      });
+    }
+
     // 3. enhancedSchedule 검증
     if (!enhancedSchedule || !Array.isArray(enhancedSchedule)) {
       return res.status(400).json({ msg: 'enhancedSchedule이 필요합니다.' });
     }
 
     console.log(`✅ [applyTravelMode] enhancedSchedule 개수: ${enhancedSchedule.length}`);
+    console.log(`📋 [디버깅] enhancedSchedule 첫 3개:`, enhancedSchedule.slice(0, 3).map(e => ({
+      user: e.user?._id?.toString() || e.user?.toString() || e.user,
+      date: e.date instanceof Date ? e.date.toISOString().split('T')[0] : e.date,
+      subject: e.subject,
+      startTime: e.startTime,
+      endTime: e.endTime,
+      originalStartTime: e.originalStartTime,
+      isTravel: e.isTravel
+    })));
+    console.log(`📋 [디버깅] room.timeSlots 첫 3개:`, room.timeSlots.slice(0, 3).map(s => ({
+      user: s.user?._id?.toString() || s.user?.toString(),
+      date: s.date.toISOString().split('T')[0],
+      subject: s.subject,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      originalStartTime: s.originalStartTime
+    })));
 
     // 4. timeSlots 업데이트
     if (travelMode === 'normal') {
-      // 🔄 일반 모드로 복원: originalStartTime이 있으면 그것으로 복원
-      room.timeSlots.forEach((slot, idx) => {
-        if (slot.originalStartTime) {
-          console.log(`   [복원 ${idx}] ${slot.subject}: ${slot.startTime} → ${slot.originalStartTime}`);
-          slot.startTime = slot.originalStartTime;
-          slot.endTime = slot.originalEndTime;
-          slot.adjustedForTravelTime = false;
-        }
-      });
+      // 🔄 일반 모드로 복원: originalTimeSlots이 있으면 복원
+      if (room.originalTimeSlots && room.originalTimeSlots.length > 0) {
+        console.log(`   [복원] originalTimeSlots → timeSlots (${room.originalTimeSlots.length}개)`);
+        room.timeSlots = room.originalTimeSlots;
+        room.originalTimeSlots = [];
+      }
     } else {
-      // 🚗 이동시간 모드: enhancedSchedule 적용
-      room.timeSlots.forEach((slot, idx) => {
-        // 원본 저장 (첫 적용 시에만)
-        if (!slot.originalStartTime) {
-          slot.originalStartTime = slot.startTime;
-          slot.originalEndTime = slot.endTime;
+      // 🚗 이동시간 모드: enhancedSchedule로 완전 교체
+
+      // 원본 저장 (첫 적용 시에만)
+      if (!room.originalTimeSlots || room.originalTimeSlots.length === 0) {
+        room.originalTimeSlots = JSON.parse(JSON.stringify(room.timeSlots));
+        console.log(`   [원본 저장] ${room.originalTimeSlots.length}개 슬롯 백업`);
+      }
+
+      // 이동시간 슬롯과 수업 슬롯 분리
+      const travelSlots = enhancedSchedule.filter(e => e.isTravel);
+      const classSlots = enhancedSchedule.filter(e => !e.isTravel);
+      console.log(`   [필터링] 전체 ${enhancedSchedule.length}개 → 수업 ${classSlots.length}개, 이동시간 ${travelSlots.length}개`);
+
+      // 이동시간 슬롯 저장 (방장 확정 시 사용)
+      room.travelTimeSlots = travelSlots.map(e => ({
+        user: room.owner._id,
+        date: e.date instanceof Date ? e.date : new Date(e.date),
+        day: e.day,
+        startTime: e.startTime,
+        endTime: e.endTime,
+        subject: '이동시간',
+        type: 'travel'
+      }));
+      console.log(`   [이동시간 저장] ${room.travelTimeSlots.length}개 슬롯 (방장용)`);
+
+      // enhancedSchedule로 교체
+      room.timeSlots = classSlots.map((e, idx) => {
+        const newSlot = {
+          user: e.user._id || e.user,
+          date: e.date instanceof Date ? e.date : new Date(e.date),
+          day: e.day,
+          startTime: e.startTime,
+          endTime: e.endTime,
+          subject: e.subject || '자동 배정',
+          assignedBy: room.owner._id,
+          status: 'confirmed',
+          adjustedForTravelTime: true,
+          originalStartTime: e.originalStartTime
+        };
+
+        if (idx < 5) {
+          console.log(`   [적용 ${idx}] ${e.subject}: ${e.startTime}-${e.endTime} (사용자: ${e.user._id || e.user})`);
         }
 
-        // enhancedSchedule에서 매칭되는 슬롯 찾기
-        const slotDate = slot.date.toISOString().split('T')[0];
-        const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
-
-        const enhanced = enhancedSchedule.find(e => {
-          const eUserId = e.user._id ? e.user._id.toString() : e.user.toString();
-          const eDate = e.date instanceof Date ? e.date.toISOString().split('T')[0] : e.date;
-
-          return eUserId === slotUserId &&
-                 eDate === slotDate &&
-                 e.subject === slot.subject &&
-                 e.originalStartTime === slot.originalStartTime; // 원본 시간으로도 매칭
-        });
-
-        if (enhanced) {
-          // 이동시간 포함 시간으로 교체
-          slot.startTime = enhanced.startTime;
-          slot.endTime = enhanced.endTime;
-          slot.adjustedForTravelTime = true;
-
-          console.log(`   [적용 ${idx}] ${slot.subject}: ${slot.originalStartTime} → ${slot.startTime} (이동시간 ${timeToMinutes(slot.originalStartTime) - timeToMinutes(slot.startTime)}분)`);
-        } else {
-          console.log(`   [매칭 실패 ${idx}] ${slot.subject}: enhancedSchedule에서 찾을 수 없음`);
-        }
+        return newSlot;
       });
+
+      console.log(`   ✅ timeSlots 교체 완료: ${room.timeSlots.length}개`);
     }
 
     // 4-1. 🔒 금지시간 검증 (Step 4)
@@ -1380,9 +1482,34 @@ exports.applyTravelMode = async (req, res) => {
 
     // 5. currentTravelMode 설정
     room.currentTravelMode = travelMode;
-    await room.save();
+    
+    // Retry logic for VersionError
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await room.save();
+        break; // 성공하면 루프 종료
+      } catch (error) {
+        if (error.name === 'VersionError' && attempt < maxRetries) {
+          console.log(`⚠️ VersionError 발생, 재시도 중 (${attempt}/${maxRetries})...`);
+          // 최신 버전 다시 조회
+          const freshRoom = await Room.findById(room._id);
+          if (freshRoom) {
+            // 변경사항 다시 적용
+            freshRoom.timeSlots = room.timeSlots;
+            freshRoom.originalTimeSlots = room.originalTimeSlots;
+            freshRoom.travelTimeSlots = room.travelTimeSlots;
+            freshRoom.currentTravelMode = room.currentTravelMode;
+            room = freshRoom;
+          }
+        } else {
+          throw error; // 재시도 횟수 초과 또는 다른 에러
+        }
+      }
+    }
 
     console.log(`✅ [applyTravelMode] 완료 - ${travelMode} 모드 적용`);
+    console.log(`📋 [저장 완료] travelTimeSlots: ${room.travelTimeSlots?.length || 0}개 저장됨`);
 
     // 🔍 디버깅: 저장된 timeSlots 검증
     console.log('📊 [저장 후 검증] 첫 5개 슬롯:');
@@ -1446,10 +1573,12 @@ exports.confirmTravelMode = async (req, res) => {
     }
 
     // 3. 전달받은 travelMode를 confirmedTravelMode로 설정
+    // ⚠️ 주의: confirmedAt은 confirmSchedule에서만 설정해야 함!
+    // confirmTravelMode는 이동 모드만 확정하는 것이지, 스케줄을 확정하는 것이 아님
     const previousConfirmedMode = room.confirmedTravelMode;
     room.confirmedTravelMode = travelMode;
     room.currentTravelMode = travelMode; // currentTravelMode도 동기화
-    room.confirmedAt = new Date();
+    // room.confirmedAt은 여기서 설정하지 않음!
 
     await room.save();
 
@@ -1461,7 +1590,6 @@ exports.confirmTravelMode = async (req, res) => {
       io.to(`room-${roomId}`).emit('travelModeConfirmed', {
         roomId: room._id.toString(),
         confirmedTravelMode: room.confirmedTravelMode,
-        confirmedAt: room.confirmedAt,
         timeSlots: room.timeSlots
       });
       console.log(`📢 [Socket.io] travelModeConfirmed 이벤트 전송: ${room.confirmedTravelMode}`);
@@ -1469,8 +1597,7 @@ exports.confirmTravelMode = async (req, res) => {
 
     res.json({
       success: true,
-      confirmedTravelMode: room.confirmedTravelMode,
-      confirmedAt: room.confirmedAt
+      confirmedTravelMode: room.confirmedTravelMode
     });
 
   } catch (error) {

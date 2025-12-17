@@ -176,20 +176,44 @@ const processAutoAssignments = (assignments, autoAssignments) => {
 const loadExistingSlots = (roomTimeSlots, assignments, ownerId) => {
   if (!roomTimeSlots || roomTimeSlots.length === 0) return;
 
+  console.log(`
+📌 [loadExistingSlots] 기존 ${roomTimeSlots.length}개 슬롯 로드 중...`);
+
+  let confirmedCount = 0;
+  let loadedCount = 0;
+
   roomTimeSlots.forEach(slot => {
     const slotUserId = slot.user._id ? slot.user._id.toString() : slot.user.toString();
-    if (slotUserId === ownerId) return; // 방장 제외
+
+    // 방장 슬롯 제외
+    if (slotUserId === ownerId) {
+      console.log(`   → 방장 슬롯 제외: ${slot.startTime}-${slot.endTime}`);
+      return;
+    }
+
+    // 🔒 개인 일정으로 확정된 슬롯 제외 (중복 방지)
+    if (slot.confirmedToPersonalCalendar) {
+      confirmedCount++;
+      console.log(`   → 확정됨 제외: ${slot.startTime}-${slot.endTime} (${slot.subject})`);
+      return;
+    }
 
     if (assignments[slotUserId]) {
       assignments[slotUserId].slots.push({
         date: slot.date,
         startTime: slot.startTime,
         endTime: slot.endTime,
-        subject: slot.subject
+        subject: slot.subject,
+        isExisting: true  // 기존 슬롯 표시
       });
       assignments[slotUserId].assignedHours += 1;
+      loadedCount++;
+
+      console.log(`   ✅ ${slotUserId.substring(0, 8)}...: ${slot.startTime}-${slot.endTime} (기존)`);
     }
   });
+
+  console.log(`📌 [loadExistingSlots] 완료: 로드 ${loadedCount}개, 확정됨 제외 ${confirmedCount}개`);
 };
 
 /**

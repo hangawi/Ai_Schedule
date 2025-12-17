@@ -143,7 +143,8 @@ const assignByPublicTransport = async (
         dayOfWeek,
         slot.startTime,
         slot.endTime,
-        daySlotKeys
+        daySlotKeys,
+        roomBlockedTimes  // 방 금지시간 전달
       );
 
       if (assignedSlots > 0) {
@@ -194,11 +195,20 @@ const assignTimeSlot = async (
   dayOfWeek,
   startTime,
   endTime,
-  daySlotKeys
+  daySlotKeys,
+  roomBlockedTimes = []  // 추가: 방 금지시간
 ) => {
   const startMinutes = timeToMinutes(startTime);
   const endMinutes = timeToMinutes(endTime);
   let assignedCount = 0;
+
+  // 17-24시 절대 금지시간 추가
+  const absoluteBlockedTime = {
+    name: '17-24시 절대 금지시간',
+    startTime: '17:00',
+    endTime: '24:00'
+  };
+  const allBlockedTimes = [...(roomBlockedTimes || []), absoluteBlockedTime];
 
   // 30분 단위로 슬롯 찾아서 배정
   for (let currentMinutes = startMinutes; currentMinutes < endMinutes; currentMinutes += MINUTES_PER_SLOT) {
@@ -233,19 +243,16 @@ const assignTimeSlot = async (
       continue;
     }
 
-    // 🔒 금지시간 검증 (Phase 4)
-    if (roomBlockedTimes && roomBlockedTimes.length > 0) {
-      // 슬롯의 시작/종료 시간 계산
-      const slotStartTime = slotTime;
-      const slotStartMinutes = timeToMinutes(slotStartTime);
-      const slotEndMinutes = slotStartMinutes + MINUTES_PER_SLOT;
-      const slotEndTime = minutesToTime(slotEndMinutes);
+    // 🔒 금지시간 검증 (17-24시 포함)
+    const slotStartTime = slotTime;
+    const slotStartMinutes = timeToMinutes(slotStartTime);
+    const slotEndMinutes = slotStartMinutes + MINUTES_PER_SLOT;
+    const slotEndTime = minutesToTime(slotEndMinutes);
 
-      const blockedTime = isTimeInBlockedRange(slotStartTime, slotEndTime, roomBlockedTimes);
-      if (blockedTime) {
-        console.log(`      ⚠️  [금지시간 침범] ${slotStartTime}-${slotEndTime}이(가) ${blockedTime.name || '금지 시간'}(${blockedTime.startTime}-${blockedTime.endTime})과 겹침`);
-        continue; // 금지시간을 침범하는 슬롯은 건너뜀
-      }
+    const blockedTime = isTimeInBlockedRange(slotStartTime, slotEndTime, allBlockedTimes);
+    if (blockedTime) {
+      console.log(`      ❌ [금지시간 침범] ${slotStartTime}-${slotEndTime}이(가) ${blockedTime.name || '금지 시간'}(${blockedTime.startTime}-${blockedTime.endTime})과 겹침`);
+      continue; // 금지시간을 침범하는 슬롯은 건너뜀
     }
 
     // 슬롯 배정
@@ -254,7 +261,7 @@ const assignTimeSlot = async (
   }
 
   return assignedCount;
-};
+};;
 
 module.exports = {
   assignByPublicTransport

@@ -346,6 +346,40 @@ const RoomSchema = new mongoose.Schema({
     enum: ['normal', 'transit', 'driving', 'bicycling', 'walking', null],
     default: null
   },
+  // 이동시간 슬롯 (방장의 이동시간 블록들, 확정 시 방장 개인일정에 추가)
+  travelTimeSlots: [{
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    date: {
+      type: Date,
+      required: true
+    },
+    day: {
+      type: String,
+      required: true,
+      enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+    },
+    startTime: {
+      type: String,
+      required: true
+    },
+    endTime: {
+      type: String,
+      required: true
+    },
+    subject: {
+      type: String,
+      default: '이동시간'
+    },
+    type: {
+      type: String,
+      default: 'travel'
+    }
+  }],
+  // 원본 timeSlots 백업 (이동시간 모드 적용 전)
+  originalTimeSlots: [TimeSlotSchema],
   // 확정 시간
   confirmedAt: {
     type: Date,

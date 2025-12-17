@@ -28,7 +28,7 @@
  *
  * ===================================================================================================
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import travelScheduleCalculator from '../services/travelScheduleCalculator';
 import { coordinationService } from '../services/coordinationService';
 
@@ -55,6 +55,9 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
   const [enhancedSchedule, setEnhancedSchedule] = useState(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState(null);
+
+  // 이전 방 ID를 추적하여 실제로 방이 변경되었을 때만 상태 초기화
+  const prevRoomIdRef = useRef(null);
 
   const handleModeChange = useCallback(async (newMode) => {
     if (!currentRoom || !currentRoom.timeSlots || currentRoom.timeSlots.length === 0) {
@@ -101,21 +104,8 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
 
       setEnhancedSchedule(result);
 
-      // 🔥 서버에 이동시간 포함 스케줄 저장 (방장만)
-      if (isOwner && currentRoom._id) {
-        try {
-          console.log(`📤 [applyTravelMode] 서버에 저장 중... 모드: ${newMode}`);
-          await coordinationService.applyTravelMode(
-            currentRoom._id,
-            newMode,
-            result.timeSlots  // 이동시간 포함된 전체 슬롯
-          );
-          console.log(`✅ [applyTravelMode] 서버 저장 완료`);
-        } catch (apiError) {
-          console.error('⚠️ [applyTravelMode] 서버 저장 실패:', apiError.message);
-          // 에러가 발생해도 화면 표시는 유지 (enhancedSchedule은 이미 설정됨)
-        }
-      }
+      // ⚠️ 서버 저장은 "적용" 버튼 클릭 시에만 수행
+      // (모드 선택만으로는 서버에 저장하지 않음)
     } catch (err) {
       if (err.message.includes('주소 정보가 필요합니다')) {
         setError(err.message);
@@ -209,10 +199,18 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
   }, [currentRoom, travelMode, isOwner]);
 
   // 현재 방이 변경되면 모든 관련 상태를 초기화합니다.
+  // 🔧 버그 수정: 같은 방 ID가 재fetch되어도 상태를 유지하도록 수정
   useEffect(() => {
-    setTravelMode('normal');
-    setEnhancedSchedule(null);
-    setError(null);
+    const currentRoomId = currentRoom?._id?.toString();
+
+    // 실제로 다른 방으로 변경되었을 때만 초기화 (같은 방 재fetch는 무시)
+    if (currentRoomId !== prevRoomIdRef.current) {
+      console.log(`🔄 [useTravelMode] 방 변경 감지: ${prevRoomIdRef.current} → ${currentRoomId}, 상태 초기화`);
+      setTravelMode('normal');
+      setEnhancedSchedule(null);
+      setError(null);
+      prevRoomIdRef.current = currentRoomId;
+    }
   }, [currentRoom?._id]);
 
   return {

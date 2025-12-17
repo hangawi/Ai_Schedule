@@ -249,48 +249,58 @@ const findNextAvailableSlot = (
   preferenceEnd
 ) => {
   const arrivalMinutes = timeToMinutes(arrivalTime);
-  const classEndMinutes = arrivalMinutes + classDurationMinutes;
-  const classEndTime = minutesToTime(classEndMinutes);
-
-  // 1. 도착시간부터 바로 시작 가능한지 확인
-  const conflict = findConflictingPersonalTime(arrivalTime, classEndTime, personalTimes, dayOfWeek);
+  const prefEndMinutes = timeToMinutes(preferenceEnd);
   
-  // 디버깅 로그
-  if (conflict) {
-    console.log(`   ⚠️  충돌 발견: ${arrivalTime}-${classEndTime} vs ${conflict.startTime}-${conflict.endTime} (${conflict.type || conflict.title || '개인시간'})`);
-  }
+  // 루프를 사용하여 모든 충돌을 피함
+  let currentStartMinutes = arrivalMinutes;
+  const maxIterations = 20; // 무한루프 방지
+  let iteration = 0;
 
-  if (!conflict) {
-    // 충돌 없음 - 바로 배정 가능
-    const prefEndMinutes = timeToMinutes(preferenceEnd);
-    if (classEndMinutes <= prefEndMinutes) {
-      return {
-        startTime: arrivalTime,
-        endTime: classEndTime,
-        waitTime: 0
-      };
-    } else {
-      // 선호시간 초과
+  while (iteration < maxIterations) {
+    const currentEndMinutes = currentStartMinutes + classDurationMinutes;
+    
+    // 1. 선호시간 초과 체크
+    if (currentEndMinutes > prefEndMinutes) {
+      console.log(`   ⚠️  선호시간 초과: ${minutesToTime(currentEndMinutes)} > ${preferenceEnd}`);
       return { impossible: true, reason: '선호시간 초과' };
     }
+
+    const currentStartTime = minutesToTime(currentStartMinutes);
+    const currentEndTime = minutesToTime(currentEndMinutes);
+
+    // 2. 충돌 체크
+    const conflict = findConflictingPersonalTime(
+      currentStartTime,
+      currentEndTime,
+      personalTimes,
+      dayOfWeek
+    );
+
+    if (!conflict) {
+      // 충돌 없음 - 배정 성공!
+      const waitTime = currentStartMinutes - arrivalMinutes;
+      
+      if (waitTime > 0) {
+        console.log(`   ⏰ 대기시간 ${waitTime}분 후 배정: ${currentStartTime}-${currentEndTime}`);
+      }
+      
+      return {
+        startTime: currentStartTime,
+        endTime: currentEndTime,
+        waitTime: Math.max(0, waitTime)
+      };
+    }
+
+    // 3. 충돌 있음 - 예외시간 이후로 이동
+    console.log(`   ⚠️  충돌 발견 [${iteration + 1}]: ${currentStartTime}-${currentEndTime} vs ${conflict.startTime}-${conflict.endTime} (${conflict.type || conflict.title || '금지시간'})`);
+    
+    currentStartMinutes = timeToMinutes(conflict.endTime);
+    iteration++;
   }
 
-  // 2. 충돌 있음 - 예외시간 이후로 이동
-  const afterExceptionMinutes = timeToMinutes(conflict.endTime);
-  const newEndMinutes = afterExceptionMinutes + classDurationMinutes;
-  const prefEndMinutes = timeToMinutes(preferenceEnd);
-
-  if (newEndMinutes <= prefEndMinutes) {
-    // 예외시간 이후 배정 가능
-    return {
-      startTime: conflict.endTime,
-      endTime: minutesToTime(newEndMinutes),
-      waitTime: afterExceptionMinutes - arrivalMinutes
-    };
-  } else {
-    // 예외시간 이후도 선호시간 초과
-    return { impossible: true, reason: '예외시간 이후 선호시간 부족' };
-  }
+  // 너무 많은 충돌 (무한루프 방지)
+  console.log(`   ❌ 너무 많은 충돌 (${maxIterations}회 이상)`);
+  return { impossible: true, reason: `너무 많은 충돌 (${maxIterations}회 이상)` };
 };
 
 /**
@@ -318,7 +328,18 @@ const validateTimeSlotWithTravel = (
   // 1. 모든 금지시간(개인, 방)을 병합
   const roomBlocked = convertRoomBlockedTimes(roomBlockedTimes, dayOfWeek);
   const roomExcept = convertRoomExceptions(roomExceptions, dayOfWeek);
-  const allBlockedTimes = [...personalTimes, ...roomBlocked, ...roomExcept];
+  
+  // 17-24시 절대 금지시간 추가 (모든 날에 적용)
+  const absoluteBlockedTime = {
+    type: 'absolute_blocked',
+    title: '17-24시 절대 금지시간',
+    startTime: '17:00',
+    endTime: '24:00',
+    days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+    isRecurring: true
+  };
+  
+  const allBlockedTimes = [...personalTimes, ...roomBlocked, ...roomExcept, absoluteBlockedTime];
 
   // 2. 도착 시간 계산
   const currentEndMinutes = timeToMinutes(currentEndTime);
