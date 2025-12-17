@@ -230,11 +230,14 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       }
 
       // 1️⃣ 서버에 이동시간 포함 스케줄 저장
-      console.log(`📤 [handleConfirmTravelMode] applyTravelMode 호출: ${travelMode}`);
+      console.log(`📤 [handleConfirmTravelMode] applyTravelMode 호출: ${travelMode}`, {
+        timeSlots개수: scheduleData.timeSlots?.length,
+        travelSlots개수: scheduleData.travelSlots?.length
+      });
       await coordinationService.applyTravelMode(
         currentRoom._id,
         travelMode,
-        scheduleData.timeSlots
+        scheduleData  // ← timeSlots와 travelSlots 모두 포함
       );
       console.log(`✅ [handleConfirmTravelMode] applyTravelMode 완료`);
 
@@ -323,6 +326,8 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       // 방 정보 다시 가져오기
       try {
         await fetchRoomDetails(currentRoom._id);
+        // ✨ 사용자 정보 다시 불러오기 (personalTimes 업데이트)
+        window.dispatchEvent(new CustomEvent('refreshUser'));
         showAlert('자동배정 시간이 확정되었습니다! 페이지가 업데이트되었습니다.', 'success');
       } catch (error) {
         console.error('Failed to refresh room after auto-confirm:', error);
@@ -667,6 +672,9 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       );
 
       await fetchRoomDetails(currentRoom._id);
+      
+      // ✨ 사용자 정보 다시 불러오기 (personalTimes 업데이트)
+      window.dispatchEvent(new CustomEvent('refreshUser'));
 
     } catch (error) {
       showAlert(`확정 처리 실패: ${error.message}`, 'error');

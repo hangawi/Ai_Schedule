@@ -115,11 +115,19 @@ export const useAuth = () => {
          await fetchUser();
       };
 
+      // Listen for refreshUser events (e.g., after schedule confirmation)
+      const handleRefreshUser = async () => {
+         console.log('[useAuth] Received refreshUser event, refetching user...');
+         await fetchUser();
+      };
+
       window.addEventListener('userProfileUpdated', handleProfileUpdate);
+      window.addEventListener('refreshUser', handleRefreshUser);
 
       return () => {
          unsubscribe();
          window.removeEventListener('userProfileUpdated', handleProfileUpdate);
+         window.removeEventListener('refreshUser', handleRefreshUser);
       };
    }, [fetchUser, firebaseUser]);
 

@@ -151,7 +151,12 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
       };
     }
 
-    return enhancedSchedule;
+    // ✨ 방장도 이동시간 슬롯은 timeSlots에서 제외 (travelSlots에만 포함)
+    return {
+      timeSlots: enhancedSchedule.timeSlots.filter(slot => !slot.isTravel),
+      travelSlots: enhancedSchedule.travelSlots,
+      travelMode: enhancedSchedule.travelMode
+    };
     }, [travelMode, enhancedSchedule, currentRoom, isCalculating, isOwner]);
 
   const getWeekViewData = useCallback((weekStartDate) => {

@@ -931,8 +931,16 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
         owner.personalTimes = [];
       }
       
-      // 방장의 선호시간 삭제 + 백업
-      removePreferenceTimes(owner, autoAssignedSlots, roomId);
+      // 방장의 선호시간 삭제 + 백업 (수업 슬롯 + 이동시간 슬롯 모두 고려)
+      const ownerSlotsForDeletion = [...autoAssignedSlots];
+      
+      // 이동시간 슬롯도 포함하여 선호시간 삭제
+      if (room.travelTimeSlots && room.travelTimeSlots.length > 0) {
+        console.log(`   📌 [방장 선호시간 삭제] 이동시간 슬롯 ${room.travelTimeSlots.length}개 추가`);
+        ownerSlotsForDeletion.push(...room.travelTimeSlots);
+      }
+      
+      removePreferenceTimes(owner, ownerSlotsForDeletion, roomId);
       
       const maxId = owner.personalTimes.reduce((max, pt) => Math.max(max, pt.id || 0), 0);
       let nextId = maxId + 1;
@@ -952,6 +960,13 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
         mergedSlots.forEach(slot => {
           const dayOfWeek = getDayOfWeekNumber(slot.day);
           const dateStr = slot.date.toISOString().split('T')[0];
+          
+          console.log(`   🔍 [방장 수업 추가 준비] ${memberName}:`, {
+            원본시간: `${slot.originalStartTime || '없음'}-${slot.originalEndTime || '없음'}`,
+            조정시간: `${slot.startTime}-${slot.endTime}`,
+            날짜: dateStr,
+            조정여부: slot.adjustedForTravelTime
+          });
           
           // 중복 체크 (같은 날짜, 같은 시간, 같은 조원)
           const isDuplicate = owner.personalTimes.some(pt => 
@@ -1350,13 +1365,23 @@ exports.applyTravelMode = async (req, res) => {
       });
     }
 
-    // 3. enhancedSchedule 검증
-    if (!enhancedSchedule || !Array.isArray(enhancedSchedule)) {
-      return res.status(400).json({ msg: 'enhancedSchedule이 필요합니다.' });
+    // 3. enhancedSchedule 검증 (객체 형태로 변경)
+    const receivedTimeSlots = enhancedSchedule?.timeSlots || (Array.isArray(enhancedSchedule) ? enhancedSchedule : null);
+    const receivedTravelSlots = enhancedSchedule?.travelSlots || [];
+    
+    if (!receivedTimeSlots || !Array.isArray(receivedTimeSlots)) {
+      return res.status(400).json({ 
+        msg: 'enhancedSchedule.timeSlots이 필요합니다.',
+        received: typeof enhancedSchedule,
+        hasTimeSlots: !!enhancedSchedule?.timeSlots
+      });
     }
 
-    console.log(`✅ [applyTravelMode] enhancedSchedule 개수: ${enhancedSchedule.length}`);
-    console.log(`📋 [디버깅] enhancedSchedule 첫 3개:`, enhancedSchedule.slice(0, 3).map(e => ({
+    console.log(`✅ [applyTravelMode] 수신 데이터:`, {
+      timeSlots개수: receivedTimeSlots.length,
+      travelSlots개수: receivedTravelSlots.length
+    });
+    console.log(`📋 [디버깅] receivedTimeSlots 첫 3개:`, receivedTimeSlots.slice(0, 3).map(e => ({
       user: e.user?._id?.toString() || e.user?.toString() || e.user,
       date: e.date instanceof Date ? e.date.toISOString().split('T')[0] : e.date,
       subject: e.subject,
@@ -1391,25 +1416,29 @@ exports.applyTravelMode = async (req, res) => {
         console.log(`   [원본 저장] ${room.originalTimeSlots.length}개 슬롯 백업`);
       }
 
-      // 이동시간 슬롯과 수업 슬롯 분리
-      const travelSlots = enhancedSchedule.filter(e => e.isTravel);
-      const classSlots = enhancedSchedule.filter(e => !e.isTravel);
-      console.log(`   [필터링] 전체 ${enhancedSchedule.length}개 → 수업 ${classSlots.length}개, 이동시간 ${travelSlots.length}개`);
+      // ✨ receivedTimeSlots와 receivedTravelSlots는 이미 위에서 정의됨
+      console.log(`   [수신 데이터] timeSlots: ${receivedTimeSlots.length}개, travelSlots: ${receivedTravelSlots.length}개`);
 
-      // 이동시간 슬롯 저장 (방장 확정 시 사용)
-      room.travelTimeSlots = travelSlots.map(e => ({
+      // ✨ 병합된 이동시간 슬롯을 travelTimeSlots에 저장 (10분 단위 아님!)
+      room.travelTimeSlots = receivedTravelSlots.map(e => {
+        const dateObj = e.date instanceof Date ? e.date : new Date(e.date);
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const dayOfWeek = dayNames[dateObj.getDay()];  // Date 객체에서 요일 추출
+        
+        return {
         user: room.owner._id,
-        date: e.date instanceof Date ? e.date : new Date(e.date),
-        day: e.day,
+        date: dateObj,
+        day: e.day || dayOfWeek,  // day 필드가 있으면 사용, 없으면 계산
         startTime: e.startTime,
         endTime: e.endTime,
         subject: '이동시간',
         type: 'travel'
-      }));
-      console.log(`   [이동시간 저장] ${room.travelTimeSlots.length}개 슬롯 (방장용)`);
+        };
+      });
+      console.log(`   [이동시간 저장] ${room.travelTimeSlots.length}개 슬롯 (병합됨, 10분 단위 아님)`);
 
-      // enhancedSchedule로 교체
-      room.timeSlots = classSlots.map((e, idx) => {
+      // enhancedSchedule.timeSlots로 교체 (10분 단위 포함)
+      room.timeSlots = receivedTimeSlots.map((e, idx) => {
         const newSlot = {
           user: e.user._id || e.user,
           date: e.date instanceof Date ? e.date : new Date(e.date),
