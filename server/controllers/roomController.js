@@ -173,7 +173,28 @@ exports.updateRoom = async (req, res) => {
                      console.log(`✅ [방 수정] 금지시간 제거됨 - 방장 프로필에서도 제거`);
                   }
                   
-                  await owner.save();
+                  // ⚠️ VersionError 방지를 위한 retry 로직
+                  let saved = false;
+                  for (let attempt = 1; attempt <= 3; attempt++) {
+                     try {
+                        await owner.save();
+                        saved = true;
+                        break;
+                     } catch (saveError) {
+                        if (saveError.name === 'VersionError' && attempt < 3) {
+                           console.log(`⚠️ [방 수정] VersionError, 재시도 (${attempt}/3)...`);
+                           const freshOwner = await User.findById(room.owner);
+                           if (freshOwner) {
+                              freshOwner.personalTimes = owner.personalTimes;
+                              owner = freshOwner;
+                           }
+                           await new Promise(resolve => setTimeout(resolve, 100 * attempt));
+                        } else {
+                           throw saveError;
+                        }
+                     }
+                  }
+                  if (!saved) throw new Error('Failed to save owner after retries');
                }
             } catch (syncError) {
                console.error('❌ [방 수정] 금지시간 동기화 실패:', syncError);

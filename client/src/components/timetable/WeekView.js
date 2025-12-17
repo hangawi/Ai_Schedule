@@ -34,7 +34,7 @@
  *
  * ===================================================================================================
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import TimeSlot from './TimeSlot';
 
 const dayNamesKorean = ['월', '화', '수', '목', '금'];
@@ -87,6 +87,10 @@ const WeekView = ({
   travelMode = 'normal', // Add travelMode to props
   travelSlots = [] // 이동 시간 슬롯
 }) => {
+  useEffect(() => {
+    // ownerOriginalSchedule 변경 감지
+  }, [ownerOriginalSchedule]);
+
   // 방장의 원본 시간표에서 해당 시간대의 일정을 확인하는 함수
   const getOwnerOriginalScheduleInfo = (date, time) => {
     if (!ownerOriginalSchedule) return null;
@@ -125,8 +129,10 @@ const WeekView = ({
         const specificDate = new Date(p.specificDate);
         const currentDate = new Date(dateStr);
 
+        const isMatch = specificDate.toDateString() === currentDate.toDateString();
+        
         // 날짜가 일치하는지 확인
-        if (specificDate.toDateString() === currentDate.toDateString()) {
+        if (isMatch) {
           const startMinutes = timeToMinutes(p.startTime);
           const endMinutes = timeToMinutes(p.endTime);
 
@@ -219,7 +225,7 @@ const WeekView = ({
     for (const time of filteredTimeSlotsInDay) {
       // 방장의 원본 시간표를 우선적으로 확인
       const ownerOriginalInfo = getOwnerOriginalScheduleInfo(date, time);
-
+      
       const ownerInfo = getSlotOwner(date, time);
       const isSelected = isSlotSelected(date, time);
       const blockedInfo = getBlockedTimeInfo(time);
@@ -230,14 +236,11 @@ const WeekView = ({
       let slotType = 'empty';
       let slotData = null;
 
-      // In travel mode, owner info (split travel/activity slots) takes precedence
-      // ✅ 단, isTravel 슬롯은 travelSlots 배열로 별도 렌더링되므로 여기서는 제외
-      if (travelMode !== 'normal' && ownerInfo && !ownerInfo.isTravel) {
-        slotType = 'owner';
-        slotData = ownerInfo;
-      }
-      // 0순위: 방장의 원본 시간표 정보 중 exception, personal만 최우선 처리
-      else if (ownerOriginalInfo && (ownerOriginalInfo.type === 'exception' || ownerOriginalInfo.type === 'personal')) {
+      // ✨✨✨ 최우선 순위: 방장의 개인시간/예외일정 (이동시간 포함, 모두 blocked로 표시)
+      if (ownerOriginalInfo && (
+        ownerOriginalInfo.type === 'exception' || 
+        ownerOriginalInfo.type === 'personal'
+      )) {
         slotType = 'blocked';
         slotData = {
           name: ownerOriginalInfo.name,
@@ -245,6 +248,12 @@ const WeekView = ({
           isOwnerOriginalSchedule: true,
           ownerScheduleType: ownerOriginalInfo.type
         };
+      }
+      // In travel mode, owner info (split travel/activity slots) takes precedence
+      // ✅ 단, isTravel 슬롯은 travelSlots 배열로 별도 렌더링되므로 여기서는 제외
+      else if (travelMode !== 'normal' && ownerInfo && !ownerInfo.isTravel) {
+        slotType = 'owner';
+        slotData = ownerInfo;
       }
       // 1순위: blocked 또는 room exception
       else if (isBlocked) {
@@ -637,8 +646,11 @@ const WeekView = ({
               let finalRoomExceptionInfo = roomExceptionInfo;
               let finalOwnerInfo = ownerInfo;
 
-              // exception이나 personal은 최우선
-              if (ownerOriginalInfo && (ownerOriginalInfo.type === 'exception' || ownerOriginalInfo.type === 'personal')) {
+              // exception이나 personal은 최우선 (이동시간 포함)
+              if (ownerOriginalInfo && (
+                ownerOriginalInfo.type === 'exception' || 
+                ownerOriginalInfo.type === 'personal'
+              )) {
                 finalBlockedInfo = { ...ownerOriginalInfo, ownerScheduleType: ownerOriginalInfo.type };
                 finalRoomExceptionInfo = null;
                 finalOwnerInfo = null;

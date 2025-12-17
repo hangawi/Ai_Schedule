@@ -39,6 +39,7 @@
  * ===================================================================================================
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { io } from 'socket.io-client';
 import { auth } from '../../../config/firebaseConfig';
 import { useCoordination } from '../../../hooks/useCoordination';
@@ -119,6 +120,9 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
   // 확정 중복 클릭 방지
   const isConfirmingRef = useRef(false);
+  
+  // 강제 재렌더링용 카운터
+  const [renderKey, setRenderKey] = useState(0);
 
   // 4.txt: 연쇄 교환 요청 모달 상태
   const [showChainExchangeModal, setShowChainExchangeModal] = useState(false);
@@ -388,11 +392,16 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   // 방장 시간표 정보 캐시 업데이트
   useEffect(() => {
     if (currentRoom?.owner?.defaultSchedule) {
-      setOwnerScheduleCache({
+      const newCache = {
         defaultSchedule: currentRoom.owner.defaultSchedule,
         scheduleExceptions: currentRoom.owner.scheduleExceptions,
-        personalTimes: currentRoom.owner.personalTimes
-      });
+        personalTimes: currentRoom.owner.personalTimes,
+        _timestamp: Date.now()
+      };
+      
+      // 즉시 업데이트
+      setOwnerScheduleCache(newCache);
+      setRenderKey(prev => prev + 1);
     } else {
       setOwnerScheduleCache(null);
     }
@@ -662,6 +671,18 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     isConfirmingRef.current = true; // 🔒 확정 시작
 
     try {
+      // 🔧 이동시간 모드가 활성화되어 있으면 먼저 서버에 저장
+      if (travelMode !== 'normal' && enhancedSchedule) {
+        console.log(`📤 [handleConfirmSchedule] 이동시간 먼저 저장: ${travelMode}`);
+        const scheduleData = getCurrentScheduleData();
+        await coordinationService.applyTravelMode(
+          currentRoom._id,
+          travelMode,
+          scheduleData
+        );
+        console.log(`✅ [handleConfirmSchedule] 이동시간 저장 완료`);
+      }
+      
       // travelMode를 함께 전달
       console.log(`📤 [handleConfirmSchedule] 확정 요청: travelMode=${travelMode}`);
       const result = await coordinationService.confirmSchedule(currentRoom._id, travelMode);
@@ -846,7 +867,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
               {viewMode === 'week' ? (
                 <TimetableGrid
-                  key={`week-${effectiveShowFullDay ? 'full' : 'basic'}-${showMerged ? 'merged' : 'split'}-${travelMode}`}
+                  key={`week-${effectiveShowFullDay ? 'full' : 'basic'}-${showMerged ? 'merged' : 'split'}-${travelMode}-${renderKey}`}
                   roomId={currentRoom._id}
                   roomSettings={{ ...currentRoom.settings, startHour: effectiveShowFullDay ? 0 : scheduleStartHour, endHour: effectiveShowFullDay ? 24 : scheduleEndHour }}
                   timeSlots={scheduleData.timeSlots}
@@ -868,6 +889,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
                 />
               ) : (
                 <CoordinationCalendarView
+                  key={`calendar-${viewMode}-${renderKey}`}
                   roomData={currentRoom}
                   timeSlots={scheduleData.timeSlots}
                   travelSlots={scheduleData.travelSlots || []}

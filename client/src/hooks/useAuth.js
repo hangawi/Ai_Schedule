@@ -69,9 +69,17 @@ export const useAuth = () => {
 
             if (response.ok) {
                const userData = await response.json();
-               console.log('[useAuth] Received user data:', userData);
+               console.log('🔥 [useAuth] 서버에서 받은 userData:', {
+                  personalTimes개수: userData.personalTimes?.length || 0,
+                  첫5개: userData.personalTimes?.slice(0, 5).map(pt => ({
+                     title: pt.title,
+                     startTime: pt.startTime,
+                     endTime: pt.endTime
+                  }))
+               });
                setIsLoggedIn(true);
                setUser(userData);
+               console.log('✅ [useAuth] setUser 완료! 새로운 user 상태 설정됨');
             } else {
                console.error('[useAuth] Failed to fetch user data, status:', response.status);
                // Don't log out on API errors - user is still authenticated in Firebase
@@ -117,8 +125,10 @@ export const useAuth = () => {
 
       // Listen for refreshUser events (e.g., after schedule confirmation)
       const handleRefreshUser = async () => {
-         console.log('[useAuth] Received refreshUser event, refetching user...');
+         console.log('🔥🔥🔥 [useAuth] refreshUser 이벤트 수신!');
+         console.log('📊 [useAuth] fetchUser 호출 전 user.personalTimes:', user?.personalTimes?.length || 0);
          await fetchUser();
+         console.log('✅ [useAuth] fetchUser 완료!');
       };
 
       window.addEventListener('userProfileUpdated', handleProfileUpdate);
@@ -129,7 +139,7 @@ export const useAuth = () => {
          window.removeEventListener('userProfileUpdated', handleProfileUpdate);
          window.removeEventListener('refreshUser', handleRefreshUser);
       };
-   }, [fetchUser, firebaseUser]);
+   }, [fetchUser]); // ⚠️ firebaseUser 제거 - 이벤트 리스너가 계속 재등록되는 문제 방지
 
    const handleLoginSuccess = useCallback((userData, loginType) => {
       localStorage.setItem('loginMethod', loginType);

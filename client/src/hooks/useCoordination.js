@@ -143,6 +143,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
       // 하위 컴포넌트의 메모이제이션을 깨기 위해 깊은 복사를 수행합니다.
       const newRoomState = JSON.parse(JSON.stringify(data));
       setCurrentRoom(newRoomState);
+      return newRoomState; // ✨ 업데이트된 방 정보를 반환
     } catch (err) {
       if (!silent) {
         setError(err.message);

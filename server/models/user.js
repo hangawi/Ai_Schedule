@@ -250,7 +250,7 @@ const UserSchema = new mongoose.Schema({
     type: {
       type: String,
       required: true,
-      enum: ['sleep', 'meal', 'commute', 'study', 'break', 'custom', 'event', 'room_blocked']
+      enum: ['sleep', 'meal', 'commute', 'study', 'break', 'custom', 'event', 'room_blocked', 'personal']
     },
     startTime: {
       type: String,

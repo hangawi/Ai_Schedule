@@ -866,7 +866,9 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
     const ownerName = `${room.owner.firstName || ''} ${room.owner.lastName || ''}`.trim() || '방장';
     
     // 5-1. 조원들 처리
+    console.log('🔥🔥🔥 [confirmSchedule] ===== 조원 personalTimes 추가 시작 =====');
     for (const [userId, mergedSlots] of Object.entries(mergedSlotsByUser)) {
+      console.log(`📝 [조원 처리] userId: ${userId}, mergedSlots: ${mergedSlots.length}개`);
       let user = userMap.get(userId);
       if (!user) {
         user = await User.findById(userId);
@@ -900,11 +902,12 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
         );
         
         if (!isDuplicate) {
+          console.log(`   ✅ [조원 추가] ${slot.startTime}-${slot.endTime} (${dateStr})`);
           // 조원: 수업시간만 저장 (이동시간 제외)
           user.personalTimes.push({
             id: nextId++,
             title: `${room.name} - ${ownerName}`,
-            type: 'event',
+            type: 'personal',  // ✅ 'personal'로 변경
             startTime: slot.originalStartTime || slot.startTime,  // 원본 시간 사용
             endTime: slot.originalEndTime || slot.endTime,
             days: [dayOfWeek],
@@ -917,7 +920,9 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
     }
     
     // 5-2. 방장 처리
+    console.log('🔥🔥🔥 [confirmSchedule] ===== 방장 personalTimes 추가 시작 =====');
     const ownerId = (room.owner._id || room.owner).toString();
+    console.log(`📝 [방장 처리] ownerId: ${ownerId}`);
     let owner = userMap.get(ownerId);
     if (!owner) {
       owner = await User.findById(ownerId);
@@ -981,7 +986,7 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
             owner.personalTimes.push({
               id: nextId++,
               title: `${room.name} - ${memberName}`,
-              type: 'event',
+              type: 'personal',  // ✅ 'personal'로 변경
               startTime: slot.startTime,  // 이동시간 포함
               endTime: slot.endTime,
               days: [dayOfWeek],
@@ -1020,7 +1025,7 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
             owner.personalTimes.push({
               id: nextId++,
               title: `${room.name} - 이동시간`,
-              type: 'event',
+              type: 'personal',  // ✅ 'personal'로 변경하여 개인시간으로 저장
               startTime: travelSlot.startTime,
               endTime: travelSlot.endTime,
               days: [dayOfWeek],
@@ -1036,12 +1041,16 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
     }
     
     // 5-3. 모든 사용자 한 번에 저장 (각 사용자는 한 번만 저장됨) with retry logic
+    console.log('🔥🔥🔥 [confirmSchedule] ===== 사용자 저장 시작 =====');
+    console.log(`📊 [사용자 저장] 총 ${userMap.size}명 저장 예정`);
+    
     const saveUserWithRetry = async (user, maxRetries = 3) => {
       let currentUser = user;
       
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           await currentUser.save();
+          console.log(`   ✅ [사용자 저장 성공] userId: ${user._id}, personalTimes: ${currentUser.personalTimes?.length}개`);
           return; // 성공
         } catch (error) {
           if (error.name === 'VersionError' && attempt < maxRetries) {
@@ -1072,6 +1081,7 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
     
     const updatePromises = Array.from(userMap.values()).map(user => saveUserWithRetry(user));
     await Promise.all(updatePromises);
+    console.log('✅✅✅ [confirmSchedule] ===== 모든 사용자 저장 완료! =====');
 
     // 자동 확정 타이머 해제 (수동 확정 완료) with retry logic
     room.autoConfirmAt = null;
@@ -1107,13 +1117,13 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
       slot.confirmedToPersonalCalendar = true; // 확정됨 표시
     });
 
-    // 6-2. 확정된 이동수단 모드 저장
+    // 6-2. 확정된 이동수단 모드 저장 및 confirmedAt 설정
+    room.confirmedAt = new Date(); // ⚠️ 항상 설정하여 중복 확정 방지
     if (travelMode) {
       room.confirmedTravelMode = travelMode;
-      room.confirmedAt = new Date();
-      await room.save();
       console.log(`✅ [확정] 이동수단 모드 저장: ${travelMode}`);
     }
+    await room.save();
 
     // 7. 활동 로그 기록
     await ActivityLog.logActivity(
@@ -1125,6 +1135,7 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
     );
     
     // 8. Socket.io로 실시간 알림 전송
+    console.log('🔥🔥🔥 [confirmSchedule] ===== Socket.io 이벤트 전송 시작 =====');
     if (global.io) {
       global.io.to(`room-${roomId}`).emit('schedule-confirmed', {
         roomId: roomId,
@@ -1135,6 +1146,7 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
     }
     
     // 9. 성공 응답
+    console.log('🔥🔥🔥 [confirmSchedule] ===== 성공 응답 전송 =====');
     res.json({
       msg: '배정 시간이 각 조원과 방장의 개인일정으로 확정되었습니다.',
       confirmedSlotsCount: autoAssignedSlots.length,
