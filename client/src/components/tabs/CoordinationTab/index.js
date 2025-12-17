@@ -694,6 +694,9 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
       await fetchRoomDetails(currentRoom._id);
       
+      // ✨ 확정 후 이동시간 모드 초기화 (이동시간이 개인시간으로 전환되었으므로)
+      handleTravelModeChange('normal');
+      
       // ✨ 사용자 정보 다시 불러오기 (personalTimes 업데이트)
       window.dispatchEvent(new CustomEvent('refreshUser'));
 
