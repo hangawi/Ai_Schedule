@@ -1420,6 +1420,9 @@ exports.applyTravelMode = async (req, res) => {
         room.timeSlots = room.originalTimeSlots;
         room.originalTimeSlots = [];
       }
+      // ✅ 이동시간 슬롯도 비우기 (일반 모드는 이동시간 없음)
+      room.travelTimeSlots = [];
+      console.log(`   [복원] travelTimeSlots 비움`);
     } else {
       // 🚗 이동시간 모드: enhancedSchedule로 완전 교체
 

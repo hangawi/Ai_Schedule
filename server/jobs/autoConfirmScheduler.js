@@ -19,7 +19,9 @@ async function processAutoConfirmations() {
       autoConfirmAt: { $lte: now },
       confirmedAt: null,
       currentTravelMode: { $ne: null }
-    });
+    })
+      .populate('owner', 'firstName lastName email personalTimes defaultSchedule scheduleExceptions')
+      .populate('members.user', '_id firstName lastName email personalTimes defaultSchedule scheduleExceptions');
 
     if (roomsToConfirm.length === 0) {
       return; // 확정할 방이 없음
@@ -27,26 +29,20 @@ async function processAutoConfirmations() {
 
     console.log(`🔔 [자동 확정] ${roomsToConfirm.length}개 방 확정 시작`);
 
+    const { confirmScheduleLogic } = require('../services/confirmScheduleService');
+
     for (const room of roomsToConfirm) {
       try {
-        // currentTravelMode를 confirmedTravelMode로 확정
-        room.confirmedTravelMode = room.currentTravelMode;
-        room.confirmedAt = now;
+        // confirmScheduleService를 사용하여 수동 확정과 동일한 로직 실행
+        const result = await confirmScheduleLogic(
+          room,
+          room.currentTravelMode,
+          room.owner._id || room.owner,
+          `${room.owner.firstName || ''} ${room.owner.lastName || ''}`.trim() || 'System'
+        );
 
-        await room.save();
+        console.log(`✅ [자동 확정 완료] 방 ${room._id}:`, result);
 
-        console.log(`✅ [자동 확정 완료] 방 ${room._id}: ${room.confirmedTravelMode} 모드 확정`);
-
-        // Socket.io로 실시간 알림 전송
-        if (global.io) {
-          global.io.to(`room-${room._id}`).emit('schedule-confirmed', {
-            roomId: room._id,
-            confirmedTravelMode: room.confirmedTravelMode,
-            confirmedAt: now,
-            message: '이동수단 모드가 자동으로 확정되었습니다.',
-            timestamp: now
-          });
-        }
       } catch (error) {
         console.error(`❌ [자동 확정 실패] 방 ${room._id}:`, error.message);
       }

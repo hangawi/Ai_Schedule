@@ -80,6 +80,18 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
       return;
     }
 
+    // ✅ 이미 조정된 슬롯이면 재계산하지 않고 서버 데이터를 그대로 사용
+    const isAlreadyAdjusted = currentRoom.timeSlots.some(slot => slot.adjustedForTravelTime);
+    if (isAlreadyAdjusted) {
+      console.log('✅ [useTravelMode] 이미 조정된 슬롯입니다. 서버 데이터를 그대로 사용합니다.');
+      setEnhancedSchedule({
+        timeSlots: currentRoom.timeSlots,
+        travelSlots: currentRoom.travelTimeSlots || [],
+        travelMode: newMode
+      });
+      return;
+    }
+
     setIsCalculating(true);
     try {
       // 도보 모드일 때 먼저 검증

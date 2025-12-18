@@ -195,27 +195,50 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       return;
     }
 
-    if (travelMode === 'normal') {
-      showAlert('먼저 이동수단 모드를 선택해주세요.', 'warning');
-      return;
-    }
-
     try {
+      // ✅ 일반 모드일 때는 원본 슬롯으로 복원
+      if (travelMode === 'normal') {
+        console.log('🔄 [handleConfirmTravelMode] 일반 모드로 복원');
+
+        // getCurrentScheduleData()를 사용하여 현재 스케줄 데이터 가져오기
+        const scheduleData = getCurrentScheduleData();
+
+        if (!scheduleData || !scheduleData.timeSlots || scheduleData.timeSlots.length === 0) {
+          showAlert('적용할 스케줄 데이터가 없습니다.', 'warning');
+          return;
+        }
+
+        // 서버에 일반 모드 적용 (원본 슬롯으로 복원)
+        await coordinationService.applyTravelMode(
+          currentRoom._id,
+          'normal',
+          scheduleData
+        );
+
+        // 조원들에게 확정 알림
+        const success = await confirmTravelModeInternal();
+        if (success) {
+          showAlert('일반 모드가 적용되었습니다.', 'success');
+          await fetchRoomDetails(currentRoom._id);
+        }
+        return;
+      }
+
       // ⚠️ enhancedSchedule이 있는지 먼저 확인
       console.log('🔍 [handleConfirmTravelMode] 상태 확인:', {
         travelMode,
         enhancedSchedule존재: !!enhancedSchedule,
         enhancedSchedule개수: enhancedSchedule?.timeSlots?.length
       });
-      
+
       if (!enhancedSchedule || !enhancedSchedule.timeSlots || enhancedSchedule.timeSlots.length === 0) {
         showAlert('이동시간 계산 데이터가 없습니다. 다시 이동수단을 선택해주세요.', 'warning');
         return;
       }
-      
+
       // getCurrentScheduleData()를 사용하여 현재 스케줄 데이터 가져오기
       const scheduleData = getCurrentScheduleData();
-      
+
       console.log('🔍 [handleConfirmTravelMode] scheduleData 확인:', {
         timeSlots개수: scheduleData?.timeSlots?.length,
         travelSlots개수: scheduleData?.travelSlots?.length,
@@ -227,7 +250,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           isTravel: s.isTravel
         }))
       });
-      
+
       if (!scheduleData || !scheduleData.timeSlots || scheduleData.timeSlots.length === 0) {
         showAlert('적용할 스케줄 데이터가 없습니다.', 'warning');
         return;
@@ -249,16 +272,16 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       const success = await confirmTravelModeInternal();
       if (success) {
         showAlert(`${travelMode === 'normal' ? '일반' : travelMode === 'transit' ? '대중교통' : travelMode === 'driving' ? '자동차' : travelMode === 'bicycling' ? '자전거' : '도보'} 모드가 조원들에게 적용되었습니다.`, 'success');
-        
+
         console.log('🔍 [fetchRoomDetails 전] 상태:', {
           travelMode,
           enhancedSchedule존재: !!enhancedSchedule,
           enhancedSchedule개수: enhancedSchedule?.timeSlots?.length
         });
-        
+
         // 방 정보 다시 가져오기 (confirmedTravelMode 업데이트)
         await fetchRoomDetails(currentRoom._id);
-        
+
         console.log('🔍 [fetchRoomDetails 후] 상태:', {
           travelMode,
           enhancedSchedule존재: !!enhancedSchedule,
