@@ -441,6 +441,14 @@ const findNearestMemberWithSufficientTime = async ({
   roomBlockedTimes = [],
   roomExceptions = []
 }) => {
+  // 🔍 디버깅: 함수 호출 확인
+  console.log(`\n🔍 [DEBUG] findNearestMemberWithSufficientTime 호출됨`);
+  console.log(`   currentEndTime: ${currentEndTime}`);
+  console.log(`   classDurationMinutes: ${classDurationMinutes}`);
+  console.log(`   currentDay: ${currentDay}`);
+  console.log(`   roomBlockedTimes: ${roomBlockedTimes?.length || 0}개`);
+  console.log(`   roomExceptions: ${roomExceptions?.length || 0}개`);
+
   // 1. 거리 순으로 정렬
   const sortedMembers = await sortMembersByDistance(currentLocation, candidateMembers, transportMode);
   console.log(`\n📍 [대중교통 모드] 가까운 순서로 ${sortedMembers.length}명 확인 (기준 요일: ${currentDay})`);
@@ -466,6 +474,14 @@ const findNearestMemberWithSufficientTime = async ({
 
         const dayToValidate = schedule.day;
 
+        // 🔍 디버깅: validateTimeSlotWithTravel 호출 전
+        console.log(`\n🔍 [DEBUG] validateTimeSlotWithTravel 호출 예정`);
+        console.log(`   멤버: ${memberName}`);
+        console.log(`   currentEndTime: ${currentEndTime}`);
+        console.log(`   travelTimeMinutes: ${travelTimeMinutes}`);
+        console.log(`   classDurationMinutes: ${classDurationMinutes}`);
+        console.log(`   schedule: ${schedule.startTime}-${schedule.endTime} (${dayToValidate})`);
+
         // 2.1. (1순위) 전체 시간 배정 시도
         const fullValidation = validateTimeSlotWithTravel(
             currentEndTime, travelTimeMinutes, classDurationMinutes,
@@ -474,7 +490,10 @@ const findNearestMemberWithSufficientTime = async ({
         );
 
         if (fullValidation.isValid) {
-            console.log(`   ✅ [전체 배정] ${memberName}: 이동 ${travelTimeMinutes}분 → ${dayToValidate} ${fullValidation.slot.startTime}-${fullValidation.slot.endTime}`);
+            const travelInfo = fullValidation.slot.travelStartTime ?
+                `이동 ${fullValidation.slot.travelStartTime}-${fullValidation.slot.travelEndTime} → ` :
+                `이동 ${travelTimeMinutes}분 → `;
+            console.log(`   ✅ [전체 배정] ${memberName}: ${travelInfo}${dayToValidate} ${fullValidation.slot.startTime}-${fullValidation.slot.endTime}`);
             if (fullValidation.slot.waitTime > 0) {
                 console.log(`      (대기시간 ${fullValidation.slot.waitTime}분)`);
             }
@@ -500,7 +519,9 @@ const findNearestMemberWithSufficientTime = async ({
             );
 
             if (partialValidation.isValid) {
-                console.log(`   ✨ [부분 배정] ${memberName}: ${d}분 배정 가능 → ${dayToValidate} ${partialValidation.slot.startTime}-${partialValidation.slot.endTime}`);
+                const travelInfo = partialValidation.slot.travelStartTime ?
+                    `이동 ${partialValidation.slot.travelStartTime}-${partialValidation.slot.travelEndTime} → ` : '';
+                console.log(`   ✨ [부분 배정] ${memberName}: ${d}분 배정 가능 → ${travelInfo}${dayToValidate} ${partialValidation.slot.startTime}-${partialValidation.slot.endTime}`);
                 largestPartialSlot = {
                     member,
                     slot: { ...partialValidation.slot, assignedDuration: d },

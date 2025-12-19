@@ -380,48 +380,62 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
 
             // 🔒 방 금지시간 체크 - 금지시간을 절대 침범하지 않도록 조정
             const blockedTimes = currentRoom.settings?.blockedTimes || [];
+
+            // ✅ 17-24시 절대 금지시간 추가 (하드코딩)
+            const absoluteBlockedTime = {
+                name: '17-24시 절대 금지시간',
+                startTime: '17:00',
+                endTime: '24:00'
+            };
+            const allBlockedTimes = [...blockedTimes, absoluteBlockedTime];
+
             let canPlace = true;  // 배치 가능 여부 플래그
 
-            for (const blocked of blockedTimes) {
+            console.log(`🔍 [금지시간 체크] allBlockedTimes:`, allBlockedTimes);
+
+            for (const blocked of allBlockedTimes) {
                 const blockedStart = this.parseTime(blocked.startTime);
                 const blockedEnd = this.parseTime(blocked.endTime);
 
                 // 이동시간 또는 활동시간이 금지시간과 겹치는지 체크
                 const travelOverlap = newTravelStartMinutes < blockedEnd && newTravelEndTimeMinutes > blockedStart;
                 const activityOverlap = newActivityStartTimeMinutes < blockedEnd && newActivityEndTimeMinutes > blockedStart;
-                
+
                 if (travelOverlap || activityOverlap) {
                     console.log(`🚫 [금지시간 감지] ${blocked.name} (${blocked.startTime}-${blocked.endTime})`);
-                    console.log(`   현재 이동+수업: ${this.formatTime(newTravelStartMinutes)}-${this.formatTime(newActivityEndTimeMinutes)}`);
-                    
-                    // ✅ 핵심 수정: 금지시간 **이전**에 끝나도록 시작 시간 조정
+                    console.log(`   현재 이동: ${this.formatTime(newTravelStartMinutes)}-${this.formatTime(newTravelEndTimeMinutes)}`);
+                    console.log(`   현재 수업: ${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)}`);
+
+                    // ✅ 핵심 수정: 금지시간 **이후**로 시작하도록 조정
                     const totalDuration = travelDurationMinutes + activityDurationMinutes;
-                    const requiredEndTime = blockedStart;  // 금지시간 시작 전에 끝나야 함
-                    const adjustedStartTime = requiredEndTime - totalDuration;
-                    
+
+                    // 금지시간 이후로 이동시간 시작
+                    const adjustedStartTime = blockedEnd;
+                    const adjustedEndTime = adjustedStartTime + totalDuration;
+
                     console.log(`   필요한 총 시간: ${totalDuration}분 (이동 ${travelDurationMinutes}분 + 수업 ${activityDurationMinutes}분)`);
-                    console.log(`   조정된 시작 시간: ${this.formatTime(adjustedStartTime)} (금지시간 ${blocked.startTime} 이전에 끝나도록)`);
-                    
-                    // 조정된 시작 시간이 너무 이르거나 음수이면 배치 불가
-                    if (adjustedStartTime < 0 || adjustedStartTime < slotStartMinutes - 180) {  // 최대 3시간까지만 앞당김 허용
-                        console.warn(`⚠️ [배치 불가] 금지시간 때문에 이 시간대에는 배치 불가능`);
-                        console.warn(`   원래 시작: ${this.formatTime(slotStartMinutes)}, 필요한 시작: ${this.formatTime(adjustedStartTime)}`);
-                        console.warn(`   차이: ${slotStartMinutes - adjustedStartTime}분 (최대 180분 허용)`);
+                    console.log(`   조정된 시작 시간: ${this.formatTime(adjustedStartTime)} (금지시간 ${blocked.endTime} 이후로 시작)`);
+                    console.log(`   조정된 종료 시간: ${this.formatTime(adjustedEndTime)}`);
+
+                    // ✅ 17시 절대 금지시간 체크: 조정 후에도 17시를 넘으면 배치 불가
+                    if (adjustedStartTime >= 17 * 60 || adjustedEndTime > 17 * 60) {
+                        console.warn(`⚠️ [배치 불가] 17시 이후로는 배정 불가능`);
+                        console.warn(`   조정된 시간: ${this.formatTime(adjustedStartTime)}-${this.formatTime(adjustedEndTime)}`);
                         console.warn(`   → 이동시간 없이 원본 슬롯 유지`);
                         canPlace = false;
                         break;
                     }
-                    
-                    // 시작 시간 조정 (금지시간 이전에 모든 것이 끝나도록)
+
+                    // 시작 시간 조정 (금지시간 이후에 모든 것이 시작하도록)
                     newTravelStartMinutes = adjustedStartTime;
                     newTravelEndTimeMinutes = adjustedStartTime + travelDurationMinutes;
                     newActivityStartTimeMinutes = newTravelEndTimeMinutes;
                     newActivityEndTimeMinutes = newActivityStartTimeMinutes + activityDurationMinutes;
-                    
+
                     console.log(`✅ [금지시간 회피 성공] 조정 완료:`);
                     console.log(`   이동: ${this.formatTime(newTravelStartMinutes)}-${this.formatTime(newTravelEndTimeMinutes)}`);
                     console.log(`   수업: ${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)}`);
-                    console.log(`   종료 시간(${this.formatTime(newActivityEndTimeMinutes)}) < 금지시간(${blocked.startTime}) ✅`);
+                    console.log(`   시작 시간(${this.formatTime(newTravelStartMinutes)}) >= 금지시간 종료(${blocked.endTime}) ✅`);
                     break;
                 }
             }

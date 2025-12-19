@@ -328,7 +328,7 @@ const validateTimeSlotWithTravel = (
   // 1. 모든 금지시간(개인, 방)을 병합
   const roomBlocked = convertRoomBlockedTimes(roomBlockedTimes, dayOfWeek);
   const roomExcept = convertRoomExceptions(roomExceptions, dayOfWeek);
-  
+
   // 17-24시 절대 금지시간 추가 (모든 날에 적용)
   const absoluteBlockedTime = {
     type: 'absolute_blocked',
@@ -338,25 +338,26 @@ const validateTimeSlotWithTravel = (
     days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
     isRecurring: true
   };
-  
+
   const allBlockedTimes = [...personalTimes, ...roomBlocked, ...roomExcept, absoluteBlockedTime];
 
-  // 2. 도착 시간 계산
+  // 2. 이동 시작 시간 계산 (선호시간 시작 고려)
   const currentEndMinutes = timeToMinutes(currentEndTime);
-  const arrivalMinutes = currentEndMinutes + travelTimeMinutes;
-  const arrivalTime = minutesToTime(arrivalMinutes);
-
-  // 3. 선호시간 시작과 도착 시간 중 더 늦은 시간을 실제 시작 가능 시간으로 설정
   const prefStartMinutes = timeToMinutes(preferenceStart);
-  const effectiveStartMinutes = Math.max(arrivalMinutes, prefStartMinutes);
-  const effectiveStartTime = minutesToTime(effectiveStartMinutes);
+  const travelStartMinutes = Math.max(currentEndMinutes, prefStartMinutes);
+  const travelStartTime = minutesToTime(travelStartMinutes);
 
-  // 4. 다음 가능한 슬롯 찾기
-  //    - 수업 시간(classDurationMinutes)만큼의 시간이 필요.
-  //    - effectiveStartTime부터 슬롯 탐색 시작.
+  // 3. 전체 소요 시간 = 이동시간 + 수업시간 (핵심!)
+  const totalDurationMinutes = travelTimeMinutes + classDurationMinutes;
+
+  console.log(`\n🔍 [validateTimeSlotWithTravel] ===== 시작 =====`);
+  console.log(`   이동 시작: ${travelStartTime}`);
+  console.log(`   전체 시간: ${totalDurationMinutes}분 (이동 ${travelTimeMinutes}분 + 수업 ${classDurationMinutes}분)`);
+
+  // 4. 이동시작부터 수업종료까지 전체 블록 검증 (핵심!)
   const result = findNextAvailableSlot(
-    effectiveStartTime,
-    classDurationMinutes,
+    travelStartTime,          // ← 이동 시작부터
+    totalDurationMinutes,     // ← 이동+수업 전체 시간
     allBlockedTimes,
     dayOfWeek,
     preferenceEnd
@@ -364,18 +365,28 @@ const validateTimeSlotWithTravel = (
 
   // 5. 결과 반환
   if (result.impossible) {
+    console.log(`   ❌ 배정 불가: ${result.reason}`);
     return { isValid: false, reason: `[${dayOfWeek}] ${preferenceStart}-${preferenceEnd}: ${result.reason}` };
   }
-  
-  // 대기시간은 (실제 수업 시작 시간) - (원래 도착 시간)
-  const waitTime = timeToMinutes(result.startTime) - arrivalMinutes;
 
-  return { 
-    isValid: true, 
+  // 6. 이동시간과 수업시간 분리
+  const actualTravelStartMinutes = timeToMinutes(result.startTime);
+  const actualTravelEndMinutes = actualTravelStartMinutes + travelTimeMinutes;
+  const actualTravelEndTime = minutesToTime(actualTravelEndMinutes);
+
+  console.log(`   ✅ 배정 성공!`);
+  console.log(`   → 이동: ${result.startTime} - ${actualTravelEndTime} (${travelTimeMinutes}분)`);
+  console.log(`   → 수업: ${actualTravelEndTime} - ${result.endTime}`);
+  console.log(`   ===== 완료 =====\n`);
+
+  return {
+    isValid: true,
     slot: {
-      startTime: result.startTime,
-      endTime: result.endTime,
-      waitTime: Math.max(0, waitTime) // 대기시간은 음수가 될 수 없음
+      travelStartTime: result.startTime,        // 이동 시작
+      travelEndTime: actualTravelEndTime,       // 이동 종료 (= 수업 시작)
+      startTime: actualTravelEndTime,           // 수업 시작
+      endTime: result.endTime,                  // 수업 종료
+      waitTime: 0  // 이동 직후 바로 수업이므로 대기시간 0
     }
   };
 };

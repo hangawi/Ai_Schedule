@@ -77,6 +77,15 @@ class SchedulingAlgorithm {
       minClassDurationMinutes = 60 // 최소 수업 시간 (분)
     } = options;
 
+    // 🔍 디버깅: 진입 파라미터 확인
+    console.log('\n🔍 ===== [DEBUG] runAutoSchedule 시작 =====');
+    console.log(`   transportMode: "${transportMode}"`);
+    console.log(`   minClassDurationMinutes: ${minClassDurationMinutes}`);
+    console.log(`   assignmentMode: "${assignmentMode}"`);
+    console.log(`   roomSettings.blockedTimes:`, roomSettings.blockedTimes ? `${roomSettings.blockedTimes.length}개` : 'undefined');
+    console.log(`   roomSettings.roomExceptions:`, roomSettings.roomExceptions ? `${roomSettings.roomExceptions.length}개` : 'undefined');
+    console.log('==========================================\n');
+
     // 다중 주 스케줄링
     if (numWeeks > 1) {
       return await runMultiWeekSchedule({
@@ -264,16 +273,19 @@ class SchedulingAlgorithm {
     // Negotiation blocks feature removed
 
     // 배정 전략 선택: 대중교통 모드 vs 시간 순서 배정
+    console.log(`\n🔍 [DEBUG] 배정 전략 선택: transportMode="${transportMode}"`);
     if (transportMode === 'public' || transportMode === 'driving' || transportMode === 'walking') {
       // 대중교통/이동수단 모드: 최단거리 우선 배정
+      console.log(`   → 대중교통 모드 진입 (assignByPublicTransport)`);
       await assignByPublicTransport(timetable, assignments, memberRequiredSlots, ownerId, members, owner, {
         transportMode,
         minClassDurationMinutes,
-        roomBlockedTimes: roomTimeSlots?.settings?.blockedTimes || [],
-        roomExceptions: roomTimeSlots?.settings?.roomExceptions || []
+        roomBlockedTimes: roomSettings.blockedTimes || [],
+        roomExceptions: roomSettings.roomExceptions || []
       });
     } else {
       // 일반 모드: 시간 순서 우선 배정 (minClassDurationMinutes 기준)
+      console.log(`   → 일반 모드 진입 (assignByTimeOrder)`);
       const blockedTimes = roomSettings.blockedTimes || [];
       assignByTimeOrder(timetable, assignments, memberRequiredSlots, ownerId, members, assignmentMode, minClassDurationMinutes, blockedTimes);
     }

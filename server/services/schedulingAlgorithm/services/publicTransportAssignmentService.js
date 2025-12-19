@@ -148,7 +148,8 @@ const assignByPublicTransport = async (
       );
 
       if (assignedSlots > 0) {
-        console.log(`   ✅ ${memberName} 배정 완료: ${slot.startTime}-${slot.endTime} (${assignedSlots}슬롯)`);
+        const travelInfo = slot.travelStartTime ? ` (이동: ${slot.travelStartTime}-${slot.travelEndTime})` : '';
+        console.log(`   ✅ ${memberName} 배정 완료: ${slot.startTime}-${slot.endTime}${travelInfo} (${assignedSlots}슬롯)`);
 
         // 현재 위치를 이 멤버 위치로 업데이트
         currentLocation = {
