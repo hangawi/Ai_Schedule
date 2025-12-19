@@ -128,21 +128,12 @@ const CoordinationDetailGrid = ({
    */
   const getOwnerScheduleInfoForTime = (date, time) => {
     if (!ownerOriginalSchedule) {
-      console.log('⚠️ ownerOriginalSchedule가 없음!');
       return null;
     }
 
     const timeMinutes = timeToMinutes(time);
     const dayOfWeek = date.getDay();
     const dateStr = toYYYYMMDD(date);
-
-    // 🔍 디버깅 로그 (처음 슬롯만)
-    if (time === '00:00') {
-      console.log(`📅 날짜: ${dateStr} (요일: ${dayOfWeek}), ownerOriginalSchedule:`, {
-        defaultScheduleCount: ownerOriginalSchedule.defaultSchedule?.length || 0,
-        personalTimesCount: ownerOriginalSchedule.personalTimes?.length || 0
-      });
-    }
 
     // 1. 예외일정 체크 (최우선)
     const exception = ownerOriginalSchedule.scheduleExceptions?.find(e => {
@@ -171,18 +162,6 @@ const CoordinationDetailGrid = ({
     });
     if (personal) return { type: 'personal', ...personal };
 
-    // 🔍 디버깅: defaultSchedule 전체 확인
-    if (time === '09:00' && ownerOriginalSchedule?.defaultSchedule) {
-      console.log('🔍 [일정맞추기-상세뷰] 09:00 시간의 defaultSchedule:', {
-        dateStr,
-        dayOfWeek,
-        totalCount: ownerOriginalSchedule.defaultSchedule.length,
-        items: ownerOriginalSchedule.defaultSchedule.filter(s =>
-          s.specificDate === dateStr || s.dayOfWeek === dayOfWeek
-        )
-      });
-    }
-
     // 3. 선호시간 체크
     const preferred = ownerOriginalSchedule.defaultSchedule?.some(s => {
       // 🔧 수정: specificDate가 있으면 그 날짜에만 적용
@@ -198,16 +177,7 @@ const CoordinationDetailGrid = ({
     });
 
     if (preferred) {
-      // 🔍 디버깅: preferred 타입 반환
-      if (time === '09:00' || (time === '13:00' && dayOfWeek === 4)) {
-        console.log(`✅ [일정맞추기-상세뷰] ${time}에 preferred 타입 반환 (빈시간) - ${dateStr}`);
-      }
       return { type: 'preferred' };
-    }
-
-    // 🔍 디버깅 로그 (샘플링)
-    if (time === '13:00' && dayOfWeek === 4) {
-      console.log(`❌ 목요일 13:00에 선호시간 없음 (${dateStr}) - non_preferred 반환`);
     }
 
     // 4. 비선호시간 (선호시간이 아닌 시간)

@@ -181,18 +181,6 @@ const CoordinationCalendarView = ({
     });
     if (personal) return { type: 'personal', ...personal };
 
-    // 🔍 디버깅: defaultSchedule 전체 확인
-    if (time === '09:00' && ownerOriginalSchedule?.defaultSchedule) {
-      console.log('🔍 [일정맞추기-캘린더뷰] 09:00 시간의 defaultSchedule:', {
-        dateStr,
-        dayOfWeek,
-        totalCount: ownerOriginalSchedule.defaultSchedule.length,
-        items: ownerOriginalSchedule.defaultSchedule.filter(s => 
-          s.specificDate === dateStr || s.dayOfWeek === dayOfWeek
-        )
-      });
-    }
-
     const preferred = ownerOriginalSchedule.defaultSchedule?.some(s => {
       // 🔧 수정: specificDate가 있으면 그 날짜에만 적용
       if (s.specificDate) {
@@ -209,7 +197,6 @@ const CoordinationCalendarView = ({
     if (preferred) {
       // 🔍 디버깅: preferred 타입 반환
       if (time === '09:00') {
-        console.log('✅ [일정맞추기-캘린더뷰] 09:00에 preferred 타입 반환 (빈시간)');
       }
       return { type: 'preferred' };
     }

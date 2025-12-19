@@ -21,7 +21,6 @@ function getHoursDifference(startTime, endTime) {
  * 4.txt: B의 선호시간을 차지한 사람들 중 오늘 이후 가장 가까운 날짜에 있는 사람부터 찾기
  */
 function findChainCandidates(room, userId, excludeUsers = []) {
-   console.log(`\n🔗 ========== Finding Chain Candidates for user ${userId} ==========`);
 
    // Get user's member data (B)
    const memberData = room.members.find(m =>
@@ -29,7 +28,6 @@ function findChainCandidates(room, userId, excludeUsers = []) {
    );
 
    if (!memberData || (!memberData.user.defaultSchedule && !memberData.user.scheduleExceptions)) {
-      console.log('❌ No member data or schedule found');
       return [];
    }
 
@@ -43,11 +41,6 @@ function findChainCandidates(room, userId, excludeUsers = []) {
 
    // Get user's preferred days (priority >= 2)
    const preferredSlots = userSchedule.filter(s => s.priority >= 2);
-   console.log(`📅 User's preferred slots (${userSchedule.length} total):`, preferredSlots.map(s => ({
-      day: s.dayOfWeek,
-      time: `${s.startTime}-${s.endTime}`,
-      specificDate: s.specificDate
-   })));
 
    // 현재 주의 월요일 계산
    const now = new Date();
@@ -123,13 +116,6 @@ function findChainCandidates(room, userId, excludeUsers = []) {
 
    // 오늘 이후 가장 가까운 날짜 순으로 정렬
    candidates.sort((a, b) => a.daysDiff - b.daysDiff);
-
-   console.log(`📋 Found ${candidates.length} chain candidates:`);
-   candidates.forEach((c, i) => {
-      console.log(`   ${i + 1}. ${c.userName} (${c.userId.substring(0, 8)}...) - ${c.slot.day} ${c.slot.startTime}-${c.slot.endTime} (${c.daysDiff} days from today)`);
-   });
-   console.log(`🔗 ============================================\n`);
-
    return candidates;
 }
 
@@ -137,14 +123,6 @@ function findChainCandidates(room, userId, excludeUsers = []) {
  * Find alternative slot for user B when they accept exchange
  */
 async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDate, slotsToIgnore = []) {
-   console.log(`\n🔍 ========== Finding alternative slot for user ${userId} ==========`);
-   console.log(`📋 Required: ${requiredHours}h, Excluding date: ${excludeDate}`);
-   console.log(`📦 Slots to ignore (${slotsToIgnore.length}):`, slotsToIgnore.map(s => ({
-      day: s.day,
-      date: new Date(s.date).toISOString().split('T')[0],
-      time: `${s.startTime}-${s.endTime}`,
-      user: s.user
-   })));
 
    // Get user's member data
    const memberData = room.members.find(m =>
@@ -152,7 +130,6 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
    );
 
    if (!memberData || !memberData.user.defaultSchedule) {
-      console.log('❌ No member data or default schedule found');
       return null;
    }
 
@@ -161,20 +138,9 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
 
    // 🔧 방장의 선호시간도 가져오기
    const ownerSchedule = room.owner?.defaultSchedule || [];
-   console.log(`👑 Owner schedule:`, ownerSchedule.map(s => ({
-      day: s.dayOfWeek,
-      time: `${s.startTime}-${s.endTime}`,
-      priority: s.priority
-   })));
 
-   console.log(`📅 User schedule:`, userSchedule.map(s => ({
-      day: s.dayOfWeek,
-      time: `${s.startTime}-${s.endTime}`,
-      priority: s.priority
-   })));
 
    // Log all current time slots in the room
-   console.log(`\n📊 Current room timeSlots (total: ${room.timeSlots.length}):`);
    const groupedSlots = {};
    room.timeSlots.forEach(slot => {
       const dateKey = new Date(slot.date).toISOString().split('T')[0];
@@ -188,9 +154,6 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
          user: `${slotUserName} (${slotUserId.substring(0, 8)}...)`,
          day: slot.day
       });
-   });
-   Object.keys(groupedSlots).sort().forEach(date => {
-      console.log(`   ${date}:`, groupedSlots[date]);
    });
 
    // Get current week's Monday
@@ -212,8 +175,6 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
    const preferredDays = [...new Set(userSchedule
       .map(s => s.dayOfWeek)
    )].sort((a, b) => a - b);
-   
-   console.log(`📅 [개선] 모든 가능 요일 체크 (우선순위 무관):`, preferredDays.map(d => dayMap[d]));
 
    // 🆕 개선: 같은 날짜 내 빈 시간 우선 체크 (불필요한 날짜 이동 방지)
    const daysToCheck = [];
@@ -226,7 +187,6 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
    // 1순위: excludeDate와 같은 요일을 먼저 체크 (같은 날짜 내 재배정 우선)
    if (preferredDays.includes(excludedDayOfWeek)) {
       daysToCheck.push(excludedDayOfWeek);
-      console.log(`🎯 [우선순위 1] 같은 요일 (${dayMap[excludedDayOfWeek]}) 먼저 체크 - 같은 날짜 내 재배정 시도`);
    }
 
    // 2순위: 나머지 선호 요일들을 시간적으로 가까운 순서로 정렬
@@ -251,13 +211,7 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
          daysToCheck.push(candidate.dayOfWeek);
       }
    }
-
-   console.log(`📅 선호시간 요일들을 시간적으로 가까운 순서로 체크:`, daysToCheck.map(d => dayMap[d]));
-   console.log(`📅 선호 요일 숫자:`, daysToCheck);
-   console.log(`📅 현재 요일: ${currentDayOfWeek} (${dayMap[currentDayOfWeek]})`);
-
    for (const dayOfWeek of daysToCheck) {
-      console.log(`\n➡️  Checking ${dayMap[dayOfWeek]} (dayOfWeek=${dayOfWeek})...`);
       const dayPreferences = userSchedule.filter(s =>
          s.dayOfWeek === dayOfWeek  // 우선순위 필터 제거 - 모든 가능시간 체크
       );
@@ -279,11 +233,8 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
       });
 
       if (ownerDayPreferences.length === 0) {
-         console.log(`   ⚠️ 방장의 ${dayMap[dayOfWeek]} 선호시간 없음 - 스킵`);
          continue;
       }
-
-      console.log(`   👑 방장의 ${dayMap[dayOfWeek]} 선호시간:`, ownerDayPreferences.map(s => `${s.startTime}-${s.endTime}`));
 
       // Merge continuous time blocks (including overlapping and nearby blocks)
       const sortedPrefs = dayPreferences.sort((a, b) =>
@@ -322,7 +273,6 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
          }
       }
 
-      console.log(`   📊 ${dayMap[dayOfWeek]} merged blocks:`, mergedBlocks);
 
       // 🔧 방장의 선호시간과 겹치는 블록만 필터링
       const ownerFilteredBlocksRaw = [];
@@ -377,20 +327,15 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
          }
       }
 
-      console.log(`   👑 방장 시간과 겹치는 블록 (병합 후):`, ownerFilteredBlocks);
-
       if (ownerFilteredBlocks.length === 0) {
-         console.log(`   ⚠️ 방장의 선호시간과 겹치는 시간 없음 - 스킵`);
          continue;
       }
 
       // Check each merged block (방장 시간과 겹치는 것만)
       for (const block of ownerFilteredBlocks) {
-         console.log(`   🔎 Checking block ${block.startTime}-${block.endTime}...`);
          const blockHours = getHoursDifference(block.startTime, block.endTime);
 
          if (blockHours < requiredHours) {
-            console.log(`  ⏭️ Block ${block.startTime}-${block.endTime} too small (${blockHours}h < ${requiredHours}h)`);
             continue;
          }
 
@@ -401,7 +346,6 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
          const endMinutes = endH * 60 + endM;
 
          let isOccupied = false;
-         console.log(`   ⏰ Checking 30-min slots from ${block.startTime} to ${addHours(block.startTime, requiredHours)}...`);
          for (let currentMinutes = startMinutes; currentMinutes < endMinutes; currentMinutes += 30) {
             const slotStart = `${Math.floor(currentMinutes/60).toString().padStart(2,'0')}:${(currentMinutes%60).toString().padStart(2,'0')}`;
             const slotEnd = addHours(slotStart, 0.5);
@@ -431,32 +375,13 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
                   return match;
                });
 
-               if (!isBeingFreed) {
-                  console.log(`      ⚠️  Slot ${slotStart}-${slotEnd} is OCCUPIED by ${slotUserName} (${slotUserId.substring(0, 8)}...)`);
-               } else {
-                  console.log(`      ✓ Slot ${slotStart}-${slotEnd} will be freed (ignoring)`);
-               }
-
                return !isBeingFreed; // Only consider occupied if NOT being freed
             });
-
-            if (occupied) {
-               console.log(`      ❌ Block is occupied at ${slotStart}-${slotEnd}`);
-               isOccupied = true;
-               break;
-            } else {
-               console.log(`      ✓ Slot ${slotStart}-${slotEnd} is available`);
-            }
          }
 
          if (!isOccupied) {
             // Found a suitable slot!
             const endTime = addHours(block.startTime, requiredHours);
-            console.log(`\n✅ ========== FOUND ALTERNATIVE SLOT ==========`);
-            console.log(`📅 Day: ${dayMap[dayOfWeek]} (${targetDateStr})`);
-            console.log(`⏰ Time: ${block.startTime}-${endTime}`);
-            console.log(`⏱️  Duration: ${requiredHours}h`);
-            console.log(`✅ ============================================\n`);
 
             return {
                day: dayMap[dayOfWeek],
@@ -467,15 +392,9 @@ async function findAlternativeSlotForUser(room, userId, requiredHours, excludeDa
                requiredHours
             };
          } else {
-            console.log(`   ❌ Block ${block.startTime}-${block.endTime} is occupied, skipping...`);
          }
       }
    }
-
-   console.log(`\n❌ ========== NO ALTERNATIVE SLOT FOUND ==========`);
-   console.log(`📋 Checked all preferred days:`, daysToCheck.map(d => dayMap[d]));
-   console.log(`⚠️  All slots in preferred times are occupied or too small`);
-   console.log(`❌ ================================================\n`);
    return null;
 }
 
@@ -488,14 +407,6 @@ exports.createExchangeRequest = async (req, res) => {
       const { roomId } = req.params;
       const { targetUserId, targetDay, targetTime, requesterSlotIds } = req.body;
 
-      console.log('🔔 Creating exchange request:', {
-         roomId,
-         requesterId: req.user.id,
-         targetUserId,
-         targetDay,
-         targetTime,
-         requesterSlotIds
-      });
 
       const room = await Room.findById(roomId)
          .populate('members.user', 'firstName lastName email defaultSchedule scheduleExceptions')
@@ -607,8 +518,6 @@ exports.createExchangeRequest = async (req, res) => {
 
       const createdRequest = room.requests[room.requests.length - 1];
 
-      console.log('✅ Exchange request created:', createdRequest._id);
-
       res.json({
          success: true,
          message: `${targetMember.user.firstName}님에게 요청을 전송했습니다.`,
@@ -616,7 +525,6 @@ exports.createExchangeRequest = async (req, res) => {
       });
 
    } catch (error) {
-      console.error('Create exchange request error:', error);
       res.status(500).json({
          success: false,
          message: '서버 오류가 발생했습니다.',
@@ -634,12 +542,6 @@ exports.respondToExchangeRequest = async (req, res) => {
       const { roomId, requestId } = req.params;
       const { action } = req.body; // 'accept' or 'reject'
 
-      console.log('💬 Responding to exchange request:', {
-         roomId,
-         requestId,
-         responderId: req.user.id,
-         action
-      });
 
       const room = await Room.findById(roomId)
          .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions')
@@ -682,8 +584,6 @@ exports.respondToExchangeRequest = async (req, res) => {
 
          await room.save();
 
-         console.log('❌ Exchange request rejected');
-
          return res.json({
             success: true,
             message: '요청을 거절했습니다.',
@@ -692,17 +592,9 @@ exports.respondToExchangeRequest = async (req, res) => {
       }
 
       if (action === 'accept') {
-         console.log('✅ Processing exchange acceptance...');
-         console.log('📋 Request data:', {
-            requestId: request._id,
-            requester: request.requester,
-            targetUser: request.targetUser,
-            targetSlot: request.targetSlot,
-            requesterSlots: request.requesterSlots
-         });
+      
 
          // 🎯 Stage 1: Check if direct exchange is possible (mutual preferred time compatibility)
-         console.log('🔍 Stage 1: Checking mutual preferred time compatibility...');
 
          // Get requester ID (will be used in both Stage 1 and Stage 2)
          const requesterId = (request.requester._id || request.requester).toString();
@@ -749,19 +641,9 @@ exports.respondToExchangeRequest = async (req, res) => {
             });
          });
 
-         console.log('🔍 Stage 1 Results:', {
-            isTargetSlotInRequesterPreferred,
-            areRequesterSlotsInTargetPreferred
-         });
-
          // If both conditions are met, execute direct exchange
          if (isTargetSlotInRequesterPreferred && areRequesterSlotsInTargetPreferred) {
-            console.log('✅ Stage 1: Direct exchange possible! Both users have mutual preferred times.');
-            console.log('🔄 Executing direct exchange...');
-            console.log('📊 Before exchange - Total timeSlots:', room.timeSlots.length);
-
             // Step 1: Remove requester's current slots (C's slots)
-            console.log('🗑️ Removing requester slots...');
             const beforeLength = room.timeSlots.length;
 
             for (const reqSlot of requesterSlots) {
@@ -776,16 +658,11 @@ exports.respondToExchangeRequest = async (req, res) => {
                          slotUserId === reqUserId;
                });
                if (index !== -1) {
-                  console.log(`  ✓ Removing slot at index ${index}: ${reqSlot.day} ${reqSlot.startTime}-${reqSlot.endTime}`);
-                  room.timeSlots.splice(index, 1);
+                 room.timeSlots.splice(index, 1);
                }
             }
-
-            console.log(`🗑️ Removed ${beforeLength - room.timeSlots.length} requester slots`);
-
             // Step 2: Remove target's slots (D's slots)
-            console.log(`🗑️ Removing target's slots: ${requesterSlots.length} slots starting from ${targetSlot.day} ${targetSlot.startTime}`);
-
+           
             let removedTargetCount = 0;
             for (let i = 0; i < requesterSlots.length; i++) {
                const currentStartTime = addHours(targetSlot.startTime, i * 0.5);
@@ -801,18 +678,9 @@ exports.respondToExchangeRequest = async (req, res) => {
                          slot.endTime === currentEndTime &&
                          slotUserId === targetUserIdStr;
                });
-
-               if (index !== -1) {
-                  console.log(`  ✓ Removing target's slot at index ${index}: ${targetSlot.day} ${currentStartTime}-${currentEndTime}`);
-                  room.timeSlots.splice(index, 1);
-                  removedTargetCount++;
-               }
             }
 
-            console.log(`🗑️ Removed ${removedTargetCount} of target's slots`);
-
             // Step 3: Add requester to target's position (C goes to D's slot)
-            console.log(`➕ Creating ${requesterSlots.length} slots for requester at target location...`);
             const newRequesterSlots = [];
             let requesterCurrentTime = targetSlot.startTime;
 
@@ -833,10 +701,7 @@ exports.respondToExchangeRequest = async (req, res) => {
             }
 
             room.timeSlots.push(...newRequesterSlots);
-            console.log(`➕ Added ${newRequesterSlots.length} slots for requester at ${targetSlot.day} ${targetSlot.startTime}`);
-
             // Step 4: Add target user to requester's position (D goes to C's slots)
-            console.log(`➕ Creating ${requesterSlots.length} slots for target user at requester's original location...`);
             const newTargetSlots = [];
 
             for (const reqSlot of requesterSlots) {
@@ -854,32 +719,24 @@ exports.respondToExchangeRequest = async (req, res) => {
             }
 
             room.timeSlots.push(...newTargetSlots);
-            console.log(`➕ Added ${newTargetSlots.length} slots for target user at requester's original location`);
-
+            
             // Step 5: Update request status
             request.status = 'approved';
             request.respondedAt = new Date();
             request.respondedBy = req.user.id;
             request.response = `수락되었습니다. 직접 교환이 완료되었습니다.`;
 
-            console.log('📊 After exchange - Total timeSlots:', room.timeSlots.length);
-            console.log('💾 Saving room changes...');
-
             room.markModified('timeSlots');
             await room.save();
             await room.populate('timeSlots.user', '_id firstName lastName email');
-
-            console.log('✅ Stage 1: Direct exchange completed successfully!');
 
             // 🔄 교환된 슬롯의 날짜에 대해 이동시간 재계산
             const affectedDates = new Set();
             affectedDates.add(new Date(targetSlot.date));
             requesterSlots.forEach(slot => affectedDates.add(new Date(slot.date)));
 
-            console.log('🔄 재계산 시작: 영향받은 날짜', Array.from(affectedDates).map(d => d.toISOString().split('T')[0]));
             await recalculateMultipleDates(roomId, Array.from(affectedDates));
-            console.log('✅ 이동시간 재계산 완료');
-
+           
             return res.json({
                success: true,
                message: '요청을 수락했습니다. 직접 교환이 완료되었습니다.',
@@ -888,15 +745,10 @@ exports.respondToExchangeRequest = async (req, res) => {
                recalculatedDates: Array.from(affectedDates).map(d => d.toISOString().split('T')[0])
             });
          }
-
-         console.log('⚠️ Stage 1: Direct exchange not possible. Proceeding to Stage 2...');
-
          // Calculate required hours from requester's slots (requesterSlots already declared above)
          const firstSlot = requesterSlots[0];
          const lastSlot = requesterSlots[requesterSlots.length - 1];
          const requiredHours = getHoursDifference(firstSlot.startTime, lastSlot.endTime);
-
-         console.log(`⏱️ Required hours: ${requiredHours}h (${requesterSlots.length} slots)`);
 
          // Find alternative slot for A (target user), ignoring B's slots that will be freed
          const targetSlotDate = request.targetSlot.date;
@@ -910,8 +762,7 @@ exports.respondToExchangeRequest = async (req, res) => {
 
          if (!alternativeSlot) {
             // 4.txt: B에게 빈 시간이 없을 때 연쇄 요청 시작
-            console.log('🔗 No alternative slot found for B, starting chain exchange process...');
-
+            
             // 원본 요청자(A)를 제외한 채로 연쇄 후보 찾기
             const originalRequesterId = (request.requester._id || request.requester).toString();
             const excludeUsers = [originalRequesterId, targetUserId]; // A와 B 제외
@@ -927,8 +778,7 @@ exports.respondToExchangeRequest = async (req, res) => {
 
             // 첫 번째 후보에게 연쇄 요청 생성
             const firstCandidate = chainCandidates[0];
-            console.log(`📤 Creating chain request to first candidate: ${firstCandidate.userName}`);
-
+            
             const chainRequest = await createChainExchangeRequest(
                room,
                request,
@@ -954,18 +804,7 @@ exports.respondToExchangeRequest = async (req, res) => {
                chainCandidatesCount: chainCandidates.length
             });
          }
-
-         console.log('🔄 Executing exchange...');
-         console.log('📊 Before exchange - Total timeSlots:', room.timeSlots.length);
-
          // Step 1: Remove requester's current slots (B's slots)
-         console.log('🗑️ Attempting to remove requester slots by matching date/time/user:');
-         console.log('   Requester slots to remove:', requesterSlots.map(s => ({
-            day: s.day,
-            date: s.date,
-            time: `${s.startTime}-${s.endTime}`,
-            user: s.user
-         })));
          const beforeLength = room.timeSlots.length;
 
          for (const reqSlot of requesterSlots) {
@@ -980,18 +819,10 @@ exports.respondToExchangeRequest = async (req, res) => {
                       slotUserId === reqUserId;
             });
             if (index !== -1) {
-               console.log(`  ✓ Removing slot at index ${index}: ${reqSlot.day} ${reqSlot.startTime}-${reqSlot.endTime}`);
                room.timeSlots.splice(index, 1);
             } else {
-               console.log(`  ⚠️ Slot not found: ${reqSlot.day} ${reqSlot.startTime}-${reqSlot.endTime}`);
             }
          }
-
-         console.log(`🗑️ Removed ${beforeLength - room.timeSlots.length} requester slots (expected ${requesterSlots.length})`);
-
-         // Step 2: Remove A's target slots (same number as B is giving up)
-         console.log(`🗑️ Removing A's slots: ${requesterSlots.length} slots starting from ${request.targetSlot.day} ${request.targetSlot.startTime}`);
-
          let removedTargetCount = 0;
          for (let i = 0; i < requesterSlots.length; i++) {
             const currentStartTime = addHours(request.targetSlot.startTime, i * 0.5);
@@ -1009,15 +840,11 @@ exports.respondToExchangeRequest = async (req, res) => {
             });
 
             if (index !== -1) {
-               console.log(`  ✓ Removing A's slot at index ${index}: ${request.targetSlot.day} ${currentStartTime}-${currentEndTime}`);
                room.timeSlots.splice(index, 1);
                removedTargetCount++;
             } else {
-               console.log(`  ⚠️ A's slot not found: ${request.targetSlot.day} ${currentStartTime}-${currentEndTime}`);
-            }
+               }
          }
-
-         console.log(`🗑️ Removed ${removedTargetCount} of A's slots (expected ${requesterSlots.length})`);
 
          // Step 3: Move A (targetUser) to alternative slot
          const alternativeSlots = [];
@@ -1040,12 +867,9 @@ exports.respondToExchangeRequest = async (req, res) => {
          }
 
          room.timeSlots.push(...alternativeSlots);
-         console.log(`➕ Added ${alternativeSlots.length} slots for A (targetUser) at ${alternativeSlot.day} ${alternativeSlot.startTime}`);
-         console.log('  Alternative slots:', alternativeSlots.map(s => `${s.day} ${s.startTime}-${s.endTime}`));
-
+         
          // Step 4: Move B (requester) to target slot (A's original position)
          // requesterId already declared above
-         console.log(`➕ Creating ${requesterSlots.length} slots for B (requester) at target location...`);
          const newRequesterSlots = [];
          let requesterCurrentTime = request.targetSlot.startTime;
 
@@ -1066,24 +890,16 @@ exports.respondToExchangeRequest = async (req, res) => {
          }
 
          room.timeSlots.push(...newRequesterSlots);
-         console.log(`➕ Added ${newRequesterSlots.length} slots for B (requester) at ${request.targetSlot.day} ${request.targetSlot.startTime}`);
-         console.log('  New requester slots:', newRequesterSlots.map(s => `${s.day} ${s.startTime}-${s.endTime}`));
-
+         
          // Step 5: Update request status
          request.status = 'approved';
          request.respondedAt = new Date();
          request.respondedBy = req.user.id;
          request.response = `수락되었습니다. ${alternativeSlot.day} ${alternativeSlot.startTime}로 이동합니다.`;
 
-         console.log('📊 After exchange - Total timeSlots:', room.timeSlots.length);
-         console.log('💾 Saving room changes...');
-
          room.markModified('timeSlots');
          await room.save();
          await room.populate('timeSlots.user', '_id firstName lastName email');
-
-         console.log('✅ Exchange completed successfully!');
-         console.log('📊 Final timeSlots count:', room.timeSlots.length);
 
          // 🔄 교환된 슬롯의 날짜에 대해 이동시간 재계산
          const affectedDates = new Set();
@@ -1091,10 +907,8 @@ exports.respondToExchangeRequest = async (req, res) => {
          affectedDates.add(new Date(alternativeSlot.date)); // 대상자가 이동한 날짜
          requesterSlots.forEach(slot => affectedDates.add(new Date(slot.date))); // 요청자의 원래 슬롯 날짜들
 
-         console.log('🔄 재계산 시작: 영향받은 날짜', Array.from(affectedDates).map(d => d.toISOString().split('T')[0]));
          await recalculateMultipleDates(roomId, Array.from(affectedDates));
-         console.log('✅ 이동시간 재계산 완료');
-
+         
          // 📡 Socket.io로 실시간 스케줄 업데이트 알림
          const io = req.app.get('io');
          if (io) {
@@ -1108,7 +922,6 @@ exports.respondToExchangeRequest = async (req, res) => {
                timeSlots: updatedRoom.timeSlots,
                recalculatedDates: Array.from(affectedDates).map(d => d.toISOString().split('T')[0])
             });
-            console.log('📡 [Socket.io] scheduleUpdated 이벤트 전송 완료');
          }
 
          return res.json({
@@ -1125,7 +938,6 @@ exports.respondToExchangeRequest = async (req, res) => {
       }
 
    } catch (error) {
-      console.error('Respond to exchange request error:', error);
       res.status(500).json({
          success: false,
          message: '서버 오류가 발생했습니다.',
@@ -1175,7 +987,6 @@ exports.getPendingExchangeRequests = async (req, res) => {
       });
 
    } catch (error) {
-      console.error('Get pending exchange requests error:', error);
       res.status(500).json({
          success: false,
          message: '서버 오류가 발생했습니다.',
@@ -1189,11 +1000,7 @@ exports.getPendingExchangeRequests = async (req, res) => {
  * 4.txt: B가 승인했지만 빈 시간이 없을 때, C에게 연쇄 요청
  */
 async function createChainExchangeRequest(room, originalRequest, intermediateUserId, chainCandidate, allCandidates) {
-   console.log(`\n🔗 ========== Creating Chain Exchange Request ==========`);
-   console.log(`📋 Original request: ${originalRequest._id}`);
-   console.log(`👤 Intermediate user (B): ${intermediateUserId}`);
-   console.log(`👤 Chain user (C): ${chainCandidate.userId}`);
-
+   
    const intermediateUser = room.members.find(m =>
       (m.user._id || m.user).toString() === intermediateUserId.toString()
    );
@@ -1265,10 +1072,6 @@ async function createChainExchangeRequest(room, originalRequest, intermediateUse
 
    room.requests.push(chainRequest);
 
-   console.log(`✅ Chain exchange request created`);
-   console.log(`📋 Remaining candidates: ${remainingCandidates.length}`);
-   console.log(`🔗 ============================================\n`);
-
    return room.requests[room.requests.length - 1];
 }
 
@@ -1281,12 +1084,6 @@ exports.respondToChainExchangeRequest = async (req, res) => {
       const { roomId, requestId } = req.params;
       const { action } = req.body; // 'accept' or 'reject'
 
-      console.log('🔗 Responding to chain exchange request:', {
-         roomId,
-         requestId,
-         responderId: req.user.id,
-         action
-      });
 
       const room = await Room.findById(roomId)
          .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions')
@@ -1321,7 +1118,6 @@ exports.respondToChainExchangeRequest = async (req, res) => {
       }
 
       if (action === 'reject') {
-         console.log('❌ C rejected the chain exchange request');
 
          // C를 거절 목록에 추가
          if (!request.chainData.rejectedUsers) {
@@ -1331,12 +1127,10 @@ exports.respondToChainExchangeRequest = async (req, res) => {
 
          // 다음 후보 찾기
          const remainingCandidates = request.chainData.candidateUsers || [];
-         console.log(`📋 Remaining candidates: ${remainingCandidates.length}`);
 
          if (remainingCandidates.length > 0) {
             // 다음 후보에게 요청
             const nextCandidate = remainingCandidates[0];
-            console.log(`📤 Sending request to next candidate: ${nextCandidate.user}`);
 
             // 현재 요청 상태 업데이트
             request.status = 'rejected';
@@ -1383,7 +1177,6 @@ exports.respondToChainExchangeRequest = async (req, res) => {
             });
          } else {
             // 모든 후보가 거절 - 원본 요청 실패 처리
-            console.log('❌ All candidates rejected - chain exchange failed');
 
             request.status = 'rejected';
             request.respondedAt = new Date();
@@ -1407,7 +1200,6 @@ exports.respondToChainExchangeRequest = async (req, res) => {
       }
 
       if (action === 'accept') {
-         console.log('✅ C accepted the chain exchange request');
 
          // C의 빈 시간 찾기
          const chainUserId = req.user.id.toString();
@@ -1431,8 +1223,6 @@ exports.respondToChainExchangeRequest = async (req, res) => {
                message: '이동할 빈 시간이 없습니다. 다른 사용자에게 요청합니다.'
             });
          }
-
-         console.log('🔄 Executing chain exchange...');
 
          // === 연쇄 교환 실행 ===
          // 1. C를 빈 시간으로 이동
@@ -1458,7 +1248,6 @@ exports.respondToChainExchangeRequest = async (req, res) => {
                room.timeSlots.splice(index, 1);
             }
          }
-         console.log(`🗑️ Removed ${cSlotsToRemove.length} C's slots`);
 
          // Step 2: B의 현재 슬롯 삭제 (B의 원래 자리 = A가 원하는 자리)
          const intermediateSlotDate = new Date(request.chainData.intermediateSlot.date).toISOString().split('T')[0];
@@ -1476,7 +1265,6 @@ exports.respondToChainExchangeRequest = async (req, res) => {
                room.timeSlots.splice(index, 1);
             }
          }
-         console.log(`🗑️ Removed ${bSlotsToRemove.length} B's slots`);
 
          // Step 3: A의 현재 슬롯 삭제
          for (const reqSlot of request.requesterSlots) {
@@ -1494,7 +1282,6 @@ exports.respondToChainExchangeRequest = async (req, res) => {
                room.timeSlots.splice(index, 1);
             }
          }
-         console.log(`🗑️ Removed A's original slots`);
 
          // Step 4: C를 빈 시간으로 이동
          const cNewSlots = [];
@@ -1515,8 +1302,7 @@ exports.respondToChainExchangeRequest = async (req, res) => {
             cCurrentTime = slotEnd;
          }
          room.timeSlots.push(...cNewSlots);
-         console.log(`➕ Added ${cNewSlots.length} new slots for C at ${alternativeSlotForC.day} ${alternativeSlotForC.startTime}`);
-
+         
          // Step 5: B를 C의 원래 자리로 이동
          const bNewSlots = [];
          let bCurrentTime = request.chainData.chainSlot.startTime;
@@ -1536,8 +1322,7 @@ exports.respondToChainExchangeRequest = async (req, res) => {
             bCurrentTime = slotEnd;
          }
          room.timeSlots.push(...bNewSlots);
-         console.log(`➕ Added ${bNewSlots.length} new slots for B at ${request.chainData.chainSlot.day}`);
-
+         
          // Step 6: A를 B의 원래 자리로 이동
          const aNewSlots = [];
          let aCurrentTime = request.chainData.intermediateSlot.startTime;
@@ -1557,8 +1342,7 @@ exports.respondToChainExchangeRequest = async (req, res) => {
             aCurrentTime = slotEnd;
          }
          room.timeSlots.push(...aNewSlots);
-         console.log(`➕ Added ${aNewSlots.length} new slots for A at ${request.chainData.intermediateSlot.day}`);
-
+         
          // 요청 상태 업데이트
          request.status = 'approved';
          request.respondedAt = new Date();
@@ -1577,8 +1361,7 @@ exports.respondToChainExchangeRequest = async (req, res) => {
          await room.save();
          await room.populate('timeSlots.user', '_id firstName lastName email');
 
-         console.log('✅ Chain exchange completed successfully!');
-
+         
          // 🔄 연쇄 교환된 슬롯의 날짜에 대해 이동시간 재계산
          const affectedDates = new Set();
          affectedDates.add(new Date(alternativeSlotForC.date)); // C가 이동한 날짜
@@ -1586,10 +1369,8 @@ exports.respondToChainExchangeRequest = async (req, res) => {
          affectedDates.add(new Date(request.chainData.intermediateSlot.date)); // A가 이동한 날짜
          request.requesterSlots.forEach(slot => affectedDates.add(new Date(slot.date))); // A의 원래 슬롯 날짜들
 
-         console.log('🔄 연쇄교환 재계산 시작: 영향받은 날짜', Array.from(affectedDates).map(d => d.toISOString().split('T')[0]));
          await recalculateMultipleDates(roomId, Array.from(affectedDates));
-         console.log('✅ 연쇄교환 이동시간 재계산 완료');
-
+         
          // 📡 Socket.io로 실시간 스케줄 업데이트 알림
          const io = req.app.get('io');
          if (io) {
@@ -1603,7 +1384,6 @@ exports.respondToChainExchangeRequest = async (req, res) => {
                timeSlots: updatedRoom.timeSlots,
                recalculatedDates: Array.from(affectedDates).map(d => d.toISOString().split('T')[0])
             });
-            console.log('📡 [Socket.io] scheduleUpdated 이벤트 전송 완료 (연쇄교환)');
          }
 
          return res.json({
@@ -1618,7 +1398,6 @@ exports.respondToChainExchangeRequest = async (req, res) => {
       }
 
    } catch (error) {
-      console.error('Respond to chain exchange request error:', error);
       res.status(500).json({
          success: false,
          message: '서버 오류가 발생했습니다.',
@@ -1668,7 +1447,6 @@ exports.getPendingChainExchangeRequests = async (req, res) => {
       });
 
    } catch (error) {
-      console.error('Get pending chain exchange requests error:', error);
       res.status(500).json({
          success: false,
          message: '서버 오류가 발생했습니다.',

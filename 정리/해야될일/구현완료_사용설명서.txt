@@ -1,0 +1,358 @@
+================================================================================
+조원 시간 선택 시 이동시간 검증 기능 - 구현 완료
+================================================================================
+작성일: 2025-12-19
+파일: client/src/services/travelScheduleCalculator.js
+================================================================================
+
+📌 구현한 기능
+================================================================================
+
+1. simulateTimeSlotPlacement()
+   - 조원이 특정 시간에 배치될 경우 이동시간을 시뮬레이션
+   - 순서에 따라 이동시간이 동적으로 변경됨
+
+2. getBlockedTimesForMember()
+   - 조원에게 보여줄 금지 시간대 계산
+   - 이동시간은 숨기고 결과만 표시
+
+3. getAvailableTimesForMember()
+   - 조원이 선택 가능한 시간대를 계산
+   - 09:00-18:00 범위에서 10분 단위로 체크
+
+
+================================================================================
+📖 사용 방법
+================================================================================
+
+## 1. simulateTimeSlotPlacement - 시간 배치 시뮬레이션
+
+```javascript
+import travelScheduleCalculator from './services/travelScheduleCalculator';
+
+// 조원이 특정 시간을 선택했을 때 검증
+const result = await travelScheduleCalculator.simulateTimeSlotPlacement(
+  currentRoom,     // 현재 방 데이터
+  userId,          // 조원 ID
+  '2025-12-20',    // 선택한 날짜
+  540,             // 선택한 시작 시간 (분) - 09:00 = 540
+  60,              // 수업 시간 (분)
+  'driving'        // 이동 수단
+);
+
+// 결과 확인
+if (result.canPlace) {
+  console.log('✅ 배치 가능');
+  console.log(`이동시간: ${result.travelTime}분`);
+  console.log(`출발: ${result.from}`);
+  console.log(`도착: ${result.to}`);
+  console.log(`이동: ${result.travelStart} - ${result.travelEnd}`);
+  console.log(`수업: ${result.activityStart} - ${result.activityEnd}`);
+} else {
+  console.log('❌ 배치 불가');
+  console.log('충돌:', result.conflicts);
+}
+```
+
+반환값:
+```javascript
+{
+  canPlace: true/false,           // 배치 가능 여부
+  travelTime: 30,                 // 이동시간 (분)
+  from: '방장',                   // 출발 위치
+  to: '김철수',                   // 도착 위치
+  travelStart: '09:00',           // 이동 시작
+  travelEnd: '09:30',             // 이동 종료
+  activityStart: '09:30',         // 수업 시작
+  activityEnd: '10:30',           // 수업 종료
+  conflicts: [],                  // 충돌 목록
+  blockedSlots: [                 // 차지하는 시간대
+    {
+      startTime: '09:00',
+      endTime: '09:30',
+      type: 'travel',
+      hidden: true                // 조원에게는 숨김
+    },
+    {
+      startTime: '09:30',
+      endTime: '10:30',
+      type: 'activity'
+    }
+  ]
+}
+```
+
+
+## 2. getBlockedTimesForMember - 금지 시간대 조회
+
+```javascript
+// 조원 화면에 표시할 금지 시간대 가져오기
+const blockedTimes = await travelScheduleCalculator.getBlockedTimesForMember(
+  currentRoom,     // 현재 방 데이터
+  userId,          // 조원 ID
+  '2025-12-20',    // 날짜
+  'driving'        // 이동 수단
+);
+
+// 결과 사용
+blockedTimes.forEach(blocked => {
+  console.log(`${blocked.startTime} - ${blocked.endTime}: ${blocked.type}`);
+  // 조원에게는 type을 숨기고 '선택 불가'로만 표시
+});
+```
+
+반환값:
+```javascript
+[
+  {
+    startTime: '12:00',
+    endTime: '13:00',
+    type: 'blocked',              // 방 금지시간
+    reason: '점심시간'
+  },
+  {
+    startTime: '09:00',
+    endTime: '10:00',
+    type: 'occupied',             // 다른 학생이 사용 중
+    reason: '다른 학생 배정됨'
+  }
+]
+```
+
+
+## 3. getAvailableTimesForMember - 선택 가능한 시간대 조회
+
+```javascript
+// 조원이 선택 가능한 모든 시간대 가져오기
+const result = await travelScheduleCalculator.getAvailableTimesForMember(
+  currentRoom,     // 현재 방 데이터
+  userId,          // 조원 ID
+  '2025-12-20',    // 날짜
+  60,              // 수업 시간 (분)
+  'driving'        // 이동 수단
+);
+
+console.log(`선택 가능: ${result.availableSlots.length}개`);
+console.log(`금지: ${result.blockedSlots.length}개`);
+
+// 선택 가능한 시간대 표시
+result.availableSlots.forEach(slot => {
+  console.log(`✅ ${slot.startTime}: 실제 수업 ${slot.actualActivityStart} - ${slot.actualActivityEnd}`);
+  console.log(`   이동시간: ${slot.travelTime}분 (${slot.from}에서 출발)`);
+});
+```
+
+반환값:
+```javascript
+{
+  availableSlots: [
+    {
+      startTime: '09:00',         // 선택 가능한 시작 시간
+      endTime: '09:10',
+      actualActivityStart: '09:30', // 실제 수업 시작 (이동시간 포함)
+      actualActivityEnd: '10:30',   // 실제 수업 종료
+      travelTime: 30,              // 이동시간 (분)
+      from: '방장'                 // 출발 위치
+    },
+    // ... 더 많은 선택 가능한 시간대
+  ],
+  blockedSlots: [
+    {
+      startTime: '12:00',
+      endTime: '12:10',
+      hidden: true                 // 조원에게는 이유를 숨김
+    },
+    // ... 더 많은 금지 시간대
+  ]
+}
+```
+
+
+================================================================================
+🎯 핵심 동작 원리
+================================================================================
+
+1. 순서에 따른 이동시간 동적 계산
+
+   예시:
+   - 월요일: A(첫번째), B(두번째)
+     → A 이동시간: 방장 → A = 60분
+     → B 이동시간: A → B = 10분
+
+   - A와 B 순서 교환 후: B(첫번째), A(두번째)
+     → B 이동시간: 방장 → B = 60분 (늘어남!)
+     → A 이동시간: B → A = 10분 (줄어듦!)
+
+
+2. 이동시간을 조원에게 숨김
+
+   - 조원 화면: "09:00 선택 불가" (이유 없음)
+   - 실제 이유: 이동시간 때문 (내부적으로만 계산)
+
+
+3. 시뮬레이션 과정
+
+   조원이 10:00을 선택하면:
+   ① 해당 날짜의 기존 배정 확인
+   ② 마지막 학생(또는 방장)의 위치 확인
+   ③ 마지막 위치 → 현재 조원의 이동시간 계산
+   ④ 이동시간 + 수업시간이 들어갈 수 있는지 검증
+   ⑤ 금지시간, 겹침 여부 체크
+   ⑥ 결과 반환 (가능/불가능)
+
+
+================================================================================
+🔧 프론트엔드 통합 가이드
+================================================================================
+
+## 1. 시간 선택 UI에 적용
+
+```javascript
+// 조원이 시간을 선택할 때
+const handleTimeSelect = async (selectedTime) => {
+  const timeMinutes = parseTime(selectedTime); // "09:00" → 540
+
+  // 시뮬레이션
+  const result = await travelScheduleCalculator.simulateTimeSlotPlacement(
+    currentRoom,
+    currentUser._id,
+    selectedDate,
+    timeMinutes,
+    classDuration,
+    travelMode
+  );
+
+  if (result.canPlace) {
+    // 배치 가능 - 확인 메시지 표시
+    alert(`선택 가능합니다.\n수업 시간: ${result.activityStart} - ${result.activityEnd}`);
+    // 조원에게는 이동시간 정보를 숨김
+  } else {
+    // 배치 불가 - 선택 차단
+    alert('이 시간은 선택할 수 없습니다.');
+    // 이유는 표시하지 않음
+  }
+};
+```
+
+
+## 2. 시간표 그리드에 금지 구간 표시
+
+```javascript
+// 컴포넌트 로드 시
+useEffect(() => {
+  const loadBlockedTimes = async () => {
+    const blocked = await travelScheduleCalculator.getBlockedTimesForMember(
+      currentRoom,
+      currentUser._id,
+      selectedDate,
+      travelMode
+    );
+
+    setBlockedTimes(blocked);
+  };
+
+  loadBlockedTimes();
+}, [currentRoom, selectedDate, travelMode]);
+
+// 렌더링
+{timeSlots.map(time => {
+  const isBlocked = blockedTimes.some(b =>
+    b.startTime === time && b.endTime === addMinutes(time, 10)
+  );
+
+  return (
+    <div
+      className={isBlocked ? 'bg-gray-300 cursor-not-allowed' : 'bg-white cursor-pointer'}
+      onClick={isBlocked ? null : () => handleTimeSelect(time)}
+    >
+      {time}
+    </div>
+  );
+})}
+```
+
+
+## 3. 실시간 유효성 검사
+
+```javascript
+// 조원이 드래그로 시간을 조정할 때
+const handleTimeDrag = async (newStartTime) => {
+  const result = await travelScheduleCalculator.simulateTimeSlotPlacement(
+    currentRoom,
+    currentUser._id,
+    selectedDate,
+    parseTime(newStartTime),
+    classDuration,
+    travelMode
+  );
+
+  if (!result.canPlace) {
+    // 드래그 취소
+    return false;
+  }
+
+  // 드래그 허용
+  return true;
+};
+```
+
+
+================================================================================
+✅ 구현 완료 체크리스트
+================================================================================
+
+[✓] 1. simulateTimeSlotPlacement 함수 구현
+[✓] 2. getBlockedTimesForMember 함수 구현
+[✓] 3. getAvailableTimesForMember 함수 구현
+[✓] 4. 순서에 따른 이동시간 동적 계산 로직
+[✓] 5. 이동시간 정보 숨김 처리 (hidden: true)
+[✓] 6. 금지시간 및 겹침 검증
+[✓] 7. 상세 로그 출력 (디버깅용)
+
+[ ] 8. 프론트엔드 UI 통합 (다음 단계)
+[ ] 9. API 엔드포인트 추가 (필요 시)
+[ ] 10. 실제 데이터로 테스트
+
+
+================================================================================
+📝 참고사항
+================================================================================
+
+1. 모든 함수는 비동기(async)로 작동합니다.
+   - 이동시간 계산을 위해 Google Maps API를 호출하기 때문
+
+2. 시간은 분 단위로 계산됩니다.
+   - 09:00 = 540분 (9 * 60)
+   - formatTime(540) = "09:00"
+   - parseTime("09:00") = 540
+
+3. 이동시간은 10분 단위로 반올림됩니다.
+   - 실제 27분 → 30분으로 계산
+
+4. 조원에게는 이동시간 정보를 절대 노출하지 않습니다.
+   - hidden: true 플래그 사용
+   - UI에서는 단순히 "선택 불가"로만 표시
+
+5. 방장의 스케줄은 이동시간이 없습니다.
+   - 방장은 이동하지 않는다고 가정
+
+
+================================================================================
+🐛 문제 해결
+================================================================================
+
+Q: "조원이 시간을 선택했는데 이동시간이 계산되지 않아요"
+A: travelMode가 'normal'로 설정되어 있는지 확인하세요.
+   'normal' 모드에서는 이동시간이 0분입니다.
+   'driving', 'transit', 'walking' 등으로 변경하세요.
+
+Q: "순서가 바뀌어도 이동시간이 업데이트되지 않아요"
+A: simulateTimeSlotPlacement는 현재 배정 상태를 기반으로 계산합니다.
+   순서를 바꾼 후 다시 호출해야 합니다.
+
+Q: "이동시간이 너무 길게 계산돼요"
+A: Google Maps API가 실시간 교통 상황을 반영하기 때문입니다.
+   시간대를 변경하거나 이동 수단을 바꿔보세요.
+
+
+================================================================================

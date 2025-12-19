@@ -18,6 +18,29 @@
  */
 
 const Room = require('../models/room');
+const User = require('../models/user');
+
+/**
+ * 거리 계산 (Haversine formula)
+ * @param {number} lat1 - 위도 1
+ * @param {number} lon1 - 경도 1
+ * @param {number} lat2 - 위도 2
+ * @param {number} lon2 - 경도 2
+ * @returns {number} 거리 (km)
+ */
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  if (!lat1 || !lon1 || !lat2 || !lon2) {
+    return 0;
+  }
+  const R = 6371; // 지구 반지름 (km)
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    0.5 - Math.cos(dLat)/2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    (1 - Math.cos(dLon))/2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+};
 
 /**
  * 시간이 금지 시간대와 겹치는지 확인
@@ -100,7 +123,6 @@ exports.parseExchangeRequest = async (req, res) => {
     res.json({ parsed });
 
   } catch (error) {
-    console.error('Parse exchange request error:', error);
     res.status(500).json({
       error: error.message || '서버 오류가 발생했습니다.',
       details: error.message
@@ -139,11 +161,6 @@ exports.smartExchange = async (req, res) => {
 
     // time_change용으로 sourceDayStr 별도 변수 생성
     const sourceDayStr = (type === 'time_change' && sourceDay) ? sourceDay : null;
-
-    console.log('🚀 ========== SMART EXCHANGE REQUEST (FULLY REFACTORED) ==========');
-    console.log('📝 Request params:', { roomId, type, targetDay, targetTime, viewMode, weekNumber, weekOffset, sourceWeekOffset, sourceDay, sourceTime, sourceDayStr, sourceMonth, sourceYear, targetMonth, targetYear, targetDateNum });
-    console.log('👤 Requester user ID:', req.user.id);
-
     // Verify room exists
     const room = await Room.findById(roomId)
       .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes')
@@ -173,7 +190,6 @@ exports.smartExchange = async (req, res) => {
 
     // Handle date_change type (날짜 기반 이동) - 완전 리팩토링됨
     if (type === 'date_change') {
-      console.log('✅ Using refactored dateChangeService');
       return await handleDateChange(req, res, room, memberData, {
         sourceMonth,
         sourceDay,
@@ -205,8 +221,6 @@ exports.smartExchange = async (req, res) => {
     monday.setUTCDate(diff);
     monday.setUTCHours(0, 0, 0, 0);
 
-    console.log(`📅 Current week Monday: ${monday.toISOString().split('T')[0]} (from today: ${now.toISOString().split('T')[0]})`);
-
     // currentWeekStartDate가 제공되고 weekOffset이 없으면 해당 주 기준으로 계산
     if (currentWeekStartDate && !weekOffset && weekOffset !== 0) {
       const providedDate = new Date(currentWeekStartDate);
@@ -215,7 +229,6 @@ exports.smartExchange = async (req, res) => {
       monday = new Date(providedDate);
       monday.setUTCDate(providedDiff);
       monday.setUTCHours(0, 0, 0, 0);
-      console.log(`📅 Using provided week Monday: ${monday.toISOString().split('T')[0]}`);
     }
 
     // Calculate target date
@@ -229,7 +242,6 @@ exports.smartExchange = async (req, res) => {
       targetWeekMonday.setUTCDate(monday.getUTCDate() + (weekOffset * 7));
       targetDate = new Date(targetWeekMonday);
       targetDate.setUTCDate(targetWeekMonday.getUTCDate() + targetDayNumber - 1);
-      console.log(`📅 Week offset ${weekOffset}: Target date = ${targetDate.toISOString().split('T')[0]}`);
     }
     // weekNumber가 제공된 경우
     else if (weekNumber) {
@@ -244,7 +256,6 @@ exports.smartExchange = async (req, res) => {
       const firstTargetDay = new Date(Date.UTC(year, month, 1 + daysToFirstTargetDay));
       targetDate = new Date(firstTargetDay);
       targetDate.setUTCDate(firstTargetDay.getUTCDate() + (weekNumber - 1) * 7);
-      console.log(`📅 ${targetMonth ? `${targetMonth}월` : 'Current month'} ${weekNumber}번째 ${targetDay}: Target date = ${targetDate.toISOString().split('T')[0]}`);
     } else {
       targetDate = new Date(monday);
       targetDate.setUTCDate(monday.getUTCDate() + targetDayNumber - 1);
@@ -295,9 +306,6 @@ exports.smartExchange = async (req, res) => {
     const targetDateStr = targetDate.toISOString().split('T')[0];
     const targetDayOfWeek = targetDate.getDay();
 
-    console.log(`🔍 [방장 검증] Target day: ${targetDayEnglish} (dayOfWeek: ${targetDayOfWeek}), date: ${targetDateStr}`);
-    console.log(`👑 Owner defaultSchedule: ${ownerDefaultSchedule.length} entries`);
-
     // Check if owner has schedule for this date/day
     const ownerTargetSchedules = ownerDefaultSchedule.filter(s => {
       // 🔧 specificDate가 있으면 그 날짜에만 적용
@@ -308,8 +316,6 @@ exports.smartExchange = async (req, res) => {
         return s.dayOfWeek === targetDayOfWeek;
       }
     });
-
-    console.log(`📅 [방장 검증] Owner schedules for ${targetDateStr}: ${ownerTargetSchedules.length} entries`);
 
     if (ownerTargetSchedules.length === 0) {
       return res.status(400).json({
@@ -364,8 +370,6 @@ exports.smartExchange = async (req, res) => {
           message: `❌ ${targetTime}는 방장의 선호시간(${ownerScheduleRanges})에 포함되지 않습니다.`
         });
       }
-
-      console.log(`✅ [방장 검증] 통과: ${targetTime}은 방장의 선호시간 내에 있습니다.`);
     }
 
     // Find requester's current slots
@@ -388,7 +392,6 @@ exports.smartExchange = async (req, res) => {
       });
     }
 
-    console.log(`📋 Found ${requesterCurrentSlots.length} slots for user`);
 
     // Group slots by date to find continuous blocks
     const slotsByDate = {};
@@ -421,11 +424,6 @@ exports.smartExchange = async (req, res) => {
       continuousBlocks.push(currentBlock);
     });
 
-    console.log(`📦 Found ${continuousBlocks.length} continuous blocks`);
-    continuousBlocks.forEach((block, idx) => {
-      console.log(`   Block ${idx + 1}: ${block[0].day} ${new Date(block[0].date).toISOString().split('T')[0]} ${block[0].startTime}-${block[block.length - 1].endTime} (${block.length} slots)`);
-    });
-
     // Select block to move (source filtering logic)
     let selectedBlock;
     let sourceWeekMonday, sourceWeekSunday;
@@ -446,17 +444,11 @@ exports.smartExchange = async (req, res) => {
       sourceWeekSunday.setUTCDate(sourceWeekMonday.getUTCDate() + 6);
     }
 
-    console.log(`📅 Source week: ${sourceWeekMonday.toISOString().split('T')[0]} ~ ${sourceWeekSunday.toISOString().split('T')[0]}`);
-
     const sourceWeekBlocks = continuousBlocks.filter(block => {
       const blockDate = new Date(block[0].date);
       return blockDate >= sourceWeekMonday && blockDate <= sourceWeekSunday;
     });
 
-    console.log(`📊 Found ${sourceWeekBlocks.length} blocks in source week`);
-    sourceWeekBlocks.forEach((block, idx) => {
-      console.log(`   Week Block ${idx + 1}: ${block[0].day} ${new Date(block[0].date).toISOString().split('T')[0]}`);
-    });
 
     let candidateBlocks = sourceWeekBlocks;
 
@@ -469,15 +461,11 @@ exports.smartExchange = async (req, res) => {
         '금요일': 'friday', '금': 'friday'
       };
       const sourceDayEnglish = sourceDayMap[sourceDayStr] || sourceDayStr.toLowerCase();
-      console.log(`🔍 Filtering by source day: "${sourceDayStr}" → "${sourceDayEnglish}"`);
       candidateBlocks = sourceWeekBlocks.filter(block => {
         const match = block[0].day === sourceDayEnglish;
-        console.log(`   Checking block: ${block[0].day} === ${sourceDayEnglish} ? ${match}`);
         return match;
       });
     }
-
-    console.log(`✅ Final candidate blocks: ${candidateBlocks.length}`);
 
     if (candidateBlocks.length > 0) {
       const blocksNotOnTargetDay = candidateBlocks.filter(block => block[0].day !== targetDayEnglish);
@@ -495,13 +483,10 @@ exports.smartExchange = async (req, res) => {
           '금요일': 'friday', '금': 'friday'
         };
         const sourceDayEnglish = sourceDayMap[sourceDayStr] || sourceDayStr.toLowerCase();
-        console.log(`🔍 주차에서 찾지 못함. 전체 블록에서 "${sourceDayStr}" (${sourceDayEnglish}) 찾기`);
 
         const allDayBlocks = continuousBlocks.filter(block => block[0].day === sourceDayEnglish);
         if (allDayBlocks.length > 0) {
-          console.log(`✅ 전체에서 ${allDayBlocks.length}개 블록 발견`);
           allDayBlocks.forEach((block, idx) => {
-            console.log(`   Block ${idx + 1}: ${block[0].day} ${new Date(block[0].date).toISOString().split('T')[0]}`);
           });
           const blocksNotOnTargetDay = allDayBlocks.filter(block => block[0].day !== targetDayEnglish);
           selectedBlock = blocksNotOnTargetDay.length > 0 ? blocksNotOnTargetDay[0] : allDayBlocks[0];
@@ -531,8 +516,6 @@ exports.smartExchange = async (req, res) => {
     const newStartTime = targetTime || blockStartTime;
     const newEndTime = addHours(newStartTime, totalHours);
 
-    console.log(`🔍 [일정 길이] ${blockStartTime}-${blockEndTime} (${totalHours}시간) → ${newStartTime}-${newEndTime}`);
-
     // ✅ Owner validation already done above (lines 240-267) - removed duplicate
 
     // 금지 시간 검증 (전체 일정 길이 확인)
@@ -545,16 +528,12 @@ exports.smartExchange = async (req, res) => {
           message: `${blockedTime.name || '금지 시간'}(${blockedTime.startTime}-${blockedTime.endTime})에는 일정을 배정할 수 없습니다. ${newStartTime}-${newEndTime} 일정이 겹칩니다.`
         });
       }
-      console.log(`✅ [금지시간 검증] 통과: ${newStartTime}-${newEndTime}은 금지 시간에 포함되지 않습니다.`);
     }
 
     // Check MEMBER's preferred schedule
     const requesterUser = memberData.user;
     const requesterDefaultSchedule = requesterUser.defaultSchedule || [];
     const requesterExceptions = requesterUser.scheduleExceptions || []; // <-- 💥 GET EXCEPTIONS
-
-    console.log(`🔍 [멤버 검증] targetDate: ${targetDate.toISOString().split('T')[0]}`);
-    console.log(`🔍 [멤버 검증] defaultSchedule: ${requesterDefaultSchedule.length}개, scheduleExceptions: ${requesterExceptions.length}개`);
 
     // Find all schedules applicable to the target date by combining default and exceptions
     const memberTargetDaySchedules = [
@@ -566,12 +545,6 @@ exports.smartExchange = async (req, res) => {
       ...requesterDefaultSchedule.filter(s => s.specificDate === targetDateStr)
     ];
 
-    console.log(`[멤버 검증] Found ${memberTargetDaySchedules.length} applicable schedules for member on ${targetDateStr}`);
-
-    // 🐛 DEBUG: 실제 스케줄 데이터 확인
-    if (memberTargetDaySchedules.length > 0) {
-      console.log('🐛 [DEBUG] Member schedules:', JSON.stringify(memberTargetDaySchedules, null, 2));
-    }
 
     if (memberTargetDaySchedules.length === 0) {
       return res.status(400).json({
@@ -584,7 +557,6 @@ exports.smartExchange = async (req, res) => {
     const mergeSlots = (schedules) => {
       // Helper: Convert time to "HH:MM" format (handles ISO datetime)
       const normalizeTime = (timeStr) => {
-        console.log('🐛 [normalizeTime] Input:', timeStr, 'Type:', typeof timeStr);
         if (!timeStr) return '00:00';
 
         // ✅ Date 객체나 다른 객체인 경우 문자열로 변환
@@ -604,7 +576,6 @@ exports.smartExchange = async (req, res) => {
         if (timeStr.includes('T')) {
           const date = new Date(timeStr);
           const result = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-          console.log('🐛 [normalizeTime] ISO converted:', timeStr, '→', result);
           return result;
         }
         return timeStr;
@@ -647,9 +618,6 @@ exports.smartExchange = async (req, res) => {
 
     const ownerMergedRanges = mergeSlots(ownerTargetSchedules);
     const memberMergedRanges = mergeSlots(memberTargetDaySchedules);
-
-    console.log('🕐 [시간 병합 결과] 방장:', ownerMergedRanges.map(r => `${r.startTime}-${r.endTime}`).join(', '));
-    console.log('🕐 [시간 병합 결과] 멤버:', memberMergedRanges.map(r => `${r.startTime}-${r.endTime}`).join(', '));
 
     const overlappingRanges = [];
     for (const ownerRange of ownerMergedRanges) {
@@ -742,28 +710,151 @@ exports.smartExchange = async (req, res) => {
         if (index !== -1) room.timeSlots.splice(index, 1);
       }
 
+      // 🆕 이동시간 재계산 로직
+      const targetDateStr = targetDate.toISOString().split('T')[0];
+      const newStartMinutes = timeToMinutesUtil(finalNewStartTime);
+
+      // 1. 해당 날짜의 기존 슬롯 찾기
+      const slotsOnDate = room.timeSlots.filter(slot => {
+        const slotDate = new Date(slot.date).toISOString().split('T')[0];
+        return slotDate === targetDateStr;
+      });
+
+      // 2. 마지막 슬롯 찾기 (새 시작 시간보다 먼저 끝나는 것 중 가장 늦게 끝나는 것)
+      let previousSlot = null;
+      let previousEndMinutes = 0;
+
+      for (const slot of slotsOnDate) {
+        const slotEndMinutes = timeToMinutesUtil(slot.endTime);
+        if (slotEndMinutes <= newStartMinutes && slotEndMinutes > previousEndMinutes) {
+          previousSlot = slot;
+          previousEndMinutes = slotEndMinutes;
+        }
+      }
+
+      // 3. 이동시간 계산
+      let travelDurationMinutes = 0;
+      let travelFromLocation = '방장';
+
+      if (room.travelMode && room.travelMode !== 'normal' && previousSlot) {
+        try {
+          // 이전 슬롯의 사용자 찾기
+          const previousUserId = previousSlot.user._id || previousSlot.user;
+          const currentUser = await User.findById(req.user.id);
+
+          // 이전 위치 확인 (방장 또는 이전 학생)
+          let previousLat, previousLng;
+
+          if (previousUserId.toString() === room.owner._id.toString()) {
+            // 이전 슬롯이 방장
+            previousLat = room.owner.addressLat;
+            previousLng = room.owner.addressLng;
+            travelFromLocation = '방장';
+          } else {
+            // 이전 슬롯이 다른 학생
+            const previousUser = await User.findById(previousUserId);
+            if (previousUser) {
+              previousLat = previousUser.addressLat;
+              previousLng = previousUser.addressLng;
+              travelFromLocation = `${previousUser.firstName || ''} ${previousUser.lastName || ''}`.trim();
+            }
+          }
+
+          // 거리 계산
+          if (previousLat && previousLng && currentUser && currentUser.addressLat && currentUser.addressLng) {
+            const distance = calculateDistance(
+              previousLat,
+              previousLng,
+              currentUser.addressLat,
+              currentUser.addressLng
+            );
+
+            // 이동 수단별 속도 (km/h)
+            const speeds = {
+              driving: 40,
+              transit: 30,
+              walking: 5,
+              bicycling: 15
+            };
+            const speed = speeds[room.travelMode] || 30;
+
+            // 이동시간 계산 (10분 단위 반올림)
+            travelDurationMinutes = Math.ceil((distance / speed) * 60 / 10) * 10;
+
+            }
+        } catch (error) {
+          travelDurationMinutes = 0;
+        }
+      } else if (!previousSlot && room.travelMode && room.travelMode !== 'normal') {
+        // 이전 슬롯이 없으면 방장에서 출발
+        try {
+          const currentUser = await User.findById(req.user.id);
+          if (room.owner.addressLat && currentUser && currentUser.addressLat) {
+            const distance = calculateDistance(
+              room.owner.addressLat,
+              room.owner.addressLng,
+              currentUser.addressLat,
+              currentUser.addressLng
+            );
+
+            const speeds = {
+              driving: 40,
+              transit: 30,
+              walking: 5,
+              bicycling: 15
+            };
+            const speed = speeds[room.travelMode] || 30;
+            travelDurationMinutes = Math.ceil((distance / speed) * 60 / 10) * 10;
+
+          }
+        } catch (error) {
+          travelDurationMinutes = 0;
+        }
+      }
+
       // Create new slots (10분 단위)
       const totalMinutes = (parseInt(finalNewEndTime.split(':')[0]) * 60 + parseInt(finalNewEndTime.split(':')[1])) -
                           (parseInt(finalNewStartTime.split(':')[0]) * 60 + parseInt(finalNewStartTime.split(':')[1]));
-      const numSlots = Math.ceil(totalMinutes / 10); // 10분 단위로 슬롯 개수 계산
-
-      console.log('🔍 [슬롯 생성 디버깅]');
-      console.log('  targetDate:', targetDate.toISOString());
-      console.log('  targetDay:', targetDay, '→', targetDayEnglish);
-      console.log('  finalNewStartTime:', finalNewStartTime);
-      console.log('  finalNewEndTime:', finalNewEndTime);
-      console.log('  totalMinutes:', totalMinutes);
-      console.log('  numSlots:', numSlots);
+      const activityDurationMinutes = totalMinutes; // 원래 수업 시간
 
       const newSlots = [];
-      let currentTimeMinutes = timeToMinutesUtil(finalNewStartTime);
 
-      for (let i = 0; i < numSlots; i++) {
-        const slotEndTimeMinutes = currentTimeMinutes + 10; // 10분 추가
-        const currentTime = minutesToTime(currentTimeMinutes);
-        const slotEndTime = minutesToTime(slotEndTimeMinutes);
+      // 4. 이동시간 슬롯 생성
+      if (travelDurationMinutes > 0) {
+        const travelStartMinutes = newStartMinutes;
+        const numTravelSlots = Math.ceil(travelDurationMinutes / 10);
 
-        console.log(`  생성 슬롯 ${i + 1}/${numSlots}: ${currentTime}-${slotEndTime} on ${targetDate.toISOString().split('T')[0]} (${targetDayEnglish})`);
+        for (let i = 0; i < numTravelSlots; i++) {
+          const slotStartMinutes = travelStartMinutes + (i * 10);
+          const slotEndMinutes = slotStartMinutes + 10;
+          const currentTime = minutesToTime(slotStartMinutes);
+          const slotEndTime = minutesToTime(slotEndMinutes);
+
+          newSlots.push({
+            user: req.user.id,
+            date: targetDate,
+            startTime: currentTime,
+            endTime: slotEndTime,
+            day: targetDayEnglish,
+            priority: 1,
+            subject: '이동시간',
+            isTravel: true,
+            assignedBy: room.owner._id,
+            assignedAt: new Date(),
+            status: 'confirmed'
+          });
+        }
+      }
+
+      // 5. 수업 슬롯 생성 (이동시간 이후부터 시작)
+      const activityStartMinutes = newStartMinutes + travelDurationMinutes;
+      const numActivitySlots = Math.ceil(activityDurationMinutes / 10);
+
+      for (let i = 0; i < numActivitySlots; i++) {
+        const slotStartMinutes = activityStartMinutes + (i * 10);
+        const slotEndMinutes = slotStartMinutes + 10;
+        const currentTime = minutesToTime(slotStartMinutes);
+        const slotEndTime = minutesToTime(slotEndMinutes);
 
         newSlots.push({
           user: req.user.id,
@@ -777,7 +868,6 @@ exports.smartExchange = async (req, res) => {
           assignedAt: new Date(),
           status: 'confirmed'
         });
-        currentTimeMinutes = slotEndTimeMinutes;
       }
 
       room.timeSlots.push(...newSlots);
@@ -819,9 +909,6 @@ exports.smartExchange = async (req, res) => {
         targetTime: finalNewStartTime
       });
     }
-
-    // Case 2: Target slot is occupied
-    console.log('🔔 Target slot is occupied');
 
     // Auto-placement if no specific time requested
     if (!targetTime) {
@@ -1003,7 +1090,6 @@ exports.smartExchange = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Smart exchange error:', error);
     res.status(500).json({
       success: false,
       message: '서버 오류가 발생했습니다.',

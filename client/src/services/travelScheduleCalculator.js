@@ -691,6 +691,332 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     return { success: true, blocks: blocks };
   }
 
+  /**
+   * simulateTimeSlotPlacement
+   * @description 조원이 특정 시간에 배치될 경우 이동시간을 시뮬레이션합니다.
+   * @param {Object} currentRoom - 현재 방 데이터
+   * @param {String} userId - 조원 ID
+   * @param {String} selectedDate - 선택한 날짜 (YYYY-MM-DD)
+   * @param {Number} selectedStartMinutes - 선택한 시작 시간 (분)
+   * @param {Number} duration - 수업 시간 (분)
+   * @param {String} travelMode - 이동 수단
+   * @returns {Promise<Object>} { canPlace: boolean, travelTime: number, from: string, conflicts: [] }
+   */
+  async simulateTimeSlotPlacement(currentRoom, userId, selectedDate, selectedStartMinutes, duration, travelMode = 'normal') {
+    console.log('🎯 [simulateTimeSlotPlacement] 시작:', {
+      userId: userId.toString().substring(0, 8),
+      날짜: selectedDate,
+      시작시간: this.formatTime(selectedStartMinutes),
+      수업시간: duration
+    });
+
+    // 1. 기본 검증
+    if (!currentRoom || !currentRoom.owner) {
+      return { canPlace: false, reason: '방 정보가 없습니다.' };
+    }
+
+    const owner = currentRoom.owner;
+    if (!owner.addressLat || !owner.addressLng) {
+      return { canPlace: false, reason: '방장 주소 정보가 없습니다.' };
+    }
+
+    // 2. 조원 위치 정보 가져오기
+    const memberLocations = {};
+    for (const member of currentRoom.members || []) {
+      if (member.user && member.user.addressLat && member.user.addressLng) {
+        const memberId = (member.user._id || member.user.id).toString();
+        memberLocations[memberId] = {
+          lat: member.user.addressLat,
+          lng: member.user.addressLng,
+          name: `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim()
+        };
+      }
+    }
+
+    const userIdStr = userId.toString();
+    const memberLocation = memberLocations[userIdStr];
+    if (!memberLocation) {
+      return { canPlace: false, reason: '조원 위치 정보가 없습니다.' };
+    }
+
+    // 3. 해당 날짜의 기존 배정 확인
+    const timeSlots = currentRoom.timeSlots || [];
+    const slotsOnDate = timeSlots.filter(slot => {
+      const slotDate = new Date(slot.date).toISOString().split('T')[0];
+      return slotDate === selectedDate;
+    });
+
+    // 4. 마지막 배정된 학생 찾기 (선택한 시작 시간보다 먼저 끝나는 슬롯 중 가장 늦게 끝나는 것)
+    let previousLocation = {
+      lat: owner.addressLat,
+      lng: owner.addressLng,
+      name: '방장'
+    };
+    let previousEndMinutes = 0;
+
+    for (const slot of slotsOnDate) {
+      const slotStartMinutes = this.parseTime(slot.startTime);
+      const slotEndMinutes = this.parseTime(slot.endTime);
+
+      // 선택한 시작 시간보다 먼저 끝나는 슬롯만
+      if (slotEndMinutes <= selectedStartMinutes && slotEndMinutes > previousEndMinutes) {
+        let slotUserId = slot.user;
+        if (typeof slotUserId === 'object' && slotUserId !== null) {
+          slotUserId = slotUserId._id || slotUserId.id;
+        }
+
+        if (slotUserId) {
+          const slotUserIdStr = slotUserId.toString();
+
+          // 방장이면
+          if (slotUserIdStr === owner._id.toString()) {
+            previousLocation = {
+              lat: owner.addressLat,
+              lng: owner.addressLng,
+              name: '방장'
+            };
+          } else if (memberLocations[slotUserIdStr]) {
+            previousLocation = memberLocations[slotUserIdStr];
+          }
+
+          previousEndMinutes = slotEndMinutes;
+        }
+      }
+    }
+
+    console.log(`📍 [출발 위치] ${previousLocation.name} (${this.formatTime(previousEndMinutes)} 종료)`);
+
+    // 5. 이동시간 계산
+    let travelDurationMinutes = 0;
+    if (travelMode !== 'normal') {
+      try {
+        const travelInfo = await travelModeService.calculateTravelTime(
+          { lat: previousLocation.lat, lng: previousLocation.lng },
+          { lat: memberLocation.lat, lng: memberLocation.lng },
+          travelMode
+        );
+        travelDurationMinutes = Math.ceil(travelInfo.duration / 60 / 10) * 10;
+        console.log(`🚗 [이동시간] ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분`);
+      } catch (error) {
+        console.error('이동시간 계산 실패:', error);
+        return { canPlace: false, reason: '이동시간 계산 실패' };
+      }
+    }
+
+    // 6. 시간 계산
+    const travelStartMinutes = Math.max(selectedStartMinutes, previousEndMinutes);
+    const travelEndMinutes = travelStartMinutes + travelDurationMinutes;
+    const activityStartMinutes = travelEndMinutes;
+    const activityEndMinutes = activityStartMinutes + duration;
+
+    console.log(`⏰ [시간 계산]`, {
+      이동: `${this.formatTime(travelStartMinutes)}-${this.formatTime(travelEndMinutes)}`,
+      수업: `${this.formatTime(activityStartMinutes)}-${this.formatTime(activityEndMinutes)}`
+    });
+
+    // 7. 금지시간 체크
+    const blockedTimes = currentRoom.settings?.blockedTimes || [];
+    const conflicts = [];
+
+    for (const blocked of blockedTimes) {
+      const blockedStart = this.parseTime(blocked.startTime);
+      const blockedEnd = this.parseTime(blocked.endTime);
+
+      const travelOverlap = travelStartMinutes < blockedEnd && travelEndMinutes > blockedStart;
+      const activityOverlap = activityStartMinutes < blockedEnd && activityEndMinutes > blockedStart;
+
+      if (travelOverlap || activityOverlap) {
+        conflicts.push({
+          type: 'blocked',
+          name: blocked.name,
+          time: `${blocked.startTime}-${blocked.endTime}`
+        });
+      }
+    }
+
+    // 8. 다른 배정과 겹침 체크
+    for (const slot of slotsOnDate) {
+      const slotStartMinutes = this.parseTime(slot.startTime);
+      const slotEndMinutes = this.parseTime(slot.endTime);
+
+      const travelOverlap = travelStartMinutes < slotEndMinutes && travelEndMinutes > slotStartMinutes;
+      const activityOverlap = activityStartMinutes < slotEndMinutes && activityEndMinutes > slotStartMinutes;
+
+      if (travelOverlap || activityOverlap) {
+        let slotUserId = slot.user;
+        if (typeof slotUserId === 'object' && slotUserId !== null) {
+          slotUserId = slotUserId._id || slotUserId.id;
+        }
+
+        conflicts.push({
+          type: 'overlap',
+          user: slotUserId,
+          time: `${slot.startTime}-${slot.endTime}`,
+          subject: slot.subject
+        });
+      }
+    }
+
+    const canPlace = conflicts.length === 0;
+
+    console.log(`${canPlace ? '✅' : '❌'} [결과] ${canPlace ? '배치 가능' : '배치 불가'}`);
+    if (!canPlace) {
+      console.log(`   충돌 개수: ${conflicts.length}`);
+    }
+
+    return {
+      canPlace,
+      travelTime: travelDurationMinutes,
+      from: previousLocation.name,
+      to: memberLocation.name,
+      travelStart: this.formatTime(travelStartMinutes),
+      travelEnd: this.formatTime(travelEndMinutes),
+      activityStart: this.formatTime(activityStartMinutes),
+      activityEnd: this.formatTime(activityEndMinutes),
+      conflicts,
+      blockedSlots: [
+        // 이동시간 구간
+        ...(travelDurationMinutes > 0 ? [{
+          startTime: this.formatTime(travelStartMinutes),
+          endTime: this.formatTime(travelEndMinutes),
+          type: 'travel',
+          hidden: true // 조원에게는 이유를 숨김
+        }] : []),
+        // 수업시간 구간
+        {
+          startTime: this.formatTime(activityStartMinutes),
+          endTime: this.formatTime(activityEndMinutes),
+          type: 'activity'
+        }
+      ]
+    };
+  }
+
+  /**
+   * getBlockedTimesForMember
+   * @description 조원에게 보여줄 금지 시간대를 계산합니다 (이동시간 포함, 하지만 이유는 숨김).
+   * @param {Object} currentRoom - 현재 방 데이터
+   * @param {String} userId - 조원 ID
+   * @param {String} selectedDate - 날짜 (YYYY-MM-DD)
+   * @param {String} travelMode - 이동 수단
+   * @returns {Promise<Array>} 금지 시간대 배열
+   */
+  async getBlockedTimesForMember(currentRoom, userId, selectedDate, travelMode = 'normal') {
+    console.log('🚫 [getBlockedTimesForMember] 시작:', {
+      userId: userId.toString().substring(0, 8),
+      날짜: selectedDate
+    });
+
+    const blockedSlots = [];
+
+    // 1. 방 금지시간 추가
+    const blockedTimes = currentRoom.settings?.blockedTimes || [];
+    for (const blocked of blockedTimes) {
+      blockedSlots.push({
+        startTime: blocked.startTime,
+        endTime: blocked.endTime,
+        type: 'blocked',
+        reason: blocked.name
+      });
+    }
+
+    // 2. 해당 날짜의 기존 배정 추가
+    const timeSlots = currentRoom.timeSlots || [];
+    const slotsOnDate = timeSlots.filter(slot => {
+      const slotDate = new Date(slot.date).toISOString().split('T')[0];
+      return slotDate === selectedDate;
+    });
+
+    for (const slot of slotsOnDate) {
+      let slotUserId = slot.user;
+      if (typeof slotUserId === 'object' && slotUserId !== null) {
+        slotUserId = slotUserId._id || slotUserId.id;
+      }
+
+      // 자신의 슬롯이 아닌 경우만 추가
+      if (slotUserId && slotUserId.toString() !== userId.toString()) {
+        blockedSlots.push({
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          type: 'occupied',
+          reason: '다른 학생 배정됨' // 조원에게는 보여지지 않음
+        });
+      }
+    }
+
+    console.log(`   총 ${blockedSlots.length}개 금지 구간`);
+    return blockedSlots;
+  }
+
+  /**
+   * getAvailableTimesForMember
+   * @description 조원이 선택 가능한 시간대를 계산합니다.
+   * @param {Object} currentRoom - 현재 방 데이터
+   * @param {String} userId - 조원 ID
+   * @param {String} selectedDate - 날짜 (YYYY-MM-DD)
+   * @param {Number} duration - 수업 시간 (분)
+   * @param {String} travelMode - 이동 수단
+   * @returns {Promise<Object>} { availableSlots: [], blockedSlots: [] }
+   */
+  async getAvailableTimesForMember(currentRoom, userId, selectedDate, duration, travelMode = 'normal') {
+    console.log('📅 [getAvailableTimesForMember] 시작:', {
+      userId: userId.toString().substring(0, 8),
+      날짜: selectedDate,
+      수업시간: duration
+    });
+
+    const availableSlots = [];
+    const blockedSlots = [];
+
+    // 1. 금지 시간대 가져오기
+    const baseBlockedTimes = await this.getBlockedTimesForMember(currentRoom, userId, selectedDate, travelMode);
+
+    // 2. 09:00 ~ 18:00 범위에서 10분 단위로 체크
+    const startHour = 9;
+    const endHour = 18;
+
+    for (let hour = startHour; hour < endHour; hour++) {
+      for (let minute = 0; minute < 60; minute += 10) {
+        const timeMinutes = hour * 60 + minute;
+
+        // 해당 시간에 배치 가능한지 시뮬레이션
+        const result = await this.simulateTimeSlotPlacement(
+          currentRoom,
+          userId,
+          selectedDate,
+          timeMinutes,
+          duration,
+          travelMode
+        );
+
+        if (result.canPlace) {
+          availableSlots.push({
+            startTime: this.formatTime(timeMinutes),
+            endTime: this.formatTime(timeMinutes + 10),
+            actualActivityStart: result.activityStart,
+            actualActivityEnd: result.activityEnd,
+            travelTime: result.travelTime,
+            from: result.from
+          });
+        } else {
+          // 배치 불가능한 시간은 blockedSlots에 추가
+          blockedSlots.push({
+            startTime: this.formatTime(timeMinutes),
+            endTime: this.formatTime(timeMinutes + 10),
+            hidden: true // 조원에게는 이유를 숨김
+          });
+        }
+      }
+    }
+
+    console.log(`   선택 가능: ${availableSlots.length}개, 금지: ${blockedSlots.length}개`);
+
+    return {
+      availableSlots,
+      blockedSlots: [...baseBlockedTimes, ...blockedSlots]
+    };
+  }
+
 /**
  * recalculateScheduleWithTravel
  * @description 기존에 자동 배정된 시간표 데이터에 이동 시간을 반영하여 새로운 스케줄을 재계산합니다.
@@ -1365,9 +1691,16 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                     previousLocation = memberLocation;
                     continue;
                 } else {
-                    // 모든 요일에 배치 불가능 - 조정된 시간 그대로 사용 (겹침 방지)
-                    console.warn(`⚠️ [배치 실패] 모든 요일에 배치 불가능 - 조정된 시간 유지 (선호시간 외)`);
-                    // travelBlock과 activityBlock은 아래에서 생성되므로 여기서는 continue하지 않음
+                    // 모든 요일에 배치 불가능 - 원본 슬롯 유지
+                    console.warn(`⚠️ [재배정 실패] 모든 요일에 배치 불가능 - 원본 슬롯 유지 (겹침 발생 가능)`);
+                    console.warn(`   원본: ${mergedSlot.startTime}-${mergedSlot.endTime}, 날짜: ${new Date(mergedSlot.date).toISOString().split('T')[0]}`);
+                    console.warn(`   경고: 이 슬롯은 선호시간 외이거나 다른 슬롯과 겹칠 수 있습니다.`);
+                    
+                    // 원본 슬롯을 그대로 추가 (겹침이나 선호시간 외 경고와 함께)
+                    allResultSlots.push(...this.unmergeBlock(mergedSlot));
+                    
+                    // 다음 슬롯으로 이동 (아래 코드를 실행하지 않음)
+                    continue;
                 }
             }
 
