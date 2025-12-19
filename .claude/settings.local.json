@@ -14,7 +14,9 @@
       "mcp__serena__search_for_pattern",
       "mcp__serena__find_file",
       "Bash(git restore:*)",
-      "mcp__serena__insert_after_symbol"
+      "mcp__serena__insert_after_symbol",
+      "Bash(git checkout:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }
