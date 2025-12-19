@@ -1,0 +1,683 @@
+================================================================================
+코드 분석 문서 - travelScheduleCalculator.js
+================================================================================
+작성일: 2025-12-19
+대상 파일: client/src/services/travelScheduleCalculator.js
+목적: 요일 재배정 기능 구현을 위한 현재 코드 상세 분석
+
+================================================================================
+📋 목차
+================================================================================
+1. 파일 개요
+2. 주요 함수 분석
+3. 현재 로직 흐름도
+4. 문제가 있는 코드 부분
+5. 수정이 필요한 부분
+6. 추가해야 할 함수
+7. 수정 전후 비교
+
+================================================================================
+1. 파일 개요
+================================================================================
+
+파일 경로:
+  client/src/services/travelScheduleCalculator.js
+
+역할:
+  - 기존 자동 배정 결과에 이동 시간을 추가하여 새로운 스케줄 재계산
+  - "보기" 버튼 클릭 시 호출됨
+  - 이동 수단별로 이동시간을 계산하고 스케줄 조정
+
+주요 메서드:
+  1. formatTime(minutes) - 분 → "HH:MM" 변환
+  2. parseTime(timeString) - "HH:MM" → 분 변환
+  3. unmergeBlock(block) - 병합된 블록 → 10분 단위 슬롯으로 분할
+  4. validateWalkingMode(currentRoom) - 도보 모드 검증
+  5. recalculateScheduleWithTravel(currentRoom, travelMode) - ⭐ 핵심 함수
+
+현재 줄 수: 561줄
+
+================================================================================
+2. 주요 함수 분석
+================================================================================
+
+[함수 1: recalculateScheduleWithTravel] ⭐ 핵심 수정 대상
+
+  위치: 202-557줄
+  역할: 이동시간을 반영하여 스케줄 재계산
+
+  입력:
+    - currentRoom: 현재 방 데이터
+    - travelMode: 'normal' | 'transit' | 'driving' | 'bicycling' | 'walking'
+
+  출력:
+    {
+      timeSlots: Array<Slot>,      // 10분 단위 슬롯 배열 (이동시간 + 수업)
+      travelSlots: Array<Travel>,  // 이동시간 슬롯만 모은 배열
+      travelMode: String           // 적용된 이동 수단
+    }
+
+  핵심 로직:
+    1. 일반 모드면 원본 반환 (206-208줄)
+    2. 방장 주소 확인 (210-221줄)
+    3. 멤버 위치 정보 수집 (223-245줄)
+    4. 시간표 병합 및 정렬 (247-258줄)
+    5. 초기 위치를 방장으로 설정 (264-269줄)
+    6. 날짜별로 슬롯 처리 (291-536줄) ← ⭐ 여기가 핵심!
+
+---
+
+[핵심 루프: 291-536줄 상세 분석]
+
+  for (const mergedSlot of sortedMergedSlots) {
+    // 1. 날짜 변경 확인 (292-311줄)
+    //    - 날짜가 바뀌면 previousLocation을 방장으로 리셋
+    //    - previousActivityEndMinutes를 0으로 리셋
+
+    // 2. userId 확인 (312-328줄)
+    //    - userId 없으면 원본 슬롯 추가 후 continue
+
+    // 3. 이동시간 계산 (330-356줄)
+    //    - travelModeService.calculateTravelTime 호출
+    //    - 10분 단위로 반올림
+    //    - 0분이면 원본 슬롯 추가 후 continue
+
+    // 4. 시간 조정 (358-379줄) ⭐ 중요
+    //    - newTravelStartMinutes = Math.max(slotStartMinutes, previousActivityEndMinutes)
+    //    - newTravelEndTimeMinutes = newTravelStartMinutes + travelDurationMinutes
+    //    - newActivityStartTimeMinutes = newTravelEndTimeMinutes
+    //    - newActivityEndTimeMinutes = newActivityStartTimeMinutes + activityDurationMinutes
+
+    // 5. 금지시간 체크 (381-441줄) ⭐ 문제 부분
+    //    - 17-24시 절대 금지시간 추가 (384-390줄) ← 삭제 필요
+    //    - 금지시간과 겹치면 조정 (396-440줄)
+    //    - 17시 이후 체크 (420-427줄) ← 삭제 필요
+    //    - canPlace = false 설정
+
+    // 6. 배치 불가능 처리 (443-449줄) ⭐ 문제 부분
+    //    - canPlace = false면 원본 슬롯 추가
+    //    - continue로 다음 슬롯 처리
+    //    - ❌ 이전 슬롯과 겹칠 수 있음!
+
+    // 7. 슬롯 생성 및 추가 (451-523줄)
+    //    - travelBlock 생성 (451-465줄)
+    //    - activityBlock 생성 (467-473줄)
+    //    - travelSlotsArray에 추가 (476-505줄)
+    //    - 10분 단위로 분할 후 allResultSlots에 추가 (507-519줄)
+
+    // 8. 상태 업데이트 (521-525줄)
+    //    - previousActivityEndMinutes 업데이트
+    //    - previousLocation 업데이트
+  }
+
+---
+
+[문제 발생 시나리오 재현]
+
+  A 학생:
+    - 원본: 월 09:00-12:00
+    - 이동시간: 70분
+    - 금지시간: 12:00-13:00
+    - 조정: 월 13:00-14:10 이동 + 14:10-17:10 수업 ✅
+    - previousActivityEndMinutes = 17:10 (1030분)
+
+  B 학생:
+    - 원본: 월 13:00-16:00
+    - 이동시간: 10분
+    - 계산:
+      * newTravelStartMinutes = max(13:00, 17:10) = 17:10 (1030분)
+      * newTravelEndTimeMinutes = 17:10 + 10 = 17:20 (1040분)
+      * newActivityStartTimeMinutes = 17:20 (1040분)
+      * newActivityEndTimeMinutes = 17:20 + 180 = 20:20 (1220분)
+
+    - 금지시간 체크:
+      * 17-24시 절대 금지시간 감지 ❌
+      * adjustedStartTime = 17:10 >= 17:00 → canPlace = false
+
+    - 배치 불가능 처리:
+      * 원본 슬롯(13:00-16:00) 추가
+      * ❌ A 학생(14:10-17:10)과 겹침! (14:10-16:00 시간대)
+
+================================================================================
+3. 현재 로직 흐름도
+================================================================================
+
+[전체 흐름]
+
+  입력: currentRoom, travelMode
+    ↓
+  일반 모드? → Yes → 원본 반환
+    ↓ No
+  방장 주소 확인
+    ↓
+  멤버 위치 정보 수집
+    ↓
+  시간표 병합 및 정렬
+    ↓
+  previousLocation = 방장
+  previousActivityEndMinutes = 0
+    ↓
+  for each mergedSlot:
+    ↓
+  날짜 변경? → Yes → previousLocation/EndMinutes 리셋
+    ↓ No
+  userId 확인 → 없음 → 원본 추가, continue
+    ↓ 있음
+  이동시간 계산 → 0분 → 원본 추가, continue
+    ↓ >0분
+  시간 조정:
+    - newTravelStart = max(원본시작, 이전종료)
+    - newTravelEnd = newTravelStart + 이동시간
+    - newActivityStart = newTravelEnd
+    - newActivityEnd = newActivityStart + 수업시간
+    ↓
+  금지시간 체크:
+    - 17-24시 금지시간 추가 ❌
+    - 겹침 감지? → Yes → 금지시간 이후로 조정
+      ↓
+    - 17시 이후? → Yes → canPlace = false ❌
+    ↓
+  canPlace = false? → Yes → 원본 추가, continue ❌
+    ↓ No
+  travelBlock, activityBlock 생성
+    ↓
+  travelSlotsArray에 추가
+    ↓
+  10분 단위로 분할
+    ↓
+  allResultSlots에 추가
+    ↓
+  previousActivityEndMinutes 업데이트
+  previousLocation 업데이트
+    ↓
+  다음 슬롯
+    ↓
+  반환: { timeSlots, travelSlots, travelMode }
+
+================================================================================
+4. 문제가 있는 코드 부분
+================================================================================
+
+[문제 1: 17-24시 절대 금지시간 하드코딩]
+
+  위치: 384-390줄
+
+  ```javascript
+  // ✅ 17-24시 절대 금지시간 추가 (하드코딩)
+  const absoluteBlockedTime = {
+      name: '17-24시 절대 금지시간',
+      startTime: '17:00',
+      endTime: '24:00'
+  };
+  const allBlockedTimes = [...blockedTimes, absoluteBlockedTime];
+  ```
+
+  문제:
+    - 선호시간이 17시 이후인 학생도 배치 불가능
+    - 사용자가 설정한 금지시간이 아님
+    - 유연성 부족
+
+  해결:
+    - 이 부분 삭제
+    - 명시적 금지시간만 사용
+
+---
+
+[문제 2: 17시 이후 배치 불가 로직]
+
+  위치: 420-427줄
+
+  ```javascript
+  // ✅ 17시 절대 금지시간 체크: 조정 후에도 17시를 넘으면 배치 불가
+  if (adjustedStartTime >= 17 * 60 || adjustedEndTime > 17 * 60) {
+      console.warn(`⚠️ [배치 불가] 17시 이후로는 배정 불가능`);
+      console.warn(`   조정된 시간: ${this.formatTime(adjustedStartTime)}-${this.formatTime(adjustedEndTime)}`);
+      console.warn(`   → 이동시간 없이 원본 슬롯 유지`);
+      canPlace = false;
+      break;
+  }
+  ```
+
+  문제:
+    - 17시 이후 선호시간을 가진 학생 무시
+    - 이동시간 때문에 17시 이후로 밀린 학생 배치 불가
+    - B 학생 사라지는 직접적인 원인
+
+  해결:
+    - 이 부분 삭제
+    - 선호시간 체크로 대체
+
+---
+
+[문제 3: 배치 불가 시 원본 슬롯 유지]
+
+  위치: 443-449줄
+
+  ```javascript
+  // 배치 불가능하면 원본 슬롯 그대로 추가 (이동시간 없이)
+  if (!canPlace) {
+      console.log(`⏩ [원본 유지] 이동시간 없이 원본 슬롯 사용: ${mergedSlot.startTime}-${mergedSlot.endTime}`);
+      allResultSlots.push(...this.unmergeBlock(mergedSlot));
+      previousLocation = memberLocation;  // 위치는 업데이트 (다음 학생 이동 시간 계산용)
+      continue;
+  }
+  ```
+
+  문제:
+    - 원본 슬롯이 이전 슬롯과 겹칠 수 있음
+    - B 학생(원본 13:00-16:00)이 A 학생(조정 14:10-17:10)과 겹침
+    - 겹침 체크 없음
+
+  해결:
+    - 다른 요일로 재배정 시도
+    - 겹침 체크 추가
+    - 최후의 수단으로만 원본 유지
+
+---
+
+[문제 4: 선호시간 체크 부재]
+
+  현재 코드:
+    - 선호시간을 전혀 고려하지 않음
+    - 17시 금지시간으로 대체했지만 부정확
+
+  해결:
+    - 각 학생의 defaultSchedule 가져오기
+    - 선호시간 내 배치 우선
+    - 선호시간 외 배치 시 경고
+
+---
+
+[문제 5: 요일 재배정 로직 부재]
+
+  현재 코드:
+    - 현재 날짜에만 배치 시도
+    - 다른 요일로 이동하는 로직 없음
+
+  해결:
+    - findAvailableSlot 함수 추가
+    - 월-금 순회하면서 배치 가능한 날짜 찾기
+
+================================================================================
+5. 수정이 필요한 부분
+================================================================================
+
+[수정 1: 함수 시작 부분 - 선호시간 정보 가져오기]
+
+  위치: 202줄 직후 추가
+
+  추가 코드:
+    ```javascript
+    // 학생별 선호시간 정보 생성
+    const memberPreferences = this.buildMemberPreferences(currentRoom);
+    console.log('📊 [memberPreferences]', memberPreferences);
+    ```
+
+---
+
+[수정 2: 루프 시작 부분 - 날짜별 배정 추적]
+
+  위치: 271줄 직후 추가
+
+  추가 코드:
+    ```javascript
+    // 날짜별로 배정된 슬롯 추적 (겹침 방지)
+    const assignedSlotsByDate = {};
+    // { "2025-12-03": [{ startMinutes: 540, endMinutes: 720, userId: "..." }] }
+    ```
+
+---
+
+[수정 3: 금지시간 부분 삭제]
+
+  위치: 384-390줄 삭제
+
+  변경 전:
+    ```javascript
+    const blockedTimes = currentRoom.settings?.blockedTimes || [];
+
+    // ✅ 17-24시 절대 금지시간 추가 (하드코딩)
+    const absoluteBlockedTime = {
+        name: '17-24시 절대 금지시간',
+        startTime: '17:00',
+        endTime: '24:00'
+    };
+    const allBlockedTimes = [...blockedTimes, absoluteBlockedTime];
+    ```
+
+  변경 후:
+    ```javascript
+    // 명시적으로 지정한 금지시간만 사용 (점심시간 등)
+    const allBlockedTimes = currentRoom.settings?.blockedTimes || [];
+    ```
+
+---
+
+[수정 4: 17시 이후 체크 삭제]
+
+  위치: 420-427줄 삭제
+
+  변경 전:
+    ```javascript
+    // ✅ 17시 절대 금지시간 체크: 조정 후에도 17시를 넘으면 배치 불가
+    if (adjustedStartTime >= 17 * 60 || adjustedEndTime > 17 * 60) {
+        console.warn(`⚠️ [배치 불가] 17시 이후로는 배정 불가능`);
+        console.warn(`   조정된 시간: ${this.formatTime(adjustedStartTime)}-${this.formatTime(adjustedEndTime)}`);
+        console.warn(`   → 이동시간 없이 원본 슬롯 유지`);
+        canPlace = false;
+        break;
+    }
+    ```
+
+  변경 후:
+    ```javascript
+    // 17시 이후 체크 제거 - 선호시간 체크로 대체
+    ```
+
+---
+
+[수정 5: 배치 불가 시 처리 변경]
+
+  위치: 443-449줄 대체
+
+  변경 전:
+    ```javascript
+    // 배치 불가능하면 원본 슬롯 그대로 추가 (이동시간 없이)
+    if (!canPlace) {
+        console.log(`⏩ [원본 유지] 이동시간 없이 원본 슬롯 사용: ${mergedSlot.startTime}-${mergedSlot.endTime}`);
+        allResultSlots.push(...this.unmergeBlock(mergedSlot));
+        previousLocation = memberLocation;
+        continue;
+    }
+    ```
+
+  변경 후:
+    ```javascript
+    // 배치 불가능하면 다른 요일로 재배정 시도
+    if (!canPlace) {
+        console.warn(`⚠️ [현재 날짜 배치 불가] 다른 요일 검색 시작`);
+
+        const alternativePlacement = this.findAvailableSlot(
+            mergedSlot,
+            userId,
+            memberPreferences,
+            travelDurationMinutes,
+            activityDurationMinutes,
+            allBlockedTimes,
+            assignedSlotsByDate,
+            previousLocation
+        );
+
+        if (alternativePlacement.success) {
+            // 다른 요일에 배치 성공
+            console.log(`✅ [요일 재배정 성공] ${alternativePlacement.date}`);
+            // ... 슬롯 생성 및 추가 ...
+        } else {
+            // 모든 요일에 배치 불가능
+            console.error(`❌ [배치 실패] 모든 요일에 배치 불가능`);
+            allResultSlots.push(...this.unmergeBlock(mergedSlot));
+        }
+
+        previousLocation = memberLocation;
+        continue;
+    }
+    ```
+
+================================================================================
+6. 추가해야 할 함수
+================================================================================
+
+[함수 1: buildMemberPreferences]
+
+  목적: 학생별 선호시간 정보를 요일별로 정리
+
+  위치: recalculateScheduleWithTravel 함수 전에 추가
+
+  시그니처:
+    ```javascript
+    buildMemberPreferences(currentRoom) {
+      // ...
+      return memberPreferences;
+    }
+    ```
+
+  입력:
+    - currentRoom: 방 데이터
+
+  출력:
+    ```javascript
+    {
+      "userId1": {
+        monday: [{ startMinutes: 540, endMinutes: 720 }],
+        tuesday: [{ startMinutes: 780, endMinutes: 960 }],
+        ...
+      },
+      "userId2": { ... }
+    }
+    ```
+
+  로직:
+    1. currentRoom.members 순회
+    2. 각 member.user.defaultSchedule 가져오기
+    3. dayOfWeek로 그룹화
+    4. 시간을 분으로 변환
+    5. 데이터 없으면 기본값 (09:00-17:00)
+
+---
+
+[함수 2: isWithinPreferredTime]
+
+  목적: 특정 시간이 선호시간 내인지 체크
+
+  시그니처:
+    ```javascript
+    isWithinPreferredTime(userId, dayOfWeek, startMinutes, endMinutes, memberPreferences) {
+      // ...
+      return true/false;
+    }
+    ```
+
+  입력:
+    - userId: 학생 ID
+    - dayOfWeek: 0-6 (일-토)
+    - startMinutes: 시작 시간 (분)
+    - endMinutes: 종료 시간 (분)
+    - memberPreferences: 선호시간 객체
+
+  출력:
+    - true: 선호시간 내
+    - false: 선호시간 외
+
+  로직:
+    1. dayOfWeek를 요일명으로 변환 (monday, tuesday, ...)
+    2. memberPreferences[userId][dayName] 가져오기
+    3. 없으면 false 반환
+    4. 선호시간 슬롯들과 비교
+    5. 하나라도 완전히 포함되면 true
+
+---
+
+[함수 3: checkOverlap]
+
+  목적: 특정 시간이 이미 배정된 슬롯과 겹치는지 체크
+
+  시그니처:
+    ```javascript
+    checkOverlap(date, startMinutes, endMinutes, assignedSlotsByDate) {
+      // ...
+      return true/false;
+    }
+    ```
+
+  입력:
+    - date: 날짜 문자열 ("YYYY-MM-DD")
+    - startMinutes: 시작 시간 (분)
+    - endMinutes: 종료 시간 (분)
+    - assignedSlotsByDate: 날짜별 배정 슬롯
+
+  출력:
+    - true: 겹침
+    - false: 겹치지 않음
+
+  로직:
+    1. assignedSlotsByDate[date] 가져오기
+    2. 없으면 false 반환
+    3. 각 슬롯과 시간 겹침 체크
+    4. 겹치면 true, 안 겹치면 false
+
+---
+
+[함수 4: checkBlockedTimeConflict]
+
+  목적: 특정 시간이 금지시간과 겹치는지 체크
+
+  시그니처:
+    ```javascript
+    checkBlockedTimeConflict(startMinutes, endMinutes, blockedTimes) {
+      // ...
+      return { conflict: true/false, blockedTime: {...} };
+    }
+    ```
+
+  입력:
+    - startMinutes: 시작 시간 (분)
+    - endMinutes: 종료 시간 (분)
+    - blockedTimes: 금지시간 배열
+
+  출력:
+    - { conflict: true, blockedTime: {...} }: 겹침
+    - { conflict: false }: 겹치지 않음
+
+  로직:
+    1. blockedTimes 순회
+    2. 각 금지시간과 겹침 체크
+    3. 겹치면 { conflict: true, blockedTime } 반환
+    4. 안 겹치면 { conflict: false } 반환
+
+---
+
+[함수 5: findAvailableSlot]
+
+  목적: 다른 요일에서 배치 가능한 시간 찾기
+
+  시그니처:
+    ```javascript
+    findAvailableSlot(mergedSlot, userId, memberPreferences, travelDurationMinutes, activityDurationMinutes, blockedTimes, assignedSlotsByDate, previousLocation) {
+      // ...
+      return { success: true/false, date, dayOfWeek, ... };
+    }
+    ```
+
+  입력:
+    - mergedSlot: 원본 슬롯
+    - userId: 학생 ID
+    - memberPreferences: 선호시간 객체
+    - travelDurationMinutes: 이동시간 (분)
+    - activityDurationMinutes: 수업시간 (분)
+    - blockedTimes: 금지시간 배열
+    - assignedSlotsByDate: 날짜별 배정 슬롯
+    - previousLocation: 이전 위치 (방장)
+
+  출력:
+    ```javascript
+    {
+      success: true,
+      date: "2025-12-03",
+      dayOfWeek: 2,
+      travelStartMinutes: 540,
+      travelEndMinutes: 550,
+      activityStartMinutes: 550,
+      activityEndMinutes: 730,
+      isPreferred: true
+    }
+    ```
+
+  로직:
+    1. 현재 날짜부터 5일간 순회 (월-금)
+    2. 각 날짜의 선호시간 슬롯들 가져오기
+    3. 각 선호시간 슬롯에 배치 시도:
+       a. 이동시간 + 수업시간 계산
+       b. 금지시간과 겹침 체크
+       c. 이미 배정된 슬롯과 겹침 체크
+       d. 가능하면 { success: true, ... } 반환
+    4. 선호시간에 불가능하면 선호시간 외도 시도
+    5. 모든 날짜에 불가능하면 { success: false } 반환
+
+================================================================================
+7. 수정 전후 비교
+================================================================================
+
+[시나리오: B 학생 배치]
+
+  입력:
+    - A 학생 종료: 17:10
+    - B 학생 원본: 월 13:00-16:00
+    - B 학생 선호시간: 화 13:00-16:00
+    - 이동시간: 10분
+
+---
+
+[수정 전 (현재 코드)]
+
+  1. B 학생 처리 시작
+  2. 이동시간 계산: 10분
+  3. 시간 조정:
+     - newTravelStart = max(13:00, 17:10) = 17:10
+     - newTravelEnd = 17:10 + 10 = 17:20
+     - newActivityStart = 17:20
+     - newActivityEnd = 17:20 + 180 = 20:20
+
+  4. 금지시간 체크:
+     - 17-24시 절대 금지시간 감지 ❌
+     - 17:10 >= 17:00 → canPlace = false
+
+  5. 배치 불가능 처리:
+     - 원본 슬롯(13:00-16:00) 추가
+     - A 학생(14:10-17:10)과 겹침! ❌
+
+  결과: B 학생 사라짐 ❌
+
+---
+
+[수정 후 (새 코드)]
+
+  1. B 학생 처리 시작
+  2. 이동시간 계산: 10분
+  3. 시간 조정:
+     - newTravelStart = max(13:00, 17:10) = 17:10
+     - newTravelEnd = 17:10 + 10 = 17:20
+     - newActivityStart = 17:20
+     - newActivityEnd = 17:20 + 180 = 20:20
+
+  4. 금지시간 체크:
+     - 명시적 금지시간만 체크 (점심시간 등)
+     - 겹치지 않음 → 조정 불필요
+
+  5. 선호시간 체크:
+     - 월요일 선호시간: 없음 또는 13:00-16:00
+     - 17:20-20:20은 선호시간 외 ❌
+     - canPlace = false (선호시간 외)
+
+  6. 요일 재배정 시도:
+     - findAvailableSlot 호출
+     - 화요일 선호시간: 13:00-16:00
+     - 화요일에 배치 시도:
+       * 이전 위치: 방장 (화요일은 새 날짜)
+       * travelStart = 13:00
+       * travelEnd = 13:00 + 10 = 13:10
+       * activityStart = 13:10
+       * activityEnd = 13:10 + 180 = 16:10
+       * 선호시간 체크: 13:10-16:10은 13:00-16:00에 거의 포함 (약간 초과)
+       * 금지시간 체크: 겹치지 않음
+       * 겹침 체크: 화요일은 비어있음
+       * ✅ 배치 가능!
+
+  7. 화요일에 배치:
+     - 화 13:00-13:10 이동 + 13:10-16:10 수업
+     - assignedSlotsByDate["2025-12-03"] 업데이트
+
+  결과: B 학생 화요일에 배치 ✅
+
+================================================================================
+END OF DOCUMENT
+================================================================================
