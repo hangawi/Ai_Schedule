@@ -1040,13 +1040,17 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                     조정선호시간내: isAdjustedPreferred
                 });
 
-                // 📌 원본은 서버에서 이미 선호시간 체크했으므로 원본 체크 제거!
-                // 이전 활동 때문에 밀렸고, 조정된 시간이 선호시간 외 → 재배정
-                if (isPushedByPrevious && !isAdjustedPreferred) {
-                    console.warn(`⚠️ [재배정 필요] 이전 활동으로 밀려서 선호시간 외`);
+                // 📌 이동시간 추가 후 선호시간 초과 여부 체크
+                // 이유 불문하고 조정된 시간이 선호시간 외면 재배정 필요
+                if (!isAdjustedPreferred) {
+                    if (isPushedByPrevious) {
+                        console.warn(`⚠️ [재배정 필요] 이전 활동으로 밀려서 선호시간 외`);
+                    } else {
+                        console.warn(`⚠️ [재배정 필요] 이동시간 추가로 선호시간 초과 (${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)})`);
+                    }
                     canPlace = false;
                 }
-                // 금지시간 회피만 했거나, 조정 후에도 선호시간 내 → OK
+                // 조정 후에도 선호시간 내 → OK
                 else {
                     console.log(`✅ [선호시간 체크 통과] 같은 날짜 배치 가능`);
                 }
