@@ -1,3 +1,31 @@
+/**
+ * ===================================================================================================
+ * create_users_and_join_room.js - 대량 사용자 생성 및 자동 가입 자동화 스크립트
+ * ===================================================================================================
+ *
+ * 📍 위치: 백엔드 > server > create_users_and_join_room.js
+ * 🎯 주요 기능:
+ *    - 대규모 인원 테스트를 위해 특정 규칙(예: 12@naver.com ~ 100@naver.com)에 따라 대량의 사용자 계정을 자동 생성.
+ *    - 생성된 각 사용자의 이름을 숫자에 대응하는 한글 명칭(예: "일", "이", "십일" 등)으로 자동 변환하여 설정.
+ *    - 백엔드 회원가입 API를 호출하여 MongoDB 및 Firebase에 사용자 데이터를 등록.
+ *    - (설계 의도) 생성된 사용자들을 특정 방에 자동으로 입장시키는 통합 자동화 시나리오 제공.
+ *
+ * 🔗 연결된 파일:
+ *    - server/controllers/authController.js - 회원가입 API를 통해 상호작용.
+ *    - server/routes/auth.js - 회원가입 엔드포인트(/api/auth/register) 참조.
+ *
+ * ✏️ 수정 가이드:
+ *    - 생성할 사용자 범위나 이메일 도메인을 변경하려면 main 함수 내의 루프 조건 수정.
+ *    - 기본 비밀번호를 변경하려면 PASSWORD 상수 수정.
+ *    - 한글 이름 변환 규칙을 조정하려면 numberToKorean 함수 수정.
+ *
+ * 📝 참고사항:
+ *    - 방 참가 로직은 Firebase ID 토큰이 필요하므로, 실제 운영 시에는 별도의 토큰 생성기나 Admin SDK가 필요함.
+ *    - API 호출 과부하 방지를 위해 각 요청 사이에 짧은 지연(100ms)을 둠.
+ *
+ * ===================================================================================================
+ */
+
 const axios = require('axios');
 
 // 서버 URL 설정
@@ -5,7 +33,12 @@ const BASE_URL = 'http://localhost:5000';
 const ROOM_INVITE_CODE = 'M8M02Z';
 const PASSWORD = 'rty123';
 
-// 숫자를 한글로 변환하는 함수
+/**
+ * numberToKorean
+ * @description 숫자를 읽기 쉬운 한글 텍스트(예: 11 -> "십일")로 변환합니다.
+ * @param {number} num - 변환할 숫자.
+ * @returns {string} 한글 텍스트.
+ */
 function numberToKorean(num) {
   if (num === 0) return '영';
   if (num === 100) return '백';
@@ -28,7 +61,11 @@ function numberToKorean(num) {
   return result;
 }
 
-// 회원가입 함수
+/**
+ * registerUser
+ * @description 백엔드 API에 회원가입 요청을 보냅니다.
+ * @returns {Promise<Object|null>} 성공 시 생성된 사용자 데이터, 실패 시 null.
+ */
 async function registerUser(email, firstName, lastName, password) {
   try {
     const response = await axios.post(`${BASE_URL}/api/auth/register`, {
@@ -50,7 +87,10 @@ async function registerUser(email, firstName, lastName, password) {
   }
 }
 
-// Firebase 로그인 함수 (실제로는 Firebase SDK 사용 필요)
+/**
+ * loginUser (Placeholder)
+ * @description 사용자 로그인을 시도합니다. (실제 Firebase SDK 연동 필요)
+ */
 async function loginUser(email, password) {
   try {
     // 실제로는 Firebase Authentication을 사용해야 합니다
@@ -66,7 +106,10 @@ async function loginUser(email, password) {
   }
 }
 
-// 방 참가 함수
+/**
+ * joinRoom
+ * @description 특정 방에 합류하기 위해 초대 코드를 사용하여 API 요청을 보냅니다.
+ */
 async function joinRoom(firebaseToken, inviteCode) {
   try {
     const response = await axios.post(
@@ -91,7 +134,10 @@ async function joinRoom(firebaseToken, inviteCode) {
   }
 }
 
-// 메인 실행 함수
+/**
+ * main
+ * @description 스크립트의 메인 실행 루프로, 사용자 생성 과정을 순차적으로 자동화합니다.
+ */
 async function main() {
   console.log('🚀 회원가입 및 방 참가 자동화 시작\n');
   console.log(`📋 작업 내용:`);

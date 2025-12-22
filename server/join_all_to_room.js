@@ -1,3 +1,33 @@
+/**
+ * ===================================================================================================
+ * join_all_to_room.js - 다수 사용자의 방 가입 자동화 스크립트 (Firebase 인증 연동)
+ * ===================================================================================================
+ *
+ * 📍 위치: 백엔드 > server > join_all_to_room.js
+ * 🎯 주요 기능:
+ *    - 대규모 인원 테스트를 위해 여러 사용자(2@naver.com ~ 100@naver.com)들을 자동으로 특정 방에 입장시킴.
+ *    - Firebase Admin SDK를 사용하여 각 사용자의 Custom Token을 생성하고, 이를 다시 ID Token으로 교환하여 인증 확보.
+ *    - 획득한 인증 토큰을 Authorization 헤더에 실어 방 가입 API(/api/coordination/rooms/join) 호출.
+ *    - 이미 가입된 사용자에 대한 예외 처리 및 API 호출 지연(200ms)을 통한 안정적인 대량 처리 지원.
+ *    - 최종 작업 통계(성공, 기가입, 실패)를 상세히 보고.
+ *
+ * 🔗 연결된 파일:
+ *    - server/config/firebaseAdmin.js - Firebase 토큰 생성을 위한 auth 인스턴스 참조.
+ *    - server/routes/coordination.js - 방 가입 API 엔드포인트 참조.
+ *    - server/models/user.js - 사용자 정보(firebaseUid) 조회를 위해 사용.
+ *
+ * ✏️ 수정 가이드:
+ *    - 가입 대상 방을 변경하려면 ROOM_INVITE_CODE 상수 수정.
+ *    - 사용자 이메일 범위를 조정하려면 main 함수의 루프 조건 수정.
+ *    - API 서버 주소를 변경하려면 BASE_URL 수정.
+ *
+ * 📝 참고사항:
+ *    - 이 스크립트는 실제 Firebase 인증 체계를 우회하지 않고 정식 토큰을 발급받아 테스트를 진행함.
+ *    - FIREBASE_API_KEY 환경변수가 설정되어 있어야 ID Token 교환이 가능함.
+ *
+ * ===================================================================================================
+ */
+
 const axios = require('axios');
 const admin = require('firebase-admin');
 const User = require('./models/user');
@@ -11,20 +41,27 @@ const { auth: firebaseAuth } = require('./config/firebaseAdmin');
 const BASE_URL = 'http://localhost:5000';
 const ROOM_INVITE_CODE = 'M8M02Z';
 
-// 방 참가 함수
+/**
+ * joinRoomWithFirebaseToken
+ * @description 획득한 Firebase ID 토큰을 사용하여 방 가입 API를 호출합니다.
+ * @param {string} firebaseToken - 유효한 사용자 ID 토큰.
+ * @param {string} inviteCode - 방 초대 코드.
+ * @param {string} email - 로깅용 사용자 이메일.
+ * @returns {Promise<Object|null>} 가입 결과 데이터 또는 에러 정보.
+ */
 async function joinRoomWithFirebaseToken(firebaseToken, inviteCode, email) {
   try {
     const response = await axios.post(
-      `${BASE_URL}/api/coordination/rooms/${inviteCode}/join`,
+      `\$\s*\{\s*BASE_URL\s*\}\s*/api/coordination/rooms/\$\s*\{\s*inviteCode\s*\}\s*/join`,
       {},
       {
         headers: {
-          'Authorization': `Bearer ${firebaseToken}`
+          'Authorization': `Bearer \$\s*\{\s*firebaseToken\s*\}\s*`
         }
       }
     );
     
-    console.log(`✅ 방 참가 성공: ${email}`);
+    console.log(`✅ 방 참가 성공: \$\s*\{\s*email\s*\}\s*`);
     return response.data;
   } catch (error) {
     if (error.response) {
@@ -32,26 +69,31 @@ async function joinRoomWithFirebaseToken(firebaseToken, inviteCode, email) {
       
       // 이미 멤버인 경우는 에러로 취급하지 않음
       if (msg.includes('이미 멤버입니다') || msg.includes('already a member')) {
-        console.log(`ℹ️  이미 참가 중: ${email}`);
+        console.log(`ℹ️  이미 참가 중: \$\s*\{\s*email\s*\}\s*`);
         return { alreadyMember: true };
       }
       
-      console.error(`❌ 방 참가 실패: ${email} - ${msg}`);
+      console.error(`❌ 방 참가 실패: \$\s*\{\s*email\s*\}\s* - \$\s*\{\s*msg\s*\}\s*`);
     } else {
-      console.error(`❌ 방 참가 실패: ${email} - ${error.message}`);
+      console.error(`❌ 방 참가 실패: \$\s*\{\s*email\s*\}\s* - \$\s*\{\s*error\.message\s*\}\s*`);
     }
     return null;
   }
 }
 
-// Firebase 커스텀 토큰 생성 및 ID 토큰 획득
+/**
+ * getFirebaseIdToken
+ * @description 특정 이메일의 사용자에 대해 Firebase Custom Token을 생성하고 이를 다시 ID Token으로 교환하여 반환합니다.
+ * @param {string} email - 대상 사용자 이메일.
+ * @returns {Promise<string|null>} 획득한 ID 토큰 문자열 또는 실패 시 null.
+ */
 async function getFirebaseIdToken(email) {
   try {
     // 1. MongoDB에서 사용자 찾기
     const user = await User.findOne({ email });
     
     if (!user || !user.firebaseUid) {
-      console.error(`❌ 사용자를 찾을 수 없습니다: ${email}`);
+      console.error(`❌ 사용자를 찾을 수 없습니다: \$\s*\{\s*email\s*\}\s*`);
       return null;
     }
     
@@ -61,7 +103,7 @@ async function getFirebaseIdToken(email) {
     // 3. Custom Token을 사용하여 ID Token 획득
     // Firebase REST API를 사용
     const response = await axios.post(
-      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${process.env.FIREBASE_API_KEY}`,
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=\$\s*\{\s*process\.env\.FIREBASE_API_KEY\s*\}\s*`,
       {
         token: customToken,
         returnSecureToken: true
@@ -70,12 +112,15 @@ async function getFirebaseIdToken(email) {
     
     return response.data.idToken;
   } catch (error) {
-    console.error(`❌ Firebase 토큰 생성 실패: ${email} -`, error.message);
+    console.error(`❌ Firebase 토큰 생성 실패: \$\s*\{\s*email\s*\}\s* -`, error.message);
     return null;
   }
 }
 
-// 메인 실행 함수
+/**
+ * main
+ * @description 스크립트 메인 루프로, 사용자들을 순회하며 토큰 발급 및 방 가입 프로세스를 자동 실행합니다.
+ */
 async function main() {
   console.log('🚀 M8M02Z 방 자동 참가 시작\n');
   console.log(`📋 작업 내용:`);

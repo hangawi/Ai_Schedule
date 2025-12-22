@@ -1060,10 +1060,11 @@ exports.smartExchange = async (req, res) => {
         const currentTime = minutesToTime(slotStartMinutes);
         const slotEndTime = minutesToTime(slotEndMinutes);
 
-        newSlots.push({
+        // 🆕 Phase 3: 조원 프라이버시 보호 - 첫 번째 슬롯에만 이동시간 메타데이터 저장
+        const slotData = {
           user: req.user.id,
           date: targetDate,
-          startTime: currentTime,
+          startTime: currentTime,  // ✅ 조원이 요청한 순수 수업 시간
           endTime: slotEndTime,
           day: targetDayEnglish,
           priority: allSlotsInBlock[0]?.priority || 3,
@@ -1075,9 +1076,17 @@ exports.smartExchange = async (req, res) => {
           originalStartTime: allSlotsInBlock[0]?.originalStartTime,
           originalEndTime: allSlotsInBlock[0]?.originalEndTime,
           adjustedForTravelTime: allSlotsInBlock[0]?.adjustedForTravelTime,
-          travelTimeBefore: allSlotsInBlock[0]?.travelTimeBefore,
           location: allSlotsInBlock[0]?.location
-        });
+        };
+
+        // 🆕 첫 번째 슬롯: 이동시간 메타데이터 저장 (조원에게 절대 노출 금지!)
+        if (i === 0 && travelDurationMinutes > 0) {
+          const actualStartMinutes = activityStartMinutes - travelDurationMinutes;
+          slotData.actualStartTime = minutesToTime(actualStartMinutes);
+          slotData.travelTimeBefore = travelDurationMinutes;
+        }
+
+        newSlots.push(slotData);
       }
 
       room.timeSlots.push(...newSlots);
@@ -1314,10 +1323,11 @@ exports.smartExchange = async (req, res) => {
           const currentTime = minutesToTime(currentTimeMinutes);
           const slotEndTime = minutesToTime(slotEndTimeMinutes);
 
-          room.timeSlots.push({
+          // 🆕 Phase 3: 조원 프라이버시 보호
+          const classSlotData = {
             user: req.user.id,
             date: targetDate,
-            startTime: currentTime,
+            startTime: currentTime,  // ✅ 조원에게 보이는 수업 시작 시간
             endTime: slotEndTime,
             day: targetDayEnglish,
             priority: allSlotsInBlock[i % allSlotsInBlock.length].priority || 3,
@@ -1329,9 +1339,16 @@ exports.smartExchange = async (req, res) => {
             originalStartTime: allSlotsInBlock[0]?.originalStartTime,
             originalEndTime: allSlotsInBlock[0]?.originalEndTime,
             adjustedForTravelTime: travelDurationMinutes > 0,
-            travelTimeBefore: travelDurationMinutes,
             location: allSlotsInBlock[0]?.location
-          });
+          };
+
+          // 🆕 첫 번째 슬롯: 이동시간 메타데이터 저장 (조원에게 절대 노출 금지!)
+          if (i === 0 && travelDurationMinutes > 0) {
+            classSlotData.actualStartTime = minutesToTime(foundSlot.start);  // 실제 시작 (이동시간 포함)
+            classSlotData.travelTimeBefore = travelDurationMinutes;
+          }
+
+          room.timeSlots.push(classSlotData);
           currentTimeMinutes = slotEndTimeMinutes;
         }
 

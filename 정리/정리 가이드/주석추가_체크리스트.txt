@@ -569,343 +569,661 @@
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+
+
 📂 3. 모델 (Models) (4개)
 
+
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
 
 [x] server/models/ActivityLog.js
 
-[ ] server/models/event.js
 
-[ ] server/models/room.js
 
-[ ] server/models/user.js
+[x] server/models/event.js
+
+
+
+[x] server/models/room.js
+
+
+
+[x] server/models/user.js
 
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
 
 📂 4. 컨트롤러 (Controllers) (33개)
 
+
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[ ] server/controllers/adminController.js
 
-[ ] server/controllers/authController.js
 
-[ ] server/controllers/calendarController.js
+[x] server/controllers/adminController.js
 
-[ ] server/controllers/callAnalysisController.js
 
-[ ] server/controllers/chatbotController.js
 
-[ ] server/controllers/conflictResolutionController.js
+[x] server/controllers/authController.js
 
-[ ] server/controllers/coordinationController.js
 
-[ ] server/controllers/coordinationExchangeController.js
 
-[ ] server/controllers/coordinationExchangeRequestController.js
+[x] server/controllers/calendarController.js
 
-[ ] server/controllers/coordinationMemberController.js
 
-[ ] server/controllers/coordinationSchedulingController.js
 
-[ ] server/controllers/eventController.js
+[x] server/controllers/callAnalysisController.js
 
-[ ] server/controllers/ocrChatController.js
 
-[ ] server/controllers/ocrController.js
 
-[ ] server/controllers/roomController.js
+[x] server/controllers/chatbotController.js
 
-[ ] server/controllers/timeSlotController.js
 
-[ ] server/controllers/userController.js
+
+[x] server/controllers/conflictResolutionController.js
+
+
+
+[x] server/controllers/coordinationController.js
+
+
+
+[x] server/controllers/coordinationExchangeController.js
+
+
+
+[x] server/controllers/coordinationExchangeRequestController.js
+
+
+
+[x] server/controllers/coordinationMemberController.js
+
+
+
+[x] server/controllers/coordinationSchedulingController.js
+
+
+
+[x] server/controllers/eventController.js
+
+
+
+[x] server/controllers/ocrChatController.js
+
+
+
+[x] server/controllers/ocrController.js
+
+
+
+[x] server/controllers/roomController.js
+
+
+
+[x] server/controllers/timeSlotController.js
+
+
+
+[x] server/controllers/userController.js
+
+
+
+
 
 
 
 # analysis 폴더 (3개)
 
-[ ] server/controllers/analysis/callTranscriptAnalysisController.js
 
-[ ] server/controllers/analysis/clipboardAnalysisController.js
 
-[ ] server/controllers/analysis/keywordDetectionController.js
+[x] server/controllers/analysis/callTranscriptAnalysisController.js
+
+
+
+[x] server/controllers/analysis/clipboardAnalysisController.js
+
+
+
+[x] server/controllers/analysis/keywordDetectionController.js
+
+
+
+
 
 
 
 # coordinationExchangeController 폴더 (14개)
 
-[ ] server/controllers/coordinationExchangeController/constants/dayMappings.js
 
-[ ] server/controllers/coordinationExchangeController/constants/errorMessages.js
 
-[ ] server/controllers/coordinationExchangeController/constants/timeFormats.js
+[x] server/controllers/coordinationExchangeController/constants/dayMappings.js
 
-[ ] server/controllers/coordinationExchangeController/constants/weekOffsets.js
 
-[ ] server/controllers/coordinationExchangeController/utils/dateUtils.js
 
-[ ] server/controllers/coordinationExchangeController/utils/slotMerger.js
+[x] server/controllers/coordinationExchangeController/constants/errorMessages.js
 
-[ ] server/controllers/coordinationExchangeController/utils/timeUtils.js
 
-[ ] server/controllers/coordinationExchangeController/validators/dayValidator.js
 
-[ ] server/controllers/coordinationExchangeController/validators/roomValidator.js
+[x] server/controllers/coordinationExchangeController/constants/timeFormats.js
 
-[ ] server/controllers/coordinationExchangeController/validators/scheduleValidator.js
 
-[ ] server/controllers/coordinationExchangeController/validators/timeRangeValidator.js
 
-[ ] server/controllers/coordinationExchangeController/helpers/activityLogger.js
+[x] server/controllers/coordinationExchangeController/constants/weekOffsets.js
 
-[ ] server/controllers/coordinationExchangeController/helpers/autoPlacement.js
 
-[ ] server/controllers/coordinationExchangeController/helpers/scheduleOverlap.js
 
-[ ] server/controllers/coordinationExchangeController/helpers/slotFinder.js
+[x] server/controllers/coordinationExchangeController/utils/dateUtils.js
 
-[ ] server/controllers/coordinationExchangeController/services/dateChangeService.js
 
-[ ] server/controllers/coordinationExchangeController/services/geminiService.js
+
+[x] server/controllers/coordinationExchangeController/utils/slotMerger.js
+
+
+
+[x] server/controllers/coordinationExchangeController/utils/timeUtils.js
+
+
+
+[x] server/controllers/coordinationExchangeController/validators/dayValidator.js
+
+
+
+[x] server/controllers/coordinationExchangeController/validators/roomValidator.js
+
+
+
+[x] server/controllers/coordinationExchangeController/validators/scheduleValidator.js
+
+
+
+[x] server/controllers/coordinationExchangeController/validators/timeRangeValidator.js
+
+
+
+[x] server/controllers/coordinationExchangeController/helpers/activityLogger.js
+
+
+
+[x] server/controllers/coordinationExchangeController/helpers/autoPlacement.js
+
+
+
+[x] server/controllers/coordinationExchangeController/helpers/scheduleOverlap.js
+
+
+
+[x] server/controllers/coordinationExchangeController/helpers/slotFinder.js
+
+
+
+[x] server/controllers/coordinationExchangeController/services/dateChangeService.js
+
+
+
+[x] server/controllers/coordinationExchangeController/services/geminiService.js
+
+
+
+
 
 
 
 # coordinationRequestController 폴더 (9개)
 
-[ ] server/controllers/coordinationRequestController/index.js
 
-[ ] server/controllers/coordinationRequestController/constants/dayNames.js
 
-[ ] server/controllers/coordinationRequestController/constants/errorMessages.js
+[x] server/controllers/coordinationRequestController/index.js
 
-[ ] server/controllers/coordinationRequestController/utils/slotComparator.js
 
-[ ] server/controllers/coordinationRequestController/utils/timeConverter.js
 
-[ ] server/controllers/coordinationRequestController/validators/validatePermission.js
+[x] server/controllers/coordinationRequestController/constants/dayNames.js
 
-[ ] server/controllers/coordinationRequestController/validators/validateRequest.js
 
-[ ] server/controllers/coordinationRequestController/helpers/buildScheduleByDay.js
 
-[ ] server/controllers/coordinationRequestController/helpers/findCandidates.js
+[x] server/controllers/coordinationRequestController/constants/errorMessages.js
 
-[ ] server/controllers/coordinationRequestController/helpers/findOverlappingSlots.js
 
-[ ] server/controllers/coordinationRequestController/services/activityLogService.js
+
+[x] server/controllers/coordinationRequestController/utils/slotComparator.js
+
+
+
+[x] server/controllers/coordinationRequestController/utils/timeConverter.js
+
+
+
+[x] server/controllers/coordinationRequestController/validators/validatePermission.js
+
+
+
+[x] server/controllers/coordinationRequestController/validators/validateRequest.js
+
+
+
+[x] server/controllers/coordinationRequestController/helpers/buildScheduleByDay.js
+
+
+
+[x] server/controllers/coordinationRequestController/helpers/findCandidates.js
+
+
+
+[x] server/controllers/coordinationRequestController/helpers/findOverlappingSlots.js
+
+
+
+[x] server/controllers/coordinationRequestController/services/activityLogService.js
 
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
 
 📂 5. 프롬프트 (Prompts) (6개)
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-[ ] server/prompts/confirmationRules.js
-
-[ ] server/prompts/conversationalScheduleRecommender.js
-
-[ ] server/prompts/fixedSchedulePrompts.js
-
-[ ] server/prompts/ocrChatFilter.js
-
-[ ] server/prompts/ocrPrompts.js
-
-[ ] server/prompts/scheduleOptimizer.js
-
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+
+[x] server/prompts/confirmationRules.js
+
+
+
+[x] server/prompts/conversationalScheduleRecommender.js
+
+
+
+[x] server/prompts/fixedSchedulePrompts.js
+
+
+
+[x] server/prompts/ocrChatFilter.js
+
+
+
+[x] server/prompts/ocrPrompts.js
+
+
+
+[x] server/prompts/scheduleOptimizer.js
+
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
 
 📂 6. 라우트 (Routes) (40개)
 
+
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[ ] server/routes/admin.js
 
-[ ] server/routes/auth.js
 
-[ ] server/routes/calendar.js
+[x] server/routes/admin.js
 
-[ ] server/routes/callAnalysis.js
 
-[ ] server/routes/chatbot.js
 
-[ ] server/routes/conflict.js
+[x] server/routes/auth.js
 
-[ ] server/routes/coordination.js
 
-[ ] server/routes/events.js
 
-[ ] server/routes/fixedSchedule.js
+[x] server/routes/calendar.js
 
-[ ] server/routes/kakao.js
 
-[ ] server/routes/nview.js
 
-[ ] server/routes/ocr.js
+[x] server/routes/callAnalysis.js
 
-[ ] server/routes/ocrChat.js
 
-[ ] server/routes/profile.js
 
-[ ] server/routes/scheduleOptimizer.js
+[x] server/routes/chatbot.js
 
-[ ] server/routes/users.js
+
+
+[x] server/routes/conflict.js
+
+
+
+[x] server/routes/coordination.js
+
+
+
+[x] server/routes/events.js
+
+
+
+[x] server/routes/fixedSchedule.js
+
+
+
+[x] server/routes/kakao.js
+
+
+
+[x] server/routes/nview.js
+
+
+
+[x] server/routes/ocr.js
+
+
+
+[x] server/routes/ocrChat.js
+
+
+
+[x] server/routes/profile.js
+
+
+
+[x] server/routes/scheduleOptimizer.js
+
+
+
+[x] server/routes/users.js
+
+
+
+
 
 
 
 # nview 폴더 (10개)
 
-[ ] server/routes/nview/constants/fallbackQuestions.js
 
-[ ] server/routes/nview/constants/typeMapping.js
 
-[ ] server/routes/nview/constants/promptTemplates.js
+[x] server/routes/nview/constants/fallbackQuestions.js
 
-[ ] server/routes/nview/utils/dateUtils.js
 
-[ ] server/routes/nview/utils/streakCalculator.js
 
-[ ] server/routes/nview/validators/requestValidator.js
+[x] server/routes/nview/constants/typeMapping.js
 
-[ ] server/routes/nview/helpers/statsCalculator.js
 
-[ ] server/routes/nview/helpers/weaknessAnalyzer.js
 
-[ ] server/routes/nview/helpers/rankingCalculator.js
+[x] server/routes/nview/constants/promptTemplates.js
 
-[ ] server/routes/nview/services/geminiService.js
+
+
+[x] server/routes/nview/utils/dateUtils.js
+
+
+
+[x] server/routes/nview/utils/streakCalculator.js
+
+
+
+[x] server/routes/nview/validators/requestValidator.js
+
+
+
+[x] server/routes/nview/helpers/statsCalculator.js
+
+
+
+[x] server/routes/nview/helpers/weaknessAnalyzer.js
+
+
+
+[x] server/routes/nview/helpers/rankingCalculator.js
+
+
+
+[x] server/routes/nview/services/geminiService.js
+
+
+
+
 
 
 
 # scheduleOptimizer 폴더 (14개)
 
-[ ] server/routes/scheduleOptimizer/constants/dayMappings.js
 
-[ ] server/routes/scheduleOptimizer/constants/keywords.js
 
-[ ] server/routes/scheduleOptimizer/constants/modelNames.js
+[x] server/routes/scheduleOptimizer/constants/dayMappings.js
 
-[ ] server/routes/scheduleOptimizer/utils/jsonParser.js
 
-[ ] server/routes/scheduleOptimizer/utils/statistics.js
 
-[ ] server/routes/scheduleOptimizer/utils/timeParser.js
+[x] server/routes/scheduleOptimizer/constants/keywords.js
 
-[ ] server/routes/scheduleOptimizer/validators/deletionValidator.js
 
-[ ] server/routes/scheduleOptimizer/validators/scheduleValidator.js
 
-[ ] server/routes/scheduleOptimizer/helpers/aiResponseHandler.js
+[x] server/routes/scheduleOptimizer/constants/modelNames.js
 
-[ ] server/routes/scheduleOptimizer/helpers/conflictDetector.js
 
-[ ] server/routes/scheduleOptimizer/helpers/promptGenerator.js
 
-[ ] server/routes/scheduleOptimizer/helpers/scheduleFilter.js
+[x] server/routes/scheduleOptimizer/utils/jsonParser.js
 
-[ ] server/routes/scheduleOptimizer/services/aiService.js
 
-[ ] server/routes/scheduleOptimizer/services/customScheduleService.js
 
-[ ] server/routes/scheduleOptimizer/services/optimizationService.js
+[x] server/routes/scheduleOptimizer/utils/statistics.js
+
+
+
+[x] server/routes/scheduleOptimizer/utils/timeParser.js
+
+
+
+[x] server/routes/scheduleOptimizer/validators/deletionValidator.js
+
+
+
+[x] server/routes/scheduleOptimizer/validators/scheduleValidator.js
+
+
+
+[x] server/routes/scheduleOptimizer/helpers/aiResponseHandler.js
+
+
+
+[x] server/routes/scheduleOptimizer/helpers/conflictDetector.js
+
+
+
+[x] server/routes/scheduleOptimizer/helpers/promptGenerator.js
+
+
+
+[x] server/routes/scheduleOptimizer/helpers/scheduleFilter.js
+
+
+
+[x] server/routes/scheduleOptimizer/services/aiService.js
+
+
+
+[x] server/routes/scheduleOptimizer/services/customScheduleService.js
+
+
+
+[x] server/routes/scheduleOptimizer/services/optimizationService.js
 
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
 
 📂 7. 서비스 (Services) (19개)
 
+
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[ ] server/services/schedulingAlgorithm.js
 
-[ ] server/services/schedulingAnalysisService.js
 
-[ ] server/services/travelScheduler.js
+[x] server/services/schedulingAlgorithm.js
 
-[ ] server/services/fixedSchedule/scheduleReoptimizer.js
+
+
+[x] server/services/schedulingAnalysisService.js
+
+
+
+[x] server/services/travelScheduler.js
+
+
+
+[x] server/services/fixedSchedule/scheduleReoptimizer.js
+
+
+
+
 
 
 
 # schedulingAlgorithm 폴더 (18개)
 
-[ ] server/services/schedulingAlgorithm/index.js
 
-[ ] server/services/schedulingAlgorithm/constants/errorMessages.js
 
-[ ] server/services/schedulingAlgorithm/constants/priorityConstants.js
+[x] server/services/schedulingAlgorithm/index.js
 
-[ ] server/services/schedulingAlgorithm/constants/schedulingConstants.js
 
-[ ] server/services/schedulingAlgorithm/constants/timeConstants.js
 
-[ ] server/services/schedulingAlgorithm/utils/arrayUtils.js
+[x] server/services/schedulingAlgorithm/constants/errorMessages.js
 
-[ ] server/services/schedulingAlgorithm/utils/dateUtils.js
 
-[ ] server/services/schedulingAlgorithm/utils/slotUtils.js
 
-[ ] server/services/schedulingAlgorithm/utils/timeUtils.js
+[x] server/services/schedulingAlgorithm/constants/priorityConstants.js
 
-[ ] server/services/schedulingAlgorithm/validators/conflictValidator.js
 
-[ ] server/services/schedulingAlgorithm/validators/inputValidator.js
 
-[ ] server/services/schedulingAlgorithm/validators/scheduleValidator.js
+[x] server/services/schedulingAlgorithm/constants/schedulingConstants.js
 
-[ ] server/services/schedulingAlgorithm/helpers/assignmentHelper.js
 
-[ ] server/services/schedulingAlgorithm/helpers/carryOverHelper.js
 
-[ ] server/services/schedulingAlgorithm/helpers/conflictMerger.js
+[x] server/services/schedulingAlgorithm/constants/timeConstants.js
 
-[ ] server/services/schedulingAlgorithm/helpers/memberHelper.js
 
-[ ] server/services/schedulingAlgorithm/helpers/timetableHelper.js
 
-[ ] server/services/schedulingAlgorithm/services/conflictIdentificationService.js
+[x] server/services/schedulingAlgorithm/utils/arrayUtils.js
 
-[ ] server/services/schedulingAlgorithm/services/conflictResolutionService.js
 
-[ ] server/services/schedulingAlgorithm/services/multiWeekSchedulingService.js
 
-[ ] server/services/schedulingAlgorithm/services/scoringService.js
+[x] server/services/schedulingAlgorithm/utils/dateUtils.js
 
-[ ] server/services/schedulingAlgorithm/services/slotAssignmentService.js
 
-[ ] server/services/schedulingAlgorithm/services/timetableCreationService.js
+
+[x] server/services/schedulingAlgorithm/utils/slotUtils.js
+
+
+
+[x] server/services/schedulingAlgorithm/utils/timeUtils.js
+
+
+
+[x] server/services/schedulingAlgorithm/validators/conflictValidator.js
+
+
+
+[x] server/services/schedulingAlgorithm/validators/inputValidator.js
+
+
+
+[x] server/services/schedulingAlgorithm/validators/scheduleValidator.js
+
+
+
+[x] server/services/schedulingAlgorithm/helpers/assignmentHelper.js
+
+
+
+[x] server/services/schedulingAlgorithm/helpers/carryOverHelper.js
+
+
+
+[x] server/services/schedulingAlgorithm/helpers/conflictMerger.js
+
+
+
+[x] server/services/schedulingAlgorithm/helpers/memberHelper.js
+
+
+
+[x] server/services/schedulingAlgorithm/helpers/timetableHelper.js
+
+
+
+[x] server/services/schedulingAlgorithm/services/conflictIdentificationService.js
+
+
+
+[x] server/services/schedulingAlgorithm/services/conflictResolutionService.js
+
+
+
+[x] server/services/schedulingAlgorithm/services/multiWeekSchedulingService.js
+
+
+
+[x] server/services/schedulingAlgorithm/services/scoringService.js
+
+
+
+[x] server/services/schedulingAlgorithm/services/slotAssignmentService.js
+
+
+
+[x] server/services/schedulingAlgorithm/services/timetableCreationService.js
 
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
 
 📂 8. 유틸리티 (Utils) (11개)
 
+
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[ ] server/utils/colorUtils.js
 
-[ ] server/utils/fixedScheduleHandler.js
 
-[ ] server/utils/imageHasher.js
+[x] server/utils/colorUtils.js
 
-[ ] server/utils/imageProcessing.js
 
-[ ] server/utils/scheduleAutoOptimizer.js
 
-[ ] server/utils/scheduleMoveHandler.js
+[x] server/utils/fixedScheduleHandler.js
 
-[ ] server/utils/scheduleProcessing.js
 
-[ ] server/utils/scheduleAnalysis/detectBaseSchedule.js
 
-[ ] server/utils/scheduleAnalysis/generateScheduleTitle.js
+[x] server/utils/imageHasher.js
+
+
+
+[x] server/utils/imageProcessing.js
+
+
+
+[x] server/utils/scheduleAutoOptimizer.js
+
+
+
+[x] server/utils/scheduleMoveHandler.js
+
+
+
+[x] server/utils/scheduleProcessing.js
+
+
+
+[x] server/utils/scheduleAnalysis/detectBaseSchedule.js
+
+
+
+[x] server/utils/scheduleAnalysis/generateScheduleTitle.js
 
 
 
@@ -1283,61 +1601,121 @@
 
 
 
-## 📊 진행률 추적
+================================================================================
+
+
+
+
+
+📊 진행률 추적
+
+
+
+
 
 - 전체 파일 수: 341개 (클라이언트: 223개, 서버: 118개)
 
-- 완료한 파일: 257 / 341
 
-- 진행률: 75.4%
+
+
+
+- 완료한 파일: 341 / 341
+
+
+
+
+
+- 진행률: 100%
+
+
+
+
+
+
+
+
 
 
 
 ### 세부 진행률
 
-- 클라이언트: 243 / 223 (109.0%)
-
-- 서버: 12 / 118 (10.2%)
-
-  - nview 폴더: 0 / 11
-
-  - scheduleOptimizer 폴더: 0 / 14
 
 
 
-### 최근 완료 (2025-12-08)
 
-- ScheduleGridSelector 폴더 전체 완료! (15개 파일)
+- 클라이언트: 223 / 223 (100%)
 
-  - index.js (메인 컴포넌트)
 
-  - components/DateDetailModal.js
 
-  - components/DetailedWeekView.js
 
-  - components/MergedWeekView.js
 
-  - components/MonthView.js
+- 서버: 118 / 118 (100%)
 
-  - components/ViewControls.js
 
-  - constants/scheduleConstants.js
 
-  - handlers/navigationHandlers.js
 
-  - hooks/useDateDetail.js
 
-  - hooks/useMonthNavigation.js
+  - nview 폴더: 11 / 11 (100%)
 
-  - hooks/useTimeSlots.js
 
-  - hooks/useViewMode.js
 
-  - hooks/useWeekNavigation.js
 
-  - utils/scheduleFilters.js
 
-  - utils/timeUtils.js
+  - scheduleOptimizer 폴더: 14 / 14 (100%)
+
+
+
+
+
+  - schedulingAlgorithm 폴더: 18 / 18 (100%)
+
+
+
+
+
+  - coordinationExchangeController 폴더: 14 / 14 (100%)
+
+
+
+
+
+  - coordinationRequestController 폴더: 9 / 9 (100%)
+
+
+
+
+
+
+
+
+
+
+
+### 최근 완료 (2025-12-22)
+
+
+
+
+
+- 백엔드(Server) 폴더 전체 완료! (118개 파일)
+
+
+
+
+
+- 클라이언트(Client) 폴더 전체 완료! (223개 파일)
+
+
+
+
+
+- 프로젝트 전체 파일(341개) 주석 작업 완료
+
+
+
+
+
+
 
 
 

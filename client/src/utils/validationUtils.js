@@ -1,17 +1,43 @@
 /**
- * Validation utilities for input validation and safety checks
+ * ===================================================================================================
+ * validationUtils.js - 클라이언트 사이드 입력 및 데이터 검증 유틸리티
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/utils > validationUtils.js
+ * 🎯 주요 기능:
+ *    - 사용자의 조작(교환 요청, 슬롯 선택 등)이 논리적으로 타당한지 검증하는 다양한 로직 제공.
+ *    - 중복된 교환 요청이 이미 존재하는지 확인하여 불필요한 API 호출 방지.
+ *    - 특정 슬롯의 소유권 확인, 선택된 슬롯 리스트 내 포함 여부 판단.
+ *    - 모달 입력 데이터(날짜, 시간, 액션 등)의 필수 여부 및 형식(Format) 유효성 검사.
+ *    - 배정 대상 멤버 선택의 정당성 확인 및 디바운스(Debounce) 기반의 요청 빈도 제어 지원.
+ *
+ * 🔗 연결된 파일:
+ *    - ./dateUtils.js - 날짜 비교를 위해 참조.
+ *    - ../components/modals/ - 각종 모달 컴포넌트에서 사용자 입력 검증 시 사용.
+ *    - ../hooks/useCoordination.js - 조율 로직 중 중복 요청 체크 시 활용.
+ *
+ * ✏️ 수정 가이드:
+ *    - 새로운 요청 타입(예: 취소 요청 등)을 추가하려면 hasExistingSwapRequest 내의 조건식 수정.
+ *    - 시간 형식을 더 정밀하게 체크하려면 isValidTimeFormat 정규식 수정.
+ *    - 모달별 검증 항목을 추가하려면 validateModalInput의 switch 문 확장.
+ *
+ * 📝 참고사항:
+ *    - 이 모듈은 서버 부하를 줄이고 프론트엔드에서의 데이터 무결성을 보장하는 1차 방어선 역할을 수행함.
+ *
+ * ===================================================================================================
  */
 
 import { safeDateToISOString } from './dateUtils';
 
 /**
- * Check if a swap request already exists
- * @param {Array} requests - Array of requests
- * @param {Object} currentUser - Current user object
- * @param {Date} date - Date object
- * @param {string} time - Time string
- * @param {string} targetUserId - Target user ID
- * @returns {boolean} - Whether swap request exists
+ * hasExistingSwapRequest
+ * @description 현재 사용자가 동일한 날짜와 시간대에 대해 이미 보낸 대기 중인 교환 요청이 있는지 확인합니다.
+ * @param {Array} requests - 방의 전체 요청 리스트.
+ * @param {Object} currentUser - 현재 로그인된 사용자 객체.
+ * @param {Date} date - 클릭한 날짜 객체.
+ * @param {string} time - 클릭한 시간 문자열.
+ * @param {string} targetUserId - 교환 대상 사용자 ID.
+ * @returns {boolean} 중복 요청이 존재하면 true, 아니면 false.
  */
 export const hasExistingSwapRequest = (requests, currentUser, date, time, targetUserId) => {
   
@@ -87,10 +113,8 @@ export const hasExistingSwapRequest = (requests, currentUser, date, time, target
 };
 
 /**
- * Check if user owns the slot
- * @param {Object} ownerInfo - Slot owner info
- * @param {Object} currentUser - Current user object
- * @returns {boolean} - Whether user owns the slot
+ * isSlotOwnedByCurrentUser
+ * @description 해당 슬롯의 소유자가 현재 로그인된 사용자인지 확인합니다.
  */
 export const isSlotOwnedByCurrentUser = (ownerInfo, currentUser) => {
   if (!ownerInfo || !currentUser) return false;
@@ -101,11 +125,8 @@ export const isSlotOwnedByCurrentUser = (ownerInfo, currentUser) => {
 };
 
 /**
- * Check if slot is selected in selectedSlots array
- * @param {Array} selectedSlots - Array of selected slots
- * @param {string} dayKey - Day key (e.g., 'monday')
- * @param {string} time - Time string
- * @returns {boolean} - Whether slot is selected
+ * isSlotInSelectedSlots
+ * @description 특정 슬롯이 현재 선택된 슬롯 배열에 포함되어 있는지 확인합니다.
  */
 export const isSlotInSelectedSlots = (selectedSlots, dayKey, time) => {
   if (!selectedSlots || !dayKey || !time) return false;
@@ -114,12 +135,8 @@ export const isSlotInSelectedSlots = (selectedSlots, dayKey, time) => {
 };
 
 /**
- * Find existing slot in timeSlots array
- * @param {Array} timeSlots - Array of time slots
- * @param {Date} date - Date object
- * @param {string} time - Time string
- * @param {string} userId - User ID
- * @returns {Object|null} - Existing slot or null
+ * findExistingSlot
+ * @description 슬롯 리스트에서 특정 날짜, 시간, 사용자에 해당하는 슬롯 객체를 찾아 반환합니다.
  */
 export const findExistingSlot = (timeSlots, date, time, userId) => {
   if (!timeSlots || !date || !time || !userId) return null;
@@ -132,10 +149,8 @@ export const findExistingSlot = (timeSlots, date, time, userId) => {
 };
 
 /**
- * Validate modal input data
- * @param {Object} modalData - Modal data object
- * @param {string} modalType - Type of modal (assign, request, change)
- * @returns {Object} - Validation result with isValid and errors
+ * validateModalInput
+ * @description 모달 창을 통해 입력된 데이터의 정합성을 검증합니다.
  */
 export const validateModalInput = (modalData, modalType) => {
   const result = {
@@ -191,11 +206,8 @@ export const validateModalInput = (modalData, modalType) => {
 };
 
 /**
- * Validate user selection for assignment
- * @param {string} memberId - Member ID to validate
- * @param {Array} members - Array of room members
- * @param {Object} currentUser - Current user object
- * @returns {Object} - Validation result
+ * validateMemberSelection
+ * @description 수동 배정 시 선택된 멤버가 유효한지 확인합니다 (자기 자신 배정 방지 등).
  */
 export const validateMemberSelection = (memberId, members, currentUser) => {
   const result = {
@@ -242,9 +254,8 @@ export const validateMemberSelection = (memberId, members, currentUser) => {
 };
 
 /**
- * Validate time format
- * @param {string} timeString - Time string to validate (HH:MM format)
- * @returns {boolean} - Whether time format is valid
+ * isValidTimeFormat
+ * @description 문자열이 유효한 HH:MM 형식인지 확인합니다.
  */
 export const isValidTimeFormat = (timeString) => {
   if (!timeString || typeof timeString !== 'string') return false;
@@ -254,19 +265,16 @@ export const isValidTimeFormat = (timeString) => {
 };
 
 /**
- * Validate date object
- * @param {Date} date - Date to validate
- * @returns {boolean} - Whether date is valid
+ * isValidDate
+ * @description 객체가 유효한 Date 타입인지 확인합니다.
  */
 export const isValidDate = (date) => {
   return date instanceof Date && !isNaN(date.getTime());
 };
 
 /**
- * Check if request is within debounce period
- * @param {Set} recentRequests - Set of recent request keys
- * @param {string} requestKey - Current request key
- * @returns {boolean} - Whether request is too recent
+ * isRequestTooRecent
+ * @description 특정 요청이 디바운스 세트(recentRequests) 내에 있는지 확인하여 중복 발송을 방지합니다.
  */
 export const isRequestTooRecent = (recentRequests, requestKey) => {
   if (!recentRequests || !requestKey) return false;

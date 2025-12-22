@@ -510,16 +510,24 @@ exports.getRoomDetails = async (req, res) => {
       // timeSlots의 user._id를 user.id로 변환 (클라이언트 호환성)
       const roomObj = room.toObject();
 
+      // 조원은 확정된 이동시간 모드만 볼 수 있음
+      const isOwner = room.owner._id.toString() === req.user.id.toString();
+
       if (roomObj.timeSlots && roomObj.timeSlots.length > 0) {
          roomObj.timeSlots.forEach(slot => {
             if (slot.user && slot.user._id) {
                slot.user.id = slot.user._id.toString();
             }
+
+            // 🆕 Phase 3: 조원 프라이버시 보호 - 이동시간 메타데이터 숨김
+            if (!isOwner) {
+               // 조원에게는 actualStartTime과 travelTimeBefore 절대 노출 금지!
+               delete slot.actualStartTime;
+               delete slot.travelTimeBefore;
+            }
          });
       }
 
-      // 조원은 확정된 이동시간 모드만 볼 수 있음
-      const isOwner = room.owner._id.toString() === req.user.id.toString();
       if (!isOwner && !roomObj.confirmedAt) {
          // 조원이고 아직 확정 안 된 경우, currentTravelMode 숨김
          roomObj.currentTravelMode = 'normal';

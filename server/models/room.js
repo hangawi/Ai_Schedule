@@ -97,6 +97,16 @@ const TimeSlotSchema = new mongoose.Schema({
   isTravel: {
     type: Boolean,
     default: false  // true면 이동시간 슬롯, false면 수업 슬롯
+  },
+  // 🆕 조원 프라이버시 보호용 필드들 (Phase 3)
+  actualStartTime: {
+    type: String,
+    required: false  // 이동시간 포함한 실제 시작 시간 (조원에게 절대 노출 금지!)
+  },
+  travelTimeBefore: {
+    type: Number,
+    required: false,  // 이 슬롯 전에 필요한 이동시간 (분 단위)
+    default: 0
   }
 });
 

@@ -1,14 +1,38 @@
 /**
- * 일정 이동 처리 핸들러
- * "금요일 구몬을 토요일 2시로 옮겨" 같은 요청 처리
+ * ===================================================================================================
+ * scheduleMoveHandler.js - 특정 일정의 시간/요일 이동 요청 처리 헬퍼
+ * ===================================================================================================
+ *
+ * 📍 위치: 백엔드 > server/utils > scheduleMoveHandler.js
+ * 🎯 주요 기능:
+ *    - 사용자의 자연어 일정 이동 요청(예: "금요일 수업을 토요일로 옮겨")을 감지하고 파싱.
+ *    - 정규식을 활용하여 원본 일정의 요일, 시간, 제목 및 목표 시점을 정확히 추출.
+ *    - 현재 시간표 및 고정 일정 목록을 검색하여 이동 대상이 되는 원본 일정 객체 식별.
+ *    - 원본 일정을 삭제하고 새로운 시점에 일정을 재배치하며, 일정의 지속 시간(Duration) 및 메타데이터 유지.
+ *    - 고정 일정(Fixed) 상태의 전파 및 업데이트를 통해 데이터 일관성 관리.
+ *    - 이동 실패 시(일정 미발견 등) 현재 스케줄 요약 정보와 함께 사용자 가이드 메시지 제공.
+ *
+ * 🔗 연결된 파일:
+ *    - server/routes/scheduleOptimizer.js - 채팅 요청 중 이동 관련 의도 발견 시 이 헬퍼 호출.
+ *    - server/utils/scheduleAutoOptimizer.js - 이동 완료 후 전체 시간표 재최적화를 위해 연동.
+ *
+ * ✏️ 수정 가이드:
+ *    - 자연어 이동 패턴(예: "~로 밀어줘" 등)을 추가하려면 handleScheduleMoveRequest 내의 정규식 패턴 보강.
+ *    - 시간 파싱 정확도를 높이려면 extractTimeFromInput(fixedScheduleHandler.js와 유사 로직) 검토.
+ *
+ * 📝 참고사항:
+ *    - "있는" 또는 "잇는"과 같은 흔한 오타에 대해서도 유연하게 대응할 수 있도록 정규식이 설계됨.
+ *
+ * ===================================================================================================
  */
 
 /**
- * 일정 이동 요청 감지 및 처리
- * @param {string} message - 사용자 입력 메시지
- * @param {Array} currentSchedule - 현재 스케줄 배열
- * @param {Array} fixedSchedules - 고정 일정 배열
- * @returns {Object} - { isMoveRequest, result }
+ * handleScheduleMoveRequest
+ * @description 사용자 메시지에서 일정 이동 의도를 추출하고, 가능하다면 실제 데이터 변경을 수행합니다.
+ * @param {string} message - 사용자 입력 메시지.
+ * @param {Array} currentSchedule - 현재 적용된 전체 일정 배열.
+ * @param {Array} fixedSchedules - 현재 등록된 고정 일정 배열.
+ * @returns {Object} 이동 수행 여부 및 결과를 담은 객체.
  */
 function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
 
@@ -75,7 +99,7 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
     const targetDay = Object.entries(dayMap).find(([k]) => targetDayKor.includes(k))?.[1];
 
     // 원본 시간 정규화 (오전/오후)
-    const isSourcePM = message.match(new RegExp(`${sourceDayKor}.*오후\\s*${sourceHour}시`));
+    const isSourcePM = message.match(new RegExp(`\$\s*\{\s*sourceDayKor\s*\}\s*\.\*오후\\s*\$\s*\{\s*sourceHour\s*\}\s*시`));
     let normalizedSourceHour = sourceHour;
     if (isSourcePM && sourceHour < 12) {
       normalizedSourceHour = sourceHour + 12;
@@ -83,7 +107,7 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
     const sourceTime = `${normalizedSourceHour.toString().padStart(2, '0')}:00`;
 
     // 목표 시간 정규화 (오전/오후)
-    const isTargetPM = message.match(new RegExp(`${targetDayKor}.*오후\\s*${targetHour}시`));
+    const isTargetPM = message.match(new RegExp(`\$\s*\{\s*targetDayKor\s*\}\s*\.\*오후\\s*\$\s*\{\s*targetHour\s*\}\s*시`));
     let normalizedTargetHour = targetHour;
     if (isTargetPM && targetHour < 12) {
       normalizedTargetHour = targetHour + 12;
@@ -140,10 +164,10 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
         isMoveRequest: true,
         result: {
           success: false,
-          understood: `${sourceDayKor} ${sourceTime} ${title}을 ${targetDayKor} ${targetTime}로 이동 시도`,
+          understood: `\$\s*\{\s*sourceDayKor\s*\}\s* \$\s*\{\s*sourceTime\s*\}\s* \$\s*\{\s*title\s*\}\s*을 \$\s*\{\s*targetDayKor\s*\}\s* \$\s*\{\s*targetTime\s*\}\s*로 이동 시도`,
           action: 'move_failed',
           schedule: currentSchedule,
-          explanation: `${sourceDayKor} ${sourceTime}에 "${title}" 일정을 찾을 수 없어요. 😅\n\n현재 ${sourceDayKor} 일정:\n${getCurrentDaySchedules(currentSchedule, sourceDay, fixedSchedules)}`
+          explanation: `\$\s*\{\s*sourceDayKor\s*\}\s* \$\s*\{\s*sourceTime\s*\}\s*에 "\$\s*\{\s*title\s*\}\s*" 일정을 찾을 수 없어요. 😅\n\n현재 \$\s*\{\s*sourceDayKor\s*\}\s* 일정:\n\$\s*\{\s*getCurrentDaySchedules\s*\(\s*currentSchedule,\s*sourceDay,\s*fixedSchedules\s*\)\s*\}\s*`
         }
       };
     }
@@ -207,7 +231,7 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
         days: [targetDayKorean], // 한글 요일 사용
         startTime: targetTime,
         endTime: newEndTime,
-        id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        id: `custom-\$\s*\{\s*Date\.now\s*\(\s*\)\s*\}\s*-\$\s*\{\s*Math\.random\s*\(\s*\)\s*\.toString\s*\(\s*36\s*\)\s*\.substr\s*\(\s*2,\s*9\s*\)\s*\}\s*`
       };
       updatedFixedSchedules.push(newFixed);
     }
@@ -216,11 +240,11 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
       isMoveRequest: true,
       result: {
         success: true,
-        understood: `${sourceDayKor} ${title}을 ${targetDayKor} ${targetHour}시로 이동`,
+        understood: `\$\s*\{\s*sourceDayKor\s*\}\s* \$\s*\{\s*title\s*\}\s*을 \$\s*\{\s*targetDayKor\s*\}\s* \$\s*\{\s*targetHour\s*\}\s*시로 이동`,
         action: 'move',
         schedule: updatedSchedule,
         fixedSchedules: updatedFixedSchedules,
-        explanation: `✅ ${title}을 ${sourceDayKor}에서 ${targetDayKorean}요일 ${targetTime}로 이동했어요! 😊`,
+        explanation: `✅ \$\s*\{\s*title\s*\}\s*을 \$\s*\{\s*sourceDayKor\s*\}\s*에서 \$\s*\{\s*targetDayKorean\s*\}\s*요일 \$\s*\{\s*targetTime\s*\}\s*로 이동했어요! 😊`,
         movedSchedule: newSchedule
       }
     };
@@ -285,10 +309,10 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
         isMoveRequest: true,
         result: {
           success: false,
-          understood: `${sourceDayKor} ${title}을 ${targetDayKor}로 이동 시도`,
+          understood: `\$\s*\{\s*sourceDayKor\s*\}\s* \$\s*\{\s*title\s*\}\s*을 \$\s*\{\s*targetDayKor\s*\}\s*로 이동 시도`,
           action: 'move_failed',
           schedule: currentSchedule,
-          explanation: `${sourceDayKor}에 "${title}" 일정을 찾을 수 없어요. 😅\n\n현재 ${sourceDayKor} 일정:\n${getCurrentDaySchedules(currentSchedule, sourceDay, fixedSchedules)}`
+          explanation: `\$\s*\{\s*sourceDayKor\s*\}\s*에 "\$\s*\{\s*title\s*\}\s*" 일정을 찾을 수 없어요. 😅\n\n현재 \$\s*\{\s*sourceDayKor\s*\}\s* 일정:\n\$\s*\{\s*getCurrentDaySchedules\s*\(\s*currentSchedule,\s*sourceDay,\s*fixedSchedules\s*\)\s*\}\s*`
         }
       };
     }
@@ -297,18 +321,18 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
     if (foundSchedules.length > 1) {
 
       const optionsList = foundSchedules.map((s, idx) =>
-        `${idx + 1}. ${s.title} (${s.startTime}-${s.endTime})`
+        `\$\s*\{\s*idx\s*\+\s*1\s*\}\s*\. \$\s*\{\s*s\.title\s*\}\s* (\$\s*\{\s*s\.startTime\s*\}\s*-\$\s*\{\s*s\.endTime\s*\}\s*)`
       ).join('\n');
 
       return {
         isMoveRequest: true,
         result: {
           success: false,
-          understood: `${sourceDayKor} ${title}을 ${targetDayKor}로 이동 시도`,
+          understood: `\$\s*\{\s*sourceDayKor\s*\}\s* \$\s*\{\s*title\s*\}\s*을 \$\s*\{\s*targetDayKor\s*\}\s*로 이동 시도`,
           action: 'move_multiple_found',
           schedule: currentSchedule,
           options: foundSchedules,
-          explanation: `${sourceDayKor}에 "${title}" 일정이 여러 개 있어요. 어떤 일정을 이동할까요? 🤔\n\n${optionsList}\n\n예: "2번 일정을 ${targetDayKor}로 이동"`
+          explanation: `\$\s*\{\s*sourceDayKor\s*\}\s*에 "\$\s*\{\s*title\s*\}\s*" 일정이 여러 개 있어요. 어떤 일정을 이동할까요? 🤔\n\n\$\s*\{\s*optionsList\s*\}\s*\n\n예: "2번 일정을 \$\s*\{\s*targetDayKor\s*\}\s*로 이동"`
         }
       };
     }
@@ -372,7 +396,7 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
         days: [targetDayKorean],
         startTime: targetTime,
         endTime: newEndTime,
-        id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        id: `custom-\$\s*\{\s*Date\.now\s*\(\s*\)\s*\}\s*-\$\s*\{\s*Math\.random\s*\(\s*\)\s*\.toString\s*\(\s*36\s*\)\s*\.substr\s*\(\s*2,\s*9\s*\)\s*\}\s*`
       };
       updatedFixedSchedules.push(newFixed);
     }
@@ -381,11 +405,11 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
       isMoveRequest: true,
       result: {
         success: true,
-        understood: `${sourceDayKor} ${title}을 ${targetDayKor}로 이동 (시간 유지)`,
+        understood: `\$\s*\{\s*sourceDayKor\s*\}\s* \$\s*\{\s*title\s*\}\s*을 \$\s*\{\s*targetDayKor\s*\}\s*로 이동 (시간 유지)`,
         action: 'move',
         schedule: updatedSchedule,
         fixedSchedules: updatedFixedSchedules,
-        explanation: `✅ ${title}을 ${sourceDayKor}에서 ${targetDayKorean}요일 ${targetTime}로 이동했어요! 😊`,
+        explanation: `✅ \$\s*\{\s*title\s*\}\s*을 \$\s*\{\s*sourceDayKor\s*\}\s*에서 \$\s*\{\s*targetDayKorean\s*\}\s*요일 \$\s*\{\s*targetTime\s*\}\s*로 이동했어요! 😊`,
         movedSchedule: newSchedule
       }
     };
@@ -405,15 +429,15 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
     const targetDay = Object.entries(dayMap).find(([k]) => targetDayKor.includes(k))?.[1];
 
     // 원본 시간 정규화
-    const isSourcePM = message.match(/오후\s*\d+시.*있는/);
+    const isSourcePM = message.match(/오후\s*\d+시\.\*있는/);
     let normalizedSourceHour = sourceHour;
     if (isSourcePM && sourceHour < 12) {
       normalizedSourceHour = sourceHour + 12;
     }
     const sourceTime = `${normalizedSourceHour.toString().padStart(2, '0')}:00`;
 
-    // 목표 시간 정규화
-    const isTargetPM = message.match(new RegExp(`${targetDayKor}.*오후\\s*${targetHour}시`));
+    // 목표 시간 정규화 (오전/오후)
+    const isTargetPM = message.match(new RegExp(`\$\s*\{\s*targetDayKor\s*\}\s*\.\*오후\\s*\$\s*\{\s*targetHour\s*\}\s*시`));
     let normalizedTargetHour = targetHour;
     if (isTargetPM && targetHour < 12) {
       normalizedTargetHour = targetHour + 12;
@@ -458,10 +482,10 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
         isMoveRequest: true,
         result: {
           success: false,
-          understood: `${sourceTime} ${title}을 ${targetDayKor} ${targetTime}로 이동 시도`,
+          understood: `\$\s*\{\s*sourceTime\s*\}\s* \$\s*\{\s*title\s*\}\s*을 \$\s*\{\s*targetDayKor\s*\}\s* \$\s*\{\s*targetTime\s*\}\s*로 이동 시도`,
           action: 'move_failed',
           schedule: currentSchedule,
-          explanation: `${sourceTime}에 "${title}" 일정을 찾을 수 없어요. 😅`
+          explanation: `\$\s*\{\s*sourceTime\s*\}\s*에 "\$\s*\{\s*title\s*\}\s*" 일정을 찾을 수 없어요. 😅`
         }
       };
     }
@@ -519,7 +543,7 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
         days: [targetDayKorean],
         startTime: targetTime,
         endTime: newEndTime,
-        id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        id: `custom-\$\s*\{\s*Date\.now\s*\(\s*\)\s*\}\s*-\$\s*\{\s*Math\.random\s*\(\s*\)\s*\.toString\s*\(\s*36\s*\)\s*\.substr\s*\(\s*2,\s*9\s*\)\s*\}\s*`
       };
       updatedFixedSchedules.push(newFixed);
     }
@@ -528,11 +552,11 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
       isMoveRequest: true,
       result: {
         success: true,
-        understood: `${sourceTime} ${title}을 ${targetDayKor} ${targetTime}로 이동`,
+        understood: `\$\s*\{\s*sourceTime\s*\}\s* \$\s*\{\s*title\s*\}\s*을 \$\s*\{\s*targetDayKor\s*\}\s* \$\s*\{\s*targetTime\s*\}\s*로 이동`,
         action: 'move',
         schedule: updatedSchedule,
         fixedSchedules: updatedFixedSchedules,
-        explanation: `✅ ${title} (${sourceTime})을 ${targetDayKorean}요일 ${targetTime}로 이동했어요! 😊`,
+        explanation: `✅ \$\s*\{\s*title\s*\}\s* (\$\s*\{\s*sourceTime\s*\}\s*)을 \$\s*\{\s*targetDayKorean\s*\}\s*요일 \$\s*\{\s*targetTime\s*\}\s*로 이동했어요! 😊`,
         movedSchedule: newSchedule
       }
     };
@@ -542,7 +566,8 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
 }
 
 /**
- * 특정 요일의 현재 스케줄 목록 가져오기
+ * getCurrentDaySchedules
+ * @description 특정 요일의 현재 적용된 전체 일정(일반 + 고정) 목록을 포맷팅된 문자열로 반환합니다.
  */
 function getCurrentDaySchedules(currentSchedule, dayCode, fixedSchedules) {
   const daySchedules = currentSchedule.filter(s =>
@@ -561,12 +586,13 @@ function getCurrentDaySchedules(currentSchedule, dayCode, fixedSchedules) {
 
   return all
     .sort((a, b) => a.startTime.localeCompare(b.startTime))
-    .map(s => `• ${s.title} (${s.startTime}-${s.endTime})`)
+    .map(s => `• \$\s*\{\s*s\.title\s*\}\s* (\$\s*\{\s*s\.startTime\s*\}\s*-\$\s*\{\s*s\.endTime\s*\}\s*)`)
     .join('\n');
 }
 
 /**
- * 시간 간격 계산 (분 단위)
+ * calculateDuration
+ * @description 두 시간 사이의 간격을 분 단위 수치로 계산합니다.
  */
 function calculateDuration(startTime, endTime) {
   const [startHour, startMin] = startTime.split(':').map(Number);
@@ -575,7 +601,8 @@ function calculateDuration(startTime, endTime) {
 }
 
 /**
- * 시간에 분 추가
+ * addMinutesToTime
+ * @description 특정 시간에 지정된 분을 더한 결과를 HH:MM 형식으로 반환합니다.
  */
 function addMinutesToTime(timeStr, minutes) {
   const [hour, min] = timeStr.split(':').map(Number);
@@ -588,3 +615,4 @@ function addMinutesToTime(timeStr, minutes) {
 module.exports = {
   handleScheduleMoveRequest
 };
+

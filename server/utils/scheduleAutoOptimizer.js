@@ -1,17 +1,42 @@
 /**
- * 스케줄 자동 최적화 유틸리티
+ * ===================================================================================================
+ * scheduleAutoOptimizer.js - AI 기반 지능형 시간표 최적화 엔진
+ * ===================================================================================================
  *
- * 새로운 로직:
- * 1. 학교 시간표 = 전체가 1개의 불가분 세트 (중복 제거 절대 안 됨!)
- * 2. 영어학원 = 여러 옵션 중 1개만 선택 (상호 배타적)
- * 3. 우선순위: 학교(1) > 공부학원(2) > 학습지(3) > 예체능(4)
- * 4. Phase 1: 학년부 기반 자동 필터링 (LLM 사용)
+ * 📍 위치: 백엔드 > server/utils > scheduleAutoOptimizer.js
+ * 🎯 주요 기능:
+ *    - OCR로 추출된 여러 장의 시간표 데이터를 통합하여 사용자 맞춤형 최적 시간표 조합 생성.
+ *    - 학교 수업(불가분 세트), 공부 학원, 예체능 등 카테고리별 우선순위 기반 배정 전략 수행.
+ *    - 사용자의 학년부(초/중/고)를 자동 감지하고 LLM을 활용하여 적합한 수업만 선별적으로 필터링.
+ *    - 고정 일정(Fixed Schedules)을 최우선 반영하며, 상호 배타적인 옵션(예: 동일 수업의 다른 시간대) 중 최적안 선택.
+ *    - 이미지 제목에서 학원명과 과목명을 추출하여 데이터의 가독성과 의미론적 정확도 향상.
+ *    - 복합적인 시간 겹침(Overlap) 체크 알고리즘을 통해 충돌 없는 시간표 구성 보장.
+ *
+ * 🔗 연결된 파일:
+ *    - server/controllers/ocrController.js - 이미지 분석 완료 후 자동 최적화 시 이 모듈 호출.
+ *    - server/routes/scheduleOptimizer.js - 채팅 기반 재최적화 시 핵심 엔진으로 활용.
+ *
+ * ✏️ 수정 가이드:
+ *    - 학년부 판별 규칙을 보강하려면 detectStudentGrade 내의 정규식 또는 판단 로직 수정.
+ *    - 카테고리별 우선순위나 분류 기준을 변경하려면 categorizeSchedulesBatch 내의 프롬프트 지침 수정.
+ *    - 최적화 알고리즘의 선택 전략을 변경하려면 optimizeSchedules 루프 내의 조건식 수정.
+ *
+ * 📝 참고사항:
+ *    - 이 엔진은 단순히 겹침을 제거하는 것을 넘어, 사용자의 상황(학년 등)에 맞는 '실제 수강 가능한' 조합을 찾아줌.
+ *
+ * ===================================================================================================
  */
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// 학교 시간표 또는 학원 시간표에서 학년부 감지
+/**
+ * detectStudentGrade
+ * @description 업로드된 이미지 제목이나 내용에서 학생의 현재 학년부(초/중/고) 정보를 추론합니다.
+ * @param {Array} allSchedules - 전체 일정 리스트.
+ * @param {Array} schedulesByImage - 이미지별 메타데이터 정보.
+ * @returns {string|null} 감지된 학년부 명칭 또는 null.
+ */
 function detectStudentGrade(allSchedules, schedulesByImage) {
   // 1. 학교 시간표에서 학년부 찾기 (최우선)
   for (const schedule of allSchedules) {
@@ -52,7 +77,13 @@ function detectStudentGrade(allSchedules, schedulesByImage) {
   return null;
 }
 
-// LLM으로 스케줄이 학생 학년에 적합한지 판단
+/**
+ * filterSchedulesByGrade
+ * @description LLM을 사용하여 추출된 일정들이 학생의 학년 수준에 적합한지 판단하고 부적절한 일정을 필터링합니다.
+ * @param {Array} schedules - 분석 대상 일정 배열.
+ * @param {string} studentGrade - 학생의 학년부 정보.
+ * @returns {Promise<Array>} 학년별 적합성이 검증된 일정 배열.
+ */
 async function filterSchedulesByGrade(schedules, studentGrade) {
   if (!studentGrade) {
     return schedules;
@@ -115,7 +146,13 @@ ${schedules.map((s, idx) => `${idx}. ${s.title} (gradeLevel: ${s.gradeLevel || '
   }
 }
 
-// Phase 2: LLM 기반 스케줄 배치 카테고리 판단 (한 번에 여러 스케줄 처리)
+/**
+ * categorizeSchedulesBatch
+ * @description 여러 개의 일정을 한 번에 분석하여 각각의 카테고리(학교, 학원 등)와 배정 우선순위를 부여합니다.
+ * @param {Array} schedules - 분류할 일정 배열.
+ * @param {string} imageTitle - 해당 일정이 속한 이미지의 제목.
+ * @returns {Promise<Array>} 카테고리 및 메타데이터가 보강된 일정 배열.
+ */
 async function categorizeSchedulesBatch(schedules, imageTitle) {
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
@@ -230,7 +267,10 @@ ${scheduleList}
   }
 }
 
-// Phase 2: 요일별 시간 겹침 체크 (학교는 요일마다 종료 시간이 다를 수 있음)
+/**
+ * hasTimeOverlap
+ * @description 두 일정이 요일과 시간 측면에서 서로 중첩되는지 확인합니다.
+ */
 function hasTimeOverlap(schedule1, schedule2) {
   const days1 = schedule1.days || [];
   const days2 = schedule2.days || [];
@@ -270,7 +310,10 @@ function hasTimeOverlap(schedule1, schedule2) {
   return false; // 모든 요일 체크 후 겹침 없음
 }
 
-// 이미지 전체가 다른 스케줄들과 겹치는지 확인
+/**
+ * imageHasOverlap
+ * @description 한 이미지 그룹의 일정들이 기존에 선택된 일정들과 하나라도 겹치는지 확인합니다.
+ */
 function imageHasOverlap(imageSchedules, otherSchedules) {
   for (const schedule1 of imageSchedules) {
     for (const schedule2 of otherSchedules) {
@@ -282,6 +325,14 @@ function imageHasOverlap(imageSchedules, otherSchedules) {
   return false;
 }
 
+/**
+ * optimizeSchedules
+ * @description 추출된 대량의 일정 데이터를 분석하여 최적의 비충돌 시간표 조합을 생성하는 메인 함수입니다.
+ * @param {Array} allSchedules - 분석할 전체 일정 리스트.
+ * @param {Array} schedulesByImage - 이미지별로 그룹화된 일정 데이터.
+ * @param {Array} [fixedSchedules=[]] - 사용자가 명시한 고정 일정 리스트.
+ * @returns {Promise<Object>} 최적화된 일정 리스트 및 분석 통계.
+ */
 async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules = []) {
 
   // 0-1. 고정 일정을 먼저 선택 (최우선)

@@ -257,7 +257,68 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
       }
     }
 
-    // ⑥ 모든 검증 통과
+    // ⑥ 🆕 Phase 4: 선호시간 범위 검증
+    const newSlotWithTravel = slotsWithTravel.find(s =>
+      (s.user._id || s.user).toString() === userId.toString() &&
+      s.startTime === targetTime
+    );
+
+    if (newSlotWithTravel) {
+      try {
+        const requestingUser = await User.findById(userId);
+        if (requestingUser) {
+          // 조원의 선호시간 조회
+          const targetDayOfWeek = new Date(targetDate).getDay(); // 0: Sunday, 6: Saturday
+          const targetDateStr = new Date(targetDate).toISOString().split('T')[0];
+
+          // 해당 요일/날짜의 선호시간 찾기 (defaultSchedule + scheduleExceptions)
+          const defaultSchedule = requestingUser.defaultSchedule || [];
+          const scheduleExceptions = requestingUser.scheduleExceptions || [];
+
+          const applicableSchedules = [
+            ...defaultSchedule.filter(s => !s.specificDate && s.dayOfWeek === targetDayOfWeek),
+            ...scheduleExceptions.filter(s => s.specificDate === targetDateStr),
+            ...defaultSchedule.filter(s => s.specificDate === targetDateStr)
+          ];
+
+          if (applicableSchedules.length > 0) {
+            // 선호시간 범위 찾기 (병합)
+            const preferredRanges = applicableSchedules.map(s => ({
+              start: timeToMinutes(s.startTime),
+              end: timeToMinutes(s.endTime)
+            })).sort((a, b) => a.start - b.start);
+
+            // 새 슬롯의 실제 시작 (이동시간 포함) & 종료 시간
+            const actualStart = timeToMinutes(newSlotWithTravel.travelStartTime);
+            const actualEnd = timeToMinutes(newSlotWithTravel.classEndTime);
+
+            // 선호시간 범위 내에 있는지 확인
+            const isWithinPreferred = preferredRanges.some(range =>
+              actualStart >= range.start && actualEnd <= range.end
+            );
+
+            if (!isWithinPreferred) {
+              console.log(`❌ [시뮬레이션 실패] 선호시간 침범: 실제 ${newSlotWithTravel.travelStartTime}-${newSlotWithTravel.classEndTime}, 선호시간: ${preferredRanges.map(r => `${minutesToTime(r.start)}-${minutesToTime(r.end)}`).join(', ')}`);
+
+              // 최소 가능 시간 계산
+              const travelTime = newSlotWithTravel.travelTime;
+              const minPossibleStart = preferredRanges[0].start + travelTime;
+              const minPossibleTime = minutesToTime(minPossibleStart);
+
+              return {
+                isValid: false,
+                reason: `선호시간 범위를 벗어납니다. 최소 ${minPossibleTime}부터 가능합니다.`,
+                minTime: minPossibleTime
+              };
+            }
+          }
+        }
+      } catch (error) {
+        console.error('선호시간 검증 오류:', error);
+      }
+    }
+
+    // ⑦ 모든 검증 통과
     console.log(`✅ [시뮬레이션 성공] 해당 시간에 배치 가능`);
     return { isValid: true, reason: '가능합니다.' };
 
