@@ -58,6 +58,10 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
 
   // 이전 방 ID를 추적하여 실제로 방이 변경되었을 때만 상태 초기화
   const prevRoomIdRef = useRef(null);
+  // 🆕 이전 timeSlots 참조 저장 (자동배정 등으로 인한 데이터 변경 감지용)
+  const prevTimeSlotsRef = useRef(currentRoom?.timeSlots);
+  // 🆕 이전 서버 모드 참조 저장 (서버 상태 변경 감지용)
+  const prevServerModeRef = useRef(currentRoom?.confirmedTravelMode || currentRoom?.currentTravelMode || 'normal');
 
   const handleModeChange = useCallback(async (newMode) => {
     // ⚠️ 확정된 방은 재계산하지 않음 (조회만 가능)
@@ -210,20 +214,47 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
     }
   }, [currentRoom?._id, currentRoom?.currentTravelMode, currentRoom?.confirmedTravelMode]);
 
+  // 🆕 TimeSlots 변경 감지 -> enhancedSchedule 무효화 (자동배정 결과 반영 등)
+  useEffect(() => {
+    if (currentRoom?.timeSlots !== prevTimeSlotsRef.current) {
+      prevTimeSlotsRef.current = currentRoom?.timeSlots;
+      
+      // 모드가 일반이 아니고, 이미 계산된 스케줄이 있다면 무효화 (재계산 유도)
+      if (travelMode !== 'normal' && enhancedSchedule) {
+         console.log('🔄 [useTravelMode] 스케줄 데이터 변경 감지: enhancedSchedule 초기화');
+         setEnhancedSchedule(null);
+      }
+    }
+  }, [currentRoom?.timeSlots, travelMode, enhancedSchedule]);
+
+  // 🆕 재계산 트리거 (모드는 설정됐는데 데이터가 없을 때)
+  useEffect(() => {
+    if (travelMode !== 'normal' && !enhancedSchedule && !isCalculating && !error) {
+       console.log('🔄 [useTravelMode] 모드 동기화 및 재계산 트리거');
+       handleModeChange(travelMode);
+    }
+  }, [travelMode, enhancedSchedule, isCalculating, error, handleModeChange]);
+
   // 🆕 방장이 travelMode를 변경했을 때 조원이 동기화 받을 수 있도록 처리
   useEffect(() => {
     const currentRoomId = currentRoom?._id?.toString();
+    const serverMode = currentRoom?.confirmedTravelMode || currentRoom?.currentTravelMode || 'normal';
 
-    // 같은 방에서 travelMode가 서버에서 업데이트된 경우 (방장이 변경한 경우)
-    if (currentRoomId === prevRoomIdRef.current && currentRoom?.currentTravelMode) {
-      const serverMode = currentRoom.confirmedTravelMode || currentRoom.currentTravelMode;
-
-      // 현재 상태와 서버 상태가 다를 경우에만 동기화
-      if (travelMode !== serverMode && !isCalculating) {
-        setTravelMode(serverMode);
+    // 같은 방 내에서
+    if (currentRoomId === prevRoomIdRef.current) {
+      // 서버의 모드 값이 실제로 변경되었을 때만 로컬 상태 업데이트
+      if (serverMode !== prevServerModeRef.current) {
+         console.log(`🔄 [useTravelMode] 서버 모드 변경 감지: ${prevServerModeRef.current} -> ${serverMode}`);
+         if (travelMode !== serverMode && !isCalculating) {
+            setTravelMode(serverMode);
+         }
+         prevServerModeRef.current = serverMode;
       }
+    } else {
+      // 방이 바뀌었으면 ref 업데이트만 (초기화는 위쪽 useEffect에서 함)
+      prevServerModeRef.current = serverMode;
     }
-  }, [currentRoom?.currentTravelMode, currentRoom?.confirmedTravelMode, isCalculating]);
+  }, [currentRoom?.currentTravelMode, currentRoom?.confirmedTravelMode, currentRoom?._id, isCalculating, travelMode]);
 
   return {
     travelMode,

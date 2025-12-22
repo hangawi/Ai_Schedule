@@ -363,6 +363,11 @@ exports.runAutoSchedule = async (req, res) => {
       const autoConfirmDelay = 1 * 60 * 1000; // 1분 = 60,000ms
       room.autoConfirmAt = new Date(Date.now() + autoConfirmDelay);
 
+      // ✨ 요청받은 이동수단 모드를 현재 모드로 설정 (UI 동기화 유지)
+      room.currentTravelMode = transportMode || 'normal';
+      room.confirmedTravelMode = null;
+      room.travelTimeSlots = [];
+
       await room.save();
 
       // 활동 로그 기록
