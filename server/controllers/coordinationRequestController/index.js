@@ -43,7 +43,7 @@ const { findCandidates } = require('./helpers/findCandidates');
 const { logApproval, logRejection, formatSlotDetails } = require('./services/activityLogService');
 
 // 체인 요청용 헬퍼 함수들 import
-const { findChainCandidates } = require('../coordinationExchangeRequestController');
+const { findChainCandidates } = require('../coordinationExchangeController');
 
 // @desc    Create a new request
 // @route   POST /api/coordination/requests
@@ -72,6 +72,39 @@ exports.createRequest = async (req, res) => {
     // 중복 요청 확인
     if (hasDuplicateRequest(room.requests, req.user.id, timeSlot, type, targetUserId)) {
       return res.status(400).json({ msg: ERROR_MESSAGES.DUPLICATE_REQUEST, duplicateRequest: true });
+    }
+
+    // 🆕 이동시간 충돌 시뮬레이션 (조원이 시간을 요청할 때)
+    if (room.travelMode && room.travelMode !== 'normal' && (type === 'time_request' || type === 'slot_swap')) {
+      console.log(`🔍 [요청 검증] 이동시간 시뮬레이션 시작: travelMode=${room.travelMode}, type=${type}`);
+
+      const { simulateScheduleWithNewSlot } = require('../../services/scheduleSimulator');
+
+      // timeSlot의 duration 계산
+      const [startH, startM] = timeSlot.startTime.split(':').map(Number);
+      const [endH, endM] = timeSlot.endTime.split(':').map(Number);
+      const duration = (endH * 60 + endM) - (startH * 60 + startM);
+
+      console.log(`📊 [요청 검증] 시뮬레이션 파라미터: 날짜=${timeSlot.date}, 시간=${timeSlot.startTime}, 길이=${duration}분`);
+
+      const simulationResult = await simulateScheduleWithNewSlot(
+        roomId,
+        req.user.id,
+        new Date(timeSlot.date),
+        timeSlot.startTime,
+        duration
+      );
+
+      if (!simulationResult.isValid) {
+        console.log(`❌ [요청 거부] 시뮬레이션 실패: ${simulationResult.reason}`);
+        return res.status(400).json({
+          success: false,
+          msg: "해당 시간은 선택할 수 없습니다."
+          // reason은 보내지 않음 (방장의 이동시간 정보 숨김)
+        });
+      }
+
+      console.log(`✅ [요청 검증] 시뮬레이션 통과`);
     }
 
     // Generate descriptive message if not provided

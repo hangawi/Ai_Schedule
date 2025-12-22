@@ -189,7 +189,13 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
       startTime: targetTime,
       endTime: newEndTime,
       type: wasFixed ? 'custom' : foundSchedule.type,
-      sourceImageIndex: foundSchedule.sourceImageIndex
+      sourceImageIndex: foundSchedule.sourceImageIndex,
+      // 이동시간 관련 메타데이터 유지
+      originalStartTime: foundSchedule.originalStartTime,
+      originalEndTime: foundSchedule.originalEndTime,
+      adjustedForTravelTime: foundSchedule.adjustedForTravelTime,
+      travelTimeBefore: foundSchedule.travelTimeBefore,
+      location: foundSchedule.location
     };
 
     updatedSchedule.push(newSchedule);
@@ -349,7 +355,13 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
       startTime: targetTime,
       endTime: newEndTime,
       type: wasFixed ? 'custom' : foundSchedule.type,
-      sourceImageIndex: foundSchedule.sourceImageIndex
+      sourceImageIndex: foundSchedule.sourceImageIndex,
+      // 이동시간 관련 메타데이터 유지
+      originalStartTime: foundSchedule.originalStartTime,
+      originalEndTime: foundSchedule.originalEndTime,
+      adjustedForTravelTime: foundSchedule.adjustedForTravelTime,
+      travelTimeBefore: foundSchedule.travelTimeBefore,
+      location: foundSchedule.location
     };
     updatedSchedule.push(newSchedule);
 
@@ -489,7 +501,13 @@ function handleScheduleMoveRequest(message, currentSchedule, fixedSchedules) {
       startTime: targetTime,
       endTime: newEndTime,
       type: wasFixed ? 'custom' : foundSchedule.type,
-      sourceImageIndex: foundSchedule.sourceImageIndex
+      sourceImageIndex: foundSchedule.sourceImageIndex,
+      // 이동시간 관련 메타데이터 유지
+      originalStartTime: foundSchedule.originalStartTime,
+      originalEndTime: foundSchedule.originalEndTime,
+      adjustedForTravelTime: foundSchedule.adjustedForTravelTime,
+      travelTimeBefore: foundSchedule.travelTimeBefore,
+      location: foundSchedule.location
     };
 
     updatedSchedule.push(newSchedule);

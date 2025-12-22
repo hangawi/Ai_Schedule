@@ -1123,6 +1123,15 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
     if (travelMode) {
       room.confirmedTravelMode = travelMode;
       console.log(`✅ [확정] 이동수단 모드 저장: ${travelMode}`);
+
+      // 일반 모드로 확정하는 경우, 이동시간 슬롯 제거
+      if (travelMode === 'normal') {
+        const beforeCount = room.timeSlots.length;
+        room.timeSlots = room.timeSlots.filter(slot => !slot.isTravel);
+        room.travelTimeSlots = [];
+        const afterCount = room.timeSlots.length;
+        console.log(`🔄 [confirmSchedule] 일반 모드 확정: 이동시간 슬롯 ${beforeCount - afterCount}개 제거`);
+      }
     }
     await room.save();
 
@@ -1254,10 +1263,16 @@ exports.getAvailableSlots = async (req, res) => {
     }
 
     // 7. 응답 반환
+    // 조원은 확정된 이동시간 모드만 볼 수 있음
+    const isOwner = room.owner._id.toString() === req.user.id.toString();
+    const travelModeForMember = isOwner
+      ? (room.currentTravelMode || 'normal')
+      : (room.confirmedAt ? (room.confirmedTravelMode || room.currentTravelMode || 'normal') : 'normal');
+
     res.json({
       date,
       slots: availabilityResults,
-      travelMode: room.currentTravelMode || room.confirmedTravelMode || 'normal',
+      travelMode: travelModeForMember,
       message: '시간대별 배치 가능 여부를 조회했습니다.'
     });
 

@@ -62,7 +62,6 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
   const handleModeChange = useCallback(async (newMode) => {
     // ⚠️ 확정된 방은 재계산하지 않음 (조회만 가능)
     if (currentRoom?.confirmedAt) {
-      console.log('⚠️ [useTravelMode] 이미 확정된 방입니다. 재계산을 건너뜁니다.');
       setTravelMode(newMode);
       return;
     }
@@ -107,20 +106,6 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
         newMode
       );
 
-      console.log('✅ [useTravelMode] enhancedSchedule 설정:', {
-        timeSlots개수: result.timeSlots?.length,
-        travelSlots개수: result.travelSlots?.length,
-        '이동시간_슬롯': result.timeSlots?.filter(s => s.isTravel).length,
-        '수업_슬롯': result.timeSlots?.filter(s => !s.isTravel).length,
-        '조정된_수업_샘플': result.timeSlots?.filter(s => !s.isTravel && s.startTime >= '09:00' && s.startTime <= '12:00').slice(0, 5).map(s => ({
-          날짜: s.date,
-          시작: s.startTime,
-          종료: s.endTime,
-          과목: s.subject,
-          사용자: s.user
-        }))
-      });
-
       setEnhancedSchedule(result);
 
       // ⚠️ 서버 저장은 "적용" 버튼 클릭 시에만 수행
@@ -143,23 +128,12 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
 
   const getCurrentScheduleData = useCallback(() => {
     if (travelMode === 'normal' || !enhancedSchedule) {
-      console.log('📋 [getCurrentScheduleData] 일반 모드 또는 enhancedSchedule 없음:', {
-        travelMode,
-        enhancedSchedule: !!enhancedSchedule,
-        원본timeSlots개수: currentRoom?.timeSlots?.length
-      });
       return {
         timeSlots: currentRoom?.timeSlots || [],
         travelSlots: [],
         travelMode: travelMode  // 하드코딩된 'normal' 대신 실제 travelMode 반환
       };
     }
-    console.log('📋 [getCurrentScheduleData] enhancedSchedule 사용:', {
-      travelMode,
-      timeSlots개수: enhancedSchedule.timeSlots?.length,
-      travelSlots개수: enhancedSchedule.travelSlots?.length,
-      isOwner
-    });
 
     // ✨ 조원이면 이동시간 블록 숨김 (방장의 이동시간 정보 보호)
     if (!isOwner) {
@@ -211,12 +185,9 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
     }
 
     try {
-      console.log(`📤 [confirmTravelMode] 확정 중... 모드: ${travelMode}`);
       const result = await coordinationService.confirmTravelMode(currentRoom._id, travelMode);
-      console.log(`✅ [confirmTravelMode] 확정 완료:`, result);
       return true;
     } catch (err) {
-      console.error('⚠️ [confirmTravelMode] 실패:', err.message);
       setError('모드 확정에 실패했습니다.');
       return false;
     }
@@ -224,18 +195,35 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
 
   // 현재 방이 변경되면 모든 관련 상태를 초기화합니다.
   // 🔧 버그 수정: 같은 방 ID가 재fetch되어도 상태를 유지하도록 수정
+  // 🆕 버그 수정: 방의 currentTravelMode를 기본값으로 사용하여 서버 상태 유지
   useEffect(() => {
     const currentRoomId = currentRoom?._id?.toString();
 
     // 실제로 다른 방으로 변경되었을 때만 초기화 (같은 방 재fetch는 무시)
     if (currentRoomId !== prevRoomIdRef.current) {
-      console.log(`🔄 [useTravelMode] 방 변경 감지: ${prevRoomIdRef.current} → ${currentRoomId}, 상태 초기화`);
-      setTravelMode('normal');
+      // 🆕 서버의 currentTravelMode를 초기값으로 사용 (confirmedTravelMode 우선)
+      const initialMode = currentRoom?.confirmedTravelMode || currentRoom?.currentTravelMode || 'normal';
+      setTravelMode(initialMode);
       setEnhancedSchedule(null);
       setError(null);
       prevRoomIdRef.current = currentRoomId;
     }
-  }, [currentRoom?._id]);
+  }, [currentRoom?._id, currentRoom?.currentTravelMode, currentRoom?.confirmedTravelMode]);
+
+  // 🆕 방장이 travelMode를 변경했을 때 조원이 동기화 받을 수 있도록 처리
+  useEffect(() => {
+    const currentRoomId = currentRoom?._id?.toString();
+
+    // 같은 방에서 travelMode가 서버에서 업데이트된 경우 (방장이 변경한 경우)
+    if (currentRoomId === prevRoomIdRef.current && currentRoom?.currentTravelMode) {
+      const serverMode = currentRoom.confirmedTravelMode || currentRoom.currentTravelMode;
+
+      // 현재 상태와 서버 상태가 다를 경우에만 동기화
+      if (travelMode !== serverMode && !isCalculating) {
+        setTravelMode(serverMode);
+      }
+    }
+  }, [currentRoom?.currentTravelMode, currentRoom?.confirmedTravelMode, isCalculating]);
 
   return {
     travelMode,

@@ -24,7 +24,7 @@ const router = express.Router();
 const coordinationController = require('../controllers/coordinationController');
 const coordinationSchedulingController = require('../controllers/coordinationSchedulingController');
 const timeSlotController = require('../controllers/timeSlotController');
-const exchangeRequestController = require('../controllers/coordinationExchangeRequestController');
+const exchangeRequestController = require('../controllers/coordinationExchangeController');
 const auth = require('../middleware/auth');
 
 // Room management
@@ -99,16 +99,16 @@ router.post('/rooms/:roomId/reset-all-stats', auth, timeSlotController.resetAllM
 router.delete('/rooms/:roomId/all-carry-over-history', auth, timeSlotController.clearAllCarryOverHistories);
 
 // Smart exchange chatbot endpoints
-router.post('/rooms/:roomId/parse-exchange-request', auth, coordinationController.parseExchangeRequest);
-router.post('/rooms/:roomId/smart-exchange', auth, coordinationController.smartExchange);
+router.post('/rooms/:roomId/parse-exchange-request', auth, exchangeRequestController.parseExchangeRequest);
+router.post('/rooms/:roomId/smart-exchange', auth, exchangeRequestController.smartExchange);
 
-// Exchange request endpoints (NEW)
-router.post('/rooms/:roomId/exchange-requests', auth, exchangeRequestController.createExchangeRequest);
-router.post('/rooms/:roomId/exchange-requests/:requestId/respond', auth, exchangeRequestController.respondToExchangeRequest);
-router.get('/exchange-requests/pending', auth, exchangeRequestController.getPendingExchangeRequests);
+// Exchange request endpoints (NEW) - COMMENTED OUT: Functions not implemented
+// router.post('/rooms/:roomId/exchange-requests', auth, exchangeRequestController.createExchangeRequest);
+// router.post('/rooms/:roomId/exchange-requests/:requestId/respond', auth, exchangeRequestController.respondToExchangeRequest);
+// router.get('/exchange-requests/pending', auth, exchangeRequestController.getPendingExchangeRequests);
 
 // Chain exchange request endpoints (4.txt: A → B → C 연쇄 교환)
-router.post('/rooms/:roomId/chain-exchange-requests/:requestId/respond', auth, exchangeRequestController.respondToChainExchangeRequest);
+// router.post('/rooms/:roomId/chain-exchange-requests/:requestId/respond', auth, exchangeRequestController.respondToChainExchangeRequest);
 router.get('/chain-exchange-requests/pending', auth, exchangeRequestController.getPendingChainExchangeRequests);
 
 module.exports = router;

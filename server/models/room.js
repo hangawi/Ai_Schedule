@@ -92,6 +92,11 @@ const TimeSlotSchema = new mongoose.Schema({
   adjustedForTravelTime: {
     type: Boolean,
     default: false  // 이동시간이 적용된 슬롯인지 여부
+  },
+  // 🆕 이동시간 슬롯 여부 (방장만 볼 수 있음)
+  isTravel: {
+    type: Boolean,
+    default: false  // true면 이동시간 슬롯, false면 수업 슬롯
   }
 });
 

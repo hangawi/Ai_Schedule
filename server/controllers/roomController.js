@@ -518,6 +518,14 @@ exports.getRoomDetails = async (req, res) => {
          });
       }
 
+      // 조원은 확정된 이동시간 모드만 볼 수 있음
+      const isOwner = room.owner._id.toString() === req.user.id.toString();
+      if (!isOwner && !roomObj.confirmedAt) {
+         // 조원이고 아직 확정 안 된 경우, currentTravelMode 숨김
+         roomObj.currentTravelMode = 'normal';
+         roomObj.travelTimeSlots = [];
+      }
+
       res.json(roomObj);
    } catch (error) {
       res.status(500).json({ msg: 'Server error' });

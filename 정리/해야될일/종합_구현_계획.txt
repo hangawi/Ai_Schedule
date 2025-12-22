@@ -1,7 +1,7 @@
 ================================================================================
-작성일: 2025-12-19
-버전: 3.0 (통합 계획)
-목적: 이동시간 관련 모든 기능 통합 구현 계획
+작성일: 2025-12-22 (긴급 업데이트)
+버전: 5.0 (실제 테스트 결과 반영 - 새로운 버그 발견)
+목적: 이동시간 관련 긴급 버그 수정 및 조원 프라이버시 보호
 ================================================================================
 
 🎯 핵심 개념 정리
@@ -12,346 +12,485 @@
    - 순서가 바뀌면 이동시간도 바뀜
    - 요일이 바뀌면 이동시간도 바뀔 수 있음
 
-2. 조원들의 시간 교환 시 이동시간 제약
-   - 조원들은 방장의 이동시간을 볼 수 없음 (비공개)
-   - 하지만 다른 조원의 이동시간을 침범하면 안 됨
-   - 시스템이 내부적으로 시뮬레이션하여 가능/불가능만 표시
+2. 조원들의 프라이버시 보호 (절대 규칙!)
+   - 조원은 방장의 이동시간을 절대 볼 수 없음
+   - 조원은 자신의 "수업 시간"만 봄 (이동시간 포함 X)
+   - 조원이 9:00 수업 요청 → 시스템이 자동으로 이동시간 계산 → 실제로는 8:10 시작
+   - 하지만 조원에게는 "9:00-11:00 수업"으로만 표시
 
-3. 챗봇을 통한 시간표 변경 시 이동시간 유지
-   - 대중교통 적용 후 챗봇으로 일정 변경 시
-   - 수업 시간만 이동하면 안 되고, 이동시간도 함께 이동해야 함
+3. 시간 선택 시 이동시간 제약
+   - 조원이 시간을 선택할 때 이동시간을 고려해서 실제로 가능한 시간만 표시
+   - 예: 이동시간 50분, 선호시간 9시 시작
+     → UI에는 9:50부터 선택 가능하게 표시 (9:00~9:49는 빨간색/금지)
+     → 9:50 선택 시 실제로는 9:00에 시작 (50분 이동 + 수업)
+   - 조원은 왜 9:00~9:49가 금지인지 이유를 모름 (그냥 금지로만 표시)
 
 ================================================================================
-📋 구현 작업 목록
+🔥 최신 상황 분석 (2025-12-22 실제 테스트 결과)
+================================================================================
+
+📌 테스트 시나리오:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. 초기 배정:
+   - 방장이 자동배정 실행
+   - 대중교통 모드 선택 → "적용" 클릭
+   - B학생: 월요일 13:00-13:10 (이동시간) + 13:10-15:10 (수업 2시간)
+
+2. 조원이 시간 이동:
+   - B학생이 챗봇으로 "화요일 9시로 옮겨줘" 요청
+   - 시스템이 9시로 이동함
+
+3. 발견된 버그들:
+   ❌ 버그 1: 이동시간이 50분인데 9시 선택이 허용됨
+      - 실제로는 8:10-11:00이 되어야 함 (8:10-9:00 이동 + 9:00-11:00 수업)
+      - 하지만 선호시간이 9시 시작이므로 8:10은 선호시간 침범!
+      - 최소한 9:50에 배치되어야 함 (9:00-9:50 이동 + 9:50-11:50 수업)
+
+   ❌ 버그 2: 조원이 이동시간을 볼 수 있음 (프라이버시 침해!)
+      - B학생 프로필 탭에서 "8:10-11:00" 수업으로 보임
+      - 원래 요청한 수업: 2시간 (9:00-11:00)
+      - 실제 표시: 2시간 50분 (8:10-11:00)
+      - 조원이 "50분 이동시간이 있구나"를 알아차릴 수 있음!
+
+   ❌ 버그 3: 기존 이동시간 슬롯이 안지워짐
+      - 월요일 13:00-13:10 이동시간 슬롯이 여전히 남아있음
+      - 수업은 화요일로 옮겨졌는데 이동시간만 월요일에 고아 슬롯으로 존재
+
+   ❌ 버그 4: UI에서 선택 불가능한 시간을 알 수 없음
+      - 조원이 어떤 시간이 실제로 가능한지 미리 알 수 없음
+      - 시도해보고 거부당해야 알 수 있음
+
+================================================================================
+📋 수정된 우선순위 (긴급도 순)
 ================================================================================
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│ Phase 1: 챗봇 이동시간 처리 수정 (최우선)                              │
+│ Phase 1: ✅ 완료 - 프론트엔드 travelMode 동기화                        │
 └─────────────────────────────────────────────────────────────────────┘
 
-🔴 우선순위: 긴급
+✅ 완료 내역:
+  [✓] 1.1. useTravelMode.js에서 travelMode 초기화 로직 수정
+  [✓] 1.2. 서버의 currentTravelMode를 초기값으로 사용
+  [✓] 1.3. 서버 travelMode 변경 시 자동 동기화
+
+완료일: 2025-12-22
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ Phase 2: ✅ 완료 - 이동시간 재계산 수정                                 │
+└─────────────────────────────────────────────────────────────────────┘
+
+✅ 완료 내역:
+  [✓] 2.1. coordinationExchangeController.js - recalculateTravelTimeSlotsForDate 수정
+  [✓] 2.2. room.travelMode → effectiveTravelMode 수정
+  [✓] 2.3. scheduleSimulator 디버깅 로그 추가
+  [✓] 2.4. coordinationRequestController 검증 로그 추가
+  [✓] 2.5. 테스트 완료 - 이동시간 재계산 작동 확인
+
+완료일: 2025-12-22
+
+테스트 결과:
+✅ [이동시간 재계산] 2025-12-22: 12개 수업 슬롯에 대한 이동시간 재계산 완료
+✅ [이동시간 재계산] 2025-12-23: 12개 수업 슬롯에 대한 이동시간 재계산 완료
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ Phase 3: 🔴 최긴급 - 조원 프라이버시 보호 (이동시간 노출 방지)             │
+└─────────────────────────────────────────────────────────────────────┘
+
+🔴 우선순위: 최긴급 (조원이 이동시간을 볼 수 있는 심각한 버그!)
 📁 영향 파일:
-   - server/utils/scheduleMoveHandler.js
-   - server/controllers/chatbotController.js
-   - client/src/components/chat/handlers/scheduleHandlers.js
+   - server/controllers/coordinationExchangeController.js (smartExchange)
+   - server/models/room.js (timeSlots 스키마)
+   - client/src/components/tabs/ProfileTab/ (조원 프로필 표시)
 
-📌 문제점:
-   현재: 챗봇으로 일정 이동 시 수업 시간만 이동, 이동시간 정보 손실
-   예시:
-   - 원본: 월 13:00-13:10 (이동) + 13:10-16:10 (수업)
-   - 변경 후: 화 13:00-16:00 (이동시간 없음) ❌
+📌 현재 문제:
+   조원이 시간을 변경하면:
+   1. ❌ 수업 슬롯의 startTime/endTime이 이동시간 포함된 값으로 저장됨
+      - 예: 조원이 9:00 요청 → DB에 8:10-11:00으로 저장
+      - 이동시간 50분이 드러남!
 
-✅ 작업 내용:
+   2. ❌ 조원 프로필 탭에서 8:10-11:00이 그대로 보임
+      - 조원은 2시간 수업을 요청했는데 2시간 50분으로 표시
+      - "뭔가 시간이 이상하네?"라고 눈치챌 수 있음
 
-1.1. scheduleMoveHandler.js 수정
-   위치: 186-193번 라인 (패턴 1), 346-354번 라인 (패턴 2)
+📋 해결 방법:
 
-   변경 전:
+3.1. DB 구조 변경: 수업 슬롯과 이동시간 슬롯 완전 분리
+   위치: server/models/room.js
+
+   기존 구조 (문제):
    ```javascript
-   const newSchedule = {
-     ...foundSchedule,
-     days: [targetDayKorean],
-     startTime: targetTime,
-     endTime: newEndTime,
-     type: wasFixed ? 'custom' : foundSchedule.type
-   };
-   ```
-
-   변경 후:
-   ```javascript
-   const newSchedule = {
-     ...foundSchedule,
-     days: [targetDayKorean],
-     startTime: targetTime,
-     endTime: newEndTime,
-     type: wasFixed ? 'custom' : foundSchedule.type,
-     // 이동시간 관련 메타데이터 유지
-     originalStartTime: foundSchedule.originalStartTime,
-     originalEndTime: foundSchedule.originalEndTime,
-     adjustedForTravelTime: foundSchedule.adjustedForTravelTime,
-     travelTimeBefore: foundSchedule.travelTimeBefore,
-     location: foundSchedule.location
-   };
-   ```
-
-1.2. Room의 timeSlots 통합 확인
-   - 챗봇이 수정하는 데이터가 Room.timeSlots인지 확인
-   - Room.timeSlots에 이동시간 정보가 포함되어 있는지 검증
-   - 필요 시 scheduleRecalculator 호출하여 이동시간 재계산
-
-1.3. 이동 후 재계산 로직 추가
-   ```javascript
-   // 새 일정 추가 후
-   updatedSchedule.push(newSchedule);
-
-   // 이동시간 재계산 필요 여부 확인
-   if (foundSchedule.adjustedForTravelTime) {
-     // Room에 저장된 경우 scheduleRecalculator 호출
-     // 또는 클라이언트에서 재계산 요청 트리거
+   {
+     user: B학생,
+     startTime: "08:10",  // ❌ 이동시간 포함!
+     endTime: "11:00",
+     isTravel: false,
+     subject: "자동 배정"
    }
    ```
 
-1.4. 테스트 시나리오
-   [ ] 대중교통 적용 → 챗봇으로 일정 이동 → 이동시간 유지 확인
-   [ ] 일반 모드 → 챗봇으로 일정 이동 → 정상 작동 확인
-   [ ] 고정 일정 → 챗봇으로 일정 이동 → 정상 작동 확인
+   수정된 구조 (올바름):
+   ```javascript
+   // 수업 슬롯 (조원에게 보임)
+   {
+     user: B학생,
+     startTime: "09:00",  // ✅ 순수 수업 시작 시간
+     endTime: "11:00",    // ✅ 순수 수업 종료 시간
+     isTravel: false,
+     subject: "자동 배정",
+     // 메타데이터 (조원에게 안보임)
+     actualStartTime: "08:10",  // 이동시간 포함한 실제 시작
+     travelTimeBefore: 50        // 이동시간 (분)
+   }
+
+   // 이동시간 슬롯 (방장만 보임)
+   {
+     user: B학생,
+     startTime: "08:10",
+     endTime: "09:00",
+     isTravel: true,
+     subject: "이동시간"
+   }
+   ```
+
+3.2. smartExchange 함수 수정
+   위치: server/controllers/coordinationExchangeController.js
+
+   작업:
+   [ ] 조원이 요청한 시간을 그대로 startTime으로 저장
+   [ ] 이동시간은 별도의 메타데이터 필드에 저장
+   [ ] actualStartTime = 요청시간 - 이동시간
+   [ ] 수업 슬롯은 순수 수업 시간만 표시
+
+3.3. 조원 프로필 표시 수정
+   위치: client/src/components/tabs/ProfileTab/
+
+   작업:
+   [ ] 조원에게는 startTime/endTime만 표시
+   [ ] actualStartTime, travelTimeBefore는 절대 표시하지 않음
+   [ ] 방장에게만 전체 정보 표시
 
 예상 시간: 4-6시간
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│ Phase 2: 조원 간 시간 교환 시 이동시간 검증 (중요)                      │
+│ Phase 4: 🔴 긴급 - 선택 불가능한 시간 검증 강화                          │
 └─────────────────────────────────────────────────────────────────────┘
 
-🟡 우선순위: 높음
+🔴 우선순위: 긴급
 📁 영향 파일:
-   - server/controllers/coordinationExchangeRequestController.js
-   - server/services/scheduleValidator.js (신규 또는 기존 파일)
-   - client/src/components/coordination/TimeSelector.js
+   - server/controllers/coordinationExchangeController.js (smartExchange)
+   - server/services/scheduleSimulator.js
+   - server/controllers/coordinationRequestController/index.js
 
-📌 요구사항:
-   "배정될때 시간 교환.txt"의 핵심 개념 구현
+📌 현재 문제:
+   조원이 9:00을 선택했을 때:
+   1. ❌ 시스템이 허용함
+   2. ❌ 이동시간 50분 포함하면 8:10 시작
+   3. ❌ 선호시간 9시 시작인데 8:10은 침범!
+   4. ❌ 시뮬레이션이 이를 잡아내지 못함
 
-   핵심 원칙:
-   1. 조원들은 방장의 이동시간을 절대 볼 수 없음
-   2. 조원이 시간 T를 선택할 때 시스템이 내부적으로 시뮬레이션
-   3. 조원에게는 결과(가능/불가능)만 표시, 이유는 숨김
+📋 해결 방법:
 
-✅ 작업 내용:
+4.1. smartExchange 함수에 검증 추가
+   위치: coordinationExchangeController.js (848번 라인 근처)
 
-2.1. 시뮬레이션 엔진 구현
-   파일: server/services/scheduleSimulator.js (신규)
+   작업:
+   [ ] 조원이 요청한 시간(targetTime)을 받음
+   [ ] 해당 날짜/시간에 필요한 이동시간 계산
+   [ ] actualStartTime = targetTime - 이동시간
+   [ ] actualStartTime이 조원의 선호시간 범위 내에 있는지 검증
+   [ ] 범위 밖이면 거부 + 최소 가능 시간 안내
 
+   예상 코드:
    ```javascript
-   /**
-    * 조원이 특정 시간을 선택했을 때 전체 스케줄 시뮬레이션
-    * @param {string} roomId - 방 ID
-    * @param {string} userId - 선택하는 조원 ID
-    * @param {Date} targetDate - 목표 날짜
-    * @param {string} targetTime - 목표 시간
-    * @param {number} duration - 소요 시간
-    * @returns {Object} { isValid, reason (internal only) }
-    */
-   async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTime, duration) {
-     // ① 해당 날짜의 전체 슬롯 조회
-     // ② 새 슬롯을 시간순으로 삽입
-     // ③ 모든 슬롯의 이동시간 재계산
-     // ④ 각 슬롯이 다른 슬롯의 이동시간과 충돌하는지 확인
-     // ⑤ 금지시간 침범 확인
-     // ⑥ 결과 반환 (가능/불가능)
-   }
-   ```
+   // 이동시간 계산
+   const travelTime = await calculateTravelTimeForMember(room, userId, targetDate);
+   const targetTimeMinutes = timeToMinutes(targetTime);
+   const actualStartMinutes = targetTimeMinutes - travelTime;
 
-2.2. coordinationExchangeRequestController.js 수정
-   위치: createExchangeRequest 메서드
+   // 조원의 선호시간 조회
+   const memberSchedule = await getMemberScheduleForDate(userId, targetDate);
+   const preferredStartMinutes = timeToMinutes(memberSchedule.startTime);
 
-   변경:
-   ```javascript
-   // 요청 생성 전 시뮬레이션 수행
-   const simulation = await scheduleSimulator.simulateScheduleWithNewSlot(
-     roomId,
-     requesterId,
-     targetDate,
-     targetTime,
-     requiredDuration
-   );
-
-   if (!simulation.isValid) {
+   // 검증
+   if (actualStartMinutes < preferredStartMinutes) {
+     const minPossibleTime = minutesToTime(preferredStartMinutes + travelTime);
      return res.status(400).json({
        success: false,
-       message: '해당 시간으로 변경할 수 없습니다.', // 이유는 숨김
-       // reason은 로그에만 출력 (조원에게 보이지 않음)
+       message: `해당 시간에 배치할 수 없습니다. 최소 ${minPossibleTime}부터 가능합니다.`,
+       minTime: minPossibleTime,
+       reason: 'travel_time_conflict'
      });
    }
    ```
 
-2.3. 클라이언트 시간 선택 UI 개선
-   파일: client/src/components/coordination/TimeSelector.js
+4.2. scheduleSimulator 수정
+   위치: server/services/scheduleSimulator.js
 
-   - 선택 불가능한 시간은 회색으로 표시
-   - 툴팁: "선택할 수 없습니다" (이유 표시 안 함)
-   - API 호출: /api/coordination/validate-time-slot
+   작업:
+   [ ] 시뮬레이션 시 조원의 선호시간 범위 확인
+   [ ] 이동시간 포함한 실제 시작/종료 시간 계산
+   [ ] 선호시간 침범 여부 검증
+   [ ] 침범 시 reason에 명확한 이유 반환
 
-2.4. 동적 이동시간 계산 통합
+예상 시간: 4-6시간
 
-   시나리오 예시:
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ Phase 5: 🔴 긴급 - 기존 이동시간 슬롯 삭제 버그 수정                      │
+└─────────────────────────────────────────────────────────────────────┘
+
+🔴 우선순위: 긴급
+📁 영향 파일:
+   - server/controllers/coordinationExchangeController.js (smartExchange)
+
+📌 현재 문제:
+   B학생이 월요일 → 화요일로 이동:
+   1. ✅ 수업 슬롯은 화요일로 이동됨
+   2. ✅ 화요일에 새 이동시간 슬롯 생성됨
+   3. ❌ 월요일의 기존 이동시간 슬롯(13:00-13:10)이 안지워짐!
+
+📋 해결 방법:
+
+5.1. smartExchange - 기존 슬롯 삭제 로직 수정
+   위치: coordinationExchangeController.js (865번 라인 근처)
+
+   현재 코드:
+   ```javascript
+   // Remove old slots and associated travel time slots
+   const slotIdsToRemove = allSlotsInBlock.map(slot => slot._id.toString());
+   const oldSlotDate = new Date(allSlotsInBlock[0].date).toISOString().split('T')[0];
+
+   for (const slotId of slotIdsToRemove) {
+     const index = room.timeSlots.findIndex(slot => slot._id.toString() === slotId);
+     if (index !== -1) room.timeSlots.splice(index, 1);
+   }
    ```
-   초기: 월요일 A(9:00), B(11:00)
-   - A 이동: 방장 집 → A = 60분 (8:00-9:00)
-   - B 이동: A → B = 10분 (10:50-11:00)
 
-   C가 10:00 선택 시도:
-   - 시뮬레이션: A(9:00), C(10:00), B(11:00)
-   - A 이동: 방장 집 → A = 60분 (8:00-9:00)
-   - C 이동: A → C = ? 분 (계산 필요)
-   - B 이동: C → B = ? 분 (재계산 필요)
+   문제: 수업 슬롯만 삭제하고 이동시간 슬롯은 안지움!
 
-   결과:
-   - C의 이동시간이 A의 9:00 수업 시간을 침범하면 → 불가능
-   - 모든 제약 만족 → 가능
+   수정:
+   ```javascript
+   // ① 수업 슬롯 삭제
+   const slotIdsToRemove = allSlotsInBlock.map(slot => slot._id.toString());
+   for (const slotId of slotIdsToRemove) {
+     const index = room.timeSlots.findIndex(slot => slot._id.toString() === slotId);
+     if (index !== -1) room.timeSlots.splice(index, 1);
+   }
+
+   // ② 해당 날짜의 해당 조원의 이동시간 슬롯도 삭제
+   const oldSlotDate = new Date(allSlotsInBlock[0].date).toISOString().split('T')[0];
+   room.timeSlots = room.timeSlots.filter(slot => {
+     const slotDate = new Date(slot.date).toISOString().split('T')[0];
+     const slotUserId = (slot.user._id || slot.user).toString();
+
+     // 같은 날짜, 같은 사용자, 이동시간 슬롯인 경우 삭제
+     return !(slotDate === oldSlotDate &&
+              slotUserId === req.user.id.toString() &&
+              slot.isTravel);
+   });
    ```
 
-2.5. 테스트 시나리오
-   [ ] 순서 변경 시 이동시간 재계산 확인
-   [ ] 중간 삽입 시 뒤따르는 슬롯 이동시간 변경 확인
-   [ ] 조원이 다른 조원 이동시간 침범 시 거부 확인
-   [ ] 조원 UI에서 이동시간 정보 숨김 확인
+예상 시간: 1-2시간
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ Phase 6: 🟡 중요 - 조원 UI에 선택 가능 시간 표시                         │
+└─────────────────────────────────────────────────────────────────────┘
+
+🟡 우선순위: 중요 (Phase 3, 4, 5 완료 후)
+📁 영향 파일:
+   - server/controllers/coordinationSchedulingController.js
+   - client/src/services/coordinationService.js
+   - client/src/components/coordination/TimeSelector.js
+
+📌 목표:
+   조원이 시간 선택 시:
+   - ✅ 선택 가능한 시간: 초록색 또는 기본색
+   - ❌ 선택 불가능한 시간: 빨간색 + 비활성화
+   - 💡 툴팁: "이 시간은 선택할 수 없습니다" (이유는 안알려줌)
+
+📋 해결 방법:
+
+6.1. 서버 API 추가: 시간대별 가능 여부 조회
+   위치: server/controllers/coordinationSchedulingController.js
+
+   새 엔드포인트:
+   ```javascript
+   /**
+    * @route   POST /api/coordination/rooms/:roomId/available-times
+    * @desc    특정 날짜에 조원이 선택 가능한 시간대 계산
+    * @access  Private (조원)
+    */
+   exports.getAvailableTimesForMember = async (req, res) => {
+     const { roomId } = req.params;
+     const { date, duration } = req.body;  // duration: 수업 시간 (분)
+     const userId = req.user.id;
+
+     // ① 해당 날짜에 필요한 이동시간 계산
+     const travelTime = await calculateTravelTimeForMember(roomId, userId, date);
+
+     // ② 조원의 선호시간 조회
+     const memberSchedule = await getMemberScheduleForDate(userId, date);
+
+     // ③ 각 시간대(10분 단위)를 시뮬레이션
+     const timeSlots = [];
+     for (let minutes = 0; minutes < 24 * 60; minutes += 10) {
+       const time = minutesToTime(minutes);
+
+       // 실제 시작 시간 = 요청 시간 - 이동시간
+       const actualStart = minutes - travelTime;
+       const actualEnd = minutes + duration;
+
+       // 선호시간 범위 내인지 확인
+       const withinPreferred = actualStart >= memberSchedule.startMinutes &&
+                              actualEnd <= memberSchedule.endMinutes;
+
+       // 시뮬레이션 수행
+       const simulation = await simulateScheduleWithNewSlot(
+         roomId, userId, date, time, duration
+       );
+
+       timeSlots.push({
+         time,
+         available: withinPreferred && simulation.isValid,
+         reason: !withinPreferred ? 'preferred_time_violation' :
+                 !simulation.isValid ? 'conflict' : null
+       });
+     }
+
+     res.json({ date, duration, travelTime, timeSlots });
+   };
+   ```
+
+6.2. 클라이언트 서비스 함수
+   위치: client/src/services/coordinationService.js
+
+   ```javascript
+   async getAvailableTimesForMember(roomId, date, duration) {
+     const response = await api.post(
+       `/coordination/rooms/${roomId}/available-times`,
+       { date, duration }
+     );
+     return response.data;
+   }
+   ```
+
+6.3. TimeSelector 컴포넌트 수정
+   위치: client/src/components/coordination/TimeSelector.js
+
+   작업:
+   [ ] 날짜 선택 시 getAvailableTimesForMember 호출
+   [ ] 선택 불가능한 시간 빨간색 + disabled
+   [ ] 툴팁: "이 시간은 선택할 수 없습니다"
+   [ ] 로딩 상태 표시
+
+예상 시간: 1-2일
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ Phase 7: 🔵 통합 테스트 및 검증                                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+🔵 우선순위: 중간 (모든 Phase 완료 후)
+
+7.1. 엔드투엔드 테스트
+   [ ] 자동배정 → 대중교통 적용 → 조원 시간 변경
+   [ ] 조원 프로필에서 순수 수업 시간만 보임 확인
+   [ ] 방장 화면에서 이동시간 슬롯 보임 확인
+   [ ] 기존 이동시간 슬롯 삭제 확인
+
+7.2. 프라이버시 테스트
+   [ ] 조원이 이동시간 정보를 어디서도 볼 수 없는지 확인
+   [ ] 조원의 수업 시간이 정확히 요청한 시간으로 표시되는지 확인
 
 예상 시간: 2-3일
 
-
-┌─────────────────────────────────────────────────────────────────────┐
-│ Phase 3: 대중교통 재계산 시 슬롯 손실 방지 (기존 이슈)                  │
-└─────────────────────────────────────────────────────────────────────┘
-
-🟢 우선순위: 중간
-📁 영향 파일:
-   - client/src/services/travelScheduleCalculator.js
-
-📌 문제점: (리팩토링_계획.txt 내용)
-   5시간 배정 시 대중교통 보기에서 1시간 손실 발생
-
-✅ 작업 내용: (기존 계획 유지)
-
-3.1. Phase 1: 긴급 수정
-   [ ] 재배정 실패 시 원본 슬롯 유지 (완료)
-   [ ] 원본 슬롯 유지 시 겹침 체크 추가
-   [ ] UI 겹침 경고 표시
-
-3.2. Phase 2: 중기 개선
-   [ ] 재배정 실패 슬롯 수집 및 재시도
-   [ ] 재배정 우선순위 조정
-
-3.3. Phase 3: 장기 리팩토링
-   [ ] 슬롯 그룹화 구조 변경
-   [ ] 사용자별 일괄 처리
-
-예상 시간: 1-2주 (기존 계획 참고)
-
-
-┌─────────────────────────────────────────────────────────────────────┐
-│ Phase 4: 통합 테스트 및 검증                                          │
-└─────────────────────────────────────────────────────────────────────┘
-
-🔵 우선순위: 중간
-📁 영향 범위: 전체 시스템
-
-✅ 테스트 시나리오:
-
-4.1. 엔드투엔드 테스트
-   [ ] 자동배정 → 대중교통 적용 → 챗봇으로 일정 변경 → 이동시간 유지 확인
-   [ ] 자동배정 → 조원 간 시간 교환 → 이동시간 재계산 확인
-   [ ] 챗봇 일정 변경 → 조원 간 시간 교환 → 충돌 검증
-
-4.2. 회귀 테스트
-   [ ] 기존 기능 정상 작동 확인 (일반 모드)
-   [ ] 서버 자동 배정 로직 영향 없음 확인
-   [ ] Google Calendar 동기화 영향 없음 확인
-
-4.3. 성능 테스트
-   [ ] 10명 이상 조원, 각 5시간 배정 시 처리 시간
-   [ ] 시뮬레이션 응답 속도 (1초 이내 목표)
-
-예상 시간: 3-5일
-
 ================================================================================
-🗓️ 일정 계획
+🗓️ 긴급 일정 계획 (업데이트)
 ================================================================================
 
-Week 1 (현재):
-  Mon-Tue: Phase 1 (챗봇 이동시간 처리) 구현 및 테스트
-  Wed-Fri: Phase 2 (조원 시간 교환 검증) 설계 및 구현 시작
+🔥 Day 1 (진행중):
+  오전: ✅ Phase 2 완료 (이동시간 재계산 수정)
+  오후: Phase 3 시작 (조원 프라이버시 보호)
 
-Week 2:
-  Mon-Wed: Phase 2 완료 및 테스트
-  Thu-Fri: Phase 3.1 (긴급 수정) 적용
+🔥 Day 2:
+  오전: Phase 3 완료
+  오후: Phase 4 완료 (선택 검증 강화)
 
-Week 3:
-  Mon-Fri: Phase 3.2-3.3 (중장기 개선) 구현
+🔥 Day 3:
+  오전: Phase 5 완료 (기존 슬롯 삭제)
+  오후: Phase 6 시작 (UI 개선)
 
-Week 4:
-  Mon-Wed: Phase 4 (통합 테스트)
-  Thu-Fri: 버그 수정 및 최종 검증
+🟡 Day 4-5:
+  전체: Phase 6 완료
 
-================================================================================
-⚠️ 위험 요소 및 대응
-================================================================================
-
-위험 1: 챗봇 수정으로 기존 기능 손상
-  - 대응: 충분한 회귀 테스트, 일반 모드와 대중교통 모드 분리 테스트
-
-위험 2: 시뮬레이션 성능 저하
-  - 대응: 캐싱, 인덱싱, 비동기 처리
-
-위험 3: 복잡한 시나리오에서 예상치 못한 동작
-  - 대응: 로그 강화, 단계별 검증, 사용자 피드백 수집
+🔵 Week 2:
+  Phase 7 - 통합 테스트
 
 ================================================================================
 📊 진행 상황 추적
 ================================================================================
 
-Phase 1: 챗봇 이동시간 처리
-  [ ] 1.1. scheduleMoveHandler.js 수정
-  [ ] 1.2. Room.timeSlots 통합 확인
-  [ ] 1.3. 이동 후 재계산 로직 추가
-  [ ] 1.4. 테스트 완료
+Phase 1: 프론트엔드 travelMode 동기화
+  [✓] 1.1. useTravelMode.js 수정
+  [✓] 1.2. 서버 currentTravelMode 초기값 사용
+  [✓] 1.3. 동기화 로직 추가
+  완료일: 2025-12-22
 
-Phase 2: 조원 시간 교환 검증
-  [ ] 2.1. 시뮬레이션 엔진 구현
-  [ ] 2.2. coordinationExchangeRequestController 수정
-  [ ] 2.3. 클라이언트 UI 개선
-  [ ] 2.4. 동적 이동시간 계산 통합
-  [ ] 2.5. 테스트 완료
+Phase 2: 이동시간 재계산 수정
+  [✓] 2.1. recalculateTravelTimeSlotsForDate 수정
+  [✓] 2.2. room.travelMode → effectiveTravelMode
+  [✓] 2.3. scheduleSimulator 로그 추가
+  [✓] 2.4. 테스트 완료
+  완료일: 2025-12-22
 
-Phase 3: 슬롯 손실 방지
-  [ ] 3.1. Phase 1 완료
-  [ ] 3.2. Phase 2 완료
-  [ ] 3.3. Phase 3 완료
+Phase 3: 조원 프라이버시 보호
+  [ ] 3.1. DB 구조 변경 (actualStartTime 필드 추가)
+  [ ] 3.2. smartExchange 수정 (순수 수업 시간만 저장)
+  [ ] 3.3. 조원 프로필 표시 수정
 
-Phase 4: 통합 테스트
-  [ ] 4.1. 엔드투엔드 테스트
-  [ ] 4.2. 회귀 테스트
-  [ ] 4.3. 성능 테스트
+Phase 4: 선택 검증 강화
+  [ ] 4.1. smartExchange 검증 추가
+  [ ] 4.2. scheduleSimulator 수정
 
-================================================================================
-📌 핵심 참고 개념
-================================================================================
+Phase 5: 기존 슬롯 삭제
+  [ ] 5.1. 이동시간 슬롯 삭제 로직 추가
 
-이동시간 계산 시나리오 (반드시 숙지)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Phase 6: UI 개선
+  [ ] 6.1. 서버 API 추가
+  [ ] 6.2. 클라이언트 서비스 추가
+  [ ] 6.3. TimeSelector 수정
 
-시나리오 1: 순서 교환 시 이동시간 변경
-  초기: 월 A(9:00), B(11:00)
-  - A 이동: 방장 집 → A = 60분
-  - B 이동: A → B = 10분
-
-  교환 후: 월 B(9:00), A(11:00)
-  - B 이동: 방장 집 → B = 60분 ← 변경!
-  - A 이동: B → A = 10분 ← 변경!
-
-시나리오 2: 중간 삽입 시 이동시간 재계산
-  기존: A(9:00), C(13:00)
-  - A 이동: 60분
-  - C 이동: 90분
-
-  B 삽입: A(9:00), B(11:00), C(13:00)
-  - A 이동: 60분 (유지)
-  - B 이동: 10분 (새로 계산)
-  - C 이동: 40분 (90분 → 40분 감소!)
-
-시나리오 3: 요일 변경 시 이동시간 변경
-  월 A(9:00), B(11:00)
-  - B 이동: A → B = 10분
-
-  화 B(9:00) [혼자]
-  - B 이동: 방장 집 → B = 60분 ← 같은 B인데 다른 시간!
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-결론: 이동시간은 고정값이 아니라 동적으로 계산되는 제약 조건!
+Phase 7: 통합 테스트
+  [ ] 7.1. 엔드투엔드 테스트
+  [ ] 7.2. 프라이버시 테스트
 
 ================================================================================
-마지막 업데이트: 2025-12-19
+🎯 현재 최우선 목표
+================================================================================
+
+1. ✅ 이동시간 재계산 작동 확인 (완료!)
+
+2. 🔴 조원 프라이버시 보호 (최긴급!)
+   - 조원이 이동시간을 절대 볼 수 없게 함
+   - 수업 시간만 표시 (이동시간 제외)
+
+3. 🔴 선택 불가능한 시간 검증
+   - 이동시간 고려해서 불가능한 시간은 거부
+
+4. 🔴 기존 이동시간 슬롯 삭제
+   - 일정 이동 시 기존 이동시간 슬롯도 함께 삭제
+
+5. 🟡 UI에서 가능/불가능 시간 표시
+   - 조원이 선택 전에 어떤 시간이 가능한지 볼 수 있게
+
+================================================================================
+마지막 업데이트: 2025-12-22 11:57
 작성자: Claude Code
-상태: 계획 수립 완료, 구현 대기
+상태: Phase 2 완료, Phase 3 시작 예정
+다음 작업: 조원 프라이버시 보호 구현
 ================================================================================

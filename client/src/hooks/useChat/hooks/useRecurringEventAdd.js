@@ -1,5 +1,34 @@
 /**
- * 반복 일정 추가 훅
+ * ===================================================================================================
+ * useRecurringEventAdd.js - 반복 일정 추가 처리를 위한 커스텀 훅
+ * ===================================================================================================
+ *
+ * 📍 위치: 프론트엔드 > client/src/hooks/useChat/hooks/useRecurringEventAdd.js
+ *
+ * 🎯 주요 기능:
+ *    - 'add_recurring_event' 인텐트를 처리하여 여러 날짜에 반복되는 일정을 추가.
+ *    - 컨텍스트('profile', 'events', 'google')에 따라 적절한 데이터 형식으로 일정 추가.
+ *    - 일정 추가 전 충돌 체크를 수행하고, 충돌 시 대안 시간을 제안.
+ *    - 'profile' 탭의 경우 personalTimes에 추가하여 빨간색으로 표시.
+ *
+ * 🔗 연결된 파일:
+ *    - client/src/hooks/useChat/index.js - 이 훅을 사용하여 반복 일정 추가 처리.
+ *    - client/src/utils/index.js - 충돌 체크(checkScheduleConflict) 및 대안 시간 탐색(findAvailableTimeSlots) 유틸리티 사용.
+ *    - client/src/hooks/useChat/utils/apiRequestUtils.js - API 요청 데이터 생성 유틸리티 사용.
+ *
+ * 💡 UI 위치:
+ *    - 채팅창을 통해 "매주 월요일 2시에 수학학원 일정 추가해줘"와 같은 반복 일정 추가 요청을 처리.
+ *
+ * ✏️ 수정 가이드:
+ *    - 충돌 감지 로직 변경 시: checkScheduleConflict 호출 부분 및 결과 처리 로직 수정.
+ *    - 데이터 생성 방식 변경 시: apiRequestUtils.js 내 관련 함수 또는 이 파일의 데이터 생성 부분 수정.
+ *    - 성공/실패 메시지 포맷 변경 시: 반환되는 message 문자열 구성 로직 수정.
+ *
+ * 📝 참고사항:
+ *    - 프로필 탭에서는 PUT 요청을 통해 전체 스케줄을 업데이트하는 방식을 사용.
+ *    - 다른 탭에서는 각 날짜별로 POST 요청을 개별적으로 보냄.
+ *
+ * ===================================================================================================
  */
 
 import { useCallback } from 'react';
@@ -10,7 +39,27 @@ import { createGoogleEventData, createLocalEventData, createProfilePersonalTime 
 import { calculateDuration, timeToHour } from '../utils/dateUtils';
 import { createConflictMessage, createSuccessResponse, createErrorResponse } from '../utils/responseUtils';
 
+/**
+ * useRecurringEventAdd
+ *
+ * @description 챗봇을 통해 여러 날짜에 반복되는 일정을 추가하는 로직을 관리하는 커스텀 훅.
+ * @param {Object} eventActions - 일정 관련 액션 함수들이 포함된 객체 (예: addEvent).
+ * @param {Function} setEventAddedKey - 일정 추가 후 상위 컴포넌트의 리렌더링을 유발하기 위한 상태 설정 함수.
+ * @returns {{handleRecurringEventAdd: Function}} AI 응답과 컨텍스트를 받아 반복 일정을 추가하는 handleRecurringEventAdd 함수를 포함하는 객체.
+ */
 export const useRecurringEventAdd = (eventActions, setEventAddedKey) => {
+  /**
+   * handleRecurringEventAdd
+   *
+   * @description AI 응답에 포함된 여러 날짜에 대해 일정을 추가합니다. 충돌 발생 시 대안 시간을 제안합니다.
+   * @param {Object} chatResponse - AI가 파싱한 dates, startTime, endTime, title 등이 포함된 객체.
+   * @param {Object} context - 현재 탭('profile', 'events') 및 탭 타입('local', 'google'), 현재 이벤트 목록 정보.
+   * @returns {Promise<Object>} 작업 성공 여부, 메시지, 대안 시간 등을 담은 결과 객체를 반환합니다.
+   *
+   * @example
+   * const { handleRecurringEventAdd } = useRecurringEventAdd(actions, setKey);
+   * const result = await handleRecurringEventAdd(chatResponse, context);
+   */
   const handleRecurringEventAdd = useCallback(async (chatResponse, context) => {
     if (!eventActions || !eventActions.addEvent) {
       return { success: false, message: '일정 추가 기능이 아직 준비되지 않았습니다.' };
