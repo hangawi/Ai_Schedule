@@ -1483,9 +1483,8 @@ exports.applyTravelMode = async (req, res) => {
       room.timeSlots = receivedTimeSlots
         .filter(e => !e.isTravel && e.subject !== '이동시간')
         .map((e, idx) => {
-          // originalStartTime이 있으면 이동시간이 포함된 것
-          const hasTravel = e.originalStartTime && e.originalStartTime !== e.startTime;
-          const pureStartTime = e.originalStartTime || e.startTime;
+          // 클라이언트에서 계산된 순수 수업 시간을 그대로 사용
+          const pureStartTime = e.startTime; 
 
           const newSlot = {
             user: e.user._id || e.user,
@@ -1496,19 +1495,16 @@ exports.applyTravelMode = async (req, res) => {
             subject: e.subject || '자동 배정',
             assignedBy: room.owner._id,
             status: 'confirmed',
-            adjustedForTravelTime: false,  // Phase 3: false로 설정
-            originalStartTime: e.originalStartTime
+            // 🆕 클라이언트에서 넘겨준 메타데이터 보존
+            adjustedForTravelTime: e.adjustedForTravelTime || false,
+            originalStartTime: e.originalStartTime,
+            originalEndTime: e.originalEndTime,
+            actualStartTime: e.actualStartTime,  // 이동시간 포함 시작
+            travelTimeBefore: e.travelTimeBefore // 이동시간(분)
           };
 
-          // ⚠️ 이동시간 메타데이터 저장 (조원에게 숨김)
-          if (hasTravel) {
-            const travelMinutes = timeToMinutes(e.startTime) - timeToMinutes(pureStartTime);
-            newSlot.actualStartTime = e.startTime;  // 이동시간 포함
-            newSlot.travelTimeBefore = travelMinutes;
-          }
-
           if (idx < 5) {
-            console.log(`   [적용 ${idx}] ${e.subject}: ${pureStartTime}-${e.endTime} (이동시간: ${hasTravel ? newSlot.travelTimeBefore + '분' : '없음'})`);
+            console.log(`   [적용 ${idx}] ${e.subject}: ${pureStartTime}-${e.endTime} (이동전 시작: ${e.actualStartTime || '없음'})`);
           }
 
           return newSlot;

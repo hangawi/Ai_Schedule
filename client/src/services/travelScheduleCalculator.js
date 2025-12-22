@@ -1278,11 +1278,10 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                 continue;
             }
 
-            // ✅ 수정: 이동시간 시작은 원본 시작 시간과 실제 마지막 활동 종료 시간 중 늦은 것
-            // 예1: 원본 09:00, 마지막 활동 없음 → 이동 09:00 시작
-            // 예2: 원본 10:00, 마지막 활동 11:00 종료 → 이동 11:00 시작 (겹치지 않도록)
+            // ✅ 원복: 이동시간만큼 수업 시간을 뒤로 미는 로직 (방장 이동 후 수업 시작)
+            // 예: 9시 배정 + 50분 이동 -> 9시 출발, 9시 50분 도착, 9시 50분 수업 시작
             let newTravelStartMinutes = Math.max(slotStartMinutes, actualPreviousEndMinutes);
-            let newTravelEndTimeMinutes = newTravelStartMinutes + travelDurationMinutes; // ✅ 조정된 시작 기준으로 종료 계산
+            let newTravelEndTimeMinutes = newTravelStartMinutes + travelDurationMinutes; 
             let newActivityStartTimeMinutes = newTravelEndTimeMinutes; // 이동 후 수업 시작
             let newActivityEndTimeMinutes = newActivityStartTimeMinutes + activityDurationMinutes; // 수업 종료
             
@@ -1499,6 +1498,12 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                             startTime: this.formatTime(block.activityStartMinutes),
                             endTime: this.formatTime(block.activityEndMinutes),
                             subject: `${mergedSlot.subject || '수업'} (${block.activityDuration}분)`,
+                            // 🆕 원본 시간 및 이동시간 메타데이터 추가
+                            originalStartTime: mergedSlot.originalStartTime || mergedSlot.startTime,
+                            originalEndTime: mergedSlot.originalEndTime || mergedSlot.endTime,
+                            actualStartTime: this.formatTime(block.travelStartMinutes),
+                            travelTimeBefore: block.travelDuration,
+                            adjustedForTravelTime: true
                         };
 
                         // travelSlots 배열에 추가
@@ -1530,6 +1535,12 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                             startTime: this.formatTime(block.activityStartMinutes),
                             endTime: this.formatTime(block.activityEndMinutes),
                             subject: `${mergedSlot.subject || '수업'} (${block.activityDuration}분)`,
+                            // 🆕 원본 시간 및 이동시간 메타데이터 추가
+                            originalStartTime: mergedSlot.originalStartTime || mergedSlot.startTime,
+                            originalEndTime: mergedSlot.originalEndTime || mergedSlot.endTime,
+                            actualStartTime: this.formatTime(block.travelStartMinutes),
+                            travelTimeBefore: block.travelDuration,
+                            adjustedForTravelTime: true
                         };
                         allResultSlots.push(...this.unmergeBlock(altActivityBlock));
                         
@@ -1648,6 +1659,12 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                         startTime: this.formatTime(actualActivityStartMinutes),
                         endTime: this.formatTime(actualActivityEndMinutes),
                         subject: mergedSlot.subject || '수업',
+                        // 🆕 원본 시간 및 이동시간 메타데이터 추가
+                        originalStartTime: mergedSlot.originalStartTime || mergedSlot.startTime,
+                        originalEndTime: mergedSlot.originalEndTime || mergedSlot.endTime,
+                        actualStartTime: this.formatTime(alternativePlacement.travelStartMinutes),
+                        travelTimeBefore: actualTravelMinutes,
+                        adjustedForTravelTime: true
                     };
 
                     // travelSlots 배열에 추가 (실제 계산된 정보 사용)
@@ -1726,6 +1743,12 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                 startTime: this.formatTime(newActivityStartTimeMinutes),
                 endTime: this.formatTime(newActivityEndTimeMinutes),
                 subject: mergedSlot.subject || '수업',
+                // 🆕 원본 시간 및 이동시간 메타데이터 추가 (서버 전달용)
+                originalStartTime: mergedSlot.originalStartTime || mergedSlot.startTime,
+                originalEndTime: mergedSlot.originalEndTime || mergedSlot.endTime,
+                actualStartTime: this.formatTime(newTravelStartMinutes), // 이동시간 포함 시작
+                travelTimeBefore: travelDurationMinutes, // 이동시간(분)
+                adjustedForTravelTime: true
             };
 
             // 🆕 travelSlots 배열에 이동시간 슬롯 추가
