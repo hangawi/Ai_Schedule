@@ -259,7 +259,8 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       // 1️⃣ 서버에 이동시간 포함 스케줄 저장
       console.log(`📤 [handleConfirmTravelMode] applyTravelMode 호출: ${travelMode}`, {
         timeSlots개수: scheduleData.timeSlots?.length,
-        travelSlots개수: scheduleData.travelSlots?.length
+        travelSlots개수: scheduleData.travelSlots?.length,
+        첫번째_travelSlot: scheduleData.travelSlots?.[0]
       });
       await coordinationService.applyTravelMode(
         currentRoom._id,

@@ -62,6 +62,8 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
   const prevTimeSlotsRef = useRef(currentRoom?.timeSlots);
   // 🆕 이전 서버 모드 참조 저장 (서버 상태 변경 감지용)
   const prevServerModeRef = useRef(currentRoom?.confirmedTravelMode || currentRoom?.currentTravelMode || 'normal');
+  // 🆕 확정 중인지 여부 (이동시간 깜빡임 방지)
+  const isConfirmingRef = useRef(false);
 
   const handleModeChange = useCallback(async (newMode) => {
     // ⚠️ 확정된 방은 재계산하지 않음 (조회만 가능)
@@ -131,30 +133,53 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
   }, [currentRoom, isOwner]);
 
   const getCurrentScheduleData = useCallback(() => {
-    if (travelMode === 'normal' || !enhancedSchedule) {
-      return {
-        timeSlots: currentRoom?.timeSlots || [],
-        travelSlots: [],
-        travelMode: travelMode  // 하드코딩된 'normal' 대신 실제 travelMode 반환
-      };
-    }
-
-    // ✨ 조원이면 이동시간 블록 숨김 (방장의 이동시간 정보 보호)
-    if (!isOwner) {
+    // 1. Enhanced Schedule (로컬 계산 결과)가 있으면 최우선 사용
+    if (enhancedSchedule) {
+      if (!isOwner) {
+        return {
+          timeSlots: enhancedSchedule.timeSlots.filter(slot => !slot.isTravel),
+          travelSlots: [],
+          travelMode: travelMode
+        };
+      }
       return {
         timeSlots: enhancedSchedule.timeSlots.filter(slot => !slot.isTravel),
-        travelSlots: [],
+        travelSlots: enhancedSchedule.travelSlots,
         travelMode: travelMode
       };
     }
 
-    // ✨ 방장도 이동시간 슬롯은 timeSlots에서 제외 (travelSlots에만 포함)
+    // 2. 로컬 계산 결과가 없으면 서버 데이터(currentRoom) 사용
+    // 일반 모드이거나, 서버에 travelTimeSlots가 없는 경우
+    if (travelMode === 'normal' || !currentRoom?.travelTimeSlots) {
+       return {
+         timeSlots: currentRoom?.timeSlots || [],
+         travelSlots: [],
+         travelMode: travelMode
+       };
+    }
+    
+    // 3. 서버에 저장된 이동시간 데이터가 있는 경우 (방장만 보기)
+    if (isOwner) {
+        return {
+            timeSlots: currentRoom.timeSlots || [], // 수업 시간
+            // 🔧 travelMode를 슬롯에 주입하여 렌더링 시 올바른 아이콘/색상 표시
+            travelSlots: (currentRoom.travelTimeSlots || []).map(slot => ({
+                ...slot,
+                travelMode: travelMode 
+            })), 
+            travelMode: travelMode
+        };
+    } 
+    
+    // 4. 조원은 서버 데이터라도 이동시간 숨김
     return {
-      timeSlots: enhancedSchedule.timeSlots.filter(slot => !slot.isTravel),
-      travelSlots: enhancedSchedule.travelSlots,
-      travelMode: enhancedSchedule.travelMode
+        timeSlots: currentRoom.timeSlots || [],
+        travelSlots: [],
+        travelMode: travelMode
     };
-    }, [travelMode, enhancedSchedule, currentRoom, isCalculating, isOwner]);
+
+  }, [travelMode, enhancedSchedule, currentRoom, isCalculating, isOwner]);
 
   const getWeekViewData = useCallback((weekStartDate) => {
     const scheduleData = getCurrentScheduleData();
@@ -188,11 +213,17 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
       return false;
     }
 
+    isConfirmingRef.current = true;
     try {
       const result = await coordinationService.confirmTravelMode(currentRoom._id, travelMode);
+      // 서버 데이터가 반영될 때까지 잠시 대기 후 플래그 해제
+      setTimeout(() => {
+        isConfirmingRef.current = false;
+      }, 2000);
       return true;
     } catch (err) {
       setError('모드 확정에 실패했습니다.');
+      isConfirmingRef.current = false;
       return false;
     }
   }, [currentRoom, travelMode, isOwner]);
@@ -220,7 +251,8 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
       prevTimeSlotsRef.current = currentRoom?.timeSlots;
       
       // 모드가 일반이 아니고, 이미 계산된 스케줄이 있다면 무효화 (재계산 유도)
-      if (travelMode !== 'normal' && enhancedSchedule) {
+      // ⚠️ 단, 확정(Apply) 중일 때는 UI 깜빡임 방지를 위해 즉시 지우지 않음
+      if (travelMode !== 'normal' && enhancedSchedule && !isConfirmingRef.current) {
          console.log('🔄 [useTravelMode] 스케줄 데이터 변경 감지: enhancedSchedule 초기화');
          setEnhancedSchedule(null);
       }

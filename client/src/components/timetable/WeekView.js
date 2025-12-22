@@ -595,14 +595,14 @@ const WeekView = ({
                               borderStyle: 'dashed',  // ✅ 점선 테두리로 구분
                               borderWidth: '3px'  // ✅ 두께 증가 (2px → 3px)
                           }}
-                          title={`${modeIcon} 이동: ${travelSlot.from} → ${travelSlot.to} (${travelSlot.travelInfo.durationText})`}
+                          title={`${modeIcon} 이동: ${travelSlot.from || '출발지'} → ${travelSlot.to || '도착지'} (${travelSlot.travelInfo?.durationText || '시간 계산 중'})`}
                       >
                           <div className="text-xs font-bold truncate text-center block" style={{ color: '#FFFFFF', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
-                            {modeIcon} {travelSlot.from} → {travelSlot.to}
+                            {modeIcon} {travelSlot.from || '출발지'} → {travelSlot.to || '도착지'}
                           </div>
                           {slotHeight > 20 && (
                             <div className="text-xs text-center mt-0.5 block font-semibold" style={{ color: '#FFFFFF', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
-                                {travelSlot.travelInfo.durationText} ({travelSlot.travelInfo.distanceText})
+                                {travelSlot.travelInfo?.durationText || `${durationMinutes}분`} {travelSlot.travelInfo?.distanceText ? `(${travelSlot.travelInfo.distanceText})` : ''}
                             </div>
                           )}
                       </div>

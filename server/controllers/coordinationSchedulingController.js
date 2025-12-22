@@ -1402,6 +1402,11 @@ exports.applyTravelMode = async (req, res) => {
     const receivedTimeSlots = enhancedSchedule?.timeSlots || (Array.isArray(enhancedSchedule) ? enhancedSchedule : null);
     const receivedTravelSlots = enhancedSchedule?.travelSlots || [];
     
+    console.log(`🔥🔥🔥 [applyTravelMode] 수신된 데이터 확인:`);
+    console.log(`   - travelMode: ${travelMode}`);
+    console.log(`   - timeSlots: ${receivedTimeSlots?.length}개`);
+    console.log(`   - travelSlots: ${receivedTravelSlots?.length}개`);
+    
     if (!receivedTimeSlots || !Array.isArray(receivedTimeSlots)) {
       return res.status(400).json({ 
         msg: 'enhancedSchedule.timeSlots이 필요합니다.',
