@@ -1,9 +1,38 @@
+/**
+ * ===================================================================================================
+ * autoConfirmSchedule.js - 일정 자동 확정 크론 잡(Cron Job) 서비스
+ * ===================================================================================================
+ *
+ * 📍 위치: 백엔드 > server/jobs > autoConfirmSchedule.js
+ * 🎯 주요 기능:
+ *    - 시스템이 사전에 설정한 자동 확정 시점(autoConfirmAt)이 도래한 방들을 주기적으로 탐색.
+ *    - 조건이 충족된 방들에 대해 confirmScheduleLogic을 호출하여 수동 확정과 동일한 배정 확정 절차 수행.
+ *    - 매 1분마다 실행되는 스케줄러를 통해 실시간성에 가까운 자동 확정 서비스 제공.
+ *    - 확정 결과 및 오류 내역을 서버 로그에 기록하여 모니터링 지원.
+ *
+ * 🔗 연결된 파일:
+ *    - server/services/confirmScheduleService.js - 실제 확정 비즈니스 로직(공통) 호출.
+ *    - server/models/room.js - 자동 확정 대상 방 조회를 위한 모델.
+ *
+ * ✏️ 수정 가이드:
+ *    - 크론 주기를 변경(예: 5분마다)하려면 startAutoConfirmJob 내의 스케줄 패턴 수정.
+ *    - 자동 확정 대상을 선별하는 쿼리를 변경하려면 processAutoConfirm 내의 find 조건 수정.
+ *
+ * 📝 참고사항:
+ *    - 이 기능은 사용자가 일일이 '확정' 버튼을 누르지 않아도 일정 시간이 지나면 시스템이 자동으로 일정을 고정해주는 편의를 제공함.
+ *
+ * ===================================================================================================
+ */
+
 const cron = require('node-cron');
 const Room = require('../models/room');
 const { confirmScheduleLogic } = require('../services/confirmScheduleService');
 
 /**
- * 자동 확정 로직 (confirmScheduleService 사용)
+ * confirmRoomSchedule
+ * @description 개별 방에 대해 자동 확정 비즈니스 로직을 실행합니다.
+ * @param {Object} room - 작업 대상 방 객체 (populate 완료된 상태).
+ * @returns {Promise<Object>} 성공 여부를 담은 객체.
  */
 async function confirmRoomSchedule(room) {
   try {
@@ -17,21 +46,22 @@ async function confirmRoomSchedule(room) {
       `${room.owner.firstName || ''} ${room.owner.lastName || ''}`.trim() || 'System'
     );
     
-    console.log(`✅ [자동확정] 방 ${room._id} (${room.name}): 성공적으로 확정됨`);
-    console.log(`   - 확정된 슬롯 수: ${result.confirmedSlotsCount}`);
-    console.log(`   - 병합된 슬롯 수: ${result.mergedSlotsCount}`);
-    console.log(`   - 영향받은 멤버 수: ${result.affectedMembersCount}`);
-    console.log(`   - 확정된 이동 모드: ${result.confirmedTravelMode}`);
+    console.log(`✅ [자동확정] 방 \$\s*\{\s*room\._id\s*\}\s* (\$\s*\{\s*room\.name\s*\}\s*): 성공적으로 확정됨`);
+    console.log(`   - 확정된 슬롯 수: \$\s*\{\s*result\.confirmedSlotsCount\s*\}\s*`);
+    console.log(`   - 병합된 슬롯 수: \$\s*\{\s*result\.mergedSlotsCount\s*\}\s*`);
+    console.log(`   - 영향받은 멤버 수: \$\s*\{\s*result\.affectedMembersCount\s*\}\s*`);
+    console.log(`   - 확정된 이동 모드: \$\s*\{\s*result\.confirmedTravelMode\s*\}\s*`);
     
     return { success: true };
   } catch (error) {
-    console.error(`❌ [자동확정] 방 ${room._id} 확정 실패:`, error.message);
+    console.error(`❌ [자동확정] 방 \$\s*\{\s*room\._id\s*\}\s* 확정 실패:`, error.message);
     return { success: false, error: error.message };
   }
 }
 
 /**
- * 자동 확정이 필요한 방들을 찾아서 확정
+ * processAutoConfirm
+ * @description DB를 조회하여 확정 대기 시간이 지난 방들을 일괄적으로 처리합니다.
  */
 async function processAutoConfirm() {
   try {
@@ -50,7 +80,7 @@ async function processAutoConfirm() {
       return;
     }
 
-    console.log(`\n🔔 [자동확정] ${roomsToConfirm.length}개 방의 자동 확정 시작...`);
+    console.log(`\n🔔 [자동확정] \$\s*\{\s*roomsToConfirm\.length\s*\}\s*개 방의 자동 확정 시작...`);
 
     for (const room of roomsToConfirm) {
       await confirmRoomSchedule(room);
@@ -64,8 +94,8 @@ async function processAutoConfirm() {
 }
 
 /**
- * Cron Job 시작
- * 매 1분마다 자동 확정 체크
+ * startAutoConfirmJob
+ * @description 서버 시작 시 호출되어 매 분마다 자동 확정 로직을 실행하는 스케줄러를 가동합니다.
  */
 function startAutoConfirmJob() {
   // 매 1분마다 실행 (*/1 * * * *)
@@ -77,3 +107,4 @@ function startAutoConfirmJob() {
 }
 
 module.exports = { startAutoConfirmJob };
+

@@ -858,7 +858,6 @@ exports.smartExchange = async (req, res) => {
     }
 
     // 🆕 이동시간 모드일 때 시뮬레이션으로 검증
-    const effectiveTravelMode = room.confirmedTravelMode || room.currentTravelMode || room.travelMode;
     if (effectiveTravelMode && effectiveTravelMode !== 'normal') {
       console.log(`🔍 [검증] 이동시간 시뮬레이션 시작: ${targetDay} ${finalNewStartTime}`);
 
@@ -1084,7 +1083,6 @@ exports.smartExchange = async (req, res) => {
       room.timeSlots.push(...newSlots);
 
       // 🆕 이동시간 재계산: 원본 날짜와 목표 날짜 모두
-      const effectiveTravelMode = room.confirmedTravelMode || room.currentTravelMode || room.travelMode;
       console.log('🔄 [smartExchange] 이동시간 재계산 시작:', {
         travelMode: effectiveTravelMode,
         oldDate: new Date(allSlotsInBlock[0].date).toISOString().split('T')[0],

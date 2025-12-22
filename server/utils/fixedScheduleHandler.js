@@ -1,10 +1,42 @@
+/**
+ * ===================================================================================================
+ * fixedScheduleHandler.js - 고정 일정 및 개인 시간 관리 헬퍼
+ * ===================================================================================================
+ *
+ * 📍 위치: 백엔드 > server/utils > fixedScheduleHandler.js
+ * 🎯 주요 기능:
+ *    - 사용자의 자연어 입력에서 고정 일정(Pin Class) 및 커스텀 개인 일정(Add Custom) 의도를 AI(Gemini)로 분석.
+ *    - 수업명, 강사명, 시간, 요일 정보를 기반으로 업로드된 시간표 내에서 특정 수업을 지능적으로 탐색.
+ *    - 사용자가 지정한 수업을 '고정 일정' 객체로 변환하고, 필요한 메타데이터(학원명, 색상 등)를 보강.
+ *    - 개인 일정(예: "밥 약속") 추가 시 접미사 제거 및 인덱스 할당을 통해 정규화된 고정 일정 생성.
+ *    - 고정 일정의 추가, 삭제, 수정, 조회 요청에 대한 메인 처리 로직(handleFixedScheduleRequest) 수행.
+ *
+ * 🔗 연결된 파일:
+ *    - server/prompts/fixedSchedulePrompts.js - 분석을 위한 LLM 프롬프트 템플릿 참조.
+ *    - server/routes/fixedSchedule.js - 사용자의 고정 일정 관련 API 요청 처리 시 호출.
+ *
+ * ✏️ 수정 가이드:
+ *    - 수업 탐색 시 매칭 알고리즘을 강화하려면 findClassByName 내의 정규식 및 점수 산정 로직 수정.
+ *    - 고정 일정의 기본 속성을 변경하려면 convertToFixedSchedule 또는 createCustomFixedSchedule 수정.
+ *    - 시간 파싱 패턴을 추가하려면 extractTimeFromInput의 정규식 배열 수정.
+ *
+ * 📝 참고사항:
+ *    - 사용자가 강사명을 언급한 경우 이를 수업 식별의 핵심 정보로 유지하여 중복된 수업명 사이에서 정확한 매칭 지원.
+ *
+ * ===================================================================================================
+ */
+
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { FIXED_SCHEDULE_INTENT_PROMPT } = require('../prompts/fixedSchedulePrompts');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /**
- * 고정 일정 관련 사용자 입력을 분석하고 처리
+ * analyzeFixedScheduleIntent
+ * @description 사용자 입력 메시지를 Gemini AI로 분석하여 고정 일정과 관련된 의도(Intent)와 파라미터를 추출합니다.
+ * @param {string} userInput - 사용자의 채팅 메시지.
+ * @param {Array} [availableClasses=[]] - 현재 선택 가능한 수업 목록 (컨텍스트 제공용).
+ * @returns {Promise<Object>} 파싱된 의도 및 데이터 객체.
  */
 async function analyzeFixedScheduleIntent(userInput, availableClasses = []) {
   try {
@@ -37,7 +69,8 @@ async function analyzeFixedScheduleIntent(userInput, availableClasses = []) {
 }
 
 /**
- * 시간을 분 단위로 변환
+ * timeToMinutes
+ * @description HH:MM 형식의 시간 문자열을 총 분 단위 수치로 변환합니다.
  */
 function timeToMinutes(timeStr) {
   const [hours, minutes] = timeStr.split(':').map(Number);
@@ -45,14 +78,18 @@ function timeToMinutes(timeStr) {
 }
 
 /**
- * 두 시간 사이의 차이를 분 단위로 계산
+ * getTimeDifference
+ * @description 두 시간 사이의 절대적인 차이(분 단위)를 계산합니다.
  */
 function getTimeDifference(time1, time2) {
   return Math.abs(timeToMinutes(time1) - timeToMinutes(time2));
 }
 
 /**
- * 사용자 입력에서 시간 추출
+ * extractTimeFromInput
+ * @description 사용자의 자연어 입력에서 시간 정보를 정규식으로 추출하여 HH:MM 형식으로 반환합니다.
+ * @param {string} userInput - 분석할 문자열.
+ * @returns {string|null} 추출된 시간 문자열 또는 null.
  */
 function extractTimeFromInput(userInput) {
   // "17시", "5시", "17:10", "5:10", "17시 반", "5시반" 등의 패턴 감지
@@ -87,7 +124,12 @@ function extractTimeFromInput(userInput) {
 }
 
 /**
- * 시간표에서 특정 수업 찾기 (시간 기반 선택 포함)
+ * findClassByName
+ * @description 수업명과 사용자 입력을 바탕으로 업로드된 전체 일정 중 일치하는 수업을 검색합니다.
+ * @param {Array} schedules - 검색 대상 일정 배열.
+ * @param {string} className - 찾으려는 수업 명칭.
+ * @param {string} [userInput=''] - 추가적인 시간 단서 파싱을 위한 원본 메시지.
+ * @returns {Array|Object|null} 찾은 수업 리스트, 혹은 선택이 필요한 경우 옵션 객체.
  */
 function findClassByName(schedules, className, userInput = '') {
   // "T", "반", "수업" 제거 (강사명 뒤의 "T"도 제거)
@@ -194,12 +236,13 @@ function findClassByName(schedules, className, userInput = '') {
 }
 
 /**
- * 시간표 수업을 고정 스케줄로 변환
+ * convertToFixedSchedule
+ * @description 일반 시간표 객체를 시스템에서 관리하는 고정 일정(Fixed Schedule) 형식으로 변환합니다.
  */
 function convertToFixedSchedule(schedule, type = 'pinned-class') {
 
   return {
-    id: `${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: `\$\s*\{\s*type\s*\}\s*-\$\s*\{\s*Date\.now\s*\(\s*\)\s*\}\s*-\$\s*\{\s*Math\.random\s*\(\s*\)\s*\.toString\s*\(\s*36\s*\)\s*\.substr\s*\(\s*2,\s*9\s*\)\s*\}\s*`,
     type,
     title: schedule.title,
     days: schedule.days || [],
@@ -218,7 +261,8 @@ function convertToFixedSchedule(schedule, type = 'pinned-class') {
 }
 
 /**
- * 제목이 명확한지 판단 (학원/과목명인지)
+ * isSpecificTitle
+ * @description 일정 제목이 구체적인 수업/활동명인지, 아니면 의미 없는 일반 용어인지 판단합니다.
  */
 function isSpecificTitle(title) {
   const genericTerms = [
@@ -243,9 +287,8 @@ function isSpecificTitle(title) {
 }
 
 /**
- * 개인 일정을 고정 스케줄로 변환
- * @param {Object} customData - 추가할 커스텀 일정 데이터
- * @param {Array} existingFixedSchedules - 기존 고정 일정 배열 (같은 제목 확인용)
+ * createCustomFixedSchedule
+ * @description 사용자가 직접 입력한 개인 일정을 고정 일정 형식으로 변환하고 고유 인덱스를 부여합니다.
  */
 function createCustomFixedSchedule(customData, existingFixedSchedules = []) {
   // ⭐ 항상 원본 제목 사용 (사용자 요구사항: "밥" = "밥약속" 같은 제목도 그대로 표시)
@@ -285,7 +328,7 @@ function createCustomFixedSchedule(customData, existingFixedSchedules = []) {
   }
 
   return {
-    id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: `custom-\$\s*\{\s*Date\.now\s*\(\s*\)\s*\}\s*-\$\s*\{\s*Math\.random\s*\(\s*\)\s*\.toString\s*\(\s*36\s*\)\s*\.substr\s*\(\s*2,\s*9\s*\)\s*\}\s*`,
     type: 'custom',
     title: baseTitle, // ⭐ 시간표에는 기본 제목 표시 (밥약속 → 밥)
     originalTitle: customData.title, // 원본 제목 보존 (밥약속)
@@ -304,7 +347,12 @@ function createCustomFixedSchedule(customData, existingFixedSchedules = []) {
 }
 
 /**
- * 고정 일정 처리 메인 함수
+ * handleFixedScheduleRequest
+ * @description 사용자의 고정 일정 관련 요청을 통합적으로 처리하는 메인 함수입니다.
+ * @param {string} userInput - 사용자의 채팅 메시지.
+ * @param {Array} currentSchedules - 현재 적용된 시간표 리스트.
+ * @param {Array} fixedSchedules - 이미 등록된 고정 일정 리스트.
+ * @returns {Promise<Object>} 처리 결과(성공 여부, 수행된 액션, 메시지 등).
  */
 async function handleFixedScheduleRequest(userInput, currentSchedules, fixedSchedules) {
   const intent = await analyzeFixedScheduleIntent(userInput, currentSchedules);

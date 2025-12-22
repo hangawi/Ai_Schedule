@@ -16,7 +16,8 @@
       "Bash(git restore:*)",
       "mcp__serena__insert_after_symbol",
       "Bash(git checkout:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npm start)"
     ]
   }
 }
