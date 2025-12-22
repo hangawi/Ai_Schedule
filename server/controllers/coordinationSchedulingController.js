@@ -1468,29 +1468,43 @@ exports.applyTravelMode = async (req, res) => {
       });
       console.log(`   [이동시간 저장] ${room.travelTimeSlots.length}개 슬롯 (병합됨, 10분 단위 아님)`);
 
-      // enhancedSchedule.timeSlots로 교체 (10분 단위 포함)
-      room.timeSlots = receivedTimeSlots.map((e, idx) => {
-        const newSlot = {
-          user: e.user._id || e.user,
-          date: e.date instanceof Date ? e.date : new Date(e.date),
-          day: e.day,
-          startTime: e.startTime,
-          endTime: e.endTime,
-          subject: e.subject || '자동 배정',
-          assignedBy: room.owner._id,
-          status: 'confirmed',
-          adjustedForTravelTime: true,
-          originalStartTime: e.originalStartTime
-        };
+      // ⚠️ Phase 3: 수업시간 슬롯만 저장 (이동시간 제외)
+      // 이동시간 슬롯은 제외하고, 순수 수업시간만 저장
+      room.timeSlots = receivedTimeSlots
+        .filter(e => !e.isTravel && e.subject !== '이동시간')
+        .map((e, idx) => {
+          // originalStartTime이 있으면 이동시간이 포함된 것
+          const hasTravel = e.originalStartTime && e.originalStartTime !== e.startTime;
+          const pureStartTime = e.originalStartTime || e.startTime;
 
-        if (idx < 5) {
-          console.log(`   [적용 ${idx}] ${e.subject}: ${e.startTime}-${e.endTime} (사용자: ${e.user._id || e.user})`);
-        }
+          const newSlot = {
+            user: e.user._id || e.user,
+            date: e.date instanceof Date ? e.date : new Date(e.date),
+            day: e.day,
+            startTime: pureStartTime,  // ✅ 순수 수업시간 (이동시간 제외)
+            endTime: e.endTime,
+            subject: e.subject || '자동 배정',
+            assignedBy: room.owner._id,
+            status: 'confirmed',
+            adjustedForTravelTime: false,  // Phase 3: false로 설정
+            originalStartTime: e.originalStartTime
+          };
 
-        return newSlot;
-      });
+          // ⚠️ 이동시간 메타데이터 저장 (조원에게 숨김)
+          if (hasTravel) {
+            const travelMinutes = timeToMinutes(e.startTime) - timeToMinutes(pureStartTime);
+            newSlot.actualStartTime = e.startTime;  // 이동시간 포함
+            newSlot.travelTimeBefore = travelMinutes;
+          }
 
-      console.log(`   ✅ timeSlots 교체 완료: ${room.timeSlots.length}개`);
+          if (idx < 5) {
+            console.log(`   [적용 ${idx}] ${e.subject}: ${pureStartTime}-${e.endTime} (이동시간: ${hasTravel ? newSlot.travelTimeBefore + '분' : '없음'})`);
+          }
+
+          return newSlot;
+        });
+
+      console.log(`   ✅ timeSlots 교체 완료: ${room.timeSlots.length}개 (이동시간 슬롯 제외)`);
     }
 
     // 4-1. 🔒 금지시간 검증 (Step 4)

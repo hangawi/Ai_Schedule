@@ -110,7 +110,10 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
       return { isValid: false, reason: '방을 찾을 수 없습니다.' };
     }
 
-    console.log(`📋 [시뮬레이션] 방 정보: travelMode=${room.travelMode}, 전체 슬롯=${room.timeSlots.length}개`);
+    // ⚠️ effectiveTravelMode 계산 (smartExchange와 동일)
+    const effectiveTravelMode = room.confirmedTravelMode || room.currentTravelMode || room.travelMode;
+
+    console.log(`📋 [시뮬레이션] 방 정보: travelMode=${room.travelMode}, effectiveTravelMode=${effectiveTravelMode}, 전체 슬롯=${room.timeSlots.length}개`);
 
     const targetDateStr = new Date(targetDate).toISOString().split('T')[0];
 
@@ -145,7 +148,7 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
       const prevSlot = i > 0 ? allSlots[i - 1] : null;
 
       let travelTime = 0;
-      if (room.travelMode && room.travelMode !== 'normal') {
+      if (effectiveTravelMode && effectiveTravelMode !== 'normal') {
         if (prevSlot) {
           // 이전 슬롯의 사용자 → 현재 슬롯의 사용자
           const prevUserId = prevSlot.user._id || prevSlot.user;
@@ -234,10 +237,10 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
     // ⑤ 금지시간 침범 확인
     const blockedTimes = room.settings?.blockedTimes || [];
     if (blockedTimes.length > 0) {
-      const newSlotWithTravel = slotsWithTravel.find(s =>
-        (s.user._id || s.user).toString() === userId.toString() &&
-        s.startTime === targetTime
-      );
+      const newSlotWithTravel = slotsWithTravel.find(s => {
+        const slotUserId = s.user?._id || s.user;
+        return slotUserId?.toString() === userId.toString() && s.startTime === targetTime;
+      });
 
       if (newSlotWithTravel) {
         const slotStart = timeToMinutes(newSlotWithTravel.travelStartTime);
@@ -258,10 +261,10 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
     }
 
     // ⑥ 🆕 Phase 4: 선호시간 범위 검증
-    const newSlotWithTravel = slotsWithTravel.find(s =>
-      (s.user._id || s.user).toString() === userId.toString() &&
-      s.startTime === targetTime
-    );
+    const newSlotWithTravel = slotsWithTravel.find(s => {
+      const slotUserId = s.user?._id || s.user;
+      return slotUserId?.toString() === userId.toString() && s.startTime === targetTime;
+    });
 
     if (newSlotWithTravel) {
       try {
@@ -282,11 +285,31 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
           ];
 
           if (applicableSchedules.length > 0) {
-            // 선호시간 범위 찾기 (병합)
-            const preferredRanges = applicableSchedules.map(s => ({
+            // ⚠️ 선호시간 범위 병합 (10분 단위 쪼개짐 해결)
+            const rawRanges = applicableSchedules.map(s => ({
               start: timeToMinutes(s.startTime),
               end: timeToMinutes(s.endTime)
             })).sort((a, b) => a.start - b.start);
+
+            // 연속된 범위 병합
+            const preferredRanges = [];
+            let current = null;
+
+            for (const range of rawRanges) {
+              if (!current) {
+                current = { ...range };
+              } else if (range.start <= current.end) {
+                // 겹치거나 연속됨 → 병합
+                current.end = Math.max(current.end, range.end);
+              } else {
+                // 새로운 범위 시작
+                preferredRanges.push(current);
+                current = { ...range };
+              }
+            }
+            if (current) preferredRanges.push(current);
+
+            console.log(`🔍 [선호시간 병합] ${rawRanges.length}개 → ${preferredRanges.length}개:`, preferredRanges.map(r => `${minutesToTime(r.start)}-${minutesToTime(r.end)}`).join(', '));
 
             // 새 슬롯의 실제 시작 (이동시간 포함) & 종료 시간
             const actualStart = timeToMinutes(newSlotWithTravel.travelStartTime);
@@ -298,7 +321,7 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
             );
 
             if (!isWithinPreferred) {
-              console.log(`❌ [시뮬레이션 실패] 선호시간 침범: 실제 ${newSlotWithTravel.travelStartTime}-${newSlotWithTravel.classEndTime}, 선호시간: ${preferredRanges.map(r => `${minutesToTime(r.start)}-${minutesToTime(r.end)}`).join(', ')}`);
+              console.log(`❌ [시뮬레이션 실패] 선호시간 침범: 실제 ${newSlotWithTravel.travelStartTime}-${newSlotWithTravel.classEndTime}, 병합된 선호시간: ${preferredRanges.map(r => `${minutesToTime(r.start)}-${minutesToTime(r.end)}`).join(', ')}`);
 
               // 최소 가능 시간 계산
               const travelTime = newSlotWithTravel.travelTime;

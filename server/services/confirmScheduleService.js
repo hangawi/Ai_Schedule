@@ -275,8 +275,12 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
     }
 
     // 2. 자동배정된 슬롯 필터링 (assignedBy가 있고 status가 'confirmed'인 것)
+    // ⚠️ 이동시간 슬롯은 제외! (조원은 순수 수업시간만 확정)
     const autoAssignedSlots = room.timeSlots.filter(slot =>
-      slot.assignedBy && slot.status === 'confirmed'
+      slot.assignedBy &&
+      slot.status === 'confirmed' &&
+      !slot.isTravel &&
+      slot.subject !== '이동시간'
     );
 
     if (autoAssignedSlots.length === 0) {
