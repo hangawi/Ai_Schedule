@@ -95,6 +95,13 @@ const WeekView = ({
   travelSlots = [], // 이동 시간 슬롯
   myTravelDuration = 0 // 🆕 나의 이동 소요 시간
 }) => {
+  console.log('🔍 [WeekView] Props 확인:', {
+      hasOwnerSchedule: !!ownerOriginalSchedule,
+      myTravelDuration,
+      travelMode,
+      isRoomOwner
+  });
+
   useEffect(() => {
     // ownerOriginalSchedule 변경 감지
   }, [ownerOriginalSchedule]);
@@ -232,8 +239,53 @@ const WeekView = ({
 
     for (const time of filteredTimeSlotsInDay) {
       // 방장의 원본 시간표를 우선적으로 확인
-      const ownerOriginalInfo = getOwnerOriginalScheduleInfo(date, time);
+      let ownerOriginalInfo = getOwnerOriginalScheduleInfo(date, time);
       
+      // 🆕 이동시간 고려한 유효성 체크 (조원이고 이동모드일 때만)
+      if (!isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0) {
+        const timeMinutes = timeToMinutes(time);
+        // 이동시간 구간 확인: 수업시작(timeMinutes) 직전부터 travelDuration만큼
+        const travelStartMinutes = timeMinutes - myTravelDuration;
+        
+        let isTravelBlocked = false;
+        
+        // 이동 구간을 10분 단위로 역추적하며 금지시간 포함 여부 확인
+        for (let m = timeMinutes - 10; m >= travelStartMinutes; m -= 10) {
+            if (m < 0) continue; 
+            const checkTimeStr = minutesToTime(m);
+            
+            // 1. 방 설정 금지시간(blockedTimes) 체크
+            const blockedInfo = getBlockedTimeInfo(checkTimeStr);
+            if (blockedInfo) {
+                isTravelBlocked = true;
+                break;
+            }
+            
+            // 2. 방장 일정(ownerOriginalInfo) 체크
+            const info = getOwnerOriginalScheduleInfo(date, checkTimeStr);
+            if (info && (info.type === 'non_preferred' || info.type === 'exception' || info.type === 'personal')) {
+                isTravelBlocked = true;
+                break;
+            }
+        }
+        
+        if (isTravelBlocked) {
+            if (!ownerOriginalInfo) {
+                ownerOriginalInfo = {
+                    type: 'travel_restricted',
+                    name: '이동시간 확보 필요',
+                    title: `이동시간(${myTravelDuration}분) 동안 일정이 있습니다`,
+                    isTravelRestricted: true
+                };
+                console.log(`🚫 [WeekView] 이동제한 블록 생성됨: ${time}`);
+            } else if (ownerOriginalInfo.type === 'non_preferred') {
+                 ownerOriginalInfo.name = '이동시간 확보 필요';
+                 ownerOriginalInfo.type = 'travel_restricted';
+                 console.log(`🚫 [WeekView] 이동제한 블록 생성됨(덮어쓰기): ${time}`);
+            }
+        }
+      }
+
       const ownerInfo = getSlotOwner(date, time);
       const isSelected = isSlotSelected(date, time);
       const blockedInfo = getBlockedTimeInfo(time);
@@ -430,6 +482,15 @@ const WeekView = ({
 
   // 병합 모드 렌더링 함수 - 각 날짜별 독립적 컬럼 렌더링
   const renderMergedView = () => {
+    // 🔍 디버깅용 로그
+    if (!isRoomOwner && travelMode !== 'normal') {
+        console.log(`🎨 [WeekView:Merged] 빗금 렌더링 체크:`, {
+            myTravelDuration,
+            travelMode,
+            isRoomOwner
+        });
+    }
+
     // 🔍 현재 화면에 표시되는 날짜들 확인
     // 이동 슬롯을 날짜별로 그룹화
     const travelSlotsByDate = {};
@@ -510,6 +571,12 @@ const WeekView = ({
                       ...(block.type === 'blocked' && block.data?.ownerScheduleType === 'non_preferred' ? {
                         backgroundColor: '#E9D5FF',
                         borderColor: '#C084FC'
+                      } : {}),
+                      // 🆕 이동 시간 부족으로 차단된 시간 (travel_restricted) - 빗금 처리
+                      ...(block.type === 'blocked' && block.data?.ownerScheduleType === 'travel_restricted' ? {
+                        backgroundColor: '#E5E7EB', // gray-200
+                        borderColor: '#9CA3AF', // gray-400
+                        backgroundImage: 'repeating-linear-gradient(45deg, #D1D5DB 0px, #D1D5DB 5px, #E5E7EB 5px, #E5E7EB 10px)'
                       } : {}),
                       // 방장의 개인시간 (personal) - 연한 주황/피치
                       ...(block.type === 'blocked' && block.data?.ownerScheduleType === 'personal' ? {
@@ -667,6 +734,15 @@ const WeekView = ({
   const renderNormalView = () => {
     // 평일 5개만 확실히 사용
     const weekdays = weekDates.slice(0, 5);
+    
+    // 🔍 디버깅용 로그
+    if (!isRoomOwner && travelMode !== 'normal') {
+        console.log(`🎨 [WeekView] 빗금 렌더링 체크:`, {
+            myTravelDuration,
+            travelMode,
+            isRoomOwner
+        });
+    }
 
     return (
       <>

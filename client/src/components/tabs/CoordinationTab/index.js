@@ -180,8 +180,9 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     isCalculating: isTravelCalculating,
     error: travelError,
     enhancedSchedule,
-    getCurrentScheduleData
-  } = useTravelMode(currentRoom, isOwner);
+    getCurrentScheduleData,
+    myTravelDuration // 🆕 추가
+  } = useTravelMode(currentRoom, isOwner, user);
 
   // 이동수단 모드 변경 핸들러
   const handleTravelModeChange = useCallback(async (newMode) => {
@@ -909,6 +910,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
                   timeSlots={scheduleData.timeSlots}
                   travelSlots={scheduleData.travelSlots || []}
                   travelMode={scheduleData.travelMode}
+                  myTravelDuration={scheduleData.myTravelDuration} // 🆕 확실하게 추가
                   members={currentRoom.members || []}
                   roomData={currentRoom}
                   currentUser={user}
@@ -930,6 +932,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
                   timeSlots={scheduleData.timeSlots}
                   travelSlots={scheduleData.travelSlots || []}
                   travelMode={scheduleData.travelMode}
+                  myTravelDuration={scheduleData.myTravelDuration} // 🆕 달력 뷰에도 추가
                   members={currentRoom.members || []}
                   currentUser={user}
                   isRoomOwner={isOwner}

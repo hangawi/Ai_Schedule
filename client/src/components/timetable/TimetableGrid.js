@@ -191,6 +191,7 @@ const TimetableGrid = ({
   timeSlots,
   travelSlots = [],
   travelMode, // Add travelMode to props
+  myTravelDuration = 0, // 🆕 나의 이동시간 (조원용)
   members = [],
   roomData,
   onSlotSelect,
@@ -1163,6 +1164,7 @@ const TimetableGrid = ({
         showMerged={showMerged}
         ownerOriginalSchedule={ownerOriginalSchedule}
         travelMode={travelMode} // Pass travelMode down
+        myTravelDuration={myTravelDuration} // 🆕 Pass myTravelDuration down
       />
 
       {/* ========== 시간 요청 모달 ========== */}

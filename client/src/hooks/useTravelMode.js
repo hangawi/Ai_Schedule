@@ -31,6 +31,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import travelScheduleCalculator from '../services/travelScheduleCalculator';
 import { coordinationService } from '../services/coordinationService';
+import travelModeService from '../services/travelModeService';
+import { auth } from '../config/firebaseConfig'; // 🆕 Firebase Auth 임포트
 
 /**
  * useTravelMode - 이동 시간 계산 모드를 관리하고, 모드에 따라 스케줄 데이터를 변환하여 제공하는 훅
@@ -50,11 +52,12 @@ import { coordinationService } from '../services/coordinationService';
  * @property {Function} getWeekViewData - 주간 뷰에 맞게 포맷된 스케줄 데이터를 반환하는 함수
  * @property {Function} getMonthViewData - 월간 뷰에 맞게 포맷된 스케줄 데이터를 반환하는 함수
  */
-export const useTravelMode = (currentRoom, isOwner = true) => {
+export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) => {
   const [travelMode, setTravelMode] = useState('normal');
   const [enhancedSchedule, setEnhancedSchedule] = useState(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState(null);
+  const [myTravelDuration, setMyTravelDuration] = useState(0); // 🆕 나의 이동시간 (분 단위)
 
   // 이전 방 ID를 추적하여 실제로 방이 변경되었을 때만 상태 초기화
   const prevRoomIdRef = useRef(null);
@@ -64,6 +67,134 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
   const prevServerModeRef = useRef(currentRoom?.confirmedTravelMode || currentRoom?.currentTravelMode || 'normal');
   // 🆕 확정 중인지 여부 (이동시간 깜빡임 방지)
   const isConfirmingRef = useRef(false);
+
+  // 🆕 방장 -> 나(조원) 이동시간 계산
+  useEffect(() => {
+    const calculateMyTravel = async () => {
+      // 1. 사용자 ID 확인 (currentUser 또는 Firebase Auth)
+      let myId = currentUser?._id || currentUser?.id;
+      let myUid = currentUser?.firebaseUid;
+
+      if (!myId && !myUid) {
+          const fbUser = auth.currentUser;
+          if (fbUser) {
+              myUid = fbUser.uid; // Firebase UID 사용
+          }
+      }
+
+      console.log('🔄 [useTravelMode] Effect Triggered', {
+          hasRoom: !!currentRoom,
+          isOwner,
+          travelMode,
+          hasUser: !!currentUser,
+          myUid
+      });
+
+      // 1. 조건 체크: 방 정보 없음, 방장임, 일반 모드 -> 계산 안 함
+      // (currentUser가 없어도 myUid가 있으면 진행)
+      if (!currentRoom || isOwner || travelMode === 'normal' || (!myId && !myUid)) {
+        console.log('⏭️ [useTravelMode] 조건 불충족으로 스킵');
+        setMyTravelDuration(0);
+        return;
+      }
+
+      // 2. 방장 위치 정보 확인
+      const owner = currentRoom.owner;
+      // 방장 정보가 객체인지 ID 문자열인지 확인
+      const ownerLat = owner?.addressLat;
+      const ownerLng = owner?.addressLng;
+
+      if (!ownerLat || !ownerLng) {
+        console.warn('⚠️ [useTravelMode] 방장 좌표 정보 없음');
+        setMyTravelDuration(0);
+        return;
+      }
+
+      // 3. 내 위치 정보 확인
+      // currentUser 객체 우선 확인
+      let myLat = currentUser?.addressLat;
+      let myLng = currentUser?.addressLng;
+      let source = 'currentUser';
+
+      // currentUser에 없으면 members 배열에서 확인
+      if (!myLat || !myLng) {
+        console.log(`🔍 [useTravelMode] 멤버 찾기 시도:`, {
+            myId,
+            myUid,
+            membersCount: currentRoom.members?.length
+        });
+
+        const myMemberInfo = currentRoom.members?.find(m => {
+            const mUser = m.user;
+            if (!mUser) return false;
+            
+            // 객체인 경우
+            if (mUser._id || mUser.id) {
+                const mId = (mUser._id || mUser.id).toString();
+                if (myId && mId === myId.toString()) return true;
+                if (myUid && mUser.firebaseUid === myUid) return true;
+            } 
+            // ID 문자열인 경우
+            else if (typeof mUser === 'string') {
+                if (myId && mUser === myId.toString()) return true;
+            }
+            
+            return false;
+        });
+        
+        // member.user가 populate된 객체일 경우
+        if (myMemberInfo?.user?.addressLat) {
+            myLat = myMemberInfo.user.addressLat;
+            myLng = myMemberInfo.user.addressLng;
+            source = 'room.members';
+        }
+      }
+
+      console.log(`🚗 [useTravelMode] 이동시간 API 호출 시작:`, {
+        mode: travelMode,
+        origin: { lat: ownerLat, lng: ownerLng },
+        dest: { lat: myLat, lng: myLng }
+      });
+
+      try {
+        const travelInfo = await travelModeService.calculateTravelTime(
+          { lat: ownerLat, lng: ownerLng },
+          { lat: myLat, lng: myLng },
+          travelMode
+        );
+
+        console.log('✅ [useTravelMode] API 호출 성공:', travelInfo);
+
+        // 10분 단위 올림 계산 (초 -> 분 -> 10분 단위 올림)
+        const durationMinutes = Math.ceil(travelInfo.duration / 60 / 10) * 10;
+        
+        console.log(`✅ [useTravelMode] 나의 이동시간 결정: ${durationMinutes}분 (${travelInfo.durationText})`);
+        setMyTravelDuration(durationMinutes);
+
+      } catch (err) {
+        console.warn('⚠️ [useTravelMode] API 호출 실패, 수동 계산(Fallback) 시작:', err.message);
+        
+        // 🆕 수동 계산 로직 (백엔드와 동일한 Haversine 공식)
+        const calculateDistance = (lat1, lon1, lat2, lon2) => {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 0.5 - Math.cos(dLat)/2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * (1 - Math.cos(dLon))/2;
+            return R * 2 * Math.asin(Math.sqrt(a));
+        };
+
+        const distance = calculateDistance(ownerLat, ownerLng, myLat, myLng);
+        const speeds = { driving: 40, transit: 30, walking: 5, bicycling: 15 };
+        const speed = speeds[travelMode] || 30;
+        const durationMinutes = Math.ceil((distance / speed) * 60 / 10) * 10;
+
+        console.log(`✅ [useTravelMode] 수동 계산 결과: ${durationMinutes}분 (거리: ${distance.toFixed(2)}km, 속도: ${speed}km/h)`);
+        setMyTravelDuration(durationMinutes);
+      }
+    };
+    
+    calculateMyTravel();
+  }, [currentRoom, isOwner, travelMode, currentUser]);
 
   const handleModeChange = useCallback(async (newMode) => {
     // ⚠️ 확정된 방은 재계산하지 않음 (조회만 가능)
@@ -139,13 +270,15 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
         return {
           timeSlots: enhancedSchedule.timeSlots.filter(slot => !slot.isTravel),
           travelSlots: [],
-          travelMode: travelMode
+          travelMode: travelMode,
+          myTravelDuration // 🆕 추가
         };
       }
       return {
         timeSlots: enhancedSchedule.timeSlots.filter(slot => !slot.isTravel),
         travelSlots: enhancedSchedule.travelSlots,
-        travelMode: travelMode
+        travelMode: travelMode,
+        myTravelDuration // 🆕 추가
       };
     }
 
@@ -155,7 +288,8 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
        return {
          timeSlots: currentRoom?.timeSlots || [],
          travelSlots: [],
-         travelMode: travelMode
+         travelMode: travelMode,
+         myTravelDuration // 🆕 추가
        };
     }
     
@@ -206,7 +340,8 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
                     color: slotColor  // ✅ 조원 색상 추가
                 };
             }), 
-            travelMode: travelMode
+            travelMode: travelMode,
+            myTravelDuration // 🆕 추가
         };
     } 
     
@@ -227,10 +362,11 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
     return {
         timeSlots: nonTravelSlots,
         travelSlots: [],
-        travelMode: travelMode
+        travelMode: travelMode,
+        myTravelDuration // 🆕 추가
     };
 
-  }, [travelMode, enhancedSchedule, currentRoom, isCalculating, isOwner]);
+  }, [travelMode, enhancedSchedule, currentRoom, isCalculating, isOwner, myTravelDuration]);
 
   const getWeekViewData = useCallback((weekStartDate) => {
     const scheduleData = getCurrentScheduleData();

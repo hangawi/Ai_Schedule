@@ -538,12 +538,12 @@ exports.getRoomDetails = async (req, res) => {
       }
 
       if (!isOwner) {
-         // 조원에게는 travelTimeSlots 절대 노출 금지
-         roomObj.travelTimeSlots = [];
+         // 조원에게는 travelTimeSlots 노출 (빗금 표시 계산용) - 대신 민감 정보 제거 가능
+         // roomObj.travelTimeSlots = []; // <-- REMOVED
          
          if (!roomObj.confirmedAt) {
-             // 조원이고 아직 확정 안 된 경우, currentTravelMode 숨김
-             roomObj.currentTravelMode = 'normal';
+             // 조원이고 아직 확정 안 된 경우, currentTravelMode 숨김 (필요시 노출 검토)
+             // roomObj.currentTravelMode = 'normal';
          }
       }
 
