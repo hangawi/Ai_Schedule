@@ -98,6 +98,11 @@ const TimeSlotSchema = new mongoose.Schema({
     type: Boolean,
     default: false  // true면 이동시간 슬롯, false면 수업 슬롯
   },
+  // 🆕 조원별 색상 (프론트엔드 표시용)
+  color: {
+    type: String,
+    required: false  // room.members[].color에서 복사됨
+  },
   // 🆕 조원 프라이버시 보호용 필드들 (Phase 3)
   actualStartTime: {
     type: String,
@@ -107,6 +112,24 @@ const TimeSlotSchema = new mongoose.Schema({
     type: Number,
     required: false,  // 이 슬롯 전에 필요한 이동시간 (분 단위)
     default: 0
+  },
+  // 🆕 이동시간 슬롯 추가 정보
+  from: {
+    type: String,
+    required: false  // 출발지 (주소 또는 이름)
+  },
+  to: {
+    type: String,
+    required: false  // 도착지 (주소 또는 이름)
+  },
+  travelMode: {
+    type: String,
+    enum: ['normal', 'transit', 'driving', 'bicycling', 'walking', null],
+    required: false  // 이동수단
+  },
+  travelInfo: {
+    durationText: String,  // "30분"
+    distanceText: String   // "5.2km"
   }
 });
 
@@ -391,6 +414,27 @@ const RoomSchema = new mongoose.Schema({
     type: {
       type: String,
       default: 'travel'
+    },
+    color: {
+      type: String,
+      required: false
+    },
+    from: {
+      type: String,
+      required: false
+    },
+    to: {
+      type: String,
+      required: false
+    },
+    travelMode: {
+      type: String,
+      enum: ['normal', 'transit', 'driving', 'bicycling', 'walking', null],
+      required: false
+    },
+    travelInfo: {
+      durationText: String,
+      distanceText: String
     }
   }],
   // 원본 timeSlots 백업 (이동시간 모드 적용 전)

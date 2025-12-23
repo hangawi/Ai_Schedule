@@ -161,32 +161,71 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
     
     // 3. 서버에 저장된 이동시간 데이터가 있는 경우 (방장만 보기)
     if (isOwner) {
-        // 🔧 timeSlots에 섞여 있는 이동시간 슬롯을 분리하여 travelSlots로 병합
-        const mixedTravelSlots = (currentRoom.timeSlots || []).filter(slot => slot.isTravel || slot.subject === '이동시간');
-        const regularSlots = (currentRoom.timeSlots || []).filter(slot => !slot.isTravel && slot.subject !== '이동시간');
+        // ✅ 명확하게 분리 (null 체크 강화)
+        const allSlots = currentRoom?.timeSlots || [];
+        const mixedTravelSlots = allSlots.filter(slot => 
+          slot?.isTravel === true || slot?.subject === '이동시간'
+        );
+        const regularSlots = allSlots.filter(slot => 
+          slot?.isTravel !== true && slot?.subject !== '이동시간'
+        );
+
+        // ✅ 디버깅 로그 추가
+        console.log('🔍 [useTravelMode] 슬롯 분리 (방장):', {
+          전체: allSlots.length,
+          수업: regularSlots.length,
+          이동시간_섞임: mixedTravelSlots.length,
+          이동시간_전용: (currentRoom?.travelTimeSlots || []).length,
+          travelMode: travelMode
+        });
         
-        // travelTimeSlots와 mixedTravelSlots 병합 (중복 제거 필요 시 id로 체크하겠지만, 일단 단순 병합)
-        // 보통 recalculate 후에는 timeSlots에만 들어있을 수 있음
+        // ✅ travelTimeSlots와 mixedTravelSlots 병합
         const combinedTravelSlots = [
-            ...(currentRoom.travelTimeSlots || []),
+            ...(currentRoom?.travelTimeSlots || []),
             ...mixedTravelSlots
         ];
 
         return {
             timeSlots: regularSlots, // 수업 시간만 반환
-            // 🔧 travelMode를 슬롯에 주입하여 렌더링 시 올바른 아이콘/색상 표시
-            travelSlots: combinedTravelSlots.map(slot => ({
-                ...slot,
-                travelMode: travelMode 
-            })), 
+            // ✅ travelMode를 슬롯에 명시적으로 주입 + color 추가
+            travelSlots: combinedTravelSlots.map(slot => {
+                // color가 없으면 room.members에서 가져오기
+                let slotColor = slot.color;
+                if (!slotColor && slot.user) {
+                    const userId = slot.user._id || slot.user;
+                    const member = currentRoom.members.find(m => 
+                        (m.user._id || m.user).toString() === userId.toString()
+                    );
+                    slotColor = member?.color || '#87CEEB';
+                }
+                
+                return {
+                    ...slot,
+                    isTravel: true,  // 명시적으로 설정
+                    travelMode: travelMode,
+                    color: slotColor  // ✅ 조원 색상 추가
+                };
+            }), 
             travelMode: travelMode
         };
     } 
     
     // 4. 조원은 서버 데이터라도 이동시간 숨김 (프라이버시 보호)
-    // 🔧 timeSlots에서 이동시간 슬롯을 완벽하게 제거
+    // ✅ 명확하게 이동시간 슬롯 제거
+    const allSlots = currentRoom?.timeSlots || [];
+    const nonTravelSlots = allSlots.filter(slot => 
+      slot?.isTravel !== true && slot?.subject !== '이동시간'
+    );
+
+    // ✅ 디버깅 로그 추가
+    console.log('🔍 [useTravelMode] 슬롯 분리 (조원):', {
+      전체: allSlots.length,
+      수업만: nonTravelSlots.length,
+      제거된_이동시간: allSlots.length - nonTravelSlots.length
+    });
+
     return {
-        timeSlots: (currentRoom.timeSlots || []).filter(slot => !slot.isTravel && slot.subject !== '이동시간'),
+        timeSlots: nonTravelSlots,
         travelSlots: [],
         travelMode: travelMode
     };

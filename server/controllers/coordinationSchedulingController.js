@@ -1466,14 +1466,29 @@ exports.applyTravelMode = async (req, res) => {
         const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         const dayOfWeek = dayNames[dateObj.getDay()];  // Date 객체에서 요일 추출
         
+        // 사용자 ID 추출 (e.user 또는 room.owner)
+        const userId = e.user?._id || e.user || room.owner._id;
+        
+        // ✅ 조원 색상 가져오기
+        let userColor = e.color;  // 클라이언트에서 계산한 색상이 있으면 사용
+        if (!userColor) {
+          // 없으면 room.members에서 찾기
+          userColor = room.getUserColor(userId);
+        }
+        
         return {
-        user: room.owner._id,
-        date: dateObj,
-        day: e.day || dayOfWeek,  // day 필드가 있으면 사용, 없으면 계산
-        startTime: e.startTime,
-        endTime: e.endTime,
-        subject: '이동시간',
-        type: 'travel'
+          user: userId,
+          date: dateObj,
+          day: e.day || dayOfWeek,  // day 필드가 있으면 사용, 없으면 계산
+          startTime: e.startTime,
+          endTime: e.endTime,
+          subject: '이동시간',
+          type: 'travel',
+          color: userColor,                  // ✅ 색상
+          from: e.from,                      // ✅ 출발지
+          to: e.to,                          // ✅ 도착지
+          travelMode: e.travelMode || travelMode,  // ✅ 이동수단
+          travelInfo: e.travelInfo           // ✅ 거리/시간 정보
         };
       });
       console.log(`   [이동시간 저장] ${room.travelTimeSlots.length}개 슬롯 (병합됨, 10분 단위 아님)`);
