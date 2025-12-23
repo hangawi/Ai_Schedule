@@ -17,7 +17,8 @@
       "mcp__serena__insert_after_symbol",
       "Bash(git checkout:*)",
       "Bash(npm run build:*)",
-      "Bash(npm start)"
+      "Bash(npm start)",
+      "mcp__serena__find_referencing_symbols"
     ]
   }
 }

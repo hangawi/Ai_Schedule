@@ -58,7 +58,7 @@ exports.runAutoSchedule = async (req, res) => {
          return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
       }
 
-      // Clear previous auto-generated slots before running new schedule
+// Clear previous auto-generated slots before running new schedule
       // 단, 협의로 배정된 슬롯(subject에 '협의'가 포함된 것)은 보존
       // 🔒 확정된 슬롯도 보존 (중복 방지)
       room.timeSlots = room.timeSlots.filter(slot => {
@@ -78,6 +78,11 @@ exports.runAutoSchedule = async (req, res) => {
          // 기타 assignedBy가 있는 슬롯 → 삭제
          return false;
       });
+
+      // ✨ 이동시간 모드 관련 데이터 초기화 (자동배정은 항상 새로 시작)
+      room.originalTimeSlots = [];
+      room.travelTimeSlots = [];
+      console.log('🔄 [자동배정 시작] originalTimeSlots와 travelTimeSlots 초기화');
 
       if (minHoursPerWeek < 0.167 || minHoursPerWeek > 10) {
          return res.status(400).json({ msg: '주당 최소 할당 시간은 10분-10시간 사이여야 합니다.' });
@@ -363,12 +368,21 @@ exports.runAutoSchedule = async (req, res) => {
       const autoConfirmDelay = 1 * 60 * 1000; // 1분 = 60,000ms
       room.autoConfirmAt = new Date(Date.now() + autoConfirmDelay);
 
-      // ✨ 요청받은 이동수단 모드를 현재 모드로 설정 (UI 동기화 유지)
-      room.currentTravelMode = transportMode || 'normal';
+      // ✨ 자동배정은 항상 normal 모드로 실행 (이동시간은 별도로 "적용" 버튼으로 처리)
+      console.log('🚨 [저장 전] transportMode:', transportMode);
+      console.log('🚨 [저장 전] room.timeSlots 개수:', room.timeSlots?.length || 0);
+      console.log('🚨 [저장 전] room.originalTimeSlots 개수:', room.originalTimeSlots?.length || 0);
+      
+      room.currentTravelMode = 'normal';
       room.confirmedTravelMode = null;
       room.travelTimeSlots = [];
+      
+      console.log('🚨 [설정 후] room.currentTravelMode:', room.currentTravelMode);
 
       await room.save();
+      
+      console.log('🚨 [저장 후] room.timeSlots 개수:', room.timeSlots?.length || 0);
+      console.log('🚨 [저장 후] room.originalTimeSlots 개수:', room.originalTimeSlots?.length || 0);
 
       // 활동 로그 기록
       try {
@@ -392,6 +406,10 @@ exports.runAutoSchedule = async (req, res) => {
          .populate('requests.requester', 'firstName lastName email')
          .populate('requests.targetUser', 'firstName lastName email')
          .lean();
+
+      console.log('🚨 [응답 전] freshRoom.timeSlots 개수:', freshRoom.timeSlots?.length || 0);
+      console.log('🚨 [응답 전] freshRoom.originalTimeSlots 개수:', freshRoom.originalTimeSlots?.length || 0);
+      console.log('🚨 [응답 전] freshRoom.currentTravelMode:', freshRoom.currentTravelMode);
 
       if (freshRoom.timeSlots.length > 0) {
          freshRoom.timeSlots.slice(0, 5).forEach((slot, idx) => {

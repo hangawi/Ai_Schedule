@@ -672,8 +672,10 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   const handleRunAutoScheduleCallback = async () => {
     await handleRunAutoSchedule(currentRoom, currentWeekStartDate, user, scheduleOptions, setIsScheduling, setScheduleError, setUnassignedMembersInfo, setConflictSuggestions, setCurrentRoom, showAlert, viewMode, travelMode);
     
-    // ✨ 자동배정 후에는 사용자가 선택했던 모드(travelMode)를 그대로 유지하거나 재적용
-    // useTravelMode 훅이 timeSlots 변경을 감지하여 자동으로 재계산하므로 강제 초기화는 제거
+    // ⚠️ 자동배정 완료 후 이동시간 모드를 일반 모드로 리셋
+    // (무한 루프 방지 및 성능 최적화)
+    // 사용자가 원하면 다시 이동시간 모드를 선택할 수 있음
+    await handleTravelModeChange('normal'); // await 추가!
   };
 
   const handleDeleteAllSlots = () => setShowDeleteConfirm(true);

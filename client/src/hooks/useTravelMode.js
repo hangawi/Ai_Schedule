@@ -62,7 +62,6 @@ export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) =
   // 이전 방 ID를 추적하여 실제로 방이 변경되었을 때만 상태 초기화
   const prevRoomIdRef = useRef(null);
   // 🆕 이전 timeSlots 참조 저장 (자동배정 등으로 인한 데이터 변경 감지용)
-  const prevTimeSlotsRef = useRef(currentRoom?.timeSlots);
   // 🆕 이전 서버 모드 참조 저장 (서버 상태 변경 감지용)
   const prevServerModeRef = useRef(currentRoom?.confirmedTravelMode || currentRoom?.currentTravelMode || 'normal');
   // 🆕 확정 중인지 여부 (이동시간 깜빡임 방지)
@@ -432,27 +431,8 @@ export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) =
     }
   }, [currentRoom?._id, currentRoom?.currentTravelMode, currentRoom?.confirmedTravelMode]);
 
-  // 🆕 TimeSlots 변경 감지 -> enhancedSchedule 무효화 (자동배정 결과 반영 등)
-  useEffect(() => {
-    if (currentRoom?.timeSlots !== prevTimeSlotsRef.current) {
-      prevTimeSlotsRef.current = currentRoom?.timeSlots;
-      
-      // 모드가 일반이 아니고, 이미 계산된 스케줄이 있다면 무효화 (재계산 유도)
-      // ⚠️ 단, 확정(Apply) 중일 때는 UI 깜빡임 방지를 위해 즉시 지우지 않음
-      if (travelMode !== 'normal' && enhancedSchedule && !isConfirmingRef.current) {
-         console.log('🔄 [useTravelMode] 스케줄 데이터 변경 감지: enhancedSchedule 초기화');
-         setEnhancedSchedule(null);
-      }
-    }
-  }, [currentRoom?.timeSlots, travelMode, enhancedSchedule]);
-
-  // 🆕 재계산 트리거 (모드는 설정됐는데 데이터가 없을 때)
-  useEffect(() => {
-    if (travelMode !== 'normal' && !enhancedSchedule && !isCalculating && !error) {
-       console.log('🔄 [useTravelMode] 모드 동기화 및 재계산 트리거');
-       handleModeChange(travelMode);
-    }
-  }, [travelMode, enhancedSchedule, isCalculating, error, handleModeChange]);
+  // ⚠️ 자동배정 후 무한 루프 방지를 위해 모든 재계산 effect 제거
+  // 사용자가 수동으로 이동시간 모드를 다시 선택하도록 함
 
   // 🆕 방장이 travelMode를 변경했을 때 조원이 동기화 받을 수 있도록 처리
   useEffect(() => {

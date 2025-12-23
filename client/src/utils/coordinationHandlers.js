@@ -276,7 +276,20 @@ export const handleRunAutoSchedule = async (
       clientToday: finalOptions.clientToday
     });
     console.log('🔍 ==========================================');
-    const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = await coordinationService.runAutoSchedule(currentRoom._id, finalOptions);
+    const response = await coordinationService.runAutoSchedule(currentRoom._id, finalOptions);
+    
+    // 🔍 응답 상세 로그
+    console.log('🔍 ===== [클라이언트] 자동배정 응답 받음 =====');
+    console.log('📥 전체 응답:', response);
+    console.log('📥 room 객체:', response.room);
+    console.log('📥 timeSlots 개수:', response.room?.timeSlots?.length || 0);
+    console.log('📥 timeSlots 샘플 (첫 5개):', response.room?.timeSlots?.slice(0, 5));
+    console.log('📥 autoConfirmAt:', response.room?.autoConfirmAt);
+    console.log('📥 assignedBy 있는 슬롯:', response.room?.timeSlots?.filter(s => s.assignedBy).length || 0);
+    console.log('📥 status=confirmed 슬롯:', response.room?.timeSlots?.filter(s => s.status === 'confirmed').length || 0);
+    console.log('🔍 ==========================================');
+    
+    const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = response;
 
     // 배정된 슬롯들의 상세 정보 출력
     if (updatedRoom.timeSlots && updatedRoom.timeSlots.length > 0) {
@@ -298,14 +311,23 @@ export const handleRunAutoSchedule = async (
 
     // Force a deep copy to break memoization in child components
     const newRoomState = JSON.parse(JSON.stringify(updatedRoom));
+    
+    console.log('🔍 ===== [클라이언트] setCurrentRoom 호출 =====');
+    console.log('📥 newRoomState.timeSlots 개수:', newRoomState.timeSlots?.length || 0);
+    console.log('📥 newRoomState.autoConfirmAt:', newRoomState.autoConfirmAt);
+    console.log('📥 assignedBy 있는 슬롯:', newRoomState.timeSlots?.filter(s => s.assignedBy).length || 0);
+    console.log('🔍 ==========================================');
+    
     setCurrentRoom(newRoomState);
 
     // 자동 배정 완료 알림
     showAlert('자동 시간 배정이 완료되었습니다.');
   } catch (error) {
+    console.error('❌ [클라이언트] 자동배정 에러:', error);
     setScheduleError(error.message);
     showAlert(`자동 배정 실패: ${error.message}`);
   } finally {
+    console.log('✅ [클라이언트] finally 블록 실행 - setIsScheduling(false)');
     setIsScheduling(false);
   }
 };;
