@@ -45,6 +45,12 @@ const timeToMinutes = (timeStr) => {
   return hours * 60 + minutes;
 };
 
+const minutesToTime = (minutes) => {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+};
+
 /**
  * WeekView - 타임테이블의 주간 그리드 본문을 렌더링하는 컴포넌트
  *
@@ -68,6 +74,7 @@ const timeToMinutes = (timeStr) => {
  * @param {Object} props.ownerOriginalSchedule - 방장의 원본 시간표 데이터
  * @param {string} [props.travelMode='normal'] - 이동 모드 ('normal', 'travel' 등)
  * @param {Array} [props.travelSlots=[]] - 이동 시간 슬롯 데이터 배열
+ * @param {number} [props.myTravelDuration=0] - 나의 이동 소요 시간 (분)
  *
  * @returns {JSX.Element} 주간 타임테이블 그리드 UI
  */
@@ -85,7 +92,8 @@ const WeekView = ({
   showMerged = true, // New prop for merged view
   ownerOriginalSchedule, // 방장의 원본 시간표 데이터
   travelMode = 'normal', // Add travelMode to props
-  travelSlots = [] // 이동 시간 슬롯
+  travelSlots = [], // 이동 시간 슬롯
+  myTravelDuration = 0 // 🆕 나의 이동 소요 시간
 }) => {
   useEffect(() => {
     // ownerOriginalSchedule 변경 감지
@@ -236,10 +244,15 @@ const WeekView = ({
       let slotType = 'empty';
       let slotData = null;
 
+      // 🆕 멤버 슬롯인지 확인 (방장이 본인 슬롯을 보는 경우 제외)
+      const isMemberSlot = ownerInfo && (!isRoomOwner || (ownerInfo.userId !== currentUser?.id && ownerInfo.userId !== currentUser?._id));
+
       // ✨✨✨ 최우선 순위: 방장의 개인시간/예외일정 (이동시간 포함, 모두 blocked로 표시)
+      // 확정된 일정은 blocked(오렌지색)로 표시되어야 함
       if (ownerOriginalInfo && (
         ownerOriginalInfo.type === 'exception' || 
-        ownerOriginalInfo.type === 'personal'
+        ownerOriginalInfo.type === 'personal' ||
+        ownerOriginalInfo.type === 'travel_restricted'
       )) {
         slotType = 'blocked';
         slotData = {
@@ -570,7 +583,18 @@ const WeekView = ({
               })}
               {(() => {
                   const dateKey = dateInfo.fullDate.toISOString().split('T')[0];
-                  const slots = travelSlotsByDate[dateKey] || [];
+                  // 🆕 확정된 일정(개인시간/예외)과 겹치는 이동시간 슬롯 필터링
+                  const slots = (travelSlotsByDate[dateKey] || []).filter(travelSlot => {
+                      // 이동시간 슬롯의 중간 지점이나 시작/끝 지점이 개인일정과 겹치는지 확인
+                      // 간단하게 시작 시간 기준으로 체크 (필요시 더 정교하게 수정 가능)
+                      const info = getOwnerOriginalScheduleInfo(dateInfo.fullDate, travelSlot.startTime);
+                      
+                      // 개인일정(personal)이나 예외일정(exception)이 있으면 이동시간 숨김
+                      if (info && (info.type === 'personal' || info.type === 'exception')) {
+                          return false; 
+                      }
+                      return true;
+                  });
                   return slots;
               })().map((travelSlot, travelIndex) => {
                   const travelStartMinutes = timeToMinutes(travelSlot.startTime);
@@ -657,23 +681,64 @@ const WeekView = ({
             {weekdays.map((dateInfo, dayIndex) => {
               const date = dateInfo.fullDate;
 
-              // 방장의 원본 시간표를 우선적으로 확인
-              const ownerOriginalInfo = getOwnerOriginalScheduleInfo(date, time);
+              // 1. 방장의 원본 시간표를 우선적으로 확인
+              let ownerOriginalInfo = getOwnerOriginalScheduleInfo(date, time);
 
+              // 2. 기본 정보 가져오기
               const ownerInfo = getSlotOwner(date, time);
               const isSelected = isSlotSelected(date, time);
               const blockedInfo = getBlockedTimeInfo(time);
               const roomExceptionInfo = getRoomExceptionInfo(date, time);
 
+              // 3. 멤버 슬롯인지 확인 (방장이 본인 슬롯을 보는 경우 제외)
+              const isMemberSlot = ownerInfo && (!isRoomOwner || (ownerInfo.userId !== currentUser?.id && ownerInfo.userId !== currentUser?._id));
+
+              // 4. 🆕 이동시간 고려한 유효성 체크 (조원이고 이동모드일 때만)
+              // (주의: ownerOriginalInfo가 이미 blocked 상태라면 체크 불필요)
+              if (!isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0 && !ownerOriginalInfo) {
+                const timeMinutes = timeToMinutes(time);
+                const travelStartMinutes = timeMinutes - myTravelDuration;
+                
+                let isTravelBlocked = false;
+                
+                for (let m = timeMinutes - 10; m >= travelStartMinutes; m -= 10) {
+                    if (m < 0) continue;
+                    const checkTimeStr = minutesToTime(m);
+                    
+                    const checkBlockedInfo = getBlockedTimeInfo(checkTimeStr);
+                    if (checkBlockedInfo) {
+                        isTravelBlocked = true;
+                        break;
+                    }
+                    
+                    const info = getOwnerOriginalScheduleInfo(date, checkTimeStr);
+                    if (info && (info.type === 'non_preferred' || info.type === 'exception' || info.type === 'personal')) {
+                        isTravelBlocked = true;
+                        break;
+                    }
+                }
+                
+                if (isTravelBlocked) {
+                    ownerOriginalInfo = {
+                        type: 'travel_restricted',
+                        name: '이동시간 확보 필요',
+                        isTravelRestricted: true
+                    };
+                }
+              }
+
+              // 5. 최종 표시 정보 결정
               // 방장의 원본 시간표 정보 처리: exception/personal만 우선, non_preferred는 나중에
               let finalBlockedInfo = blockedInfo;
               let finalRoomExceptionInfo = roomExceptionInfo;
               let finalOwnerInfo = ownerInfo;
 
               // exception이나 personal은 최우선 (이동시간 포함)
+              // 확정된 일정은 blocked(오렌지색)로 표시되어야 함
               if (ownerOriginalInfo && (
                 ownerOriginalInfo.type === 'exception' || 
-                ownerOriginalInfo.type === 'personal'
+                ownerOriginalInfo.type === 'personal' ||
+                ownerOriginalInfo.type === 'travel_restricted'
               )) {
                 finalBlockedInfo = { ...ownerOriginalInfo, ownerScheduleType: ownerOriginalInfo.type };
                 finalRoomExceptionInfo = null;
