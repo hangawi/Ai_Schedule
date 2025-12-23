@@ -497,8 +497,8 @@ exports.smartExchange = async (req, res) => {
 
     // Verify room exists
     const room = await Room.findById(roomId)
-      .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes')
-      .populate('members.user', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes')
+      .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes addressLat addressLng')
+      .populate('members.user', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes addressLat addressLng')
       .populate('timeSlots.user', '_id firstName lastName email');
 
     if (!room) {
@@ -1138,8 +1138,30 @@ exports.smartExchange = async (req, res) => {
         if (predictedTravelMinutes > 0) {
            const actualStartMin = (newStartH * 60 + newStartM) - predictedTravelMinutes;
            console.log(`🔍 [검증] 요청시간: ${newStartTime}, 실제시작: ${minutesToTime(actualStartMin)} (${predictedTravelMinutes}분 이동)`);
-           console.log('  - 선호시간 범위:', memberMergedRanges.map(r => `${minutesToTime(r.startMinutes)}~${minutesToTime(r.endMinutes)}`).join(', '));
+           
+           // 4-1. 방장의 선호시간(ownerMergedRanges) 체크 (가장 중요!)
+           const isOwnerPreferred = ownerMergedRanges.some(range => 
+              actualStartMin >= range.startMinutes && (newEndH * 60 + newEndM) <= range.endMinutes
+           );
 
+           if (!isOwnerPreferred) {
+              // 가능한 가장 빠른 시간 제안 (방장 선호시간 시작 + 이동시간)
+              const validStart = ownerMergedRanges.find(range => range.endMinutes - range.startMinutes >= (totalHours * 60) + predictedTravelMinutes);
+              let suggestion = '';
+              if (validStart) {
+                  const suggestedTime = minutesToTime(validStart.startMinutes + predictedTravelMinutes);
+                  suggestion = ` 최소 ${suggestedTime}부터 가능합니다.`;
+              }
+
+              console.log(`⛔ [거부] 방장 선호시간 침범! 요청된 실제 시작: ${minutesToTime(actualStartMin)}`);
+              return res.status(400).json({
+                  success: false,
+                  message: `이동시간(${predictedTravelMinutes}분)을 고려하면 ${minutesToTime(actualStartMin)}에 시작해야 합니다. 이는 방장의 선호시간을 벗어납니다.${suggestion}`,
+                  reason: 'travel_time_owner_preference_conflict'
+              });
+           }
+
+           // 4-2. 공통 선호시간(memberMergedRanges) 체크
            // memberMergedRanges가 비어있으면(전체 가능) 통과, 아니면 범위 체크
            const isPreferred = memberMergedRanges.length === 0 || memberMergedRanges.some(range => 
               actualStartMin >= range.startMinutes && (newEndH * 60 + newEndM) <= range.endMinutes
@@ -1147,10 +1169,10 @@ exports.smartExchange = async (req, res) => {
            
            if (!isPreferred) {
               const minPossibleTime = minutesToTime(memberMergedRanges[0].startMinutes + predictedTravelMinutes);
-              console.log(`⛔ [거부] 선호시간 침범! 최소 가능 시간: ${minPossibleTime}`);
+              console.log(`⛔ [거부] 공통 선호시간 침범! 최소 가능 시간: ${minPossibleTime}`);
               return res.status(400).json({
                   success: false,
-                  message: `이동시간(${predictedTravelMinutes}분)을 고려하면 ${minutesToTime(actualStartMin)}에 시작해야 합니다. 이는 선호시간을 벗어납니다. 최소 ${minPossibleTime}부터 가능합니다.`,
+                  message: `이동시간(${predictedTravelMinutes}분)을 고려하면 ${minutesToTime(actualStartMin)}에 시작해야 합니다. 이는 공통 선호시간을 벗어납니다. 최소 ${minPossibleTime}부터 가능합니다.`,
                   reason: 'travel_time_preference_conflict'
               });
            }
