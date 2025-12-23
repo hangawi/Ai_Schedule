@@ -230,12 +230,27 @@ export const getSlotOwner = (date, time, timeSlots, members, currentUser, isRoom
   if (bookedSlot) {
     // Handle travel slots
     if (bookedSlot.isTravel) {
+        // Try to find the member to get their color
+        let userId = bookedSlot.userId || bookedSlot.user;
+        if (typeof userId === 'object' && userId !== null) {
+            userId = userId._id || userId.id;
+        }
+
+        const member = (members || []).find(m => {
+            const memberId = m.user?._id?.toString() || m.user?.id?.toString();
+            return memberId && userId && memberId === userId.toString();
+        });
+
+        // Use member color if found, otherwise Sky Blue (#87CEEB)
+        const color = member?.color || '#87CEEB';
+        const name = member ? `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim() : bookedSlot.subject;
+
         return {
-            name: bookedSlot.subject,
-            color: '#20B2AA', // LightSeaGreen (background)
+            name: name,
+            color: color, 
             textColor: '#000000', // Black (text)
             isTravel: true,
-            userId: 'travel',
+            userId: userId,
             subject: bookedSlot.subject,
             travelInfo: bookedSlot.travelInfo
         };

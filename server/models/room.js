@@ -509,7 +509,13 @@ RoomSchema.methods.isMember = function(userId) {
 
 // Get user's color in the room
 RoomSchema.methods.getUserColor = function(userId) {
-  const member = this.members.find(member => member.user.toString() === userId.toString());
+  if (!userId) return null;
+  const targetUserId = userId._id ? userId._id.toString() : userId.toString();
+  
+  const member = this.members.find(member => {
+    const memberUserId = member.user?._id ? member.user._id.toString() : member.user?.toString();
+    return memberUserId === targetUserId;
+  });
   return member ? member.color : null;
 };
 
