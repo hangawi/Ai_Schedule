@@ -480,10 +480,19 @@ const WeekView = ({
                     style={{
                       height: `${blockHeight}px`,
                       top: `${topPosition}px`,
-                      ...(block.type === 'owner' && block.data ? {
-                        backgroundColor: `${block.data.color}CC`,
-                        borderColor: block.data.color
-                      } : {}),
+                      ...(block.type === 'owner' && block.data ? (
+                        block.data.isTravel ? {
+                          // 🆕 이동시간 슬롯: 흰색 배경 + 회색 점선 테두리
+                          backgroundColor: '#FFFFFF',
+                          borderColor: '#9CA3AF',
+                          borderStyle: 'dashed',
+                          borderWidth: '2px'
+                        } : {
+                          // 일반 수업 슬롯: 멤버 색상
+                          backgroundColor: `${block.data.color}CC`,
+                          borderColor: block.data.color
+                        }
+                      ) : {}),
                       // 방장의 불가능한 시간 (non_preferred) - 연한 보라/라벤더
                       ...(block.type === 'blocked' && block.data?.ownerScheduleType === 'non_preferred' ? {
                         backgroundColor: '#E9D5FF',
@@ -522,13 +531,28 @@ const WeekView = ({
                         className="text-xs font-medium px-0.5 py-0.5 rounded"
                         style={{
                           color: '#000000',
-                          backgroundColor: `${block.data?.color}CC`,
+                          // 🆕 이동시간은 부모 div가 배경색 담당하므로 투명
+                          backgroundColor: block.data?.isTravel ? 'transparent' : `${block.data?.color}CC`,
                           fontSize: '25px'
                         }}
                         title={`${block.data?.subject || block.data?.name} (${block.startTime}~${block.actualEndTime})`}
                       >
-                        <div className="text-xs leading-tight" style={{ fontSize: '25px' }}>{block.data?.name.length > 4 ? block.data?.name.substring(0, 3) + '...' : block.data?.name}</div>
-                        {blockHeight > 20 && <div className="text-xs leading-tight" style={{ fontSize: '25px' }}>{block.startTime}~{block.actualEndTime}</div>}
+                        <div className="text-xs leading-tight" style={{ fontSize: '25px' }}>
+                          {/* 🆕 이동시간일 경우 텍스트 표시 변경 */}
+                          {block.data?.isTravel ? (
+                             <>
+                               {block.data?.travelInfo?.travelMode === 'transit' ? '🚇' : 
+                                block.data?.travelInfo?.travelMode === 'driving' ? '🚗' : 
+                                block.data?.travelInfo?.travelMode === 'bicycling' ? '🚴' : 
+                                block.data?.travelInfo?.travelMode === 'walking' ? '🚶' : '🚗'} 이동
+                               <br/>
+                               {block.data?.travelInfo?.durationText}
+                             </>
+                          ) : (
+                             block.data?.name.length > 4 ? block.data?.name.substring(0, 3) + '...' : block.data?.name
+                          )}
+                        </div>
+                        {blockHeight > 20 && !block.data?.isTravel && <div className="text-xs leading-tight" style={{ fontSize: '25px' }}>{block.startTime}~{block.actualEndTime}</div>}
                       </div>
                     ) : block.type === 'selected' ? (
                       <div className="text-xs font-medium text-blue-700 px-0.5 py-0.5 rounded bg-blue-100" style={{ fontSize: '25px' }}>

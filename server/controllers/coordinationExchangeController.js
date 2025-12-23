@@ -904,10 +904,12 @@ exports.smartExchange = async (req, res) => {
       if (effectiveTravelMode && effectiveTravelMode !== 'normal') {
         let predictedTravelMinutes = 0;
         try {
-           // 1. 해당 날짜(targetDate)의 기존 슬롯들 가져오기 (타겟 시간 이전의 가장 가까운 슬롯 찾기용)
+           console.log('🔍 [검증] 이동시간 예측 시작...');
+           // 1. 해당 날짜(targetDate)의 기존 슬롯들 가져오기
            const slotsOnTargetDate = room.timeSlots.filter(slot => {
-             const slotDate = new Date(slot.date).toISOString().split('T')[0];
-             return slotDate === targetDate.toISOString().split('T')[0] && !slot.isTravel;
+             const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
+             const targetDateStr = targetDate.toISOString().split('T')[0];
+             return slotDateStr === targetDateStr && !slot.isTravel;
            });
 
            // 2. 이전 슬롯 찾기
@@ -924,43 +926,57 @@ exports.smartExchange = async (req, res) => {
              }
            }
 
-           // 3. 이동시간 계산 (약식: 좌표 거리 기반)
+           // 3. 이동시간 계산
            let fromLat, fromLng;
-           // 이전 슬롯이 있으면 거기서 출발, 없으면 방장(집)에서 출발
            if (prevSlot) {
-             const prevUser = await User.findById(prevSlot.user._id || prevSlot.user); // 최적화: user object가 있으면 바로 사용 가능
+             const prevUserId = prevSlot.user._id || prevSlot.user;
+             const prevUser = await User.findById(prevUserId);
              fromLat = prevUser?.addressLat;
              fromLng = prevUser?.addressLng;
-             if (!fromLat && prevSlot.user.toString() === room.owner._id.toString()) {
+             console.log(`  - 이전 수업(${prevSlot.subject}) 종료 위치: ${prevUser?.firstName}`);
+             
+             // 만약 이전 수업이 있는데 주소가 없으면? 방장 집에서 출발하는 것으로 가정? 아니면 0분?
+             // 일단 방장 집 체크
+             if (!fromLat && prevUserId.toString() === room.owner._id.toString()) {
                 fromLat = room.owner.addressLat;
                 fromLng = room.owner.addressLng;
+                console.log('  - 이전 수업 주소 없음 -> 방장 집 위치 사용');
              }
            } else {
              fromLat = room.owner.addressLat;
              fromLng = room.owner.addressLng;
+             console.log('  - 이전 수업 없음 -> 방장 집 위치 사용');
            }
 
            const myUser = await User.findById(req.user.id);
-           if (fromLat && fromLng && myUser?.addressLat) {
+           console.log(`  🔍 [좌표 확인] 출발(${fromLat}, ${fromLng}) -> 도착(${myUser?.firstName}: ${myUser?.addressLat}, ${myUser?.addressLng})`);
+           
+           if (fromLat && fromLng && myUser?.addressLat && myUser?.addressLng) {
               const distance = calculateDistance(fromLat, fromLng, myUser.addressLat, myUser.addressLng);
               const speed = { driving: 40, transit: 30, walking: 5, bicycling: 15 }[effectiveTravelMode] || 30;
               predictedTravelMinutes = Math.ceil((distance / speed) * 60 / 10) * 10;
+              console.log(`  ✅ [계산 성공] 거리: ${distance.toFixed(2)}km, 속도: ${speed}km/h, 시간: ${predictedTravelMinutes}분`);
+           } else {
+              console.warn(`  ⚠️ [계산 실패] 좌표 정보 누락. fromLat: ${!!fromLat}, fromLng: ${!!fromLng}, toLat: ${!!myUser?.addressLat}`);
            }
         } catch (e) {
-          console.error('검증 중 이동시간 계산 실패:', e);
+          console.error('❌ 검증 중 이동시간 계산 실패:', e);
         }
 
         // 4. 선호시간 침범 확인
         if (predictedTravelMinutes > 0) {
            const actualStartMin = (newStartH * 60 + newStartM) - predictedTravelMinutes;
-           const isPreferred = memberMergedRanges.some(range => 
+           console.log(`🔍 [검증] 요청시간: ${newStartTime}, 실제시작: ${minutesToTime(actualStartMin)} (${predictedTravelMinutes}분 이동)`);
+           console.log('  - 선호시간 범위:', memberMergedRanges.map(r => `${minutesToTime(r.startMinutes)}~${minutesToTime(r.endMinutes)}`).join(', '));
+
+           // memberMergedRanges가 비어있으면(전체 가능) 통과, 아니면 범위 체크
+           const isPreferred = memberMergedRanges.length === 0 || memberMergedRanges.some(range => 
               actualStartMin >= range.startMinutes && (newEndH * 60 + newEndM) <= range.endMinutes
            );
            
            if (!isPreferred) {
-              // 약간의 오차 허용 (예: 10분) 또는 엄격 적용? 엄격 적용.
-              // 단, 'preferred'가 없는 경우(전체 가능)는 통과되어야 함. memberMergedRanges가 비었으면 위에서 걸러졌을 것.
               const minPossibleTime = minutesToTime(memberMergedRanges[0].startMinutes + predictedTravelMinutes);
+              console.log(`⛔ [거부] 선호시간 침범! 최소 가능 시간: ${minPossibleTime}`);
               return res.status(400).json({
                   success: false,
                   message: `이동시간(${predictedTravelMinutes}분)을 고려하면 ${minutesToTime(actualStartMin)}에 시작해야 합니다. 이는 선호시간을 벗어납니다. 최소 ${minPossibleTime}부터 가능합니다.`,
@@ -984,43 +1000,34 @@ exports.smartExchange = async (req, res) => {
         });
       }
 
-      // Remove old slots and associated travel time slots
-      const slotIdsToRemove = allSlotsInBlock.map(slot => slot._id.toString());
+      // 🧹 [문제 2 해결] 강력한 삭제 로직
+      const slotIdsToRemove = allSlotsInBlock.map(slot => String(slot._id));
       const oldSlotDate = new Date(allSlotsInBlock[0].date).toISOString().split('T')[0];
-
-      for (const slotId of slotIdsToRemove) {
-        const index = room.timeSlots.findIndex(slot => slot._id.toString() === slotId);
-        if (index !== -1) room.timeSlots.splice(index, 1);
-      }
-
-      // 🆕 이동시간 재계산 로직
       const targetDateStr = targetDate.toISOString().split('T')[0];
-      const newStartMinutes = timeToMinutesUtil(finalNewStartTime);
+      const myUserIdStr = String(req.user.id);
 
-      // Remove travel time slots from both old and new dates (will be recalculated)
-      console.log(`🗑️ [슬롯 삭제 전] 전체 슬롯: ${room.timeSlots.length}개, 이동시간 슬롯: ${room.timeSlots.filter(s => s.isTravel).length}개`);
-      console.log(`🗑️ [삭제 대상 날짜] 원본: ${oldSlotDate}, 목표: ${targetDateStr}`);
+      // 1. 수업 슬롯 삭제
+      room.timeSlots = room.timeSlots.filter(slot => !slotIdsToRemove.includes(String(slot._id)));
 
-      const beforeCount = room.timeSlots.length;
+      // 2. 이동시간 슬롯 삭제 (원본 날짜 + 목표 날짜, 내꺼만)
+      const initialCount = room.timeSlots.length;
       room.timeSlots = room.timeSlots.filter(slot => {
-        const slotDate = new Date(slot.date).toISOString().split('T')[0];
-        // 🔧 수정: 삭제 조건을 더 강력하게 (subject 체크 강화)
-        const isTravelSlot = slot.isTravel === true || slot.subject === '이동시간' || slot.subject === 'Travel Time';
-        
-        // 원본 날짜의 내 이동시간 OR 목표 날짜의 내 이동시간 삭제
-        const isMySlot = (slot.user._id || slot.user).toString() === req.user.id.toString();
-        
-        // 주의: 이동시간 슬롯은 user 필드가 '이동하는 사람' (즉, 현재 유저)로 되어있음.
-        const shouldRemove = (slotDate === oldSlotDate || slotDate === targetDateStr) && isTravelSlot && isMySlot;
-
-        if (shouldRemove) {
-          console.log(`  ❌ [삭제] ${slotDate} ${slot.startTime}-${slot.endTime} (${slot.subject}, isTravel=${slot.isTravel})`);
-        }
-
-        return !shouldRemove;
+         const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
+         const slotUserIdStr = String(slot.user._id || slot.user);
+         const isTravel = slot.isTravel === true || slot.subject === '이동시간' || slot.subject === 'Travel Time';
+         
+         if (isTravel && slotUserIdStr === myUserIdStr && (slotDateStr === oldSlotDate || slotDateStr === targetDateStr)) {
+            console.log(`  🔥 [삭제] 고아 슬롯 방지: ${slotDateStr} ${slot.startTime}`);
+            return false; 
+         }
+         return true;
       });
-      const afterCount = room.timeSlots.length;
-      console.log(`🗑️ [슬롯 삭제 후] ${beforeCount - afterCount}개 삭제됨, 남은 슬롯: ${afterCount}개`);
+      console.log(`🗑️ 삭제 완료: ${initialCount - room.timeSlots.length}개 슬롯 제거됨`);
+
+
+      // 🆕 이동시간 재계산 및 새 수업 배치 로직 시작...
+      // (아래 로직은 기존 유지)
+      const newStartMinutes = timeToMinutesUtil(finalNewStartTime);
 
       // 1. 해당 날짜의 기존 슬롯 찾기
       const slotsOnDate = room.timeSlots.filter(slot => {
@@ -1040,82 +1047,47 @@ exports.smartExchange = async (req, res) => {
         }
       }
 
-      // 3. 이동시간 계산
+      // 3. 이동시간 계산 (실제 적용용)
       let travelDurationMinutes = 0;
       let travelFromLocation = '방장';
 
-      if (room.travelMode && room.travelMode !== 'normal' && previousSlot) {
+      // effectiveTravelMode 사용 (room.travelMode가 아직 없을 수 있음)
+      const calcMode = effectiveTravelMode || room.travelMode;
+
+      if (calcMode && calcMode !== 'normal') {
         try {
-          // 이전 슬롯의 사용자 찾기
-          const previousUserId = previousSlot.user._id || previousSlot.user;
-          const currentUser = await User.findById(req.user.id);
-
-          // 이전 위치 확인 (방장 또는 이전 학생)
-          let previousLat, previousLng;
-
-          if (previousUserId.toString() === room.owner._id.toString()) {
-            // 이전 슬롯이 방장
-            previousLat = room.owner.addressLat;
-            previousLng = room.owner.addressLng;
-            travelFromLocation = '방장';
+          console.log(`🔍 [실제 적용] 이동시간 계산 시작 (${calcMode})`);
+          
+          let fromLat, fromLng;
+          if (previousSlot) {
+             const previousUserId = previousSlot.user._id || previousSlot.user;
+             const previousUser = await User.findById(previousUserId);
+             fromLat = previousUser?.addressLat;
+             fromLng = previousUser?.addressLng;
+             
+             if (!fromLat && String(previousUserId) === String(room.owner._id)) {
+                fromLat = room.owner.addressLat;
+                fromLng = room.owner.addressLng;
+             }
           } else {
-            // 이전 슬롯이 다른 학생
-            const previousUser = await User.findById(previousUserId);
-            if (previousUser) {
-              previousLat = previousUser.addressLat;
-              previousLng = previousUser.addressLng;
-              travelFromLocation = `${previousUser.firstName || ''} ${previousUser.lastName || ''}`.trim();
-            }
+             // 이전 슬롯 없으면 방장 집에서 출발
+             fromLat = room.owner.addressLat;
+             fromLng = room.owner.addressLng;
           }
 
-          // 거리 계산
-          if (previousLat && previousLng && currentUser && currentUser.addressLat && currentUser.addressLng) {
-            const distance = calculateDistance(
-              previousLat,
-              previousLng,
-              currentUser.addressLat,
-              currentUser.addressLng
-            );
-
-            // 이동 수단별 속도 (km/h)
-            const speeds = {
-              driving: 40,
-              transit: 30,
-              walking: 5,
-              bicycling: 15
-            };
-            const speed = speeds[room.travelMode] || 30;
-
-            // 이동시간 계산 (10분 단위 반올림)
-            travelDurationMinutes = Math.ceil((distance / speed) * 60 / 10) * 10;
-
-            }
-        } catch (error) {
-          travelDurationMinutes = 0;
-        }
-      } else if (!previousSlot && room.travelMode && room.travelMode !== 'normal') {
-        // 이전 슬롯이 없으면 방장에서 출발
-        try {
           const currentUser = await User.findById(req.user.id);
-          if (room.owner.addressLat && currentUser && currentUser.addressLat) {
-            const distance = calculateDistance(
-              room.owner.addressLat,
-              room.owner.addressLng,
-              currentUser.addressLat,
-              currentUser.addressLng
-            );
+          console.log(`  - 좌표: 출발(${fromLat}, ${fromLng}) -> 도착(${currentUser?.addressLat}, ${currentUser?.addressLng})`);
 
-            const speeds = {
-              driving: 40,
-              transit: 30,
-              walking: 5,
-              bicycling: 15
-            };
-            const speed = speeds[room.travelMode] || 30;
+          if (fromLat && fromLng && currentUser?.addressLat && currentUser?.addressLng) {
+            const distance = calculateDistance(fromLat, fromLng, currentUser.addressLat, currentUser.addressLng);
+            const speed = { driving: 40, transit: 30, walking: 5, bicycling: 15 }[calcMode] || 30;
             travelDurationMinutes = Math.ceil((distance / speed) * 60 / 10) * 10;
-
+            console.log(`  ✅ [계산 성공] ${travelDurationMinutes}분`);
+          } else {
+            console.warn(`  ⚠️ [계산 실패] 좌표 누락`);
           }
         } catch (error) {
+          console.error('❌ 이동시간 계산 중 오류:', error);
           travelDurationMinutes = 0;
         }
       }
@@ -1174,6 +1146,8 @@ exports.smartExchange = async (req, res) => {
         oldDate: new Date(allSlotsInBlock[0].date).toISOString().split('T')[0],
         newDate: targetDate.toISOString().split('T')[0]
       });
+      // ⚠️ 중요: 재계산 전 travelMode 강제 주입 (DB 저장 전이라 없을 수 있음)
+      room.travelMode = effectiveTravelMode;
       await recalculateTravelTimeSlotsForDate(room, new Date(allSlotsInBlock[0].date), room.owner._id);
       await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id);
 

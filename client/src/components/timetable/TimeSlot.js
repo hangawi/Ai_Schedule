@@ -289,7 +289,20 @@ const TimeSlot = ({
       //
       // 7. 기본 (빈 슬롯 또는 선택된 슬롯)
       //    - 스타일 없음 (className으로 제어)
-      style={!isEffectivelyBlocked && ownerInfo ? { backgroundColor: `${ownerInfo.color}CC`, borderColor: ownerInfo.color } :
+      style={
+        !isEffectivelyBlocked && ownerInfo ? (
+          ownerInfo.isTravel ? {
+            // 🆕 이동시간 슬롯: 흰색 배경 + 회색 점선 테두리 (깔끔한 스타일)
+            backgroundColor: '#FFFFFF',
+            borderColor: '#9CA3AF', // gray-400
+            borderStyle: 'dashed',
+            borderWidth: '2px'
+          } : {
+            // 일반 수업 슬롯: 멤버 색상
+            backgroundColor: `${ownerInfo.color}CC`,
+            borderColor: ownerInfo.color
+          }
+        ) :
              // 방장의 불가능한 시간 (non_preferred) - 연한 보라/라벤더
              isEffectivelyBlocked && blockedInfo?.ownerScheduleType === 'non_preferred' ? { backgroundColor: '#E9D5FF', borderColor: '#C084FC' } :
              // 방장의 개인시간 (personal) - 연한 주황/피치
@@ -348,15 +361,15 @@ const TimeSlot = ({
           {ownerInfo && (
             <span
               className={`text-xs font-medium px-1 py-0.5 rounded ${
-                ownerInfo.isTravel ? 'border-2' : (showMerged && ownerInfo.isMergedSlot ? 'border-2' : '')
+                // 🆕 이동시간은 이미 부모 div에 테두리가 있으므로 여기선 제거
+                ownerInfo.isTravel ? '' : (showMerged && ownerInfo.isMergedSlot ? 'border-2' : '')
               }`}
               style={{
                 color: '#000000',
-                backgroundColor: ownerInfo.isTravel ? `${ownerInfo.color}99` : `${ownerInfo.color}CC`,  // 🆕 이동시간은 더 연하게
+                // 🆕 이동시간은 부모 div가 배경색을 담당하므로 여기선 투명하게
+                backgroundColor: ownerInfo.isTravel ? 'transparent' : `${ownerInfo.color}CC`,
                 ...(ownerInfo.isTravel ? {
-                  borderColor: ownerInfo.color,
-                  borderStyle: 'dashed',  // 🆕 이동시간은 점선 테두리
-                  borderWidth: '2px'
+                   // 이동시간 내부 스타일 제거 (부모 div로 이동됨)
                 } : (showMerged && ownerInfo.isMergedSlot ? {
                   borderColor: ownerInfo.color,
                   borderStyle: 'solid'
