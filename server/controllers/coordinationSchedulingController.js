@@ -1505,8 +1505,8 @@ exports.applyTravelMode = async (req, res) => {
       room.timeSlots = receivedTimeSlots
         .filter(e => !e.isTravel && e.subject !== '이동시간')
         .map((e, idx) => {
-          // 클라이언트에서 계산된 순수 수업 시간을 그대로 사용
-          const pureStartTime = e.startTime; 
+          // ✅ 원본 수업시간 사용 (이동시간으로 조정되기 전)
+          const pureStartTime = e.originalStartTime || e.startTime; 
 
           const newSlot = {
             user: e.user._id || e.user,
