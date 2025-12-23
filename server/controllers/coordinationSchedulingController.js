@@ -34,17 +34,7 @@ exports.runAutoSchedule = async (req, res) => {
 
       const startDate = currentWeek ? new Date(currentWeek) : new Date();
       
-      console.log('🔍 ===== [서버] 자동배정 요청 받음 =====');
-      console.log('📥 받은 파라미터:', { 
-         minHoursPerWeek, 
-         numWeeks, 
-         currentWeek: currentWeek ? currentWeek : 'undefined', 
-         assignmentMode: mode,
-         transportMode,              // 추가
-         minClassDurationMinutes     // 추가
-      });
-      console.log('📅 계산된 startDate:', startDate.toISOString().split('T')[0]);
-      console.log('🔍 ===================================\n');
+      // 자동배정 시작
 
       const room = await Room.findById(roomId)
         .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes priority')
@@ -82,7 +72,6 @@ exports.runAutoSchedule = async (req, res) => {
       // ✨ 이동시간 모드 관련 데이터 초기화 (자동배정은 항상 새로 시작)
       room.originalTimeSlots = [];
       room.travelTimeSlots = [];
-      console.log('🔄 [자동배정 시작] originalTimeSlots와 travelTimeSlots 초기화');
 
       if (minHoursPerWeek < 0.167 || minHoursPerWeek > 10) {
          return res.status(400).json({ msg: '주당 최소 할당 시간은 10분-10시간 사이여야 합니다.' });
@@ -345,44 +334,18 @@ exports.runAutoSchedule = async (req, res) => {
       });
 
       // 💡 저장 전 최종 슬롯 통계 로그
-      console.log('\n📊 ===== [서버] 최종 배정 결과 =====');
-      console.log('총 슬롯 수:', room.timeSlots.length);
-      
-      if (room.timeSlots.length > 0) {
-        const dates = room.timeSlots.map(slot => new Date(slot.date).toISOString().split('T')[0]).sort();
-        const uniqueDates = [...new Set(dates)];
-        console.log('날짜 범위:', uniqueDates[0], '~', uniqueDates[uniqueDates.length - 1]);
-        console.log('총 배정일 수:', uniqueDates.length);
-        
-        // 월별 통계
-        const monthCount = {};
-        uniqueDates.forEach(date => {
-          const month = date.substring(0, 7);
-          monthCount[month] = (monthCount[month] || 0) + 1;
-        });
-        console.log('월별 배정일 수:', monthCount);
-      }
-      console.log('🔍 ===================================\n');
+      // 최종 배정 완료
 
       // 자동 확정 타이머 설정 (1분 후 - 실험용, 프로덕션에서는 48시간)
       const autoConfirmDelay = 1 * 60 * 1000; // 1분 = 60,000ms
       room.autoConfirmAt = new Date(Date.now() + autoConfirmDelay);
 
       // ✨ 자동배정은 항상 normal 모드로 실행 (이동시간은 별도로 "적용" 버튼으로 처리)
-      console.log('🚨 [저장 전] transportMode:', transportMode);
-      console.log('🚨 [저장 전] room.timeSlots 개수:', room.timeSlots?.length || 0);
-      console.log('🚨 [저장 전] room.originalTimeSlots 개수:', room.originalTimeSlots?.length || 0);
-      
       room.currentTravelMode = 'normal';
       room.confirmedTravelMode = null;
       room.travelTimeSlots = [];
-      
-      console.log('🚨 [설정 후] room.currentTravelMode:', room.currentTravelMode);
 
       await room.save();
-      
-      console.log('🚨 [저장 후] room.timeSlots 개수:', room.timeSlots?.length || 0);
-      console.log('🚨 [저장 후] room.originalTimeSlots 개수:', room.originalTimeSlots?.length || 0);
 
       // 활동 로그 기록
       try {
@@ -406,10 +369,6 @@ exports.runAutoSchedule = async (req, res) => {
          .populate('requests.requester', 'firstName lastName email')
          .populate('requests.targetUser', 'firstName lastName email')
          .lean();
-
-      console.log('🚨 [응답 전] freshRoom.timeSlots 개수:', freshRoom.timeSlots?.length || 0);
-      console.log('🚨 [응답 전] freshRoom.originalTimeSlots 개수:', freshRoom.originalTimeSlots?.length || 0);
-      console.log('🚨 [응답 전] freshRoom.currentTravelMode:', freshRoom.currentTravelMode);
 
       if (freshRoom.timeSlots.length > 0) {
          freshRoom.timeSlots.slice(0, 5).forEach((slot, idx) => {
@@ -446,6 +405,31 @@ exports.runAutoSchedule = async (req, res) => {
 // @route   DELETE /api/coordination/rooms/:roomId/timeslots
 // @access  Private (Room Owner only)
 exports.deleteAllTimeSlots = exports.deleteAllTimeSlots = async (req, res) => {
+   // Retry 헬퍼 함수 (VersionError 처리)
+   const saveWithRetry = async (doc, maxRetries = 3) => {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+         try {
+            await doc.save();
+            return;
+         } catch (error) {
+            if (error.name === 'VersionError' && attempt < maxRetries) {
+               // 최신 버전 다시 불러오기
+               const Model = doc.constructor;
+               const fresh = await Model.findById(doc._id);
+               if (fresh) {
+                  // 변경사항 재적용
+                  if (doc.personalTimes !== undefined) fresh.personalTimes = doc.personalTimes;
+                  if (doc.defaultSchedule !== undefined) fresh.defaultSchedule = doc.defaultSchedule;
+                  if (doc.deletedPreferencesByRoom !== undefined) fresh.deletedPreferencesByRoom = doc.deletedPreferencesByRoom;
+                  doc = fresh;
+               }
+            } else {
+               throw error;
+            }
+         }
+      }
+   };
+
    try {
       const { roomId } = req.params;
       const room = await Room.findById(roomId)
@@ -469,6 +453,11 @@ exports.deleteAllTimeSlots = exports.deleteAllTimeSlots = async (req, res) => {
       // 확정된 이동수단 모드 초기화
       room.confirmedTravelMode = null;
       room.confirmedAt = null;
+
+      // ✨ 이동시간 관련 데이터 모두 초기화
+      room.travelTimeSlots = [];
+      room.originalTimeSlots = [];
+      room.currentTravelMode = 'normal';
 
       // Also clear non-pending requests as they are linked to slots
       room.requests = room.requests.filter(r => r.status === 'pending');
@@ -523,7 +512,7 @@ exports.deleteAllTimeSlots = exports.deleteAllTimeSlots = async (req, res) => {
             }
           }
 
-          updatePromises.push(memberUser.save());
+          updatePromises.push(saveWithRetry(memberUser));
         }
       }
 
@@ -571,7 +560,7 @@ exports.deleteAllTimeSlots = exports.deleteAllTimeSlots = async (req, res) => {
           }
         }
 
-        updatePromises.push(owner.save());
+        updatePromises.push(saveWithRetry(owner));
       }
 
       await Promise.all(updatePromises);

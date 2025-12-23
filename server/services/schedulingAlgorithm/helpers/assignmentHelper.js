@@ -176,9 +176,7 @@ const processAutoAssignments = (assignments, autoAssignments) => {
 const loadExistingSlots = (roomTimeSlots, assignments, ownerId) => {
   if (!roomTimeSlots || roomTimeSlots.length === 0) return;
 
-  console.log(`
-📌 [loadExistingSlots] 기존 ${roomTimeSlots.length}개 슬롯 로드 중...`);
-
+  // 기존 슬롯 로드
   let confirmedCount = 0;
   let loadedCount = 0;
 
@@ -187,14 +185,12 @@ const loadExistingSlots = (roomTimeSlots, assignments, ownerId) => {
 
     // 방장 슬롯 제외
     if (slotUserId === ownerId) {
-      console.log(`   → 방장 슬롯 제외: ${slot.startTime}-${slot.endTime}`);
       return;
     }
 
     // 🔒 개인 일정으로 확정된 슬롯 제외 (중복 방지)
     if (slot.confirmedToPersonalCalendar) {
       confirmedCount++;
-      console.log(`   → 확정됨 제외: ${slot.startTime}-${slot.endTime} (${slot.subject})`);
       return;
     }
 
@@ -208,12 +204,8 @@ const loadExistingSlots = (roomTimeSlots, assignments, ownerId) => {
       });
       assignments[slotUserId].assignedHours += 1;
       loadedCount++;
-
-      console.log(`   ✅ ${slotUserId.substring(0, 8)}...: ${slot.startTime}-${slot.endTime} (기존)`);
     }
   });
-
-  console.log(`📌 [loadExistingSlots] 완료: 로드 ${loadedCount}개, 확정됨 제외 ${confirmedCount}개`);
 };
 
 /**
@@ -274,7 +266,7 @@ const calculateTravelTime = async (origin, destination, transportMode = 'transit
     // 3. 캐시 저장
     travelTimeCache.set(originParam, destParam, mode, durationMinutes);
 
-    console.log(`🚌 이동시간 계산: ${durationMinutes}분 (${mode}) [API 호출]`);
+
     return durationMinutes;
 
   } catch (error) {
@@ -328,7 +320,7 @@ const calculateTravelTimesBatch = async (origin, destinations, transportMode = '
     }
 
     if (uncachedDests.length === 0) {
-      console.log(`✅ [배치] 모든 항목 캐시 HIT (${destinations.length}개)`);
+
       return results;
     }
 
@@ -360,14 +352,14 @@ const calculateTravelTimesBatch = async (origin, destinations, transportMode = '
           }
         });
 
-        console.log(`🚌 [배치 API] ${batch.length}개 목적지 이동시간 계산 완료`);
+
       } else {
         // API 오류 시 기본값
         batch.forEach(dest => results.set(dest.memberId, 60));
       }
     }
 
-    console.log(`✅ [배치] 총 ${destinations.length}개 (캐시: ${destinations.length - uncachedDests.length}, API: ${uncachedDests.length})`);
+
     return results;
 
   } catch (error) {
@@ -394,7 +386,7 @@ const sortMembersByDistance = async (currentLocation, candidateMembers, transpor
   const validMembers = candidateMembers.filter(member => {
     const hasLocation = member.user.addressLat && member.user.addressLng;
     if (!hasLocation) {
-      console.log(`⚠️ 멤버 ${member.user._id} 위치 정보 없음`);
+
     }
     return hasLocation;
   });
@@ -442,11 +434,6 @@ const findNearestMemberWithSufficientTime = async ({
   roomExceptions = []
 }) => {
   // 🔍 디버깅: 함수 호출 확인
-  console.log(`\n🔍 [DEBUG] findNearestMemberWithSufficientTime 호출됨`);
-  console.log(`   currentEndTime: ${currentEndTime}`);
-  console.log(`   classDurationMinutes: ${classDurationMinutes}`);
-  console.log(`   currentDay: ${currentDay}`);
-  console.log(`   roomBlockedTimes: ${roomBlockedTimes?.length || 0}개`);
   console.log(`   roomExceptions: ${roomExceptions?.length || 0}개`);
 
   // 1. 거리 순으로 정렬

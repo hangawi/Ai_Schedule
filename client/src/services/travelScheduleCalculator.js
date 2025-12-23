@@ -264,16 +264,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
       }
     }
 
-    console.log('📊 [buildMemberPreferences] 완료:', {
-      멤버수: Object.keys(memberPreferences).length,
-      전체_멤버ID: Object.keys(memberPreferences),
-      병합후_슬롯수: Object.entries(memberPreferences).map(([id, prefs]) => ({
-        userId: id.substring(0, 8),
-        monday: prefs.monday?.length || 0,
-        tuesday: prefs.tuesday?.length || 0,
-        wednesday: prefs.wednesday?.length || 0
-      }))
-    });
+
 
     return memberPreferences;
   }

@@ -78,13 +78,7 @@ class SchedulingAlgorithm {
     } = options;
 
     // 🔍 디버깅: 진입 파라미터 확인
-    console.log('\n🔍 ===== [DEBUG] runAutoSchedule 시작 =====');
-    console.log(`   transportMode: "${transportMode}"`);
-    console.log(`   minClassDurationMinutes: ${minClassDurationMinutes}`);
-    console.log(`   assignmentMode: "${assignmentMode}"`);
-    console.log(`   roomSettings.blockedTimes:`, roomSettings.blockedTimes ? `${roomSettings.blockedTimes.length}개` : 'undefined');
-    console.log(`   roomSettings.roomExceptions:`, roomSettings.roomExceptions ? `${roomSettings.roomExceptions.length}개` : 'undefined');
-    console.log('==========================================\n');
+    // 자동배정 시작
 
     // 다중 주 스케줄링
     if (numWeeks > 1) {
@@ -112,50 +106,7 @@ class SchedulingAlgorithm {
     const startDate = currentWeek ? new Date(currentWeek) : new Date('2025-09-16T00:00:00.000Z');
 
     // 🔍 멤버 선호시간 확인
-    console.log('\n🔍 ===== 멤버 선호시간 확인 =====');
-    console.log(`📅 자동배정 날짜 범위: ${startDate.toISOString().split('T')[0]} ~ (${numWeeks}주)`);
-    nonOwnerMembers.forEach((member, idx) => {
-      const memberId = (member.user?._id || member.user).toString();
-      const memberUser = member.user?._id ? member.user : members.find(m => m.user._id?.toString() === memberId)?.user;
-
-      console.log(`\n👤 멤버 ${idx + 1} (${memberId.substring(0, 8)}...):`);
-
-      // defaultSchedule 확인
-      const defaultSchedule = memberUser?.defaultSchedule || member.defaultSchedule || [];
-      console.log(`   📋 defaultSchedule (${defaultSchedule.length}개):`);
-
-      // 날짜별로 그룹화
-      const dateGroups = {};
-      defaultSchedule.forEach(schedule => {
-        if (schedule.specificDate) {
-          const dateStr = schedule.specificDate.toString().split('T')[0];
-          if (!dateGroups[dateStr]) dateGroups[dateStr] = [];
-          dateGroups[dateStr].push(`${schedule.startTime}~${schedule.endTime}`);
-        } else if (schedule.dayOfWeek !== undefined) {
-          const days = ['일', '월', '화', '수', '목', '금', '토'];
-          const key = `매주 ${days[schedule.dayOfWeek]}`;
-          if (!dateGroups[key]) dateGroups[key] = [];
-          dateGroups[key].push(`${schedule.startTime}~${schedule.endTime}`);
-        }
-      });
-
-      // 날짜 순으로 정렬하여 출력
-      const sortedDates = Object.keys(dateGroups).sort();
-      sortedDates.forEach(date => {
-        const times = dateGroups[date];
-        console.log(`      ${date}: ${times.join(', ')}`);
-      });
-
-      // scheduleExceptions 확인
-      const scheduleExceptions = memberUser?.scheduleExceptions || member.scheduleExceptions || [];
-      console.log(`   📋 scheduleExceptions (${scheduleExceptions.length}개):`);
-      scheduleExceptions.slice(0, 5).forEach((schedule, i) => {
-        if (schedule.specificDate) {
-          console.log(`      ${i + 1}. specificDate: ${schedule.specificDate}, ${schedule.startTime}~${schedule.endTime}`);
-        }
-      });
-    });
-    console.log('🔍 ==============================\n');
+    // 멤버 선호시간 로드
 
     // 타임테이블 생성
     let timetable = createTimetableFromPersonalSchedules(

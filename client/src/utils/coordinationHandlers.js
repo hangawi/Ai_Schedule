@@ -233,7 +233,7 @@ export const handleRunAutoSchedule = async (
         uiCurrentWeek = firstMonday;
         numWeeks = Math.max(weeksDiff, 12);
 
-        console.log('📅 [Auto Schedule] specificDate 기반 범위:', firstMonday.toISOString().split('T')[0], '~', maxDate.toISOString().split('T')[0], '(', numWeeks, '주)');
+
       } else {
         // specificDate가 없는 경우: 충분히 긴 범위 사용 (현재 날짜 기준 6개월 전부터 1년간)
         const today = new Date();
@@ -250,7 +250,7 @@ export const handleRunAutoSchedule = async (
         uiCurrentWeek = firstMonday;
         numWeeks = 52; // 1년
 
-        console.log('📅 [Auto Schedule] dayOfWeek 기반 범위: 6개월 전부터 1년간 (52주)');
+
       }
     }
     // minHoursPerWeek를 분 단위로 변환하여 minClassDurationMinutes로 설정
@@ -265,29 +265,11 @@ export const handleRunAutoSchedule = async (
       clientToday: new Date().toISOString().slice(0, 10)
     };
     
-    console.log('🔍 ===== [클라이언트] 자동배정 요청 전송 =====');
-    console.log('📤 보내는 파라미터:', {
-      currentWeek: uiCurrentWeek ? uiCurrentWeek.toISOString().split('T')[0] : 'undefined',
-      numWeeks,
-      minHoursPerWeek: finalOptions.minHoursPerWeek,
-      minClassDurationMinutes: finalOptions.minClassDurationMinutes, // 추가
-      assignmentMode: finalOptions.assignmentMode,
-      transportMode: travelMode,  // 추가
-      clientToday: finalOptions.clientToday
-    });
-    console.log('🔍 ==========================================');
+    // 자동배정 요청 전송
     const response = await coordinationService.runAutoSchedule(currentRoom._id, finalOptions);
     
     // 🔍 응답 상세 로그
-    console.log('🔍 ===== [클라이언트] 자동배정 응답 받음 =====');
-    console.log('📥 전체 응답:', response);
-    console.log('📥 room 객체:', response.room);
-    console.log('📥 timeSlots 개수:', response.room?.timeSlots?.length || 0);
-    console.log('📥 timeSlots 샘플 (첫 5개):', response.room?.timeSlots?.slice(0, 5));
-    console.log('📥 autoConfirmAt:', response.room?.autoConfirmAt);
-    console.log('📥 assignedBy 있는 슬롯:', response.room?.timeSlots?.filter(s => s.assignedBy).length || 0);
-    console.log('📥 status=confirmed 슬롯:', response.room?.timeSlots?.filter(s => s.status === 'confirmed').length || 0);
-    console.log('🔍 ==========================================');
+    // 응답 받음
     
     const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = response;
 
@@ -312,11 +294,7 @@ export const handleRunAutoSchedule = async (
     // Force a deep copy to break memoization in child components
     const newRoomState = JSON.parse(JSON.stringify(updatedRoom));
     
-    console.log('🔍 ===== [클라이언트] setCurrentRoom 호출 =====');
-    console.log('📥 newRoomState.timeSlots 개수:', newRoomState.timeSlots?.length || 0);
-    console.log('📥 newRoomState.autoConfirmAt:', newRoomState.autoConfirmAt);
-    console.log('📥 assignedBy 있는 슬롯:', newRoomState.timeSlots?.filter(s => s.assignedBy).length || 0);
-    console.log('🔍 ==========================================');
+    // setCurrentRoom 호출
     
     setCurrentRoom(newRoomState);
 
@@ -327,7 +305,7 @@ export const handleRunAutoSchedule = async (
     setScheduleError(error.message);
     showAlert(`자동 배정 실패: ${error.message}`);
   } finally {
-    console.log('✅ [클라이언트] finally 블록 실행 - setIsScheduling(false)');
+
     setIsScheduling(false);
   }
 };;
