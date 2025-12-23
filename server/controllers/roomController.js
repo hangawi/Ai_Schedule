@@ -514,12 +514,21 @@ exports.getRoomDetails = async (req, res) => {
       const isOwner = room.owner._id.toString() === req.user.id.toString();
 
       if (roomObj.timeSlots && roomObj.timeSlots.length > 0) {
+         // 🆕 조원 프라이버시 보호: 이동시간 슬롯 자체를 제거
+         if (!isOwner) {
+            roomObj.timeSlots = roomObj.timeSlots.filter(slot => {
+               // 이동시간 슬롯이면 제거
+               const isTravel = slot.isTravel === true || slot.subject === '이동시간' || slot.subject === 'Travel Time';
+               return !isTravel;
+            });
+         }
+
          roomObj.timeSlots.forEach(slot => {
             if (slot.user && slot.user._id) {
                slot.user.id = slot.user._id.toString();
             }
 
-            // 🆕 Phase 3: 조원 프라이버시 보호 - 이동시간 메타데이터 숨김
+            // 🆕 Phase 3: 조원 프라이버시 보호 - 이동시간 메타데이터 숨김 (혹시 필터링 놓친 것 대비)
             if (!isOwner) {
                // 조원에게는 actualStartTime과 travelTimeBefore 절대 노출 금지!
                delete slot.actualStartTime;
@@ -528,10 +537,14 @@ exports.getRoomDetails = async (req, res) => {
          });
       }
 
-      if (!isOwner && !roomObj.confirmedAt) {
-         // 조원이고 아직 확정 안 된 경우, currentTravelMode 숨김
-         roomObj.currentTravelMode = 'normal';
+      if (!isOwner) {
+         // 조원에게는 travelTimeSlots 절대 노출 금지
          roomObj.travelTimeSlots = [];
+         
+         if (!roomObj.confirmedAt) {
+             // 조원이고 아직 확정 안 된 경우, currentTravelMode 숨김
+             roomObj.currentTravelMode = 'normal';
+         }
       }
 
       res.json(roomObj);

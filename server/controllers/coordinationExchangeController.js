@@ -899,6 +899,77 @@ exports.smartExchange = async (req, res) => {
     // Case 1: Target slot is empty → Immediate swap
     if (!occupiedSlot) {
       console.log('📍 [smartExchange] Case 1 진입: 타겟 슬롯이 비어있음 (즉시 이동)');
+
+      // 🛑 [검증 Phase] 이동시간 포함 시 선호시간 침범 여부 확인
+      if (effectiveTravelMode && effectiveTravelMode !== 'normal') {
+        let predictedTravelMinutes = 0;
+        try {
+           // 1. 해당 날짜(targetDate)의 기존 슬롯들 가져오기 (타겟 시간 이전의 가장 가까운 슬롯 찾기용)
+           const slotsOnTargetDate = room.timeSlots.filter(slot => {
+             const slotDate = new Date(slot.date).toISOString().split('T')[0];
+             return slotDate === targetDate.toISOString().split('T')[0] && !slot.isTravel;
+           });
+
+           // 2. 이전 슬롯 찾기
+           let prevSlot = null;
+           let prevEndMin = 0;
+           const targetStartMin = newStartH * 60 + newStartM;
+
+           for (const slot of slotsOnTargetDate) {
+             const [h, m] = slot.endTime.split(':').map(Number);
+             const endMin = h * 60 + m;
+             if (endMin <= targetStartMin && endMin > prevEndMin) {
+               prevSlot = slot;
+               prevEndMin = endMin;
+             }
+           }
+
+           // 3. 이동시간 계산 (약식: 좌표 거리 기반)
+           let fromLat, fromLng;
+           // 이전 슬롯이 있으면 거기서 출발, 없으면 방장(집)에서 출발
+           if (prevSlot) {
+             const prevUser = await User.findById(prevSlot.user._id || prevSlot.user); // 최적화: user object가 있으면 바로 사용 가능
+             fromLat = prevUser?.addressLat;
+             fromLng = prevUser?.addressLng;
+             if (!fromLat && prevSlot.user.toString() === room.owner._id.toString()) {
+                fromLat = room.owner.addressLat;
+                fromLng = room.owner.addressLng;
+             }
+           } else {
+             fromLat = room.owner.addressLat;
+             fromLng = room.owner.addressLng;
+           }
+
+           const myUser = await User.findById(req.user.id);
+           if (fromLat && fromLng && myUser?.addressLat) {
+              const distance = calculateDistance(fromLat, fromLng, myUser.addressLat, myUser.addressLng);
+              const speed = { driving: 40, transit: 30, walking: 5, bicycling: 15 }[effectiveTravelMode] || 30;
+              predictedTravelMinutes = Math.ceil((distance / speed) * 60 / 10) * 10;
+           }
+        } catch (e) {
+          console.error('검증 중 이동시간 계산 실패:', e);
+        }
+
+        // 4. 선호시간 침범 확인
+        if (predictedTravelMinutes > 0) {
+           const actualStartMin = (newStartH * 60 + newStartM) - predictedTravelMinutes;
+           const isPreferred = memberMergedRanges.some(range => 
+              actualStartMin >= range.startMinutes && (newEndH * 60 + newEndM) <= range.endMinutes
+           );
+           
+           if (!isPreferred) {
+              // 약간의 오차 허용 (예: 10분) 또는 엄격 적용? 엄격 적용.
+              // 단, 'preferred'가 없는 경우(전체 가능)는 통과되어야 함. memberMergedRanges가 비었으면 위에서 걸러졌을 것.
+              const minPossibleTime = minutesToTime(memberMergedRanges[0].startMinutes + predictedTravelMinutes);
+              return res.status(400).json({
+                  success: false,
+                  message: `이동시간(${predictedTravelMinutes}분)을 고려하면 ${minutesToTime(actualStartMin)}에 시작해야 합니다. 이는 선호시간을 벗어납니다. 최소 ${minPossibleTime}부터 가능합니다.`,
+                  reason: 'travel_time_preference_conflict'
+              });
+           }
+        }
+      }
+
       const currentBlockDate = new Date(allSlotsInBlock[0].date);
       const isSameDay = currentBlockDate.toISOString().split('T')[0] === targetDate.toISOString().split('T')[0];
       const isSameTime = blockStartTime === newStartTime && blockEndTime === newEndTime;
@@ -933,8 +1004,14 @@ exports.smartExchange = async (req, res) => {
       const beforeCount = room.timeSlots.length;
       room.timeSlots = room.timeSlots.filter(slot => {
         const slotDate = new Date(slot.date).toISOString().split('T')[0];
-        const isTravelSlot = slot.isTravel === true || slot.subject === '이동시간';
-        const shouldRemove = (slotDate === oldSlotDate || slotDate === targetDateStr) && isTravelSlot;
+        // 🔧 수정: 삭제 조건을 더 강력하게 (subject 체크 강화)
+        const isTravelSlot = slot.isTravel === true || slot.subject === '이동시간' || slot.subject === 'Travel Time';
+        
+        // 원본 날짜의 내 이동시간 OR 목표 날짜의 내 이동시간 삭제
+        const isMySlot = (slot.user._id || slot.user).toString() === req.user.id.toString();
+        
+        // 주의: 이동시간 슬롯은 user 필드가 '이동하는 사람' (즉, 현재 유저)로 되어있음.
+        const shouldRemove = (slotDate === oldSlotDate || slotDate === targetDateStr) && isTravelSlot && isMySlot;
 
         if (shouldRemove) {
           console.log(`  ❌ [삭제] ${slotDate} ${slot.startTime}-${slot.endTime} (${slot.subject}, isTravel=${slot.isTravel})`);

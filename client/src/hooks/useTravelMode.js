@@ -161,10 +161,21 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
     
     // 3. 서버에 저장된 이동시간 데이터가 있는 경우 (방장만 보기)
     if (isOwner) {
+        // 🔧 timeSlots에 섞여 있는 이동시간 슬롯을 분리하여 travelSlots로 병합
+        const mixedTravelSlots = (currentRoom.timeSlots || []).filter(slot => slot.isTravel || slot.subject === '이동시간');
+        const regularSlots = (currentRoom.timeSlots || []).filter(slot => !slot.isTravel && slot.subject !== '이동시간');
+        
+        // travelTimeSlots와 mixedTravelSlots 병합 (중복 제거 필요 시 id로 체크하겠지만, 일단 단순 병합)
+        // 보통 recalculate 후에는 timeSlots에만 들어있을 수 있음
+        const combinedTravelSlots = [
+            ...(currentRoom.travelTimeSlots || []),
+            ...mixedTravelSlots
+        ];
+
         return {
-            timeSlots: currentRoom.timeSlots || [], // 수업 시간
+            timeSlots: regularSlots, // 수업 시간만 반환
             // 🔧 travelMode를 슬롯에 주입하여 렌더링 시 올바른 아이콘/색상 표시
-            travelSlots: (currentRoom.travelTimeSlots || []).map(slot => ({
+            travelSlots: combinedTravelSlots.map(slot => ({
                 ...slot,
                 travelMode: travelMode 
             })), 
@@ -172,9 +183,10 @@ export const useTravelMode = (currentRoom, isOwner = true) => {
         };
     } 
     
-    // 4. 조원은 서버 데이터라도 이동시간 숨김
+    // 4. 조원은 서버 데이터라도 이동시간 숨김 (프라이버시 보호)
+    // 🔧 timeSlots에서 이동시간 슬롯을 완벽하게 제거
     return {
-        timeSlots: currentRoom.timeSlots || [],
+        timeSlots: (currentRoom.timeSlots || []).filter(slot => !slot.isTravel && slot.subject !== '이동시간'),
         travelSlots: [],
         travelMode: travelMode
     };
