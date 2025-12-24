@@ -49,7 +49,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
  * @param {string} ownerId - 방장 ID
  * @returns {Promise<void>}
  */
-const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTravelMode = null) => {
+const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTravelMode = null, targetUserId = null) => {
   console.log('🔥🔥🔥 [recalculateTravelTimeSlotsForDate] 함수 호출됨!', {
     날짜: new Date(date).toISOString().split('T')[0],
     forceTravelMode: forceTravelMode,
@@ -83,17 +83,35 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
     
     room.travelTimeSlots = room.travelTimeSlots.filter(slot => {
       const slotDate = new Date(slot.date).toISOString().split('T')[0];
-      const shouldDelete = slotDate === dateStr;
       
-      if (shouldDelete) {
-        deletedFromTravelTimeSlots.push({
-          시간: `${slot.startTime}-${slot.endTime}`,
-          subject: slot.subject,
-          user: slot.user
-        });
+      // ✅ targetUserId가 지정되면 그 사용자의 것만 삭제
+      if (targetUserId) {
+        const slotUserId = String(slot.user._id || slot.user);
+        const shouldDelete = slotDate === dateStr && slotUserId === String(targetUserId);
+        
+        if (shouldDelete) {
+          deletedFromTravelTimeSlots.push({
+            시간: `${slot.startTime}-${slot.endTime}`,
+            subject: slot.subject,
+            user: slot.user
+          });
+        }
+        
+        return !shouldDelete;
+      } else {
+        // targetUserId가 없으면 전체 삭제 (기존 동작 유지)
+        const shouldDelete = slotDate === dateStr;
+        
+        if (shouldDelete) {
+          deletedFromTravelTimeSlots.push({
+            시간: `${slot.startTime}-${slot.endTime}`,
+            subject: slot.subject,
+            user: slot.user
+          });
+        }
+        
+        return !shouldDelete;
       }
-      
-      return !shouldDelete;
     });
     
     const afterCount = room.travelTimeSlots.length;
@@ -143,18 +161,38 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
   room.timeSlots = room.timeSlots.filter(slot => {
     const slotDate = new Date(slot.date).toISOString().split('T')[0];
     const isTravelSlot = slot.isTravel === true || slot.subject === '이동시간';
-    const shouldDelete = slotDate === dateStr && isTravelSlot;
     
-    if (shouldDelete) {
-      slotsToDelete.push({
-        시간: `${slot.startTime}-${slot.endTime}`,
-        isTravel: slot.isTravel,
-        subject: slot.subject,
-        날짜: slotDate
-      });
+    // ✅ targetUserId가 지정되면 그 사용자의 것만 삭제
+    if (targetUserId) {
+      const slotUserId = String(slot.user._id || slot.user);
+      const shouldDelete = slotDate === dateStr && isTravelSlot && slotUserId === String(targetUserId);
+      
+      if (shouldDelete) {
+        slotsToDelete.push({
+          시간: `${slot.startTime}-${slot.endTime}`,
+          isTravel: slot.isTravel,
+          subject: slot.subject,
+          날짜: slotDate,
+          userId: slotUserId
+        });
+      }
+      
+      return !shouldDelete;
+    } else {
+      // targetUserId가 없으면 전체 삭제 (기존 동작 유지)
+      const shouldDelete = slotDate === dateStr && isTravelSlot;
+      
+      if (shouldDelete) {
+        slotsToDelete.push({
+          시간: `${slot.startTime}-${slot.endTime}`,
+          isTravel: slot.isTravel,
+          subject: slot.subject,
+          날짜: slotDate
+        });
+      }
+      
+      return !shouldDelete;
     }
-    
-    return !shouldDelete;
   });
   
   console.log('🗑️ [삭제 완료]', {
@@ -163,11 +201,19 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
     삭제된_상세: slotsToDelete
   });
 
-  // ② 해당 날짜의 수업 슬롯들만 가져와서 시간순 정렬
+  // ② 특정 사용자의 수업 슬롯만 가져와서 시간순 정렬
   const classSlots = room.timeSlots
     .filter(slot => {
       const slotDate = new Date(slot.date).toISOString().split('T')[0];
-      return slotDate === dateStr && !slot.isTravel;
+      
+      // ✅ targetUserId가 지정되면 그 사용자의 것만
+      if (targetUserId) {
+        const slotUserId = String(slot.user._id || slot.user);
+        return slotDate === dateStr && !slot.isTravel && slotUserId === String(targetUserId);
+      } else {
+        // targetUserId가 없으면 전체 (기존 동작 유지)
+        return slotDate === dateStr && !slot.isTravel;
+      }
     })
     .sort((a, b) => {
       const aMinutes = parseInt(a.startTime.split(':')[0]) * 60 + parseInt(a.startTime.split(':')[1]);
@@ -1314,11 +1360,11 @@ exports.smartExchange = async (req, res) => {
           assignedBy: room.owner._id,
           assignedAt: new Date(),
           status: 'confirmed',
-          // 이동시간 관련 메타데이터 유지
-          originalStartTime: allSlotsInBlock[0]?.originalStartTime,
-          originalEndTime: allSlotsInBlock[0]?.originalEndTime,
-          adjustedForTravelTime: allSlotsInBlock[0]?.adjustedForTravelTime,
-          location: allSlotsInBlock[0]?.location
+          location: allSlotsInBlock[0]?.location,
+          // ✅ 메타데이터 초기화 (재계산 후 설정됨)
+          originalStartTime: undefined,
+          originalEndTime: undefined,
+          adjustedForTravelTime: false
         };
 
         // 🆕 첫 번째 슬롯: 이동시간 메타데이터 저장 (조원에게 절대 노출 금지!)
@@ -1341,11 +1387,11 @@ exports.smartExchange = async (req, res) => {
       });
       console.log('🔥 [Case 1] 재계산 전 슬롯 개수:', room.timeSlots.length);
       
-      // ✅ 수정: effectiveTravelMode를 명시적으로 전달
-      await recalculateTravelTimeSlotsForDate(room, new Date(allSlotsInBlock[0].date), room.owner._id, effectiveTravelMode);
+      // ✅ 수정: effectiveTravelMode와 userId를 명시적으로 전달 (이동한 사용자만 재계산)
+      await recalculateTravelTimeSlotsForDate(room, new Date(allSlotsInBlock[0].date), room.owner._id, effectiveTravelMode, req.user.id);
       console.log('🔥 [Case 1] 첫 번째 재계산 완료');
       
-      await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode);
+      await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode, req.user.id);
       console.log('🔥 [Case 1] 두 번째 재계산 완료');
 
       console.log('✅ [smartExchange Case 1] 이동시간 재계산 완료');
@@ -1476,25 +1522,30 @@ exports.smartExchange = async (req, res) => {
             assignedBy: room.owner._id,
             assignedAt: new Date(),
             status: 'confirmed',
-            location: allSlotsInBlock[0]?.location
+            location: allSlotsInBlock[0]?.location,
+            // ✅ 메타데이터 초기화 (재계산 후 설정됨)
+            originalStartTime: undefined,
+            originalEndTime: undefined,
+            adjustedForTravelTime: false
           };
 
           room.timeSlots.push(classSlotData);
           currentTimeMinutes = slotEndTimeMinutes;
         }
 
-        // ✅ 이동시간 재계산 (Case 1과 동일한 방식)
+        // ✅ 이동시간 재계산 (Case 1과 동일한 방식) - 이동한 사용자만 재계산
         console.log('🔥🔥🔥 [smartExchange Case 2] 이동시간 재계산 시작!', {
           travelMode: effectiveTravelMode,
           oldDate: oldSlotDate,
-          newDate: targetDateStr
+          newDate: targetDateStr,
+          userId: req.user.id
         });
         console.log('🔥 [Case 2] 재계산 전 슬롯 개수:', room.timeSlots.length);
         
-        await recalculateTravelTimeSlotsForDate(room, new Date(oldSlotDate), room.owner._id, effectiveTravelMode);
+        await recalculateTravelTimeSlotsForDate(room, new Date(oldSlotDate), room.owner._id, effectiveTravelMode, req.user.id);
         console.log('🔥 [Case 2] 첫 번째 재계산 완료');
         
-        await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode);
+        await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode, req.user.id);
         console.log('🔥 [Case 2] 두 번째 재계산 완료');
         
         console.log('✅ [smartExchange Case 2] 이동시간 재계산 완료');
