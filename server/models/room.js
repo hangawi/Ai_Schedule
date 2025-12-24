@@ -372,6 +372,13 @@ const RoomSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // 🆕 자동 확정 타이머 시간 (분 단위, 사용자 설정 가능, 기본값 5분)
+  autoConfirmDuration: {
+    type: Number,
+    default: 5,  // 기본값: 5분
+    min: 1,      // 최소: 1분
+    max: 1440    // 최대: 24시간 (1440분)
+  },
   // 현재 선택된 이동수단 모드 (확정 전 임시, 보기 버튼 선택 시)
   currentTravelMode: {
     type: String,

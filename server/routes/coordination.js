@@ -71,6 +71,9 @@ router.post('/rooms/:roomId/apply-travel-mode', auth, coordinationSchedulingCont
 // Confirm travel mode (make it visible to members)
 router.post('/rooms/:roomId/confirm-travel-mode', auth, coordinationSchedulingController.confirmTravelMode);
 
+// Set auto-confirm timer duration
+router.put('/rooms/:roomId/auto-confirm-duration', auth, coordinationSchedulingController.setAutoConfirmDuration);
+
 // Request management
 router.post('/requests', auth, coordinationController.createRequest);
 // 🔧 더 구체적인 라우트를 먼저 배치

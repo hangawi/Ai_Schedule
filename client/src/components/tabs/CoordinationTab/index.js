@@ -135,7 +135,8 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     setCurrentRoom, fetchMyRooms, fetchRoomDetails,
     createRoom, joinRoom, updateRoom, deleteRoom,
     submitTimeSlots, assignTimeSlot, removeTimeSlot,
-    createRequest, cancelRequest, handleRequest
+    createRequest, cancelRequest, handleRequest,
+    setAutoConfirmDuration
   } = useCoordination(user?.id, onExchangeRequestCountChange, loadSentRequests, showAlert);
   const { roomExchangeCounts, setRoomExchangeCounts, loadRoomExchangeCounts, getRoomRequestCount } = useRoomExchangeCounts(user, myRooms, receivedRequests);
 
@@ -842,6 +843,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
                   onDeleteAllSlots={handleDeleteAllSlots}
                   onConfirmSchedule={handleConfirmSchedule}
                   currentWeekStartDate={currentWeekStartDate}
+                  setAutoConfirmDuration={setAutoConfirmDuration}
                 />
               )}
               <MemberList

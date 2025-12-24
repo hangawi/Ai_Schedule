@@ -63,12 +63,15 @@ const AutoSchedulerPanel = ({
   onDeleteAllSlots,
   onClearAllCarryOverHistories,
   onConfirmSchedule,
-  currentWeekStartDate
+  currentWeekStartDate,
+  setAutoConfirmDuration
 }) => {
   const [shouldRun, setShouldRun] = useState(false);
   const [showModeDropdown, setShowModeDropdown] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(null);
   const [showClearSlotsWarning, setShowClearSlotsWarning] = useState(false);
+  const [timerDuration, setTimerDuration] = useState(5);
+  const [isSavingTimer, setIsSavingTimer] = useState(false);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -131,6 +134,35 @@ const AutoSchedulerPanel = ({
       setOptions(prev => ({ ...prev, assignmentMode: 'normal' }));
     }
   }, []);
+
+  // currentRoom의 autoConfirmDuration을 timerDuration에 동기화
+  useEffect(() => {
+    if (currentRoom?.autoConfirmDuration) {
+      setTimerDuration(currentRoom.autoConfirmDuration);
+    }
+  }, [currentRoom?.autoConfirmDuration]);
+
+  // 타이머 시간 저장 핸들러
+  const handleSaveTimerDuration = async () => {
+    if (!currentRoom?._id || !setAutoConfirmDuration) return;
+
+    // 유효성 검사
+    if (timerDuration < 1 || timerDuration > 1440) {
+      alert('타이머는 1분에서 1440분(24시간) 사이여야 합니다.');
+      return;
+    }
+
+    setIsSavingTimer(true);
+    try {
+      await setAutoConfirmDuration(currentRoom._id, timerDuration);
+      // 성공 메시지는 서버에서 socket.io로 전달됨
+    } catch (error) {
+      console.error('타이머 설정 실패:', error);
+      alert(error.message || '타이머 설정에 실패했습니다.');
+    } finally {
+      setIsSavingTimer(false);
+    }
+  };
 
   /**
    * [useEffect - 자동 확정 타이머]
@@ -246,6 +278,34 @@ const AutoSchedulerPanel = ({
               />
               <span className="text-xs text-gray-500 mt-0.5 block">분</span>
             </div>
+          </div>
+        </div>
+
+        {/* 자동 확정 타이머 설정 */}
+        <div className="mt-3">
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            자동 확정 타이머 (분)
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              value={timerDuration}
+              onChange={(e) => setTimerDuration(Number(e.target.value))}
+              className="flex-1 p-1.5 text-sm border rounded-md"
+              min="1"
+              max="1440"
+              placeholder="5"
+            />
+            <button
+              onClick={handleSaveTimerDuration}
+              disabled={isSavingTimer || !setAutoConfirmDuration}
+              className="px-3 py-1.5 bg-blue-500 text-white text-xs rounded-md hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+              {isSavingTimer ? '저장 중...' : '저장'}
+            </button>
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            자동배정 후 타이머가 만료되면 자동으로 확정됩니다.
           </div>
         </div>
       </div>

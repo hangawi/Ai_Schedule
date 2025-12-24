@@ -637,4 +637,33 @@ export const coordinationService = {
 
     return await response.json();
   },
+
+  /**
+   * 자동 확정 타이머 시간 설정
+   * @param {string} roomId - 방 ID
+   * @param {number} duration - 타이머 시간 (분 단위)
+   * @returns {Promise<object>} { success, duration, msg }
+   */
+  async setAutoConfirmDuration(roomId, duration) {
+    const token = await getAuthToken();
+
+    const response = await fetch(
+      `${API_BASE_URL}/api/coordination/rooms/${roomId}/auto-confirm-duration`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ duration })
+      }
+    );
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || '타이머 설정에 실패했습니다.');
+    }
+
+    return await response.json();
+  },
 };

@@ -328,6 +328,18 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
     }
   }, [currentRoomState, fetchRoomDetails, onRefreshExchangeCount, onRefreshSentRequests]);
 
+  const setAutoConfirmDuration = useCallback(async (roomId, duration) => {
+    setError(null);
+    try {
+      const result = await coordinationService.setAutoConfirmDuration(roomId, duration);
+      // 방 정보 다시 불러오기 (silent mode)
+      await fetchRoomDetails(roomId, true);
+      return result;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }, [fetchRoomDetails]);
 
   // 사용자 ID가 변경될 때마다 내 방 목록을 다시 가져옵니다.
   useEffect(() => {
@@ -353,6 +365,7 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
     assignTimeSlot,
     createRequest,
     handleRequest,
-    cancelRequest
+    cancelRequest,
+    setAutoConfirmDuration
   };
 };

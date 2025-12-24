@@ -336,9 +336,11 @@ exports.runAutoSchedule = async (req, res) => {
       // 💡 저장 전 최종 슬롯 통계 로그
       // 최종 배정 완료
 
-      // 자동 확정 타이머 설정 (1분 후 - 실험용, 프로덕션에서는 48시간)
-      const autoConfirmDelay = 1 * 60 * 1000; // 1분 = 60,000ms
+      // 🆕 자동 확정 타이머 설정 (사용자 설정값 사용, 기본값 5분)
+      const autoConfirmDurationMinutes = room.autoConfirmDuration || 5;
+      const autoConfirmDelay = autoConfirmDurationMinutes * 60 * 1000;
       room.autoConfirmAt = new Date(Date.now() + autoConfirmDelay);
+      console.log(`⏰ [자동배정] 자동 확정 타이머 설정: ${autoConfirmDurationMinutes}분 후`);
 
       // ✨ 자동배정은 항상 normal 모드로 실행 (이동시간은 별도로 "적용" 버튼으로 처리)
       room.currentTravelMode = 'normal';
@@ -1333,10 +1335,10 @@ exports.startConfirmationTimer = async (req, res) => {
       isTimerReset = true;
     }
 
-    // 6. 타이머 설정 (테스트: 1분, 실제: 48시간)
+    // 🆕 6. 타이머 설정 (사용자 설정값 사용, 기본값 5분)
+    const autoConfirmDurationMinutes = room.autoConfirmDuration || 5;
     const confirmTime = new Date();
-    confirmTime.setMinutes(confirmTime.getMinutes() + 1);  // 테스트용: 1분
-    // confirmTime.setHours(confirmTime.getHours() + 48);  // 실제용: 48시간
+    confirmTime.setMinutes(confirmTime.getMinutes() + autoConfirmDurationMinutes);
 
     room.autoConfirmAt = confirmTime;
 
@@ -1346,7 +1348,7 @@ exports.startConfirmationTimer = async (req, res) => {
 
     await room.save();
 
-    console.log(`⏰ [타이머 ${isTimerReset ? '재시작' : '시작'}] 방 ${roomId}: ${confirmTime.toISOString()}, 이동수단: ${travelMode}`);
+    console.log(`⏰ [타이머 ${isTimerReset ? '재시작' : '시작'}] 방 ${roomId}: ${confirmTime.toISOString()}, 이동수단: ${travelMode}, ${autoConfirmDurationMinutes}분 후 확정`);
 
     // 8. Socket.io로 실시간 알림 전송
     if (global.io) {
@@ -1355,6 +1357,7 @@ exports.startConfirmationTimer = async (req, res) => {
         autoConfirmAt: confirmTime,
         travelMode: travelMode,
         isReset: isTimerReset,
+        minutesRemaining: autoConfirmDurationMinutes,
         message: isTimerReset ? '타이머가 초기화되었습니다.' : '자동 확정 타이머가 시작되었습니다.',
         timestamp: new Date()
       });
@@ -1364,7 +1367,7 @@ exports.startConfirmationTimer = async (req, res) => {
       msg: isTimerReset ? '타이머가 초기화되었습니다.' : '자동 확정 타이머가 시작되었습니다.',
       autoConfirmAt: confirmTime,
       travelMode: travelMode,
-      minutesRemaining: 1,  // 테스트용: 1분
+      minutesRemaining: autoConfirmDurationMinutes,
       isReset: isTimerReset
     });
 
@@ -1704,6 +1707,60 @@ exports.confirmTravelMode = async (req, res) => {
 
   } catch (error) {
     console.error('❌ [confirmTravelMode] 실패:', error);
+    res.status(500).json({ msg: '서버 오류가 발생했습니다.', error: error.message });
+  }
+};
+
+// @desc    Set auto-confirm timer duration
+// @route   PUT /api/coordination/rooms/:roomId/auto-confirm-duration
+// @access  Private (Room Owner only)
+exports.setAutoConfirmDuration = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { duration } = req.body; // 분 단위
+
+    // 유효성 검사
+    if (!duration || duration < 1 || duration > 1440) {
+      return res.status(400).json({
+        msg: '타이머는 1분에서 1440분(24시간) 사이여야 합니다.'
+      });
+    }
+
+    // 방 조회
+    const room = await Room.findById(roomId);
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    // 방장 확인
+    if (room.owner.toString() !== req.user.id) {
+      return res.status(403).json({ msg: '방장만 타이머를 설정할 수 있습니다.' });
+    }
+
+    // 타이머 시간 업데이트
+    room.autoConfirmDuration = duration;
+    await room.save();
+
+    console.log(`⏰ [타이머 설정] 방 ${roomId}: ${duration}분`);
+
+    // Socket.io로 실시간 알림 전송
+    if (global.io) {
+      global.io.to(`room-${roomId}`).emit('timer-duration-updated', {
+        roomId: roomId,
+        duration: duration,
+        message: `자동 확정 타이머가 ${duration}분으로 설정되었습니다.`,
+        timestamp: new Date()
+      });
+    }
+
+    res.json({
+      success: true,
+      duration: duration,
+      msg: `자동 확정 타이머가 ${duration}분으로 설정되었습니다.`
+    });
+
+  } catch (error) {
+    console.error('❌ [setAutoConfirmDuration] 실패:', error);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.', error: error.message });
   }
 };
