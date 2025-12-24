@@ -218,12 +218,10 @@ export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) =
     // ✅ 이미 조정된 슬롯이면 재계산하지 않고 서버 데이터를 그대로 사용
     const isAlreadyAdjusted = currentRoom.timeSlots.some(slot => slot.adjustedForTravelTime);
     if (isAlreadyAdjusted) {
-      console.log('✅ [useTravelMode] 이미 조정된 슬롯입니다. 서버 데이터를 그대로 사용합니다.');
-      setEnhancedSchedule({
-        timeSlots: currentRoom.timeSlots,
-        travelSlots: currentRoom.travelTimeSlots || [],
-        travelMode: newMode
-      });
+      console.log('✅ [useTravelMode] 이미 조정된 슬롯입니다. enhancedSchedule을 비우고 실시간 데이터(currentRoom)를 사용합니다.');
+      // 🔧 수정: enhancedSchedule을 null로 설정하여 getCurrentScheduleData가 currentRoom을 사용하도록 유도
+      // 이렇게 하면 서버에서 데이터가 갱신(챗봇 변경 등)되었을 때 즉시 반영됨
+      setEnhancedSchedule(null);
       return;
     }
 

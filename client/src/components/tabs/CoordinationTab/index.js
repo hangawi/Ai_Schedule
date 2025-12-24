@@ -370,6 +370,18 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       }
     });
 
+    // 🆕 일정 변경 이벤트 수신 (챗봇 등)
+    socket.on('schedule-updated', async (data) => {
+      console.log('📡 Schedule updated event received:', data);
+      try {
+        await fetchRoomDetails(currentRoom._id);
+        // 필요하다면 사용자 정보도 갱신
+        window.dispatchEvent(new CustomEvent('refreshUser'));
+      } catch (error) {
+        console.error('Failed to refresh room after schedule update:', error);
+      }
+    });
+
     // 🔥 이동시간 모드 변경 이벤트 수신 (조원용)
     socket.on('travelModeChanged', async (data) => {
       console.log('📡 [조원] travelModeChanged 이벤트 수신:', data);
