@@ -1388,11 +1388,11 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                 // 이유 불문하고 조정된 시간이 선호시간 외면 재배정 필요
                 if (!isAdjustedPreferred) {
                     if (isPushedByPrevious) {
-                        console.warn(`⚠️ [재배정 필요] 이전 활동으로 밀려서 선호시간 외`);
+                        console.warn(`⚠️ [선호시간 초과] 이전 활동으로 밀려서 선호시간 외 (강제 적용)`);
                     } else {
-                        console.warn(`⚠️ [재배정 필요] 이동시간 추가로 선호시간 초과 (${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)})`);
+                        console.warn(`⚠️ [선호시간 초과] 이동시간 추가로 선호시간 초과 (${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)}) (강제 적용)`);
                     }
-                    canPlace = false;
+                    // canPlace = false; // 🔧 수정: 이동시간 보기 모드에서는 선호시간을 초과하더라도 밀린 시간을 보여줌
                 }
                 // 조정 후에도 선호시간 내 → OK
                 else {

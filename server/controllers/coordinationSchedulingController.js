@@ -1558,16 +1558,17 @@ exports.applyTravelMode = async (req, res) => {
       room.timeSlots = receivedTimeSlots
         .filter(e => !e.isTravel && e.subject !== '이동시간')
         .map((e, idx) => {
-          // ✅ 원본 수업시간 사용 (이동시간으로 조정되기 전)
-          const pureStartTime = e.originalStartTime || e.startTime;
-          const pureEndTime = e.originalEndTime || e.endTime;  // 🔧 버그 수정: endTime도 원본 사용
+          // ✅ 이동시간이 반영된 수업시간 사용
+          // (일반 모드로 복귀 시 room.originalTimeSlots에서 원본을 복원하므로 여기서는 변형된 시간을 저장해도 됨)
+          const adjustedStartTime = e.startTime;
+          const adjustedEndTime = e.endTime;
 
           const newSlot = {
             user: e.user._id || e.user,
             date: e.date instanceof Date ? e.date : new Date(e.date),
             day: e.day,
-            startTime: pureStartTime,  // ✅ 순수 수업시간 (이동시간 제외)
-            endTime: pureEndTime,      // 🔧 버그 수정: 원본 endTime 사용
+            startTime: adjustedStartTime,  // ✅ 이동시간이 반영된 시작 시간
+            endTime: adjustedEndTime,      // ✅ 이동시간이 반영된 종료 시간
             subject: e.subject || '자동 배정',
             assignedBy: room.owner._id,
             status: 'confirmed',
@@ -1580,7 +1581,7 @@ exports.applyTravelMode = async (req, res) => {
           };
 
           if (idx < 5) {
-            console.log(`   [적용 ${idx}] ${e.subject}: ${pureStartTime}-${e.endTime} (이동전 시작: ${e.actualStartTime || '없음'})`);
+            console.log(`   [적용 ${idx}] ${e.subject}: ${adjustedStartTime}-${adjustedEndTime} (이동전 시작: ${e.actualStartTime || '없음'})`);
           }
 
           return newSlot;
