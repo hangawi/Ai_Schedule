@@ -19,6 +19,7 @@
 
 const Room = require('../models/room');
 const User = require('../models/user');
+const dynamicTravelTimeCalculator = require('../services/dynamicTravelTimeCalculator');
 
 /**
  * 거리 계산 (Haversine formula)
@@ -267,22 +268,29 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
       }
 
       if (previousLat && previousLng && currentUser.addressLat && currentUser.addressLng) {
-        const distance = calculateDistance(
-          previousLat,
-          previousLng,
-          currentUser.addressLat,
-          currentUser.addressLng
+        // ✅ Google Maps API 사용하여 실제 이동시간 계산
+        const fromLocation = {
+          type: 'coordinates',
+          coordinates: { lat: previousLat, lng: previousLng },
+          address: previousSlot
+            ? (await User.findById(previousSlot.user._id || previousSlot.user))?.address
+            : (await User.findById(ownerId))?.address
+        };
+
+        const toLocation = {
+          type: 'coordinates',
+          coordinates: { lat: currentUser.addressLat, lng: currentUser.addressLng },
+          address: currentUser.address
+        };
+
+        travelDurationMinutes = await dynamicTravelTimeCalculator.calculateTravelTimeBetween(
+          fromLocation,
+          toLocation,
+          effectiveTravelMode
         );
 
-        const speeds = {
-          driving: 40,
-          transit: 30,
-          walking: 5,
-          bicycling: 15
-        };
-        const speed = speeds[effectiveTravelMode] || 30;
-
-        travelDurationMinutes = Math.ceil((distance / speed) * 60 / 10) * 10;
+        // 10분 단위로 반올림
+        travelDurationMinutes = Math.ceil(travelDurationMinutes / 10) * 10;
       }
     } catch (error) {
       console.error(`이동시간 계산 오류 (날짜: ${dateStr}, 슬롯: ${slot.startTime}):`, error);

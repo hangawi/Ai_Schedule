@@ -616,9 +616,9 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
       return res.status(400).json({ msg: '이미 확정된 스케줄입니다.' });
     }
 
-    // 3. 자동배정된 슬롯 필터링 (assignedBy가 있고 status가 'confirmed'인 것)
+    // 3. 자동배정된 슬롯 필터링 (assignedBy가 있고 status가 'confirmed'인 것, 이동시간 제외)
     const autoAssignedSlots = room.timeSlots.filter(slot =>
-      slot.assignedBy && slot.status === 'confirmed'
+      slot.assignedBy && slot.status === 'confirmed' && !slot.isTravel
     );
 
     // 🔍 디버깅: 필터링 직후 데이터 상태 확인
