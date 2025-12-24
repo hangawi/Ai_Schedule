@@ -80,16 +80,44 @@ class TravelScheduleCalculator {
       const startMinutes = this.parseTime(block.startTime);
       const endMinutes = this.parseTime(block.endTime);
 
+      // 🔍 디버깅: 입력 확인
+      console.log('🔍 [unmergeBlock] 입력:', {
+          원본_startTime: block.startTime,
+          원본_endTime: block.endTime,
+          계산된_startMinutes: startMinutes,
+          계산된_endMinutes: endMinutes,
+          subject: block.subject
+      });
+
+      // 🔧 버그 수정: block에서 startTime/endTime 제외하고 나머지 속성만 추출
+      const { startTime: _st, endTime: _et, originalSlots, isMerged, ...baseProps } = block;
+
       for (let m = startMinutes; m < endMinutes; m += 10) {
+          // 완전히 새로운 객체 생성 (참조 공유 방지)
+          const calculatedStart = this.formatTime(m);
+          const calculatedEnd = this.formatTime(m + 10);
+
           const newSlot = {
-              ...block,
-              startTime: this.formatTime(m),
-              endTime: this.formatTime(m + 10),
+              ...baseProps,
+              startTime: calculatedStart,
+              endTime: calculatedEnd
           };
-          delete newSlot.originalSlots;
-          delete newSlot.isMerged;
+
+          // 🔍 디버깅: 생성된 슬롯 확인 (처음 3개만)
+          if (slots.length < 3) {
+              console.log(`🔍 [unmergeBlock] 슬롯 ${slots.length + 1}:`, {
+                  계산된_start: calculatedStart,
+                  계산된_end: calculatedEnd,
+                  실제_newSlot_start: newSlot.startTime,
+                  실제_newSlot_end: newSlot.endTime,
+                  일치여부: calculatedStart === newSlot.startTime && calculatedEnd === newSlot.endTime
+              });
+          }
+
           slots.push(newSlot);
       }
+
+      console.log(`🔍 [unmergeBlock] 결과: ${slots.length}개 슬롯 생성`);
       return slots;
   }
 

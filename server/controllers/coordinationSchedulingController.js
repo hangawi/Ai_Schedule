@@ -592,11 +592,19 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
     const room = await Room.findById(roomId)
       .populate('owner', 'firstName lastName email personalTimes defaultSchedule scheduleExceptions')
       .populate('members.user', '_id firstName lastName email personalTimes defaultSchedule scheduleExceptions');
-    
+
+    // 🔍 디버깅: Room.findById() 직후 데이터 상태 확인
+    console.log(`\n🔍 [confirmSchedule - Room.findById 직후] timeSlots 첫 5개:`);
+    const autoSlots = room.timeSlots.filter(s => s.subject === '자동 배정');
+    autoSlots.slice(0, 5).forEach((s, idx) => {
+      console.log(`  [${idx + 1}] ${s.startTime}-${s.endTime} (${s.day}) | user: ${s.user.toString().substring(0, 8)}`);
+    });
+    console.log(`  총 ${autoSlots.length}개의 자동 배정 슬롯\n`);
+
     if (!room) {
       return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
     }
-    
+
     // 2. 방장 권한 확인
     if (!room.isOwner(req.user.id)) {
       return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
@@ -612,6 +620,13 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
     const autoAssignedSlots = room.timeSlots.filter(slot =>
       slot.assignedBy && slot.status === 'confirmed'
     );
+
+    // 🔍 디버깅: 필터링 직후 데이터 상태 확인
+    console.log(`\n🔍 [confirmSchedule - 필터링 직후] autoAssignedSlots 첫 5개:`);
+    autoAssignedSlots.slice(0, 5).forEach((s, idx) => {
+      console.log(`  [${idx + 1}] ${s.startTime}-${s.endTime} (${s.day}) | user: ${s.user.toString().substring(0, 8)}`);
+    });
+    console.log(`  총 ${autoAssignedSlots.length}개의 필터링된 슬롯\n`);
 
     console.log(`📋 [confirmSchedule] Room 상태:`, {
       timeSlots개수: room.timeSlots?.length || 0,
@@ -690,7 +705,7 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
       const userId = slot.user.toString();
       const dateStr = slot.date.toISOString().split('T')[0];
       const key = `${userId}_${dateStr}`;
-      
+
       if (!slotsByUserAndDate[key]) {
         slotsByUserAndDate[key] = {
           userId,
@@ -701,16 +716,42 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
       }
       slotsByUserAndDate[key].slots.push(slot);
     });
-    
+
+    // 🔍 디버깅: 그룹화 직후 데이터 상태 확인
+    console.log(`\n🔍 [그룹화 직후] slotsByUserAndDate 첫 번째 그룹:`);
+    const firstKey = Object.keys(slotsByUserAndDate)[0];
+    if (firstKey) {
+      const firstGroup = slotsByUserAndDate[firstKey];
+      console.log(`  그룹 키: ${firstKey}`);
+      console.log(`  슬롯 개수: ${firstGroup.slots.length}`);
+      firstGroup.slots.slice(0, 5).forEach((s, idx) => {
+        console.log(`  [${idx + 1}] ${s.startTime}-${s.endTime}`);
+      });
+    }
+
     // 각 그룹의 슬롯을 병합
     const mergedSlotsByUser = {};
     for (const [key, group] of Object.entries(slotsByUserAndDate)) {
+      // 🔍 디버깅: 병합 전 원본 슬롯 확인
+      if (group.slots.length > 0) {
+        console.log(`\n🔍 [병합 전] ${key}: ${group.slots.length}개 슬롯`);
+        group.slots.slice(0, 3).forEach((s, idx) => {
+          console.log(`  [${idx + 1}] ${s.startTime}-${s.endTime}`);
+        });
+      }
+
       const mergedSlots = mergeConsecutiveSlots(group.slots);
-      
+
+      // 🔍 디버깅: 병합 후 결과 확인
+      console.log(`🔍 [병합 후] ${key}: ${mergedSlots.length}개 슬롯`);
+      mergedSlots.slice(0, 3).forEach((s, idx) => {
+        console.log(`  [${idx + 1}] ${s.startTime}-${s.endTime}`);
+      });
+
       if (!mergedSlotsByUser[group.userId]) {
         mergedSlotsByUser[group.userId] = [];
       }
-      
+
       mergedSlots.forEach(slot => {
         mergedSlotsByUser[group.userId].push({
           startTime: slot.startTime,
@@ -1429,7 +1470,7 @@ exports.applyTravelMode = async (req, res) => {
       timeSlots개수: receivedTimeSlots.length,
       travelSlots개수: receivedTravelSlots.length
     });
-    console.log(`📋 [디버깅] receivedTimeSlots 첫 3개:`, receivedTimeSlots.slice(0, 3).map(e => ({
+    console.log(`📋 [디버깅] receivedTimeSlots 첫 5개:`, receivedTimeSlots.slice(0, 5).map(e => ({
       user: e.user?._id?.toString() || e.user?.toString() || e.user,
       date: e.date instanceof Date ? e.date.toISOString().split('T')[0] : e.date,
       subject: e.subject,
@@ -1438,6 +1479,15 @@ exports.applyTravelMode = async (req, res) => {
       originalStartTime: e.originalStartTime,
       isTravel: e.isTravel
     })));
+
+    // 🔍 추가 디버깅: req.body 원본 데이터 확인
+    console.log(`🔍 [applyTravelMode] req.body.enhancedSchedule.timeSlots 첫 3개:`,
+      req.body.enhancedSchedule.timeSlots.slice(0, 3).map(s => ({
+        startTime: s.startTime,
+        endTime: s.endTime,
+        subject: s.subject
+      }))
+    );
     console.log(`📋 [디버깅] room.timeSlots 첫 3개:`, room.timeSlots.slice(0, 3).map(s => ({
       user: s.user?._id?.toString() || s.user?.toString(),
       date: s.date.toISOString().split('T')[0],
@@ -1509,14 +1559,15 @@ exports.applyTravelMode = async (req, res) => {
         .filter(e => !e.isTravel && e.subject !== '이동시간')
         .map((e, idx) => {
           // ✅ 원본 수업시간 사용 (이동시간으로 조정되기 전)
-          const pureStartTime = e.originalStartTime || e.startTime; 
+          const pureStartTime = e.originalStartTime || e.startTime;
+          const pureEndTime = e.originalEndTime || e.endTime;  // 🔧 버그 수정: endTime도 원본 사용
 
           const newSlot = {
             user: e.user._id || e.user,
             date: e.date instanceof Date ? e.date : new Date(e.date),
             day: e.day,
             startTime: pureStartTime,  // ✅ 순수 수업시간 (이동시간 제외)
-            endTime: e.endTime,
+            endTime: pureEndTime,      // 🔧 버그 수정: 원본 endTime 사용
             subject: e.subject || '자동 배정',
             assignedBy: room.owner._id,
             status: 'confirmed',
@@ -1587,12 +1638,35 @@ exports.applyTravelMode = async (req, res) => {
 
     // 5. currentTravelMode 설정
     room.currentTravelMode = travelMode;
-    
+
+    // 🔍 디버깅: 저장 직전 데이터 확인
+    console.log(`🔍 [저장 직전] room.timeSlots 첫 3개:`, room.timeSlots.slice(0, 3).map(s => ({
+      startTime: s.startTime,
+      endTime: s.endTime,
+      subject: s.subject
+    })));
+
     // Retry logic for VersionError
     const maxRetries = 3;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         await room.save();
+
+        // 🔍 디버깅: 저장 직후 메모리 확인
+        console.log(`🔍 [저장 직후 - 메모리] room.timeSlots 첫 3개:`, room.timeSlots.slice(0, 3).map(s => ({
+          startTime: s.startTime,
+          endTime: s.endTime,
+          subject: s.subject
+        })));
+
+        // 🔍 디버깅: DB에서 다시 읽어서 확인
+        const verifyRoom = await Room.findById(room._id);
+        console.log(`🔍 [저장 직후 - DB 재조회] timeSlots 첫 3개:`, verifyRoom.timeSlots.slice(0, 3).map(s => ({
+          startTime: s.startTime,
+          endTime: s.endTime,
+          subject: s.subject
+        })));
+
         break; // 성공하면 루프 종료
       } catch (error) {
         if (error.name === 'VersionError' && attempt < maxRetries) {

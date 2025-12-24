@@ -589,6 +589,29 @@ export const coordinationService = {
   async applyTravelMode(roomId, travelMode, enhancedSchedule) {
     const token = await getAuthToken();
 
+    // 🔍 디버깅: 전송 전 데이터 확인
+    console.log('🔍 [applyTravelMode] 전송 전 enhancedSchedule.timeSlots 첫 3개:',
+      enhancedSchedule.timeSlots?.slice(0, 3).map(s => ({
+        startTime: s.startTime,
+        endTime: s.endTime,
+        subject: s.subject,
+        date: s.date
+      }))
+    );
+
+    const payload = { travelMode, enhancedSchedule };
+    const jsonString = JSON.stringify(payload);
+
+    // 🔍 디버깅: JSON 변환 후 다시 파싱해서 확인
+    const parsed = JSON.parse(jsonString);
+    console.log('🔍 [applyTravelMode] JSON 변환 후 timeSlots 첫 3개:',
+      parsed.enhancedSchedule.timeSlots?.slice(0, 3).map(s => ({
+        startTime: s.startTime,
+        endTime: s.endTime,
+        subject: s.subject
+      }))
+    );
+
     const response = await fetch(
       `${API_BASE_URL}/api/coordination/rooms/${roomId}/apply-travel-mode`,
       {
@@ -597,7 +620,7 @@ export const coordinationService = {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ travelMode, enhancedSchedule })
+        body: jsonString
       }
     );
 
