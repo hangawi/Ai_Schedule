@@ -1151,6 +1151,7 @@ const TimetableGrid = ({
       {/* Time Rows */}
       <WeekView
         travelSlots={travelSlots}
+        timeSlots={timeSlots}
         filteredTimeSlotsInDay={filteredTimeSlotsInDay}
         weekDates={weekDates} // Pass weekDates to WeekView
         days={days}

@@ -93,6 +93,7 @@ const WeekView = ({
   ownerOriginalSchedule, // 방장의 원본 시간표 데이터
   travelMode = 'normal', // Add travelMode to props
   travelSlots = [], // 이동 시간 슬롯
+  timeSlots = [], // 🆕 전체 배정된 수업 정보
   myTravelDuration = 0 // 🆕 나의 이동 소요 시간
 }) => {
   console.log('🔍 [WeekView] Props 확인:', {
@@ -231,6 +232,76 @@ const WeekView = ({
     return null;
   };
 
+  // 🆕 현재 시간에 현재 사용자의 수업이 있는지 확인하는 함수
+  const hasScheduleAtTime = (date, time, timeSlots, currentUser) => {
+    if (!date || !time || !currentUser || !timeSlots || timeSlots.length === 0) return false;
+
+    const dateStr = date.toISOString().split('T')[0];
+    const currentUserId = currentUser._id || currentUser.id;
+    const timeMinutes = timeToMinutes(time);
+
+    return timeSlots.some(slot => {
+      const slotDate = slot.date ? new Date(slot.date).toISOString().split('T')[0] : null;
+      const slotUserId = slot.user?._id || slot.user?.id || slot.user;
+      const startMinutes = timeToMinutes(slot.startTime);
+      const endMinutes = timeToMinutes(slot.endTime);
+
+      return slotDate === dateStr &&
+             slotUserId === currentUserId &&
+             timeMinutes >= startMinutes &&
+             timeMinutes < endMinutes;
+    });
+  };
+
+  // 🆕 동적 이동시간 계산 함수
+  const getDynamicTravelDuration = (date, currentTime, timeSlots, currentUser, myTravelDuration) => {
+    if (!date || !currentTime || !currentUser || !timeSlots || timeSlots.length === 0 || !myTravelDuration) {
+      return myTravelDuration || 0;
+    }
+
+    const dateStr = date.toISOString().split('T')[0];
+    const currentUserId = currentUser._id || currentUser.id;
+    const currentTimeMinutes = timeToMinutes(currentTime);
+
+    // 같은 날짜의 현재 사용자 수업만 필터링
+    const sameDayClasses = timeSlots.filter(slot => {
+      const slotDate = slot.date ? new Date(slot.date).toISOString().split('T')[0] : null;
+      const slotUserId = slot.user?._id || slot.user?.id || slot.user;
+      return slotDate === dateStr && slotUserId === currentUserId;
+    });
+
+    if (sameDayClasses.length === 0) {
+      // 같은 날 수업이 없으면: 방장 → 현재 시간
+      return myTravelDuration;
+    }
+
+    // 시간순 정렬
+    sameDayClasses.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+
+    // 현재 시간 이전의 가장 최근 수업 찾기
+    let previousClass = null;
+    for (const cls of sameDayClasses) {
+      const classEndMinutes = timeToMinutes(cls.endTime);
+      if (classEndMinutes <= currentTimeMinutes) {
+        previousClass = cls;
+      } else {
+        break;
+      }
+    }
+
+    if (previousClass) {
+      // 이전 수업 있으면: 이전 수업 끝 → 현재 시간
+      const prevEndMinutes = timeToMinutes(previousClass.endTime);
+      const duration = currentTimeMinutes - prevEndMinutes;
+      console.log(`🚗 [동적 이동시간] ${currentTime} - 이전 수업 있음: ${previousClass.endTime} → ${currentTime} = ${duration}분`);
+      return duration;
+    } else {
+      // 이전 수업 없으면: 방장 → 현재 시간
+      console.log(`🚗 [동적 이동시간] ${currentTime} - 이전 수업 없음: 방장 → 현재 = ${myTravelDuration}분`);
+      return myTravelDuration;
+    }
+  };
+
   // 연속된 시간대를 자동으로 병합하는 함수
   const getMergedTimeBlocks = (dateInfo, dayIndex) => {
     const date = dateInfo.fullDate;
@@ -242,47 +313,62 @@ const WeekView = ({
       let ownerOriginalInfo = getOwnerOriginalScheduleInfo(date, time);
       
       // 🆕 이동시간 고려한 유효성 체크 (조원이고 이동모드일 때만)
+      // ⭐ 시간별 체크 + 동적 이동시간 계산 (문제 1+3+4 해결)
       if (!isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0) {
-        const timeMinutes = timeToMinutes(time);
-        // 이동시간 구간 확인: 수업시작(timeMinutes) 직전부터 travelDuration만큼
-        const travelStartMinutes = timeMinutes - myTravelDuration;
-        
-        let isTravelBlocked = false;
-        
-        // 이동 구간을 10분 단위로 역추적하며 금지시간 포함 여부 확인
-        for (let m = timeMinutes - 10; m >= travelStartMinutes; m -= 10) {
-            if (m < 0) continue; 
-            const checkTimeStr = minutesToTime(m);
-            
-            // 1. 방 설정 금지시간(blockedTimes) 체크
-            const blockedInfo = getBlockedTimeInfo(checkTimeStr);
-            if (blockedInfo) {
-                isTravelBlocked = true;
-                break;
-            }
-            
-            // 2. 방장 일정(ownerOriginalInfo) 체크
-            const info = getOwnerOriginalScheduleInfo(date, checkTimeStr);
-            if (info && (info.type === 'non_preferred' || info.type === 'exception' || info.type === 'personal')) {
-                isTravelBlocked = true;
-                break;
-            }
-        }
-        
-        if (isTravelBlocked) {
-            if (!ownerOriginalInfo) {
-                ownerOriginalInfo = {
-                    type: 'travel_restricted',
-                    name: '이동시간 확보 필요',
-                    title: `이동시간(${myTravelDuration}분) 동안 일정이 있습니다`,
-                    isTravelRestricted: true
-                };
-                console.log(`🚫 [WeekView] 이동제한 블록 생성됨: ${time}`);
-            } else if (ownerOriginalInfo.type === 'non_preferred') {
-                 ownerOriginalInfo.name = '이동시간 확보 필요';
-                 ownerOriginalInfo.type = 'travel_restricted';
-                 console.log(`🚫 [WeekView] 이동제한 블록 생성됨(덮어쓰기): ${time}`);
-            }
+        // 현재 시간에 이미 수업이 있는지 확인
+        const hasSchedule = hasScheduleAtTime(date, time, timeSlots, currentUser);
+
+        // 현재 시간이 비어있으면 빗금 계산
+        if (!hasSchedule) {
+          // ⭐ 동적 이동시간 계산
+          const dynamicTravelDuration = getDynamicTravelDuration(
+            date, time, timeSlots, currentUser, myTravelDuration
+          );
+
+          const timeMinutes = timeToMinutes(time);
+          const travelStartMinutes = timeMinutes - dynamicTravelDuration;
+
+          let isTravelBlocked = false;
+
+          // 이동 구간을 10분 단위로 역추적하며 금지시간 포함 여부 확인
+          for (let m = timeMinutes - 10; m >= travelStartMinutes; m -= 10) {
+              if (m < 0) continue;
+              const checkTimeStr = minutesToTime(m);
+
+              // 1. 방 설정 금지시간(blockedTimes) 체크
+              const blockedInfo = getBlockedTimeInfo(checkTimeStr);
+              if (blockedInfo) {
+                  isTravelBlocked = true;
+                  break;
+              }
+
+              // 2. 방장 일정(ownerOriginalInfo) 체크
+              const info = getOwnerOriginalScheduleInfo(date, checkTimeStr);
+              if (info && (info.type === 'non_preferred' || info.type === 'exception' || info.type === 'personal')) {
+                  isTravelBlocked = true;
+                  break;
+              }
+          }
+
+          if (isTravelBlocked) {
+              // ⭐ 선호시간 내에서만 빗금 표시
+              const currentTimeBlocked = getBlockedTimeInfo(time);
+              const isPreferredTime = !currentTimeBlocked && !ownerOriginalInfo;
+
+              if (isPreferredTime) {
+                  ownerOriginalInfo = {
+                      type: 'travel_restricted',
+                      name: '이동시간 확보 필요',
+                      title: `이동시간(${dynamicTravelDuration}분) 동안 일정이 있습니다`,
+                      isTravelRestricted: true
+                  };
+                  console.log(`🚫 [WeekView] 이동제한 블록 생성됨: ${time} (${dynamicTravelDuration}분)`);
+              } else {
+                  console.log(`⏭️ [WeekView] 금지시간/불가능한 시간 - 빗금 스킵: ${time}`);
+              }
+          }
+        } else {
+          console.log(`✅ [WeekView] 이미 수업 있음 - 빗금 스킵: ${time}`);
         }
       }
 
@@ -770,36 +856,55 @@ const WeekView = ({
               const isMemberSlot = ownerInfo && (!isRoomOwner || (ownerInfo.userId !== currentUser?.id && ownerInfo.userId !== currentUser?._id));
 
               // 4. 🆕 이동시간 고려한 유효성 체크 (조원이고 이동모드일 때만)
+              // ⭐ 시간별 체크 + 동적 이동시간 계산 (문제 1+3+4 해결)
               // (주의: ownerOriginalInfo가 이미 blocked 상태라면 체크 불필요)
               if (!isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0 && !ownerOriginalInfo) {
-                const timeMinutes = timeToMinutes(time);
-                const travelStartMinutes = timeMinutes - myTravelDuration;
-                
-                let isTravelBlocked = false;
-                
-                for (let m = timeMinutes - 10; m >= travelStartMinutes; m -= 10) {
-                    if (m < 0) continue;
-                    const checkTimeStr = minutesToTime(m);
-                    
-                    const checkBlockedInfo = getBlockedTimeInfo(checkTimeStr);
-                    if (checkBlockedInfo) {
-                        isTravelBlocked = true;
-                        break;
-                    }
-                    
-                    const info = getOwnerOriginalScheduleInfo(date, checkTimeStr);
-                    if (info && (info.type === 'non_preferred' || info.type === 'exception' || info.type === 'personal')) {
-                        isTravelBlocked = true;
-                        break;
-                    }
-                }
-                
-                if (isTravelBlocked) {
-                    ownerOriginalInfo = {
-                        type: 'travel_restricted',
-                        name: '이동시간 확보 필요',
-                        isTravelRestricted: true
-                    };
+                // 현재 시간에 이미 수업이 있는지 확인
+                const hasSchedule = hasScheduleAtTime(date, time, timeSlots, currentUser);
+
+                // 현재 시간이 비어있으면 빗금 계산
+                if (!hasSchedule) {
+                  // ⭐ 동적 이동시간 계산
+                  const dynamicTravelDuration = getDynamicTravelDuration(
+                    date, time, timeSlots, currentUser, myTravelDuration
+                  );
+
+                  const timeMinutes = timeToMinutes(time);
+                  const travelStartMinutes = timeMinutes - dynamicTravelDuration;
+
+                  let isTravelBlocked = false;
+
+                  for (let m = timeMinutes - 10; m >= travelStartMinutes; m -= 10) {
+                      if (m < 0) continue;
+                      const checkTimeStr = minutesToTime(m);
+
+                      const checkBlockedInfo = getBlockedTimeInfo(checkTimeStr);
+                      if (checkBlockedInfo) {
+                          isTravelBlocked = true;
+                          break;
+                      }
+
+                      const info = getOwnerOriginalScheduleInfo(date, checkTimeStr);
+                      if (info && (info.type === 'non_preferred' || info.type === 'exception' || info.type === 'personal')) {
+                          isTravelBlocked = true;
+                          break;
+                      }
+                  }
+
+                  if (isTravelBlocked) {
+                      // ⭐ 선호시간 내에서만 빗금 표시
+                      const currentTimeBlocked = getBlockedTimeInfo(time);
+                      const isPreferredTime = !currentTimeBlocked && !ownerOriginalInfo;
+
+                      if (isPreferredTime) {
+                          ownerOriginalInfo = {
+                              type: 'travel_restricted',
+                              name: '이동시간 확보 필요',
+                              title: `이동시간(${dynamicTravelDuration}분) 동안 일정이 있습니다`,
+                              isTravelRestricted: true
+                          };
+                      }
+                  }
                 }
               }
 
