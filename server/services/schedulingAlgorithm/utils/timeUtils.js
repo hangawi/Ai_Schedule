@@ -344,62 +344,134 @@ const validateTimeSlotWithTravel = (
   // 2. 이동 시작 시간 계산 (선호시간 시작 고려)
   const currentEndMinutes = timeToMinutes(currentEndTime);
   const prefStartMinutes = timeToMinutes(preferenceStart);
+  const prefEndMinutes = timeToMinutes(preferenceEnd);
   const travelStartMinutes = Math.max(currentEndMinutes, prefStartMinutes);
   const travelStartTime = minutesToTime(travelStartMinutes);
 
-  // 3. 전체 소요 시간 = 이동시간 + 수업시간 (핵심!)
-  const totalDurationMinutes = travelTimeMinutes + classDurationMinutes;
+  console.log(`
+🔍 [validateTimeSlotWithTravel] ===== 시작 =====`);
+  console.log(`   📥 입력 파라미터:`);
+  console.log(`      - currentEndTime: ${currentEndTime}`);
+  console.log(`      - travelTimeMinutes: ${travelTimeMinutes}분`);
+  console.log(`      - classDurationMinutes: ${classDurationMinutes}분`);
+  console.log(`      - preferenceStart: ${preferenceStart}`);
+  console.log(`      - preferenceEnd: ${preferenceEnd}`);
+  console.log(`      - dayOfWeek: ${dayOfWeek}`);
+  console.log(`   📊 계산 결과:`);
+  console.log(`      - currentEndMinutes: ${currentEndMinutes}분`);
+  console.log(`      - prefStartMinutes: ${prefStartMinutes}분`);
+  console.log(`      - prefEndMinutes: ${prefEndMinutes}분`);
+  console.log(`      - travelStartMinutes: ${travelStartMinutes}분`);
+  console.log(`      - travelStartTime: ${travelStartTime}`);
 
-  console.log(`\n🔍 [validateTimeSlotWithTravel] ===== 시작 =====`);
-  console.log(`   이동 시작: ${travelStartTime}`);
-  console.log(`   전체 시간: ${totalDurationMinutes}분 (이동 ${travelTimeMinutes}분 + 수업 ${classDurationMinutes}분)`);
+  // 3. 🔥 이동시간 종료 시간 계산 및 검증
+  const travelEndMinutes = travelStartMinutes + travelTimeMinutes;
+  const travelEndTime = minutesToTime(travelEndMinutes);
 
-  // 4. 이동시작부터 수업종료까지 전체 블록 검증 (핵심!)
-  const result = findNextAvailableSlot(
-    travelStartTime,          // ← 이동 시작부터
-    totalDurationMinutes,     // ← 이동+수업 전체 시간
-    allBlockedTimes,
-    dayOfWeek,
-    preferenceEnd
-  );
+  console.log(`   🚗 이동시간 검증:`);
+  console.log(`      - travelStartTime: ${travelStartTime} (${travelStartMinutes}분)`);
+  console.log(`      - travelEndTime: ${travelEndTime} (${travelEndMinutes}분)`);
+  console.log(`      - prefEndMinutes: ${prefEndMinutes}분`);
+  console.log(`      - travelEndMinutes > prefEndMinutes? ${travelEndMinutes > prefEndMinutes}`);
 
-  // 5. 결과 반환
-  if (result.impossible) {
-    console.log(`   ❌ 배정 불가: ${result.reason}`);
-    
-    // 선호시간 부족 여부 확인
-    const prefEndMinutes = timeToMinutes(preferenceEnd);
-    const prefStartMinutes = timeToMinutes(preferenceStart);
+  // 🔥 이동시간이 선호시간 블록을 넘어가는지 확인
+  if (travelEndMinutes > prefEndMinutes) {
     const availableMinutes = prefEndMinutes - prefStartMinutes;
-    const isPreferenceInsufficient = result.reason === '선호시간 초과';
-    
+    console.log(`   ❌ 이동시간이 선호시간 블록을 초과: ${travelStartTime}-${travelEndTime} (이동 ${travelTimeMinutes}분) > ${preferenceEnd}`);
+    console.log(`      상세: ${travelEndMinutes}분 > ${prefEndMinutes}분`);
     return {
       isValid: false,
-      reason: `[${dayOfWeek}] ${preferenceStart}-${preferenceEnd}: ${result.reason}`,
-      preferenceInsufficient: isPreferenceInsufficient,  // ← 추가
-      requiredMinutes: totalDurationMinutes,              // ← 추가
-      availableMinutes: availableMinutes,                 // ← 추가
-      dayOfWeek: dayOfWeek                                // ← 추가
+      reason: `[${dayOfWeek}] ${preferenceStart}-${preferenceEnd}: 이동시간이 선호시간 블록을 초과 (이동 종료: ${travelEndTime})`,
+      preferenceInsufficient: true,
+      requiredMinutes: travelTimeMinutes + classDurationMinutes,
+      availableMinutes: availableMinutes,
+      dayOfWeek: dayOfWeek
     };
   }
 
-  // 6. 이동시간과 수업시간 분리
-  const actualTravelStartMinutes = timeToMinutes(result.startTime);
-  const actualTravelEndMinutes = actualTravelStartMinutes + travelTimeMinutes;
-  const actualTravelEndTime = minutesToTime(actualTravelEndMinutes);
+  console.log(`      ✅ 이동시간 OK - 선호시간 블록 내`);
 
+  // 4. 🔥 수업시간 종료 시간 계산 및 검증
+  const classEndMinutes = travelEndMinutes + classDurationMinutes;
+  const classEndTime = minutesToTime(classEndMinutes);
+
+  console.log(`   📚 수업시간 검증:`);
+  console.log(`      - classStartTime: ${travelEndTime} (${travelEndMinutes}분)`);
+  console.log(`      - classEndTime: ${classEndTime} (${classEndMinutes}분)`);
+  console.log(`      - prefEndMinutes: ${prefEndMinutes}분`);
+  console.log(`      - classEndMinutes > prefEndMinutes? ${classEndMinutes > prefEndMinutes}`);
+
+  // 🔥 수업시간이 선호시간 블록을 넘어가는지 확인
+  if (classEndMinutes > prefEndMinutes) {
+    const availableMinutes = prefEndMinutes - prefStartMinutes;
+    console.log(`   ❌ 수업시간이 선호시간 블록을 초과: ${travelEndTime}-${classEndTime} (수업 ${classDurationMinutes}분) > ${preferenceEnd}`);
+    console.log(`      상세: ${classEndMinutes}분 > ${prefEndMinutes}분`);
+    return {
+      isValid: false,
+      reason: `[${dayOfWeek}] ${preferenceStart}-${preferenceEnd}: 수업시간이 선호시간 블록을 초과 (수업 종료: ${classEndTime})`,
+      preferenceInsufficient: true,
+      requiredMinutes: travelTimeMinutes + classDurationMinutes,
+      availableMinutes: availableMinutes,
+      dayOfWeek: dayOfWeek
+    };
+  }
+
+  console.log(`      ✅ 수업시간 OK - 선호시간 블록 내`);
+
+  // 5. 🔥 이동시간 구간 금지시간 체크
+  const travelConflict = findConflictingPersonalTime(
+    travelStartTime,
+    travelEndTime,
+    allBlockedTimes,
+    dayOfWeek
+  );
+
+  if (travelConflict) {
+    console.log(`   ❌ 이동시간이 금지시간과 충돌: ${travelStartTime}-${travelEndTime} vs ${travelConflict.startTime}-${travelConflict.endTime}`);
+    return {
+      isValid: false,
+      reason: `[${dayOfWeek}] ${preferenceStart}-${preferenceEnd}: 이동시간이 금지시간과 충돌 (${travelConflict.title || '금지시간'})`,
+      preferenceInsufficient: false,
+      requiredMinutes: travelTimeMinutes + classDurationMinutes,
+      availableMinutes: prefEndMinutes - prefStartMinutes,
+      dayOfWeek: dayOfWeek
+    };
+  }
+
+  // 6. 🔥 수업시간 구간 금지시간 체크
+  const classConflict = findConflictingPersonalTime(
+    travelEndTime,
+    classEndTime,
+    allBlockedTimes,
+    dayOfWeek
+  );
+
+  if (classConflict) {
+    console.log(`   ❌ 수업시간이 금지시간과 충돌: ${travelEndTime}-${classEndTime} vs ${classConflict.startTime}-${classConflict.endTime}`);
+    return {
+      isValid: false,
+      reason: `[${dayOfWeek}] ${preferenceStart}-${preferenceEnd}: 수업시간이 금지시간과 충돌 (${classConflict.title || '금지시간'})`,
+      preferenceInsufficient: false,
+      requiredMinutes: travelTimeMinutes + classDurationMinutes,
+      availableMinutes: prefEndMinutes - prefStartMinutes,
+      dayOfWeek: dayOfWeek
+    };
+  }
+
+  // 7. ✅ 모든 검증 통과 - 배정 성공!
   console.log(`   ✅ 배정 성공!`);
-  console.log(`   → 이동: ${result.startTime} - ${actualTravelEndTime} (${travelTimeMinutes}분)`);
-  console.log(`   → 수업: ${actualTravelEndTime} - ${result.endTime}`);
-  console.log(`   ===== 완료 =====\n`);
+  console.log(`   → 이동: ${travelStartTime} - ${travelEndTime} (${travelTimeMinutes}분)`);
+  console.log(`   → 수업: ${travelEndTime} - ${classEndTime} (${classDurationMinutes}분)`);
+  console.log(`   ===== 완료 =====
+`);
 
   return {
     isValid: true,
     slot: {
-      travelStartTime: result.startTime,        // 이동 시작
-      travelEndTime: actualTravelEndTime,       // 이동 종료 (= 수업 시작)
-      startTime: actualTravelEndTime,           // 수업 시작
-      endTime: result.endTime,                  // 수업 종료
+      travelStartTime: travelStartTime,        // 이동 시작
+      travelEndTime: travelEndTime,           // 이동 종료 (= 수업 시작)
+      startTime: travelEndTime,               // 수업 시작
+      endTime: classEndTime,                  // 수업 종료
       waitTime: 0  // 이동 직후 바로 수업이므로 대기시간 0
     }
   };

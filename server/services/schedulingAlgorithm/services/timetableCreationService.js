@@ -187,6 +187,15 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
       // 병합된 스케줄 사용
       const schedulesToUse = mergedSchedules.length > 0 ? mergedSchedules : validSchedules;
 
+      // 🔥 FIX: specificDate가 있는 날짜들을 먼저 수집
+      const specificDateSet = new Set();
+      schedulesToUse.forEach(schedule => {
+        if (schedule.specificDate) {
+          const dateStr = new Date(schedule.specificDate).toISOString().split('T')[0];
+          specificDateSet.add(dateStr);
+        }
+      });
+
       schedulesToUse.forEach(schedule => {
         const { dayOfWeek, startTime, endTime, specificDate } = schedule;
         const schedulePriority = schedule.priority || priority;
@@ -230,10 +239,16 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
           const currentDate = new Date(ownerRangeStart);
           while (currentDate < ownerRangeEnd) {
             if (currentDate.getUTCDay() === dayOfWeek) {
+              // 🔥 FIX: 이 날짜에 specificDate 스케줄이 있으면 건너뛰기
+              const dateKey = currentDate.toISOString().split('T')[0];
+              if (specificDateSet.has(dateKey)) {
+                currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+                continue;
+              }
+
               const slots = generateTimeSlots(startTime, endTime);
 
               slots.forEach(slotTime => {
-                const dateKey = currentDate.toISOString().split('T')[0];
                 const key = createSlotKey(dateKey, slotTime);
 
                 // 방장이 가능한 시간대인지 확인

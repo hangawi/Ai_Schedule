@@ -586,11 +586,21 @@ export const handleValidateScheduleWithTransportMode = async (currentRoom, trans
         }
       });
 
+      // ✅ 이동수단 한글 변환
+      const transportModeNames = {
+        'normal': '일반',
+        'transit': '대중교통',
+        'walking': '도보',
+        'driving': '자동차'
+      };
+      const transportModeName = transportModeNames[transportMode] || transportMode;
+
       // ✅ 중복 제거 및 줄바꿈 처리
       const lines = [];
-      lines.push(`⚠️ ${transportMode} 모드는 현재 스케줄에 적합하지 않습니다.`);
+      lines.push(`⚠️ ${transportModeName} 모드는 현재 스케줄에 적합하지 않습니다.`);
       lines.push('');
       lines.push('📊 문제 요약:');
+      lines.push('');
 
       Object.values(memberWarnings).forEach(member => {
         // 중복 제거
@@ -598,15 +608,14 @@ export const handleValidateScheduleWithTransportMode = async (currentRoom, trans
 
         // 멤버당 표시
         if (uniqueIssues.length > 0) {
-          lines.push('');
-          lines.push(`👤 ${member.name}:`);
+          lines.push(`   ${member.name}`);
           uniqueIssues.forEach(issue => {
             lines.push(`   • ${issue}`);
           });
+          lines.push('');
         }
       });
 
-      lines.push('');
       lines.push('💡 다른 이동수단을 선택하거나, 멤버의 선호시간을 조정하세요.');
 
       // ✅ 실제 줄바꿈으로 결합

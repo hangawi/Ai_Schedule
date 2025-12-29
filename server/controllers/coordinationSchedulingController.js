@@ -1555,37 +1555,94 @@ exports.applyTravelMode = async (req, res) => {
 
       // ⚠️ Phase 3: 수업시간 슬롯만 저장 (이동시간 제외)
       // 이동시간 슬롯은 제외하고, 순수 수업시간만 저장
-      room.timeSlots = receivedTimeSlots
-        .filter(e => !e.isTravel && e.subject !== '이동시간')
-        .map((e, idx) => {
-          // ✅ 이동시간이 반영된 수업시간 사용
-          // (일반 모드로 복귀 시 room.originalTimeSlots에서 원본을 복원하므로 여기서는 변형된 시간을 저장해도 됨)
-          const adjustedStartTime = e.startTime;
-          const adjustedEndTime = e.endTime;
-
-          const newSlot = {
-            user: e.user._id || e.user,
-            date: e.date instanceof Date ? e.date : new Date(e.date),
-            day: e.day,
-            startTime: adjustedStartTime,  // ✅ 이동시간이 반영된 시작 시간
-            endTime: adjustedEndTime,      // ✅ 이동시간이 반영된 종료 시간
-            subject: e.subject || '자동 배정',
-            assignedBy: room.owner._id,
-            status: 'confirmed',
-            // 🆕 클라이언트에서 넘겨준 메타데이터 보존
-            adjustedForTravelTime: e.adjustedForTravelTime || false,
-            originalStartTime: e.originalStartTime,
-            originalEndTime: e.originalEndTime,
-            actualStartTime: e.actualStartTime,  // 이동시간 포함 시작
-            travelTimeBefore: e.travelTimeBefore // 이동시간(분)
-          };
-
-          if (idx < 5) {
-            console.log(`   [적용 ${idx}] ${e.subject}: ${adjustedStartTime}-${adjustedEndTime} (이동전 시작: ${e.actualStartTime || '없음'})`);
-          }
-
-          return newSlot;
+      
+      // 🔧 Step 3-1: 이동시간이 아닌 슬롯만 필터링
+      const classTimeSlots = receivedTimeSlots.filter(e => !e.isTravel && e.subject !== '이동시간');
+      
+      // 🔧 Step 3-2: 연속된 슬롯 병합 (같은 user, date, subject, 연속된 시간)
+      const mergeConsecutiveSlots = (slots) => {
+        if (slots.length === 0) return [];
+        
+        // 날짜/사용자/시작시간 순으로 정렬
+        const sorted = [...slots].sort((a, b) => {
+          const dateCompare = new Date(a.date) - new Date(b.date);
+          if (dateCompare !== 0) return dateCompare;
+          
+          const userA = (a.user._id || a.user).toString();
+          const userB = (b.user._id || b.user).toString();
+          const userCompare = userA.localeCompare(userB);
+          if (userCompare !== 0) return userCompare;
+          
+          return a.startTime.localeCompare(b.startTime);
         });
+        
+        const merged = [];
+        let current = { ...sorted[0] };
+        
+        for (let i = 1; i < sorted.length; i++) {
+          const next = sorted[i];
+          const currentUserId = (current.user._id || current.user).toString();
+          const nextUserId = (next.user._id || next.user).toString();
+          const currentDate = new Date(current.date).toISOString().split('T')[0];
+          const nextDate = new Date(next.date).toISOString().split('T')[0];
+          
+          // 병합 조건: 같은 user, 같은 날짜, 같은 subject, 연속된 시간
+          if (
+            currentUserId === nextUserId &&
+            currentDate === nextDate &&
+            current.subject === next.subject &&
+            current.endTime === next.startTime
+          ) {
+            // 연속된 슬롯이므로 endTime만 업데이트
+            current.endTime = next.endTime;
+            // originalEndTime도 업데이트 (있는 경우)
+            if (next.originalEndTime) {
+              current.originalEndTime = next.originalEndTime;
+            }
+          } else {
+            // 연속되지 않으므로 현재 슬롯을 저장하고 새로운 슬롯 시작
+            merged.push(current);
+            current = { ...next };
+          }
+        }
+        
+        // 마지막 슬롯 추가
+        merged.push(current);
+        
+        return merged;
+      };
+      
+      const mergedSlots = mergeConsecutiveSlots(classTimeSlots);
+      console.log(`   🔧 슬롯 병합: ${classTimeSlots.length}개 → ${mergedSlots.length}개`);
+      
+      // 🔧 Step 3-3: 병합된 슬롯을 DB 형식으로 변환
+      room.timeSlots = mergedSlots.map((e, idx) => {
+        // ✅ 이동시간이 반영된 수업시간 사용
+        const adjustedStartTime = e.startTime;
+        const adjustedEndTime = e.endTime;
+
+        const newSlot = {
+          user: e.user._id || e.user,
+          date: e.date instanceof Date ? e.date : new Date(e.date),
+          day: e.day,
+          startTime: adjustedStartTime,  // ✅ 이동시간이 반영된 시작 시간
+          endTime: adjustedEndTime,      // ✅ 이동시간이 반영된 종료 시간
+          subject: e.subject || '자동 배정',
+          assignedBy: room.owner._id,
+          status: 'confirmed',
+          // 🆕 클라이언트에서 넘겨준 메타데이터 보존
+          adjustedForTravelTime: e.adjustedForTravelTime || false,
+          originalStartTime: e.originalStartTime,
+          originalEndTime: e.originalEndTime,
+          actualStartTime: e.actualStartTime,  // 이동시간 포함 시작
+          travelTimeBefore: e.travelTimeBefore // 이동시간(분)
+        };
+
+        if (idx < 5) {
+          console.log(`   [적용 ${idx}] ${e.subject}: ${adjustedStartTime}-${adjustedEndTime} (이동전 시작: ${e.actualStartTime || '없음'})`)        }
+
+        return newSlot;
+      });
 
       console.log(`   ✅ timeSlots 교체 완료: ${room.timeSlots.length}개 (이동시간 슬롯 제외)`);
     }

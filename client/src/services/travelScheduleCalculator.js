@@ -1336,27 +1336,9 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                     console.log(`   현재 이동: ${this.formatTime(newTravelStartMinutes)}-${this.formatTime(newTravelEndTimeMinutes)}`);
                     console.log(`   현재 수업: ${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)}`);
 
-                    // ✅ 핵심 수정: 금지시간 **이후**로 시작하도록 조정
-                    const totalDuration = travelDurationMinutes + activityDurationMinutes;
-
-                    // 금지시간 이후로 이동시간 시작
-                    const adjustedStartTime = blockedEnd;
-                    const adjustedEndTime = adjustedStartTime + totalDuration;
-
-                    console.log(`   필요한 총 시간: ${totalDuration}분 (이동 ${travelDurationMinutes}분 + 수업 ${activityDurationMinutes}분)`);
-                    console.log(`   조정된 시작 시간: ${this.formatTime(adjustedStartTime)} (금지시간 ${blocked.endTime} 이후로 시작)`);
-                    console.log(`   조정된 종료 시간: ${this.formatTime(adjustedEndTime)}`);
-
-                    // 시작 시간 조정 (금지시간 이후에 모든 것이 시작하도록)
-                    newTravelStartMinutes = adjustedStartTime;
-                    newTravelEndTimeMinutes = adjustedStartTime + travelDurationMinutes;
-                    newActivityStartTimeMinutes = newTravelEndTimeMinutes;
-                    newActivityEndTimeMinutes = newActivityStartTimeMinutes + activityDurationMinutes;
-
-                    console.log(`✅ [금지시간 회피 성공] 조정 완료:`);
-                    console.log(`   이동: ${this.formatTime(newTravelStartMinutes)}-${this.formatTime(newTravelEndTimeMinutes)}`);
-                    console.log(`   수업: ${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)}`);
-                    console.log(`   시작 시간(${this.formatTime(newTravelStartMinutes)}) >= 금지시간 종료(${blocked.endTime}) ✅`);
+                    // 🔥 금지시간과 겹치면 재배정 필요 (수업시간을 밀지 않음)
+                    console.log(`   ⚠️  금지시간과 겹침 - 재배정 필요`);
+                    canPlace = false;
                     break;
                 }
             }
@@ -1727,15 +1709,23 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                     previousLocation = memberLocation;
                     continue;
                 } else {
-                    // 모든 요일에 배치 불가능 - 원본 슬롯 유지
-                    console.warn(`⚠️ [재배정 실패] 모든 요일에 배치 불가능 - 원본 슬롯 유지 (겹침 발생 가능)`);
-                    console.warn(`   원본: ${mergedSlot.startTime}-${mergedSlot.endTime}, 날짜: ${new Date(mergedSlot.date).toISOString().split('T')[0]}`);
-                    console.warn(`   경고: 이 슬롯은 선호시간 외이거나 다른 슬롯과 겹칠 수 있습니다.`);
+                    // 모든 요일에 배치 불가능 - 슬롯 숨김
+                    console.error(`
+❌❌❌ [재배정 실패] 모든 요일에 배치 불가능 ❌❌❌`);
+                    console.error(`   📍 사용자: ${userId}`);
+                    console.error(`   📅 원본 날짜: ${new Date(mergedSlot.date).toISOString().split('T')[0]}`);
+                    console.error(`   ⏰ 원본 시간: ${mergedSlot.startTime}-${mergedSlot.endTime}`);
+                    console.error(`   🚗 필요 이동시간: ${travelDurationMinutes}분`);
+                    console.error(`   📚 필요 수업시간: ${activityDurationMinutes}분`);
+                    console.error(`   ⏱️  총 필요시간: ${travelDurationMinutes + activityDurationMinutes}분`);
+                    console.error(`   ⚠️  문제: 이동시간 + 수업시간이 선호시간 블록을 초과합니다`);
+                    console.error(`   💡 해결: 선호시간을 늘리거나 다른 이동수단을 선택하세요`);
+                    console.error(`   🚫 결과: 이 슬롯은 표시하지 않습니다 (배치 불가)`);
                     
-                    // 원본 슬롯을 그대로 추가 (겹침이나 선호시간 외 경고와 함께)
-                    allResultSlots.push(...this.unmergeBlock(mergedSlot));
+                    // ❌ 원본 슬롯도 추가하지 않음 (선호시간 외 배치 방지)
+                    // allResultSlots.push(...this.unmergeBlock(mergedSlot));
                     
-                    // 다음 슬롯으로 이동 (아래 코드를 실행하지 않음)
+                    // 다음 슬롯으로 이동
                     continue;
                 }
             }

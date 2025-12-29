@@ -87,6 +87,15 @@ const createOwnerAvailableSlots = (owner, rangeStart, rangeEnd) => {
   let specificDateCount = 0;
   let recurringCount = 0;
 
+  // 🔥 FIX: specificDate가 있는 날짜들을 먼저 수집
+  const specificDateSet = new Set();
+  validSchedules.forEach(schedule => {
+    if (schedule.specificDate) {
+      const dateStr = new Date(schedule.specificDate).toISOString().split('T')[0];
+      specificDateSet.add(dateStr);
+    }
+  });
+
   validSchedules.forEach(schedule => {
     if (schedule.specificDate) specificDateCount++;
     else recurringCount++;
@@ -112,8 +121,14 @@ const createOwnerAvailableSlots = (owner, rangeStart, rangeEnd) => {
       const currentDate = new Date(rangeStart);
       while (currentDate < rangeEnd) {
         if (currentDate.getUTCDay() === dayOfWeek) {
-          const slots = generateTimeSlots(startTime, endTime);
+          // 🔥 FIX: 이 날짜에 specificDate 스케줄이 있으면 건너뛰기
           const dateKey = currentDate.toISOString().split('T')[0];
+          if (specificDateSet.has(dateKey)) {
+            currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+            continue;
+          }
+
+          const slots = generateTimeSlots(startTime, endTime);
 
           slots.forEach(slotTime => {
             ownerAvailableSlots.add(createSlotKey(dateKey, slotTime));

@@ -190,24 +190,41 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   const handleTravelModeChange = useCallback(async (newMode) => {
     console.log('🔄 [handleTravelModeChange] 이동수단 변경:', newMode);
 
-    // ✅ B안: 스케줄을 수정하지 않고 검증만 수행
-    // 1. 먼저 모드를 변경 (UI 표시용)
-    await handleTravelModeChangeInternal(newMode);
-
-    // 2. 일반 모드가 아니면 검증 수행
-    if (newMode !== 'normal' && currentRoom) {
-      console.log('🔍 [handleTravelModeChange] 검증 시작:', newMode);
-      
-      // 검증 수행 (경고만 표시, 스케줄은 수정 안 함)
-      await handleValidateScheduleWithTransportMode(
-        currentRoom,
-        newMode,
-        showAlert,
-        viewMode,
-        currentWeekStartDate
-      );
+    // ✅ 일반 모드는 항상 허용
+    if (newMode === 'normal') {
+      await handleTravelModeChangeInternal(newMode);
+      return;
     }
-  }, [handleTravelModeChangeInternal, currentRoom, showAlert, viewMode, currentWeekStartDate]);
+
+    // ✅ 다른 모드는 검증 후 모드 변경 (검증 실패해도 변경됨)
+    if (currentRoom) {
+      console.log('🔍 [handleTravelModeChange] 검증 시작:', newMode);
+
+      try {
+        // 1. 검증 수행 (경고만 표시)
+        const validationResult = await handleValidateScheduleWithTransportMode(
+          currentRoom,
+          newMode,
+          showAlert,
+          viewMode,
+          currentWeekStartDate
+        );
+
+        // 2. 검증 결과 로그 (실패해도 모드는 변경됨)
+        if (validationResult && !validationResult.isValid) {
+          console.log('⚠️ [handleTravelModeChange] 검증 실패 - 하지만 모드는 변경');
+        } else {
+          console.log('✅ [handleTravelModeChange] 검증 통과');
+        }
+
+        // 3. 검증 성공/실패 관계없이 모드 변경
+        await handleTravelModeChangeInternal(newMode);
+      } catch (error) {
+        console.error('❌ [handleTravelModeChange] 오류:', error);
+        showAlert('검증 중 오류가 발생했습니다.', 'error');
+      }
+    }
+  }, [handleTravelModeChangeInternal, currentRoom, showAlert, viewMode, currentWeekStartDate, handleValidateScheduleWithTransportMode]);
 
   // 이동수단 모드 확정 핸들러 (조원들에게 표시)
   const handleConfirmTravelMode = useCallback(async () => {

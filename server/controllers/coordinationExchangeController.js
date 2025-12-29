@@ -297,13 +297,51 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
       travelDurationMinutes = 0;
     }
 
-    // ④ 이동시간 슬롯 생성
+    // ④ 금지시간 체크 및 수업시간 조정
     console.log(`  📊 [슬롯 ${i+1}/${classSlots.length}] ${slot.startTime}-${slot.endTime}, 이동시간: ${travelDurationMinutes}분`);
 
     if (travelDurationMinutes > 0) {
-      const classStartMinutes = parseInt(slot.startTime.split(':')[0]) * 60 + parseInt(slot.startTime.split(':')[1]);
-      const travelStartMinutes = classStartMinutes - travelDurationMinutes;
-      const travelEndMinutes = classStartMinutes;
+      // 🔒 금지시간 정보 가져오기
+      const blockedTimes = room.settings?.blockedTimes || [];
+      const absoluteBlockedTime = {
+        name: '17-24시 절대 금지시간',
+        startTime: '17:00',
+        endTime: '24:00'
+      };
+      const allBlockedTimes = [...blockedTimes, absoluteBlockedTime];
+      let classStartMinutes = parseInt(slot.startTime.split(':')[0]) * 60 + parseInt(slot.startTime.split(':')[1]);
+      let classEndMinutes = parseInt(slot.endTime.split(':')[0]) * 60 + parseInt(slot.endTime.split(':')[1]);
+      const classDuration = classEndMinutes - classStartMinutes;
+      
+      let travelStartMinutes = classStartMinutes - travelDurationMinutes;
+      let travelEndMinutes = classStartMinutes;
+
+      // 🔒 금지시간 침범 체크
+      const travelStartTime = `${String(Math.floor(travelStartMinutes / 60)).padStart(2, '0')}:${String(travelStartMinutes % 60).padStart(2, '0')}`;
+      const travelEndTime = `${String(Math.floor(travelEndMinutes / 60)).padStart(2, '0')}:${String(travelEndMinutes % 60).padStart(2, '0')}`;
+      
+      const blockedTime = isTimeInBlockedRange(travelStartTime, travelEndTime, allBlockedTimes);
+      
+      if (blockedTime) {
+        console.log(`  ⚠️  [금지시간 침범] 이동시간 ${travelStartTime}-${travelEndTime}이(가) ${blockedTime.name || '금지시간'}(${blockedTime.startTime}-${blockedTime.endTime})과 겹침`);
+        
+        // 🔧 이동시간이 금지시간 이후부터 시작하도록 수업시간 조정
+        const blockedEndMinutes = parseInt(blockedTime.endTime.split(':')[0]) * 60 + parseInt(blockedTime.endTime.split(':')[1]);
+        
+        // 새로운 수업 시작 시간 = 금지시간 종료 + 이동시간
+        classStartMinutes = blockedEndMinutes + travelDurationMinutes;
+        classEndMinutes = classStartMinutes + classDuration;
+        
+        // 새로운 이동시간 계산 (금지시간 종료 후부터 시작)
+        travelStartMinutes = blockedEndMinutes;
+        travelEndMinutes = classStartMinutes;
+        
+        // ✅ slot의 시간 업데이트
+        slot.startTime = `${String(Math.floor(classStartMinutes / 60)).padStart(2, '0')}:${String(classStartMinutes % 60).padStart(2, '0')}`;
+        slot.endTime = `${String(Math.floor(classEndMinutes / 60)).padStart(2, '0')}:${String(classEndMinutes % 60).padStart(2, '0')}`;
+        
+        console.log(`  ✅ [수업시간 조정] ${slot.startTime}-${slot.endTime}로 이동 (금지시간 ${blockedTime.endTime} 이후 + 이동시간 ${travelDurationMinutes}분)`);
+      }
 
       // 시작 시간 계산
       const startHours = Math.floor(travelStartMinutes / 60);
@@ -1346,46 +1384,37 @@ exports.smartExchange = async (req, res) => {
 
       const newSlots = [];
 
-      // 수업 슬롯 생성 (사용자가 요청한 시간에 배치)
+      // 🔧 수업 슬롯 생성 (하나의 병합된 슬롯으로)
       const activityStartMinutes = newStartMinutes;
-      const numActivitySlots = Math.ceil(activityDurationMinutes / 10);
 
-      for (let i = 0; i < numActivitySlots; i++) {
-        const slotStartMinutes = activityStartMinutes + (i * 10);
-        const slotEndMinutes = slotStartMinutes + 10;
-        const currentTime = minutesToTime(slotStartMinutes);
-        const slotEndTime = minutesToTime(slotEndMinutes);
+      // ✅ 10분 단위로 쪼개지 않고, 하나의 큰 슬롯으로 저장
+      const slotData = {
+        user: req.user.id,
+        date: targetDate,
+        startTime: finalNewStartTime,  // ✅ 전체 시작 시간
+        endTime: finalNewEndTime,       // ✅ 전체 종료 시간
+        day: targetDayEnglish,
+        priority: allSlotsInBlock[0]?.priority || 3,
+        subject: '자동 배정',
+        assignedBy: room.owner._id,
+        assignedAt: new Date(),
+        status: 'confirmed',
+        location: allSlotsInBlock[0]?.location,
+        // ✅ 메타데이터 초기화 (재계산 후 설정됨)
+        originalStartTime: undefined,
+        originalEndTime: undefined,
+        adjustedForTravelTime: false
+      };
 
-        // 🆕 Phase 3: 조원 프라이버시 보호 - 첫 번째 슬롯에만 이동시간 메타데이터 저장
-        const slotData = {
-          user: req.user.id,
-          date: targetDate,
-          startTime: currentTime,  // ✅ 조원이 요청한 순수 수업 시간
-          endTime: slotEndTime,
-          day: targetDayEnglish,
-          priority: allSlotsInBlock[0]?.priority || 3,
-          subject: '자동 배정',
-          assignedBy: room.owner._id,
-          assignedAt: new Date(),
-          status: 'confirmed',
-          location: allSlotsInBlock[0]?.location,
-          // ✅ 메타데이터 초기화 (재계산 후 설정됨)
-          originalStartTime: undefined,
-          originalEndTime: undefined,
-          adjustedForTravelTime: false
-        };
-
-        // 🆕 첫 번째 슬롯: 이동시간 메타데이터 저장 (조원에게 절대 노출 금지!)
-        if (i === 0 && travelDurationMinutes > 0) {
-          const actualStartMinutes = activityStartMinutes - travelDurationMinutes;
-          slotData.actualStartTime = minutesToTime(actualStartMinutes);
-          slotData.travelTimeBefore = travelDurationMinutes;
-        }
-
-        newSlots.push(slotData);
+      // 🆕 이동시간 메타데이터 저장 (조원에게 절대 노출 금지!)
+      if (travelDurationMinutes > 0) {
+        const actualStartMinutes = activityStartMinutes - travelDurationMinutes;
+        slotData.actualStartTime = minutesToTime(actualStartMinutes);
+        slotData.travelTimeBefore = travelDurationMinutes;
       }
 
-      room.timeSlots.push(...newSlots);
+      room.timeSlots.push(slotData);
+      console.log(`  ✅ [슬롯 생성] ${finalNewStartTime}-${finalNewEndTime} (병합된 1개 슬롯)`);
 
       // 🆕 이동시간 재계산: 원본 날짜와 목표 날짜 모두
       console.log('🔥🔥🔥 [smartExchange Case 1] 이동시간 재계산 시작!', {
@@ -1395,12 +1424,12 @@ exports.smartExchange = async (req, res) => {
       });
       console.log('🔥 [Case 1] 재계산 전 슬롯 개수:', room.timeSlots.length);
       
-      // ✅ 수정: effectiveTravelMode와 userId를 명시적으로 전달 (이동한 사용자만 재계산)
-      await recalculateTravelTimeSlotsForDate(room, new Date(allSlotsInBlock[0].date), room.owner._id, effectiveTravelMode, req.user.id);
-      console.log('🔥 [Case 1] 첫 번째 재계산 완료');
+      // ✅ 수정: 모든 사용자의 이동시간 재계산 (targetUserId = null)
+      await recalculateTravelTimeSlotsForDate(room, new Date(allSlotsInBlock[0].date), room.owner._id, effectiveTravelMode, null);
+      console.log('🔥 [Case 1] 첫 번째 재계산 완료 (원래 날짜 - 모든 사용자)');
       
-      await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode, req.user.id);
-      console.log('🔥 [Case 1] 두 번째 재계산 완료');
+      await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode, null);
+      console.log('🔥 [Case 1] 두 번째 재계산 완료 (도착 날짜 - 모든 사용자)');
 
       console.log('✅ [smartExchange Case 1] 이동시간 재계산 완료');
       const travelSlots = room.timeSlots.filter(s => s.isTravel);
@@ -1506,40 +1535,31 @@ exports.smartExchange = async (req, res) => {
           return !((slotDate === oldSlotDate || slotDate === targetDateStr) && slot.isTravel && slotUserIdStr === myUserIdStr);
         });
 
-        // 수업 슬롯 생성 (이동시간 없이)
+        // 🔧 수업 슬롯 생성 (하나의 병합된 슬롯으로)
         const classStartMinutes = foundSlot.start;
         const classEndMinutes = foundSlot.end;
-        const classTotalMinutes = classEndMinutes - classStartMinutes;
-        const classNumSlots = Math.ceil(classTotalMinutes / 10);
 
-        let currentTimeMinutes = classStartMinutes;
-        for (let i = 0; i < classNumSlots; i++) {
-          const slotEndTimeMinutes = currentTimeMinutes + 10;
-          const currentTime = minutesToTime(currentTimeMinutes);
-          const slotEndTime = minutesToTime(slotEndTimeMinutes);
+        // ✅ 10분 단위로 쪼개지 않고, 하나의 큰 슬롯으로 저장
+        const classSlotData = {
+          user: req.user.id,
+          date: targetDate,
+          startTime: autoStartTime,  // ✅ 전체 시작 시간
+          endTime: autoEndTime,       // ✅ 전체 종료 시간
+          day: targetDayEnglish,
+          priority: allSlotsInBlock[0].priority || 3,
+          subject: allSlotsInBlock[0].subject || '자동 배정',
+          assignedBy: room.owner._id,
+          assignedAt: new Date(),
+          status: 'confirmed',
+          location: allSlotsInBlock[0]?.location,
+          // ✅ 메타데이터 초기화 (재계산 후 설정됨)
+          originalStartTime: undefined,
+          originalEndTime: undefined,
+          adjustedForTravelTime: false
+        };
 
-          // 🆕 Phase 3: 조원 프라이버시 보호
-          const classSlotData = {
-            user: req.user.id,
-            date: targetDate,
-            startTime: currentTime,  // ✅ 조원에게 보이는 수업 시작 시간
-            endTime: slotEndTime,
-            day: targetDayEnglish,
-            priority: allSlotsInBlock[i % allSlotsInBlock.length].priority || 3,
-            subject: allSlotsInBlock[i % allSlotsInBlock.length].subject || '자동 배정',
-            assignedBy: room.owner._id,
-            assignedAt: new Date(),
-            status: 'confirmed',
-            location: allSlotsInBlock[0]?.location,
-            // ✅ 메타데이터 초기화 (재계산 후 설정됨)
-            originalStartTime: undefined,
-            originalEndTime: undefined,
-            adjustedForTravelTime: false
-          };
-
-          room.timeSlots.push(classSlotData);
-          currentTimeMinutes = slotEndTimeMinutes;
-        }
+        room.timeSlots.push(classSlotData);
+        console.log(`  ✅ [슬롯 생성] ${autoStartTime}-${autoEndTime} (병합된 1개 슬롯)`);
 
         // ✅ 이동시간 재계산 (Case 1과 동일한 방식) - 이동한 사용자만 재계산
         console.log('🔥🔥🔥 [smartExchange Case 2] 이동시간 재계산 시작!', {
@@ -1550,11 +1570,11 @@ exports.smartExchange = async (req, res) => {
         });
         console.log('🔥 [Case 2] 재계산 전 슬롯 개수:', room.timeSlots.length);
         
-        await recalculateTravelTimeSlotsForDate(room, new Date(oldSlotDate), room.owner._id, effectiveTravelMode, req.user.id);
-        console.log('🔥 [Case 2] 첫 번째 재계산 완료');
+        await recalculateTravelTimeSlotsForDate(room, new Date(oldSlotDate), room.owner._id, effectiveTravelMode, null);
+        console.log('🔥 [Case 2] 첫 번째 재계산 완료 (원래 날짜 - 모든 사용자)');
         
-        await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode, req.user.id);
-        console.log('🔥 [Case 2] 두 번째 재계산 완료');
+        await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode, null);
+        console.log('🔥 [Case 2] 두 번째 재계산 완료 (도착 날짜 - 모든 사용자)');
         
         console.log('✅ [smartExchange Case 2] 이동시간 재계산 완료');
         const travelSlots = room.timeSlots.filter(s => s.isTravel);
