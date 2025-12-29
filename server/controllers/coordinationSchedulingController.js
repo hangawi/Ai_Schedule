@@ -2079,10 +2079,27 @@ exports.validateScheduleWithTransportMode = async (req, res) => {
 
         // ✅ 이 요일의 선호시간 확인 (dayOfWeek 숫자로 비교)
         const targetDayOfWeek = dayOfWeekMap[dayEn];
-        console.log(`      선호시간 검색: dayOfWeek=${targetDayOfWeek} 또는 day=${dayEn}`);
+        
+        // ✅ 해당 요일의 실제 날짜 찾기 (이번 주에서)
+        let targetDate = null;
+        daySlots.forEach(slot => {
+          if (!targetDate) {
+            targetDate = new Date(slot.date);
+          }
+        });
+        
+        console.log(`      선호시간 검색: dayOfWeek=${targetDayOfWeek} 또는 day=${dayEn}, 날짜=${targetDate ? targetDate.toISOString().split('T')[0] : 'N/A'}`);
 
         const preferredSchedules = (memberUser.defaultSchedule || []).filter(s => {
-          // defaultSchedule은 dayOfWeek(숫자) 또는 day(문자열) 둘 다 가능
+          // specificDate가 있으면 정확한 날짜로 필터링
+          if (s.specificDate) {
+            const scheduleDate = new Date(s.specificDate);
+            const targetDateStr = targetDate ? targetDate.toISOString().split('T')[0] : null;
+            const scheduleDateStr = scheduleDate.toISOString().split('T')[0];
+            return scheduleDateStr === targetDateStr;
+          }
+          
+          // specificDate가 없으면 dayOfWeek로 필터링 (반복 스케줄)
           return s.dayOfWeek === targetDayOfWeek || s.day === dayEn;
         });
         
