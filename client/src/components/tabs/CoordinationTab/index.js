@@ -202,10 +202,12 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       await handleValidateScheduleWithTransportMode(
         currentRoom,
         newMode,
-        showAlert
+        showAlert,
+        viewMode,
+        currentWeekStartDate
       );
     }
-  }, [handleTravelModeChangeInternal, currentRoom, showAlert]);
+  }, [handleTravelModeChangeInternal, currentRoom, showAlert, viewMode, currentWeekStartDate]);
 
   // 이동수단 모드 확정 핸들러 (조원들에게 표시)
   const handleConfirmTravelMode = useCallback(async () => {

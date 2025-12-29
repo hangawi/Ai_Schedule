@@ -1847,13 +1847,15 @@ exports.setAutoConfirmDuration = async (req, res) => {
 exports.validateScheduleWithTransportMode = async (req, res) => {
   try {
     const { roomId } = req.params;
-    const { transportMode } = req.body;
+    const { transportMode, viewMode, weekStartDate } = req.body;
 
-    console.log('\n\n' + '🔍'.repeat(50));
+    console.log('' + '🔍'.repeat(50));
     console.log('🔍 [validateScheduleWithTransportMode] 스케줄 검증 시작');
     console.log(`   roomId: ${roomId}`);
     console.log(`   transportMode: ${transportMode}`);
-    console.log('🔍'.repeat(50) + '\n');
+    console.log(`   viewMode: ${viewMode}`);
+    console.log(`   weekStartDate: ${weekStartDate}`);
+    console.log('🔍'.repeat(50) + '');
 
     // 1. 방 조회
     const room = await Room.findById(roomId)
@@ -1870,9 +1872,25 @@ exports.validateScheduleWithTransportMode = async (req, res) => {
     }
 
     // 3. 현재 스케줄 확인 (자동배정된 슬롯만)
-    const autoAssignedSlots = room.timeSlots.filter(slot =>
+    let autoAssignedSlots = room.timeSlots.filter(slot =>
       slot.assignedBy && slot.status === 'confirmed' && !slot.isTravel
     );
+
+    // ✅ viewMode에 따라 슬롯 필터링
+    if (viewMode === 'week' && weekStartDate) {
+      const weekStart = new Date(weekStartDate);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+
+      console.log(`📅 주간 모드: ${weekStart.toLocaleDateString()} ~ ${weekEnd.toLocaleDateString()}`);
+
+      autoAssignedSlots = autoAssignedSlots.filter(slot => {
+        const slotDate = new Date(slot.date);
+        return slotDate >= weekStart && slotDate < weekEnd;
+      });
+
+      console.log(`   필터링 후 슬롯 수: ${autoAssignedSlots.length}개`);
+    }
 
     if (autoAssignedSlots.length === 0) {
       return res.status(400).json({ 

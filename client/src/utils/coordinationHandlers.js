@@ -521,9 +521,11 @@ export const createChangeRequestData = (slotToChange, currentRoom, user) => {
  * @param {object} currentRoom - 현재 방 정보 객체.
  * @param {string} transportMode - 검증할 이동수단 모드 ('normal', 'transit', 'driving', 'walking', 'bicycling').
  * @param {function} showAlert - 사용자에게 알림을 표시하는 함수.
+ * @param {string} viewMode - 현재 보기 모드 ('week' 또는 'month').
+ * @param {Date} currentWeekStartDate - 주간 모드일 때 현재 주의 시작 날짜.
  * @returns {Promise<object>} 검증 결과 { isValid, warnings }
  */
-export const handleValidateScheduleWithTransportMode = async (currentRoom, transportMode, showAlert) => {
+export const handleValidateScheduleWithTransportMode = async (currentRoom, transportMode, showAlert, viewMode, currentWeekStartDate) => {
   try {
     console.log('\n' + '🔍'.repeat(50));
     console.log('🔍 [handleValidateScheduleWithTransportMode] 스케줄 검증 시작');
@@ -534,7 +536,9 @@ export const handleValidateScheduleWithTransportMode = async (currentRoom, trans
     // 1. API 호출하여 검증 수행
     const response = await coordinationService.validateScheduleWithTransportMode(
       currentRoom._id,
-      transportMode
+      transportMode,
+      viewMode,
+      currentWeekStartDate
     );
 
     console.log('✅ [handleValidateScheduleWithTransportMode] 검증 결과:', response);

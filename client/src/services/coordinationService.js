@@ -665,12 +665,14 @@ export const coordinationService = {
    * 기존 스케줄을 다른 이동수단 모드로 검증합니다 (수정하지 않음)
    * @param {string} roomId - 방 ID
    * @param {string} transportMode - 검증할 이동수단 모드
+   * @param {string} viewMode - 보기 모드 ('week' 또는 'month')
+   * @param {Date} currentWeekStartDate - 주간 모드일 때 현재 주의 시작 날짜
    * @returns {Promise<object>} { success, isValid, transportMode, warnings, msg }
    */
-  async validateScheduleWithTransportMode(roomId, transportMode) {
+  async validateScheduleWithTransportMode(roomId, transportMode, viewMode, currentWeekStartDate) {
     const token = await getAuthToken();
 
-    console.log('🔍 [validateScheduleWithTransportMode] 호출:', { roomId, transportMode });
+    console.log('🔍 [validateScheduleWithTransportMode] 호출:', { roomId, transportMode, viewMode, currentWeekStartDate });
 
     const response = await fetch(
       `${API_BASE_URL}/api/coordination/rooms/${roomId}/validate-schedule`,
@@ -680,7 +682,11 @@ export const coordinationService = {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ transportMode })
+        body: JSON.stringify({ 
+          transportMode,
+          viewMode,
+          weekStartDate: currentWeekStartDate ? new Date(currentWeekStartDate).toISOString() : null
+        })
       }
     );
 
