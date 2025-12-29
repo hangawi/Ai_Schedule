@@ -263,11 +263,11 @@ const WeekView = ({
     const currentUserId = currentUser._id || currentUser.id;
     const currentTimeMinutes = timeToMinutes(currentTime);
 
-    // 같은 날짜의 현재 사용자 수업만 필터링
+    // 🔧 같은 날짜의 모든 사용자 수업 필터링 (A, B 등 모두 포함)
     const sameDayClasses = timeSlots.filter(slot => {
       const slotDate = slot.date ? new Date(slot.date).toISOString().split('T')[0] : null;
-      const slotUserId = slot.user?._id || slot.user?.id || slot.user;
-      return slotDate === dateStr && slotUserId === currentUserId;
+      // ✅ 모든 사용자의 수업 포함 (이동시간 제외)
+      return slotDate === dateStr && !slot.isTravel;
     });
 
     if (sameDayClasses.length === 0) {
@@ -290,11 +290,20 @@ const WeekView = ({
     }
 
     if (previousClass) {
-      // 이전 수업 있으면: 이전 수업 끝 → 현재 시간
       const prevEndMinutes = timeToMinutes(previousClass.endTime);
-      const duration = currentTimeMinutes - prevEndMinutes;
-      console.log(`🚗 [동적 이동시간] ${currentTime} - 이전 수업 있음: ${previousClass.endTime} → ${currentTime} = ${duration}분`);
-      return duration;
+      const prevUserId = previousClass.user?._id || previousClass.user?.id || previousClass.user;
+      
+      // 🔧 이전 수업이 다른 사용자의 것인지 확인
+      if (prevUserId !== currentUserId) {
+        // ✅ 다른 사용자 → 다른 사용자: 최소 이동시간 (10분)
+        console.log(`🚗 [동적 이동시간] ${currentTime} - 다른 사용자(${previousClass.user?.firstName || prevUserId})의 수업 뒤: 최소 10분`);
+        return 10;
+      } else {
+        // ✅ 같은 사용자: 시간 간격 (연속 수업)
+        const duration = currentTimeMinutes - prevEndMinutes;
+        console.log(`🚗 [동적 이동시간] ${currentTime} - 내 이전 수업 있음: ${previousClass.endTime} → ${currentTime} = ${duration}분`);
+        return duration;
+      }
     } else {
       // 이전 수업 없으면: 방장 → 현재 시간
       console.log(`🚗 [동적 이동시간] ${currentTime} - 이전 수업 없음: 방장 → 현재 = ${myTravelDuration}분`);
