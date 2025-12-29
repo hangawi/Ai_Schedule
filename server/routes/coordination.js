@@ -74,6 +74,9 @@ router.post('/rooms/:roomId/confirm-travel-mode', auth, coordinationSchedulingCo
 // Set auto-confirm timer duration
 router.put('/rooms/:roomId/auto-confirm-duration', auth, coordinationSchedulingController.setAutoConfirmDuration);
 
+// Validate schedule with transport mode (without modifying it)
+router.post('/rooms/:roomId/validate-schedule', auth, coordinationSchedulingController.validateScheduleWithTransportMode);
+
 // Request management
 router.post('/requests', auth, coordinationController.createRequest);
 // 🔧 더 구체적인 라우트를 먼저 배치

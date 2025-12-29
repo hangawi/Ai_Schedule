@@ -19,7 +19,12 @@
       "Bash(npm run build:*)",
       "Bash(npm start)",
       "mcp__serena__find_referencing_symbols",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(dir /B /S)",
+      "Bash(node -c:*)",
+      "Bash(powershell -Command \"\\(Get-Content ''server\\\\controllers\\\\coordinationSchedulingController.js''\\).Count\")",
+      "Bash(powershell -Command:*)",
+      "Bash(Select-String -Pattern \"Failed to compile\" -Context 5)"
     ]
   }
 }

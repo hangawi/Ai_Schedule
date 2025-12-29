@@ -150,6 +150,11 @@ export const handleRunAutoSchedule = async (
   viewMode = 'week',
   travelMode = 'normal' // Add travelMode parameter
 ) => {
+  console.log('\n\n' + '🚨'.repeat(50));
+  console.log('🔥🔥🔥 handleRunAutoSchedule 호출됨! (프론트엔드)');
+  console.log('전달받은 travelMode:', travelMode);
+  console.log('🚨'.repeat(50) + '\n');
+
   if (!currentRoom || !currentWeekStartDate) {
     showAlert('현재 방 정보나 주차 정보가 없습니다.');
     return;
@@ -271,7 +276,46 @@ export const handleRunAutoSchedule = async (
     // 🔍 응답 상세 로그
     // 응답 받음
     
-    const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions } = response;
+    const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions, warnings } = response;
+    
+    // ===== warnings 처리 (선호시간 부족 알림) =====
+    if (warnings && warnings.length > 0) {
+      console.log('⚠️ [자동배정] warnings 수신:', warnings);
+      
+      // warnings를 유형별로 분류
+      const noPreferenceMembers = warnings.filter(w => w.type === 'no_preference');
+      const insufficientMembers = warnings.filter(w => w.type === 'insufficient_preference');
+      const otherFailures = warnings.filter(w => w.type === 'assignment_failed');
+      
+      // 알림 메시지 생성
+      let alertMessage = '⚠️ 일부 멤버를 배정할 수 없습니다:\n\n';
+      
+      if (noPreferenceMembers.length > 0) {
+        alertMessage += '📅 선호시간 미설정:\n';
+        noPreferenceMembers.forEach(w => {
+          alertMessage += `  - ${w.memberName}\n`;
+        });
+        alertMessage += '\n';
+      }
+      
+      if (insufficientMembers.length > 0) {
+        alertMessage += '⏰ 선호시간 부족:\n';
+        insufficientMembers.forEach(w => {
+          alertMessage += `  - ${w.memberName}: 필요 ${w.requiredMinutes}분, 가용 ${w.availableMinutes}분\n`;
+        });
+        alertMessage += '\n';
+      }
+      
+      if (otherFailures.length > 0) {
+        alertMessage += '❌ 기타 배정 실패:\n';
+        otherFailures.forEach(w => {
+          alertMessage += `  - ${w.memberName}: ${w.message}\n`;
+        });
+      }
+      
+      // 사용자에게 알림 표시
+      showAlert(alertMessage);
+    }
 
     // 배정된 슬롯들의 상세 정보 출력
     if (updatedRoom.timeSlots && updatedRoom.timeSlots.length > 0) {
@@ -467,5 +511,112 @@ export const createChangeRequestData = (slotToChange, currentRoom, user) => {
       targetUserId: slotToChange.targetUserId,
       message: '자리를 요청합니다.',
     };
+  }
+};
+
+
+/**
+ * handleValidateScheduleWithTransportMode
+ * @description 기존 스케줄을 다른 이동수단 모드로 검증합니다 (스케줄을 수정하지 않음).
+ * @param {object} currentRoom - 현재 방 정보 객체.
+ * @param {string} transportMode - 검증할 이동수단 모드 ('normal', 'transit', 'driving', 'walking', 'bicycling').
+ * @param {function} showAlert - 사용자에게 알림을 표시하는 함수.
+ * @returns {Promise<object>} 검증 결과 { isValid, warnings }
+ */
+export const handleValidateScheduleWithTransportMode = async (currentRoom, transportMode, showAlert) => {
+  try {
+    console.log('\n' + '🔍'.repeat(50));
+    console.log('🔍 [handleValidateScheduleWithTransportMode] 스케줄 검증 시작');
+    console.log(`   roomId: ${currentRoom._id}`);
+    console.log(`   transportMode: ${transportMode}`);
+    console.log('🔍'.repeat(50) + '\n');
+
+    // 1. API 호출하여 검증 수행
+    const response = await coordinationService.validateScheduleWithTransportMode(
+      currentRoom._id,
+      transportMode
+    );
+
+    console.log('✅ [handleValidateScheduleWithTransportMode] 검증 결과:', response);
+
+    // 2. 검증 결과 처리
+    if (response.success && response.isValid) {
+      // 검증 성공
+      console.log('✅ 스케줄이 유효합니다!');
+      // 성공 시 알림 표시 (옵션)
+      // showAlert(`${transportMode} 모드로 스케줄이 유효합니다.`, 'success');
+      return { isValid: true, warnings: [] };
+    } else if (response.success && !response.isValid) {
+      // 검증 실패 - 경고 표시
+      console.log('⚠️ 스케줄 검증 실패:', response.warnings);
+      
+      const warnings = response.warnings || [];
+      
+      // ✅ 멤버별로 그룹화
+      const memberWarnings = {};
+      
+      warnings.forEach(w => {
+        const memberName = w.memberName;
+        if (!memberWarnings[memberName]) {
+          memberWarnings[memberName] = {
+            name: memberName,
+            issues: []
+          };
+        }
+        
+        // 문제 유형별로 간단한 메시지 추가 (백엔드에서 이미 한글로 변환됨)
+        if (w.type === 'insufficient_preference') {
+          memberWarnings[memberName].issues.push(
+            `${w.day} 선호시간 부족 (필요 ${w.requiredMinutes}분, 가용 ${w.availableMinutes}분)`
+          );
+        } else if (w.type === 'no_preference_for_day') {
+          memberWarnings[memberName].issues.push(
+            `${w.day} 선호시간 없음`
+          );
+        } else if (w.type === 'no_address') {
+          memberWarnings[memberName].issues.push('주소 정보 없음');
+        } else if (w.type === 'travel_time_error') {
+          memberWarnings[memberName].issues.push('이동시간 계산 실패');
+        } else if (w.type === 'not_assigned') {
+          memberWarnings[memberName].issues.push('스케줄에 배정되지 않음');
+        }
+      });
+
+      // ✅ 중복 제거 및 줄바꿈 처리
+      const lines = [];
+      lines.push(`⚠️ ${transportMode} 모드는 현재 스케줄에 적합하지 않습니다.`);
+      lines.push('');
+      lines.push('📊 문제 요약:');
+
+      Object.values(memberWarnings).forEach(member => {
+        // 중복 제거
+        const uniqueIssues = [...new Set(member.issues)];
+
+        // 멤버당 표시
+        if (uniqueIssues.length > 0) {
+          lines.push('');
+          lines.push(`👤 ${member.name}:`);
+          uniqueIssues.forEach(issue => {
+            lines.push(`   • ${issue}`);
+          });
+        }
+      });
+
+      lines.push('');
+      lines.push('💡 다른 이동수단을 선택하거나, 멤버의 선호시간을 조정하세요.');
+
+      // ✅ 실제 줄바꿈으로 결합
+      const alertMessage = lines.join('\n');
+
+      showAlert(alertMessage, 'warning');
+      
+      return { isValid: false, warnings };
+    } else {
+      throw new Error(response.msg || '스케줄 검증에 실패했습니다.');
+    }
+  } catch (error) {
+    console.error('❌ [handleValidateScheduleWithTransportMode] 오류:', error);
+    showAlert(`스케줄 검증 실패: ${error.message}`, 'error');
+    return { isValid: false, warnings: [], error: error.message };
   }
 };

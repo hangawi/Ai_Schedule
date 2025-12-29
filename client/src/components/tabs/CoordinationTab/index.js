@@ -54,7 +54,8 @@ import { getViewMode } from '../../../utils/coordinationModeUtils';
 import {
   handleResetCarryOverTimes,
   handleResetCompletedTimes,
-  handleRunAutoSchedule
+  handleRunAutoSchedule,
+  handleValidateScheduleWithTransportMode
 } from '../../../utils/coordinationHandlers';
 
 // Components
@@ -187,8 +188,24 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
   // 이동수단 모드 변경 핸들러
   const handleTravelModeChange = useCallback(async (newMode) => {
+    console.log('🔄 [handleTravelModeChange] 이동수단 변경:', newMode);
+
+    // ✅ B안: 스케줄을 수정하지 않고 검증만 수행
+    // 1. 먼저 모드를 변경 (UI 표시용)
     await handleTravelModeChangeInternal(newMode);
-  }, [handleTravelModeChangeInternal]);
+
+    // 2. 일반 모드가 아니면 검증 수행
+    if (newMode !== 'normal' && currentRoom) {
+      console.log('🔍 [handleTravelModeChange] 검증 시작:', newMode);
+      
+      // 검증 수행 (경고만 표시, 스케줄은 수정 안 함)
+      await handleValidateScheduleWithTransportMode(
+        currentRoom,
+        newMode,
+        showAlert
+      );
+    }
+  }, [handleTravelModeChangeInternal, currentRoom, showAlert]);
 
   // 이동수단 모드 확정 핸들러 (조원들에게 표시)
   const handleConfirmTravelMode = useCallback(async () => {
@@ -684,11 +701,9 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
   const handleRunAutoScheduleCallback = async () => {
     await handleRunAutoSchedule(currentRoom, currentWeekStartDate, user, scheduleOptions, setIsScheduling, setScheduleError, setUnassignedMembersInfo, setConflictSuggestions, setCurrentRoom, showAlert, viewMode, travelMode);
-    
-    // ⚠️ 자동배정 완료 후 이동시간 모드를 일반 모드로 리셋
-    // (무한 루프 방지 및 성능 최적화)
-    // 사용자가 원하면 다시 이동시간 모드를 선택할 수 있음
-    await handleTravelModeChange('normal'); // await 추가!
+
+    // ✅ 수정: 모드 리셋 제거 - 사용자가 선택한 모드 유지
+    // (이동수단 모드 변경 시 자동으로 재배정되므로 리셋 불필요)
   };
 
   const handleDeleteAllSlots = () => setShowDeleteConfirm(true);
@@ -761,7 +776,8 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     try {
       const updatedRoom = await coordinationService.deleteAllTimeSlots(currentRoom._id);
       setCurrentRoom(updatedRoom);
-      handleTravelModeChange('normal'); // 교통수단 상태 초기화
+      // ✅ 전체비우기는 스케줄이 없으므로 검증 없이 모드만 변경
+      await handleTravelModeChangeInternal('normal');
       showAlert('시간표가 모두 삭제되었습니다.');
     } catch (error) {
       showAlert(`시간표 삭제에 실패했습니다: ${error.message}`, 'error');

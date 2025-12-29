@@ -39,8 +39,11 @@ const assignByPublicTransport = async (
     roomExceptions = []     // 추가
   } = options;
 
-  console.log('\n🚌 ===== 대중교통 모드 배정 시작 =====');
+  console.log('🚌 ===== 대중교통 모드 배정 시작 =====');
   console.log(`   이동수단: ${transportMode}, 최소 수업시간: ${minClassDurationMinutes}분`);
+  
+  // ===== 알림 수집용 배열 =====
+  const warnings = [];
 
   // 모든 슬롯을 날짜/시간 순으로 정렬
   const sortedKeys = Object.keys(timetable).sort();
@@ -62,7 +65,11 @@ const assignByPublicTransport = async (
 
   // 요일별 순차 배정
   for (const [dayOfWeek, daySlotKeys] of Object.entries(slotsByDay)) {
-    console.log(`\n📅 [${DAY_MAP[dayOfWeek]}] 배정 시작`);
+    console.log(`
+
+${'='.repeat(60)}`);
+    console.log(`📅📅📅 [${DAY_MAP[dayOfWeek]}] 배정 시작 (요일 코드: ${dayOfWeek})`);
+    console.log(`${'='.repeat(60)}`);
 
     // 아직 배정되지 않은 멤버 목록
     let unassignedMembers = members.filter(m => {
@@ -114,6 +121,9 @@ const assignByPublicTransport = async (
 
     // 순차적으로 가장 가까운 멤버 찾아서 배정
     while (unassignedMembers.length > 0) {
+      console.log(`
+🔍 [배정 시도] 현재 요일: ${DAY_MAP[dayOfWeek]} (dayOfWeek: ${dayOfWeek}), 남은 멤버: ${unassignedMembers.length}명`);
+      
       const result = await findNearestMemberWithSufficientTime({
         currentLocation,
         currentEndTime: currentEndTime || '09:00', // 첫 배정은 09:00부터
@@ -131,9 +141,53 @@ const assignByPublicTransport = async (
         break;
       }
 
-      const { member, slot, travelTimeMinutes } = result;
+      // ===== allFailed 처리: 실패 정보를 warnings에 추가 =====
+      if (result.allFailed) {
+        console.log(`   ⚠️  [${DAY_MAP[dayOfWeek]}] 모든 멤버 배정 실패:`);
+        result.failedMembers.forEach(fm => {
+          if (fm.hasNoPreference) {
+            console.log(`     - ${fm.memberName}: ${fm.reason}`);
+            warnings.push({
+              type: 'no_preference',
+              memberId: fm.memberId,
+              memberName: fm.memberName,
+              message: `${fm.memberName}님은 선호시간이 설정되지 않았습니다.`,
+              day: DAY_MAP[dayOfWeek]
+            });
+          } else if (fm.preferenceInsufficient) {
+            console.log(`     - ${fm.memberName}: 선호시간 부족 (필요: ${fm.requiredMinutes}분, 가용: ${fm.availableMinutes}분)`);
+            warnings.push({
+              type: 'insufficient_preference',
+              memberId: fm.memberId,
+              memberName: fm.memberName,
+              message: `${fm.memberName}님의 선호시간이 부족합니다 (필요: ${fm.requiredMinutes}분, 가용: ${fm.availableMinutes}분)`,
+              requiredMinutes: fm.requiredMinutes,
+              availableMinutes: fm.availableMinutes,
+              day: fm.dayOfWeek || DAY_MAP[dayOfWeek]
+            });
+          } else {
+            console.log(`     - ${fm.memberName}: ${fm.reason}`);
+            warnings.push({
+              type: 'assignment_failed',
+              memberId: fm.memberId,
+              memberName: fm.memberName,
+              message: `${fm.memberName}님을 배정할 수 없습니다: ${fm.reason}`,
+              day: DAY_MAP[dayOfWeek]
+            });
+          }
+        });
+        break;  // 다음 요일로 이동
+      }
+
+      const { member, slot, travelTimeMinutes, day } = result;
       const memberId = member.user._id.toString();
       const memberName = member.user.displayName || memberId.substring(0, 8);
+      
+      console.log(`
+📌 [배정 결과] ${memberName}`);
+      console.log(`   반환된 요일: ${day || '정보없음'}`);
+      console.log(`   현재 처리중인 요일: ${DAY_MAP[dayOfWeek]} (${dayOfWeek})`);
+      console.log(`   배정 시간: ${slot.startTime}-${slot.endTime}`);
 
       // 배정 슬롯 생성 및 할당
       const assignedSlots = await assignTimeSlot(
@@ -175,7 +229,10 @@ const assignByPublicTransport = async (
     }
   }
 
-  console.log('\n🚌 ===== 대중교통 모드 배정 완료 =====');
+  console.log('🚌 ===== 대중교통 모드 배정 완료 =====');
+  
+  // ===== 알림 반환 =====
+  return { warnings };
 };
 
 /**

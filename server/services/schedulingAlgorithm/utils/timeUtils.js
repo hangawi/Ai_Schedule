@@ -366,7 +366,21 @@ const validateTimeSlotWithTravel = (
   // 5. 결과 반환
   if (result.impossible) {
     console.log(`   ❌ 배정 불가: ${result.reason}`);
-    return { isValid: false, reason: `[${dayOfWeek}] ${preferenceStart}-${preferenceEnd}: ${result.reason}` };
+    
+    // 선호시간 부족 여부 확인
+    const prefEndMinutes = timeToMinutes(preferenceEnd);
+    const prefStartMinutes = timeToMinutes(preferenceStart);
+    const availableMinutes = prefEndMinutes - prefStartMinutes;
+    const isPreferenceInsufficient = result.reason === '선호시간 초과';
+    
+    return {
+      isValid: false,
+      reason: `[${dayOfWeek}] ${preferenceStart}-${preferenceEnd}: ${result.reason}`,
+      preferenceInsufficient: isPreferenceInsufficient,  // ← 추가
+      requiredMinutes: totalDurationMinutes,              // ← 추가
+      availableMinutes: availableMinutes,                 // ← 추가
+      dayOfWeek: dayOfWeek                                // ← 추가
+    };
   }
 
   // 6. 이동시간과 수업시간 분리

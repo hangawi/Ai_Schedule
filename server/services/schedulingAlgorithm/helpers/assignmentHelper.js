@@ -436,9 +436,13 @@ const findNearestMemberWithSufficientTime = async ({
   // 🔍 디버깅: 함수 호출 확인
   console.log(`   roomExceptions: ${roomExceptions?.length || 0}개`);
 
+  // ===== 실패 멤버 추적용 배열 =====
+  const failedMembers = [];
+
   // 1. 거리 순으로 정렬
   const sortedMembers = await sortMembersByDistance(currentLocation, candidateMembers, transportMode);
-  console.log(`\n📍 [대중교통 모드] 가까운 순서로 ${sortedMembers.length}명 확인 (기준 요일: ${currentDay})`);
+  console.log(`
+📍 [대중교통 모드] 가까운 순서로 ${sortedMembers.length}명 확인 (기준 요일: ${currentDay})`);
 
   // 2. 각 멤버에 대해 시간 충족 여부 확인
   for (const { member, travelTimeMinutes } of sortedMembers) {
@@ -447,11 +451,32 @@ const findNearestMemberWithSufficientTime = async ({
     const personalTimes = member.user.personalTimes || [];
     const allPreferredSchedules = member.user.defaultSchedule || [];
 
-    // 모든 선호 시간대를 순회 (현재 요일 우선)
-    const schedulesToSearch = [
-        ...allPreferredSchedules.filter(s => s.day === currentDay),
-        ...allPreferredSchedules.filter(s => s.day !== currentDay),
-    ];
+    console.log(`
+👤 [멤버 확인] ${memberName} (이동시간: ${travelTimeMinutes}분)`);
+    console.log(`   📅 전체 선호시간: ${allPreferredSchedules.length}개`);
+    allPreferredSchedules.forEach(s => {
+        console.log(`      - ${s.day}: ${s.startTime}-${s.endTime}`);
+    });
+    console.log(`   🎯 현재 배정 대상 요일: ${currentDay}`);
+
+    // 현재 요일의 선호 시간대만 검색 (다른 요일 제외)
+    const schedulesToSearch = allPreferredSchedules.filter(s => s.day === currentDay);
+    console.log(`   ✅ ${currentDay}에 해당하는 선호시간: ${schedulesToSearch.length}개`);
+    
+    // 현재 요일에 선호시간이 없으면 즉시 실패 처리
+    if (schedulesToSearch.length === 0) {
+        console.log(`   ⚠️  [${memberName}] ${currentDay}에 선호시간 없음 - 건너뜀`);
+        failedMembers.push({
+            memberId: memberId,
+            memberName: memberName,
+            reason: `${currentDay}에 선호시간 없음`,
+            preferenceInsufficient: false,
+            hasNoPreference: true,
+            travelTimeMinutes: travelTimeMinutes
+        });
+        continue; // 다음 멤버로
+    }
+    
     const processedSchedules = new Set(); // 중복된 스케줄 검사 방지
 
     for (const schedule of schedulesToSearch) {
@@ -480,7 +505,11 @@ const findNearestMemberWithSufficientTime = async ({
             const travelInfo = fullValidation.slot.travelStartTime ?
                 `이동 ${fullValidation.slot.travelStartTime}-${fullValidation.slot.travelEndTime} → ` :
                 `이동 ${travelTimeMinutes}분 → `;
-            console.log(`   ✅ [전체 배정] ${memberName}: ${travelInfo}${dayToValidate} ${fullValidation.slot.startTime}-${fullValidation.slot.endTime}`);
+            console.log(`
+   ✅✅✅ [배정 성공!] ${memberName}`);
+            console.log(`   📍 배정 요일: ${dayToValidate}`);
+            console.log(`   ⏰ 배정 시간: ${fullValidation.slot.startTime}-${fullValidation.slot.endTime}`);
+            console.log(`   🚌 ${travelInfo}`);
             if (fullValidation.slot.waitTime > 0) {
                 console.log(`      (대기시간 ${fullValidation.slot.waitTime}분)`);
             }
@@ -526,10 +555,67 @@ const findNearestMemberWithSufficientTime = async ({
              console.log(`     -> ${dayToValidate} ${schedule.startTime}-${schedule.endTime} 내에 30분 이상의 부분 배정도 불가능합니다.`);
         }
     }
-     console.log(`   -> '${memberName}'에 대한 모든 선호 시간 확인 완료. 다음 멤버로 이동.`);
+
+    // ===== 이 멤버의 모든 스케줄 검증 실패 - 실패 정보 기록 =====
+    console.log(`   -> '${memberName}'에 대한 모든 선호 시간 확인 완료. 다음 멤버로 이동.`);
+    
+    // 선호시간 부족 여부 확인
+    const hasPreference = allPreferredSchedules.length > 0;
+    if (!hasPreference) {
+        failedMembers.push({
+            memberId: memberId,
+            memberName: memberName,
+            reason: '선호시간 없음',
+            preferenceInsufficient: false,
+            hasNoPreference: true,
+            travelTimeMinutes: travelTimeMinutes
+        });
+    } else {
+        // 선호시간은 있지만 시간이 부족한 경우
+        const firstSchedule = allPreferredSchedules[0];
+        const testValidation = validateTimeSlotWithTravel(
+            currentEndTime, travelTimeMinutes, classDurationMinutes,
+            firstSchedule.startTime, firstSchedule.endTime, personalTimes, firstSchedule.day,
+            roomBlockedTimes, roomExceptions
+        );
+        
+        failedMembers.push({
+            memberId: memberId,
+            memberName: memberName,
+            reason: testValidation.reason || '배정 불가',
+            preferenceInsufficient: testValidation.preferenceInsufficient,
+            requiredMinutes: testValidation.requiredMinutes,
+            availableMinutes: testValidation.availableMinutes,
+            dayOfWeek: testValidation.dayOfWeek,
+            travelTimeMinutes: travelTimeMinutes,
+            hasNoPreference: false
+        });
+    }
   }
 
-  console.log(`\n   ➡️  모든 후보 학생 확인 완료. 조건 충족하는 멤버 없음.`);
+  console.log(`
+   ➡️  모든 후보 학생 확인 완료. 조건 충족하는 멤버 없음.`);
+  
+  // ===== 모든 멤버 실패 - 실패 정보 반환 =====
+  if (failedMembers.length > 0) {
+    console.log(`
+   ⚠️  실패한 멤버들:`);
+    failedMembers.forEach(fm => {
+      if (fm.hasNoPreference) {
+        console.log(`     - ${fm.memberName}: ${fm.reason}`);
+      } else if (fm.preferenceInsufficient) {
+        console.log(`     - ${fm.memberName}: 선호시간 부족 (필요: ${fm.requiredMinutes}분, 가용: ${fm.availableMinutes}분)`);
+      } else {
+        console.log(`     - ${fm.memberName}: ${fm.reason}`);
+      }
+    });
+    
+    return {
+      allFailed: true,
+      failedMembers: failedMembers
+    };
+  }
+  
   return null;
 };
 

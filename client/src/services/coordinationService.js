@@ -662,6 +662,37 @@ export const coordinationService = {
   },
 
   /**
+   * 기존 스케줄을 다른 이동수단 모드로 검증합니다 (수정하지 않음)
+   * @param {string} roomId - 방 ID
+   * @param {string} transportMode - 검증할 이동수단 모드
+   * @returns {Promise<object>} { success, isValid, transportMode, warnings, msg }
+   */
+  async validateScheduleWithTransportMode(roomId, transportMode) {
+    const token = await getAuthToken();
+
+    console.log('🔍 [validateScheduleWithTransportMode] 호출:', { roomId, transportMode });
+
+    const response = await fetch(
+      `${API_BASE_URL}/api/coordination/rooms/${roomId}/validate-schedule`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ transportMode })
+      }
+    );
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
+      throw new Error(errData.msg || '스케줄 검증에 실패했습니다.');
+    }
+
+    return await response.json();
+  },
+
+  /**
    * 자동 확정 타이머 시간 설정
    * @param {string} roomId - 방 ID
    * @param {number} duration - 타이머 시간 (분 단위)

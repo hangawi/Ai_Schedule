@@ -1839,3 +1839,338 @@ exports.setAutoConfirmDuration = async (req, res) => {
     res.status(500).json({ msg: '서버 오류가 발생했습니다.', error: error.message });
   }
 };
+
+
+// @desc    Validate existing schedule with a different transport mode (without modifying it)
+// @route   POST /api/coordination/rooms/:roomId/validate-schedule
+// @access  Private (Room Owner)
+exports.validateScheduleWithTransportMode = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { transportMode } = req.body;
+
+    console.log('\n\n' + '🔍'.repeat(50));
+    console.log('🔍 [validateScheduleWithTransportMode] 스케줄 검증 시작');
+    console.log(`   roomId: ${roomId}`);
+    console.log(`   transportMode: ${transportMode}`);
+    console.log('🔍'.repeat(50) + '\n');
+
+    // 1. 방 조회
+    const room = await Room.findById(roomId)
+      .populate('owner', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes priority address addressLat addressLng')
+      .populate('members.user', 'firstName lastName email defaultSchedule scheduleExceptions personalTimes priority address addressLat addressLng');
+
+    if (!room) {
+      return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+    }
+
+    // 2. 방장 권한 확인
+    if (!room.isOwner(req.user.id)) {
+      return res.status(403).json({ msg: '방장만 이 기능을 사용할 수 있습니다.' });
+    }
+
+    // 3. 현재 스케줄 확인 (자동배정된 슬롯만)
+    const autoAssignedSlots = room.timeSlots.filter(slot =>
+      slot.assignedBy && slot.status === 'confirmed' && !slot.isTravel
+    );
+
+    if (autoAssignedSlots.length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        msg: '검증할 스케줄이 없습니다. 먼저 자동배정을 실행하세요.' 
+      });
+    }
+
+    console.log(`📊 검증할 슬롯 수: ${autoAssignedSlots.length}개`);
+
+    // 4. 일반 모드면 항상 검증 성공
+    if (transportMode === 'normal') {
+      return res.json({
+        success: true,
+        isValid: true,
+        transportMode: 'normal',
+        warnings: [],
+        msg: '일반 모드는 항상 유효합니다.'
+      });
+    }
+
+    // 5. 이동시간 모드 검증
+    const warnings = [];
+    const membersOnly = room.members.filter(m => {
+      const memberId = m.user._id ? m.user._id.toString() : m.user.toString();
+      const ownerId = room.owner._id ? room.owner._id.toString() : room.owner.toString();
+      return memberId !== ownerId;
+    });
+
+    console.log(`
+📋 검증 대상 멤버 수: ${membersOnly.length}명`);
+    membersOnly.forEach((m, idx) => {
+      const memberUser = m.user;
+      const memberName = `${memberUser.firstName} ${memberUser.lastName}`;
+      console.log(`   ${idx+1}. ${memberName} (ID: ${memberUser._id})`);
+    });
+
+    const ownerLocation = {
+      lat: room.owner.addressLat,
+      lng: room.owner.addressLng,
+      address: room.owner.address
+    };
+
+    // 방장 위치 정보 확인
+    if (!ownerLocation.lat || !ownerLocation.lng) {
+      return res.status(400).json({
+        success: false,
+        msg: '방장의 주소 정보가 없습니다. 프로필에서 주소를 설정해주세요.'
+      });
+    }
+
+    const dynamicTravelTimeCalculator = require('../services/dynamicTravelTimeCalculator');
+
+    // 6. 각 멤버별로 검증
+    for (const member of membersOnly) {
+      const memberUser = member.user;
+      const memberId = memberUser._id.toString();
+      const memberName = `${memberUser.firstName} ${memberUser.lastName}`;
+
+      // 멤버의 위치 정보 확인
+      if (!memberUser.addressLat || !memberUser.addressLng) {
+        warnings.push({
+          type: 'no_address',
+          memberId: memberId,
+          memberName: memberName,
+          reason: '주소 정보 없음'
+        });
+        continue;
+      }
+
+      // 이 멤버에게 배정된 슬롯들
+      const memberSlots = autoAssignedSlots.filter(slot => 
+        slot.user.toString() === memberId
+      );
+
+      if (memberSlots.length === 0) {
+        // ⚠️ 배정된 슬롯이 없으면 경고 추가
+        console.log(`
+👤 검증 중: ${memberName} (0개 슬롯)`);
+        console.log(`   ❌ 스케줄에 배정되지 않음`);
+        warnings.push({
+          type: 'not_assigned',
+          memberId: memberId,
+          memberName: memberName,
+          reason: '스케줄에 배정되지 않음'
+        });
+        continue;
+      }
+
+      console.log(`
+👤 검증 중: ${memberName} (${memberSlots.length}개 슬롯)`);
+
+      // 이동시간 계산
+      const memberLocation = {
+        coordinates: {
+          lat: memberUser.addressLat,
+          lng: memberUser.addressLng
+        },
+        address: memberUser.address
+      };
+
+      const ownerLocationFormatted = {
+        coordinates: {
+          lat: ownerLocation.lat,
+          lng: ownerLocation.lng
+        },
+        address: ownerLocation.address
+      };
+
+      let travelTimeMinutes = 0;
+      try {
+        // ✅ calculateTravelTimeBetween 메서드 사용 (분 단위로 반환)
+        travelTimeMinutes = await dynamicTravelTimeCalculator.calculateTravelTimeBetween(
+          memberLocation,
+          ownerLocationFormatted,
+          transportMode
+        );
+        console.log(`   🚌 이동시간: ${travelTimeMinutes}분 (${transportMode})`);
+      } catch (error) {
+        console.error(`   ❌ 이동시간 계산 실패:`, error.message);
+        warnings.push({
+          type: 'travel_time_error',
+          memberId: memberId,
+          memberName: memberName,
+          reason: '이동시간 계산 실패'
+        });
+        continue;
+      }
+
+      // ✅ 요일별 한글 변환 및 dayOfWeek 매핑
+      const dayTranslation = {
+        'monday': '월요일',
+        'tuesday': '화요일',
+        'wednesday': '수요일',
+        'thursday': '목요일',
+        'friday': '금요일',
+        'saturday': '토요일',
+        'sunday': '일요일'
+      };
+
+      // dayOfWeek 매핑 (슬롯의 영어 요일 → dayOfWeek 숫자)
+      const dayOfWeekMap = {
+        'sunday': 0,
+        'monday': 1,
+        'tuesday': 2,
+        'wednesday': 3,
+        'thursday': 4,
+        'friday': 5,
+        'saturday': 6
+      };
+
+      const timeToMinutes = (timeStr) => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+      };
+
+      // ✅ 요일별로 슬롯 그룹화 (각 요일에 대해 한 번만 검증)
+      const slotsByDay = {};
+      memberSlots.forEach(slot => {
+        if (!slotsByDay[slot.day]) {
+          slotsByDay[slot.day] = [];
+        }
+        slotsByDay[slot.day].push(slot);
+      });
+
+      // 각 요일별로 검증 (요일당 한 번만!)
+      for (const [dayEn, daySlots] of Object.entries(slotsByDay)) {
+        const dayKo = dayTranslation[dayEn] || dayEn;
+        
+        // 이 요일의 총 수업시간 계산
+        let totalClassMinutes = 0;
+        daySlots.forEach(slot => {
+          const duration = timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime);
+          totalClassMinutes += duration;
+        });
+
+        // 이 요일의 총 필요시간 = 이동시간 + 수업시간
+        const totalRequiredMinutes = travelTimeMinutes + totalClassMinutes;
+
+        console.log(`
+   📅 ${dayKo} 검증:`);
+        console.log(`      슬롯 수: ${daySlots.length}개`);
+        console.log(`      수업시간: ${totalClassMinutes}분`);
+        console.log(`      이동시간: ${travelTimeMinutes}분`);
+        console.log(`      총 필요: ${totalRequiredMinutes}분`);
+
+        // ✅ 이 요일의 선호시간 확인 (dayOfWeek 숫자로 비교)
+        const targetDayOfWeek = dayOfWeekMap[dayEn];
+        console.log(`      선호시간 검색: dayOfWeek=${targetDayOfWeek} 또는 day=${dayEn}`);
+
+        const preferredSchedules = (memberUser.defaultSchedule || []).filter(s => {
+          // defaultSchedule은 dayOfWeek(숫자) 또는 day(문자열) 둘 다 가능
+          return s.dayOfWeek === targetDayOfWeek || s.day === dayEn;
+        });
+        
+        console.log(`      🔍 찾은 선호시간 블록: ${preferredSchedules.length}개`);
+        preferredSchedules.forEach((pref, idx) => {
+          console.log(`         블록${idx+1}: ${pref.startTime} ~ ${pref.endTime}`);
+        });
+        
+        if (preferredSchedules.length === 0) {
+          console.log(`      ❌ ${dayKo}에 선호시간 없음`);
+          warnings.push({
+            type: 'no_preference_for_day',
+            memberId: memberId,
+            memberName: memberName,
+            day: dayKo,
+            dayEn: dayEn,
+            reason: `${dayKo}에 선호시간 없음`
+          });
+          continue;
+        }
+
+        // ✅ 겹치는 시간대를 머지해서 실제 총 가용시간 계산
+        const mergedIntervals = [];
+        const sortedPrefs = preferredSchedules
+          .map(pref => ({
+            start: timeToMinutes(pref.startTime),
+            end: timeToMinutes(pref.endTime)
+          }))
+          .sort((a, b) => a.start - b.start);
+
+        for (const interval of sortedPrefs) {
+          if (mergedIntervals.length === 0 || mergedIntervals[mergedIntervals.length - 1].end < interval.start) {
+            // 겹치지 않음 - 새로운 인터벌 추가
+            mergedIntervals.push({ start: interval.start, end: interval.end });
+          } else {
+            // 겹침 - 마지막 인터벌 확장
+            mergedIntervals[mergedIntervals.length - 1].end = Math.max(
+              mergedIntervals[mergedIntervals.length - 1].end,
+              interval.end
+            );
+          }
+        }
+
+        console.log(`      📊 머지 후 인터벌: ${mergedIntervals.length}개`);
+        mergedIntervals.forEach((interval, idx) => {
+          const startH = Math.floor(interval.start / 60);
+          const startM = interval.start % 60;
+          const endH = Math.floor(interval.end / 60);
+          const endM = interval.end % 60;
+          const duration = interval.end - interval.start;
+          console.log(`         머지${idx+1}: ${String(startH).padStart(2,'0')}:${String(startM).padStart(2,'0')} ~ ${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')} (${duration}분)`);
+        });
+
+        // 선호시간 총합 계산 (머지된 인터벌 기준)
+        let totalAvailableMinutes = 0;
+        mergedIntervals.forEach(interval => {
+          totalAvailableMinutes += (interval.end - interval.start);
+        });
+
+        console.log(`      선호시간: ${totalAvailableMinutes}분`);
+
+        // 검증: 필요시간 <= 선호시간
+        if (totalRequiredMinutes > totalAvailableMinutes) {
+          console.log(`      ❌ 선호시간 부족!`);
+          warnings.push({
+            type: 'insufficient_preference',
+            memberId: memberId,
+            memberName: memberName,
+            day: dayKo,
+            dayEn: dayEn,
+            requiredMinutes: totalRequiredMinutes,
+            availableMinutes: totalAvailableMinutes,
+            travelMinutes: travelTimeMinutes,
+            classMinutes: totalClassMinutes,
+            reason: `${dayKo} 선호시간 부족 (필요 ${totalRequiredMinutes}분, 가용 ${totalAvailableMinutes}분)`
+          });
+        } else {
+          console.log(`      ✅ 검증 통과 (${totalAvailableMinutes}분 >= ${totalRequiredMinutes}분)`);
+        }
+      }
+    }
+
+    // 7. 결과 반환
+    const isValid = warnings.length === 0;
+    
+    console.log('\n' + '✅'.repeat(50));
+    console.log(`🎯 검증 결과: ${isValid ? '성공' : '실패'}`);
+    console.log(`⚠️  경고 수: ${warnings.length}개`);
+    console.log('✅'.repeat(50) + '\n\n');
+
+    res.json({
+      success: true,
+      isValid: isValid,
+      transportMode: transportMode,
+      warnings: warnings,
+      msg: isValid 
+        ? `${transportMode} 모드로 스케줄이 유효합니다.`
+        : `${transportMode} 모드로 스케줄 검증에 ${warnings.length}개의 문제가 발견되었습니다.`
+    });
+
+  } catch (error) {
+    console.error('❌ [validateScheduleWithTransportMode] 실패:', error);
+    res.status(500).json({ 
+      success: false,
+      msg: '서버 오류가 발생했습니다.', 
+      error: error.message 
+    });
+  }
+};

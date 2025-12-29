@@ -54,6 +54,11 @@ class SchedulingAlgorithm {
    * @returns {Object} 스케줄링 결과
    */
   async runAutoSchedule(members, owner, roomTimeSlots, options, deferredAssignments = []) {
+    console.log('\n\n' + '='.repeat(80));
+    console.log('🚀🚀🚀 runAutoSchedule 호출됨!');
+    console.log('받은 options:', JSON.stringify(options, null, 2));
+    console.log('='.repeat(80) + '\n');
+    
     // Input validation
     if (!members || !Array.isArray(members)) {
       throw new Error('Invalid members data provided to scheduling algorithm');
@@ -223,17 +228,32 @@ class SchedulingAlgorithm {
     const conflictingSlots = conflicts;
     // Negotiation blocks feature removed
 
+    // ===== 알림 수집용 배열 =====
+    const warnings = [];
+
     // 배정 전략 선택: 대중교통 모드 vs 시간 순서 배정
-    console.log(`\n🔍 [DEBUG] 배정 전략 선택: transportMode="${transportMode}"`);
-    if (transportMode === 'public' || transportMode === 'driving' || transportMode === 'walking') {
+    console.log('\n' + '🚦'.repeat(40));
+    console.log(`🔍 [배정 전략] transportMode="${transportMode}"`);
+    console.log(`🔍 조건: transportMode === 'transit' ? ${transportMode === 'transit'}`);
+    console.log(`🔍 조건: transportMode === 'driving' ? ${transportMode === 'driving'}`);
+    console.log(`🔍 조건: transportMode === 'walking' ? ${transportMode === 'walking'}`);
+    console.log(`🔍 조건: transportMode === 'bicycling' ? ${transportMode === 'bicycling'}`);
+    console.log('🚦'.repeat(40));
+
+    if (transportMode === 'transit' || transportMode === 'driving' || transportMode === 'walking' || transportMode === 'bicycling') {
       // 대중교통/이동수단 모드: 최단거리 우선 배정
       console.log(`   → 대중교통 모드 진입 (assignByPublicTransport)`);
-      await assignByPublicTransport(timetable, assignments, memberRequiredSlots, ownerId, members, owner, {
+      const publicTransportResult = await assignByPublicTransport(timetable, assignments, memberRequiredSlots, ownerId, members, owner, {
         transportMode,
         minClassDurationMinutes,
         roomBlockedTimes: roomSettings.blockedTimes || [],
         roomExceptions: roomSettings.roomExceptions || []
       });
+      
+      // ===== 알림 수집 =====
+      if (publicTransportResult?.warnings) {
+        warnings.push(...publicTransportResult.warnings);
+      }
     } else {
       // 일반 모드: 시간 순서 우선 배정 (minClassDurationMinutes 기준)
       console.log(`   → 일반 모드 진입 (assignByTimeOrder)`);
@@ -291,7 +311,8 @@ class SchedulingAlgorithm {
     return {
       assignments,
       carryOverAssignments,
-      unassignedMembersInfo
+      unassignedMembersInfo,
+      warnings  // ← 추가
     };
   }
 
