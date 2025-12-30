@@ -412,6 +412,24 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
   // 방장 시간표 정보 캐시 업데이트
   useEffect(() => {
+    // 🔍 디버깅: 12/29 슬롯 출력
+    if (currentRoom?.timeSlots) {
+      const dec29Slots = currentRoom.timeSlots.filter(s => {
+        const date = new Date(s.date).toISOString().split('T')[0];
+        return date === '2025-12-29';
+      });
+      
+      if (dec29Slots.length > 0) {
+        console.log('🔍🔍🔍 [프론트엔드] 12/29 슬롯 받음:', dec29Slots.map(s => ({
+          startTime: s.startTime,
+          endTime: s.endTime,
+          subject: s.subject,
+          isTravel: s.isTravel,
+          user: s.user?.firstName || s.user
+        })));
+      }
+    }
+    
     if (currentRoom?.owner?.defaultSchedule) {
       const newCache = {
         defaultSchedule: currentRoom.owner.defaultSchedule,

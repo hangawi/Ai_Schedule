@@ -340,6 +340,9 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
         slot.startTime = `${String(Math.floor(classStartMinutes / 60)).padStart(2, '0')}:${String(classStartMinutes % 60).padStart(2, '0')}`;
         slot.endTime = `${String(Math.floor(classEndMinutes / 60)).padStart(2, '0')}:${String(classEndMinutes % 60).padStart(2, '0')}`;
         
+        // 🔥 Mongoose 배열 수정 추적을 위해 markModified 호출
+        room.markModified('timeSlots');
+        
         console.log(`  ✅ [수업시간 조정] ${slot.startTime}-${slot.endTime}로 이동 (금지시간 ${blockedTime.endTime} 이후 + 이동시간 ${travelDurationMinutes}분)`);
       }
 
@@ -439,6 +442,17 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
   const travelSlotsBySubject = room.timeSlots.filter(s => s.subject === '이동시간').length;
   console.log(`✅ [이동시간 재계산] ${dateStr}: ${classSlots.length}개 수업 슬롯 처리 완료`);
   console.log(`   📊 [확인] isTravel===true: ${travelSlotsCount}개, subject==='이동시간': ${travelSlotsBySubject}개`);
+  
+  // 🔍 해당 날짜의 최종 슬롯 상태 출력 (디버깅용)
+  const finalSlots = room.timeSlots.filter(s => {
+    const slotDate = new Date(s.date).toISOString().split('T')[0];
+    return slotDate === dateStr;
+  });
+  console.log(`🔍🔍🔍 [${dateStr} 최종 슬롯 상태] 총 ${finalSlots.length}개:`);
+  finalSlots.forEach((s, idx) => {
+    const userId = s.user._id || s.user;
+    console.log(`  [${idx + 1}] ${s.startTime}-${s.endTime}: ${s.subject || '수업'}, isTravel: ${s.isTravel}, user: ${userId}`);
+  });
   
   // ✅ room.timeSlots의 이동시간을 room.travelTimeSlots에도 추가
   const newTravelSlots = room.timeSlots.filter(slot => {

@@ -514,25 +514,25 @@ exports.getRoomDetails = async (req, res) => {
       const isOwner = room.owner._id.toString() === req.user.id.toString();
 
       if (roomObj.timeSlots && roomObj.timeSlots.length > 0) {
-         // 🆕 조원 프라이버시 보호: 이동시간 슬롯 자체를 제거
-         if (!isOwner) {
-            roomObj.timeSlots = roomObj.timeSlots.filter(slot => {
-               // 이동시간 슬롯이면 제거
-               const isTravel = slot.isTravel === true || slot.subject === '이동시간' || slot.subject === 'Travel Time';
-               return !isTravel;
-            });
-         }
-
          roomObj.timeSlots.forEach(slot => {
             if (slot.user && slot.user._id) {
                slot.user.id = slot.user._id.toString();
             }
 
-            // 🆕 Phase 3: 조원 프라이버시 보호 - 이동시간 메타데이터 숨김 (혹시 필터링 놓친 것 대비)
+            // 🆕 조원 프라이버시 보호: 이동시간 슬롯의 민감한 정보만 제거 (슬롯 자체는 유지)
             if (!isOwner) {
                // 조원에게는 actualStartTime과 travelTimeBefore 절대 노출 금지!
                delete slot.actualStartTime;
                delete slot.travelTimeBefore;
+
+               // 이동시간 슬롯의 상세 정보 제거 (시간대만 유지하여 "배정불가" 표시용)
+               const isTravel = slot.isTravel === true || slot.subject === '이동시간' || slot.subject === 'Travel Time';
+               if (isTravel) {
+                  delete slot.from;
+                  delete slot.to;
+                  delete slot.travelMode;
+                  delete slot.travelInfo;
+               }
             }
          });
       }

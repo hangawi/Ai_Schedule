@@ -307,15 +307,12 @@ export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) =
         };
     } 
     
-    // 4. 조원은 서버 데이터라도 이동시간 숨김 (프라이버시 보호)
-    // ✅ 명확하게 이동시간 슬롯 제거
+    // 4. 조원은 다른 사람의 이동시간도 포함 (WeekView에서 "배정불가"로 표시)
+    // ✅ 모든 슬롯 포함 (이동시간도 포함하여 다른 사람의 시간대를 배정불가로 표시)
     const allSlots = currentRoom?.timeSlots || [];
-    const nonTravelSlots = allSlots.filter(slot => 
-      slot?.isTravel !== true && slot?.subject !== '이동시간'
-    );
 
     return {
-        timeSlots: nonTravelSlots,
+        timeSlots: allSlots,  // ✅ 이동시간 슬롯도 포함 (WeekView에서 자동으로 다른 사람 슬롯 = 배정불가 처리)
         travelSlots: [],
         travelMode: travelMode,
         myTravelDuration // 🆕 추가

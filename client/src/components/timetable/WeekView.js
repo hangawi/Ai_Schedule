@@ -514,9 +514,20 @@ const WeekView = ({
       // 🆕 멤버 슬롯인지 확인 (방장이 본인 슬롯을 보는 경우 제외)
       const isMemberSlot = ownerInfo && (!isRoomOwner || (ownerInfo.userId !== currentUser?.id && ownerInfo.userId !== currentUser?._id));
 
-      // ✨✨✨ 최우선 순위: 방장의 개인시간/예외일정 (이동시간 포함, 모두 blocked로 표시)
+      // 🔒 최우선 순위: 조원은 이동시간 슬롯을 절대 보면 안 됨 (본인 것이든 다른 사람 것이든)
+      // 이동시간 구간은 무조건 "배정 불가"로 표시
+      if (!isRoomOwner && ownerInfo && ownerInfo.isTravel) {
+        slotType = 'blocked';
+        slotData = {
+          name: '배정 불가',
+          info: { type: 'travel_hidden' },
+          isTravelHidden: true,
+          ownerScheduleType: 'travel_hidden'
+        };
+      }
+      // ✨✨✨ 차순위: 방장의 개인시간/예외일정 (이동시간 포함, 모두 blocked로 표시)
       // 확정된 일정은 blocked(오렌지색)로 표시되어야 함
-      if (ownerOriginalInfo && (
+      else if (ownerOriginalInfo && (
         ownerOriginalInfo.type === 'exception' ||
         ownerOriginalInfo.type === 'personal' ||
         ownerOriginalInfo.type === 'travel_restricted' ||
@@ -810,6 +821,12 @@ const WeekView = ({
                       } : {}),
                       // 🆕 다른 조원 배치 시간 (other_member) - 빗금 처리
                       ...(block.type === 'blocked' && block.data?.ownerScheduleType === 'other_member' ? {
+                        backgroundColor: '#E5E7EB', // gray-200
+                        borderColor: '#9CA3AF', // gray-400
+                        backgroundImage: 'repeating-linear-gradient(45deg, #D1D5DB 0px, #D1D5DB 5px, #E5E7EB 5px, #E5E7EB 10px)'
+                      } : {}),
+                      // 🆕 이동시간 숨김 (travel_hidden) - 빗금 처리 (조원용)
+                      ...(block.type === 'blocked' && block.data?.ownerScheduleType === 'travel_hidden' ? {
                         backgroundColor: '#E5E7EB', // gray-200
                         borderColor: '#9CA3AF', // gray-400
                         backgroundImage: 'repeating-linear-gradient(45deg, #D1D5DB 0px, #D1D5DB 5px, #E5E7EB 5px, #E5E7EB 10px)'
