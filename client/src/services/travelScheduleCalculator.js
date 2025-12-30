@@ -927,6 +927,133 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
   }
 
 /**
+ * sortSlotsByDistance
+ * @description 슬롯을 날짜별로 그룹화한 후 거리 순서대로 정렬합니다 (Greedy 알고리즘).
+ * @param {Array} slots - 정렬할 슬롯 배열
+ * @param {Object} owner - 방장 정보 (addressLat, addressLng 포함)
+ * @param {Object} memberLocations - 멤버 위치 정보 객체 { userId: { lat, lng, name, color } }
+ * @returns {Array} 거리 순서대로 정렬된 슬롯 배열
+ */
+  sortSlotsByDistance(slots, owner, memberLocations) {
+    // 날짜별로 그룹화
+    const slotsByDate = {};
+    slots.forEach(slot => {
+      const dateStr = new Date(slot.date).toISOString().split('T')[0];
+      if (!slotsByDate[dateStr]) {
+        slotsByDate[dateStr] = [];
+      }
+      slotsByDate[dateStr].push(slot);
+    });
+
+    const sortedSlots = [];
+
+    // 각 날짜별로 거리 순서대로 정렬
+    Object.keys(slotsByDate).sort().forEach(dateStr => {
+      const dailySlots = slotsByDate[dateStr];
+
+      // 🔧 방장 슬롯과 조원 슬롯 분리
+      const ownerSlots = [];
+      const memberSlots = [];
+
+      dailySlots.forEach(slot => {
+        let userId = slot.user;
+        if (typeof userId === 'object' && userId !== null) {
+          userId = userId._id || userId.id;
+        }
+
+        if (userId && userId.toString() === owner._id.toString()) {
+          ownerSlots.push(slot);
+        } else {
+          memberSlots.push(slot);
+        }
+      });
+
+      // 조원 슬롯만 거리 순서대로 정렬 (Greedy)
+      const orderedMembers = [];
+      if (memberSlots.length > 0) {
+        const remaining = [...memberSlots];
+
+        // 시작 위치: 방장 집
+        let currentLat = owner.addressLat;
+        let currentLng = owner.addressLng;
+
+        while (remaining.length > 0) {
+          let closestIndex = 0;
+          let closestDistance = Infinity;
+
+          // 현재 위치에서 가장 가까운 슬롯 찾기
+          for (let i = 0; i < remaining.length; i++) {
+            const slot = remaining[i];
+            let userId = slot.user;
+            if (typeof userId === 'object' && userId !== null) {
+              userId = userId._id || userId.id;
+            }
+
+            const userLocation = memberLocations[userId?.toString()];
+            if (!userLocation) {
+              continue;
+            }
+
+            const distance = this.calculateDistance(
+              currentLat, currentLng,
+              userLocation.lat, userLocation.lng
+            );
+
+            if (distance < closestDistance) {
+              closestDistance = distance;
+              closestIndex = i;
+            }
+          }
+
+          const closestSlot = remaining.splice(closestIndex, 1)[0];
+          orderedMembers.push(closestSlot);
+
+          // 현재 위치 업데이트
+          let userId = closestSlot.user;
+          if (typeof userId === 'object' && userId !== null) {
+            userId = userId._id || userId.id;
+          }
+
+          const userLocation = memberLocations[userId?.toString()];
+          if (userLocation) {
+            currentLat = userLocation.lat;
+            currentLng = userLocation.lng;
+          }
+        }
+      }
+
+      // 방장 슬롯은 시간 순서대로 정렬
+      ownerSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+      // 방장 슬롯 먼저, 그 다음 거리 순서대로 정렬된 조원 슬롯
+      sortedSlots.push(...ownerSlots, ...orderedMembers);
+    });
+
+    return sortedSlots;
+  }
+
+/**
+ * calculateDistance
+ * @description Haversine 공식을 사용하여 두 지점 간의 거리를 계산합니다 (km).
+ * @param {number} lat1 - 시작점 위도
+ * @param {number} lng1 - 시작점 경도
+ * @param {number} lat2 - 도착점 위도
+ * @param {number} lng2 - 도착점 경도
+ * @returns {number} 거리 (km)
+ */
+  calculateDistance(lat1, lng1, lat2, lng2) {
+    const R = 6371; // 지구 반지름 (km)
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+/**
  * recalculateScheduleWithTravel
  * @description 기존에 자동 배정된 시간표 데이터에 이동 시간을 반영하여 새로운 스케줄을 재계산합니다.
  * @param {Object} currentRoom - 현재 방 데이터 (방장, 멤버, 시간 슬롯 정보 포함).
@@ -972,15 +1099,35 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     // 1. Merge raw slots into activity blocks
     const mergedSlots = mergeConsecutiveTimeSlots(currentRoom.timeSlots);
 
-    // 🆕 시간 순서대로 정렬 (이동 경로를 올바르게 계산하기 위해)
-    const sortedMergedSlots = mergedSlots.sort((a, b) => {
-        const dateA = new Date(a.date);
-        const dateB = new Date(b.date);
-        if (dateA.getTime() !== dateB.getTime()) {
-            return dateA.getTime() - dateB.getTime();
-        }
-        return a.startTime.localeCompare(b.startTime);
-    });
+    // 🆕 이동 모드에 따라 정렬 방식 결정
+    let sortedMergedSlots;
+
+    if (travelMode === 'normal') {
+        // 일반 모드: 시간 순서대로만 정렬
+        sortedMergedSlots = mergedSlots.sort((a, b) => {
+            const dateA = new Date(a.date);
+            const dateB = new Date(b.date);
+            if (dateA.getTime() !== dateB.getTime()) {
+                return dateA.getTime() - dateB.getTime();
+            }
+            return a.startTime.localeCompare(b.startTime);
+        });
+    } else {
+        // 이동 모드 (대중교통, 자동차 등): 날짜별로 거리 순서대로 정렬
+        sortedMergedSlots = this.sortSlotsByDistance(mergedSlots, owner, memberLocations);
+
+        // 🔍 디버깅: 거리 순서 출력
+        console.log('🔍 [거리 순서 정렬 결과]:');
+        sortedMergedSlots.forEach((slot, idx) => {
+            let userId = slot.user;
+            if (typeof userId === 'object' && userId !== null) {
+                userId = userId._id || userId.id;
+            }
+            const userLocation = memberLocations[userId?.toString()];
+            const dateStr = new Date(slot.date).toISOString().split('T')[0];
+            console.log(`  [${idx + 1}] ${dateStr} ${slot.startTime}-${slot.endTime}: ${userLocation?.name || '방장'}`);
+        });
+    }
 
     // 🆕 이동시간 슬롯을 저장할 배열 추가
     const travelSlotsArray = [];
@@ -1127,9 +1274,17 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                 continue;
             }
 
-            // ✅ 원복: 이동시간만큼 수업 시간을 뒤로 미는 로직 (방장 이동 후 수업 시작)
-            // 예: 9시 배정 + 50분 이동 -> 9시 출발, 9시 50분 도착, 9시 50분 수업 시작
-            let newTravelStartMinutes = Math.max(slotStartMinutes, actualPreviousEndMinutes);
+            // ✅ 이동 모드: 거리 순서대로 연속 배치
+            // - 날짜의 첫 슬롯: 원래 시간 유지
+            // - 그 이후: 이전 종료 시간부터 연속 배치 (원래 시간 무시)
+            let newTravelStartMinutes;
+            if (actualPreviousEndMinutes === 0) {
+                // 날짜의 첫 슬롯: 원래 시간 사용
+                newTravelStartMinutes = slotStartMinutes;
+            } else {
+                // 이전 활동 종료 시간부터 바로 시작
+                newTravelStartMinutes = actualPreviousEndMinutes;
+            }
             let newTravelEndTimeMinutes = newTravelStartMinutes + travelDurationMinutes; 
             let newActivityStartTimeMinutes = newTravelEndTimeMinutes; // 이동 후 수업 시작
             let newActivityEndTimeMinutes = newActivityStartTimeMinutes + activityDurationMinutes; // 수업 종료
