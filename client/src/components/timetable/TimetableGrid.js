@@ -1166,6 +1166,7 @@ const TimetableGrid = ({
         ownerOriginalSchedule={ownerOriginalSchedule}
         travelMode={travelMode} // Pass travelMode down
         myTravelDuration={myTravelDuration} // 🆕 Pass myTravelDuration down
+        isConfirmed={!!roomData?.confirmedAt} // 🆕 확정 여부 전달
       />
 
       {/* ========== 시간 요청 모달 ========== */}

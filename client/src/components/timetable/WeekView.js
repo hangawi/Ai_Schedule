@@ -94,7 +94,8 @@ const WeekView = ({
   travelMode = 'normal', // Add travelMode to props
   travelSlots = [], // 이동 시간 슬롯
   timeSlots = [], // 🆕 전체 배정된 수업 정보
-  myTravelDuration = 0 // 🆕 나의 이동 소요 시간
+  myTravelDuration = 0, // 🆕 나의 이동 소요 시간
+  isConfirmed = false // 🆕 확정 여부
 }) => {
   console.log('🔍 [WeekView] Props 확인:', {
       hasOwnerSchedule: !!ownerOriginalSchedule,
@@ -336,7 +337,8 @@ const WeekView = ({
       // 🆕 이동시간 고려한 유효성 체크 (조원이고 이동모드일 때만)
       // ⭐ 시간별 체크 + 동적 이동시간 계산 (문제 1+3+4 해결)
       // ⭐ 단, 다른 사람의 수업이 있으면 빗금 계산 스킵
-      if (!isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0 && !ownerInfo) {
+      // ⭐ 확정 후에는 빗금 계산 스킵 (문제 2 해결)
+      if (!isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0 && !ownerInfo && !isConfirmed) {
         // 현재 시간에 이미 수업이 있는지 확인
         const hasSchedule = hasScheduleAtTime(date, time, timeSlots, currentUser);
 
@@ -906,7 +908,8 @@ const WeekView = ({
               // 4. 🆕 이동시간 고려한 유효성 체크 (조원이고 이동모드일 때만)
               // ⭐ 시간별 체크 + 동적 이동시간 계산 (문제 1+3+4 해결)
               // ⭐ 단, ownerOriginalInfo나 ownerInfo가 있으면 빗금 계산 스킵
-              if (!isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0 && !ownerOriginalInfo && !ownerInfo) {
+              // ⭐ 확정 후에는 빗금 계산 스킵 (문제 2 해결)
+              if (!isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0 && !ownerOriginalInfo && !ownerInfo && !isConfirmed) {
                 // 현재 시간에 이미 수업이 있는지 확인
                 const hasSchedule = hasScheduleAtTime(date, time, timeSlots, currentUser);
 
