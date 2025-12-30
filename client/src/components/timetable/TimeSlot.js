@@ -303,6 +303,24 @@ const TimeSlot = ({
             borderColor: ownerInfo.color
           }
         ) :
+             // 🆕 이동시간 부족 (travel_restricted) - 빗금 처리
+             isEffectivelyBlocked && blockedInfo?.ownerScheduleType === 'travel_restricted' ? {
+               backgroundColor: '#E5E7EB',
+               borderColor: '#9CA3AF',
+               backgroundImage: 'repeating-linear-gradient(45deg, #D1D5DB 0px, #D1D5DB 5px, #E5E7EB 5px, #E5E7EB 10px)'
+             } :
+             // 🆕 조원 본인 비선호시간 (user_non_preferred) - 빗금 처리 (문제 1)
+             isEffectivelyBlocked && blockedInfo?.ownerScheduleType === 'user_non_preferred' ? {
+               backgroundColor: '#E5E7EB',
+               borderColor: '#9CA3AF',
+               backgroundImage: 'repeating-linear-gradient(45deg, #D1D5DB 0px, #D1D5DB 5px, #E5E7EB 5px, #E5E7EB 10px)'
+             } :
+             // 🆕 다른 조원 배치 (other_member) - 빗금 처리
+             isEffectivelyBlocked && blockedInfo?.ownerScheduleType === 'other_member' ? {
+               backgroundColor: '#E5E7EB',
+               borderColor: '#9CA3AF',
+               backgroundImage: 'repeating-linear-gradient(45deg, #D1D5DB 0px, #D1D5DB 5px, #E5E7EB 5px, #E5E7EB 10px)'
+             } :
              // 방장의 불가능한 시간 (non_preferred) - 연한 보라/라벤더
              isEffectivelyBlocked && blockedInfo?.ownerScheduleType === 'non_preferred' ? { backgroundColor: '#E9D5FF', borderColor: '#C084FC' } :
              // 방장의 개인시간 (personal) - 연한 주황/피치

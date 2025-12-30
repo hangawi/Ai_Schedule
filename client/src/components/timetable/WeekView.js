@@ -99,6 +99,17 @@ const WeekView = ({
 }) => {
   console.log('🔍 [WeekView] Props 확인:', {
       hasOwnerSchedule: !!ownerOriginalSchedule,
+      ownerScheduleDetails: ownerOriginalSchedule ? {
+        hasDefaultSchedule: !!ownerOriginalSchedule.defaultSchedule,
+        defaultScheduleLength: ownerOriginalSchedule.defaultSchedule?.length,
+        hasExceptions: !!ownerOriginalSchedule.scheduleExceptions,
+        hasPersonalTimes: !!ownerOriginalSchedule.personalTimes
+      } : null,
+      hasCurrentUser: !!currentUser,
+      currentUserDetails: currentUser ? {
+        hasDefaultSchedule: !!currentUser.defaultSchedule,
+        defaultScheduleLength: currentUser.defaultSchedule?.length
+      } : null,
       myTravelDuration,
       travelMode,
       isRoomOwner
@@ -233,6 +244,137 @@ const WeekView = ({
     return null;
   };
 
+  // 🆕 조원 본인의 선호시간 체크 함수 (문제 1 해결)
+  const getCurrentUserScheduleInfo = (date, time) => {
+    if (!currentUser || isRoomOwner) return null; // 방장은 체크하지 않음
+
+    const timeMinutes = timeToMinutes(time);
+    const dayOfWeek = date.getDay(); // 0=일요일, 1=월요일, ...
+    const dateStr = date.toISOString().split('T')[0];
+
+    console.log(`🔍 [getCurrentUserScheduleInfo] 체크 시작:`, {
+      time,
+      dayOfWeek,
+      dateStr,
+      hasDefaultSchedule: !!currentUser.defaultSchedule,
+      defaultScheduleLength: currentUser.defaultSchedule?.length
+    });
+
+    // 1. scheduleExceptions 확인 (특정 날짜 일정)
+    const exceptionSlot = currentUser.scheduleExceptions?.find(e => {
+      if (e.specificDate !== dateStr) return false;
+
+      const startDate = new Date(e.startTime);
+      const endDate = new Date(e.endTime);
+      const startMinutes = startDate.getHours() * 60 + startDate.getMinutes();
+      const endMinutes = endDate.getHours() * 60 + endDate.getMinutes();
+
+      return timeMinutes >= startMinutes && timeMinutes < endMinutes;
+    });
+
+    if (exceptionSlot) {
+      // 예외일정이 있으면 비선호시간으로 간주
+      return {
+        type: 'user_non_preferred',
+        name: '배정 불가',
+        title: '본인 다른 일정',
+        reason: 'exception'
+      };
+    }
+
+    // 2. personalTimes 확인 (개인시간 = 비선호시간)
+    const personalSlot = currentUser.personalTimes?.find(p => {
+      // specificDate가 있는 경우 먼저 체크
+      if (p.specificDate) {
+        const specificDate = new Date(p.specificDate);
+        const currentDate = new Date(dateStr);
+
+        if (specificDate.toDateString() === currentDate.toDateString()) {
+          const startMinutes = timeToMinutes(p.startTime);
+          const endMinutes = timeToMinutes(p.endTime);
+          return timeMinutes >= startMinutes && timeMinutes < endMinutes;
+        }
+        return false;
+      }
+
+      // 반복되는 개인시간 처리
+      const personalDays = p.days || [];
+      if (p.isRecurring !== false && personalDays.length > 0) {
+        const convertedDays = personalDays.map(day => day === 7 ? 0 : day);
+        if (convertedDays.includes(dayOfWeek)) {
+          const startMinutes = timeToMinutes(p.startTime);
+          const endMinutes = timeToMinutes(p.endTime);
+
+          if (endMinutes <= startMinutes) {
+            return timeMinutes >= startMinutes || timeMinutes < endMinutes;
+          } else {
+            return timeMinutes >= startMinutes && timeMinutes < endMinutes;
+          }
+        }
+      }
+
+      return false;
+    });
+
+    if (personalSlot) {
+      // 개인시간이 있으면 비선호시간으로 간주
+      return {
+        type: 'user_non_preferred',
+        name: '배정 불가',
+        title: '본인 개인시간',
+        reason: 'personal'
+      };
+    }
+
+    // 3. defaultSchedule 체크 (priority >= 2는 선호시간)
+    const hasPreferredTime = currentUser.defaultSchedule?.some(sched => {
+      if (sched.priority < 2) return false; // priority 2 이상만 선호시간
+
+      if (sched.specificDate) {
+        if (sched.specificDate !== dateStr) return false;
+      } else {
+        if (sched.dayOfWeek !== dayOfWeek) return false;
+      }
+
+      const startMinutes = timeToMinutes(sched.startTime);
+      const endMinutes = timeToMinutes(sched.endTime);
+
+      const isMatch = timeMinutes >= startMinutes && timeMinutes < endMinutes;
+
+      if (isMatch) {
+        console.log(`✅ [getCurrentUserScheduleInfo] 선호시간 발견:`, {
+          time,
+          dayOfWeek,
+          schedDayOfWeek: sched.dayOfWeek,
+          schedTime: `${sched.startTime}-${sched.endTime}`,
+          priority: sched.priority
+        });
+      }
+
+      return isMatch;
+    });
+
+    console.log(`🎯 [getCurrentUserScheduleInfo] 결과:`, {
+      time,
+      dayOfWeek,
+      hasPreferredTime,
+      willReturnNonPreferred: !hasPreferredTime
+    });
+
+    // 선호시간이 없으면 비선호시간으로 간주
+    if (!hasPreferredTime) {
+      return {
+        type: 'user_non_preferred',
+        name: '배정 불가',
+        title: '본인 비선호시간',
+        reason: 'non_preferred'
+      };
+    }
+
+    // 선호시간이면 null 반환 (가능한 시간)
+    return null;
+  };
+
   // 🆕 현재 시간에 현재 사용자의 수업이 있는지 확인하는 함수
   const hasScheduleAtTime = (date, time, timeSlots, currentUser) => {
     if (!date || !time || !currentUser || !timeSlots || timeSlots.length === 0) return false;
@@ -321,19 +463,31 @@ const WeekView = ({
     for (const time of filteredTimeSlotsInDay) {
       // 방장의 원본 시간표를 우선적으로 확인
       let ownerOriginalInfo = getOwnerOriginalScheduleInfo(date, time);
-      
+
       // 🔧 다른 사람의 수업 먼저 확인 (빗금 계산 전에!)
       const ownerInfo = getSlotOwner(date, time);
       if (ownerInfo) {
-        console.log('👤 [WeekView] ownerInfo 발견:', { 
-          time, 
+        console.log('👤 [WeekView] ownerInfo 발견:', {
+          time,
           userId: ownerInfo.userId || ownerInfo.actualUserId,
           name: ownerInfo.name,
           isTravel: ownerInfo.isTravel,
           currentUserId: currentUser?._id || currentUser?.id
         });
       }
-      
+
+      // 🆕 조원 본인의 비선호시간 체크 (문제 1 해결)
+      // ⭐ 방장의 선호시간(빈 시간)일 때, 조원 본인이 불가능하면 빗금 표시
+      // ⭐ 우선순위: 방장 개인시간/예외일정 > 조원 본인 비선호시간
+      if (!ownerOriginalInfo || ownerOriginalInfo.type === 'non_preferred') {
+        const userScheduleInfo = getCurrentUserScheduleInfo(date, time);
+        if (userScheduleInfo) {
+          // 조원 본인이 비선호시간이면 빗금으로 표시
+          ownerOriginalInfo = userScheduleInfo;
+          console.log(`🚫 [WeekView-병합] 조원 본인 비선호시간: ${time}`, userScheduleInfo);
+        }
+      }
+
       // 🆕 이동시간 고려한 유효성 체크 (조원이고 이동모드일 때만)
       // ⭐ 시간별 체크 + 동적 이동시간 계산 (문제 1+3+4 해결)
       // ⭐ 단, 다른 사람의 수업이 있으면 빗금 계산 스킵
@@ -413,9 +567,11 @@ const WeekView = ({
       // ✨✨✨ 최우선 순위: 방장의 개인시간/예외일정 (이동시간 포함, 모두 blocked로 표시)
       // 확정된 일정은 blocked(오렌지색)로 표시되어야 함
       if (ownerOriginalInfo && (
-        ownerOriginalInfo.type === 'exception' || 
+        ownerOriginalInfo.type === 'exception' ||
         ownerOriginalInfo.type === 'personal' ||
-        ownerOriginalInfo.type === 'travel_restricted'
+        ownerOriginalInfo.type === 'travel_restricted' ||
+        ownerOriginalInfo.type === 'user_non_preferred' ||  // 🆕 조원 본인 비선호시간 (문제 1)
+        ownerOriginalInfo.type === 'non_preferred'  // 🆕 방장 비선호시간
       )) {
         slotType = 'blocked';
         slotData = {
@@ -708,6 +864,12 @@ const WeekView = ({
                         borderColor: '#9CA3AF', // gray-400
                         backgroundImage: 'repeating-linear-gradient(45deg, #D1D5DB 0px, #D1D5DB 5px, #E5E7EB 5px, #E5E7EB 10px)'
                       } : {}),
+                      // 🆕 조원 본인 비선호시간 (user_non_preferred) - 빗금 처리 (문제 1)
+                      ...(block.type === 'blocked' && block.data?.ownerScheduleType === 'user_non_preferred' ? {
+                        backgroundColor: '#E5E7EB', // gray-200
+                        borderColor: '#9CA3AF', // gray-400
+                        backgroundImage: 'repeating-linear-gradient(45deg, #D1D5DB 0px, #D1D5DB 5px, #E5E7EB 5px, #E5E7EB 10px)'
+                      } : {}),
                       // 🆕 다른 조원 배치 시간 (other_member) - 빗금 처리
                       ...(block.type === 'blocked' && block.data?.ownerScheduleType === 'other_member' ? {
                         backgroundColor: '#E5E7EB', // gray-200
@@ -905,6 +1067,18 @@ const WeekView = ({
               // 3. 멤버 슬롯인지 확인 (방장이 본인 슬롯을 보는 경우 제외)
               const isMemberSlot = ownerInfo && (!isRoomOwner || (ownerInfo.userId !== currentUser?.id && ownerInfo.userId !== currentUser?._id));
 
+              // 3-1. 🆕 조원 본인의 비선호시간 체크 (문제 1 해결)
+              // ⭐ 방장의 선호시간(빈 시간)일 때, 조원 본인이 불가능하면 빗금 표시
+              // ⭐ 우선순위: 방장 개인시간/예외일정 > 조원 본인 비선호시간
+              if (!ownerOriginalInfo || ownerOriginalInfo.type === 'non_preferred') {
+                const userScheduleInfo = getCurrentUserScheduleInfo(date, time);
+                if (userScheduleInfo) {
+                  // 조원 본인이 비선호시간이면 빗금으로 표시
+                  ownerOriginalInfo = userScheduleInfo;
+                  console.log(`🚫 [WeekView-일반] 조원 본인 비선호시간: ${time}`, userScheduleInfo);
+                }
+              }
+
               // 4. 🆕 이동시간 고려한 유효성 체크 (조원이고 이동모드일 때만)
               // ⭐ 시간별 체크 + 동적 이동시간 계산 (문제 1+3+4 해결)
               // ⭐ 단, ownerOriginalInfo나 ownerInfo가 있으면 빗금 계산 스킵
@@ -968,9 +1142,11 @@ const WeekView = ({
               // exception이나 personal은 최우선 (이동시간 포함)
               // 확정된 일정은 blocked(오렌지색)로 표시되어야 함
               if (ownerOriginalInfo && (
-                ownerOriginalInfo.type === 'exception' || 
+                ownerOriginalInfo.type === 'exception' ||
                 ownerOriginalInfo.type === 'personal' ||
-                ownerOriginalInfo.type === 'travel_restricted'
+                ownerOriginalInfo.type === 'travel_restricted' ||
+                ownerOriginalInfo.type === 'user_non_preferred' ||  // 🆕 조원 본인 비선호시간 (문제 1)
+                ownerOriginalInfo.type === 'non_preferred'  // 🆕 방장 비선호시간
               )) {
                 finalBlockedInfo = { ...ownerOriginalInfo, ownerScheduleType: ownerOriginalInfo.type };
                 finalRoomExceptionInfo = null;

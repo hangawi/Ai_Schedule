@@ -478,6 +478,17 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
   // 방장 시간표 정보 캐시 업데이트
   useEffect(() => {
+    console.log('🔍 [CoordinationTab] currentRoom 업데이트:', {
+      hasCurrentRoom: !!currentRoom,
+      hasOwner: !!currentRoom?.owner,
+      ownerId: currentRoom?.owner?._id,
+      ownerName: currentRoom?.owner?.firstName,
+      hasDefaultSchedule: !!currentRoom?.owner?.defaultSchedule,
+      defaultScheduleLength: currentRoom?.owner?.defaultSchedule?.length,
+      hasScheduleExceptions: !!currentRoom?.owner?.scheduleExceptions,
+      hasPersonalTimes: !!currentRoom?.owner?.personalTimes
+    });
+
     if (currentRoom?.owner?.defaultSchedule) {
       const newCache = {
         defaultSchedule: currentRoom.owner.defaultSchedule,
@@ -485,11 +496,18 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         personalTimes: currentRoom.owner.personalTimes,
         _timestamp: Date.now()
       };
-      
+
+      console.log('✅ [CoordinationTab] ownerScheduleCache 설정:', {
+        defaultScheduleLength: newCache.defaultSchedule.length,
+        hasExceptions: !!newCache.scheduleExceptions,
+        hasPersonalTimes: !!newCache.personalTimes
+      });
+
       // 즉시 업데이트
       setOwnerScheduleCache(newCache);
       setRenderKey(prev => prev + 1);
     } else {
+      console.warn('❌ [CoordinationTab] ownerScheduleCache를 null로 설정 - owner 정보 없음');
       setOwnerScheduleCache(null);
     }
   }, [currentRoom]);
