@@ -69,6 +69,18 @@ const timeToMinutes = (timeStr) => {
   return hour * 60 + minute;
 };
 
+/**
+ * DaySummaryBar - 날짜별 시간 블록 요약 바
+ *
+ * @description 하루의 시간 블록(배정, 차단, 이동, 빈 시간)을 시각적인 바로 표시합니다.
+ * @param {Object} props - 컴포넌트 props
+ * @param {Array<Object>} props.blocks - 하루의 시간 블록 배열
+ * @returns {JSX.Element} 요약 바 UI
+ *
+ * @note
+ * - 각 블록의 너비는 24시간 중 차지하는 비율에 따라 결정됩니다.
+ * - 블록 타입에 따라 다른 색상으로 표시됩니다.
+ */
 const DaySummaryBar = ({ blocks }) => {
   if (!blocks || blocks.length === 0) {
     return <div className="w-full h-2 bg-gray-200 rounded-full"></div>;
@@ -121,6 +133,16 @@ const DaySummaryBar = ({ blocks }) => {
   );
 };
 
+/**
+ * getEndTimeForBlock - 시간 블록의 종료 시간 계산
+ *
+ * @description 시작 시간과 지속 시간을 기반으로 블록의 종료 시간을 HH:MM 형식으로 계산합니다.
+ * @param {object} block - 시간 블록 객체 (startTime, duration 포함)
+ * @returns {string} HH:MM 형식의 종료 시간
+ *
+ * @example
+ * getEndTimeForBlock({ startTime: '09:00', duration: 90 }); // "10:30"
+ */
 const getEndTimeForBlock = (block) => {
   const startMinutes = timeToMinutes(block.startTime);
   const endMinutes = startMinutes + block.duration;
@@ -149,6 +171,18 @@ const CoordinationCalendarView = ({
     }
   }, [currentWeekStartDate]);
 
+  /**
+   * getOwnerScheduleInfoForTime - 특정 시간의 방장 일정 정보 조회
+   *
+   * @description 주어진 날짜와 시간에 방장의 일정이 예외, 개인 시간, 선호, 또는 비선호인지 확인합니다.
+   * @param {Date} date - 확인할 날짜
+   * @param {string} time - 확인할 시간 (HH:MM)
+   * @returns {object|null} 방장의 일정 정보 객체 (예: { type: 'exception', ... }) 또는 null
+   *
+   * @note
+   * - `ownerOriginalSchedule` prop을 참조합니다.
+   * - 예외 > 개인 시간 > 비선호 시간 순으로 우선순위를 가집니다.
+   */
   const getOwnerScheduleInfoForTime = (date, time) => {
     if (!ownerOriginalSchedule) return null;
 
@@ -204,6 +238,18 @@ const CoordinationCalendarView = ({
     return { type: 'non_preferred' };
   };
 
+  /**
+   * getBlocksForDay - 하루의 시간 블록 생성
+   *
+   * @description 주어진 날짜에 대해 10분 단위로 시간 슬롯을 생성하고, 각 슬롯의 상태(배정, 차단, 이동, 빈 시간 등)를 결정하여
+   *              연속된 슬롯들을 하나의 블록으로 병합합니다.
+   * @param {Date} date - 블록을 생성할 날짜
+   * @returns {Array<Object>} 하루의 시간 블록 배열
+   *
+   * @note
+   * - `generateDayTimeSlots`, `getBlockedTimeInfo`, `getRoomExceptionInfo`, `getOwnerScheduleInfoForTime` 등 여러 헬퍼 함수를 사용하여 각 슬롯의 상태를 결정합니다.
+   * - 방장이 아닌 경우 다른 사람의 슬롯은 '배정된 시간'으로 익명 처리됩니다.
+   */
   const getBlocksForDay = (date) => {
     const allPossibleSlots = generateDayTimeSlots(0, 24);
     const slotMap = new Map();
@@ -326,6 +372,12 @@ const CoordinationCalendarView = ({
   const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
   const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
 
+  /**
+   * navigateMonth - 월 이동 처리
+   *
+   * @description 현재 표시된 월을 이전 또는 다음 달로 변경합니다.
+   * @param {number} direction - 이동 방향 (-1: 이전 달, 1: 다음 달)
+   */
   const navigateMonth = (direction) => {
     const newDate = new Date(currentDate);
     newDate.setMonth(currentDate.getMonth() + direction);
@@ -333,6 +385,11 @@ const CoordinationCalendarView = ({
     if (onWeekChange) onWeekChange(toYYYYMMDD(newDate));
   };
 
+  /**
+   * goToToday - '오늘'로 이동
+   *
+   * @description 캘린더 뷰를 현재 날짜가 포함된 월로 이동합니다.
+   */
   const goToToday = () => {
     const today = new Date();
     setCurrentDate(today);

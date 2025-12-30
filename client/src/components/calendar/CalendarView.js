@@ -99,16 +99,35 @@ const CalendarView = ({
   }, [schedule, exceptions, personalTimes]);
 
   /**
-   * generateCalendarDates - 캘린더 날짜 데이터 생성
+   * generateCalendarDates
+   *
+   * @description 월간 캘린더 날짜 데이터를 생성하여 상태를 업데이트합니다.
+   *
+   * @example
+   * generateCalendarDates();
+   *
+   * @note
+   * - `generateMonthDates` 함수를 호출하여 실제 날짜 데이터를 생성합니다.
+   * - `useEffect` 내에서 `currentDate`, `schedule`, `exceptions`, `personalTimes`가 변경될 때 호출됩니다.
    */
   const generateCalendarDates = () => {
     generateMonthDates();
   };
 
   /**
-   * generateMonthDates - 월간 캘린더 날짜 배열 생성
+   * generateMonthDates
    *
-   * @description 현재 월의 모든 날짜와 일정/예외/개인시간 정보를 포함한 배열 생성
+   * @description 현재 `currentDate`를 기준으로 6주(42일)에 해당하는 월간 캘린더 날짜 배열을 생성합니다.
+   *              각 날짜 객체에는 일정, 예외, 개인 시간 등의 정보가 포함됩니다.
+   *
+   * @example
+   * generateMonthDates();
+   * // `calendarDates` 상태가 42개의 날짜 정보 객체 배열로 업데이트됩니다.
+   *
+   * @note
+   * - 캘린더는 항상 6주(42일)로 표시되며, 일요일부터 시작합니다.
+   * - 각 날짜 객체는 `date`, `day`, `isCurrentMonth`, `isToday`, `isSelected`, `hasSchedule`, `hasException`, `hasPersonalTime`, `hasHoliday`, `scheduleCount`, `exceptionCount`, `personalTimeCount`, `totalCount`, `exceptions` 속성을 가집니다.
+   * - 이 함수는 `generateCalendarDates` 내부에서 호출됩니다.
    */
   const generateMonthDates = () => {
     const year = currentDate.getFullYear();
@@ -166,6 +185,22 @@ const CalendarView = ({
   };
 
 
+  /**
+   * hasScheduleForDate - 특정 날짜의 일정 존재 여부 확인
+   *
+   * @description 주어진 날짜에 `schedule` 배열을 기반으로 한 일정이 있는지 확인합니다.
+   *              특정 날짜(specificDate) 또는 요일(dayOfWeek)을 기준으로 검사합니다.
+   * @param {Date} date - 확인할 날짜 객체
+   * @returns {boolean} 해당 날짜에 일정이 있으면 true, 없으면 false
+   *
+   * @example
+   * const date = new Date('2025-12-25');
+   * const hasSchedule = hasScheduleForDate(date);
+   *
+   * @note
+   * - `schedule` 상태 배열을 참조합니다.
+   * - `specificDate`가 있는 일정은 해당 날짜와 직접 비교하고, 없으면 요일을 비교합니다.
+   */
   const hasScheduleForDate = (date) => {
     const dayOfWeek = date.getDay();
     const year = date.getFullYear();
@@ -183,6 +218,21 @@ const CalendarView = ({
       }
     });
   };;
+  /**
+   * getScheduleCount - 특정 날짜의 병합된 일정 개수 반환
+   *
+   * @description 주어진 날짜에 해당하는 일정을 찾아, 연속된 시간을 병합한 후의 총 일정 개수를 반환합니다.
+   * @param {Date} date - 개수를 계산할 날짜 객체
+   * @returns {number} 병합된 일정의 총 개수
+   *
+   * @example
+   * const date = new Date('2025-12-25');
+   * const count = getScheduleCount(date);
+   *
+   * @note
+   * - `schedule` 상태 배열을 참조하며, `specificDate`와 `dayOfWeek`를 모두 고려합니다.
+   * - 시간이 연속되고 우선순위가 같은 일정은 하나의 일정으로 병합하여 계산합니다.
+   */
   const getScheduleCount = (date) => {
     const dayOfWeek = date.getDay();
     const year = date.getFullYear();
@@ -217,6 +267,23 @@ const CalendarView = ({
     return merged.length;
   };;
 
+  /**
+   * getExceptionCount - 특정 날짜의 병합된 예외 일정 개수 반환
+   *
+   * @description 주어진 날짜에 해당하는 예외 일정을 찾아, 연속된 시간을 병합한 후의 총 예외 개수를 반환합니다.
+   *              '휴무일'은 계산에서 제외됩니다.
+   * @param {Date} date - 개수를 계산할 날짜 객체
+   * @returns {number} 병합된 예외 일정의 총 개수
+   *
+   * @example
+   * const date = new Date('2025-12-25');
+   * const count = getExceptionCount(date);
+   *
+   * @note
+   * - `exceptions` 상태 배열을 참조합니다.
+   * - 시간이 연속되는 예외는 하나의 예외로 병합하여 계산합니다.
+   * - `title`이 '휴무일'이거나 `isHoliday`가 true인 예외는 카운트에서 제외됩니다.
+   */
   const getExceptionCount = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -261,6 +328,22 @@ const CalendarView = ({
     return merged.length;
   };;
 
+  /**
+   * getPersonalTimeCount - 특정 날짜의 개인 시간 개수 반환
+   *
+   * @description 주어진 날짜에 해당하는 개인 시간(반복 또는 특정 날짜)의 개수를 반환합니다.
+   * @param {Date} date - 개수를 계산할 날짜 객체
+   * @returns {number} 개인 시간의 총 개수
+   *
+   * @example
+   * const date = new Date('2025-12-25');
+   * const count = getPersonalTimeCount(date);
+   *
+   * @note
+   * - `personalTimes` 상태 배열을 참조합니다.
+   * - 반복되는 개인 시간(`isRecurring`, `days`)과 특정 날짜의 개인 시간(`isRecurring: false`, `specificDate`)을 모두 고려합니다.
+   * - 개인 시간은 병합되지 않고 각 항목을 개별로 카운트합니다.
+   */
   const getPersonalTimeCount = (date) => {
     const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay();
     const year = date.getFullYear();
@@ -282,6 +365,21 @@ const CalendarView = ({
     return pts.length;
   };;
 
+  /**
+   * hasExceptionForDate - 특정 날짜의 예외 일정 존재 여부 확인
+   *
+   * @description 주어진 날짜에 '휴무일'이 아닌 예외 일정이 있는지 확인합니다.
+   * @param {Date} date - 확인할 날짜 객체
+   * @returns {boolean} 해당 날짜에 예외가 있으면 true, 없으면 false
+   *
+   * @example
+   * const date = new Date('2025-12-26');
+   * const hasException = hasExceptionForDate(date);
+   *
+   * @note
+   * - `exceptions` 상태 배열을 참조합니다.
+   * - `title`이 '휴무일'이거나 `isHoliday`가 true인 항목은 예외로 간주하지 않습니다.
+   */
   const hasExceptionForDate = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -299,6 +397,21 @@ const CalendarView = ({
     return hasException;
   };
 
+  /**
+   * hasHolidayForDate - 특정 날짜의 휴무일 존재 여부 확인
+   *
+   * @description 주어진 날짜가 '휴무일'로 지정된 예외인지 확인합니다.
+   * @param {Date} date - 확인할 날짜 객체
+   * @returns {boolean} 해당 날짜가 휴무일이면 true, 아니면 false
+   *
+   * @example
+   * const date = new Date('2025-01-01');
+   * const isHoliday = hasHolidayForDate(date);
+   *
+   * @note
+   * - `exceptions` 상태 배열을 참조합니다.
+   * - `title`이 '휴무일'이거나 `isHoliday`가 true인 항목을 휴무일로 간주합니다.
+   */
   const hasHolidayForDate = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -376,6 +489,16 @@ const CalendarView = ({
   };
 
 
+  /**
+   * renderCalendarHeader - 캘린더 헤더 렌더링
+   *
+   * @description 현재 연도와 월, 그리고 월 이동 및 '오늘'로 가기 버튼을 포함한 헤더를 렌더링합니다.
+   * @returns {JSX.Element} 캘린더 헤더 UI
+   *
+   * @note
+   * - `currentDate` 상태를 사용하여 현재 표시된 연도와 월을 결정합니다.
+   * - `navigateMonth`와 `goToToday` 함수를 버튼 클릭 이벤트에 연결합니다.
+   */
   const renderCalendarHeader = () => (
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center space-x-4">
@@ -410,6 +533,17 @@ onClick={() => navigateMonth(1)}
     </div>
   );
 
+  /**
+   * renderMonthView - 월간 캘린더 그리드 렌더링
+   *
+   * @description 6주(42일) 분량의 캘린더 그리드를 렌더링합니다. 각 날짜 셀에는 일정, 예외, 개인 시간 등의 정보가 시각적으로 표시됩니다.
+   * @returns {JSX.Element} 월간 캘린더 그리드 UI
+   *
+   * @note
+   * - `calendarDates` 상태 배열을 기반으로 각 날짜 셀을 렌더링합니다.
+   * - 휴무일, 오늘, 선택된 날짜, 현재 월에 속하지 않는 날짜 등을 각기 다른 스타일로 표시합니다.
+   * - 각 날짜의 일정, 예외, 개인 시간은 색상 막대로 요약하여 표시됩니다.
+   */
   const renderMonthView = () => (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       {/* 요일 헤더 */}

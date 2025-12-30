@@ -6,7 +6,7 @@
  */
 
 const User = require('../models/user');
-const ActivityLog = require('../models/activityLog');
+const ActivityLog = require('../models/ActivityLog');
 
 /**
  * 시간 문자열을 분 단위로 변환 (예: "09:30" -> 570)
@@ -233,7 +233,6 @@ const saveUserWithRetry = async (user, maxRetries = 3) => {
       return; // 성공
     } catch (error) {
       if (error.name === 'VersionError' && attempt < maxRetries) {
-        console.log(`⚠️ VersionError for user ${user._id}, retrying (${attempt}/${maxRetries})...`);
 
         // 최신 버전 다시 조회
         const freshUser = await User.findById(user._id);
@@ -513,7 +512,6 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
         message: '자동배정 시간이 확정되었습니다.',
         timestamp: new Date()
       });
-      console.log(`📡 Socket 이벤트 전송: room-${room._id}`);
     }
 
     // 10. 결과 반환
@@ -525,7 +523,6 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
     };
 
   } catch (error) {
-    console.error('❌ [confirmScheduleLogic] 오류:', error.message);
     throw error;
   }
 }

@@ -103,6 +103,19 @@ const AdminDashboard = () => {
     fetchDashboardData();
   }, []);
 
+  /**
+   * formatDateTime - 날짜 문자열 포맷팅
+   *
+   * @description ISO 형식의 날짜 문자열을 한국어 로케일에 맞는 짧은 형식으로 변환합니다.
+   * @param {string} dateString - ISO 형식의 날짜 문자열
+   * @returns {string} 포맷팅된 날짜 문자열 (예: "12월 25일, 오후 3:00") 또는 '-'
+   *
+   * @example
+   * formatDateTime('2025-12-25T06:00:00.000Z'); // "12월 25일, 오후 3:00" (한국 시간 기준)
+   *
+   * @note
+   * - `dateString`이 유효하지 않으면 '-'를 반환합니다.
+   */
   const formatDateTime = (dateString) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleString('ko-KR', {
@@ -113,6 +126,20 @@ const AdminDashboard = () => {
     });
   };
 
+  /**
+   * getActivityIcon - 활동 타입에 따른 아이콘 반환
+   *
+   * @description 활동 타입 문자열에 따라 해당하는 lucide-react 아이콘 컴포넌트를 반환합니다.
+   * @param {string} type - 활동 타입 (예: 'user_signup', 'room_create')
+   * @returns {JSX.Element} 활동 타입에 맞는 아이콘
+   *
+   * @example
+   * getActivityIcon('user_signup'); // <Users> 아이콘 반환
+   * getActivityIcon('unknown_type'); // <Calendar> 기본 아이콘 반환
+   *
+   * @note
+   * - 정의되지 않은 타입에 대해서는 기본 아이콘(Calendar)을 반환합니다.
+   */
   const getActivityIcon = (type) => {
     switch (type) {
       case 'user_signup':
@@ -128,6 +155,20 @@ const AdminDashboard = () => {
     }
   };
 
+  /**
+   * getActivityLabel - 활동 타입에 따른 레이블 반환
+   *
+   * @description 활동 타입 문자열에 따라 UI에 표시될 한글 레이블을 반환합니다.
+   * @param {string} type - 활동 타입 (예: 'user_signup', 'room_create')
+   * @returns {string} 한글로 변환된 활동 레이블
+   *
+   * @example
+   * getActivityLabel('user_signup'); // '회원가입' 반환
+   * getActivityLabel('unknown_type'); // 'unknown_type' 그대로 반환
+   *
+   * @note
+   * - `labels` 객체에 정의되지 않은 타입은 원래의 타입 문자열을 그대로 반환합니다.
+   */
   const getActivityLabel = (type) => {
     const labels = {
       user_signup: '회원가입',
@@ -152,6 +193,20 @@ const AdminDashboard = () => {
     return labels[type] || type;
   };
 
+  /**
+   * getActivityColor - 활동 타입에 따른 Tailwind CSS 클래스 반환
+   *
+   * @description 활동 타입 문자열에 따라 카드 스타일에 적용될 Tailwind CSS 색상 클래스를 반환합니다.
+   * @param {string} type - 활동 타입 (예: 'user_signup', 'room_create')
+   * @returns {string} Tailwind CSS 클래스 문자열
+   *
+   * @example
+   * getActivityColor('user_signup'); // 'bg-green-100 text-green-700' 반환
+   * getActivityColor('unknown_type'); // 'bg-gray-100 text-gray-600' 기본값 반환
+   *
+   * @note
+   * - `colors` 객체에 정의되지 않은 타입에 대해서는 기본 회색 계열 클래스를 반환합니다.
+   */
   const getActivityColor = (type) => {
     const colors = {
       user_signup: 'bg-green-100 text-green-700',

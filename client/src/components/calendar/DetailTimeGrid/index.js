@@ -141,6 +141,22 @@ const DetailTimeGrid = ({
     return `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
   };
 
+  /**
+   * handleSlotClick - 시간 슬롯 클릭 핸들러
+   *
+   * @description 시간 슬롯을 클릭할 때마다 우선순위를 순환(3→2→1→삭제)시키거나 새로 추가합니다.
+   *              읽기 전용 모드에서는 아무 작업도 수행하지 않습니다.
+   *              모든 변경사항은 `schedule` 상태에 반영됩니다.
+   *
+   * @param {string} startTime - 클릭된 슬롯의 시작 시간 (HH:MM 형식)
+   *
+   * @note
+   * - `readOnly` prop이 true이면 즉시 반환됩니다.
+   * - 기존 슬롯이 있으면 우선순위를 3→2→1 순으로 변경하고, 1에서 다시 클릭하면 삭제됩니다.
+   * - 새 슬롯은 우선순위 3(선호)으로 생성됩니다.
+   * - 복사 옵션이 활성화된 경우, 슬롯 추가 시 복사본도 함께 생성됩니다.
+   * - 변경이 발생하면 `hasUnsavedChanges` 상태가 true로 설정됩니다.
+   */
   const handleSlotClick = (startTime) => {
     // 모든 모드에서 시간대 정보 확인 가능
     const exception = getExceptionForSlot(startTime);
@@ -243,6 +259,19 @@ const DetailTimeGrid = ({
     setHasUnsavedChanges(true);
   };
 
+  /**
+   * getSlotInfo - 특정 시간의 일정 정보 조회
+   *
+   * @description 주어진 시작 시간에 해당하는 일정(schedule) 정보를 반환합니다.
+   *              병합/분할 뷰 모드에 따라 다른 방식으로 정보를 찾습니다.
+   *
+   * @param {string} startTime - 조회할 시작 시간 (HH:MM 형식)
+   * @returns {Object|null} 해당 시간의 일정 객체. 없으면 null.
+   *
+   * @note
+   * - `showMerged` 상태에 따라 `mergedSchedule` 또는 `schedule` 배열에서 검색합니다.
+   * - `specificDate`가 있는 일정은 날짜를 비교하고, 없으면 요일을 비교하여 현재 선택된 날짜에 유효한지 확인합니다.
+   */
   const getSlotInfo = (startTime) => {
     const dayOfWeek = selectedDate.getDay();
     const year = selectedDate.getFullYear();
@@ -287,11 +316,35 @@ const DetailTimeGrid = ({
     }
   };
 
+
+/**
+ * timeToMinutes - 시간 문자열을 분으로 변환
+ *
+ * @description "HH:MM" 형식의 시간 문자열을 0시 0분부터의 총 분으로 변환합니다.
+ * @param {string} timeString - "HH:MM" 형식의 시간 문자열
+ * @returns {number} 분으로 변환된 시간
+ *
+ * @example
+ * timeToMinutes("01:30"); // 90
+ * timeToMinutes("14:00"); // 840
+ */
   const timeToMinutes = (timeString) => {
     const [hour, minute] = timeString.split(':').map(Number);
     return hour * 60 + minute;
   };
 
+  /**
+   * getExceptionForSlot - 특정 시간 슬롯의 예외 일정 조회
+   *
+   * @description 주어진 시작 시간에 해당하는 예외(exception) 일정이 있는지 확인하고, 있으면 해당 예외 객체를 반환합니다.
+   * @param {string} startTime - 조회할 시작 시간 (HH:MM 형식)
+   * @returns {Object|null} 해당 시간의 예외 객체. 없으면 null.
+   *
+   * @note
+   * - `exceptions` 상태 배열을 참조합니다.
+   * - `specificDate`가 현재 선택된 날짜와 일치하는지 확인합니다.
+   * - 예외 객체의 `startTime`과 `endTime`이 ISO 문자열 형식과 "HH:MM" 형식을 모두 처리할 수 있도록 구현되어 있습니다.
+   */
   const getExceptionForSlot = (startTime) => {
     const year = selectedDate.getFullYear();
     const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
@@ -336,6 +389,18 @@ const DetailTimeGrid = ({
     return null;
   };
 
+  /**
+   * getPersonalTimeForSlot - 특정 시간 슬롯의 개인 시간 정보 조회
+   *
+   * @description 주어진 시작 시간에 해당하는 개인 시간(personal time)이 있는지 확인하고, 있으면 해당 개인 시간 객체를 반환합니다.
+   * @param {string} startTime - 조회할 시작 시간 (HH:MM 형식)
+   * @returns {Object|null} 해당 시간의 개인 시간 객체. 없으면 null.
+   *
+   * @note
+   * - `personalTimes` 상태 배열을 참조합니다.
+   * - 반복되는 개인 시간(요일 기준)과 특정 날짜의 개인 시간을 모두 고려합니다.
+   * - 수면 시간처럼 자정을 넘어가는 시간대도 올바르게 처리합니다.
+   */
   const getPersonalTimeForSlot = (startTime) => {
     const dayOfWeek = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
     const selectedDateStr = selectedDate.toISOString().split('T')[0];
@@ -441,6 +506,20 @@ const DetailTimeGrid = ({
     setHasUnsavedChanges(true);
   };
 
+  /**
+   * addQuickTimeSlot - 빠른 시간 추가 (오전/오후 전체)
+   *
+   * @description 오전(9-12시) 또는 오후(13-17시) 등 미리 정의된 시간 범위를 한번에 추가하거나 제거(토글)합니다.
+   * @param {number} startHour - 시작 시간 (hour)
+   * @param {number} endHour - 종료 시간 (hour)
+   * @param {number} [priority=3] - 적용할 우선순위
+   *
+   * @note
+   * - `readOnly` 모드에서는 작동하지 않습니다.
+   * - 이미 해당 시간대에 슬롯이 있으면 모든 관련 슬롯을 제거하고, 없으면 새로 추가합니다.
+   * - 복사 옵션이 활성화된 경우, 슬롯 추가 시 복사본도 함께 생성됩니다.
+   * - 변경 사항은 즉시 자동 저장됩니다.
+   */
   const addQuickTimeSlot = (startHour, endHour, priority = 3) => {
     if (readOnly || !setSchedule) return;
 
@@ -525,6 +604,17 @@ const DetailTimeGrid = ({
   };
 
 
+  /**
+   * applyCopyOptions - 예외 일정에 복사 옵션 적용
+   *
+   * @description 주어진 예외 일정을 `copyOptions` 상태에 따라 다른 날짜에 복사하여 추가합니다.
+   * @param {Object} baseException - 복사의 기준이 되는 원본 예외 객체
+   *
+   * @note
+   * - `setExceptions` 함수를 사용하여 상태를 업데이트합니다.
+   * - 복사 유형: 'nextWeek', 'prevWeek', 'thisWholeWeek', 'nextWholeWeek', 'wholeMonth'.
+   * - 복사된 예외는 원본의 `_id`를 `sourceId`로 가리켜 원본과의 관계를 유지합니다.
+   */
   const applyCopyOptions = (baseException) => {
     // 복사 옵션에 따라 다른 날짜에도 동일한 예외 추가
     if (!setExceptions || copyOptions.copyType === 'none') return;
@@ -666,6 +756,17 @@ const DetailTimeGrid = ({
       }, 100);
     }
   };
+  /**
+   * applyCopyOptionsToSchedule - 선호 시간에 복사 옵션 적용
+   *
+   * @description 주어진 선호 시간 슬롯(들)을 `copyOptions` 상태에 따라 다른 날짜에 복사하여 추가합니다.
+   * @param {Array<Object>} baseSlots - 복사의 기준이 되는 원본 슬롯 객체의 배열
+   *
+   * @note
+   * - `setSchedule` 함수를 사용하여 상태를 업데이트합니다.
+   * - 복사 유형: 'nextWeek', 'prevWeek', 'thisWholeWeek', 'nextWholeWeek', 'wholeMonth'.
+   * - 복사된 슬롯은 원본의 `_id`를 `sourceId`로 가리켜 원본과의 관계를 유지합니다.
+   */
   const applyCopyOptionsToSchedule = (baseSlots) => {
     // 선호시간에 대한 복사 옵션 적용
     if (!setSchedule || copyOptions.copyType === 'none' || !baseSlots || baseSlots.length === 0) return;
@@ -764,7 +865,17 @@ const DetailTimeGrid = ({
     }
   };
 
-  // 휴무일 설정/해제 함수
+  /**
+   * addHolidayForDay - '휴무일' 설정/해제
+   *
+   * @description 선택된 날짜 전체를 '휴무일' 예외로 설정하거나, 이미 설정된 경우 해제합니다(토글).
+   *
+   * @note
+   * - `readOnly` 모드에서는 작동하지 않습니다.
+   * - 휴무일 설정 시 해당 날짜의 다른 모든 예외를 제거하고, 하루 전체를 덮는 휴무일 예외를 생성합니다.
+   * - 휴무일 해제 시 해당 날짜의 휴무일 예외 및 관련 복사본을 모두 제거합니다.
+   * - 복사 옵션이 활성화된 경우, 휴무일 설정 시 다른 날짜에도 복사됩니다.
+   */
   const addHolidayForDay = () => {
     if (readOnly) return;
 
@@ -849,6 +960,10 @@ const DetailTimeGrid = ({
     }
   };
 
+  /**
+   * blockEntireDay - 하루 전체를 휴무일로 설정/해제 (토글)
+   * @description `addHolidayForDay`와 동일한 기능을 수행합니다. 선택된 날짜를 휴무일로 만들거나 기존 휴무일을 해제합니다.
+   */
   const blockEntireDay = () => {
     if (readOnly || !setExceptions) return;
 
@@ -925,6 +1040,11 @@ const DetailTimeGrid = ({
     }
   };
 
+  /**
+   * deleteEntireDay - 선택된 날짜의 모든 일정/예외 삭제
+   * @description 선택된 날짜에 해당하는 모든 선호 시간(schedule)과 예외(exception)를 삭제합니다.
+   *              복사된 항목들(sourceId 기준)도 함께 제거하여 일관성을 유지합니다.
+   */
   const deleteEntireDay = async () => {
     if (readOnly) return;
 
@@ -1044,6 +1164,11 @@ const DetailTimeGrid = ({
     }
   };
 
+  /**
+   * handleDirectInput - 직접 입력 시간 추가
+   * @description 사용자가 직접 입력한 시작/종료 시간과 우선순위로 예외 일정을 생성합니다.
+   *              입력된 시간은 10분 단위 슬롯으로 분할되어 저장됩니다.
+   */
   const handleDirectInput = () => {
     if (readOnly) return;
 
@@ -1136,7 +1261,12 @@ const DetailTimeGrid = ({
 
   const timeSlots = getCurrentTimeSlots();
 
-  // 병합된 뷰 렌더링 (연속 시간대를 실제로 단일 슬롯으로 병합)
+  /**
+   * renderMergedView - 병합된 시간표 뷰 렌더링
+   * @description 연속된 동일한 타입의 시간 슬롯들을 하나의 블록으로 병합하여 시각적으로 깔끔하게 표시합니다.
+   *              선호 시간이 아닌 모든 시간대는 '불가능한 시간'으로 표시됩니다.
+   * @returns {JSX.Element} 병합된 뷰 UI
+   */
   const renderMergedView = () => {
     const dayOfWeek = selectedDate.getDay();
     // 병합된 슬롯들과 개별 슬롯들을 모두 수집
@@ -1589,7 +1719,11 @@ const DetailTimeGrid = ({
     );
   };
 
-  // 기존 상세 뷰 렌더링
+  /**
+   * renderDetailedView - 분할된(상세) 시간표 뷰 렌더링
+   * @description 모든 시간 슬롯을 10분 단위로 각각 표시합니다. 각 슬롯을 개별적으로 클릭하여 편집할 수 있습니다.
+   * @returns {JSX.Element} 상세 뷰 UI
+   */
   const renderDetailedView = () => {
     return (
       <div className="grid grid-cols-7 gap-0">

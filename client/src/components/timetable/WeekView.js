@@ -322,13 +322,6 @@ const WeekView = ({
       return isMatch;
     });
 
-    console.log(`🎯 [getCurrentUserScheduleInfo] 결과:`, {
-      time,
-      dayOfWeek,
-      hasPreferredTime,
-      willReturnNonPreferred: !hasPreferredTime
-    });
-
     // 선호시간이 없으면 비선호시간으로 간주
     if (!hasPreferredTime) {
       return {
@@ -407,17 +400,14 @@ const WeekView = ({
       // 🔧 이전 수업이 다른 사용자의 것인지 확인
       if (prevUserId !== currentUserId) {
         // ✅ 다른 사용자 → 다른 사용자: 최소 이동시간 (10분)
-        console.log(`🚗 [동적 이동시간] ${currentTime} - 다른 사용자(${previousClass.user?.firstName || prevUserId})의 수업 뒤: 최소 10분`);
         return 10;
       } else {
         // ✅ 같은 사용자: 시간 간격 (연속 수업)
         const duration = currentTimeMinutes - prevEndMinutes;
-        console.log(`🚗 [동적 이동시간] ${currentTime} - 내 이전 수업 있음: ${previousClass.endTime} → ${currentTime} = ${duration}분`);
         return duration;
       }
     } else {
       // 이전 수업 없으면: 방장 → 현재 시간
-      console.log(`🚗 [동적 이동시간] ${currentTime} - 이전 수업 없음: 방장 → 현재 = ${myTravelDuration}분`);
       return myTravelDuration;
     }
   };
@@ -434,15 +424,6 @@ const WeekView = ({
 
       // 🔧 다른 사람의 수업 먼저 확인 (빗금 계산 전에!)
       const ownerInfo = getSlotOwner(date, time);
-      if (ownerInfo) {
-        console.log('👤 [WeekView] ownerInfo 발견:', {
-          time,
-          userId: ownerInfo.userId || ownerInfo.actualUserId,
-          name: ownerInfo.name,
-          isTravel: ownerInfo.isTravel,
-          currentUserId: currentUser?._id || currentUser?.id
-        });
-      }
 
       // 🆕 조원 본인의 비선호시간 체크 (문제 1 해결)
       // ⭐ 방장의 선호시간(빈 시간)일 때, 조원 본인이 불가능하면 빗금 표시
@@ -548,7 +529,6 @@ const WeekView = ({
       // In travel mode, owner info (split travel/activity slots) takes precedence
       // ✅ 단, isTravel 슬롯은 travelSlots 배열로 별도 렌더링되므로 여기서는 제외
       else if (travelMode !== 'normal' && ownerInfo && !ownerInfo.isTravel) {
-        console.log('🎯 [WeekView] travel mode + ownerInfo 조건 진입:', { time, travelMode });
         slotType = 'owner';
         slotData = ownerInfo;
         
@@ -558,7 +538,6 @@ const WeekView = ({
           const slotUserId = slotData.userId || slotData.actualUserId;
 
           if (slotUserId && slotUserId.toString() !== currentUserId.toString()) {
-            console.log('🔒 [WeekView:TravelMode] 다른 조원 슬롯 감지 - 빗금 처리:', { time, slotUserId, currentUserId });
             slotType = 'blocked';
             slotData = {
               name: '배정 불가',
@@ -612,7 +591,6 @@ const WeekView = ({
 
             // 🆕 다른 사람의 슬롯이면 빗금으로 표시 (배치 위치 숨김)
             if (slotUserId && slotUserId.toString() !== currentUserId.toString()) {
-              console.log('🔒 [WeekView] 다른 조원 슬롯 감지 - 빗금 처리:', { time, slotUserId, currentUserId });
               slotType = 'blocked';
               slotData = {
                 name: '배정 불가',
@@ -731,14 +709,6 @@ const WeekView = ({
 
   // 병합 모드 렌더링 함수 - 각 날짜별 독립적 컬럼 렌더링
   const renderMergedView = () => {
-    // 🔍 디버깅용 로그
-    if (!isRoomOwner && travelMode !== 'normal') {
-        console.log(`🎨 [WeekView:Merged] 빗금 렌더링 체크:`, {
-            myTravelDuration,
-            travelMode,
-            isRoomOwner
-        });
-    }
 
     // 🔍 현재 화면에 표시되는 날짜들 확인
     // 이동 슬롯을 날짜별로 그룹화
@@ -935,18 +905,6 @@ const WeekView = ({
                   const topPosition = (topOffsetMinutes / 10) * 20;
                   const slotHeight = (durationMinutes / 10) * 20;
                   
-                  console.log('🎨 [WeekView 렌더링]', {
-                      from: travelSlot.from,
-                      to: travelSlot.to,
-                      startTime: travelSlot.startTime,
-                      endTime: travelSlot.endTime,
-                      travelStartMinutes,
-                      travelEndMinutes,
-                      durationMinutes,
-                      slotHeight,
-                      '표시되는_duration': travelSlot.travelInfo?.durationText
-                  });
-                  
                   if (slotHeight <= 0) return null;
 
                   // 🆕 사용자 색상 가져오기 (기본값: 하늘색)
@@ -995,15 +953,7 @@ const WeekView = ({
   const renderNormalView = () => {
     // 평일 5개만 확실히 사용
     const weekdays = weekDates.slice(0, 5);
-    
-    // 🔍 디버깅용 로그
-    if (!isRoomOwner && travelMode !== 'normal') {
-        console.log(`🎨 [WeekView] 빗금 렌더링 체크:`, {
-            myTravelDuration,
-            travelMode,
-            isRoomOwner
-        });
-    }
+
 
     return (
       <>
@@ -1126,7 +1076,6 @@ const WeekView = ({
 
                 // 🆕 다른 사람의 슬롯이면 빗금으로 표시 (배치 위치 숨김)
                 if (slotUserId && slotUserId.toString() !== currentUserId.toString()) {
-                  console.log('🔒 [WeekView:Normal] 다른 조원 슬롯 감지 - 빗금 처리:', { time, slotUserId, currentUserId });
                   finalBlockedInfo = {
                     name: '배정 불가',
                     ownerScheduleType: 'other_member',

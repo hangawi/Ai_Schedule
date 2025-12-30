@@ -80,15 +80,6 @@ class TravelScheduleCalculator {
       const startMinutes = this.parseTime(block.startTime);
       const endMinutes = this.parseTime(block.endTime);
 
-      // 🔍 디버깅: 입력 확인
-      console.log('🔍 [unmergeBlock] 입력:', {
-          원본_startTime: block.startTime,
-          원본_endTime: block.endTime,
-          계산된_startMinutes: startMinutes,
-          계산된_endMinutes: endMinutes,
-          subject: block.subject
-      });
-
       // 🔧 버그 수정: block에서 startTime/endTime 제외하고 나머지 속성만 추출
       const { startTime: _st, endTime: _et, originalSlots, isMerged, ...baseProps } = block;
 
@@ -103,21 +94,8 @@ class TravelScheduleCalculator {
               endTime: calculatedEnd
           };
 
-          // 🔍 디버깅: 생성된 슬롯 확인 (처음 3개만)
-          if (slots.length < 3) {
-              console.log(`🔍 [unmergeBlock] 슬롯 ${slots.length + 1}:`, {
-                  계산된_start: calculatedStart,
-                  계산된_end: calculatedEnd,
-                  실제_newSlot_start: newSlot.startTime,
-                  실제_newSlot_end: newSlot.endTime,
-                  일치여부: calculatedStart === newSlot.startTime && calculatedEnd === newSlot.endTime
-              });
-          }
-
           slots.push(newSlot);
       }
-
-      console.log(`🔍 [unmergeBlock] 결과: ${slots.length}개 슬롯 생성`);
       return slots;
   }
 
@@ -211,7 +189,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
 
         previousLocation = memberLocation;
       } catch (error) {
-        console.error('도보 모드 검증 중 오류:', error);
         // 검증 중 오류는 통과시킴 (실제 계산에서 처리)
       }
     }
@@ -419,13 +396,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     const userIdStr = userId.toString();
     const originalDate = new Date(mergedSlot.date);
 
-    console.log('🔍 [findAvailableSlot] 시작:', {
-      userId: userIdStr,
-      원본날짜: originalDate.toISOString().split('T')[0],
-      이동시간: travelDurationMinutes,
-      수업시간: activityDurationMinutes
-    });
-
     // 월-금 순회 (5일간)
     for (let dayOffset = 0; dayOffset < 5; dayOffset++) {
       const targetDate = new Date(originalDate);
@@ -437,8 +407,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
       // 주말이면 건너뛰기
       if (dayOfWeek === 0 || dayOfWeek === 6) continue;
 
-      console.log(`  📅 [요일 시도] ${dateStr} (${dayName})`);
-
       const userPrefs = memberPreferences[userIdStr];
       if (!userPrefs || !userPrefs[dayName]) continue;
 
@@ -446,17 +414,12 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
 
       // 🆕 선호시간 슬롯을 시간 순으로 정렬 (빠른 시간부터 배치)
       preferredSlots.sort((a, b) => a.startMinutes - b.startMinutes);
-      
-      console.log(`    📋 [선호시간 슬롯] ${dayName}:`, preferredSlots.map(s => 
-        `${this.formatTime(s.startMinutes)}-${this.formatTime(s.endMinutes)}`
-      ).join(', '));
 
       // 🆕 해당 날짜의 마지막 위치 확인하여 이동시간 재계산
       let actualTravelMinutes = travelDurationMinutes; // 기본값: 방장 기준
       
       if (lastLocationByDate && lastLocationByDate[dateStr] && travelModeService) {
         const lastLoc = lastLocationByDate[dateStr];
-        console.log(`    🔄 [이동시간 재계산] ${dateStr}에 ${lastLoc.location.name} 있음`);
         try {
           const travelInfo = await travelModeService.calculateTravelTime(
             { lat: lastLoc.location.lat, lng: lastLoc.location.lng },
@@ -464,12 +427,9 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
             travelMode
           );
           actualTravelMinutes = Math.ceil(travelInfo.duration / 60 / 10) * 10;
-          console.log(`       ${lastLoc.location.name} → ${memberLocation.name}: ${actualTravelMinutes}분`);
         } catch (err) {
-          console.warn(`    ⚠️ [재계산 실패] 기본값 사용:`, err.message);
         }
       } else {
-        console.log(`    🏠 [방장에서 출발] ${dateStr} - ${actualTravelMinutes}분`);
       }
 
       // 선호시간 슬롯들에 배치 시도
@@ -482,7 +442,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
 
         // 선호시간 내에 완전히 들어가는지 체크
         if (activityEnd > prefSlot.endMinutes) {
-          console.log(`    ⚠️ [선호시간 초과] ${this.formatTime(activityEnd)} > ${this.formatTime(prefSlot.endMinutes)}`);
           continue;
         }
 
@@ -491,7 +450,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         const activityBlockedCheck = this.checkBlockedTimeConflict(activityStart, activityEnd, blockedTimes);
 
         if (travelBlockedCheck.conflict || activityBlockedCheck.conflict) {
-          console.log(`    🚫 [금지시간 충돌]`);
           continue;
         }
 
@@ -500,12 +458,10 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         const activityOverlap = this.checkOverlap(dateStr, activityStart, activityEnd, assignedSlotsByDate);
 
         if (travelOverlap || activityOverlap) {
-          console.log(`    ⚠️ [겹침 발생]`);
           continue;
         }
 
         // 배치 가능!
-        console.log(`    ✅ [배치 가능] ${this.formatTime(travelStart)}-${this.formatTime(activityEnd)} (이동 ${actualTravelMinutes}분)`);
         return {
           success: true,
           date: targetDate,
@@ -522,7 +478,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     }
 
     // 모든 요일에 배치 불가능
-    console.log('  ❌ [배치 실패] 모든 요일에 배치 불가능');
     return { success: false };
   }
 
@@ -543,12 +498,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const userIdStr = userId.toString();
     const originalDate = new Date(mergedSlot.date);
-    
-    console.log('🔄 [findAvailableSlotsWithSplit] 시작:', {
-      userId: userIdStr,
-      이동시간: travelDurationMinutes,
-      총수업시간: totalActivityDurationMinutes
-    });
 
     const blocks = []; // 배치된 블록들
     let remainingActivityMinutes = totalActivityDurationMinutes;
@@ -567,8 +516,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
       // 주말이면 건너뛰기
       if (dayOfWeek === 0 || dayOfWeek === 6) continue;
 
-      console.log(`  📅 [요일 시도] ${dateStr} (${dayName}), 남은 수업시간: ${remainingActivityMinutes}분`);
-
       const userPrefs = memberPreferences[userIdStr];
       if (!userPrefs || !userPrefs[dayName]) continue;
 
@@ -576,10 +523,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
 
       // 🆕 선호시간 슬롯을 시간 순으로 정렬 (빠른 시간부터 배치)
       preferredSlots.sort((a, b) => a.startMinutes - b.startMinutes);
-      
-      console.log(`    📋 [선호시간 슬롯] ${dayName}:`, preferredSlots.map(s => 
-        `${this.formatTime(s.startMinutes)}-${this.formatTime(s.endMinutes)}`
-      ).join(', '));
 
       // 선호시간 슬롯들에 배치 시도
       for (const prefSlot of preferredSlots) {
@@ -599,10 +542,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
           // 🚨 중요: 마지막 활동이 현재 시작 시간보다 먼저 끝나야 함!
           if (lastLocOnDate && lastLocOnDate.location && lastLocOnDate.endMinutes <= prefSlot.startMinutes) {
             // 🆕 마지막 학생 → 현재 학생 이동시간 실제 계산
-            console.log(`    🔄 [이동시간 재계산] ${dateStr}에 이미 배치된 학생 있음`);
-            console.log(`       출발: ${lastLocOnDate.location.name || '이전 학생'}`);
-            console.log(`       도착: ${currentMemberLocation.name || '현재 학생'}`);
-            
             try {
               const lastToCurrentTravel = await travelModeService.calculateTravelTime(
                 { lat: lastLocOnDate.location.lat, lng: lastLocOnDate.location.lng },
@@ -612,9 +551,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
               actualTravelDuration = Math.ceil(lastToCurrentTravel.duration / 60 / 10) * 10;
               fromLocation = lastLocOnDate.location;
               fromLocationName = lastLocOnDate.location.name || '이전 학생';
-              console.log(`       계산된 이동시간: ${actualTravelDuration}분`);
             } catch (err) {
-              console.warn(`    ⚠️ [이동시간 계산 실패] 방장 위치로 대체`, err.message);
               fromLocation = startFromLocation;
               fromLocationName = startFromLocation.name || '방장';
               actualTravelDuration = travelDurationMinutes;
@@ -624,14 +561,12 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
             fromLocation = startFromLocation;
             fromLocationName = startFromLocation.name || '방장';
             actualTravelDuration = travelDurationMinutes;
-            console.log(`    🏠 [방장에서 출발] 이동시간: ${actualTravelDuration}분`);
           }
         } else {
           // 같은 날짜의 다음 블록: 이미 해당 위치에 있음
           actualTravelDuration = 0;
           fromLocation = null;
           fromLocationName = null;
-          console.log(`    ⏭️ [같은 날 연속] 이동시간 없음`);
         }
         
         const travelStart = prefSlot.startMinutes;
@@ -642,7 +577,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         const availableMinutes = prefSlot.endMinutes - activityStart;
         
         if (availableMinutes <= 0) {
-          console.log(`    ⚠️ [슬롯 부족] ${this.formatTime(prefSlot.startMinutes)}-${this.formatTime(prefSlot.endMinutes)}: 이동시간 후 여유 없음`);
           continue;
         }
 
@@ -655,7 +589,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         const activityBlockedCheck = this.checkBlockedTimeConflict(activityStart, activityEnd, blockedTimes);
 
         if (travelBlockedCheck.conflict || activityBlockedCheck.conflict) {
-          console.log(`    🚫 [금지시간 충돌]`);
           continue;
         }
 
@@ -664,13 +597,8 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         const activityOverlap = this.checkOverlap(dateStr, activityStart, activityEnd, assignedSlotsByDate);
 
         if (travelOverlap || activityOverlap) {
-          console.log(`    ⚠️ [겹침 발생]`);
           continue;
         }
-
-        // 배치 성공!
-        console.log(`    ✅ [부분 배치] ${this.formatTime(travelStart)}-${this.formatTime(activityEnd)} (수업 ${activityDuration}분, 이동 ${actualTravelDuration}분)${isNewDay ? ' [새 날짜]' : ' [연속]'}`);
-        
         blocks.push({
           date: targetDate,
           dateStr: dateStr,
@@ -702,11 +630,8 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     }
 
     if (remainingActivityMinutes > 0) {
-      console.log(`  ❌ [배치 실패] 남은 수업시간: ${remainingActivityMinutes}분`);
       return { success: false, remainingMinutes: remainingActivityMinutes };
     }
-
-    console.log(`  ✅ [배치 완료] 총 ${blocks.length}개 블록으로 분할`);
     return { success: true, blocks: blocks };
   }
 
@@ -722,12 +647,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
    * @returns {Promise<Object>} { canPlace: boolean, travelTime: number, from: string, conflicts: [] }
    */
   async simulateTimeSlotPlacement(currentRoom, userId, selectedDate, selectedStartMinutes, duration, travelMode = 'normal') {
-    console.log('🎯 [simulateTimeSlotPlacement] 시작:', {
-      userId: userId.toString().substring(0, 8),
-      날짜: selectedDate,
-      시작시간: this.formatTime(selectedStartMinutes),
-      수업시간: duration
-    });
 
     // 1. 기본 검증
     if (!currentRoom || !currentRoom.owner) {
@@ -802,9 +721,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         }
       }
     }
-
-    console.log(`📍 [출발 위치] ${previousLocation.name} (${this.formatTime(previousEndMinutes)} 종료)`);
-
     // 5. 이동시간 계산
     let travelDurationMinutes = 0;
     if (travelMode !== 'normal') {
@@ -815,9 +731,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
           travelMode
         );
         travelDurationMinutes = Math.ceil(travelInfo.duration / 60 / 10) * 10;
-        console.log(`🚗 [이동시간] ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분`);
       } catch (error) {
-        console.error('이동시간 계산 실패:', error);
         return { canPlace: false, reason: '이동시간 계산 실패' };
       }
     }
@@ -827,11 +741,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     const travelEndMinutes = travelStartMinutes + travelDurationMinutes;
     const activityStartMinutes = travelEndMinutes;
     const activityEndMinutes = activityStartMinutes + duration;
-
-    console.log(`⏰ [시간 계산]`, {
-      이동: `${this.formatTime(travelStartMinutes)}-${this.formatTime(travelEndMinutes)}`,
-      수업: `${this.formatTime(activityStartMinutes)}-${this.formatTime(activityEndMinutes)}`
-    });
 
     // 7. 금지시간 체크
     const blockedTimes = currentRoom.settings?.blockedTimes || [];
@@ -878,11 +787,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
 
     const canPlace = conflicts.length === 0;
 
-    console.log(`${canPlace ? '✅' : '❌'} [결과] ${canPlace ? '배치 가능' : '배치 불가'}`);
-    if (!canPlace) {
-      console.log(`   충돌 개수: ${conflicts.length}`);
-    }
-
     return {
       canPlace,
       travelTime: travelDurationMinutes,
@@ -921,10 +825,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
    * @returns {Promise<Array>} 금지 시간대 배열
    */
   async getBlockedTimesForMember(currentRoom, userId, selectedDate, travelMode = 'normal') {
-    console.log('🚫 [getBlockedTimesForMember] 시작:', {
-      userId: userId.toString().substring(0, 8),
-      날짜: selectedDate
-    });
 
     const blockedSlots = [];
 
@@ -962,8 +862,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         });
       }
     }
-
-    console.log(`   총 ${blockedSlots.length}개 금지 구간`);
     return blockedSlots;
   }
 
@@ -978,11 +876,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
    * @returns {Promise<Object>} { availableSlots: [], blockedSlots: [] }
    */
   async getAvailableTimesForMember(currentRoom, userId, selectedDate, duration, travelMode = 'normal') {
-    console.log('📅 [getAvailableTimesForMember] 시작:', {
-      userId: userId.toString().substring(0, 8),
-      날짜: selectedDate,
-      수업시간: duration
-    });
 
     const availableSlots = [];
     const blockedSlots = [];
@@ -1027,9 +920,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         }
       }
     }
-
-    console.log(`   선택 가능: ${availableSlots.length}개, 금지: ${blockedSlots.length}개`);
-
     return {
       availableSlots,
       blockedSlots: [...baseBlockedTimes, ...blockedSlots]
@@ -1054,13 +944,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
 
     const owner = currentRoom.owner;
     
-    console.log('🏠 [방장 주소 정보]', {
-        이름: `${owner.firstName} ${owner.lastName}`,
-        주소: owner.address,
-        위도: owner.addressLat,
-        경도: owner.addressLng
-    });
-    
     if (!owner.addressLat || !owner.addressLng) {
         throw new Error('방장의 주소 정보가 필요합니다. 프로필에서 주소를 설정해주세요.');
     }
@@ -1068,13 +951,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     const members = currentRoom.members;
     const memberLocations = {};
     
-    console.log('👥 [멤버 주소 정보]');
     members.forEach(m => {
-        console.log(`  - ${m.user.firstName} ${m.user.lastName}:`, {
-            주소: m.user.address,
-            위도: m.user.addressLat,
-            경도: m.user.addressLng
-        });
         
         if (m.user && m.user.addressLat && m.user.addressLng) {
             let userId = m.user._id || m.user.id;
@@ -1117,18 +994,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     };
 
     const allResultSlots = [];
-    
-    console.log('🔍 [recalculateScheduleWithTravel] 시작:', {
-        '전체_병합슬롯': sortedMergedSlots.length,
-        '방장_ID': owner._id,
-        '멤버수': Object.keys(memberLocations).length,
-        '병합슬롯_목록': sortedMergedSlots.map(s => ({
-            날짜: new Date(s.date).toISOString().split('T')[0],
-            시간: `${s.startTime}-${s.endTime}`,
-            사용자: s.user?.firstName || s.userId,
-            과목: s.subject
-        }))
-    });
 
     // 🆕 날짜별로 배정된 슬롯 추적 (겹침 방지)
     const assignedSlotsByDate = {};
@@ -1159,11 +1024,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         }
     }
 
-    console.log('📊 [방장 스케줄 추가]:', {
-        방장ID: ownerIdStr,
-        추가된_날짜: Object.keys(assignedSlotsByDate)
-    });
-
     // 🆕 날짜별 previousLocation 초기화를 위한 변수
     let currentDate = null;
 
@@ -1173,13 +1033,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     for (const mergedSlot of sortedMergedSlots) {
         // 🆕 날짜가 바뀌면 previousLocation을 방장으로 초기화
         const slotDate = new Date(mergedSlot.date).toISOString().split('T')[0];
-        
-        console.log('🔄 [슬롯 처리 중]:', {
-            날짜: slotDate,
-            시간: `${mergedSlot.startTime}-${mergedSlot.endTime}`,
-            사용자: mergedSlot.user?.firstName || mergedSlot.userId,
-            과목: mergedSlot.subject
-        });
         if (slotDate !== currentDate) {
             currentDate = slotDate;
             previousActivityEndMinutes = 0;  // 🆕 날짜 변경 시 종료 시간도 리셋
@@ -1189,14 +1042,12 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                 name: '방장',
                 color: '#4B5563'
             };
-            console.log(`📅 [날짜 변경] ${slotDate} - previousLocation을 방장으로 초기화`);
         }
         let userId = mergedSlot.user;
         if (typeof userId === 'object' && userId !== null) {
             userId = userId._id || userId.id;
         }
         if (!userId) {
-            console.log('⚠️ [원본 추가] userId 없음:', mergedSlot.startTime, mergedSlot.subject);
             allResultSlots.push(...this.unmergeBlock(mergedSlot));
             continue;
         }
@@ -1205,7 +1056,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         
         // 🆕 방장의 슬롯은 이동시간 없이 원본 그대로 추가
         if (userIdStr === owner._id.toString()) {
-            console.log('👑 [방장 슬롯] 이동시간 없이 원본 추가:', mergedSlot.startTime, mergedSlot.subject);
             allResultSlots.push(...this.unmergeBlock(mergedSlot));
             // previousLocation은 업데이트하지 않음 (방장은 이동하지 않음)
             // previousActivityEndMinutes도 업데이트하지 않음
@@ -1214,7 +1064,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         
         const memberLocation = memberLocations[userIdStr];
         if (!memberLocation) {
-            console.log('⚠️ [원본 추가] memberLocation 없음:', { userId: userIdStr, startTime: mergedSlot.startTime, subject: mergedSlot.subject });
             allResultSlots.push(...this.unmergeBlock(mergedSlot));
             continue;
         }
@@ -1240,13 +1089,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                     const lastSlot = slotsBeforeCurrent.reduce((latest, slot) => 
                         slot.endMinutes > latest.endMinutes ? slot : latest
                     );
-                
-                console.log(`🔍 [이전 슬롯 발견] ${slotDate}:`, {
-                        userId: lastSlot.userId,
-                        startTime: this.formatTime(lastSlot.startMinutes),
-                        endTime: this.formatTime(lastSlot.endMinutes),
-                        isOwner: lastSlot.isOwner
-                    });
                     
                     // 그 슬롯의 사용자 위치 찾기
                     const lastUserId = lastSlot.userId;
@@ -1262,12 +1104,9 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                     }
                     actualPreviousEndMinutes = lastSlot.endMinutes;
                     
-                    console.log(`📍 [실제 출발 위치] ${actualPreviousLocation.name} (${this.formatTime(actualPreviousEndMinutes)} 종료)`);
                 } else {
-                    console.log(`📍 [해당 날짜 첫 배정] ${slotDate} ${this.formatTime(slotStartMinutes)} - 방장에서 출발`);
                 }
             } else {
-                console.log(`📍 [해당 날짜 첫 배정] ${slotDate} - 방장에서 출발`);
             }
             
             // 이전 위치에서 현재 학생 위치로 이동 시간 계산
@@ -1279,16 +1118,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
 
             const travelDurationSeconds = travelInfo.duration || 0;
             const travelDurationMinutes = Math.ceil(travelDurationSeconds / 60 / 10) * 10;
-            
-            console.log('🚗 [이동시간 계산]', {
-                from: actualPreviousLocation.name,
-                to: memberLocation.name,
-                travelDurationSeconds,
-                travelDurationMinutes,
-                원래값_초: travelInfo.duration,
-                계산된_분: Math.ceil(travelDurationSeconds / 60),
-                '10분단위_반올림': travelDurationMinutes
-            });
+
             
             if (travelDurationMinutes === 0) {
                 allResultSlots.push(...this.unmergeBlock(mergedSlot));
@@ -1303,25 +1133,13 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
             let newTravelEndTimeMinutes = newTravelStartMinutes + travelDurationMinutes; 
             let newActivityStartTimeMinutes = newTravelEndTimeMinutes; // 이동 후 수업 시작
             let newActivityEndTimeMinutes = newActivityStartTimeMinutes + activityDurationMinutes; // 수업 종료
-            
-            console.log('✅ [이동시간 슬롯 차지]', {
-                출발지: actualPreviousLocation.name,
-                도착지: memberLocation.name,
-                원래_수업: `${this.formatTime(slotStartMinutes)}-${this.formatTime(slotEndMinutes)}`,
-                이동시간: `${this.formatTime(newTravelStartMinutes)}-${this.formatTime(newTravelEndTimeMinutes)} (${travelDurationMinutes}분)`,
-                조정된_수업: `${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)}`,
-                실제_거리: travelInfo.distanceText || `${(travelInfo.distance / 1000).toFixed(1)}km`,
-                실제_소요시간: `${Math.floor(travelDurationSeconds / 60)}분 ${travelDurationSeconds % 60}초`,
-                총_시간_증가: `${travelDurationMinutes}분`
-            });
+
 
             // 🔒 방 금지시간 체크 - 금지시간을 절대 침범하지 않도록 조정
             // 명시적으로 지정한 금지시간만 사용 (점심시간 등)
             const allBlockedTimes = currentRoom.settings?.blockedTimes || [];
 
             let canPlace = true;  // 배치 가능 여부 플래그
-
-            console.log(`🔍 [금지시간 체크] allBlockedTimes:`, allBlockedTimes);
 
             for (const blocked of allBlockedTimes) {
                 const blockedStart = this.parseTime(blocked.startTime);
@@ -1332,12 +1150,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                 const activityOverlap = newActivityStartTimeMinutes < blockedEnd && newActivityEndTimeMinutes > blockedStart;
 
                 if (travelOverlap || activityOverlap) {
-                    console.log(`🚫 [금지시간 감지] ${blocked.name} (${blocked.startTime}-${blocked.endTime})`);
-                    console.log(`   현재 이동: ${this.formatTime(newTravelStartMinutes)}-${this.formatTime(newTravelEndTimeMinutes)}`);
-                    console.log(`   현재 수업: ${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)}`);
-
-                    // 🔥 금지시간과 겹치면 재배정 필요 (수업시간을 밀지 않음)
-                    console.log(`   ⚠️  금지시간과 겹침 - 재배정 필요`);
                     canPlace = false;
                     break;
                 }
@@ -1358,28 +1170,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                     newActivityEndTimeMinutes,
                     memberPreferences
                 );
-
-                console.log(`🔍 [선호시간 체크]`, {
-                    조정: `${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)}`,
-                    이전활동종료: this.formatTime(previousActivityEndMinutes),
-                    이전활동때문에밀림: isPushedByPrevious,
-                    조정선호시간내: isAdjustedPreferred
-                });
-
-                // 📌 이동시간 추가 후 선호시간 초과 여부 체크
-                // 이유 불문하고 조정된 시간이 선호시간 외면 재배정 필요
-                if (!isAdjustedPreferred) {
-                    if (isPushedByPrevious) {
-                        console.warn(`⚠️ [선호시간 초과] 이전 활동으로 밀려서 선호시간 외 (강제 적용)`);
-                    } else {
-                        console.warn(`⚠️ [선호시간 초과] 이동시간 추가로 선호시간 초과 (${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)}) (강제 적용)`);
-                    }
-                    // canPlace = false; // 🔧 수정: 이동시간 보기 모드에서는 선호시간을 초과하더라도 밀린 시간을 보여줌
-                }
-                // 조정 후에도 선호시간 내 → OK
-                else {
-                    console.log(`✅ [선호시간 체크 통과] 같은 날짜 배치 가능`);
-                }
             }
             
             // 🆕 겹침 체크 (선호시간 체크 통과 후)
@@ -1401,23 +1191,16 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                 );
                 
                 if (travelOverlap || activityOverlap) {
-                    console.warn(`⚠️ [재배정 필요] 기존 배정과 겹침 발생`);
-                    console.warn(`   이동시간 겹침: ${travelOverlap}, 수업시간 겹침: ${activityOverlap}`);
-                    console.warn(`   이동: ${this.formatTime(newTravelStartMinutes)}-${this.formatTime(newTravelEndTimeMinutes)}`);
-                    console.warn(`   수업: ${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)}`);
                     canPlace = false;
                 } else {
-                    console.log(`✅ [겹침 체크 통과] 같은 날짜 배치 가능`);
                 }
             }
 
             // 배치 불가능하면 다른 요일로 재배정 시도
             if (!canPlace) {
-                console.warn(`⚠️ [현재 날짜 배치 불가] 다른 요일 검색 시작`);
 
                 // 🆕 재배정 시 날짜별 이동 출발지 확인 (이미 배치된 학생이 있으면 그 위치에서 출발)
                 // 원본 날짜의 마지막 위치를 확인 (재배정은 다른 날짜로 하므로, 각 날짜의 마지막 위치 체크)
-                console.log(`🔄 [재배정 이동시간 계산] lastLocationByDate 확인:`, Object.keys(lastLocationByDate).map(d => `${d}: ${lastLocationByDate[d]?.location?.name || '없음'}`).join(', '));
                 
                 // 방장에서 출발하는 이동시간 (기본값)
                 const ownerToMemberTravelInfo = await travelModeService.calculateTravelTime(
@@ -1428,8 +1211,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                 const ownerTravelDurationSeconds = ownerToMemberTravelInfo.duration || 0;
                 const ownerTravelDurationMinutes = Math.ceil(ownerTravelDurationSeconds / 60 / 10) * 10;
 
-                console.log(`   방장 → ${memberLocation.name}: ${ownerTravelDurationMinutes}분 (방장에서 출발 기본값)`);
-
+                
                 // 먼저 한 블록으로 배치 시도
                 let alternativePlacement = await this.findAvailableSlot(
                     mergedSlot,
@@ -1448,7 +1230,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
 
                 // 한 블록으로 배치 실패 → 여러 블록으로 분할 시도
                 if (!alternativePlacement.success) {
-                    console.warn(`⚠️ [한 블록 배치 실패] 수업 분할 시도`);
                     alternativePlacement = await this.findAvailableSlotsWithSplit(
                         mergedSlot,
                         userId,
@@ -1468,7 +1249,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
 
                 if (alternativePlacement.success && alternativePlacement.blocks) {
                     // 여러 블록으로 분할 배치 성공
-                    console.log(`✅ [분할 배치 성공] ${alternativePlacement.blocks.length}개 블록`);
 
                     for (const block of alternativePlacement.blocks) {
                         // 🆕 이동시간이 필요한 블록만 이동시간 블록 생성
@@ -1552,16 +1332,14 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                                 location: memberLocation,
                                 endMinutes: block.activityEndMinutes
                             };
-                            console.log(`   📍 [lastLocationByDate 업데이트] ${blockDateStr}: ${memberLocation.name} (${this.formatTime(block.activityEndMinutes)} 종료)`);
-                        }
+                            }
                     }
 
                     previousLocation = memberLocation;
                     continue;
                 } else if (alternativePlacement.success) {
                     // 다른 요일에 배치 성공
-                    console.log(`✅ [요일 재배정 성공] ${alternativePlacement.dateStr} (${alternativePlacement.dayOfWeek})`);
-
+                    
                     // 🔄 실제 이동시간 확인 (findAvailableSlot에서 이미 계산됨)
                     const targetDateStr = alternativePlacement.dateStr;
                     let actualTravelMinutes = alternativePlacement.actualTravelMinutes || ownerTravelDurationMinutes;
@@ -1572,10 +1350,8 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                         const lastLocOnTargetDate = lastLocationByDate[targetDateStr];
                         if (lastLocOnTargetDate && lastLocOnTargetDate.location) {
                             actualFromLocationName = lastLocOnTargetDate.location.name;
-                            console.log(`   ✅ [findAvailableSlot에서 재계산됨] ${actualFromLocationName} → ${memberLocation.name}: ${actualTravelMinutes}분`);
                         }
                     } else {
-                        console.log(`   🏠 [방장 기준] ${actualTravelMinutes}분`);
                     }
                     
                     // 🔍 추가 확인: assignedSlotsByDate에서 실제 마지막 학생 찾기
@@ -1591,11 +1367,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                         const lastSlot = slotsBeforeCurrent.reduce((latest, slot) => 
                             slot.endMinutes > latest.endMinutes ? slot : latest
                         );
-                        
-                        console.log(`   🔍 [assignedSlotsByDate에서 발견] ${targetDateStr}:`, {
-                            userId: lastSlot.userId,
-                            endTime: this.formatTime(lastSlot.endMinutes)
-                        });
                         
                         // 그 슬롯의 사용자 위치 찾기
                         const lastUserId = lastSlot.userId;
@@ -1620,13 +1391,10 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                                 );
                                 actualTravelMinutes = Math.ceil(lastToCurrentTravel.duration / 60 / 10) * 10;
                                 actualFromLocationName = actualPreviousLocation.name;
-                                console.log(`   ✅ [재계산 완료] ${actualFromLocationName} → ${memberLocation.name}: ${actualTravelMinutes}분`);
                             } catch (err) {
-                                console.warn(`   ⚠️ [재계산 실패] 방장 기준 사용:`, err.message);
                             }
                         }
                     } else {
-                        console.log(`   🏠 [방장에서 출발] ${targetDateStr}에 배치된 학생 없음 - 방장 기준 ${actualTravelMinutes}분`);
                     }
 
                     // 재배정된 날짜와 시간으로 블록 생성 (실제 계산된 이동시간 사용)
@@ -1703,24 +1471,11 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                             location: memberLocation,
                             endMinutes: actualActivityEndMinutes
                         };
-                        console.log(`   📍 [lastLocationByDate 업데이트] ${alternativePlacement.dateStr}: ${memberLocation.name} (${this.formatTime(actualActivityEndMinutes)} 종료)`);
-                    }
+                        }
 
                     previousLocation = memberLocation;
                     continue;
                 } else {
-                    // 모든 요일에 배치 불가능 - 슬롯 숨김
-                    console.error(`
-❌❌❌ [재배정 실패] 모든 요일에 배치 불가능 ❌❌❌`);
-                    console.error(`   📍 사용자: ${userId}`);
-                    console.error(`   📅 원본 날짜: ${new Date(mergedSlot.date).toISOString().split('T')[0]}`);
-                    console.error(`   ⏰ 원본 시간: ${mergedSlot.startTime}-${mergedSlot.endTime}`);
-                    console.error(`   🚗 필요 이동시간: ${travelDurationMinutes}분`);
-                    console.error(`   📚 필요 수업시간: ${activityDurationMinutes}분`);
-                    console.error(`   ⏱️  총 필요시간: ${travelDurationMinutes + activityDurationMinutes}분`);
-                    console.error(`   ⚠️  문제: 이동시간 + 수업시간이 선호시간 블록을 초과합니다`);
-                    console.error(`   💡 해결: 선호시간을 늘리거나 다른 이동수단을 선택하세요`);
-                    console.error(`   🚫 결과: 이 슬롯은 표시하지 않습니다 (배치 불가)`);
                     
                     // ❌ 원본 슬롯도 추가하지 않음 (선호시간 외 배치 방지)
                     // allResultSlots.push(...this.unmergeBlock(mergedSlot));
@@ -1777,32 +1532,10 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                 travelMode: travelMode
             };
             
-            console.log('📊 [travelSlots 추가]', {
-                날짜: travelSlotData.date,  // ← 날짜 추가
-                from: travelSlotData.from,
-                to: travelSlotData.to,
-                startTime: travelSlotData.startTime,
-                endTime: travelSlotData.endTime,
-                '실제_duration_분': travelDurationMinutes,
-                '표시_duration': travelSlotData.travelInfo.durationText,
-                newTravelStartMinutes,
-                newTravelEndTimeMinutes,
-                '계산된_차이_분': newTravelEndTimeMinutes - newTravelStartMinutes
-            });
-            
 travelSlotsArray.push(travelSlotData);
 
             const travelSlots10min = this.unmergeBlock(travelBlock);
             const activitySlots10min = this.unmergeBlock(activityBlock);
-            
-            console.log('✅ [조정된 슬롯 추가]:', {
-                원본: `${mergedSlot.startTime}-${mergedSlot.endTime}`,
-                이동: `${travelBlock.startTime}-${travelBlock.endTime}`,
-                조정된수업: `${activityBlock.startTime}-${activityBlock.endTime}`,
-                추가개수: travelSlots10min.length + activitySlots10min.length,
-                이전종료: this.formatTime(previousActivityEndMinutes),
-                새종료: this.formatTime(newActivityEndTimeMinutes)
-            });
 
             allResultSlots.push(...travelSlots10min, ...activitySlots10min);
 
@@ -1822,8 +1555,7 @@ travelSlotsArray.push(travelSlotData);
                     location: memberLocation,
                     endMinutes: newActivityEndTimeMinutes
                 };
-                console.log(`   📍 [lastLocationByDate 업데이트] ${slotDate}: ${memberLocation.name} (${this.formatTime(newActivityEndTimeMinutes)} 종료)`);
-            }
+                 }
 
             // 🆕 이전 활동 종료 시간 업데이트 (다음 학생은 이 시간 이후에 시작)
             previousActivityEndMinutes = newActivityEndTimeMinutes;
@@ -1832,18 +1564,11 @@ travelSlotsArray.push(travelSlotData);
             previousLocation = memberLocation;
 
         } catch (error) {
-            console.error('❌ [에러 발생 - 원본 추가]:', {
-                error: error.message,
-                슬롯: `${mergedSlot.startTime}-${mergedSlot.endTime}`,
-                날짜: mergedSlot.date,
-                사용자: mergedSlot.user?.firstName || mergedSlot.userId
-            });
             allResultSlots.push(...this.unmergeBlock(mergedSlot));
         }
     }
 
     // 🔄 [FINAL PASS] 모든 배치 완료 후 이동시간 재계산
-    console.log('🔄 [FINAL PASS] 이동시간 최종 재계산 시작');
     
     for (let i = 0; i < travelSlotsArray.length; i++) {
         const travelSlot = travelSlotsArray[i];
@@ -1861,10 +1586,6 @@ travelSlotsArray.push(travelSlotData);
             const lastSlot = slotsBeforeCurrent.reduce((latest, slot) => 
                 slot.endMinutes > latest.endMinutes ? slot : latest
             );
-            
-            console.log(`   🔍 [재계산 대상] ${travelSlot.to} (${dateStr} ${travelSlot.startTime})`);
-            console.log(`      이전 슬롯 발견: userId=${lastSlot.userId}, 종료=${this.formatTime(lastSlot.endMinutes)}`);
-            
             // 이전 슬롯의 사용자 위치 찾기
             const lastUserId = lastSlot.userId;
             let fromLocation;
@@ -1897,8 +1618,6 @@ travelSlotsArray.push(travelSlotData);
                         const oldTravelMinutes = this.parseTime(travelSlot.endTime) - this.parseTime(travelSlot.startTime);
                         
                         if (newTravelMinutes !== oldTravelMinutes) {
-                            console.log(`      ✅ 재계산: ${fromLocationName} → ${travelSlot.to}: ${oldTravelMinutes}분 → ${newTravelMinutes}분`);
-                            console.log(`      🔍 toUserId: ${toUserId}, 날짜: ${new Date(travelSlot.date).toISOString().split('T')[0]}`);
                             
                             // travelSlot 업데이트
                             travelSlot.from = fromLocationName;
@@ -1947,32 +1666,15 @@ travelSlotsArray.push(travelSlotData);
                                 }
                             });
                             
-                            console.log(`      📝 슬롯 업데이트: 이동 ${travelSlotsUpdated}개, 수업 ${activitySlotsUpdated}개`);
-                            console.log(`      📝 수업 시간 조정: ${this.formatTime(oldActivityStartMinutes)} → ${this.formatTime(newActivityStartMinutes)} (${timeDifference}분 앞당김)`);
-                        }
+                            }
                     } catch (err) {
-                        console.warn(`      ⚠️ 재계산 실패:`, err.message);
                     }
                 }
             }
         }
     }
     
-    console.log('✅ [FINAL PASS] 이동시간 최종 재계산 완료');
-    
     // travelSlots 배열을 실제 데이터와 함께 반환
-    
-    console.log('📦 [recalculateScheduleWithTravel] 완료:', {
-        '최종_timeSlots': allResultSlots.length,
-        '이동_슬롯': travelSlotsArray.length,
-        '10시_슬롯들': allResultSlots.filter(s => s.startTime >= '10:00' && s.startTime < '11:00').map(s => ({
-            시작: s.startTime,
-            종료: s.endTime,
-            과목: s.subject,
-            isTravel: s.isTravel,
-            사용자: s.user?.firstName || s.userId
-        }))
-    });
     
     return {
         timeSlots: allResultSlots,

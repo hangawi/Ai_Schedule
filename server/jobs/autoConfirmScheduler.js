@@ -14,14 +14,14 @@
  *    - server/models/room.js - 자동 확정 대상 방 조회를 위한 모델.
  *
  * ✏️ 수정 가이드:
- *    - 실행 빈도를 조정하려면 startAutoConfirmScheduler 내의 cron 패턴(*/10 * * * * *) 수정.
+ *    - 실행 빈도를 조정하려면 startAutoConfirmScheduler 내의 cron 패턴(*10 * * * * *) 수정.
  *    - 특정 주차나 상태의 방만 확정하고 싶다면 processAutoConfirmations의 쿼리 필터 보강.
  *
  * 📝 참고사항:
  *    - 이 파일은 autoConfirmSchedule.js와 유사한 역할을 수행하나, 더 높은 정밀도가 요구되는 환경을 위해 별도로 구성됨.
  *
  * ===================================================================================================
- */
+ **/
 
 const cron = require('node-cron');
 const Room = require('../models/room');
@@ -46,9 +46,6 @@ async function processAutoConfirmations() {
     if (roomsToConfirm.length === 0) {
       return; // 확정할 방이 없음
     }
-
-    console.log(`🔔 [자동 확정] \$\s*\{\s*roomsToConfirm\.length\s*\}\s*개 방 확정 시작`);
-
     const { confirmScheduleLogic } = require('../services/confirmScheduleService');
 
     for (const room of roomsToConfirm) {
@@ -61,16 +58,10 @@ async function processAutoConfirmations() {
           `${room.owner.firstName || ''} ${room.owner.lastName || ''}`.trim() || 'System'
         );
 
-        console.log(`✅ [자동 확정 완료] 방 \$\s*\{\s*room\._id\s*\}\s*:`, result);
-
       } catch (error) {
-        console.error(`❌ [자동 확정 실패] 방 \$\s*\{\s*room\._id\s*\}\s*:`, error.message);
       }
     }
-
-    console.log(`🎉 [자동 확정 완료] 총 \$\s*\{\s*roomsToConfirm\.length\s*\}\s*개 방 확정됨`);
   } catch (error) {
-    console.error('❌ [자동 확정 스케줄러 오류]:', error);
   }
 }
 
@@ -83,8 +74,6 @@ function startAutoConfirmScheduler() {
   cron.schedule('*/10 * * * * *', async () => {
     await processAutoConfirmations();
   });
-
-  console.log('⏰ [자동 확정 스케줄러] 시작 (10초마다 실행)');
 }
 
 module.exports = { startAutoConfirmScheduler, processAutoConfirmations };

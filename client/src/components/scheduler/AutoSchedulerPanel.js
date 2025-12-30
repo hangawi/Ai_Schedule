@@ -157,7 +157,6 @@ const AutoSchedulerPanel = ({
       await setAutoConfirmDuration(currentRoom._id, timerDuration);
       // 성공 메시지는 서버에서 socket.io로 전달됨
     } catch (error) {
-      console.error('타이머 설정 실패:', error);
       alert(error.message || '타이머 설정에 실패했습니다.');
     } finally {
       setIsSavingTimer(false);
