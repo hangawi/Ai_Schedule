@@ -323,6 +323,15 @@ const WeekView = ({
       
       // 🔧 다른 사람의 수업 먼저 확인 (빗금 계산 전에!)
       const ownerInfo = getSlotOwner(date, time);
+      if (ownerInfo) {
+        console.log('👤 [WeekView] ownerInfo 발견:', { 
+          time, 
+          userId: ownerInfo.userId || ownerInfo.actualUserId,
+          name: ownerInfo.name,
+          isTravel: ownerInfo.isTravel,
+          currentUserId: currentUser?._id || currentUser?.id
+        });
+      }
       
       // 🆕 이동시간 고려한 유효성 체크 (조원이고 이동모드일 때만)
       // ⭐ 시간별 체크 + 동적 이동시간 계산 (문제 1+3+4 해결)
@@ -371,11 +380,11 @@ const WeekView = ({
               if (isPreferredTime) {
                   ownerOriginalInfo = {
                       type: 'travel_restricted',
-                      name: '이동시간 확보 필요',
-                      title: `이동시간(${dynamicTravelDuration}분) 동안 일정이 있습니다`,
+                      name: '배정 불가',
+                      title: '이 시간은 배정할 수 없습니다',
                       isTravelRestricted: true
                   };
-                  console.log(`🚫 [WeekView] 이동제한 블록 생성됨: ${time} (${dynamicTravelDuration}분)`);
+                  console.log(`🚫 [WeekView] 배정 불가 블록 생성됨: ${time}`);
               } else {
                   console.log(`⏭️ [WeekView] 금지시간/불가능한 시간 - 빗금 스킵: ${time}`);
               }
@@ -417,8 +426,26 @@ const WeekView = ({
       // In travel mode, owner info (split travel/activity slots) takes precedence
       // ✅ 단, isTravel 슬롯은 travelSlots 배열로 별도 렌더링되므로 여기서는 제외
       else if (travelMode !== 'normal' && ownerInfo && !ownerInfo.isTravel) {
+        console.log('🎯 [WeekView] travel mode + ownerInfo 조건 진입:', { time, travelMode });
         slotType = 'owner';
         slotData = ownerInfo;
+        
+        // 🔒 조원은 다른 사람의 슬롯을 빗금으로 표시
+        if (!isRoomOwner && slotData && currentUser) {
+          const currentUserId = currentUser.id || currentUser._id;
+          const slotUserId = slotData.userId || slotData.actualUserId;
+
+          if (slotUserId && slotUserId.toString() !== currentUserId.toString()) {
+            console.log('🔒 [WeekView:TravelMode] 다른 조원 슬롯 감지 - 빗금 처리:', { time, slotUserId, currentUserId });
+            slotType = 'blocked';
+            slotData = {
+              name: '배정 불가',
+              info: { type: 'other_member' },
+              isOtherMemberSlot: true,
+              ownerScheduleType: 'other_member'
+            };
+          }
+        }
       }
       // 1순위: blocked 또는 room exception
       else if (isBlocked) {
@@ -439,6 +466,7 @@ const WeekView = ({
       }
       // 2순위: owner가 있고 blocked가 아닌 경우 - 단, 방장 개인시간은 blocked로 처리
       else if (ownerInfo) {
+        console.log('📍 [WeekView] ownerInfo 조건 진입 (일반):', { time });
         // 방장의 개인시간인지 확인 (방장이고 본인 슬롯인 경우 blocked로 처리)
         const isRoomOwnerPersonalTime = isRoomOwner &&
                                        (ownerInfo.actualUserId === currentUser?.actualUserId ||
@@ -461,15 +489,15 @@ const WeekView = ({
             const currentUserId = currentUser.id || currentUser._id;
             const slotUserId = slotData.userId || slotData.actualUserId;
 
-            // 다른 사람의 슬롯이면 "배정됨"으로 표시
+            // 🆕 다른 사람의 슬롯이면 빗금으로 표시 (배치 위치 숨김)
             if (slotUserId && slotUserId.toString() !== currentUserId.toString()) {
+              console.log('🔒 [WeekView] 다른 조원 슬롯 감지 - 빗금 처리:', { time, slotUserId, currentUserId });
+              slotType = 'blocked';
               slotData = {
-                ...slotData,
-                name: '배정됨',
-                subject: '배정됨',
-                color: '#9CA3AF',
-                textColor: '#4B5563',
-                isOtherMemberSlot: true
+                name: '배정 불가',
+                info: { type: 'other_member' },
+                isOtherMemberSlot: true,
+                ownerScheduleType: 'other_member'
               };
             }
           }
@@ -674,6 +702,12 @@ const WeekView = ({
                       } : {}),
                       // 🆕 이동 시간 부족으로 차단된 시간 (travel_restricted) - 빗금 처리
                       ...(block.type === 'blocked' && block.data?.ownerScheduleType === 'travel_restricted' ? {
+                        backgroundColor: '#E5E7EB', // gray-200
+                        borderColor: '#9CA3AF', // gray-400
+                        backgroundImage: 'repeating-linear-gradient(45deg, #D1D5DB 0px, #D1D5DB 5px, #E5E7EB 5px, #E5E7EB 10px)'
+                      } : {}),
+                      // 🆕 다른 조원 배치 시간 (other_member) - 빗금 처리
+                      ...(block.type === 'blocked' && block.data?.ownerScheduleType === 'other_member' ? {
                         backgroundColor: '#E5E7EB', // gray-200
                         borderColor: '#9CA3AF', // gray-400
                         backgroundImage: 'repeating-linear-gradient(45deg, #D1D5DB 0px, #D1D5DB 5px, #E5E7EB 5px, #E5E7EB 10px)'
@@ -913,8 +947,8 @@ const WeekView = ({
                       if (isPreferredTime) {
                           ownerOriginalInfo = {
                               type: 'travel_restricted',
-                              name: '이동시간 확보 필요',
-                              title: `이동시간(${dynamicTravelDuration}분) 동안 일정이 있습니다`,
+                              name: '배정 불가',
+                              title: '이 시간은 배정할 수 없습니다',
                               isTravelRestricted: true
                           };
                       }
@@ -949,16 +983,15 @@ const WeekView = ({
                 const currentUserId = currentUser.id || currentUser._id;
                 const slotUserId = finalOwnerInfo.userId || finalOwnerInfo.actualUserId;
 
-                // 다른 사람의 슬롯이면 "배정됨"으로 표시
+                // 🆕 다른 사람의 슬롯이면 빗금으로 표시 (배치 위치 숨김)
                 if (slotUserId && slotUserId.toString() !== currentUserId.toString()) {
-                  finalOwnerInfo = {
-                    ...finalOwnerInfo,
-                    name: '배정됨',
-                    subject: '배정됨',
-                    color: '#9CA3AF',
-                    textColor: '#4B5563',
+                  console.log('🔒 [WeekView:Normal] 다른 조원 슬롯 감지 - 빗금 처리:', { time, slotUserId, currentUserId });
+                  finalBlockedInfo = {
+                    name: '배정 불가',
+                    ownerScheduleType: 'other_member',
                     isOtherMemberSlot: true
                   };
+                  finalOwnerInfo = null;
                 }
               }
 

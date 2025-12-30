@@ -196,9 +196,16 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       return;
     }
 
-    // ✅ 다른 모드는 검증 후 모드 변경 (검증 실패해도 변경됨)
+    // ✅ 조원은 검증 없이 바로 모드 변경
+    if (!isOwner) {
+      console.log('👥 [handleTravelModeChange] 조원 - 검증 스킵하고 바로 모드 변경:', newMode);
+      await handleTravelModeChangeInternal(newMode);
+      return;
+    }
+
+    // ✅ 방장만 검증 후 모드 변경 (검증 실패해도 변경됨)
     if (currentRoom) {
-      console.log('🔍 [handleTravelModeChange] 검증 시작:', newMode);
+      console.log('🔍 [handleTravelModeChange] 방장 - 검증 시작:', newMode);
 
       try {
         // 1. 검증 수행 (경고만 표시)
@@ -224,7 +231,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         showAlert('검증 중 오류가 발생했습니다.', 'error');
       }
     }
-  }, [handleTravelModeChangeInternal, currentRoom, showAlert, viewMode, currentWeekStartDate, handleValidateScheduleWithTransportMode]);
+  }, [handleTravelModeChangeInternal, currentRoom, showAlert, viewMode, currentWeekStartDate, handleValidateScheduleWithTransportMode, isOwner]);
 
   // 이동수단 모드 확정 핸들러 (조원들에게 표시)
   const handleConfirmTravelMode = useCallback(async () => {
