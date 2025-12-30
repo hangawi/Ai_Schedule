@@ -497,17 +497,10 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         _timestamp: Date.now()
       };
 
-      console.log('✅ [CoordinationTab] ownerScheduleCache 설정:', {
-        defaultScheduleLength: newCache.defaultSchedule.length,
-        hasExceptions: !!newCache.scheduleExceptions,
-        hasPersonalTimes: !!newCache.personalTimes
-      });
-
       // 즉시 업데이트
       setOwnerScheduleCache(newCache);
       setRenderKey(prev => prev + 1);
     } else {
-      console.warn('❌ [CoordinationTab] ownerScheduleCache를 null로 설정 - owner 정보 없음');
       setOwnerScheduleCache(null);
     }
   }, [currentRoom]);

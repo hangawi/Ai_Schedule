@@ -97,23 +97,6 @@ const WeekView = ({
   myTravelDuration = 0, // 🆕 나의 이동 소요 시간
   isConfirmed = false // 🆕 확정 여부
 }) => {
-  console.log('🔍 [WeekView] Props 확인:', {
-      hasOwnerSchedule: !!ownerOriginalSchedule,
-      ownerScheduleDetails: ownerOriginalSchedule ? {
-        hasDefaultSchedule: !!ownerOriginalSchedule.defaultSchedule,
-        defaultScheduleLength: ownerOriginalSchedule.defaultSchedule?.length,
-        hasExceptions: !!ownerOriginalSchedule.scheduleExceptions,
-        hasPersonalTimes: !!ownerOriginalSchedule.personalTimes
-      } : null,
-      hasCurrentUser: !!currentUser,
-      currentUserDetails: currentUser ? {
-        hasDefaultSchedule: !!currentUser.defaultSchedule,
-        defaultScheduleLength: currentUser.defaultSchedule?.length
-      } : null,
-      myTravelDuration,
-      travelMode,
-      isRoomOwner
-  });
 
   useEffect(() => {
     // ownerOriginalSchedule 변경 감지
@@ -252,14 +235,6 @@ const WeekView = ({
     const dayOfWeek = date.getDay(); // 0=일요일, 1=월요일, ...
     const dateStr = date.toISOString().split('T')[0];
 
-    console.log(`🔍 [getCurrentUserScheduleInfo] 체크 시작:`, {
-      time,
-      dayOfWeek,
-      dateStr,
-      hasDefaultSchedule: !!currentUser.defaultSchedule,
-      defaultScheduleLength: currentUser.defaultSchedule?.length
-    });
-
     // 1. scheduleExceptions 확인 (특정 날짜 일정)
     const exceptionSlot = currentUser.scheduleExceptions?.find(e => {
       if (e.specificDate !== dateStr) return false;
@@ -342,13 +317,6 @@ const WeekView = ({
       const isMatch = timeMinutes >= startMinutes && timeMinutes < endMinutes;
 
       if (isMatch) {
-        console.log(`✅ [getCurrentUserScheduleInfo] 선호시간 발견:`, {
-          time,
-          dayOfWeek,
-          schedDayOfWeek: sched.dayOfWeek,
-          schedTime: `${sched.startTime}-${sched.endTime}`,
-          priority: sched.priority
-        });
       }
 
       return isMatch;
@@ -484,7 +452,6 @@ const WeekView = ({
         if (userScheduleInfo) {
           // 조원 본인이 비선호시간이면 빗금으로 표시
           ownerOriginalInfo = userScheduleInfo;
-          console.log(`🚫 [WeekView-병합] 조원 본인 비선호시간: ${time}`, userScheduleInfo);
         }
       }
 
@@ -540,13 +507,10 @@ const WeekView = ({
                       title: '이 시간은 배정할 수 없습니다',
                       isTravelRestricted: true
                   };
-                  console.log(`🚫 [WeekView] 배정 불가 블록 생성됨: ${time}`);
               } else {
-                  console.log(`⏭️ [WeekView] 금지시간/불가능한 시간 - 빗금 스킵: ${time}`);
               }
           }
         } else {
-          console.log(`✅ [WeekView] 이미 수업 있음 - 빗금 스킵: ${time}`);
         }
       }
 
@@ -624,7 +588,6 @@ const WeekView = ({
       }
       // 2순위: owner가 있고 blocked가 아닌 경우 - 단, 방장 개인시간은 blocked로 처리
       else if (ownerInfo) {
-        console.log('📍 [WeekView] ownerInfo 조건 진입 (일반):', { time });
         // 방장의 개인시간인지 확인 (방장이고 본인 슬롯인 경우 blocked로 처리)
         const isRoomOwnerPersonalTime = isRoomOwner &&
                                        (ownerInfo.actualUserId === currentUser?.actualUserId ||
@@ -1075,7 +1038,6 @@ const WeekView = ({
                 if (userScheduleInfo) {
                   // 조원 본인이 비선호시간이면 빗금으로 표시
                   ownerOriginalInfo = userScheduleInfo;
-                  console.log(`🚫 [WeekView-일반] 조원 본인 비선호시간: ${time}`, userScheduleInfo);
                 }
               }
 
