@@ -188,7 +188,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
   // 이동수단 모드 변경 핸들러
   const handleTravelModeChange = useCallback(async (newMode) => {
-    console.log('🔄 [handleTravelModeChange] 이동수단 변경:', newMode);
 
     // ✅ 일반 모드는 항상 허용
     if (newMode === 'normal') {
@@ -198,14 +197,12 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
     // ✅ 조원은 검증 없이 바로 모드 변경
     if (!isOwner) {
-      console.log('👥 [handleTravelModeChange] 조원 - 검증 스킵하고 바로 모드 변경:', newMode);
       await handleTravelModeChangeInternal(newMode);
       return;
     }
 
     // ✅ 방장만 검증 후 모드 변경 (검증 실패해도 변경됨)
     if (currentRoom) {
-      console.log('🔍 [handleTravelModeChange] 방장 - 검증 시작:', newMode);
 
       try {
         // 1. 검증 수행 (경고만 표시)
@@ -216,18 +213,9 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           viewMode,
           currentWeekStartDate
         );
-
-        // 2. 검증 결과 로그 (실패해도 모드는 변경됨)
-        if (validationResult && !validationResult.isValid) {
-          console.log('⚠️ [handleTravelModeChange] 검증 실패 - 하지만 모드는 변경');
-        } else {
-          console.log('✅ [handleTravelModeChange] 검증 통과');
-        }
-
         // 3. 검증 성공/실패 관계없이 모드 변경
         await handleTravelModeChangeInternal(newMode);
       } catch (error) {
-        console.error('❌ [handleTravelModeChange] 오류:', error);
         showAlert('검증 중 오류가 발생했습니다.', 'error');
       }
     }
@@ -243,7 +231,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     try {
       // ✅ 일반 모드일 때는 원본 슬롯으로 복원
       if (travelMode === 'normal') {
-        console.log('🔄 [handleConfirmTravelMode] 일반 모드로 복원');
 
         // getCurrentScheduleData()를 사용하여 현재 스케줄 데이터 가져오기
         const scheduleData = getCurrentScheduleData();
@@ -269,13 +256,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         return;
       }
 
-      // ⚠️ enhancedSchedule이 있는지 먼저 확인
-      console.log('🔍 [handleConfirmTravelMode] 상태 확인:', {
-        travelMode,
-        enhancedSchedule존재: !!enhancedSchedule,
-        enhancedSchedule개수: enhancedSchedule?.timeSlots?.length
-      });
-
       if (!enhancedSchedule || !enhancedSchedule.timeSlots || enhancedSchedule.timeSlots.length === 0) {
         showAlert('이동시간 계산 데이터가 없습니다. 다시 이동수단을 선택해주세요.', 'warning');
         return;
@@ -284,58 +264,27 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       // getCurrentScheduleData()를 사용하여 현재 스케줄 데이터 가져오기
       const scheduleData = getCurrentScheduleData();
 
-      console.log('🔍 [handleConfirmTravelMode] scheduleData 확인:', {
-        timeSlots개수: scheduleData?.timeSlots?.length,
-        travelSlots개수: scheduleData?.travelSlots?.length,
-        첫5개_timeSlots: scheduleData?.timeSlots?.slice(0, 5).map(s => ({
-          날짜: s.date,
-          시작: s.startTime,
-          종료: s.endTime,
-          과목: s.subject,
-          isTravel: s.isTravel
-        }))
-      });
-
       if (!scheduleData || !scheduleData.timeSlots || scheduleData.timeSlots.length === 0) {
         showAlert('적용할 스케줄 데이터가 없습니다.', 'warning');
         return;
       }
 
       // 1️⃣ 서버에 이동시간 포함 스케줄 저장
-      console.log(`📤 [handleConfirmTravelMode] applyTravelMode 호출: ${travelMode}`, {
-        timeSlots개수: scheduleData.timeSlots?.length,
-        travelSlots개수: scheduleData.travelSlots?.length,
-        첫번째_travelSlot: scheduleData.travelSlots?.[0]
-      });
       await coordinationService.applyTravelMode(
         currentRoom._id,
         travelMode,
         scheduleData  // ← timeSlots와 travelSlots 모두 포함
       );
-      console.log(`✅ [handleConfirmTravelMode] applyTravelMode 완료`);
-
       // 2️⃣ 조원들에게 확정 알림
       const success = await confirmTravelModeInternal();
       if (success) {
         showAlert(`${travelMode === 'normal' ? '일반' : travelMode === 'transit' ? '대중교통' : travelMode === 'driving' ? '자동차' : travelMode === 'bicycling' ? '자전거' : '도보'} 모드가 조원들에게 적용되었습니다.`, 'success');
 
-        console.log('🔍 [fetchRoomDetails 전] 상태:', {
-          travelMode,
-          enhancedSchedule존재: !!enhancedSchedule,
-          enhancedSchedule개수: enhancedSchedule?.timeSlots?.length
-        });
-
         // 방 정보 다시 가져오기 (confirmedTravelMode 업데이트)
         await fetchRoomDetails(currentRoom._id);
 
-        console.log('🔍 [fetchRoomDetails 후] 상태:', {
-          travelMode,
-          enhancedSchedule존재: !!enhancedSchedule,
-          enhancedSchedule개수: enhancedSchedule?.timeSlots?.length
-        });
       }
     } catch (error) {
-      console.error('⚠️ [handleConfirmTravelMode] 실패:', error);
       showAlert(`모드 적용 실패: ${error.message}`, 'error');
     }
   }, [confirmTravelModeInternal, travelMode, currentRoom, showAlert, isOwner, getCurrentScheduleData, fetchRoomDetails, coordinationService, enhancedSchedule]);
@@ -347,12 +296,10 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   useEffect(() => {
     // ⚠️ 확정된 방은 자동 동기화 건너뛰기
     if (currentRoom?.confirmedAt) {
-      console.log('⚠️ [조원 동기화] 이미 확정된 방입니다. 동기화를 건너뜁니다.');
       return;
     }
     
     if (!isOwner && currentRoom?.currentTravelMode && travelMode !== currentRoom.currentTravelMode) {
-      console.log(`🔄 [조원 동기화] 방장의 이동수단 모드 적용: ${currentRoom.currentTravelMode}`);
       handleTravelModeChange(currentRoom.currentTravelMode);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -396,11 +343,9 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
     // 방에 참여
     socket.emit('join-room', currentRoom._id);
-    console.log(`📡 Socket joined room: ${currentRoom._id}`);
 
     // 자동 확정 이벤트 수신
     socket.on('schedule-confirmed', async (data) => {
-      console.log('📡 Schedule confirmed event received:', data);
 
       // 방 정보 다시 가져오기
       try {
@@ -409,45 +354,37 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         window.dispatchEvent(new CustomEvent('refreshUser'));
         showAlert('자동배정 시간이 확정되었습니다! 페이지가 업데이트되었습니다.', 'success');
       } catch (error) {
-        console.error('Failed to refresh room after auto-confirm:', error);
       }
     });
 
     // 🆕 일정 변경 이벤트 수신 (챗봇 등)
     socket.on('schedule-updated', async (data) => {
-      console.log('📡 Schedule updated event received:', data);
       try {
         await fetchRoomDetails(currentRoom._id);
         // 필요하다면 사용자 정보도 갱신
         window.dispatchEvent(new CustomEvent('refreshUser'));
       } catch (error) {
-        console.error('Failed to refresh room after schedule update:', error);
       }
     });
 
     // 🔥 이동시간 모드 변경 이벤트 수신 (조원용)
     socket.on('travelModeChanged', async (data) => {
-      console.log('📡 [조원] travelModeChanged 이벤트 수신:', data);
 
       if (!isOwner) {
         // 조원만 처리 (방장은 이미 handleModeChange에서 처리함)
-        console.log(`🔄 [조원 동기화] 방장이 모드 변경: ${data.travelMode}`);
 
         // 방 정보 다시 가져오기
         try {
           await fetchRoomDetails(currentRoom._id);
           // travelMode 상태도 동기화
           handleTravelModeChange(data.travelMode);
-          console.log(`✅ [조원 동기화] 완료: ${data.travelMode} 모드로 업데이트`);
         } catch (error) {
-          console.error('⚠️ [조원 동기화] 실패:', error);
         }
       }
     });
 
     // 🔥 이동시간 모드 확정 이벤트 수신 (조원용)
     socket.on('travelModeConfirmed', async (data) => {
-      console.log('📡 [조원] travelModeConfirmed 이벤트 수신:', data);
 
       // 방 정보 다시 가져오기 (confirmedTravelMode 업데이트)
       try {
@@ -456,9 +393,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         if (data.confirmedTravelMode) {
           handleTravelModeChange(data.confirmedTravelMode);
         }
-        console.log(`✅ [조원 동기화] 확정 완료: ${data.confirmedTravelMode} 모드`);
       } catch (error) {
-        console.error('⚠️ [조원 동기화] 실패:', error);
       }
     });
 
@@ -472,23 +407,11 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     return () => {
       socket.emit('leave-room', currentRoom._id);
       socket.disconnect();
-      console.log(`📡 Socket disconnected from room: ${currentRoom._id}`);
     };
   }, [currentRoom?._id, fetchRoomDetails, showAlert]);
 
   // 방장 시간표 정보 캐시 업데이트
   useEffect(() => {
-    console.log('🔍 [CoordinationTab] currentRoom 업데이트:', {
-      hasCurrentRoom: !!currentRoom,
-      hasOwner: !!currentRoom?.owner,
-      ownerId: currentRoom?.owner?._id,
-      ownerName: currentRoom?.owner?.firstName,
-      hasDefaultSchedule: !!currentRoom?.owner?.defaultSchedule,
-      defaultScheduleLength: currentRoom?.owner?.defaultSchedule?.length,
-      hasScheduleExceptions: !!currentRoom?.owner?.scheduleExceptions,
-      hasPersonalTimes: !!currentRoom?.owner?.personalTimes
-    });
-
     if (currentRoom?.owner?.defaultSchedule) {
       const newCache = {
         defaultSchedule: currentRoom.owner.defaultSchedule,
@@ -521,7 +444,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         try {
           await fetchRoomDetails(currentRoom._id);
         } catch (error) {
-          console.error('Failed to refresh room after time swap:', error);
         }
       }
     };
@@ -750,7 +672,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
 
     // 🔒 중복 클릭 방지
     if (isConfirmingRef.current) {
-      console.log('⚠️ 이미 확정 처리 중입니다. 중복 요청 무시.');
       return;
     }
 
@@ -774,18 +695,15 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     try {
       // 🔧 이동시간 모드가 활성화되어 있으면 먼저 서버에 저장
       if (travelMode !== 'normal' && enhancedSchedule) {
-        console.log(`📤 [handleConfirmSchedule] 이동시간 먼저 저장: ${travelMode}`);
         const scheduleData = getCurrentScheduleData();
         await coordinationService.applyTravelMode(
           currentRoom._id,
           travelMode,
           scheduleData
         );
-        console.log(`✅ [handleConfirmSchedule] 이동시간 저장 완료`);
       }
       
       // travelMode를 함께 전달
-      console.log(`📤 [handleConfirmSchedule] 확정 요청: travelMode=${travelMode}`);
       const result = await coordinationService.confirmSchedule(currentRoom._id, travelMode);
 
       showAlert(
@@ -866,16 +784,6 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   if (currentRoom) {
     // isOwner는 이미 167번 줄에서 계산됨
     const scheduleData = getCurrentScheduleData();
-    
-    console.log('🔍 [CoordinationTab] scheduleData:', {
-      timeSlots개수: scheduleData.timeSlots?.length,
-      travelSlots개수: scheduleData.travelSlots?.length,
-      travelMode: scheduleData.travelMode,
-      '수업_샘플': scheduleData.timeSlots?.filter(s => !s.isTravel).slice(0, 3).map(s => ({
-        시작: s.startTime,
-        종료: s.endTime
-      }))
-    });
 
     return (
       <div className="p-1">

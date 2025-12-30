@@ -81,18 +81,9 @@ export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) =
           }
       }
 
-      console.log('🔄 [useTravelMode] Effect Triggered', {
-          hasRoom: !!currentRoom,
-          isOwner,
-          travelMode,
-          hasUser: !!currentUser,
-          myUid
-      });
-
       // 1. 조건 체크: 방 정보 없음, 방장임, 일반 모드 -> 계산 안 함
       // (currentUser가 없어도 myUid가 있으면 진행)
       if (!currentRoom || isOwner || travelMode === 'normal' || (!myId && !myUid)) {
-        console.log('⏭️ [useTravelMode] 조건 불충족으로 스킵');
         setMyTravelDuration(0);
         return;
       }
@@ -104,7 +95,6 @@ export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) =
       const ownerLng = owner?.addressLng;
 
       if (!ownerLat || !ownerLng) {
-        console.warn('⚠️ [useTravelMode] 방장 좌표 정보 없음');
         setMyTravelDuration(0);
         return;
       }
@@ -117,11 +107,6 @@ export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) =
 
       // currentUser에 없으면 members 배열에서 확인
       if (!myLat || !myLng) {
-        console.log(`🔍 [useTravelMode] 멤버 찾기 시도:`, {
-            myId,
-            myUid,
-            membersCount: currentRoom.members?.length
-        });
 
         const myMemberInfo = currentRoom.members?.find(m => {
             const mUser = m.user;
@@ -149,11 +134,6 @@ export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) =
         }
       }
 
-      console.log(`🚗 [useTravelMode] 이동시간 API 호출 시작:`, {
-        mode: travelMode,
-        origin: { lat: ownerLat, lng: ownerLng },
-        dest: { lat: myLat, lng: myLng }
-      });
 
       try {
         const travelInfo = await travelModeService.calculateTravelTime(
@@ -162,16 +142,12 @@ export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) =
           travelMode
         );
 
-        console.log('✅ [useTravelMode] API 호출 성공:', travelInfo);
-
         // 10분 단위 올림 계산 (초 -> 분 -> 10분 단위 올림)
         const durationMinutes = Math.ceil(travelInfo.duration / 60 / 10) * 10;
         
-        console.log(`✅ [useTravelMode] 나의 이동시간 결정: ${durationMinutes}분 (${travelInfo.durationText})`);
         setMyTravelDuration(durationMinutes);
 
       } catch (err) {
-        console.warn('⚠️ [useTravelMode] API 호출 실패, 수동 계산(Fallback) 시작:', err.message);
         
         // 🆕 수동 계산 로직 (백엔드와 동일한 Haversine 공식)
         const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -187,7 +163,6 @@ export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) =
         const speed = speeds[travelMode] || 30;
         const durationMinutes = Math.ceil((distance / speed) * 60 / 10) * 10;
 
-        console.log(`✅ [useTravelMode] 수동 계산 결과: ${durationMinutes}분 (거리: ${distance.toFixed(2)}km, 속도: ${speed}km/h)`);
         setMyTravelDuration(durationMinutes);
       }
     };
@@ -218,7 +193,6 @@ export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) =
     // ✅ 이미 조정된 슬롯이면 재계산하지 않고 서버 데이터를 그대로 사용
     const isAlreadyAdjusted = currentRoom.timeSlots.some(slot => slot.adjustedForTravelTime);
     if (isAlreadyAdjusted) {
-      console.log('✅ [useTravelMode] 이미 조정된 슬롯입니다. enhancedSchedule을 비우고 실시간 데이터(currentRoom)를 사용합니다.');
       // 🔧 수정: enhancedSchedule을 null로 설정하여 getCurrentScheduleData가 currentRoom을 사용하도록 유도
       // 이렇게 하면 서버에서 데이터가 갱신(챗봇 변경 등)되었을 때 즉시 반영됨
       setEnhancedSchedule(null);
@@ -300,15 +274,6 @@ export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) =
         const regularSlots = allSlots.filter(slot => 
           slot?.isTravel !== true && slot?.subject !== '이동시간'
         );
-
-        // ✅ 디버깅 로그 추가
-        console.log('🔍 [useTravelMode] 슬롯 분리 (방장):', {
-          전체: allSlots.length,
-          수업: regularSlots.length,
-          이동시간_섞임: mixedTravelSlots.length,
-          이동시간_전용: (currentRoom?.travelTimeSlots || []).length,
-          travelMode: travelMode
-        });
         
         // ✅ travelTimeSlots와 mixedTravelSlots 병합
         const combinedTravelSlots = [
@@ -348,13 +313,6 @@ export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) =
     const nonTravelSlots = allSlots.filter(slot => 
       slot?.isTravel !== true && slot?.subject !== '이동시간'
     );
-
-    // ✅ 디버깅 로그 추가
-    console.log('🔍 [useTravelMode] 슬롯 분리 (조원):', {
-      전체: allSlots.length,
-      수업만: nonTravelSlots.length,
-      제거된_이동시간: allSlots.length - nonTravelSlots.length
-    });
 
     return {
         timeSlots: nonTravelSlots,
@@ -441,8 +399,7 @@ export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) =
     if (currentRoomId === prevRoomIdRef.current) {
       // 서버의 모드 값이 실제로 변경되었을 때만 로컬 상태 업데이트
       if (serverMode !== prevServerModeRef.current) {
-         console.log(`🔄 [useTravelMode] 서버 모드 변경 감지: ${prevServerModeRef.current} -> ${serverMode}`);
-         if (travelMode !== serverMode && !isCalculating) {
+        if (travelMode !== serverMode && !isCalculating) {
             setTravelMode(serverMode);
          }
          prevServerModeRef.current = serverMode;

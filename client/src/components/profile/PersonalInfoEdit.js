@@ -164,12 +164,6 @@ const PersonalInfoEdit = () => {
               <AddressAutocomplete 
                 value={userInfo.address} 
                 onChange={(data) => {
-                  console.log('📍 [좌표받음]', {
-                    address: data.address,
-                    lat: data.lat,
-                    lng: data.lng,
-                    isValid: !!(data.lat && data.lng)
-                  });
                   
                   setUserInfo(p => ({
                     ...p, 

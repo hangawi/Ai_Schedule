@@ -108,8 +108,6 @@ const RoomManagementModal = ({
   const roomOwnerUid = room?.owner?.firebaseUid || room?.owner?.uid || room?.ownerId?.firebaseUid || room?.ownerId?.uid;
   const isOwner = roomOwnerId === currentUserId || roomOwnerUid === currentUserId;
 
-  console.log('isOwner check:', { currentUserId, roomOwnerId, roomOwnerUid, isOwner, room });
-
   // 로그 조회
   const fetchLogs = async () => {
     try {
@@ -131,7 +129,6 @@ const RoomManagementModal = ({
 
       setLogs(data.logs);
     } catch (err) {
-      console.error('Fetch logs error:', err);
     } finally {
       setLogsLoading(false);
     }
@@ -171,7 +168,6 @@ const RoomManagementModal = ({
       setLogs([]);
       alert('로그가 초기화되었습니다.');
     } catch (err) {
-      console.error('Clear logs error:', err);
       alert(err.message || '로그 초기화 중 오류가 발생했습니다.');
     }
   };
