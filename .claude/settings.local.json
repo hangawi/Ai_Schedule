@@ -24,7 +24,8 @@
       "Bash(node -c:*)",
       "Bash(powershell -Command \"\\(Get-Content ''server\\\\controllers\\\\coordinationSchedulingController.js''\\).Count\")",
       "Bash(powershell -Command:*)",
-      "Bash(Select-String -Pattern \"Failed to compile\" -Context 5)"
+      "Bash(Select-String -Pattern \"Failed to compile\" -Context 5)",
+      "Bash(dir /B:*)"
     ]
   }
 }

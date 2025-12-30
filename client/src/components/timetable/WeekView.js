@@ -321,9 +321,13 @@ const WeekView = ({
       // 방장의 원본 시간표를 우선적으로 확인
       let ownerOriginalInfo = getOwnerOriginalScheduleInfo(date, time);
       
+      // 🔧 다른 사람의 수업 먼저 확인 (빗금 계산 전에!)
+      const ownerInfo = getSlotOwner(date, time);
+      
       // 🆕 이동시간 고려한 유효성 체크 (조원이고 이동모드일 때만)
       // ⭐ 시간별 체크 + 동적 이동시간 계산 (문제 1+3+4 해결)
-      if (!isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0) {
+      // ⭐ 단, 다른 사람의 수업이 있으면 빗금 계산 스킵
+      if (!isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0 && !ownerInfo) {
         // 현재 시간에 이미 수업이 있는지 확인
         const hasSchedule = hasScheduleAtTime(date, time, timeSlots, currentUser);
 
@@ -381,7 +385,8 @@ const WeekView = ({
         }
       }
 
-      const ownerInfo = getSlotOwner(date, time);
+      // ownerInfo는 이미 위에서 가져왔으므로 중복 제거
+      // const ownerInfo = getSlotOwner(date, time);
       const isSelected = isSlotSelected(date, time);
       const blockedInfo = getBlockedTimeInfo(time);
       const roomExceptionInfo = getRoomExceptionInfo(date, time);
@@ -866,8 +871,8 @@ const WeekView = ({
 
               // 4. 🆕 이동시간 고려한 유효성 체크 (조원이고 이동모드일 때만)
               // ⭐ 시간별 체크 + 동적 이동시간 계산 (문제 1+3+4 해결)
-              // (주의: ownerOriginalInfo가 이미 blocked 상태라면 체크 불필요)
-              if (!isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0 && !ownerOriginalInfo) {
+              // ⭐ 단, ownerOriginalInfo나 ownerInfo가 있으면 빗금 계산 스킵
+              if (!isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0 && !ownerOriginalInfo && !ownerInfo) {
                 // 현재 시간에 이미 수업이 있는지 확인
                 const hasSchedule = hasScheduleAtTime(date, time, timeSlots, currentUser);
 
