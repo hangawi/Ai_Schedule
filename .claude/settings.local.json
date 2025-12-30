@@ -27,7 +27,8 @@
       "Bash(Select-String -Pattern \"Failed to compile\" -Context 5)",
       "Bash(dir /B:*)",
       "mcp__serena__create_text_file",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(ls:*)"
     ]
   }
 }
