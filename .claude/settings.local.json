@@ -29,7 +29,9 @@
       "mcp__serena__create_text_file",
       "Bash(del:*)",
       "Bash(ls:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(dir:*)",
+      "Bash(test:*)"
     ]
   }
 }
