@@ -1142,6 +1142,7 @@ const TimetableGrid = ({
         travelMode={travelMode} // Pass travelMode down
         myTravelDuration={myTravelDuration} // 🆕 Pass myTravelDuration down
         isConfirmed={!!roomData?.confirmedAt} // 🆕 확정 여부 전달
+        roomData={roomData} // 🆕 룸 데이터 전달 (members, blockedTimes 등)
       />
 
       {/* ========== 시간 요청 모달 ========== */}

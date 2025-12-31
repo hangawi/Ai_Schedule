@@ -95,7 +95,8 @@ const WeekView = ({
   travelSlots = [], // 이동 시간 슬롯
   timeSlots = [], // 🆕 전체 배정된 수업 정보
   myTravelDuration = 0, // 🆕 나의 이동 소요 시간
-  isConfirmed = false // 🆕 확정 여부
+  isConfirmed = false, // 🆕 확정 여부
+  roomData = null // 🆕 룸 데이터 (members, blockedTimes 등)
 }) => {
 
   useEffect(() => {
@@ -417,6 +418,110 @@ const WeekView = ({
     }
   };
 
+
+  // 🆕 [문제 2] 다른 조원 수업 뒤 이동시간 고려한 배정 불가 체크
+  const getCannotPlaceAfterOtherMembers = (date, time) => {
+    // 조건: 조원이고, 이동모드이고, 확정 전이어야 함
+    if (isRoomOwner || travelMode === 'normal' || isConfirmed || !roomData) {
+      return null;
+    }
+
+    const currentUserId = currentUser?._id || currentUser?.id;
+    if (!currentUserId) return null;
+
+    const dateStr = date.toISOString().split('T')[0];
+    const currentTimeMinutes = timeToMinutes(time);
+
+    // 1. 같은 날짜의 다른 조원 수업 찾기
+    const otherMembersClasses = timeSlots.filter(slot => {
+      const slotDate = slot.date ? new Date(slot.date).toISOString().split('T')[0] : null;
+      const slotUserId = slot.user?._id || slot.user?.id || slot.user;
+      
+      return slotDate === dateStr && 
+             !slot.isTravel && 
+             slotUserId && 
+             slotUserId.toString() !== currentUserId.toString();
+    });
+
+    if (otherMembersClasses.length === 0) {
+      return null; // 다른 조원 수업 없음
+    }
+
+    // 2. 현재 시간 이전에 끝나는 수업 중 가장 최근 것 찾기
+    let closestPreviousClass = null;
+    let closestEndTime = -1;
+
+    for (const cls of otherMembersClasses) {
+      const classEndMinutes = timeToMinutes(cls.endTime);
+      if (classEndMinutes <= currentTimeMinutes && classEndMinutes > closestEndTime) {
+        closestPreviousClass = cls;
+        closestEndTime = classEndMinutes;
+      }
+    }
+
+    if (!closestPreviousClass) {
+      return null; // 현재 시간 이전에 끝난 수업 없음
+    }
+
+    // 3. 이동시간 계산: 그 조원의 수업 위치 → 현재 사용자 수업 위치
+    const otherMemberUserId = closestPreviousClass.user?._id || closestPreviousClass.user?.id || closestPreviousClass.user;
+    const members = roomData.members || [];
+    
+    const otherMember = members.find(m => {
+      const memberId = m.user?._id || m.user?.id || m.user;
+      return memberId && memberId.toString() === otherMemberUserId.toString();
+    });
+
+    const currentMember = members.find(m => {
+      const memberId = m.user?._id || m.user?.id || m.user;
+      return memberId && memberId.toString() === currentUserId.toString();
+    });
+
+    if (!otherMember || !currentMember) {
+      return null; // 멤버 정보 없음
+    }
+
+    // 이동시간 계산 (간단하게 10분 단위로 가정, 실제로는 더 정교한 계산 필요)
+    // TODO: travelScheduleCalculator의 이동시간 계산 로직 재사용
+    const travelTimeMinutes = 30; // 기본값 30분 (추후 정교화 필요)
+
+    // 4. 종료시간 + 이동시간 > 현재 시간이면 배정 불가
+    const requiredStartTime = closestEndTime + travelTimeMinutes;
+    
+    if (requiredStartTime > currentTimeMinutes) {
+      return {
+        type: 'cannot_place_after',
+        name: '배정 불가',
+        title: `다른 수업 종료 후 이동시간 부족`,
+        previousClassEndTime: minutesToTime(closestEndTime),
+        requiredStartTime: minutesToTime(requiredStartTime)
+      };
+    }
+
+    // 5. 추가: 현재 시간에 수업 배치 시 금지시간 침범 체크
+    const classDurationMinutes = 60; // 기본 수업 시간 (추후 정교화 필요)
+    const classEndMinutes = currentTimeMinutes + classDurationMinutes;
+
+    const blockedTimes = roomData.settings?.blockedTimes || [];
+    
+    for (const blocked of blockedTimes) {
+      const blockedStartMinutes = timeToMinutes(blocked.startTime);
+      const blockedEndMinutes = timeToMinutes(blocked.endTime);
+      
+      // 수업 시간이 금지시간과 겹치는지 확인
+      if (currentTimeMinutes < blockedEndMinutes && classEndMinutes > blockedStartMinutes) {
+        return {
+          type: 'blocked_by_restriction',
+          name: '배정 불가',
+          title: `이 시간에 배치하면 금지시간(${blocked.startTime}-${blocked.endTime})을 침범합니다`,
+          blockedTime: `${blocked.startTime}-${blocked.endTime}`
+        };
+      }
+    }
+
+    return null; // 배정 가능
+  };
+
   // 연속된 시간대를 자동으로 병합하는 함수
   const getMergedTimeBlocks = (dateInfo, dayIndex) => {
     const date = dateInfo.fullDate;
@@ -434,10 +539,16 @@ const WeekView = ({
       // ⭐ 방장의 선호시간(빈 시간)일 때, 조원 본인이 불가능하면 빗금 표시
       // ⭐ 우선순위: 방장 개인시간/예외일정 > 조원 본인 비선호시간
       if (!ownerOriginalInfo || ownerOriginalInfo.type === 'non_preferred') {
-        const userScheduleInfo = getCurrentUserScheduleInfo(date, time);
-        if (userScheduleInfo) {
-          // 조원 본인이 비선호시간이면 빗금으로 표시
-          ownerOriginalInfo = userScheduleInfo;
+        // 🆕 [문제 2] 먼저 다른 조원 수업 뒤 배정 불가 체크
+        const cannotPlaceInfo = getCannotPlaceAfterOtherMembers(date, time);
+        if (cannotPlaceInfo) {
+          ownerOriginalInfo = cannotPlaceInfo;
+        } else {
+          const userScheduleInfo = getCurrentUserScheduleInfo(date, time);
+          if (userScheduleInfo) {
+            // 조원 본인이 비선호시간이면 빗금으로 표시
+            ownerOriginalInfo = userScheduleInfo;
+          }
         }
       }
 
@@ -559,7 +670,9 @@ const WeekView = ({
         ownerOriginalInfo.type === 'personal' ||
         ownerOriginalInfo.type === 'travel_restricted' ||
         ownerOriginalInfo.type === 'user_non_preferred' ||  // 🆕 조원 본인 비선호시간 (문제 1)
-        ownerOriginalInfo.type === 'non_preferred'  // 🆕 방장 비선호시간
+        ownerOriginalInfo.type === 'non_preferred' ||  // 🆕 방장 비선호시간
+        ownerOriginalInfo.type === 'cannot_place_after' ||  // 🆕 다른 조원 수업 뒤 배정 불가 (문제 2)
+        ownerOriginalInfo.type === 'blocked_by_restriction'  // 🆕 금지시간 침범 (문제 2)
       )) {
         slotType = 'blocked';
         slotData = {
@@ -1033,10 +1146,16 @@ const WeekView = ({
               // ⭐ 방장의 선호시간(빈 시간)일 때, 조원 본인이 불가능하면 빗금 표시
               // ⭐ 우선순위: 방장 개인시간/예외일정 > 조원 본인 비선호시간
               if (!ownerOriginalInfo || ownerOriginalInfo.type === 'non_preferred') {
-                const userScheduleInfo = getCurrentUserScheduleInfo(date, time);
-                if (userScheduleInfo) {
-                  // 조원 본인이 비선호시간이면 빗금으로 표시
-                  ownerOriginalInfo = userScheduleInfo;
+                // 🆕 [문제 2] 먼저 다른 조원 수업 뒤 배정 불가 체크
+                const cannotPlaceInfo = getCannotPlaceAfterOtherMembers(date, time);
+                if (cannotPlaceInfo) {
+                  ownerOriginalInfo = cannotPlaceInfo;
+                } else {
+                  const userScheduleInfo = getCurrentUserScheduleInfo(date, time);
+                  if (userScheduleInfo) {
+                    // 조원 본인이 비선호시간이면 빗금으로 표시
+                    ownerOriginalInfo = userScheduleInfo;
+                  }
                 }
               }
 
@@ -1107,7 +1226,9 @@ const WeekView = ({
                 ownerOriginalInfo.type === 'personal' ||
                 ownerOriginalInfo.type === 'travel_restricted' ||
                 ownerOriginalInfo.type === 'user_non_preferred' ||  // 🆕 조원 본인 비선호시간 (문제 1)
-                ownerOriginalInfo.type === 'non_preferred'  // 🆕 방장 비선호시간
+                ownerOriginalInfo.type === 'non_preferred' ||  // 🆕 방장 비선호시간
+                ownerOriginalInfo.type === 'cannot_place_after' ||  // 🆕 다른 조원 수업 뒤 배정 불가 (문제 2)
+                ownerOriginalInfo.type === 'blocked_by_restriction'  // 🆕 금지시간 침범 (문제 2)
               )) {
                 finalBlockedInfo = { ...ownerOriginalInfo, ownerScheduleType: ownerOriginalInfo.type };
                 finalRoomExceptionInfo = null;

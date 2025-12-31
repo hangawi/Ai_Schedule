@@ -321,6 +321,18 @@ const TimeSlot = ({
                borderColor: '#9CA3AF',
                backgroundImage: 'repeating-linear-gradient(45deg, #D1D5DB 0px, #D1D5DB 5px, #E5E7EB 5px, #E5E7EB 10px)'
              } :
+             // 🆕 [문제 2] 다른 조원 수업 뒤 배정 불가 (cannot_place_after) - 빗금 처리
+             isEffectivelyBlocked && blockedInfo?.ownerScheduleType === 'cannot_place_after' ? {
+               backgroundColor: '#FEE2E2',
+               borderColor: '#F87171',
+               backgroundImage: 'repeating-linear-gradient(45deg, #FCA5A5 0px, #FCA5A5 5px, #FEE2E2 5px, #FEE2E2 10px)'
+             } :
+             // 🆕 [문제 2] 금지시간 침범 (blocked_by_restriction) - 빗금 처리
+             isEffectivelyBlocked && blockedInfo?.ownerScheduleType === 'blocked_by_restriction' ? {
+               backgroundColor: '#FEF9C3',
+               borderColor: '#FBBF24',
+               backgroundImage: 'repeating-linear-gradient(45deg, #FDE047 0px, #FDE047 5px, #FEF9C3 5px, #FEF9C3 10px)'
+             } :
              // 방장의 불가능한 시간 (non_preferred) - 연한 보라/라벤더
              isEffectivelyBlocked && blockedInfo?.ownerScheduleType === 'non_preferred' ? { backgroundColor: '#E9D5FF', borderColor: '#C084FC' } :
              // 방장의 개인시간 (personal) - 연한 주황/피치
