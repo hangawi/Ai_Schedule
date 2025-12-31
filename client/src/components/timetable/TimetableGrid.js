@@ -77,23 +77,37 @@ import {
   isRequestTooRecent
 } from '../../utils/validationUtils';
 
-// ===================================================================================================
-// 📌 섹션 2: 레거시 상수
-// ===================================================================================================
-//
-// 이 섹션에서는 하위 호환성을 위한 레거시 상수를 정의합니다.
-//
-// 📝 레거시 상수:
-//    - dayNames: DAY_NAMES 별칭 (영어 요일명)
-//    - dayNamesKorean: DAY_NAMES_KOREAN 별칭 (한글 요일명)
-//
-// ===================================================================================================
+// Import constants
+import {
+  DAY_NAMES,
+  DAY_NAMES_KOREAN,
+  DAYS,
+  REQUEST_TYPES,
+  CHANGE_ACTIONS,
+  BUTTON_STYLES,
+  DEFAULT_SCHEDULE_START_HOUR,
+  DEFAULT_SCHEDULE_END_HOUR
+} from '../../utils/timetableConstants';
 
-// Legacy constants for backward compatibility
-const dayNames = DAY_NAMES;
-const dayNamesKorean = DAY_NAMES_KOREAN;
+// Import helper functions
+import {
+  generateDayTimeSlots,
+  getBlockedTimeInfo as getBlockedTimeInfoHelper,
+  getRoomExceptionInfo as getRoomExceptionInfoHelper,
+  getSlotOwner as getSlotOwnerHelper,
+  isSlotSelected as isSlotSelectedHelper,
+  mergeConsecutiveTimeSlots,
+  getHourFromSettings
+} from '../../utils/timetableHelpers';
 
-
+// Import date utilities
+import {
+  getBaseDate,
+  generateWeekDates,
+  getDayIndex,
+  createDayDisplay,
+  safeDateToISOString
+} from '../../utils/dateUtils';
 
 // Helper functions are now imported from utility files
 
@@ -286,7 +300,7 @@ const TimetableGrid = ({
     const baseDate = getBaseDate(initialStartDate);
 
     // Generate week dates using utility function
-    const dates = generateWeekDates(baseDate, dayNamesKorean);
+    const dates = generateWeekDates(baseDate, DAY_NAMES_KOREAN);
     setWeekDates(dates);
 
     // Call onWeekChange with the start date of the first week displayed
@@ -714,9 +728,9 @@ const TimetableGrid = ({
       startTime: blockStart,
       endTime: blockEnd,
       date: date,
-      day: dayNames[dayIndex]
+      day: DAY_NAMES[dayIndex]
     };
-  }, [timeSlots, showMerged, getDayIndex, dayNames]);
+  }, [timeSlots, showMerged, getDayIndex, DAY_NAMES]);
 
   // ===================================================================================================
   // 📌 섹션 8: 슬롯 클릭 핸들러
@@ -780,7 +794,7 @@ const TimetableGrid = ({
 
           onRemoveSlot({
             date: date, // Pass date object
-            day: dayNames[dayIndex],
+            day: DAY_NAMES[dayIndex],
             startTime: time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`
           });
@@ -835,7 +849,7 @@ const TimetableGrid = ({
           isBlockRequest: !!mergedBlock, // Flag to indicate block request
           targetSlot: {
             date: date, // Pass date object
-            day: dayNames[getDayIndex(date)],
+            day: DAY_NAMES[getDayIndex(date)],
             startTime: startTime,
             endTime: endTime,
             subject: existingSlot?.subject || (mergedBlock ? '블록 요청' : '자리 요청'),
@@ -926,7 +940,7 @@ const TimetableGrid = ({
         type: REQUEST_TYPES.TIME_REQUEST, // Or 'time_change' if applicable
         timeSlot: {
           date: slotToRequest.date ? (slotToRequest.date instanceof Date ? slotToRequest.date.toISOString() : slotToRequest.date) : undefined,
-          day: dayNames[getDayIndex(slotToRequest.date)],
+          day: DAY_NAMES[getDayIndex(slotToRequest.date)],
           startTime: slotToRequest.time,
           endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
         },
@@ -977,7 +991,7 @@ const TimetableGrid = ({
           type: REQUEST_TYPES.SLOT_RELEASE,
           timeSlot: {
             date: slotToChange.date ? (slotToChange.date instanceof Date ? slotToChange.date.toISOString() : slotToChange.date) : undefined,
-            day: dayNames[getDayIndex(slotToChange.date)],
+            day: DAY_NAMES[getDayIndex(slotToChange.date)],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
           },
@@ -990,7 +1004,7 @@ const TimetableGrid = ({
           type: REQUEST_TYPES.SLOT_SWAP,
           timeSlot: {
             date: slotToChange.date ? (slotToChange.date instanceof Date ? slotToChange.date.toISOString() : slotToChange.date) : undefined,
-            day: dayNames[getDayIndex(slotToChange.date)],
+            day: DAY_NAMES[getDayIndex(slotToChange.date)],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: (() => {
@@ -1016,7 +1030,7 @@ const TimetableGrid = ({
           type: REQUEST_TYPES.TIME_CHANGE,
           timeSlot: {
             date: slotToChange.date ? (slotToChange.date instanceof Date ? slotToChange.date.toISOString() : slotToChange.date) : undefined,
-            day: dayNames[getDayIndex(slotToChange.date)],
+            day: DAY_NAMES[getDayIndex(slotToChange.date)],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: (() => {
@@ -1033,7 +1047,7 @@ const TimetableGrid = ({
           },
           targetSlot: {
             date: slotToChange.date, // Pass date object
-            day: dayNames[getDayIndex(slotToChange.date)],
+            day: DAY_NAMES[getDayIndex(slotToChange.date)],
             startTime: slotToChange.time,
             endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`,
             subject: (() => {

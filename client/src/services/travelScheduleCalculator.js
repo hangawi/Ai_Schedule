@@ -946,101 +946,143 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
  * @returns {Array} 거리 순서대로 정렬된 슬롯 배열
  */
   sortSlotsByDistance(slots, owner, memberLocations) {
-    // 날짜별로 그룹화
-    const slotsByDate = {};
+    // 🔧 수정: 날짜 구분 없이 전체 슬롯을 거리 순서대로 정렬
+    
+    // 1️⃣ 방장 슬롯과 조원 슬롯 분리
+    const ownerSlots = [];
+    const memberSlots = [];
+
     slots.forEach(slot => {
-      const dateStr = new Date(slot.date).toISOString().split('T')[0];
-      if (!slotsByDate[dateStr]) {
-        slotsByDate[dateStr] = [];
+      let userId = slot.user;
+      if (typeof userId === 'object' && userId !== null) {
+        userId = userId._id || userId.id;
       }
-      slotsByDate[dateStr].push(slot);
+
+      if (userId && userId.toString() === owner._id.toString()) {
+        ownerSlots.push(slot);
+      } else {
+        memberSlots.push(slot);
+      }
     });
 
-    const sortedSlots = [];
+    // 2️⃣ 방장 슬롯은 날짜+시간 순서대로 정렬
+    ownerSlots.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      if (dateA.getTime() !== dateB.getTime()) {
+        return dateA.getTime() - dateB.getTime();
+      }
+      return a.startTime.localeCompare(b.startTime);
+    });
 
-    // 각 날짜별로 거리 순서대로 정렬
-    Object.keys(slotsByDate).sort().forEach(dateStr => {
-      const dailySlots = slotsByDate[dateStr];
+    // 3️⃣ 조원 슬롯을 거리 순서대로 정렬 (날짜 무시, Greedy 알고리즘)
+    const orderedMembers = [];
+    if (memberSlots.length > 0) {
+      const remaining = [...memberSlots];
 
-      // 🔧 방장 슬롯과 조원 슬롯 분리
-      const ownerSlots = [];
-      const memberSlots = [];
+      // 시작 위치: 방장 집
+      let currentLat = owner.addressLat;
+      let currentLng = owner.addressLng;
+      let currentDate = null;  // 현재 처리 중인 날짜
 
-      dailySlots.forEach(slot => {
-        let userId = slot.user;
-        if (typeof userId === 'object' && userId !== null) {
-          userId = userId._id || userId.id;
-        }
+      console.log('🔍 [거리 순서 정렬 시작] 방장 위치에서 출발');
 
-        if (userId && userId.toString() === owner._id.toString()) {
-          ownerSlots.push(slot);
-        } else {
-          memberSlots.push(slot);
-        }
-      });
+      while (remaining.length > 0) {
+        let closestIndex = 0;
+        let closestDistance = Infinity;
 
-      // 조원 슬롯만 거리 순서대로 정렬 (Greedy)
-      const orderedMembers = [];
-      if (memberSlots.length > 0) {
-        const remaining = [...memberSlots];
-
-        // 시작 위치: 방장 집
-        let currentLat = owner.addressLat;
-        let currentLng = owner.addressLng;
-
-        while (remaining.length > 0) {
-          let closestIndex = 0;
-          let closestDistance = Infinity;
-
-          // 현재 위치에서 가장 가까운 슬롯 찾기
-          for (let i = 0; i < remaining.length; i++) {
-            const slot = remaining[i];
-            let userId = slot.user;
-            if (typeof userId === 'object' && userId !== null) {
-              userId = userId._id || userId.id;
-            }
-
-            const userLocation = memberLocations[userId?.toString()];
-            if (!userLocation) {
-              continue;
-            }
-
-            const distance = this.calculateDistance(
-              currentLat, currentLng,
-              userLocation.lat, userLocation.lng
-            );
-
-            if (distance < closestDistance) {
-              closestDistance = distance;
-              closestIndex = i;
-            }
-          }
-
-          const closestSlot = remaining.splice(closestIndex, 1)[0];
-          orderedMembers.push(closestSlot);
-
-          // 현재 위치 업데이트
-          let userId = closestSlot.user;
+        // 현재 위치에서 가장 가까운 슬롯 찾기 (날짜 무시)
+        for (let i = 0; i < remaining.length; i++) {
+          const slot = remaining[i];
+          let userId = slot.user;
           if (typeof userId === 'object' && userId !== null) {
             userId = userId._id || userId.id;
           }
 
           const userLocation = memberLocations[userId?.toString()];
-          if (userLocation) {
-            currentLat = userLocation.lat;
-            currentLng = userLocation.lng;
+          if (!userLocation) {
+            continue;
+          }
+
+          const distance = this.calculateDistance(
+            currentLat, currentLng,
+            userLocation.lat, userLocation.lng
+          );
+
+          if (distance < closestDistance) {
+            closestDistance = distance;
+            closestIndex = i;
           }
         }
+
+        const closestSlot = remaining.splice(closestIndex, 1)[0];
+        orderedMembers.push(closestSlot);
+
+        // 현재 위치 업데이트
+        let userId = closestSlot.user;
+        if (typeof userId === 'object' && userId !== null) {
+          userId = userId._id || userId.id;
+        }
+
+        const userLocation = memberLocations[userId?.toString()];
+        if (userLocation) {
+          currentLat = userLocation.lat;
+          currentLng = userLocation.lng;
+          
+          const slotDate = new Date(closestSlot.date).toISOString().split('T')[0];
+          console.log(`🔍 [거리 정렬] ${userLocation.name} (${slotDate} ${closestSlot.startTime}) - 거리: ${Math.round(closestDistance)}m`);
+        }
       }
+    }
 
-      // 방장 슬롯은 시간 순서대로 정렬
-      ownerSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
-
-      // 방장 슬롯 먼저, 그 다음 거리 순서대로 정렬된 조원 슬롯
-      sortedSlots.push(...ownerSlots, ...orderedMembers);
+    // 4️⃣ 방장 슬롯과 조원 슬롯을 섞어서 시간 순서대로 재정렬
+    // 이렇게 하면 같은 날짜 내에서 방장→조원 순서가 유지됨
+    const allSlots = [...ownerSlots, ...orderedMembers];
+    
+    // 최종적으로 날짜+시간 순서대로 정렬하되, 같은 날짜 내에서는 거리 순서 유지
+    allSlots.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      
+      // 날짜가 다르면 날짜 순서대로
+      if (dateA.getTime() !== dateB.getTime()) {
+        return dateA.getTime() - dateB.getTime();
+      }
+      
+      // 같은 날짜면 방장이 먼저
+      let userIdA = a.user;
+      if (typeof userIdA === 'object' && userIdA !== null) {
+        userIdA = userIdA._id || userIdA.id;
+      }
+      let userIdB = b.user;
+      if (typeof userIdB === 'object' && userIdB !== null) {
+        userIdB = userIdB._id || userIdB.id;
+      }
+      
+      const isOwnerA = userIdA && userIdA.toString() === owner._id.toString();
+      const isOwnerB = userIdB && userIdB.toString() === owner._id.toString();
+      
+      if (isOwnerA && !isOwnerB) return -1;
+      if (!isOwnerA && isOwnerB) return 1;
+      
+      // 둘 다 방장이거나 둘 다 조원이면 orderedMembers의 순서 유지
+      // (이미 거리 순서대로 정렬되어 있음)
+      return 0;
     });
 
-    return sortedSlots;
+    console.log('🔍 [최종 정렬 결과]:');
+    allSlots.forEach((slot, idx) => {
+      let userId = slot.user;
+      if (typeof userId === 'object' && userId !== null) {
+        userId = userId._id || userId.id;
+      }
+      const userLocation = memberLocations[userId?.toString()];
+      const dateStr = new Date(slot.date).toISOString().split('T')[0];
+      const isOwner = userId && userId.toString() === owner._id.toString();
+      console.log(`  [${idx + 1}] ${dateStr} ${slot.startTime}-${slot.endTime}: ${isOwner ? '방장' : userLocation?.name || '?'}`);
+    });
+
+    return allSlots;
   }
 
 /**
@@ -1182,25 +1224,16 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         }
     }
 
-    // 🆕 날짜별 previousLocation 초기화를 위한 변수
-    let currentDate = null;
-
-    // 🆕 이전 활동 종료 시간 추적 (분 단위, 날짜별로 리셋)
-    let previousActivityEndMinutes = 0;
+    // 🔧 수정: 거리 순서 연속 배치를 위해 날짜 리셋 로직 제거
+    // 이전 슬롯 정보 추적
+    let previousDate = null;  // 이전에 배치된 날짜
+    let previousActivityEndMinutes = 0;  // 이전 활동 종료 시간 (분)
+    let previousUserId = null;  // 이전 슬롯의 사용자 ID
 
     for (const mergedSlot of sortedMergedSlots) {
-        // 🆕 날짜가 바뀌면 previousLocation을 방장으로 초기화
         const slotDate = new Date(mergedSlot.date).toISOString().split('T')[0];
-        if (slotDate !== currentDate) {
-            currentDate = slotDate;
-            previousActivityEndMinutes = 0;  // 🆕 날짜 변경 시 종료 시간도 리셋
-            previousLocation = {
-                lat: owner.addressLat,
-                lng: owner.addressLng,
-                name: '방장',
-                color: '#4B5563'
-            };
-        }
+        
+        // 🔧 수정: 날짜 리셋 로직 제거 - 거리 순서대로 연속 배치
         let userId = mergedSlot.user;
         if (typeof userId === 'object' && userId !== null) {
             userId = userId._id || userId.id;
@@ -1280,23 +1313,22 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                 continue;
             }
 
-            // ✅ 이동 모드: 거리 순서대로 연속 배치
-            // - 날짜의 첫 슬롯: 원래 시간 유지
-            // - 그 이후: 이전 종료 시간부터 연속 배치 (원래 시간 무시)
+            // 🔧 수정: 거리 순서 연속 배치 - 이전 슬롯과 같은 날짜에 배치 시도
+            let targetDate;  // 실제로 배치할 날짜
             let newTravelStartMinutes;
-            if (actualPreviousEndMinutes === 0) {
-                // 날짜의 첫 슬롯: 원래 시간 사용
-                newTravelStartMinutes = slotStartMinutes;
-                console.log(`🔍 [이동시간 계산] ${slotDate} - 첫 슬롯: 원래 시간 사용 (${this.formatTime(slotStartMinutes)})`);
+            
+            if (previousActivityEndMinutes > 0 && previousDate) {
+                // 이전 슬롯이 있고, 거리 순서상 연속이면 → 이전 날짜에 배치 시도
+                targetDate = previousDate;
+                newTravelStartMinutes = previousActivityEndMinutes;  // 이전 종료 시간부터 시작
+                console.log(`🔍 [거리 연속 배치] ${memberLocation.name}: 이전 슬롯(${previousDate}) 다음에 배치 시도`);
+                console.log(`  - 이전 종료: ${this.formatTime(previousActivityEndMinutes)}`);
+                console.log(`  - 원래 날짜: ${slotDate} → 변경: ${targetDate}`);
             } else {
-                // 이전 활동 종료 시간부터 바로 시작
-                newTravelStartMinutes = actualPreviousEndMinutes;
-                console.log(`🔍 [이동시간 계산] ${slotDate} - 이전 종료 시간부터 시작:`, {
-                    actualPreviousLocation: actualPreviousLocation.name,
-                    actualPreviousEndMinutes: this.formatTime(actualPreviousEndMinutes),
-                    slotStartMinutes: this.formatTime(slotStartMinutes),
-                    newTravelStartMinutes: this.formatTime(newTravelStartMinutes)
-                });
+                // 첫 슬롯이거나 이전 슬롯이 없으면 → 원래 날짜, 원래 시간 사용
+                targetDate = slotDate;
+                newTravelStartMinutes = slotStartMinutes;
+                console.log(`🔍 [일반 배치] ${memberLocation.name}: 원래 날짜(${slotDate})에 배치 시도`);
             }
             let newTravelEndTimeMinutes = newTravelStartMinutes + travelDurationMinutes;
             let newActivityStartTimeMinutes = newTravelEndTimeMinutes; // 이동 후 수업 시작
