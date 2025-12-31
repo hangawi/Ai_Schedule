@@ -1364,45 +1364,56 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
 
             // 🆕 선호시간 체크 (금지시간 체크 통과 후)
             if (canPlace) {
-                const slotDayOfWeek = new Date(mergedSlot.date).getDay();
-
-                // 이전 활동 때문에 밀렸는지 확인
-                const isPushedByPrevious = previousActivityEndMinutes > slotStartMinutes;
+                // 🔧 수정: targetDate의 요일 사용
+                const targetDayOfWeek = new Date(targetDate).getDay();
 
                 // 조정된 시간이 선호시간 내인지 체크
                 const isAdjustedPreferred = this.isWithinPreferredTime(
                     userId,
-                    slotDayOfWeek,
+                    targetDayOfWeek,
                     newActivityStartTimeMinutes,
                     newActivityEndTimeMinutes,
                     memberPreferences
                 );
+                
+                // 🔧 수정: 선호시간 체크 결과 적용
+                if (!isAdjustedPreferred) {
+                    canPlace = false;
+                    console.log(`❌ [선호시간 벗어남] ${targetDate} ${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)} - ${memberLocation.name}`);
+                }
+            }
+            
+            // 🔧 추가: 24시간 범위 체크
+            if (canPlace && newActivityEndTimeMinutes > 1440) {  // 24:00 = 1440분
+                canPlace = false;
+                console.log(`❌ [하루 범위 초과] ${targetDate} ${this.formatTime(newActivityEndTimeMinutes)} - ${memberLocation.name}`);
             }
             
             // 🆕 겹침 체크 (선호시간 체크 통과 후)
             if (canPlace) {
-                // 이동시간 겹침 체크
+                // 🔧 수정: targetDate로 겹침 체크
                 const travelOverlap = this.checkOverlap(
-                    slotDate,
+                    targetDate,
                     newTravelStartMinutes,
                     newTravelEndTimeMinutes,
                     assignedSlotsByDate
                 );
 
-                // 수업시간 겹침 체크
                 const activityOverlap = this.checkOverlap(
-                    slotDate,
+                    targetDate,
                     newActivityStartTimeMinutes,
                     newActivityEndTimeMinutes,
                     assignedSlotsByDate
                 );
 
                 if (travelOverlap || activityOverlap) {
-                    console.log(`❌ [겹침 발견] ${slotDate} - ${memberLocation.name}`, {
+                    console.log(`❌ [겹침 발견] ${targetDate} - ${memberLocation.name}`, {
                         이동시간: `${this.formatTime(newTravelStartMinutes)} - ${this.formatTime(newTravelEndTimeMinutes)}`,
                         수업시간: `${this.formatTime(newActivityStartTimeMinutes)} - ${this.formatTime(newActivityEndTimeMinutes)}`,
                         이동시간겹침: travelOverlap,
-                        수업시간겹침: activityOverlap
+                        수업시간겹침: activityOverlap,
+                        원래날짜: slotDate,
+                        배치날짜: targetDate
                     });
                     canPlace = false;
                 }
@@ -1544,10 +1555,23 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                                 location: memberLocation,
                                 endMinutes: block.activityEndMinutes
                             };
-                            }
+                        }
                     }
 
+                    // 🔧 수정: 마지막 블록 정보로 이전 슬롯 정보 업데이트
+                    const lastBlock = alternativePlacement.blocks[alternativePlacement.blocks.length - 1];
+                    const lastBlockDateStr = new Date(lastBlock.date).toISOString().split('T')[0];
+                    previousDate = lastBlockDateStr;
+                    previousActivityEndMinutes = lastBlock.activityEndMinutes;
+                    previousUserId = userIdStr;
                     previousLocation = memberLocation;
+                    
+                    console.log(`✅ [분할 배치 성공] ${memberLocation.name}:`, {
+                        원래날짜: slotDate,
+                        블록수: alternativePlacement.blocks.length,
+                        마지막블록: `${lastBlockDateStr} ${this.formatTime(lastBlock.activityEndMinutes)}`
+                    });
+                    
                     continue;
                 } else if (alternativePlacement.success) {
                     // 다른 요일에 배치 성공
@@ -1683,9 +1707,20 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                             location: memberLocation,
                             endMinutes: actualActivityEndMinutes
                         };
-                        }
+                    }
 
+                    // 🔧 수정: 이전 슬롯 정보 업데이트 (거리 연속 배치용)
+                    previousDate = alternativePlacement.dateStr;
+                    previousActivityEndMinutes = actualActivityEndMinutes;
+                    previousUserId = userIdStr;
                     previousLocation = memberLocation;
+                    
+                    console.log(`✅ [재배정 성공] ${memberLocation.name}:`, {
+                        원래날짜: slotDate,
+                        배치날짜: alternativePlacement.dateStr,
+                        수업시간: `${this.formatTime(actualActivityStartMinutes)} - ${this.formatTime(actualActivityEndMinutes)}`
+                    });
+                    
                     continue;
                 } else {
                     console.log(`❌ [재배정 실패] ${slotDate} - ${memberLocation.name}`, {
@@ -1703,39 +1738,47 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                 }
             }
 
+            // 🔧 수정: targetDate를 사용해서 블록 생성
+            const targetDateObj = new Date(targetDate);
+            const targetDayOfWeek = targetDateObj.getDay();
+            const targetDayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][targetDayOfWeek];
+            
             const travelBlock = {
                 ...mergedSlot,
+                date: targetDateObj,  // targetDate 사용
+                day: targetDayName,
                 isTravel: true,
                 startTime: this.formatTime(newTravelStartMinutes),
                 endTime: this.formatTime(newTravelEndTimeMinutes),
                 subject: '이동시간',
-                user: userId,  // 🆕 사용자 ID 추가 (색상 매칭용)
-                color: memberLocation.color,  // 🆕 사용자 색상 추가
+                user: userId,
+                color: memberLocation.color,
                 travelInfo: { 
                     ...travelInfo, 
                     durationText: `${travelDurationMinutes}분`,
-                    from: actualPreviousLocation.name,  // 🆕 실제 출발지 이름
-                    to: memberLocation.name  // 🆕 도착지 이름
+                    from: actualPreviousLocation.name,
+                    to: memberLocation.name
                 },
             };
 
             const activityBlock = {
                 ...mergedSlot,
+                date: targetDateObj,  // targetDate 사용
+                day: targetDayName,
                 isTravel: false,
                 startTime: this.formatTime(newActivityStartTimeMinutes),
                 endTime: this.formatTime(newActivityEndTimeMinutes),
                 subject: mergedSlot.subject || '수업',
-                // 🆕 원본 시간 및 이동시간 메타데이터 추가 (서버 전달용)
                 originalStartTime: mergedSlot.originalStartTime || mergedSlot.startTime,
                 originalEndTime: mergedSlot.originalEndTime || mergedSlot.endTime,
-                actualStartTime: this.formatTime(newTravelStartMinutes), // 이동시간 포함 시작
-                travelTimeBefore: travelDurationMinutes, // 이동시간(분)
+                actualStartTime: this.formatTime(newTravelStartMinutes),
+                travelTimeBefore: travelDurationMinutes,
                 adjustedForTravelTime: true
             };
 
             // 🆕 travelSlots 배열에 이동시간 슬롯 추가
             const travelSlotData = {
-                date: mergedSlot.date,
+                date: targetDateObj,  // targetDate 사용
                 startTime: this.formatTime(newTravelStartMinutes),
                 endTime: this.formatTime(newTravelEndTimeMinutes),
                 from: actualPreviousLocation.name,
@@ -1756,29 +1799,38 @@ travelSlotsArray.push(travelSlotData);
             const activitySlots10min = this.unmergeBlock(activityBlock);
 
             allResultSlots.push(...travelSlots10min, ...activitySlots10min);
+            
+            // 🔍 배치 성공 로그
+            console.log(`✅ [배치 성공] ${memberLocation.name}:`, {
+                원래날짜: slotDate,
+                배치날짜: targetDate,
+                이동시간: `${this.formatTime(newTravelStartMinutes)} - ${this.formatTime(newTravelEndTimeMinutes)} (${travelDurationMinutes}분)`,
+                수업시간: `${this.formatTime(newActivityStartTimeMinutes)} - ${this.formatTime(newActivityEndTimeMinutes)} (${activityDurationMinutes}분)`,
+                출발지: actualPreviousLocation.name
+            });
 
-            // 🆕 assignedSlotsByDate에 기록 (겹침 방지)
-            if (!assignedSlotsByDate[slotDate]) {
-                assignedSlotsByDate[slotDate] = [];
+            // 🔧 수정: targetDate로 기록 (거리 연속 배치 지원)
+            if (!assignedSlotsByDate[targetDate]) {
+                assignedSlotsByDate[targetDate] = [];
             }
-            assignedSlotsByDate[slotDate].push({
+            assignedSlotsByDate[targetDate].push({
                 startMinutes: newTravelStartMinutes,
                 endMinutes: newActivityEndTimeMinutes,
                 userId: userId
             });
             
-            // 🆕 각 날짜의 마지막 위치 업데이트 (더 늦게 끝나는 경우만)
-            if (!lastLocationByDate[slotDate] || newActivityEndTimeMinutes > lastLocationByDate[slotDate].endMinutes) {
-                lastLocationByDate[slotDate] = {
+            // 🔧 수정: targetDate로 마지막 위치 업데이트
+            if (!lastLocationByDate[targetDate] || newActivityEndTimeMinutes > lastLocationByDate[targetDate].endMinutes) {
+                lastLocationByDate[targetDate] = {
                     location: memberLocation,
                     endMinutes: newActivityEndTimeMinutes
                 };
-                 }
+            }
 
-            // 🆕 이전 활동 종료 시간 업데이트 (다음 학생은 이 시간 이후에 시작)
+            // 🔧 수정: 이전 슬롯 정보 업데이트 (거리 연속 배치용)
+            previousDate = targetDate;  // 배치된 날짜 저장
             previousActivityEndMinutes = newActivityEndTimeMinutes;
-
-            // 🆕 현재 위치를 이전 위치로 업데이트 (다음 학생은 여기서 출발)
+            previousUserId = userIdStr;
             previousLocation = memberLocation;
 
         } catch (error) {
