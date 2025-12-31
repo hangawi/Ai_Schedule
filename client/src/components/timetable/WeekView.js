@@ -481,6 +481,33 @@ const WeekView = ({
               }
           }
 
+          // 🆕 수업 시간도 금지시간과 겹치는지 체크 (문제 B 해결!)
+          if (!isTravelBlocked) {
+              // currentRoom에서 classDuration 가져오기
+              const classDuration = (timeSlots && timeSlots.length > 0) 
+                  ? (timeSlots[0].endMinutes || 60) - (timeSlots[0].startMinutes || 0)
+                  : 60; // 기본값 60분
+              
+              const classEndMinutes = timeMinutes + classDuration;
+
+              // 수업 구간을 10분 단위로 체크
+              for (let m = timeMinutes; m < classEndMinutes; m += 10) {
+                  const checkTimeStr = minutesToTime(m);
+                  
+                  const blockedInfo = getBlockedTimeInfo(checkTimeStr);
+                  if (blockedInfo) {
+                      isTravelBlocked = true;
+                      break;
+                  }
+
+                  const info = getOwnerOriginalScheduleInfo(date, checkTimeStr);
+                  if (info && (info.type === 'non_preferred' || info.type === 'exception' || info.type === 'personal')) {
+                      isTravelBlocked = true;
+                      break;
+                  }
+              }
+          }
+
           if (isTravelBlocked) {
               // ⭐ 선호시간 내에서만 빗금 표시
               const currentTimeBlocked = getBlockedTimeInfo(time);
@@ -996,7 +1023,7 @@ const WeekView = ({
               // 2. 기본 정보 가져오기
               const ownerInfo = getSlotOwner(date, time);
               const isSelected = isSlotSelected(date, time);
-              const blockedInfo = getBlockedTimeInfo(time);
+              const blockedInfo = getBlockedTimeInfo(time, date);
               const roomExceptionInfo = getRoomExceptionInfo(date, time);
 
               // 3. 멤버 슬롯인지 확인 (방장이 본인 슬롯을 보는 경우 제외)

@@ -312,18 +312,61 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
       let classStartMinutes = parseInt(slot.startTime.split(':')[0]) * 60 + parseInt(slot.startTime.split(':')[1]);
       let classEndMinutes = parseInt(slot.endTime.split(':')[0]) * 60 + parseInt(slot.endTime.split(':')[1]);
       const classDuration = classEndMinutes - classStartMinutes;
-      
-      let travelStartMinutes = classStartMinutes - travelDurationMinutes;
-      let travelEndMinutes = classStartMinutes;
 
-      // 🔒 금지시간 침범 체크
+      // 🔧 이동시간 계산 (겹침 방지)
+      let travelStartMinutes, travelEndMinutes;
+
+      if (!previousSlot) {
+        // 첫 번째 슬롯: 원래 시간 유지, 이동시간 역산
+        travelStartMinutes = classStartMinutes - travelDurationMinutes;
+        travelEndMinutes = classStartMinutes;
+        console.log(`  🔍 [첫 슬롯] 원래 시간 유지, 이동: ${String(Math.floor(travelStartMinutes / 60)).padStart(2, '0')}:${String(travelStartMinutes % 60).padStart(2, '0')}-${slot.startTime}`);
+      } else {
+        // 이전 슬롯이 있음: 이전 종료 시간부터 연속 배치
+        const prevEnd = previousSlot.endTime.split(':');
+        const previousEndMinutes = parseInt(prevEnd[0]) * 60 + parseInt(prevEnd[1]);
+        console.log(`  🔍 [이전 슬롯] ${previousSlot.startTime}-${previousSlot.endTime}, 종료: ${previousEndMinutes}분`);
+
+        travelStartMinutes = previousEndMinutes;
+        travelEndMinutes = travelStartMinutes + travelDurationMinutes;
+
+        // 수업 시작 시간 = 이동 종료 시간
+        const adjustedClassStartMinutes = travelEndMinutes;
+        const adjustedClassEndMinutes = adjustedClassStartMinutes + classDuration;
+
+        // 원래 시간과 다르면 슬롯 시간 업데이트
+        if (adjustedClassStartMinutes !== classStartMinutes) {
+          console.log(`  ⚠️  [수업시간 조정] ${slot.startTime}-${slot.endTime} → ${String(Math.floor(adjustedClassStartMinutes / 60)).padStart(2, '0')}:${String(adjustedClassStartMinutes % 60).padStart(2, '0')}-${String(Math.floor(adjustedClassEndMinutes / 60)).padStart(2, '0')}:${String(adjustedClassEndMinutes % 60).padStart(2, '0')}`);
+
+          classStartMinutes = adjustedClassStartMinutes;
+          classEndMinutes = adjustedClassEndMinutes;
+
+          slot.startTime = `${String(Math.floor(classStartMinutes / 60)).padStart(2, '0')}:${String(classStartMinutes % 60).padStart(2, '0')}`;
+          slot.endTime = `${String(Math.floor(classEndMinutes / 60)).padStart(2, '0')}:${String(classEndMinutes % 60).padStart(2, '0')}`;
+          room.markModified('timeSlots');
+        }
+      }
+
+      // 🔒 금지시간 침범 체크 (이동시간 + 수업시간 모두 체크!)
       const travelStartTime = `${String(Math.floor(travelStartMinutes / 60)).padStart(2, '0')}:${String(travelStartMinutes % 60).padStart(2, '0')}`;
       const travelEndTime = `${String(Math.floor(travelEndMinutes / 60)).padStart(2, '0')}:${String(travelEndMinutes % 60).padStart(2, '0')}`;
-      
-      const blockedTime = isTimeInBlockedRange(travelStartTime, travelEndTime, allBlockedTimes);
-      
+      const classEndTime = `${String(Math.floor(classEndMinutes / 60)).padStart(2, '0')}:${String(classEndMinutes % 60).padStart(2, '0')}`;
+
+      // 이동시간 체크
+      const travelBlockedTime = isTimeInBlockedRange(travelStartTime, travelEndTime, allBlockedTimes);
+
+      // 수업시간 체크 (이동 종료부터 수업 종료까지)
+      const classBlockedTime = isTimeInBlockedRange(travelEndTime, classEndTime, allBlockedTimes);
+
+      const blockedTime = travelBlockedTime || classBlockedTime;
+
       if (blockedTime) {
-        console.log(`  ⚠️  [금지시간 침범] 이동시간 ${travelStartTime}-${travelEndTime}이(가) ${blockedTime.name || '금지시간'}(${blockedTime.startTime}-${blockedTime.endTime})과 겹침`);
+        if (travelBlockedTime) {
+          console.log(`  ⚠️  [금지시간 침범] 이동시간 ${travelStartTime}-${travelEndTime}이(가) ${blockedTime.name || '금지시간'}(${blockedTime.startTime}-${blockedTime.endTime})과 겹침`);
+        }
+        if (classBlockedTime) {
+          console.log(`  ⚠️  [금지시간 침범] 수업시간 ${travelEndTime}-${classEndTime}이(가) ${blockedTime.name || '금지시간'}(${blockedTime.startTime}-${blockedTime.endTime})과 겹침`);
+        }
         
         // 🔧 이동시간이 금지시간 이후부터 시작하도록 수업시간 조정
         const blockedEndMinutes = parseInt(blockedTime.endTime.split(':')[0]) * 60 + parseInt(blockedTime.endTime.split(':')[1]);

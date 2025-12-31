@@ -70,34 +70,6 @@ import WeekView from './WeekView';
 
 // Import utility functions
 import {
-  getMondayOfCurrentWeek,
-  safeDateToISOString,
-  generateWeekDates,
-  getDayIndex,
-  getBaseDate,
-  createDayDisplay
-} from '../../utils/dateUtils';
-import {
-  DAY_NAMES,
-  DAY_NAMES_KOREAN,
-  DAYS,
-  DEFAULT_SCHEDULE_START_HOUR,
-  DEFAULT_SCHEDULE_END_HOUR,
-  REQUEST_TYPES,
-  REQUEST_DEBOUNCE_TIME,
-  CHANGE_ACTIONS,
-  BUTTON_STYLES
-} from '../../utils/timetableConstants';
-import {
-  getHourFromSettings,
-  generateDayTimeSlots,
-  getBlockedTimeInfo as getBlockedTimeInfoHelper,
-  getRoomExceptionInfo as getRoomExceptionInfoHelper,
-  getSlotOwner as getSlotOwnerHelper,
-  isSlotSelected as isSlotSelectedHelper,
-  mergeConsecutiveTimeSlots
-} from '../../utils/timetableHelpers';
-import {
   hasExistingSwapRequest,
   isSlotOwnedByCurrentUser,
   isSlotInSelectedSlots,

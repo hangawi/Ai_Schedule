@@ -51,8 +51,9 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 /**
  * 이동시간 계산
  */
-const calculateTravelTime = async (fromUserId, toUserId, room) => {
-  if (!room.travelMode || room.travelMode === 'normal') return 0;
+const calculateTravelTime = async (fromUserId, toUserId, room, effectiveTravelMode) => {
+  // 🔧 effectiveTravelMode 매개변수 추가 (room.travelMode 대신 사용)
+  if (!effectiveTravelMode || effectiveTravelMode === 'normal') return 0;
 
   try {
     const fromUser = await User.findById(fromUserId);
@@ -75,7 +76,7 @@ const calculateTravelTime = async (fromUserId, toUserId, room) => {
       walking: 5,
       bicycling: 15
     };
-    const speed = speeds[room.travelMode] || 30;
+    const speed = speeds[effectiveTravelMode] || 30;
 
     // 이동시간 계산 (10분 단위 반올림)
     const travelMinutes = Math.ceil((distance / speed) * 60 / 10) * 10;
@@ -140,8 +141,9 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
 
     console.log(`📊 [시뮬레이션] 전체 슬롯 (정렬 후): ${allSlots.length}개`);
 
-    // ③ 모든 슬롯의 이동시간 재계산
+    // ③ 모든 슬롯의 이동시간 재계산 (서버 로직과 동일하게!)
     const slotsWithTravel = [];
+    let previousEndMinutes = 0;
 
     for (let i = 0; i < allSlots.length; i++) {
       const slot = allSlots[i];
@@ -156,25 +158,47 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
 
           if (prevUserId.toString() === room.owner._id.toString()) {
             // 방장 → 학생
-            travelTime = await calculateTravelTime(room.owner._id, currUserId, room);
+            travelTime = await calculateTravelTime(room.owner._id, currUserId, room, effectiveTravelMode);
           } else {
             // 학생 → 학생
-            travelTime = await calculateTravelTime(prevUserId, currUserId, room);
+            travelTime = await calculateTravelTime(prevUserId, currUserId, room, effectiveTravelMode);
           }
         } else {
           // 첫 슬롯: 방장 → 학생
           const currUserId = slot.user._id || slot.user;
-          travelTime = await calculateTravelTime(room.owner._id, currUserId, room);
+          travelTime = await calculateTravelTime(room.owner._id, currUserId, room, effectiveTravelMode);
         }
       }
+
+      // 🔧 서버 로직과 동일하게: 이전 슬롯 종료 시간부터 이동 시작
+      let travelStartMinutes, travelEndMinutes, classStartMinutes, classEndMinutes;
+      const slotStartMinutes = timeToMinutes(slot.startTime);
+      const slotEndMinutes = timeToMinutes(slot.endTime);
+      const classDuration = slotEndMinutes - slotStartMinutes;
+
+      if (!prevSlot) {
+        // 첫 번째 슬롯: 원래 시간 유지, 이동시간 역산
+        travelStartMinutes = slotStartMinutes - travelTime;
+        travelEndMinutes = slotStartMinutes;
+        classStartMinutes = slotStartMinutes;
+        classEndMinutes = slotEndMinutes;
+      } else {
+        // 이전 슬롯이 있음: 이전 종료 시간부터 연속 배치
+        travelStartMinutes = previousEndMinutes;
+        travelEndMinutes = travelStartMinutes + travelTime;
+        classStartMinutes = travelEndMinutes;
+        classEndMinutes = classStartMinutes + classDuration;
+      }
+
+      previousEndMinutes = classEndMinutes;
 
       slotsWithTravel.push({
         ...slot,
         travelTime,
-        travelStartTime: slot.startTime,
-        travelEndTime: minutesToTime(timeToMinutes(slot.startTime) + travelTime),
-        classStartTime: minutesToTime(timeToMinutes(slot.startTime) + travelTime),
-        classEndTime: slot.endTime
+        travelStartTime: minutesToTime(travelStartMinutes),
+        travelEndTime: minutesToTime(travelEndMinutes),
+        classStartTime: minutesToTime(classStartMinutes),
+        classEndTime: minutesToTime(classEndMinutes)
       });
     }
 
