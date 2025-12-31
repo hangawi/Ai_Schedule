@@ -376,8 +376,8 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
         // 방 정보 다시 가져오기
         try {
           await fetchRoomDetails(currentRoom._id);
-          // travelMode 상태도 동기화
-          handleTravelModeChange(data.travelMode);
+          // ✅ useTravelMode의 useEffect가 자동으로 currentRoom.currentTravelMode 변경을 감지하여 동기화함
+          // handleTravelModeChange 호출 제거 (React state 업데이트가 비동기이므로 명시적 호출 시 구 데이터 참조)
         } catch (error) {
         }
       }
@@ -389,10 +389,8 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       // 방 정보 다시 가져오기 (confirmedTravelMode 업데이트)
       try {
         await fetchRoomDetails(currentRoom._id);
-        // 확정된 모드로 화면 업데이트
-        if (data.confirmedTravelMode) {
-          handleTravelModeChange(data.confirmedTravelMode);
-        }
+        // ✅ useTravelMode의 useEffect가 자동으로 currentRoom.confirmedTravelMode 변경을 감지하여 동기화함
+        // handleTravelModeChange 호출 제거 (React state 업데이트가 비동기이므로 명시적 호출 시 구 데이터 참조)
       } catch (error) {
       }
     });
