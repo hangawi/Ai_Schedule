@@ -555,13 +555,7 @@ const WeekView = ({
       // 🆕 이동시간 고려한 유효성 체크 (조원이고 이동모드일 때만)
       // ⭐ 시간별 체크 + 동적 이동시간 계산 (문제 1+3+4 해결)
       // ⭐ 단, 다른 사람의 수업이 있으면 빗금 계산 스킵
-      // ⭐ 확정 후에는 빗금 계산 스킵 (문제 2 해결)
-      if (time >= '16:00' && time <= '17:00') {
-        console.log(`🔍 [${time}] 빗금 체크:`, {
-          isRoomOwner, travelMode, myTravelDuration, ownerInfo, isConfirmed,
-          조건만족: !isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0 && !ownerInfo && !isConfirmed
-        });
-      }
+      // ⭐ 확정 후에는 빗금 계산 스킵 (문제 2 해결
       if (!isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0 && !ownerInfo && !isConfirmed) {
         // 현재 시간에 이미 수업이 있는지 확인
         const hasSchedule = hasScheduleAtTime(date, time, timeSlots, currentUser);
@@ -607,13 +601,6 @@ const WeekView = ({
               
               const classEndMinutes = timeMinutes + classDuration;
 
-              if (time >= '16:00' && time <= '16:20') {
-                console.log(`🎓 [${time}] 수업시간 체크:`, {
-                  timeMinutes, classDuration, classEndMinutes,
-                  체크범위: `${timeMinutes}분 ~ ${classEndMinutes}분 (미포함)`
-                });
-              }
-
               // 수업 구간을 10분 단위로 체크
               for (let m = timeMinutes; m < classEndMinutes; m += 10) {
                   const checkTimeStr = minutesToTime(m);
@@ -621,7 +608,6 @@ const WeekView = ({
                   const blockedInfo = getBlockedTimeInfo(checkTimeStr);
                   if (blockedInfo) {
                       if (time >= '16:00' && time <= '16:20') {
-                        console.log(`  ❌ [${time}] ${checkTimeStr}에 차단시간 발견!`, blockedInfo);
                       }
                       isTravelBlocked = true;
                       break;
@@ -630,7 +616,6 @@ const WeekView = ({
                   const info = getOwnerOriginalScheduleInfo(date, checkTimeStr);
                   if (info && (info.type === 'non_preferred' || info.type === 'exception' || info.type === 'personal')) {
                       if (time >= '16:00' && time <= '16:20') {
-                        console.log(`  ❌ [${time}] ${checkTimeStr}에 방장 일정 발견!`, info);
                       }
                       isTravelBlocked = true;
                       break;
@@ -638,7 +623,6 @@ const WeekView = ({
               }
               
               if (time >= '16:00' && time <= '16:20') {
-                console.log(`  ✅ [${time}] 수업시간 체크 완료, isTravelBlocked:`, isTravelBlocked);
               }
           }
 

@@ -230,13 +230,16 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
 
       const userId = (user._id || user.id).toString();
       memberPreferences[userId] = {
-        sunday: [],
-        monday: [],
-        tuesday: [],
-        wednesday: [],
-        thursday: [],
-        friday: [],
-        saturday: []
+        byDay: {
+          sunday: [],
+          monday: [],
+          tuesday: [],
+          wednesday: [],
+          thursday: [],
+          friday: [],
+          saturday: []
+        },
+        byDate: {} // 특정 날짜별 선호시간 (예: '2025-12-29': [...])
       };
 
       // defaultSchedule이 있으면 사용, 없으면 기본값
@@ -245,26 +248,47 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
       if (defaultSchedule.length === 0) {
         // 기본값: 월-금 09:00-17:00
         for (let day = 1; day <= 5; day++) {
-          memberPreferences[userId][dayNames[day]].push({
+          memberPreferences[userId].byDay[dayNames[day]].push({
             startMinutes: 9 * 60,    // 09:00
             endMinutes: 17 * 60      // 17:00
           });
         }
       } else {
-        // defaultSchedule을 요일별로 정리
+        // defaultSchedule을 요일별 / 날짜별로 정리 (priority >= 2만 선호시간으로 간주)
         for (const schedule of defaultSchedule) {
-          const dayOfWeek = schedule.dayOfWeek; // 0-6 (일-토)
-          const dayName = dayNames[dayOfWeek];
+          // 🔧 수정: priority가 2 이상인 것만 선호시간으로 간주 (서버와 동일한 로직)
+          if (schedule.priority < 2) continue;
 
-          memberPreferences[userId][dayName].push({
-            startMinutes: this.parseTime(schedule.startTime),
-            endMinutes: this.parseTime(schedule.endTime)
-          });
+          // 🔧 수정: specificDate가 있으면 날짜별로 저장
+          if (schedule.specificDate) {
+            const dateStr = new Date(schedule.specificDate).toISOString().split('T')[0];
+            if (!memberPreferences[userId].byDate[dateStr]) {
+              memberPreferences[userId].byDate[dateStr] = [];
+            }
+            memberPreferences[userId].byDate[dateStr].push({
+              startMinutes: this.parseTime(schedule.startTime),
+              endMinutes: this.parseTime(schedule.endTime)
+            });
+          } else {
+            // specificDate가 없으면 요일별로 저장
+            const dayOfWeek = schedule.dayOfWeek; // 0-6 (일-토)
+            const dayName = dayNames[dayOfWeek];
+
+            memberPreferences[userId].byDay[dayName].push({
+              startMinutes: this.parseTime(schedule.startTime),
+              endMinutes: this.parseTime(schedule.endTime)
+            });
+          }
         }
-        
+
         // 🆕 각 요일의 슬롯들을 병합 (10분 단위로 나뉜 슬롯들을 하나로 합침)
         for (const dayName of dayNames) {
-          memberPreferences[userId][dayName] = this.mergeOverlappingSlots(memberPreferences[userId][dayName]);
+          memberPreferences[userId].byDay[dayName] = this.mergeOverlappingSlots(memberPreferences[userId].byDay[dayName]);
+        }
+
+        // 🆕 각 날짜의 슬롯들도 병합
+        for (const dateStr in memberPreferences[userId].byDate) {
+          memberPreferences[userId].byDate[dateStr] = this.mergeOverlappingSlots(memberPreferences[userId].byDate[dateStr]);
         }
       }
     }
@@ -311,21 +335,39 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
    * @param {Number} startMinutes - 시작 시간 (분)
    * @param {Number} endMinutes - 종료 시간 (분)
    * @param {Object} memberPreferences - 학생별 선호시간 객체
+   * @param {String} dateStr - 날짜 문자열 (YYYY-MM-DD) - 선택 사항
    * @returns {Boolean} 선호시간 내이면 true, 아니면 false
    */
-  isWithinPreferredTime(userId, dayOfWeek, startMinutes, endMinutes, memberPreferences) {
+  isWithinPreferredTime(userId, dayOfWeek, startMinutes, endMinutes, memberPreferences, dateStr = null) {
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const dayName = dayNames[dayOfWeek];
 
     const userIdStr = userId.toString();
     const userPrefs = memberPreferences[userIdStr];
 
-    if (!userPrefs || !userPrefs[dayName] || userPrefs[dayName].length === 0) {
+    if (!userPrefs) {
+      return false; // 선호시간 없음
+    }
+
+    // 🔧 수정: 특정 날짜가 있으면 먼저 byDate 확인
+    if (dateStr && userPrefs.byDate && userPrefs.byDate[dateStr] && userPrefs.byDate[dateStr].length > 0) {
+      // 특정 날짜의 선호시간이 있으면 그것만 사용
+      for (const pref of userPrefs.byDate[dateStr]) {
+        if (startMinutes >= pref.startMinutes && endMinutes <= pref.endMinutes) {
+          return true;
+        }
+      }
+      return false; // 특정 날짜 선호시간이 있지만 범위를 벗어남
+    }
+
+    // 🔧 수정: byDay 구조 확인
+    const dayPrefs = userPrefs.byDay ? userPrefs.byDay[dayName] : userPrefs[dayName];
+    if (!dayPrefs || dayPrefs.length === 0) {
       return false; // 선호시간 없음
     }
 
     // 모든 선호시간 슬롯 중 하나라도 완전히 포함되면 true
-    for (const pref of userPrefs[dayName]) {
+    for (const pref of dayPrefs) {
       if (startMinutes >= pref.startMinutes && endMinutes <= pref.endMinutes) {
         return true;
       }
@@ -408,9 +450,20 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
       if (dayOfWeek === 0 || dayOfWeek === 6) continue;
 
       const userPrefs = memberPreferences[userIdStr];
-      if (!userPrefs || !userPrefs[dayName]) continue;
+      if (!userPrefs) continue;
 
-      const preferredSlots = userPrefs[dayName];
+      // 🔧 수정: 특정 날짜 선호시간 우선, 없으면 요일별 선호시간 사용
+      let preferredSlots = [];
+      if (userPrefs.byDate && userPrefs.byDate[dateStr] && userPrefs.byDate[dateStr].length > 0) {
+        preferredSlots = userPrefs.byDate[dateStr];
+      } else if (userPrefs.byDay && userPrefs.byDay[dayName]) {
+        preferredSlots = userPrefs.byDay[dayName];
+      } else if (userPrefs[dayName]) {
+        // 하위 호환성: 구 구조 지원
+        preferredSlots = userPrefs[dayName];
+      }
+
+      if (preferredSlots.length === 0) continue;
 
       // 🆕 선호시간 슬롯을 시간 순으로 정렬 (빠른 시간부터 배치)
       preferredSlots.sort((a, b) => a.startMinutes - b.startMinutes);
@@ -517,9 +570,20 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
       if (dayOfWeek === 0 || dayOfWeek === 6) continue;
 
       const userPrefs = memberPreferences[userIdStr];
-      if (!userPrefs || !userPrefs[dayName]) continue;
+      if (!userPrefs) continue;
 
-      const preferredSlots = userPrefs[dayName];
+      // 🔧 수정: 특정 날짜 선호시간 우선, 없으면 요일별 선호시간 사용
+      let preferredSlots = [];
+      if (userPrefs.byDate && userPrefs.byDate[dateStr] && userPrefs.byDate[dateStr].length > 0) {
+        preferredSlots = userPrefs.byDate[dateStr];
+      } else if (userPrefs.byDay && userPrefs.byDay[dayName]) {
+        preferredSlots = userPrefs.byDay[dayName];
+      } else if (userPrefs[dayName]) {
+        // 하위 호환성: 구 구조 지원
+        preferredSlots = userPrefs[dayName];
+      }
+
+      if (preferredSlots.length === 0) continue;
 
       // 🆕 선호시간 슬롯을 시간 순으로 정렬 (빠른 시간부터 배치)
       preferredSlots.sort((a, b) => a.startMinutes - b.startMinutes);
@@ -1149,6 +1213,9 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     // 🆕 학생별 선호시간 정보 생성
     const memberPreferences = this.buildMemberPreferences(currentRoom);
 
+    // 🔍 디버깅: 선호시간 정보 출력
+    console.log('🔍 [선호시간 정보 (memberPreferences)]:', memberPreferences);
+
     // 1. Merge raw slots into activity blocks
     const mergedSlots = mergeConsecutiveTimeSlots(currentRoom.timeSlots);
 
@@ -1367,19 +1434,20 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                 // 🔧 수정: targetDate의 요일 사용
                 const targetDayOfWeek = new Date(targetDate).getDay();
 
-                // 조정된 시간이 선호시간 내인지 체크
+                // 🔧 수정: 이동시간 시작부터 수업 종료까지 전체가 선호시간 내인지 체크
                 const isAdjustedPreferred = this.isWithinPreferredTime(
                     userId,
                     targetDayOfWeek,
-                    newActivityStartTimeMinutes,
-                    newActivityEndTimeMinutes,
-                    memberPreferences
+                    newTravelStartMinutes,        // 이동시간 시작
+                    newActivityEndTimeMinutes,    // 수업 종료
+                    memberPreferences,
+                    targetDate                    // 날짜 정보 추가
                 );
-                
+
                 // 🔧 수정: 선호시간 체크 결과 적용
                 if (!isAdjustedPreferred) {
                     canPlace = false;
-                    console.log(`❌ [선호시간 벗어남] ${targetDate} ${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)} - ${memberLocation.name}`);
+                    console.log(`❌ [선호시간 벗어남] ${targetDate} ${this.formatTime(newTravelStartMinutes)}-${this.formatTime(newActivityEndTimeMinutes)} (이동+수업) - ${memberLocation.name}`);
                 }
             }
             

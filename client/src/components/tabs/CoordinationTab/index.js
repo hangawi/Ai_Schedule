@@ -203,11 +203,11 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
       return;
     }
 
-    // ✅ 방장만 검증 후 모드 변경 (검증 실패해도 변경됨)
+    // ✅ 방장만 검증 후 모드 변경
     if (currentRoom) {
 
       try {
-        // 1. 검증 수행 (경고만 표시)
+        // 1. 검증 수행 (경고만 표시, 배정 가능한 사람만 배정하도록 진행)
         const validationResult = await handleValidateScheduleWithTransportMode(
           currentRoom,
           newMode,
@@ -215,7 +215,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
           viewMode,
           currentWeekStartDate
         );
-        // 3. 검증 성공/실패 관계없이 모드 변경
+        // 2. 검증 결과와 관계없이 모드 변경 (배정 가능한 사람만 배정됨)
         await handleTravelModeChangeInternal(newMode);
       } catch (error) {
         showAlert('검증 중 오류가 발생했습니다.', 'error');
@@ -868,7 +868,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
             <ScheduleErrorAlert scheduleError={scheduleError} />
             <UnassignedMembersAlert unassignedMembersInfo={unassignedMembersInfo} />
             <ConflictSuggestionsAlert conflictSuggestions={conflictSuggestions} />
-            <WarningsAlert warnings={warnings} />
+            {/* <WarningsAlert warnings={warnings} /> */}
 
             {currentRoom?.autoConfirmAt && (
               <AutoConfirmBanner
