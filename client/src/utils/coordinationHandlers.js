@@ -281,15 +281,24 @@ export const handleRunAutoSchedule = async (
     // ===== warnings 처리 (선호시간 부족 알림) =====
     if (warnings && warnings.length > 0) {
       console.log('⚠️ [자동배정] warnings 수신:', warnings);
-      
+
       // warnings를 유형별로 분류
       const noPreferenceMembers = warnings.filter(w => w.type === 'no_preference');
       const insufficientMembers = warnings.filter(w => w.type === 'insufficient_preference');
+      const insufficientPreferredTime = warnings.filter(w => w.type === 'insufficient_preferred_time');
       const otherFailures = warnings.filter(w => w.type === 'assignment_failed');
-      
+
       // 알림 메시지 생성
-      let alertMessage = '⚠️ 일부 멤버를 배정할 수 없습니다:\n\n';
-      
+      let alertMessage = '⚠️ 일부 주차를 배정하지 못했습니다:\n\n';
+
+      if (insufficientPreferredTime.length > 0) {
+        alertMessage += '⏰ 선호시간 부족으로 건너뛴 주차:\n\n';
+        insufficientPreferredTime.forEach(w => {
+          alertMessage += `${w.message}\n\n`;
+        });
+        alertMessage += '다른 주차는 정상적으로 배정되었습니다.\n\n';
+      }
+
       if (noPreferenceMembers.length > 0) {
         alertMessage += '📅 선호시간 미설정:\n';
         noPreferenceMembers.forEach(w => {
@@ -297,7 +306,7 @@ export const handleRunAutoSchedule = async (
         });
         alertMessage += '\n';
       }
-      
+
       if (insufficientMembers.length > 0) {
         alertMessage += '⏰ 선호시간 부족:\n';
         insufficientMembers.forEach(w => {
@@ -305,14 +314,14 @@ export const handleRunAutoSchedule = async (
         });
         alertMessage += '\n';
       }
-      
+
       if (otherFailures.length > 0) {
         alertMessage += '❌ 기타 배정 실패:\n';
         otherFailures.forEach(w => {
           alertMessage += `  - ${w.memberName}: ${w.message}\n`;
         });
       }
-      
+
       // 사용자에게 알림 표시
       showAlert(alertMessage);
     }
