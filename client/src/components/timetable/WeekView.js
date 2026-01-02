@@ -1050,13 +1050,18 @@ const WeekView = ({
                   const dateKey = dateInfo.fullDate.toISOString().split('T')[0];
                   // 🆕 확정된 일정(개인시간/예외)과 겹치는 이동시간 슬롯 필터링
                   const slots = (travelSlotsByDate[dateKey] || []).filter(travelSlot => {
+                      // 🔒 최우선 순위: 조원은 이동시간 슬롯을 절대 보면 안 됨
+                      if (!isRoomOwner) {
+                          return false;
+                      }
+
                       // 이동시간 슬롯의 중간 지점이나 시작/끝 지점이 개인일정과 겹치는지 확인
                       // 간단하게 시작 시간 기준으로 체크 (필요시 더 정교하게 수정 가능)
                       const info = getOwnerOriginalScheduleInfo(dateInfo.fullDate, travelSlot.startTime);
-                      
+
                       // 개인일정(personal)이나 예외일정(exception)이 있으면 이동시간 숨김
                       if (info && (info.type === 'personal' || info.type === 'exception')) {
-                          return false; 
+                          return false;
                       }
                       return true;
                   });
