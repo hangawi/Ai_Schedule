@@ -566,32 +566,32 @@ export const handleValidateScheduleWithTransportMode = async (currentRoom, trans
       const transportModeName = transportModeNames[transportMode] || transportMode;
 
       // ✅ 중복 제거 및 줄바꿈 처리
-      const lines = [];
-      lines.push(`⚠️ ${transportModeName} 모드는 현재 스케줄에 적합하지 않습니다.`);
-      lines.push('');
-      lines.push('📊 문제 요약:');
-      lines.push('');
+      // const lines = [];
+      // lines.push(`⚠️ ${transportModeName} 모드는 현재 스케줄에 적합하지 않습니다.`);
+      // lines.push('');
+      // lines.push('📊 문제 요약:');
+      // lines.push('');
 
-      Object.values(memberWarnings).forEach(member => {
-        // 중복 제거
-        const uniqueIssues = [...new Set(member.issues)];
+      // Object.values(memberWarnings).forEach(member => {
+      //   // 중복 제거
+      //   const uniqueIssues = [...new Set(member.issues)];
 
-        // 멤버당 표시
-        if (uniqueIssues.length > 0) {
-          lines.push(`   ${member.name}`);
-          uniqueIssues.forEach(issue => {
-            lines.push(`   • ${issue}`);
-          });
-          lines.push('');
-        }
-      });
+      //   // 멤버당 표시
+      //   if (uniqueIssues.length > 0) {
+      //     lines.push(`   ${member.name}`);
+      //     uniqueIssues.forEach(issue => {
+      //       lines.push(`   • ${issue}`);
+      //     });
+      //     lines.push('');
+      //   }
+      // });
 
-      lines.push('💡 다른 이동수단을 선택하거나, 멤버의 선호시간을 조정하세요.');
+      // lines.push('💡 다른 이동수단을 선택하거나, 멤버의 선호시간을 조정하세요.');
 
       // ✅ 실제 줄바꿈으로 결합
-      const alertMessage = lines.join('\n');
+      // const alertMessage = lines.join('\n');
 
-      showAlert(alertMessage, 'warning');
+      // showAlert(alertMessage, 'warning');
       
       return { isValid: false, warnings };
     } else {

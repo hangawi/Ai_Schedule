@@ -70,6 +70,26 @@ class TravelScheduleCalculator {
   }
 
   /**
+   * toLocalDateString
+   * @description Date 객체 또는 문자열을 YYYY-MM-DD 형식으로 변환 (시간대 문제 방지)
+   * @param {Date|string} date - 변환할 날짜
+   * @returns {string} YYYY-MM-DD 형식 문자열
+   */
+  toLocalDateString(date) {
+    // 이미 YYYY-MM-DD 형식이면 그대로 반환
+    if (typeof date === 'string' && date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      return date;
+    }
+
+    // Date 객체로 변환 후 로컬 날짜 사용 (UTC 변환 시 시간대 문제 방지)
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  /**
    * unmergeBlock
    * @description 병합된 스케줄 블록을 10분 단위의 개별 슬롯으로 분할합니다.
    * @param {Object} block - 병합된 스케줄 블록 객체 ({startTime, endTime, ...}).
@@ -149,7 +169,7 @@ class TravelScheduleCalculator {
 
     // 모든 경로 검증
     for (const mergedSlot of sortedMergedSlots) {
-      const slotDate = new Date(mergedSlot.date).toISOString().split('T')[0];
+      const slotDate = this.toLocalDateString(mergedSlot.date);
       if (slotDate !== currentDate) {
         currentDate = slotDate;
         previousLocation = {
@@ -261,7 +281,8 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
 
           // 🔧 수정: specificDate가 있으면 날짜별로 저장
           if (schedule.specificDate) {
-            const dateStr = new Date(schedule.specificDate).toISOString().split('T')[0];
+            // 🔧 수정: 시간대 문제 방지 - 헬퍼 함수 사용
+            const dateStr = this.toLocalDateString(schedule.specificDate);
             if (!memberPreferences[userId].byDate[dateStr]) {
               memberPreferences[userId].byDate[dateStr] = [];
             }
@@ -744,7 +765,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     // 3. 해당 날짜의 기존 배정 확인
     const timeSlots = currentRoom.timeSlots || [];
     const slotsOnDate = timeSlots.filter(slot => {
-      const slotDate = new Date(slot.date).toISOString().split('T')[0];
+      const slotDate = this.toLocalDateString(slot.date);
       return slotDate === selectedDate;
     });
 
@@ -917,7 +938,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     // 2. 해당 날짜의 기존 배정 추가
     const timeSlots = currentRoom.timeSlots || [];
     const slotsOnDate = timeSlots.filter(slot => {
-      const slotDate = new Date(slot.date).toISOString().split('T')[0];
+      const slotDate = this.toLocalDateString(slot.date);
       return slotDate === selectedDate;
     });
 
@@ -1093,26 +1114,25 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
           currentLat = userLocation.lat;
           currentLng = userLocation.lng;
           
-          const slotDate = new Date(closestSlot.date).toISOString().split('T')[0];
+          const slotDate = this.toLocalDateString(closestSlot.date);
           console.log(`🔍 [거리 정렬] ${userLocation.name} (${slotDate} ${closestSlot.startTime}) - 거리: ${Math.round(closestDistance)}m`);
         }
       }
     }
 
-    // 4️⃣ 방장 슬롯과 조원 슬롯을 섞어서 시간 순서대로 재정렬
-    // 이렇게 하면 같은 날짜 내에서 방장→조원 순서가 유지됨
+    // 4️⃣ 방장 슬롯과 조원 슬롯을 섞어서 거리 순서 유지하며 정렬
     const allSlots = [...ownerSlots, ...orderedMembers];
-    
-    // 최종적으로 날짜+시간 순서대로 정렬하되, 같은 날짜 내에서는 거리 순서 유지
+
+    // 최종적으로 날짜 순서대로 정렬하되, 같은 날짜 내에서는 거리 순서 유지
     allSlots.sort((a, b) => {
       const dateA = new Date(a.date);
       const dateB = new Date(b.date);
-      
+
       // 날짜가 다르면 날짜 순서대로
       if (dateA.getTime() !== dateB.getTime()) {
         return dateA.getTime() - dateB.getTime();
       }
-      
+
       // 같은 날짜면 방장이 먼저
       let userIdA = a.user;
       if (typeof userIdA === 'object' && userIdA !== null) {
@@ -1122,15 +1142,14 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
       if (typeof userIdB === 'object' && userIdB !== null) {
         userIdB = userIdB._id || userIdB.id;
       }
-      
+
       const isOwnerA = userIdA && userIdA.toString() === owner._id.toString();
       const isOwnerB = userIdB && userIdB.toString() === owner._id.toString();
-      
+
       if (isOwnerA && !isOwnerB) return -1;
       if (!isOwnerA && isOwnerB) return 1;
-      
-      // 둘 다 방장이거나 둘 다 조원이면 orderedMembers의 순서 유지
-      // (이미 거리 순서대로 정렬되어 있음)
+
+      // 둘 다 학생이면 거리 순서 유지 (orderedMembers의 순서)
       return 0;
     });
 
@@ -1141,7 +1160,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         userId = userId._id || userId.id;
       }
       const userLocation = memberLocations[userId?.toString()];
-      const dateStr = new Date(slot.date).toISOString().split('T')[0];
+      const dateStr = this.toLocalDateString(slot.date);
       const isOwner = userId && userId.toString() === owner._id.toString();
       console.log(`  [${idx + 1}] ${dateStr} ${slot.startTime}-${slot.endTime}: ${isOwner ? '방장' : userLocation?.name || '?'}`);
     });
@@ -1244,7 +1263,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                 userId = userId._id || userId.id;
             }
             const userLocation = memberLocations[userId?.toString()];
-            const dateStr = new Date(slot.date).toISOString().split('T')[0];
+            const dateStr = this.toLocalDateString(slot.date);
             console.log(`  [${idx + 1}] ${dateStr} ${slot.startTime}-${slot.endTime}: ${userLocation?.name || '방장'}`);
         });
     }
@@ -1278,7 +1297,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         
         if (userId && userId.toString() === ownerIdStr) {
             // 방장의 슬롯
-            const slotDate = new Date(mergedSlot.date).toISOString().split('T')[0];
+            const slotDate = this.toLocalDateString(mergedSlot.date);
             if (!assignedSlotsByDate[slotDate]) {
                 assignedSlotsByDate[slotDate] = [];
             }
@@ -1298,8 +1317,8 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     let previousUserId = null;  // 이전 슬롯의 사용자 ID
 
     for (const mergedSlot of sortedMergedSlots) {
-        const slotDate = new Date(mergedSlot.date).toISOString().split('T')[0];
-        
+        const slotDate = this.toLocalDateString(mergedSlot.date);
+
         // 🔧 수정: 날짜 리셋 로직 제거 - 거리 순서대로 연속 배치
         let userId = mergedSlot.user;
         if (typeof userId === 'object' && userId !== null) {
@@ -1332,36 +1351,24 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
             const slotEndMinutes = this.parseTime(mergedSlot.endTime);
             const activityDurationMinutes = slotEndMinutes - slotStartMinutes;
             
-            // 🆕 거리 순서 정렬 시: 같은 날짜 내에서 순서대로 연속 배치
-            // previousActivityEndMinutes를 직접 사용 (이미 처리된 슬롯들의 종료 시간 추적)
-            let actualPreviousLocation = previousLocation; // 기본값: 방장 또는 이전 학생
-            let actualPreviousEndMinutes = previousActivityEndMinutes; // 같은 날짜 내 이전 종료 시간
+            // 🔧 수정: 같은 날짜 내에서는 이전 학생에서 출발, 다른 날짜면 방장에서 출발
+            let actualPreviousLocation;
 
-            // 만약 날짜가 바뀌어서 previousActivityEndMinutes가 0이면, assignedSlotsByDate 확인
-            if (actualPreviousEndMinutes === 0) {
-                const assignedSlots = assignedSlotsByDate[slotDate] || [];
-                if (assignedSlots.length > 0) {
-                    // 해당 날짜에 이미 배정된 슬롯 중 가장 늦게 끝나는 슬롯 찾기
-                    const lastSlot = assignedSlots.reduce((latest, slot) =>
-                        slot.endMinutes > latest.endMinutes ? slot : latest
-                    );
-
-                    // 그 슬롯의 사용자 위치 찾기
-                    const lastUserId = lastSlot.userId;
-                    if (lastUserId === owner._id.toString()) {
-                        actualPreviousLocation = {
-                            lat: owner.addressLat,
-                            lng: owner.addressLng,
-                            name: '방장',
-                            color: '#4B5563'
-                        };
-                    } else {
-                        actualPreviousLocation = memberLocations[lastUserId] || previousLocation;
-                    }
-                    actualPreviousEndMinutes = lastSlot.endMinutes;
-                }
+            // 날짜가 바뀌었거나 첫 슬롯이면 방장에서 출발
+            if (!previousDate || previousDate !== slotDate) {
+                actualPreviousLocation = {
+                    lat: owner.addressLat,
+                    lng: owner.addressLng,
+                    name: '방장',
+                    color: '#4B5563'
+                };
+                console.log(`🔍 [${memberLocation.name}] 방장에서 출발 (새로운 날짜: ${slotDate})`);
+            } else {
+                // 같은 날짜면 이전 학생에서 출발
+                actualPreviousLocation = previousLocation;
+                console.log(`🔍 [${memberLocation.name}] ${previousLocation.name}에서 출발 (같은 날짜: ${slotDate})`);
             }
-            
+
             // 이전 위치에서 현재 학생 위치로 이동 시간 계산
             const travelInfo = await travelModeService.calculateTravelTime(
                 { lat: actualPreviousLocation.lat, lng: actualPreviousLocation.lng },
@@ -1375,31 +1382,19 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
             
             if (travelDurationMinutes === 0) {
                 allResultSlots.push(...this.unmergeBlock(mergedSlot));
-                // 🆕 현재 위치 업데이트
+                // 🔧 수정: previousLocation 업데이트 (같은 날짜 내 연속 이동)
                 previousLocation = memberLocation;
                 continue;
             }
 
-            // 🔧 수정: 거리 순서 연속 배치 - 이전 슬롯과 같은 날짜에 배치 시도
-            let targetDate;  // 실제로 배치할 날짜
-            let newTravelStartMinutes;
-            
-            if (previousActivityEndMinutes > 0 && previousDate) {
-                // 이전 슬롯이 있고, 거리 순서상 연속이면 → 이전 날짜에 배치 시도
-                targetDate = previousDate;
-                newTravelStartMinutes = previousActivityEndMinutes;  // 이전 종료 시간부터 시작
-                console.log(`🔍 [거리 연속 배치] ${memberLocation.name}: 이전 슬롯(${previousDate}) 다음에 배치 시도`);
-                console.log(`  - 이전 종료: ${this.formatTime(previousActivityEndMinutes)}`);
-                console.log(`  - 원래 날짜: ${slotDate} → 변경: ${targetDate}`);
-            } else {
-                // 첫 슬롯이거나 이전 슬롯이 없으면 → 원래 날짜, 원래 시간 사용
-                targetDate = slotDate;
-                newTravelStartMinutes = slotStartMinutes;
-                console.log(`🔍 [일반 배치] ${memberLocation.name}: 원래 날짜(${slotDate})에 배치 시도`);
-            }
-            let newTravelEndTimeMinutes = newTravelStartMinutes + travelDurationMinutes;
-            let newActivityStartTimeMinutes = newTravelEndTimeMinutes; // 이동 후 수업 시작
-            let newActivityEndTimeMinutes = newActivityStartTimeMinutes + activityDurationMinutes; // 수업 종료
+            // 🔧 수정: 원래 수업 시간 유지, 이동 시간은 앞에 추가
+            let targetDate = slotDate;  // 원래 날짜
+            let newActivityStartTimeMinutes = slotStartMinutes;  // 원래 수업 시작 시간 유지
+            let newActivityEndTimeMinutes = slotEndMinutes;  // 원래 수업 종료 시간 유지
+            let newTravelStartMinutes = slotStartMinutes - travelDurationMinutes;  // 이동 시작 = 수업 시작 - 이동 시간
+            let newTravelEndTimeMinutes = slotStartMinutes;  // 이동 종료 = 수업 시작
+
+            console.log(`🔍 [배치] ${memberLocation.name}: ${slotDate} ${this.formatTime(newTravelStartMinutes)}-${this.formatTime(newActivityEndTimeMinutes)} (이동 ${travelDurationMinutes}분 포함)`);
 
             console.log(`🔍 [이동시간 계산 결과]`, {
                 날짜: slotDate,
@@ -1617,7 +1612,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                         allResultSlots.push(...this.unmergeBlock(altActivityBlock));
                         
                         // 🆕 해당 날짜의 마지막 위치 업데이트 (더 늦게 끝나는 경우만)
-                        const blockDateStr = new Date(block.date).toISOString().split('T')[0];
+                        const blockDateStr = this.toLocalDateString(block.date);
                         if (!lastLocationByDate[blockDateStr] || block.activityEndMinutes > lastLocationByDate[blockDateStr].endMinutes) {
                             lastLocationByDate[blockDateStr] = {
                                 location: memberLocation,
@@ -1632,7 +1627,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                     previousDate = lastBlockDateStr;
                     previousActivityEndMinutes = lastBlock.activityEndMinutes;
                     previousUserId = userIdStr;
-                    previousLocation = memberLocation;
+                    previousLocation = memberLocation;  // 🔧 수정: 같은 날짜 내 연속 이동
                     
                     console.log(`✅ [분할 배치 성공] ${memberLocation.name}:`, {
                         원래날짜: slotDate,
@@ -1781,7 +1776,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                     previousDate = alternativePlacement.dateStr;
                     previousActivityEndMinutes = actualActivityEndMinutes;
                     previousUserId = userIdStr;
-                    previousLocation = memberLocation;
+                    previousLocation = memberLocation;  // 🔧 수정: 같은 날짜 내 연속 이동
                     
                     console.log(`✅ [재배정 성공] ${memberLocation.name}:`, {
                         원래날짜: slotDate,
@@ -1899,7 +1894,7 @@ travelSlotsArray.push(travelSlotData);
             previousDate = targetDate;  // 배치된 날짜 저장
             previousActivityEndMinutes = newActivityEndTimeMinutes;
             previousUserId = userIdStr;
-            previousLocation = memberLocation;
+            previousLocation = memberLocation;  // 🔧 수정: 같은 날짜 내 연속 이동
 
         } catch (error) {
             allResultSlots.push(...this.unmergeBlock(mergedSlot));
@@ -1910,7 +1905,7 @@ travelSlotsArray.push(travelSlotData);
     
     for (let i = 0; i < travelSlotsArray.length; i++) {
         const travelSlot = travelSlotsArray[i];
-        const dateStr = new Date(travelSlot.date).toISOString().split('T')[0];
+        const dateStr = this.toLocalDateString(travelSlot.date);
         const travelStartMinutes = this.parseTime(travelSlot.startTime);
         
         // 해당 날짜에서 현재 이동시간 슬롯보다 먼저 끝나는 슬롯 찾기
