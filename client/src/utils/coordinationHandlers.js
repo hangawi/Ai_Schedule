@@ -184,14 +184,8 @@ export const handleRunAutoSchedule = async (
       ? currentWeekStartDate
       : new Date(currentWeekStartDate);
 
-    // ✅ viewMode에 따라 배정 범위 설정
-    if (viewMode === 'week') {
-      // 주간 보기: 현재 주만 배정
-      uiCurrentWeek = currentDateObj;
-      numWeeks = 1;
-    } else {
-      // 월간 보기: 모든 멤버의 선호시간이 있는 날짜를 포함하도록 범위 계산
-      {
+    // ✅ 자동배정: 모든 멤버의 선호시간이 있는 날짜를 포함하도록 범위 계산
+    {
       // 모든 멤버의 specificDate 수집 (defaultSchedule + scheduleExceptions)
       let minDate = null;
       let maxDate = null;
