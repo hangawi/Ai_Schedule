@@ -1036,14 +1036,18 @@ const WeekView = ({
                         <div className="text-xs leading-tight" style={{ fontSize: '25px' }}>
                           {/* 🆕 이동시간일 경우 텍스트 표시 변경 */}
                           {block.data?.isTravel ? (
-                             <>
+                             <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                {block.data?.travelInfo?.travelMode === 'transit' ? '🚇' : 
                                 block.data?.travelInfo?.travelMode === 'driving' ? '🚗' : 
                                 block.data?.travelInfo?.travelMode === 'bicycling' ? '🚴' : 
-                                block.data?.travelInfo?.travelMode === 'walking' ? '🚶' : '🚗'} 이동
-                               <br/>
-                               {block.data?.travelInfo?.durationText}
-                             </>
+                                block.data?.travelInfo?.travelMode === 'walking' ? '🚶' : '🚗'} {block.data?.travelInfo?.from || '출발'} &gt; {block.data?.travelInfo?.to || '도착'}
+                               {blockHeight > 40 && (
+                                 <>
+                                   <br/>
+                                   {block.data?.travelInfo?.durationText}
+                                 </>
+                               )}
+                             </div>
                           ) : (
                              block.data?.name.length > 4 ? block.data?.name.substring(0, 3) + '...' : block.data?.name
                           )}
@@ -1110,7 +1114,7 @@ const WeekView = ({
                   return (
                       <div
                           key={`travel-${dayIndex}-${travelIndex}`}
-                          className="absolute left-0 right-0 border-2 border-solid z-20 flex flex-col justify-center"
+                          className="absolute left-0 right-0 border-2 border-solid z-0 flex flex-col justify-center"
                           style={{
                               top: `${topPosition}px`,
                               height: `${slotHeight}px`,
