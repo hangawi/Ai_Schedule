@@ -322,29 +322,31 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
         travelEndMinutes = classStartMinutes;
         console.log(`  🔍 [첫 슬롯] 원래 시간 유지, 이동: ${String(Math.floor(travelStartMinutes / 60)).padStart(2, '0')}:${String(travelStartMinutes % 60).padStart(2, '0')}-${slot.startTime}`);
       } else {
-        // 이전 슬롯이 있음: 이전 종료 시간부터 연속 배치
+        // 이전 슬롯이 있음: 수업 시작 시간을 기준으로 이동시간 역산
         const prevEnd = previousSlot.endTime.split(':');
         const previousEndMinutes = parseInt(prevEnd[0]) * 60 + parseInt(prevEnd[1]);
         console.log(`  🔍 [이전 슬롯] ${previousSlot.startTime}-${previousSlot.endTime}, 종료: ${previousEndMinutes}분`);
 
-        travelStartMinutes = previousEndMinutes;
-        travelEndMinutes = travelStartMinutes + travelDurationMinutes;
+        // 🔧 이동시간을 수업 시작 시간 기준으로 역산
+        travelEndMinutes = classStartMinutes;
+        travelStartMinutes = classStartMinutes - travelDurationMinutes;
 
-        // 수업 시작 시간 = 이동 종료 시간
+        // 수업 시작 시간 = 이동 종료 시간 (이미 classStartMinutes로 설정됨)
         const adjustedClassStartMinutes = travelEndMinutes;
         const adjustedClassEndMinutes = adjustedClassStartMinutes + classDuration;
 
+        // 🔒 수업시간 자동 조정 비활성화 (사용자가 지정한 시간 유지)
         // 원래 시간과 다르면 슬롯 시간 업데이트
-        if (adjustedClassStartMinutes !== classStartMinutes) {
-          console.log(`  ⚠️  [수업시간 조정] ${slot.startTime}-${slot.endTime} → ${String(Math.floor(adjustedClassStartMinutes / 60)).padStart(2, '0')}:${String(adjustedClassStartMinutes % 60).padStart(2, '0')}-${String(Math.floor(adjustedClassEndMinutes / 60)).padStart(2, '0')}:${String(adjustedClassEndMinutes % 60).padStart(2, '0')}`);
-
-          classStartMinutes = adjustedClassStartMinutes;
-          classEndMinutes = adjustedClassEndMinutes;
-
-          slot.startTime = `${String(Math.floor(classStartMinutes / 60)).padStart(2, '0')}:${String(classStartMinutes % 60).padStart(2, '0')}`;
-          slot.endTime = `${String(Math.floor(classEndMinutes / 60)).padStart(2, '0')}:${String(classEndMinutes % 60).padStart(2, '0')}`;
-          room.markModified('timeSlots');
-        }
+        // if (adjustedClassStartMinutes !== classStartMinutes) {
+        //   console.log(`  ⚠️  [수업시간 조정] ${slot.startTime}-${slot.endTime} → ${String(Math.floor(adjustedClassStartMinutes / 60)).padStart(2, '0')}:${String(adjustedClassStartMinutes % 60).padStart(2, '0')}-${String(Math.floor(adjustedClassEndMinutes / 60)).padStart(2, '0')}:${String(adjustedClassEndMinutes % 60).padStart(2, '0')}`);
+        //
+        //   classStartMinutes = adjustedClassStartMinutes;
+        //   classEndMinutes = adjustedClassEndMinutes;
+        //
+        //   slot.startTime = `${String(Math.floor(classStartMinutes / 60)).padStart(2, '0')}:${String(classStartMinutes % 60).padStart(2, '0')}`;
+        //   slot.endTime = `${String(Math.floor(classEndMinutes / 60)).padStart(2, '0')}:${String(classEndMinutes % 60).padStart(2, '0')}`;
+        //   room.markModified('timeSlots');
+        // }
       }
 
       // 🔒 금지시간 침범 체크 (이동시간 + 수업시간 모두 체크!)

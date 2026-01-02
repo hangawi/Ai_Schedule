@@ -556,6 +556,12 @@ const WeekView = ({
       // ⭐ 시간별 체크 + 동적 이동시간 계산 (문제 1+3+4 해결)
       // ⭐ 단, 다른 사람의 수업이 있으면 빗금 계산 스킵
       // ⭐ 확정 후에는 빗금 계산 스킵 (문제 2 해결)
+      if (time >= '16:00' && time <= '17:00') {
+        console.log(`🔍 [${time}] 빗금 체크:`, {
+          isRoomOwner, travelMode, myTravelDuration, ownerInfo, isConfirmed,
+          조건만족: !isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0 && !ownerInfo && !isConfirmed
+        });
+      }
       if (!isRoomOwner && travelMode !== 'normal' && myTravelDuration > 0 && !ownerInfo && !isConfirmed) {
         // 현재 시간에 이미 수업이 있는지 확인
         const hasSchedule = hasScheduleAtTime(date, time, timeSlots, currentUser);
@@ -601,21 +607,38 @@ const WeekView = ({
               
               const classEndMinutes = timeMinutes + classDuration;
 
+              if (time >= '16:00' && time <= '16:20') {
+                console.log(`🎓 [${time}] 수업시간 체크:`, {
+                  timeMinutes, classDuration, classEndMinutes,
+                  체크범위: `${timeMinutes}분 ~ ${classEndMinutes}분 (미포함)`
+                });
+              }
+
               // 수업 구간을 10분 단위로 체크
               for (let m = timeMinutes; m < classEndMinutes; m += 10) {
                   const checkTimeStr = minutesToTime(m);
                   
                   const blockedInfo = getBlockedTimeInfo(checkTimeStr);
                   if (blockedInfo) {
+                      if (time >= '16:00' && time <= '16:20') {
+                        console.log(`  ❌ [${time}] ${checkTimeStr}에 차단시간 발견!`, blockedInfo);
+                      }
                       isTravelBlocked = true;
                       break;
                   }
 
                   const info = getOwnerOriginalScheduleInfo(date, checkTimeStr);
                   if (info && (info.type === 'non_preferred' || info.type === 'exception' || info.type === 'personal')) {
+                      if (time >= '16:00' && time <= '16:20') {
+                        console.log(`  ❌ [${time}] ${checkTimeStr}에 방장 일정 발견!`, info);
+                      }
                       isTravelBlocked = true;
                       break;
                   }
+              }
+              
+              if (time >= '16:00' && time <= '16:20') {
+                console.log(`  ✅ [${time}] 수업시간 체크 완료, isTravelBlocked:`, isTravelBlocked);
               }
           }
 
@@ -654,11 +677,7 @@ const WeekView = ({
 
       // 🔒 최우선 순위: 조원은 이동시간 슬롯을 절대 보면 안 됨 (본인 것이든 다른 사람 것이든)
       // 이동시간 구간은 무조건 "배정 불가"로 표시
-      if (ownerInfo && ownerInfo.isTravel) {
-        console.log(`🚗 [${time}] 이동시간 감지! isRoomOwner: ${isRoomOwner}, ownerInfo:`, ownerInfo);
-      }
       if (!isRoomOwner && ownerInfo && ownerInfo.isTravel) {
-        console.log(`✅ [${time}] 이동시간을 blocked로 설정!`);
         slotType = 'blocked';
         slotData = {
           name: '배정 불가',
@@ -666,7 +685,6 @@ const WeekView = ({
           isTravelHidden: true,
           ownerScheduleType: 'travel_hidden'
         };
-        console.log(`✅ [${time}] slotType 설정 완료: ${slotType}, slotData:`, slotData);
       }
       // ✨✨✨ 차순위: 방장의 개인시간/예외일정 (이동시간 포함, 모두 blocked로 표시)
       // 확정된 일정은 blocked(오렌지색)로 표시되어야 함
@@ -1092,24 +1110,38 @@ const WeekView = ({
                   return (
                       <div
                           key={`travel-${dayIndex}-${travelIndex}`}
-                          className="absolute left-0 right-0 border-2 border-solid z-20 p-1 flex flex-col justify-center"
+                          className="absolute left-0 right-0 border-2 border-solid z-20 flex flex-col justify-center"
                           style={{
                               top: `${topPosition}px`,
                               height: `${slotHeight}px`,
-                              backgroundColor: userColor,  // ✅ 100% 불투명으로 변경 (명확한 표시)
-                              borderColor: '#1F2937',  // ✅ 진한 테두리로 구분
-                              borderStyle: 'dashed',  // ✅ 점선 테두리로 구분
-                              borderWidth: '3px'  // ✅ 두께 증가 (2px → 3px)
+                              backgroundColor: userColor,
+                              borderColor: '#1F2937',
+                              borderStyle: 'dashed',
+                              borderWidth: '3px',
+                              overflow: 'hidden',  // 🔧 텍스트가 블록 밖으로 나가지 않도록
+                              padding: slotHeight < 30 ? '1px' : '4px',  // 🔧 작은 블록은 패딩 최소화
+                              fontSize: slotHeight < 30 ? '9px' : '12px',  // 🔧 작은 블록은 글자 크기 축소
+                              lineHeight: slotHeight < 30 ? '1' : '1.2'  // 🔧 작은 블록은 줄간격 축소
                           }}
                           title={`${modeIcon} 이동: ${travelSlot.from || '출발지'} → ${travelSlot.to || '도착지'} (${travelSlot.travelInfo?.durationText || '시간 계산 중'})`}
                       >
-                          <div className="text-xs font-bold truncate text-center block" style={{ color: '#FFFFFF', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
-                            {modeIcon} {travelSlot.from || '출발지'} → {travelSlot.to || '도착지'}
-                          </div>
-                          {slotHeight > 20 && (
-                            <div className="text-xs text-center mt-0.5 block font-semibold" style={{ color: '#FFFFFF', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
-                                {travelSlot.travelInfo?.durationText || `${durationMinutes}분`} {travelSlot.travelInfo?.distanceText ? `(${travelSlot.travelInfo.distanceText})` : ''}
+                          {slotHeight < 30 ? (
+                            // 🔧 작은 블록 (10-20분): 이모지와 출발지 > 도착지
+                            <div className="font-bold truncate text-center" style={{ color: '#FFFFFF', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                              {modeIcon} {travelSlot.from || '출발'} &gt; {travelSlot.to || '도착'}
                             </div>
+                          ) : (
+                            // 🔧 큰 블록 (30분 이상): 전체 정보 표시
+                            <>
+                              <div className="text-xs font-bold truncate text-center" style={{ color: '#FFFFFF', textShadow: '0 1px 2px rgba(0,0,0,0.5)', lineHeight: '1.2' }}>
+                                {modeIcon} {travelSlot.from || '출발지'} → {travelSlot.to || '도착지'}
+                              </div>
+                              {slotHeight > 40 && (
+                                <div className="text-xs text-center mt-0.5 font-semibold truncate" style={{ color: '#FFFFFF', textShadow: '0 1px 2px rgba(0,0,0,0.5)', lineHeight: '1.2' }}>
+                                    {travelSlot.travelInfo?.durationText || `${durationMinutes}분`} {travelSlot.travelInfo?.distanceText ? `(${travelSlot.travelInfo.distanceText})` : ''}
+                                </div>
+                              )}
+                            </>
                           )}
                       </div>
                   );
