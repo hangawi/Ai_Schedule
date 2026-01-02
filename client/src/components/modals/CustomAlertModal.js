@@ -128,7 +128,7 @@ const CustomAlertModal = ({
             {getIcon()}
             <div className="flex-1">
               {title && <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>}
-              <p className="text-gray-700">{message}</p>
+              <p className="text-gray-700 whitespace-pre-wrap">{message}</p>
             </div>
           </div>
         </div>

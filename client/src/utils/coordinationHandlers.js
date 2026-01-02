@@ -184,8 +184,14 @@ export const handleRunAutoSchedule = async (
       ? currentWeekStartDate
       : new Date(currentWeekStartDate);
 
-    // ✅ 자동배정: 모든 멤버의 선호시간이 있는 날짜를 포함하도록 범위 계산
-    {
+    // ✅ viewMode에 따라 배정 범위 설정
+    if (viewMode === 'week') {
+      // 주간 보기: 현재 주만 배정
+      uiCurrentWeek = currentDateObj;
+      numWeeks = 1;
+    } else {
+      // 월간 보기: 모든 멤버의 선호시간이 있는 날짜를 포함하도록 범위 계산
+      {
       // 모든 멤버의 specificDate 수집 (defaultSchedule + scheduleExceptions)
       let minDate = null;
       let maxDate = null;
@@ -258,6 +264,7 @@ export const handleRunAutoSchedule = async (
 
       }
     }
+    } // else 블록 닫기
     // minHoursPerWeek를 분 단위로 변환하여 minClassDurationMinutes로 설정
     const minClassDurationMinutes = Math.ceil((scheduleOptions.minHoursPerWeek || 1) * 60);
 
@@ -270,12 +277,38 @@ export const handleRunAutoSchedule = async (
       clientToday: new Date().toISOString().slice(0, 10)
     };
     
-    // 자동배정 요청 전송
-    const response = await coordinationService.runAutoSchedule(currentRoom._id, finalOptions);
+    // 자동배정 요청 전송 (먼저 사전 체크)
+    const response = await coordinationService.runAutoSchedule(currentRoom._id, { ...finalOptions, skipConfirmation: false });
     
-    // 🔍 응답 상세 로그
-    // 응답 받음
+    // 🔍 선호시간 부족 확인 필요 시
+    if (response.needsConfirmation && response.insufficientMembers) {
+      console.log('⚠️ 선호시간 부족 멤버:', response.insufficientMembers);
+      
+      // 확인 메시지 생성
+      let confirmMessage = '⚠️ 다음 멤버들의 선호시간이 부족합니다:\n\n';
+      response.insufficientMembers.forEach(m => {
+        confirmMessage += `• ${m.memberName}: ${m.availableMinutes}분 (필요: ${m.requiredMinutes}분)\n`;
+      });
+      confirmMessage += '\n해당 멤버를 제외하고 나머지 멤버만 배정하시겠습니까?';
+      
+      // 사용자 확인 요청
+      const confirmed = window.confirm(confirmMessage);
+      
+      if (!confirmed) {
+        setIsScheduling(false);
+        showAlert('자동배정이 취소되었습니다.');
+        return;
+      }
+      
+      // 확인했으면 skipConfirmation: true로 재시도
+      console.log('✅ 사용자 확인 완료 - 부족한 멤버 제외하고 배정 진행');
+      const retryResponse = await coordinationService.runAutoSchedule(currentRoom._id, { ...finalOptions, skipConfirmation: true });
+      
+      // retryResponse를 response로 덮어쓰기
+      Object.assign(response, retryResponse);
+    }
     
+    // 응답 처리
     const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions, warnings } = response;
     
     // ===== warnings 처리 (선호시간 부족 알림) =====

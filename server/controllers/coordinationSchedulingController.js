@@ -65,7 +65,8 @@ exports.runAutoSchedule = async (req, res) => {
       currentWeek, 
       assignmentMode,
       transportMode = 'normal',
-      minClassDurationMinutes = 60
+      minClassDurationMinutes = 60,
+      skipConfirmation = false  // 사전 확인 건너뛰기 플래그
     } = req.body;
       
     const validModes = ['normal', 'first_come_first_served', 'from_today'];
@@ -117,6 +118,94 @@ exports.runAutoSchedule = async (req, res) => {
 
     // 이월 정보 수집
     const existingCarryOvers = getExistingCarryOvers(room.members, startDate);
+
+    // 🔍 사전 선호시간 체크 (skipConfirmation이 false일 때만)
+    if (!skipConfirmation) {
+      const insufficientMembers = [];
+      const requiredMinutesPerWeek = minHoursPerWeek * 60;
+
+      // 각 멤버의 전체 기간 선호시간 계산
+      for (const member of membersOnly) {
+        const user = member.user;
+        const memberName = user?.firstName || user?.name || 'Unknown';
+        
+        console.log(`
+🔍 [사전체크] ${memberName} 선호시간 계산 시작`);
+        console.log(`  - defaultSchedule 개수: ${(user.defaultSchedule || []).length}`);
+        
+        let totalPreferredMinutes = 0;
+        
+        // numWeeks만큼 반복하여 각 주의 선호시간 계산
+        for (let weekIndex = 0; weekIndex < numWeeks; weekIndex++) {
+          const weekStartDate = new Date(startDate);
+          weekStartDate.setUTCDate(startDate.getUTCDate() + (weekIndex * 7));
+          
+          const weekDays = [];
+          for (let i = 0; i < 7; i++) {
+            const day = new Date(weekStartDate);
+            day.setUTCDate(weekStartDate.getUTCDate() + i);
+            weekDays.push(day);
+          }
+
+          let weekPreferredMinutes = 0;
+          for (const day of weekDays) {
+            const dayOfWeek = day.getUTCDay();
+            const dateStr = day.toISOString().split('T')[0];
+            
+            console.log(`  [${dateStr}] dayOfWeek=${dayOfWeek}`);
+            
+            const daySchedules = (user.defaultSchedule || []).filter(s => {
+              if (s.priority < 2) return false;
+              if (s.specificDate) {
+                const specificDateStr = new Date(s.specificDate).toISOString().split('T')[0];
+                return specificDateStr === dateStr;
+              }
+              return s.dayOfWeek === dayOfWeek;
+            });
+            
+            console.log(`    매칭된 스케줄: ${daySchedules.length}개`);
+            
+            for (const schedule of daySchedules) {
+              const [startHour, startMin] = schedule.startTime.split(':').map(Number);
+              const [endHour, endMin] = schedule.endTime.split(':').map(Number);
+              const minutes = (endHour * 60 + endMin) - (startHour * 60 + startMin);
+              weekPreferredMinutes += minutes;
+              console.log(`      ${schedule.startTime}-${schedule.endTime}: ${minutes}분 추가 (priority=${schedule.priority})`);
+            }
+          }
+          
+          console.log(`  [${weekIndex + 1}주차] 선호시간 합계: ${weekPreferredMinutes}분 (필요: ${requiredMinutesPerWeek}분)`);
+          
+          totalPreferredMinutes += weekPreferredMinutes;
+          
+          // 이번 주 선호시간이 부족하면 기록하고 중단
+          if (weekPreferredMinutes < requiredMinutesPerWeek) {
+            console.log(`    ⚠️ 부족! (부족분: ${requiredMinutesPerWeek - weekPreferredMinutes}분)`);
+            break; // 한 주라도 부족하면 중단 (하지만 totalPreferredMinutes는 유지)
+          }
+        }
+
+        // 한 주라도 부족하면 insufficientMembers에 추가
+        if (totalPreferredMinutes < requiredMinutesPerWeek * numWeeks) {
+          insufficientMembers.push({
+            memberName,
+            memberId: member.user._id.toString(),
+            availableMinutes: totalPreferredMinutes,
+            requiredMinutes: requiredMinutesPerWeek * numWeeks
+          });
+        }
+      }
+
+      // 부족한 멤버가 있으면 확인 요청 응답
+      if (insufficientMembers.length > 0) {
+        console.log('⚠️ 선호시간 부족한 멤버 발견:', insufficientMembers);
+        return res.status(200).json({
+          needsConfirmation: true,
+          insufficientMembers,
+          message: '일부 멤버의 선호시간이 부족합니다. 해당 멤버를 제외하고 배정하시겠습니까?'
+        });
+      }
+    }
 
     // 자동 스케줄링 실행 (주별 선호시간 체크는 알고리즘 내부에서 처리)
     const result = await schedulingAlgorithm.runAutoSchedule(

@@ -31,7 +31,9 @@
       "Bash(ls:*)",
       "Bash(grep:*)",
       "Bash(dir:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(awk:*)",
+      "Bash(node -e:*)"
     ]
   }
 }
