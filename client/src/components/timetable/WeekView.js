@@ -654,7 +654,11 @@ const WeekView = ({
 
       // 🔒 최우선 순위: 조원은 이동시간 슬롯을 절대 보면 안 됨 (본인 것이든 다른 사람 것이든)
       // 이동시간 구간은 무조건 "배정 불가"로 표시
+      if (ownerInfo && ownerInfo.isTravel) {
+        console.log(`🚗 [${time}] 이동시간 감지! isRoomOwner: ${isRoomOwner}, ownerInfo:`, ownerInfo);
+      }
       if (!isRoomOwner && ownerInfo && ownerInfo.isTravel) {
+        console.log(`✅ [${time}] 이동시간을 blocked로 설정!`);
         slotType = 'blocked';
         slotData = {
           name: '배정 불가',
@@ -662,6 +666,7 @@ const WeekView = ({
           isTravelHidden: true,
           ownerScheduleType: 'travel_hidden'
         };
+        console.log(`✅ [${time}] slotType 설정 완료: ${slotType}, slotData:`, slotData);
       }
       // ✨✨✨ 차순위: 방장의 개인시간/예외일정 (이동시간 포함, 모두 blocked로 표시)
       // 확정된 일정은 blocked(오렌지색)로 표시되어야 함

@@ -307,13 +307,43 @@ export const useTravelMode = (currentRoom, isOwner = true, currentUser = null) =
         };
     } 
     
-    // 4. 조원은 다른 사람의 이동시간도 포함 (WeekView에서 "배정불가"로 표시)
-    // ✅ 모든 슬롯 포함 (이동시간도 포함하여 다른 사람의 시간대를 배정불가로 표시)
+    // 4. 조원도 방장과 동일하게 이동시간 슬롯 받음 (WeekView에서 "배정불가"로 표시)
+    // ✅ 명확하게 분리 (방장 로직과 동일)
     const allSlots = currentRoom?.timeSlots || [];
+    const mixedTravelSlots = allSlots.filter(slot => 
+      slot?.isTravel === true || slot?.subject === '이동시간'
+    );
+    const regularSlots = allSlots.filter(slot => 
+      slot?.isTravel !== true && slot?.subject !== '이동시간'
+    );
+    
+    // ✅ travelTimeSlots와 mixedTravelSlots 병합 (방장과 동일)
+    const combinedTravelSlots = [
+        ...(currentRoom?.travelTimeSlots || []),
+        ...mixedTravelSlots
+    ];
 
     return {
-        timeSlots: allSlots,  // ✅ 이동시간 슬롯도 포함 (WeekView에서 자동으로 다른 사람 슬롯 = 배정불가 처리)
-        travelSlots: [],
+        timeSlots: regularSlots, // 수업 시간만 반환
+        // ✅ 조원도 이동시간 슬롯 받음 (방장과 동일한 구조)
+        travelSlots: combinedTravelSlots.map(slot => {
+            // color가 없으면 room.members에서 가져오기
+            let slotColor = slot.color;
+            if (!slotColor && slot.user) {
+                const userId = slot.user._id || slot.user;
+                const member = currentRoom.members.find(m => 
+                    (m.user._id || m.user).toString() === userId.toString()
+                );
+                slotColor = member?.color || '#87CEEB';
+            }
+            
+            return {
+                ...slot,
+                isTravel: true,  // 명시적으로 설정
+                travelMode: travelMode,
+                color: slotColor  // ✅ 조원 색상 추가
+            };
+        }), 
         travelMode: travelMode,
         myTravelDuration // 🆕 추가
     };

@@ -205,14 +205,77 @@ export const getRoomExceptionInfo = (date, time, roomSettings) => {
  * @param {Array<object>} members - 방 멤버 목록.
  * @param {object} currentUser - 현재 로그인된 사용자 정보.
  * @param {boolean} isRoomOwner - 현재 사용자의 방장 여부.
+ * @param {Array<object>} travelSlots - 이동시간 슬롯 목록 (기본값: []).
  * @returns {object|null} 슬롯 소유자 정보(이름, 색상, ID 등) 또는 null.
  */
-export const getSlotOwner = (date, time, timeSlots, members, currentUser, isRoomOwner) => {
-  if (!timeSlots || !time || !date) return null;
+export const getSlotOwner = (date, time, timeSlots, members, currentUser, isRoomOwner, travelSlots = []) => {
+  if (!time || !date) return null;
 
   const currentTime = time.trim();
   const currentMinutes = timeToMinutes(currentTime);
   const currentDateStr = date.toISOString().split('T')[0];
+
+  // 🔍 디버깅: travelSlots 확인
+  if (travelSlots && travelSlots.length > 0) {
+    console.log('🚗 travelSlots 전달됨:', travelSlots.length, '개');
+    console.log('🔍 현재 확인 중인 시간:', currentDateStr, currentTime);
+    console.log('📋 첫 번째 travelSlot:', travelSlots[0]);
+  }
+
+  // 🆕 1. travelSlots 먼저 확인 (우선순위 높음)
+  const travelSlot = (travelSlots || []).find(slot => {
+    if (!slot || !slot.date || !slot.startTime || !slot.endTime) return false;
+    
+    const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
+    if (slotDateStr !== currentDateStr) return false;
+    
+    const startMinutes = timeToMinutes(slot.startTime);
+    const endMinutes = timeToMinutes(slot.endTime);
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  });
+  
+  // 🔍 디버깅 호출
+  debug1440(currentTime, currentDateStr, travelSlot, travelSlots);
+  
+  if (travelSlot) {
+    // 이동시간 슬롯 반환
+    let userId = travelSlot.userId || travelSlot.user;
+    if (typeof userId === 'object' && userId !== null) {
+      userId = userId._id || userId.id;
+    }
+    
+    const member = (members || []).find(m => {
+      const memberId = m.user?._id?.toString() || m.user?.id?.toString();
+      return memberId && userId && memberId === userId.toString();
+    });
+    
+    const color = member?.color || '#87CEEB';
+    const name = member ? `${member.user.firstName || ''} ${member.user.lastName || ''}`.trim() : travelSlot.subject;
+    
+    const returnValue = {
+      name: name,
+      color: color,
+      textColor: '#000000',
+      isTravel: true,  // ✅ 이동시간 플래그
+      userId: userId,
+      actualUserId: userId,
+      subject: travelSlot.subject || '이동',
+      travelInfo: travelSlot.travelInfo
+    };
+    
+    // 🔍 디버깅: 반환값 확인
+    if (currentTime === '14:40') {
+      console.log('🎯 14:40 getSlotOwner 반환값:', returnValue);
+      console.log('   - isTravel:', returnValue.isTravel);
+      console.log('   - userId:', returnValue.userId);
+      console.log('   - name:', returnValue.name);
+    }
+    
+    return returnValue;
+  }
+
+  // 2. timeSlots 확인 (기존 로직 유지)
+  if (!timeSlots || timeSlots.length === 0) return null;
 
   // Find the specific slot for the given time
   const bookedSlot = (timeSlots || []).find(slot => {
@@ -294,6 +357,22 @@ export const getSlotOwner = (date, time, timeSlots, members, currentUser, isRoom
 
   // 4. If no slot is found, return null
   return null;
+};
+
+// 🔍 [임시] 14:40 디버깅용 함수
+const debug1440 = (currentTime, currentDateStr, travelSlot, travelSlots) => {
+  if (currentTime === '14:40') {
+    console.log('🎯 14:40 매칭 시도');
+    console.log('현재 날짜:', currentDateStr);
+    console.log('travelSlot 찾음?', travelSlot ? 'YES ✅' : 'NO ❌');
+    if (!travelSlot && travelSlots && travelSlots.length > 0) {
+      console.log('❌ 매칭 실패. travelSlots 내용:', travelSlots);
+      travelSlots.forEach((slot, idx) => {
+        const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
+        console.log(`  [${idx}] 날짜:${slotDateStr}, 시간:${slot.startTime}-${slot.endTime}`);
+      });
+    }
+  }
 };
 
 /**

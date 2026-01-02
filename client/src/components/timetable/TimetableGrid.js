@@ -559,7 +559,8 @@ const TimetableGrid = ({
       slotsToUse,
       members,
       currentUser,
-      isRoomOwner
+      isRoomOwner,
+      travelSlots  // 🆕 travelSlots 추가
     );
 
     // 병합 모드에서 병합된 슬롯인지 확인
@@ -583,7 +584,7 @@ const TimetableGrid = ({
     }
 
     return baseOwnerInfo;
-  }, [timeSlots, mergedTimeSlots, members, currentUser, isRoomOwner, showMerged]);
+  }, [timeSlots, mergedTimeSlots, members, currentUser, isRoomOwner, showMerged, travelSlots]);  // 🆕 travelSlots 의존성 추가
 
   /**
    * isSlotSelected - 슬롯 선택 여부 확인
