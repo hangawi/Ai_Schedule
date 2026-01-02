@@ -5,6 +5,8 @@
  * 원본 schedulingAlgorithm.js (2160줄)을 모듈화하여 ~300줄로 축소했습니다.
  */
 
+console.log('🚀🚀🚀 schedulingAlgorithm/index.js 로드됨 - 수정버전');
+
 // Constants
 const { SLOTS_PER_HOUR } = require('./constants/timeConstants');
 const { DAY_MAP, DEFAULT_REQUIRED_SLOTS } = require('./constants/schedulingConstants');
@@ -99,6 +101,22 @@ class SchedulingAlgorithm {
     // 단일 주 배정
     const ownerId = owner._id.toString();
     const nonOwnerMembers = filterNonOwnerMembers(members, ownerId);
+    
+    console.log(`
+🔍 [필터링 확인]`);
+    console.log(`   방장 ID: ${ownerId.substring(0, 8)}...`);
+    console.log(`   전체 멤버: ${members.length}명`);
+    members.forEach(m => {
+      const memberId = m.user._id.toString();
+      const memberName = m.user?.firstName || m.user?.name || 'Unknown';
+      const isOwner = memberId === ownerId ? '👑 방장' : '👤 조원';
+      console.log(`      ${isOwner} ${memberName} (${memberId.substring(0, 8)}...)`);
+    });
+    console.log(`   필터링 후: ${nonOwnerMembers.length}명`);
+    nonOwnerMembers.forEach(m => {
+      const memberName = m.user?.firstName || m.user?.name || 'Unknown';
+      console.log(`      👤 ${memberName}`);
+    });
 
     // 멤버별 필요 슬롯 계산
     const memberRequiredSlots = calculateMemberRequiredSlots(
@@ -114,8 +132,9 @@ class SchedulingAlgorithm {
     // 멤버 선호시간 로드
 
     // 타임테이블 생성
+    console.log('📊 [타임테이블 생성 시작]');
     let timetable = createTimetableFromPersonalSchedules(
-      members,
+      nonOwnerMembers, // 🔧 FIX: members → nonOwnerMembers (방장 제외)
       owner,
       startDate,
       numWeeks,
@@ -123,6 +142,8 @@ class SchedulingAlgorithm {
       fullRangeStart,
       fullRangeEnd
     );
+    
+    // "오늘 기준" 모드
     
     // "오늘 기준" 모드: 과거 날짜 필터링
     if (assignmentMode === 'from_today') {
@@ -258,7 +279,50 @@ class SchedulingAlgorithm {
       // 일반 모드: 시간 순서 우선 배정 (minClassDurationMinutes 기준)
       console.log(`   → 일반 모드 진입 (assignByTimeOrder)`);
       const blockedTimes = roomSettings.blockedTimes || [];
-      assignByTimeOrder(timetable, assignments, memberRequiredSlots, ownerId, members, assignmentMode, minClassDurationMinutes, blockedTimes);
+      
+      // 선호시간 부족 검증
+      const MINUTES_PER_SLOT = 10;
+      
+      for (const member of members) {
+        const memberId = member.user._id.toString();
+        const memberName = member.user?.firstName || member.user?.name || 'Unknown';
+        const requiredSlots = memberRequiredSlots[memberId] || 0;
+        const requiredMinutes = requiredSlots * MINUTES_PER_SLOT;
+        
+        // timetable에서 이 멤버의 선호시간(priority >= 2) 슬롯 수 계산
+        let availableSlots = 0;
+        let totalSlots = 0;
+        Object.keys(timetable).forEach(slotKey => {
+          const slot = timetable[slotKey];
+          const memberSlot = slot.available.find(a => a.memberId === memberId && !a.isOwner);
+          if (memberSlot) {
+            totalSlots++;
+            if (memberSlot.priority >= 2) {
+              availableSlots++;
+            }
+          }
+        });
+
+        const availableMinutes = availableSlots * MINUTES_PER_SLOT;
+        console.log(`   📊 ${memberName}: 전체 슬롯 ${totalSlots}개, 선호시간 슬롯 ${availableSlots}개 (${availableMinutes}분), 필요 ${requiredMinutes}분`);
+        
+        if (availableMinutes < requiredMinutes) {
+          warnings.push({
+            type: 'insufficient_preferred_time',
+            memberId: memberId,
+            memberName: memberName,
+            requiredMinutes: requiredMinutes,
+            availableMinutes: availableMinutes,
+            message: `${memberName}님의 선호시간(${availableMinutes}분)이 요청 시간(${requiredMinutes}분)보다 부족합니다.`
+          });
+        }
+      }
+      
+      // 선호시간 부족한 멤버가 있으면 배정 차단
+      const insufficientMembers = warnings.filter(w => w.type === 'insufficient_preferred_time');
+      if (insufficientMembers.length === 0) {
+        assignByTimeOrder(timetable, assignments, memberRequiredSlots, ownerId, members, assignmentMode, minClassDurationMinutes, blockedTimes);
+      }
     }
 
     // 기존 Phase 2, 3 비활성화 (단독 슬롯 우선 배정 제거)

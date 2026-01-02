@@ -64,7 +64,8 @@ const assignByPublicTransport = async (
   });
 
   // 요일별 순차 배정
-  for (const [dayOfWeek, daySlotKeys] of Object.entries(slotsByDay)) {
+  for (const [dayOfWeekStr, daySlotKeys] of Object.entries(slotsByDay)) {
+    const dayOfWeek = parseInt(dayOfWeekStr); // 🔧 문자열을 숫자로 변환
     console.log(`
 
 ${'='.repeat(60)}`);

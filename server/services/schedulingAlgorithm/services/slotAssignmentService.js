@@ -2,7 +2,10 @@
  * 슬롯 배정 서비스
  */
 
+console.log('🚀🚀🚀 slotAssignmentService.js 로드됨 - 수정버전 (priority 체크 포함)');
+
 const { DEFAULT_REQUIRED_SLOTS, MAX_ITERATION_ROUNDS, FAIRNESS_GAP_THRESHOLD } = require('../constants/schedulingConstants');
+const { PREFERRED_TIME_PRIORITY_THRESHOLD } = require('../constants/priorityConstants');
 const { MINUTES_PER_SLOT } = require('../constants/timeConstants');
 const { timeToMinutes, minutesToTime } = require('../utils/timeUtils');
 const { extractDateFromSlotKey, extractTimeFromSlotKey, areConsecutiveSlots } = require('../utils/slotUtils');
@@ -54,6 +57,7 @@ const sortMembersByMode = (
  * 한 멤버의 필요 시간을 모두 채운 후 다음 멤버로 넘어가는 방식으로 분할을 최소화합니다.
  */
 const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId, members, assignmentMode = 'normal', minClassDurationMinutes = 60, blockedTimes = []) => {
+  console.log('🔥🔥🔥 assignByTimeOrder 호출됨 - 수정버전 (priority >= 2만 배정)');
   const sortedKeys = Object.keys(timetable).sort();
   if (sortedKeys.length === 0) {
     console.log('🕐 배정할 슬롯이 없어 시간 순서 배정을 건너뜁니다.');
@@ -81,7 +85,14 @@ const assignByTimeOrder = (timetable, assignments, memberRequiredSlots, ownerId,
         const key = sortedKeys[i];
         const slot = timetable[key];
         if (slot.assignedTo) break;
-        if (!slot.available.some(a => a.memberId === memberId && !a.isOwner)) break;
+        
+        // 🔧 선호시간 내에서만 배정 (priority >= 2)
+        const memberAvail = slot.available.find(a => a.memberId === memberId && !a.isOwner);
+        if (!memberAvail) break;
+        if (memberAvail.priority < PREFERRED_TIME_PRIORITY_THRESHOLD) {
+          console.log(`   ⚠️  슬롯 ${key} 스킵: ${memberId.substring(0,6)}의 priority ${memberAvail.priority} < ${PREFERRED_TIME_PRIORITY_THRESHOLD}`);
+          break;
+        }
         if (blockKeys.length > 0 && !areConsecutiveSlots(blockKeys[blockKeys.length - 1], key)) break;
         blockKeys.push(key);
         if (blockKeys.length >= maxSlots) break;

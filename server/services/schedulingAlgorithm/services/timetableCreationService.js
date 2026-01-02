@@ -168,6 +168,9 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
 
   // Step 2: 조원들의 개인 시간표 추가 (방장 가능 시간대와 겹치는 것만)
   members.forEach(member => {
+    const memberName = member.user?.firstName || member.user?.name || 'Unknown';
+    console.log(`
+👤 [멤버 처리 시작] ${memberName}`);
     const user = member.user;
     const userId = user._id.toString();
     const priority = getMemberPriority(member);
@@ -178,6 +181,7 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
     // 개인 시간표(defaultSchedule) 처리
     if (user.defaultSchedule && Array.isArray(user.defaultSchedule)) {
       const validSchedules = filterValidSchedules(user.defaultSchedule);
+      console.log(`   📋 ${memberName}의 선호시간: ${validSchedules.length}개`);
       
 
 
@@ -199,6 +203,7 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
       schedulesToUse.forEach(schedule => {
         const { dayOfWeek, startTime, endTime, specificDate } = schedule;
         const schedulePriority = schedule.priority || priority;
+        console.log(`      ⏰ ${memberName}: dayOfWeek=${dayOfWeek}, ${startTime}-${endTime}, specificDate=${specificDate}`);
 
         // 주말 제외
         if (isWeekendDay(dayOfWeek)) return;

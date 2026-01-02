@@ -455,12 +455,17 @@ const findNearestMemberWithSufficientTime = async ({
 👤 [멤버 확인] ${memberName} (이동시간: ${travelTimeMinutes}분)`);
     console.log(`   📅 전체 선호시간: ${allPreferredSchedules.length}개`);
     allPreferredSchedules.forEach(s => {
-        console.log(`      - ${s.day}: ${s.startTime}-${s.endTime}`);
+        console.log(`      - s.day=${s.day} (타입: ${typeof s.day}), DAY_MAP[s.day]=${DAY_MAP[s.day]}, ${s.startTime}-${s.endTime}`);
     });
-    console.log(`   🎯 현재 배정 대상 요일: ${currentDay}`);
+    console.log(`   🎯 현재 배정 대상 요일: ${currentDay} (타입: ${typeof currentDay})`);
 
-    // 현재 요일의 선호 시간대만 검색 (다른 요일 제외)
-    const schedulesToSearch = allPreferredSchedules.filter(s => s.day === currentDay);
+    // 🔧 현재 요일의 선호 시간대만 검색 (s.day는 숫자이므로 DAY_MAP으로 변환 후 비교)
+    const schedulesToSearch = allPreferredSchedules.filter(s => {
+        const dayStr = DAY_MAP[s.day];
+        const match = dayStr === currentDay;
+        console.log(`      🔍 비교: DAY_MAP[${s.day}]="${dayStr}" === "${currentDay}" ? ${match}`);
+        return match;
+    });
     console.log(`   ✅ ${currentDay}에 해당하는 선호시간: ${schedulesToSearch.length}개`);
     
     // 현재 요일에 선호시간이 없으면 즉시 실패 처리

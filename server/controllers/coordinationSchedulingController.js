@@ -1,4 +1,5 @@
 // 조정 스케줄링 컨트롤러 (리팩토링 버전)
+console.log('🚀🚀🚀 coordinationSchedulingController.js 로드됨 - 수정버전 실행중');
 const Room = require('../models/room');
 const User = require('../models/user');
 const ActivityLog = require('../models/ActivityLog');
@@ -54,7 +55,8 @@ const {
 // @desc    Run auto-schedule algorithm for the room
 // @route   POST /api/coordination/rooms/:roomId/auto-schedule
 // @access  Private (Room Owner only)
-exports.runAutoSchedule = exports.runAutoSchedule = exports.runAutoSchedule = async (req, res) => {
+exports.runAutoSchedule = async (req, res) => {
+  console.log('>>> runAutoSchedule 시작 - 선호시간 체크 적용 버전 <<<');
   try {
     const { roomId } = req.params;
     const { 
@@ -116,6 +118,67 @@ exports.runAutoSchedule = exports.runAutoSchedule = exports.runAutoSchedule = as
     // 이월 정보 수집
     const existingCarryOvers = getExistingCarryOvers(room.members, startDate);
 
+    // ========================================
+    // 🔥 선호시간 부족 체크 (배정 전 검증)
+    // ========================================
+    console.log('\n🔍 선호시간 부족 체크 시작...');
+    const insufficientMembers = [];
+    const requiredMinutesPerWeek = minHoursPerWeek * 60;
+
+    for (const member of membersOnly) {
+      const user = member.user;
+      const memberName = user?.firstName || user?.name || 'Unknown';
+      const memberId = user._id.toString();
+
+      // 이월 시간 고려
+      const carryOver = existingCarryOvers.find(c => c.memberId === memberId)?.carryOver || 0;
+      const requiredMinutes = requiredMinutesPerWeek - carryOver;
+
+      if (requiredMinutes <= 0) {
+        console.log(`   ✅ ${memberName}: 이월로 충분 (이월 ${carryOver}분, 필요 ${requiredMinutesPerWeek}분)`);
+        continue;
+      }
+
+      // 선호시간 계산 (priority >= 2인 시간만)
+      const preferredSchedules = (user.defaultSchedule || []).filter(s => s.priority >= 2);
+      let totalPreferredMinutes = 0;
+
+      for (const schedule of preferredSchedules) {
+        const [startHour, startMin] = schedule.startTime.split(':').map(Number);
+        const [endHour, endMin] = schedule.endTime.split(':').map(Number);
+        const minutes = (endHour * 60 + endMin) - (startHour * 60 + startMin);
+        totalPreferredMinutes += minutes;
+      }
+
+      console.log(`   📊 ${memberName}: 선호시간 ${totalPreferredMinutes}분, 필요 ${requiredMinutes}분 (이월 ${carryOver}분)`);
+
+      if (totalPreferredMinutes < requiredMinutes) {
+        insufficientMembers.push({
+          memberName,
+          availableMinutes: totalPreferredMinutes,
+          requiredMinutes,
+          carryOver
+        });
+      }
+    }
+
+    if (insufficientMembers.length > 0) {
+      console.log(`\n❌ 선호시간 부족 멤버 ${insufficientMembers.length}명 발견 - 배정 차단`);
+      const details = insufficientMembers.map(m =>
+        `${m.memberName}: 선호시간 ${m.availableMinutes}분, 필요 ${m.requiredMinutes}분`
+      ).join('\n');
+
+      return res.status(400).json({
+        success: false,
+        msg: '일부 멤버의 선호시간이 부족하여 배정할 수 없습니다.',
+        details,
+        insufficientMembers
+      });
+    }
+
+    console.log('✅ 모든 멤버의 선호시간 충분 - 배정 진행\n');
+    // ========================================
+
     // 자동 스케줄링 실행
     const result = await schedulingAlgorithm.runAutoSchedule(
       membersOnly,
@@ -135,6 +198,29 @@ exports.runAutoSchedule = exports.runAutoSchedule = exports.runAutoSchedule = as
       },
       existingCarryOvers,
     );
+
+    // 🔧 선호시간 부족 체크 - 배정 차단
+    const preferenceWarnings = (result.warnings || []).filter(
+      w => w.type === 'insufficient_preferred_time'
+    );
+
+    if (preferenceWarnings.length > 0) {
+      const warningMessages = preferenceWarnings.map(w => 
+        `${w.memberName}: 필요 ${w.requiredMinutes}분, 가용 ${w.availableMinutes}분`
+      ).join('');
+      
+      console.log(`❌ [배정 차단] ${preferenceWarnings.length}명의 선호시간 부족`);
+      preferenceWarnings.forEach(w => {
+        console.log(`   - ${w.memberName}: 필요 ${w.requiredMinutes}분 > 가용 ${w.availableMinutes}분`);
+      });
+      
+      return res.status(400).json({
+        success: false,
+        msg: '일부 멤버의 선호시간이 부족하여 배정할 수 없습니다.',
+        details: warningMessages,
+        insufficientMembers: preferenceWarnings
+      });
+    }
 
     // 장기 이월 확인
     const twoWeeksAgo = new Date(startDate);

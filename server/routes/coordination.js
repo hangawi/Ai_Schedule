@@ -56,7 +56,7 @@ router.delete('/rooms/:roomId/time-slots', auth, coordinationController.deleteAl
 
 // AI-based scheduling
 router.post('/rooms/:roomId/find-common-slots', auth, coordinationController.findCommonSlots);
-router.post('/rooms/:roomId/run-schedule', auth, coordinationController.runAutoSchedule);
+router.post('/rooms/:roomId/run-schedule', auth, coordinationSchedulingController.runAutoSchedule);
 router.post('/rooms/:roomId/confirm-schedule', auth, coordinationSchedulingController.confirmSchedule);
 
 // Dynamic travel time - Available slots (조원용 시간대 조회)
