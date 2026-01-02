@@ -100,6 +100,7 @@ import {
   ScheduleErrorAlert,
   UnassignedMembersAlert,
   ConflictSuggestionsAlert,
+  WarningsAlert,
   TravelErrorAlert,
   LoadingSpinner,
   ErrorDisplay
@@ -153,6 +154,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   const {
     isScheduling, setIsScheduling, scheduleError, setScheduleError,
     unassignedMembersInfo, setUnassignedMembersInfo, conflictSuggestions, setConflictSuggestions,
+    warnings, setWarnings,
     showDeleteConfirm, setShowDeleteConfirm
   } = useSchedulerState();
 
@@ -675,7 +677,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
   }, [currentRoom, setCurrentRoom, showAlert]);
 
   const handleRunAutoScheduleCallback = async () => {
-    await handleRunAutoSchedule(currentRoom, currentWeekStartDate, user, scheduleOptions, setIsScheduling, setScheduleError, setUnassignedMembersInfo, setConflictSuggestions, setCurrentRoom, showAlert, viewMode, travelMode);
+    await handleRunAutoSchedule(currentRoom, currentWeekStartDate, user, scheduleOptions, setIsScheduling, setScheduleError, setUnassignedMembersInfo, setConflictSuggestions, setWarnings, setCurrentRoom, showAlert, viewMode, travelMode);
 
     // ✅ 수정: 모드 리셋 제거 - 사용자가 선택한 모드 유지
     // (이동수단 모드 변경 시 자동으로 재배정되므로 리셋 불필요)
@@ -866,6 +868,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
             <ScheduleErrorAlert scheduleError={scheduleError} />
             <UnassignedMembersAlert unassignedMembersInfo={unassignedMembersInfo} />
             <ConflictSuggestionsAlert conflictSuggestions={conflictSuggestions} />
+            <WarningsAlert warnings={warnings} />
 
             {currentRoom?.autoConfirmAt && (
               <AutoConfirmBanner

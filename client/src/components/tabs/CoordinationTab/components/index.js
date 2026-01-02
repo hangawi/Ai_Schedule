@@ -34,6 +34,7 @@ export {
   ScheduleErrorAlert,
   UnassignedMembersAlert,
   ConflictSuggestionsAlert,
+  WarningsAlert,
   TravelErrorAlert,
   LoadingSpinner,
   ErrorDisplay

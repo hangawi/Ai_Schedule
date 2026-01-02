@@ -145,10 +145,11 @@ export const handleRunAutoSchedule = async (
   setScheduleError,
   setUnassignedMembersInfo,
   setConflictSuggestions,
+  setWarnings,
   setCurrentRoom,
   showAlert,
   viewMode = 'week',
-  travelMode = 'normal' // Add travelMode parameter
+  travelMode = 'normal'
 ) => {
   console.log('\n\n' + '🚨'.repeat(50));
   console.log('🔥🔥🔥 handleRunAutoSchedule 호출됨! (프론트엔드)');
@@ -258,7 +259,6 @@ export const handleRunAutoSchedule = async (
 
       }
     }
-    } // else 블록 닫기
     // minHoursPerWeek를 분 단위로 변환하여 minClassDurationMinutes로 설정
     const minClassDurationMinutes = Math.ceil((scheduleOptions.minHoursPerWeek || 1) * 60);
 
@@ -271,36 +271,8 @@ export const handleRunAutoSchedule = async (
       clientToday: new Date().toISOString().slice(0, 10)
     };
     
-    // 자동배정 요청 전송 (먼저 사전 체크)
-    const response = await coordinationService.runAutoSchedule(currentRoom._id, { ...finalOptions, skipConfirmation: false });
-    
-    // 🔍 선호시간 부족 확인 필요 시
-    if (response.needsConfirmation && response.insufficientMembers) {
-      console.log('⚠️ 선호시간 부족 멤버:', response.insufficientMembers);
-      
-      // 확인 메시지 생성
-      let confirmMessage = '⚠️ 다음 멤버들의 선호시간이 부족합니다:\n\n';
-      response.insufficientMembers.forEach(m => {
-        confirmMessage += `• ${m.memberName}: ${m.availableMinutes}분 (필요: ${m.requiredMinutes}분)\n`;
-      });
-      confirmMessage += '\n해당 멤버를 제외하고 나머지 멤버만 배정하시겠습니까?';
-      
-      // 사용자 확인 요청
-      const confirmed = window.confirm(confirmMessage);
-      
-      if (!confirmed) {
-        setIsScheduling(false);
-        showAlert('자동배정이 취소되었습니다.');
-        return;
-      }
-      
-      // 확인했으면 skipConfirmation: true로 재시도
-      console.log('✅ 사용자 확인 완료 - 부족한 멤버 제외하고 배정 진행');
-      const retryResponse = await coordinationService.runAutoSchedule(currentRoom._id, { ...finalOptions, skipConfirmation: true });
-      
-      // retryResponse를 response로 덮어쓰기
-      Object.assign(response, retryResponse);
-    }
+    // 자동배정 요청 전송 (바로 실행 - 사전 확인 제거)
+    const response = await coordinationService.runAutoSchedule(currentRoom._id, { ...finalOptions, skipConfirmation: true });
     
     // 응답 처리
     const { room: updatedRoom, unassignedMembersInfo: newUnassignedMembersInfo, conflictSuggestions: newConflictSuggestions, warnings } = response;
@@ -308,49 +280,11 @@ export const handleRunAutoSchedule = async (
     // ===== warnings 처리 (선호시간 부족 알림) =====
     if (warnings && warnings.length > 0) {
       console.log('⚠️ [자동배정] warnings 수신:', warnings);
-
-      // warnings를 유형별로 분류
-      const noPreferenceMembers = warnings.filter(w => w.type === 'no_preference');
-      const insufficientMembers = warnings.filter(w => w.type === 'insufficient_preference');
-      const insufficientPreferredTime = warnings.filter(w => w.type === 'insufficient_preferred_time');
-      const otherFailures = warnings.filter(w => w.type === 'assignment_failed');
-
-      // 알림 메시지 생성
-      let alertMessage = '⚠️ 일부 주차를 배정하지 못했습니다:\n\n';
-
-      if (insufficientPreferredTime.length > 0) {
-        alertMessage += '⏰ 선호시간 부족으로 건너뛴 주차:\n\n';
-        insufficientPreferredTime.forEach(w => {
-          alertMessage += `${w.message}\n\n`;
-        });
-        alertMessage += '다른 주차는 정상적으로 배정되었습니다.\n\n';
-      }
-
-      if (noPreferenceMembers.length > 0) {
-        alertMessage += '📅 선호시간 미설정:\n';
-        noPreferenceMembers.forEach(w => {
-          alertMessage += `  - ${w.memberName}\n`;
-        });
-        alertMessage += '\n';
-      }
-
-      if (insufficientMembers.length > 0) {
-        alertMessage += '⏰ 선호시간 부족:\n';
-        insufficientMembers.forEach(w => {
-          alertMessage += `  - ${w.memberName}: 필요 ${w.requiredMinutes}분, 가용 ${w.availableMinutes}분\n`;
-        });
-        alertMessage += '\n';
-      }
-
-      if (otherFailures.length > 0) {
-        alertMessage += '❌ 기타 배정 실패:\n';
-        otherFailures.forEach(w => {
-          alertMessage += `  - ${w.memberName}: ${w.message}\n`;
-        });
-      }
-
-      // 사용자에게 알림 표시
-      showAlert(alertMessage);
+      // warnings를 state에 저장하여 UI 상단에 표시
+      setWarnings(warnings);
+    } else {
+      // warnings가 없으면 빈 배열로 초기화
+      setWarnings([]);
     }
 
     // 배정된 슬롯들의 상세 정보 출력

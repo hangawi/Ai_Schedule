@@ -82,6 +82,7 @@ export const useSchedulerState = () => {
   const [scheduleError, setScheduleError] = useState(null);
   const [unassignedMembersInfo, setUnassignedMembersInfo] = useState(null);
   const [conflictSuggestions, setConflictSuggestions] = useState([]);
+  const [warnings, setWarnings] = useState([]);
 
   // Delete confirmation modal state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -106,6 +107,8 @@ export const useSchedulerState = () => {
     setUnassignedMembersInfo,
     conflictSuggestions,
     setConflictSuggestions,
+    warnings,
+    setWarnings,
     showDeleteConfirm,
     setShowDeleteConfirm,
     handleDeleteAllSlots

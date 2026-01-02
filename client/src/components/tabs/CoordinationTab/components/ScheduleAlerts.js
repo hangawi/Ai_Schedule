@@ -93,6 +93,28 @@ export const ConflictSuggestionsAlert = ({ conflictSuggestions }) => {
 };
 
 /**
+ * [WarningsAlert]
+ * @description 자동 배정 중 발생한 경고 메시지들을 표시하는 알림 컴포넌트.
+ * @param {Array<object>} warnings - 경고 정보 배열. 각 객체는 { type, message } 구조.
+ * @returns {JSX.Element|null} 경고가 있을 경우에만 JSX를 반환.
+ */
+export const WarningsAlert = ({ warnings }) => {
+  if (!warnings || warnings.length === 0) return null;
+
+  return (
+    <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative mt-4" role="alert">
+      <strong className="font-bold">배정 경고</strong>
+      <p className="block sm:inline"> 다음 배정에서 문제가 발생했습니다:</p>
+      <ul className="list-disc list-inside mt-2 text-sm">
+        {warnings.map((warning, index) => (
+          <li key={index}>{warning.message}</li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+/**
  * [TravelErrorAlert]
  * @description 이동 시간 계산 중 발생한 오류를 표시하는 알림 컴포넌트.
  * @param {string} travelError - 표시할 오류 메시지 문자열.
