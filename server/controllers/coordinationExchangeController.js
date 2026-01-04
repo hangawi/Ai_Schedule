@@ -401,32 +401,43 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
       const endMinutes = travelEndMinutes % 60;
       const endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
 
-      // 🔍 출발지/도착지 정보 수집
-      let fromAddress = '출발지';
-      let toAddress = '도착지';
+      // 🔍 출발지/도착지 사용자 이름 수집 (주소가 아닌 이름)
+      let fromName = '출발지';
+      let toName = '도착지';
       
       try {
         const currentUserId = slot.user._id || slot.user;
         const currentUser = await User.findById(currentUserId);
         
-        if (currentUser && currentUser.address) {
-          toAddress = currentUser.address;
+        // 도착지: 현재 사용자 이름
+        if (currentUser) {
+          toName = currentUser.firstName && currentUser.lastName
+            ? `${currentUser.firstName} ${currentUser.lastName}`
+            : currentUser.email;
         }
         
+        // 출발지 결정
         if (previousSlot) {
           const previousUserId = previousSlot.user._id || previousSlot.user;
-          const previousUser = await User.findById(previousUserId);
-          if (previousUser && previousUser.address) {
-            fromAddress = previousUser.address;
+          
+          // 이전 슬롯이 방장인지 확인
+          if (previousUserId.toString() === ownerId.toString()) {
+            fromName = '방장';
+          } else {
+            // 이전 슬롯이 다른 조원
+            const previousUser = await User.findById(previousUserId);
+            if (previousUser) {
+              fromName = previousUser.firstName && previousUser.lastName
+                ? `${previousUser.firstName} ${previousUser.lastName}`
+                : previousUser.email;
+            }
           }
         } else {
-          const owner = await User.findById(ownerId);
-          if (owner && owner.address) {
-            fromAddress = owner.address;
-          }
+          // 첫 슬롯이면 방장에서 출발
+          fromName = '방장';
         }
       } catch (err) {
-        console.error('주소 정보 가져오기 실패:', err);
+        console.error('사용자 이름 가져오기 실패:', err);
       }
 
       // 🔍 members에서 조원의 색상 가져오기
@@ -457,8 +468,8 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
         assignedAt: new Date(),
         status: 'confirmed',
         color: userColor,  // ✅ room.members에서 가져온 조원의 색상
-        from: fromAddress,  // ✅ 출발지
-        to: toAddress,      // ✅ 도착지
+        from: fromName,     // ✅ 출발지 (사용자 이름)
+        to: toName,         // ✅ 도착지 (사용자 이름)
         travelMode: effectiveTravelMode,  // ✅ 이동수단
         travelInfo: {
           durationText: `${travelDurationMinutes}분`,
