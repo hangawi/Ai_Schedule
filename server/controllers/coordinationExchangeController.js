@@ -1483,12 +1483,13 @@ exports.smartExchange = async (req, res) => {
       });
       console.log('🔥 [Case 1] 재계산 전 슬롯 개수:', room.timeSlots.length);
       
-      // ✅ 수정: 모든 사용자의 이동시간 재계산 (targetUserId = null)
+      // ✅ 월요일: 전체 재계산 (C가 A 다음으로 오도록)
       await recalculateTravelTimeSlotsForDate(room, new Date(allSlotsInBlock[0].date), room.owner._id, effectiveTravelMode, null);
-      console.log('🔥 [Case 1] 첫 번째 재계산 완료 (원래 날짜 - 모든 사용자)');
+      console.log('🔥 [Case 1] 첫 번째 재계산 완료 (원래 날짜 - 전체 사용자)');
       
-      await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode, null);
-      console.log('🔥 [Case 1] 두 번째 재계산 완료 (도착 날짜 - 모든 사용자)');
+      // ✅ 화요일: B만 재계산
+      await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode, req.user.id);
+      console.log('🔥 [Case 1] 두 번째 재계산 완료 (도착 날짜 - 이동한 사용자만)');
 
       console.log('✅ [smartExchange Case 1] 이동시간 재계산 완료');
       const travelSlots = room.timeSlots.filter(s => s.isTravel);
@@ -1629,11 +1630,13 @@ exports.smartExchange = async (req, res) => {
         });
         console.log('🔥 [Case 2] 재계산 전 슬롯 개수:', room.timeSlots.length);
         
+        // ✅ 원래 날짜: 전체 재계산
         await recalculateTravelTimeSlotsForDate(room, new Date(oldSlotDate), room.owner._id, effectiveTravelMode, null);
-        console.log('🔥 [Case 2] 첫 번째 재계산 완료 (원래 날짜 - 모든 사용자)');
+        console.log('🔥 [Case 2] 첫 번째 재계산 완료 (원래 날짜 - 전체 사용자)');
         
-        await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode, null);
-        console.log('🔥 [Case 2] 두 번째 재계산 완료 (도착 날짜 - 모든 사용자)');
+        // ✅ 도착 날짜: B만 재계산
+        await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode, req.user.id);
+        console.log('🔥 [Case 2] 두 번째 재계산 완료 (도착 날짜 - 이동한 사용자만)');
         
         console.log('✅ [smartExchange Case 2] 이동시간 재계산 완료');
         const travelSlots = room.timeSlots.filter(s => s.isTravel);
