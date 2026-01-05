@@ -538,7 +538,8 @@ const WeekView = ({
       // 🆕 조원 본인의 비선호시간 체크 (문제 1 해결)
       // ⭐ 방장의 선호시간(빈 시간)일 때, 조원 본인이 불가능하면 빗금 표시
       // ⭐ 우선순위: 방장 개인시간/예외일정 > 조원 본인 비선호시간
-      if (!ownerOriginalInfo || ownerOriginalInfo.type === 'non_preferred') {
+      // ⭐⭐ 중요: ownerInfo가 있으면 (누군가 배치되어 있으면) 비선호시간 체크 스킵!
+      if (!ownerInfo && (!ownerOriginalInfo || ownerOriginalInfo.type === 'non_preferred')) {
         // 🆕 [문제 2] 먼저 다른 조원 수업 뒤 배정 불가 체크
         const cannotPlaceInfo = getCannotPlaceAfterOtherMembers(date, time);
         if (cannotPlaceInfo) {
