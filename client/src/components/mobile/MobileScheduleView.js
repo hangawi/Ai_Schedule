@@ -119,17 +119,17 @@ const MobileScheduleView = ({ user }) => {
                if (pt.daysOfWeek && pt.daysOfWeek.includes(dayOfWeek)) {
                   const [startHour, startMin] = pt.startTime.split(':').map(Number);
                   const [endHour, endMin] = pt.endTime.split(':').map(Number);
-                  
+
                   const start = new Date(d);
                   start.setHours(startHour, startMin, 0, 0);
-                  
+
                   const end = new Date(d);
                   end.setHours(endHour, endMin, 0, 0);
-                  
+
                   tempEvents.push({
                      title: pt.name || '개인',
-                     start: start.toISOString(),
-                     end: end.toISOString(),
+                     start: formatLocalDateTime(start),
+                     end: formatLocalDateTime(end),
                      backgroundColor: '#f472b6',
                      borderColor: '#ec4899',
                      textColor: '#ffffff',
@@ -142,17 +142,17 @@ const MobileScheduleView = ({ user }) => {
                if (pt.specificDate === dateStr) {
                   const [startHour, startMin] = pt.startTime.split(':').map(Number);
                   const [endHour, endMin] = pt.endTime.split(':').map(Number);
-                  
+
                   const start = new Date(d);
                   start.setHours(startHour, startMin, 0, 0);
-                  
+
                   const end = new Date(d);
                   end.setHours(endHour, endMin, 0, 0);
-                  
+
                   tempEvents.push({
                      title: pt.name || '개인',
-                     start: start.toISOString(),
-                     end: end.toISOString(),
+                     start: formatLocalDateTime(start),
+                     end: formatLocalDateTime(end),
                      backgroundColor: '#f472b6',
                      borderColor: '#ec4899',
                      textColor: '#ffffff',
@@ -362,22 +362,40 @@ const MobileScheduleView = ({ user }) => {
                <div className="section-tabs">
                   <h3 className="section-title">일정 관리</h3>
                </div>
-               
+
                <div className="sections-container">
                   <div className="preference-section">
                      <h4 className="subsection-title">선호시간</h4>
-                     <SimplifiedScheduleDisplay 
-                        schedule={defaultSchedule} 
+                     <p className="section-description">
+                        클릭 또는 챗봇으로 추가한 가능한 시간들 (자동배정 시 사용됨)
+                     </p>
+                     <SimplifiedScheduleDisplay
+                        schedule={defaultSchedule}
                         type="preference"
                      />
+                     <button
+                        className="edit-button"
+                        onClick={() => window.location.href = '/'}
+                     >
+                        시간표 수정
+                     </button>
                   </div>
 
                   <div className="personal-section">
                      <h4 className="subsection-title">개인시간</h4>
-                     <SimplifiedScheduleDisplay 
-                        schedule={personalTimes} 
+                     <p className="section-description">
+                        자동 스케줄링 시 이 시간들은 제외됩니다
+                     </p>
+                     <SimplifiedScheduleDisplay
+                        schedule={personalTimes}
                         type="personal"
                      />
+                     <button
+                        className="edit-button"
+                        onClick={() => window.location.href = '/'}
+                     >
+                        개인시간 수정
+                     </button>
                   </div>
                </div>
             </div>
@@ -389,15 +407,12 @@ const MobileScheduleView = ({ user }) => {
 
    return (
       <div className="mobile-schedule-view">
-         <div className="schedule-header">
-            <h1 className="schedule-title">내 일정</h1>
-         </div>
-         
          <div className="schedule-content">
             {isLoading ? (
                <div className="loading-state">로딩 중...</div>
             ) : (
                <>
+                  <div className="schedule-page-title">내 일정</div>
                   <div className="calendar-container">
                      <FullCalendar
                         ref={calendarRef}
