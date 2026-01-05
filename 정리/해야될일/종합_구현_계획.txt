@@ -257,32 +257,74 @@
   ```
 
 ==================================================================================================
-5. 구현 우선순위
+5. 문제 2 실제 해결 방법 (2026-01-05 완료)
 ==================================================================================================
 
-**우선순위 1 (High): 문제 1 - 조원 시간표 표시**
-- 영향도: 높음 (조원이 자기 시간표를 볼 수 없음)
-- 난이도: 중간
-- 예상 시간: 2-3시간
+**원인 재분석:**
+- Google Maps API가 driving/walking/bicycling 모드에서 ZERO_RESULTS 반환
+- 이 경우 dynamicTravelTimeCalculator.js가 기본값 30분 반환 (Line 145)
+- 기존의 정확한 이동시간(대중교통 모드로 계산된 값)이 30분으로 덮어씌워짐
 
-**우선순위 2 (High): 문제 2 - 이동시간 표기**
-- 영향도: 높음 (챗봇 기능 사용 불가)
-- 난이도: 높음
-- 예상 시간: 3-4시간
+**실제 해결 방법:**
 
-**구현 순서:**
-1. 문제 1 해결 (조원 시간표 표시)
-   - WeekView.js 수정
-   - 테스트
-   
-2. 문제 2 해결 (이동시간 표기)
-   - smartExchange 함수 수정
-   - travelScheduleCalculator.js 수정
-   - applyTravelMode 함수 수정
-   - 통합 테스트
+✅ Step 1: travelTimeCache.js에 fallback 메서드 추가
+  - getFromAnyMode() 메서드 추가
+  - 다른 교통수단(transit, driving, walking, bicycling)의 캐시된 값 찾기
+  - 우선순위: transit > driving > walking > bicycling
+
+✅ Step 2: dynamicTravelTimeCalculator.js 수정 (Line 143-151)
+  - API가 ZERO_RESULTS 반환 시
+  - 다른 교통수단의 캐시된 값이 있는지 확인
+  - 있으면 그 값을 사용하고 현재 모드에도 캐싱
+  - 없으면 기본값 30분 반환
+
+✅ Step 3: recalculateTravelTimeSlotsForDate 함수 수정 (Line 205-241)
+  - **핵심 문제:** targetUserId로 필터링하면 previousSlot 컨텍스트 손실
+  - **이전 로직:**
+    * classSlots = targetUserId의 슬롯만 필터링
+    * previousSlot = classSlots[i-1] (같은 사용자의 이전 슬롯)
+    * 예: 화요일 A(9-10), B(10-11 새로 이동), C(11-12)
+    * classSlots = [B만] → previousSlot = null → 방장→B 계산 (❌ 잘못!)
+  - **수정 로직:**
+    * classSlots = 해당 날짜의 전체 슬롯 (시간순 정렬)
+    * loop에서 targetUserId 아니면 continue로 스킵
+    * previousSlot = classSlots[i-1] (실제 이전 슬롯)
+    * 예: classSlots = [A, B, C] → B 처리 시 previousSlot = A → A→B 계산 (✅ 정확!)
+
+**동작 원리:**
+1. 대중교통 모드 적용: API 성공 → 60분, 30분, 70분 캐싱
+2. 자동차 모드로 변경: API 실패(ZERO_RESULTS) → 대중교통 캐시 찾기 → 60분, 30분, 70분 사용
+3. 조원이 챗봇으로 일정 이동:
+   - 전체 슬롯 컨텍스트 유지 → 올바른 previousSlot 참조
+   - 캐시된 값 사용 → 이동시간 정확하게 계산 ✅
+
+**수정된 파일:**
+- server/services/schedulingAlgorithm/utils/travelTimeCache.js (getFromAnyMode 메서드 추가)
+- server/services/dynamicTravelTimeCalculator.js (Line 143-151 수정)
+- server/controllers/coordinationExchangeController.js (Line 205-241 수정)
+
+**장점:**
+- 교통수단 변경 시에도 정확한 이동시간 유지
+- 불필요한 API 호출 감소
+- 기존 로직 변경 최소화
 
 ==================================================================================================
-6. 테스트 계획
+6. 구현 완료 상태
+==================================================================================================
+
+✅ **문제 1: 조원 시간표 표시 - 해결 완료 (2026-01-05)**
+  - client/src/components/timetable/WeekView.js Line 540 수정
+  - ownerInfo 우선순위 조정으로 배치된 조원 시간표 표시
+  
+✅ **문제 2: 이동시간 표기 - 해결 완료 (2026-01-05)**
+  - server/services/schedulingAlgorithm/utils/travelTimeCache.js (getFromAnyMode 추가)
+  - server/services/dynamicTravelTimeCalculator.js (fallback 로직 추가)
+  - server/controllers/coordinationExchangeController.js (previousSlot 컨텍스트 유지)
+  - 교통수단 변경 시 캐시된 이동시간 재사용
+  - 조원 일정 이동 시 올바른 이동시간 계산
+
+==================================================================================================
+7. 테스트 계획
 ==================================================================================================
 
 **문제 1 테스트:**
@@ -312,7 +354,7 @@
 4. 병합 모드/일반 모드 전환 테스트
 
 ==================================================================================================
-7. 주의사항
+8. 주의사항
 ==================================================================================================
 
 1. **WeekView.js 수정 시:**

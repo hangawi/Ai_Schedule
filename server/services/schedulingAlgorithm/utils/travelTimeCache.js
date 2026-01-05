@@ -62,6 +62,30 @@ class TravelTimeCache {
   }
 
   /**
+   * 다른 교통수단으로 캐시된 값 찾기 (fallback용)
+   * @param {string} origin - 출발지
+   * @param {string} destination - 목적지
+   * @param {string} excludeMode - 제외할 교통수단 (이미 시도한 모드)
+   * @returns {number|null} 이동시간 (분) 또는 null
+   */
+  getFromAnyMode(origin, destination, excludeMode = null) {
+    // 우선순위: transit > driving > walking > bicycling
+    const modes = ['transit', 'driving', 'walking', 'bicycling'];
+    
+    for (const mode of modes) {
+      if (mode === excludeMode) continue;
+      
+      const travelTime = this.get(origin, destination, mode);
+      if (travelTime !== null) {
+        console.log(`🔄 [캐시 fallback] ${excludeMode}모드 실패 → ${mode}모드 캐시 사용: ${travelTime}분`);
+        return travelTime;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
    * 캐시에 이동시간 저장
    * @param {string} origin - 출발지
    * @param {string} destination - 목적지

@@ -142,7 +142,49 @@ class DynamicTravelTimeCalculator {
         return travelTimeMinutes;
       } else {
         console.warn(`⚠️  Google Maps API 응답 오류: ${data.status} / ${data.rows[0]?.elements[0]?.status}`);
-        return 30; // 기본값
+
+        // ✅ Fallback 1: 다른 교통수단 캐시 확인
+        const fallbackValue = travelTimeCache.getFromAnyMode(originParam, destParam, mode);
+        if (fallbackValue !== null) {
+          console.log(`🔄 [Fallback 성공] 다른 모드 캐시 사용: ${fallbackValue}분`);
+          travelTimeCache.set(originParam, destParam, mode, fallbackValue);
+          return fallbackValue;
+        }
+
+        // ✅ Fallback 2: 단순 거리 계산 (최종 fallback)
+        if (fromLocation.coordinates && toLocation.coordinates) {
+          const { lat: lat1, lng: lng1 } = fromLocation.coordinates;
+          const { lat: lat2, lng: lng2 } = toLocation.coordinates;
+
+          // Haversine 공식으로 거리 계산
+          const R = 6371; // 지구 반지름 (km)
+          const dLat = (lat2 - lat1) * Math.PI / 180;
+          const dLng = (lng2 - lng1) * Math.PI / 180;
+          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLng/2) * Math.sin(dLng/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const distance = R * c; // km
+
+          // 교통수단별 속도
+          const speeds = {
+            driving: 40,
+            transit: 30,
+            walking: 5,
+            bicycling: 15
+          };
+          const speed = speeds[mode] || 30;
+          const travelTimeMinutes = Math.ceil((distance / speed) * 60 / 10) * 10; // 10분 단위
+
+          console.log(`🔄 [Fallback 성공] 단순 거리 계산: ${distance.toFixed(1)}km, ${travelTimeMinutes}분 (${mode})`);
+
+          // 캐시에 저장
+          travelTimeCache.set(originParam, destParam, mode, travelTimeMinutes);
+          return travelTimeMinutes;
+        }
+
+        console.warn(`❌ [Fallback 실패] 모든 방법 실패, 기본값 30분 사용`);
+        return 30; // 최종 기본값
       }
 
     } catch (error) {
