@@ -2,6 +2,28 @@
    display: flex;
    flex-direction: column;
    gap: 8px;
+   max-height: 300px;
+   overflow-y: auto;
+   overflow-x: hidden;
+   padding-right: 4px;
+}
+
+.simplified-schedule::-webkit-scrollbar {
+   width: 6px;
+}
+
+.simplified-schedule::-webkit-scrollbar-track {
+   background: #f1f1f1;
+   border-radius: 3px;
+}
+
+.simplified-schedule::-webkit-scrollbar-thumb {
+   background: #cbd5e1;
+   border-radius: 3px;
+}
+
+.simplified-schedule::-webkit-scrollbar-thumb:hover {
+   background: #94a3b8;
 }
 
 .schedule-group {
