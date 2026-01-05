@@ -5,6 +5,10 @@
   "homepage": ".",
   "proxy": "http://localhost:5000",
   "dependencies": {
+    "@fullcalendar/daygrid": "^6.1.20",
+    "@fullcalendar/interaction": "^6.1.20",
+    "@fullcalendar/react": "^6.1.20",
+    "@fullcalendar/timegrid": "^6.1.20",
     "@google/generative-ai": "^0.14.1",
     "@react-google-maps/api": "^2.20.7",
     "@testing-library/dom": "^10.4.0",

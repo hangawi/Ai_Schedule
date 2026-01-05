@@ -1,0 +1,155 @@
+.mobile-calendar-view {
+   display: flex;
+   flex-direction: column;
+   height: 100vh;
+   background: white;
+   overflow: hidden;
+}
+
+.calendar-header {
+   padding: 16px 20px;
+   background: white;
+   border-bottom: 1px solid #e5e7eb;
+}
+
+.calendar-title {
+   font-size: 24px;
+   font-weight: 700;
+   color: #1f2937;
+   margin: 0;
+}
+
+.calendar-container {
+   flex: 1;
+   padding: 16px;
+   overflow-y: auto;
+   padding-bottom: 80px;
+}
+
+/* FullCalendar 모바일 최적화 스타일 */
+.fc {
+   font-size: 14px;
+}
+
+.fc .fc-toolbar {
+   flex-wrap: wrap;
+   gap: 8px;
+   margin-bottom: 16px;
+}
+
+.fc .fc-toolbar-title {
+   font-size: 18px;
+   font-weight: 600;
+   color: #1f2937;
+}
+
+.fc .fc-button {
+   padding: 6px 12px;
+   font-size: 13px;
+   border-radius: 8px;
+   border: 1px solid #d1d5db;
+   background: white;
+   color: #374151;
+   transition: all 0.2s;
+}
+
+.fc .fc-button:hover {
+   background: #f3f4f6;
+}
+
+.fc .fc-button-primary {
+   background: #3b82f6;
+   border-color: #3b82f6;
+   color: white;
+}
+
+.fc .fc-button-primary:hover {
+   background: #2563eb;
+   border-color: #2563eb;
+}
+
+.fc .fc-button-active {
+   background: #3b82f6 !important;
+   border-color: #3b82f6 !important;
+   color: white !important;
+}
+
+.fc .fc-daygrid-day {
+   cursor: pointer;
+}
+
+.fc .fc-daygrid-day:hover {
+   background: #f9fafb;
+}
+
+.fc .fc-event {
+   border-radius: 4px;
+   padding: 2px 4px;
+   font-size: 12px;
+   cursor: pointer;
+   border: none;
+}
+
+.fc .fc-daygrid-event-dot {
+   display: none;
+}
+
+.fc .fc-col-header-cell {
+   padding: 8px 4px;
+   font-weight: 600;
+   color: #6b7280;
+   font-size: 12px;
+}
+
+.fc .fc-daygrid-day-number {
+   padding: 8px;
+   font-size: 14px;
+   color: #374151;
+}
+
+.fc .fc-day-today {
+   background: #eff6ff !important;
+}
+
+.fc .fc-day-today .fc-daygrid-day-number {
+   color: #3b82f6;
+   font-weight: 700;
+}
+
+/* 주말 스타일 */
+.fc .fc-day-sat {
+   color: #3b82f6;
+}
+
+.fc .fc-day-sun {
+   color: #ef4444;
+}
+
+/* 반응형 조정 */
+@media (max-width: 480px) {
+   .calendar-container {
+      padding: 12px;
+   }
+   
+   .fc .fc-toolbar {
+      font-size: 12px;
+   }
+   
+   .fc .fc-toolbar-title {
+      font-size: 16px;
+   }
+   
+   .fc .fc-button {
+      padding: 4px 8px;
+      font-size: 11px;
+   }
+   
+   .fc .fc-col-header-cell {
+      font-size: 11px;
+   }
+   
+   .fc .fc-daygrid-day-number {
+      font-size: 13px;
+      padding: 6px;
+   }
+}

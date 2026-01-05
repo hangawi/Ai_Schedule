@@ -50,12 +50,17 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { LoadScript } from '@react-google-maps/api';
 import SchedulingSystem from './SchedulingSystem';
 import AuthScreen from './components/auth/AuthScreen';
+import MobileDashboard from './components/mobile/MobileDashboard';
+import MobileCalendarView from './components/mobile/MobileCalendarView';
+import MobileScheduleView from './components/mobile/MobileScheduleView';
+import MobileGroupsView from './components/mobile/MobileGroupsView';
 import { AdminProvider } from './contexts/AdminContext';
 import SharedTextModal from './components/modals/SharedTextModal';
 import CopiedTextModal from './components/modals/CopiedTextModal';
 import BackgroundGuide from './components/guides/BackgroundGuide';
 import { useAuth } from './hooks/useAuth';
 import { useChat } from './hooks/useChat';
+import { useMobileDetection } from './components/chat/hooks/useMobileDetection';
 import { speak } from './utils';
 import { auth } from './config/firebaseConfig';
 
@@ -63,6 +68,7 @@ const libraries = ['places'];
 
 function App() {
    const { isLoggedIn, user, loginMethod, handleLoginSuccess, handleLogout } = useAuth();
+   const isMobile = useMobileDetection();
    const [eventAddedKey, setEventAddedKey] = useState(0);
    const [isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled] = useState(() => {
       const saved = localStorage.getItem('voiceRecognitionEnabled');
@@ -252,11 +258,20 @@ function App() {
          <Router>
             <Routes>
                <Route path="/auth" element={isLoggedIn ? <Navigate to="/" /> : <AuthScreen onLoginSuccess={handleLoginSuccess} />} />
-               <Route path="/" element={isLoggedIn ? (
-                  <AdminProvider user={user}>
-                     <SchedulingSystem {...schedulingSystemProps} speak={speak} />
-                  </AdminProvider>
-               ) : <Navigate to="/auth" />} />
+               <Route path="/" element={
+                  isLoggedIn ? (
+                     <AdminProvider user={user}>
+                        <SchedulingSystem {...schedulingSystemProps} speak={speak} isMobile={isMobile} />
+                     </AdminProvider>
+                  ) : <Navigate to="/auth" />
+               } />
+               <Route path="/mobile/schedule" element={
+                  isLoggedIn ? <MobileScheduleView user={user} /> : <Navigate to="/auth" />
+               } />
+               <Route path="/mobile/groups" element={
+                  isLoggedIn ? <MobileGroupsView user={user} /> : <Navigate to="/auth" />
+               } />
+               <Route path="/mobile/calendar" element={<MobileCalendarView />} />
             </Routes>
             {isLoggedIn && sharedText && (
                <SharedTextModal text={sharedText} onClose={() => setSharedText(null)} onConfirm={handleConfirmSharedText} />

@@ -1,0 +1,86 @@
+.mobile-groups-view {
+   display: flex;
+   flex-direction: column;
+   height: 100vh;
+   background: white;
+   overflow: hidden;
+}
+
+.groups-header {
+   padding: 16px 20px;
+   background: white;
+   border-bottom: 1px solid #e5e7eb;
+   flex-shrink: 0;
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+}
+
+.groups-title {
+   font-size: 24px;
+   font-weight: 700;
+   color: #1f2937;
+   margin: 0;
+}
+
+.notification-badge {
+   background: #ef4444;
+   color: white;
+   font-size: 12px;
+   font-weight: 700;
+   padding: 4px 8px;
+   border-radius: 12px;
+   min-width: 20px;
+   text-align: center;
+}
+
+.groups-content {
+   flex: 1;
+   overflow-y: auto;
+   padding-bottom: 80px;
+}
+
+/* CoordinationTab 모바일 최적화 */
+.groups-content .coordination-tab-container {
+   padding: 16px;
+}
+
+/* 버튼 크기 조정 */
+.groups-content button {
+   min-height: 44px;
+   font-size: 14px;
+}
+
+/* 타임테이블 모바일 최적화 */
+.groups-content .timetable-grid {
+   font-size: 12px;
+   overflow-x: auto;
+}
+
+.groups-content .room-card {
+   margin-bottom: 12px;
+}
+
+/* 모달 모바일 최적화 */
+.groups-content .modal-content {
+   max-width: 90vw;
+}
+
+@media (max-width: 480px) {
+   .groups-header {
+      padding: 12px 16px;
+   }
+   
+   .groups-title {
+      font-size: 20px;
+   }
+   
+   .groups-content {
+      padding-bottom: 70px;
+   }
+   
+   .notification-badge {
+      font-size: 11px;
+      padding: 3px 6px;
+   }
+}

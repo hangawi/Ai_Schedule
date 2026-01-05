@@ -1,0 +1,38 @@
+.simplified-schedule {
+   display: flex;
+   flex-direction: column;
+   gap: 8px;
+}
+
+.schedule-group {
+   background: #f9fafb;
+   border-radius: 6px;
+   padding: 8px 10px;
+   border-left: 3px solid #3b82f6;
+}
+
+.schedule-date {
+   font-size: 12px;
+   font-weight: 700;
+   color: #1f2937;
+   margin-bottom: 4px;
+}
+
+.schedule-times {
+   display: flex;
+   flex-wrap: wrap;
+   gap: 6px;
+}
+
+.time-range {
+   font-size: 11px;
+   color: #4b5563;
+   font-weight: 600;
+}
+
+.simplified-schedule-empty {
+   text-align: center;
+   padding: 20px;
+   color: #9ca3af;
+   font-size: 11px;
+}

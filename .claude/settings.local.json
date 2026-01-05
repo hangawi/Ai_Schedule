@@ -34,7 +34,8 @@
       "Bash(test:*)",
       "Bash(awk:*)",
       "Bash(node -e:*)",
-      "mcp__serena__think_about_task_adherence"
+      "mcp__serena__think_about_task_adherence",
+      "Bash(npm install:*)"
     ]
   }
 }

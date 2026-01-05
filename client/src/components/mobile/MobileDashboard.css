@@ -1,0 +1,127 @@
+/**
+ * MobileDashboard.css - 모바일 대시보드 스타일
+ */
+
+.mobile-dashboard {
+   display: flex;
+   flex-direction: column;
+   height: 100vh;
+   background: white;
+   overflow: hidden;
+}
+
+/* ===================================
+   중앙 메뉴 버튼 영역
+   =================================== */
+.dashboard-content {
+   flex: 1;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   padding: 16px;
+   padding-bottom: 80px;
+   overflow: hidden;
+}
+
+.menu-buttons-container {
+   display: flex;
+   flex-direction: column;
+   gap: 12px;
+   width: 100%;
+   max-width: 400px;
+}
+
+.menu-card {
+   background: white;
+   border: none;
+   border-radius: 12px;
+   padding: 20px;
+   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+   cursor: pointer;
+   transition: all 0.3s ease;
+   text-align: center;
+   min-height: 100px;
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   justify-content: center;
+}
+
+.menu-card:hover {
+   transform: translateY(-4px);
+   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.menu-card:active {
+   transform: translateY(-2px);
+}
+
+
+
+.card-title {
+   font-size: 20px;
+   font-weight: 700;
+   color: #333;
+   margin: 0 0 8px 0;
+}
+
+.card-description {
+   font-size: 14px;
+   color: #666;
+   margin: 0;
+}
+
+/* 카드별 그라디언트 효과 */
+.schedule-card {
+   background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+   border-left: 4px solid #667eea;
+}
+
+.group-card {
+   background: linear-gradient(135deg, #f093fb20 0%, #f5576c20 100%);
+   border-left: 4px solid #f093fb;
+}
+
+.calendar-card {
+   background: linear-gradient(135deg, #4facfe20 0%, #00f2fe20 100%);
+   border-left: 4px solid #4facfe;
+}
+
+/* ===================================
+   반응형
+   =================================== */
+@media (max-width: 480px) {
+   .dashboard-content {
+      padding: 12px;
+   }
+
+   .menu-buttons-container {
+      gap: 10px;
+   }
+
+   .menu-card {
+      padding: 16px;
+      min-height: 85px;
+   }
+
+   .card-title {
+      font-size: 17px;
+      margin: 0 0 6px 0;
+   }
+
+   .card-description {
+      font-size: 12px;
+   }
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+   .menu-buttons-container {
+      flex-direction: row;
+      flex-wrap: wrap;
+   }
+
+   .menu-card {
+      flex: 1;
+      min-width: 150px;
+   }
+}

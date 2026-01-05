@@ -44,6 +44,7 @@
  * ===================================================================================================
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import MobileDashboard from './components/mobile/MobileDashboard';
 import {
    Calendar,
    CalendarCheck,
@@ -166,7 +167,7 @@ const formatEventForClient = (event, color) => {
  * @param {string} props.loginMethod - 로그인 방식 (e.g., 'google')
  * @returns {JSX.Element}
  */
-const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled, isClipboardMonitoring, setIsClipboardMonitoring, loginMethod }) => {
+const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecognitionEnabled, setIsVoiceRecognitionEnabled, isClipboardMonitoring, setIsClipboardMonitoring, loginMethod, isMobile }) => {
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
    const [showAdminCodeModal, setShowAdminCodeModal] = useState(false);
    const { isAdmin } = useAdmin();
@@ -806,7 +807,11 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
             </nav>
 
             <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-               {activeTab === 'dashboard' && <DashboardTab onSelectTime={handleSelectProposalForTime} proposals={globalProposals} todayEvents={todayEvents} upcomingEvents={upcomingEvents} />}
+               {isMobile ? (
+                  <MobileDashboard />
+               ) : (
+                  <>
+                     {activeTab === 'dashboard' && <DashboardTab onSelectTime={handleSelectProposalForTime} proposals={globalProposals} todayEvents={todayEvents} upcomingEvents={upcomingEvents} />}
                {activeTab === 'proposals' && <ProposalsTab onSelectTime={handleSelectProposalForTime} proposals={globalProposals} />}
                {activeTab === 'events' && <EventsTab events={globalEvents} onAddEvent={handleAddGlobalEvent} isLoggedIn={isLoggedIn} onDeleteEvent={handleDeleteEvent} onEditEvent={handleEditEvent} />}
                {activeTab === 'googleCalendar' && <MyCalendar isListening={isListening} onEventAdded={eventAddedKey} isVoiceRecognitionEnabled={isVoiceRecognitionEnabled} onToggleVoiceRecognition={() => setIsVoiceRecognitionEnabled(prev => !prev)} />}
@@ -814,8 +819,10 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                {activeTab === 'agent' && <AgentTab />}
                {activeTab === 'profile' && <ProfileTab user={user} onEditingChange={setIsProfileEditing} />}
                {activeTab === 'adminDashboard' && <AdminDashboard />}
-               {activeTab === 'adminUsers' && <AdminUserManagement />}
-               {activeTab === 'adminRooms' && <AdminRoomManagement />}
+                     {activeTab === 'adminUsers' && <AdminUserManagement />}
+                     {activeTab === 'adminRooms' && <AdminRoomManagement />}
+                  </>
+               )}
             </main>
          </div>
 
@@ -840,7 +847,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
          />
 
          {/* 탭별 컨텍스트를 가진 ChatBox - 내 프로필 탭에서는 편집 모드일 때만 활성화 */}
-         {(activeTab !== 'profile' || isProfileEditing) && (
+         {!isMobile && (activeTab !== 'profile' || isProfileEditing) && (
             <ChatBox
                onSendMessage={handleTabSpecificChatMessage}
                speak={speak}
@@ -863,15 +870,17 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
             />
          )}
 
-         <MobileStatusIndicator
-            isListening={isListening}
-            isBackgroundMonitoring={isBackgroundMonitoring}
-            isCallDetected={isCallDetected}
-            callStartTime={callStartTime}
-            voiceStatus={voiceStatus}
-            isAnalyzing={voiceAnalyzing}
-            micVolume={micVolume}
-         />
+         {!isMobile && (
+            <MobileStatusIndicator
+               isListening={isListening}
+               isBackgroundMonitoring={isBackgroundMonitoring}
+               isCallDetected={isCallDetected}
+               callStartTime={callStartTime}
+               voiceStatus={voiceStatus}
+               isAnalyzing={voiceAnalyzing}
+               micVolume={micVolume}
+            />
+         )}
 
          {notification && (
             <NotificationModal
