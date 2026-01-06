@@ -75,7 +75,14 @@ import { MESSAGES } from './constants/messages';
  * @returns {JSX.Element}
  */
 const ProfileTab = ({ onEditingChange }) => {
-  const [showPersonalInfo, setShowPersonalInfo] = useState(false);
+  const [showPersonalInfo, setShowPersonalInfo] = useState(() => {
+    const saved = localStorage.getItem('showPersonalInfo');
+    if (saved === 'true') {
+      localStorage.removeItem('showPersonalInfo');
+      return true;
+    }
+    return false;
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [viewingMonth, setViewingMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
@@ -236,6 +243,28 @@ const ProfileTab = ({ onEditingChange }) => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [fetchSchedule, isEditing, showPersonalInfo]);
+
+  /**
+   * [useEffect - 모바일에서 편집 모드 자동 활성화]
+   * @description 모바일에서 "편집" 버튼을 눌러 이동한 경우,
+   *              데이터 로드 완료 후 자동으로 편집 모드를 켭니다.
+   */
+  useEffect(() => {
+    if (!isLoading && !isEditing) {
+      const shouldEdit = localStorage.getItem('profileEditMode');
+      if (shouldEdit === 'true') {
+        localStorage.removeItem('profileEditMode');
+        // 편집 모드 시작
+        setInitialState({
+          defaultSchedule: [...defaultSchedule],
+          scheduleExceptions: [...scheduleExceptions],
+          personalTimes: [...personalTimes]
+        });
+        setWasCleared(false);
+        setIsEditing(true);
+      }
+    }
+  }, [isLoading, defaultSchedule, scheduleExceptions, personalTimes, isEditing, setInitialState, setWasCleared]);
 
   // 핸들러 생성
   const handleSave = createSaveHandler(

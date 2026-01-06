@@ -254,6 +254,10 @@
    padding: 16px 20px 12px 20px;
    background: white;
    border-bottom: 2px solid #e5e7eb;
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: 12px;
 }
 
 .loading-state {
@@ -287,6 +291,28 @@
    margin: 0 0 12px 0;
 }
 
+.top-edit-buttons {
+   display: flex;
+   gap: 6px;
+   flex-shrink: 0;
+}
+
+.top-edit-buttons .edit-button {
+   padding: 4px 8px;
+   font-size: 10px;
+   background: #f3f4f6;
+   color: #4b5563;
+   border: 1px solid #d1d5db;
+}
+
+.top-edit-buttons .edit-button:hover {
+   background: #e5e7eb;
+}
+
+.top-edit-buttons .edit-button:active {
+   background: #d1d5db;
+}
+
 .subsection-title {
    font-size: 14px;
    font-weight: 700;
@@ -304,8 +330,6 @@
 }
 
 .edit-button {
-   width: 100%;
-   margin-top: 8px;
    padding: 6px 12px;
    font-size: 11px;
    font-weight: 600;
@@ -315,6 +339,7 @@
    border-radius: 6px;
    cursor: pointer;
    transition: background 0.2s;
+   white-space: nowrap;
 }
 
 .edit-button:hover {
@@ -478,15 +503,21 @@
 }
 
 .schedule-content .fc .fc-toolbar {
-   flex-wrap: wrap;
-   gap: 8px;
+   flex-wrap: nowrap !important;
+   gap: 4px;
    margin-bottom: 16px;
+   align-items: center;
 }
 
 .schedule-content .fc .fc-toolbar-title {
-   font-size: 16px;
+   font-size: 14px;
    font-weight: 600;
    color: #1f2937;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   max-width: 150px;
+   flex-shrink: 1;
 }
 
 .schedule-content .fc .fc-button {

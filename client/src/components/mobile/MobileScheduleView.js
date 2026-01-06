@@ -122,8 +122,13 @@ const MobileScheduleView = ({ user }) => {
          // 2. 개인시간 (반복)
          if (personalTimes && personalTimes.length > 0) {
             personalTimes.forEach(pt => {
-               // 반복 개인시간
-               if (pt.daysOfWeek && pt.daysOfWeek.includes(dayOfWeek)) {
+               // 반복 개인시간 - PC 버전과 동일하게 처리
+               const adjustedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
+               const hasRecurringTime = (pt.isRecurring !== false) &&
+                  ((pt.days && pt.days.includes(adjustedDayOfWeek)) ||
+                   (pt.daysOfWeek && pt.daysOfWeek.includes(dayOfWeek)));
+
+               if (hasRecurringTime) {
                   const [startHour, startMin] = pt.startTime.split(':').map(Number);
                   const [endHour, endMin] = pt.endTime.split(':').map(Number);
 
@@ -137,8 +142,8 @@ const MobileScheduleView = ({ user }) => {
                      title: pt.name || '개인',
                      start: formatLocalDateTime(start),
                      end: formatLocalDateTime(end),
-                     backgroundColor: '#f472b6',
-                     borderColor: '#ec4899',
+                     backgroundColor: '#ef4444',
+                     borderColor: '#dc2626',
                      textColor: '#ffffff',
                      display: 'block',
                      dateKey: dateStr
@@ -146,7 +151,7 @@ const MobileScheduleView = ({ user }) => {
                }
                
                // 특정 날짜 개인시간
-               if (pt.specificDate === dateStr) {
+               if (pt.isRecurring === false && pt.specificDate === dateStr) {
                   const [startHour, startMin] = pt.startTime.split(':').map(Number);
                   const [endHour, endMin] = pt.endTime.split(':').map(Number);
 
@@ -160,8 +165,8 @@ const MobileScheduleView = ({ user }) => {
                      title: pt.name || '개인',
                      start: formatLocalDateTime(start),
                      end: formatLocalDateTime(end),
-                     backgroundColor: '#f472b6',
-                     borderColor: '#ec4899',
+                     backgroundColor: '#ef4444',
+                     borderColor: '#dc2626',
                      textColor: '#ffffff',
                      display: 'block',
                      dateKey: dateStr
@@ -380,12 +385,6 @@ const MobileScheduleView = ({ user }) => {
                         schedule={defaultSchedule}
                         type="preference"
                      />
-                     <button
-                        className="edit-button"
-                        onClick={() => window.location.href = '/'}
-                     >
-                        시간표 수정
-                     </button>
                   </div>
 
                   <div className="personal-section">
@@ -397,12 +396,6 @@ const MobileScheduleView = ({ user }) => {
                         schedule={personalTimes}
                         type="personal"
                      />
-                     <button
-                        className="edit-button"
-                        onClick={() => window.location.href = '/'}
-                     >
-                        개인시간 수정
-                     </button>
                   </div>
                </div>
             </div>
@@ -513,7 +506,31 @@ const MobileScheduleView = ({ user }) => {
                <div className="loading-state">로딩 중...</div>
             ) : (
                <>
-                  <div className="schedule-page-title">내 일정</div>
+                  <div className="schedule-page-title">
+                     <span>내 일정</span>
+                     <div className="top-edit-buttons">
+                        <button
+                           className="edit-button"
+                           onClick={() => {
+                              localStorage.setItem('activeTab', 'profile');
+                              localStorage.setItem('profileEditMode', 'true');
+                              window.location.href = '/';
+                           }}
+                        >
+                           편집
+                        </button>
+                        <button
+                           className="edit-button"
+                           onClick={() => {
+                              localStorage.setItem('activeTab', 'profile');
+                              localStorage.setItem('showPersonalInfo', 'true');
+                              window.location.href = '/';
+                           }}
+                        >
+                           개인정보 수정
+                        </button>
+                     </div>
+                  </div>
                   <div className="calendar-container">
                      <FullCalendar
                         ref={calendarRef}
@@ -521,7 +538,7 @@ const MobileScheduleView = ({ user }) => {
                         initialView="dayGridMonth"
                         timeZone="local"
                         headerToolbar={{
-                           left: 'prev,next today',
+                           left: 'prev,next',
                            center: 'title',
                            right: 'dayGridMonth,timeGridWeek,timeGridDay'
                         }}
