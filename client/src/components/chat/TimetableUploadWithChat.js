@@ -269,6 +269,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose, isMobile = fal
                     imagePreviews={imagePreviews}
                     removeImage={removeImage}
                     isProcessing={isProcessing}
+                    isMobile={isMobile}
                   />
 
                   {/* 에러 메시지 */}
@@ -292,6 +293,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose, isMobile = fal
                       onClick={() => handleProcessImages()}
                       disabled={isProcessing}
                       className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ fontSize: isMobile ? '12px' : '16px' }}
                     >
                       {isProcessing ? '분석 중...' : '시간표 분석 시작'}
                     </button>

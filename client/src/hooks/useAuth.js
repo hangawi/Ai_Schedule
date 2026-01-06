@@ -100,14 +100,16 @@ export const useAuth = () => {
          console.log('[useAuth] Firebase auth state changed:', firebaseUser ? 'User logged in' : 'User logged out');
 
          if (firebaseUser) {
-            setFirebaseUser(firebaseUser);
+         setFirebaseUser(firebaseUser);
+         // ⭐ 즉시 로그인 상태로 설정 (깜빡임 방지)
+         setIsLoggedIn(true);
 
-            // Store login method
-            const storedLoginMethod = localStorage.getItem('loginMethod') || 'google';
-            setLoginMethod(storedLoginMethod);
+         // Store login method
+         const storedLoginMethod = localStorage.getItem('loginMethod') || 'google';
+         setLoginMethod(storedLoginMethod);
 
-            // Fetch user data from backend
-            await fetchUser();
+         // Fetch user data from backend (비동기로 실행하지만 isLoggedIn은 이미 true)
+         await fetchUser();
          } else {
             setFirebaseUser(null);
             setIsLoggedIn(false);

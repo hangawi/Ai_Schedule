@@ -787,10 +787,10 @@ const MobileScheduleView = ({ user }) => {
                   <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(true)}>
                      <Menu size={24} />
                   </button>
-                  <button onClick={() => window.location.href = '/'} className="mobile-logo-btn">
+                  <div className="mobile-logo-btn" onClick={() => window.location.href = '/'}>
                      <img src="/image.png" alt="MeetAgent Logo" className="mobile-logo-img" />
                      <h1 className="mobile-logo-text">MeetAgent</h1>
-                  </button>
+                  </div>
                </div>
 
                {/* 오른쪽: 버튼들 */}

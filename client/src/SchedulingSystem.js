@@ -689,7 +689,9 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
 
    return (
       <div className="flex flex-col h-screen bg-gray-50">
-         <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex-shrink-0">
+         {/* 모바일일 때는 헤더 숨김 */}
+         {!(isMobile && !forceDesktopMode) && (
+            <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex-shrink-0">
             <div className="flex items-center justify-between">
                <div className="flex items-center">
                   <button className="md:hidden mr-3 text-gray-600 hover:text-gray-800" onClick={() => setIsSidebarOpen(true)}>
@@ -782,6 +784,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                </div>
             </div>
          </header>
+         )}
 
          <div className="flex flex-1 overflow-hidden">
             <div className={`fixed inset-0 bg-black md:hidden ${isSidebarOpen ? 'bg-opacity-50' : 'bg-opacity-0 pointer-events-none'} transition-opacity duration-300 ease-in-out z-30`} onClick={() => setIsSidebarOpen(false)}></div>

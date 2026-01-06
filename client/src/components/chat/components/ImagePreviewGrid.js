@@ -37,21 +37,28 @@ import { X } from 'lucide-react';
  * @param {Array<object>} props.imagePreviews - 미리보기 이미지 객체들의 배열. 각 객체는 { id: number, url: string, name: string } 형태를 가짐.
  * @param {function} props.removeImage - 특정 인덱스의 이미지를 제거할 때 호출되는 콜백 함수.
  * @param {boolean} props.isProcessing - 이미지가 현재 처리 중인지 여부를 나타내는 boolean 값. true일 경우 제거 버튼 비활성화.
+ * @param {boolean} props.isMobile - 모바일 환경 여부.
  * @returns {JSX.Element|null} `imagePreviews` 배열이 비어있으면 null을 반환, 그렇지 않으면 이미지 미리보기 그리드를 렌더링.
  */
-const ImagePreviewGrid = ({ imagePreviews, removeImage, isProcessing }) => {
+const ImagePreviewGrid = ({ imagePreviews, removeImage, isProcessing, isMobile = false }) => {
   if (imagePreviews.length === 0) return null;
 
   return (
     <div className="space-y-2">
       <h3 className="font-semibold text-sm">선택된 이미지 ({imagePreviews.length}개)</h3>
-      <div className="grid grid-cols-2 gap-2">
+      <div 
+        className="grid grid-cols-2 gap-2" 
+        style={{ 
+          maxHeight: isMobile ? '210px' : '280px',  // 모바일: 4개 이미지 (2행 × 96px + gap), 데스크톱: 4개 이미지 (2행 × 128px + gap)
+          overflowY: 'auto'     // 5개 이상이면 스크롤
+        }}
+      >
         {imagePreviews.map((preview, index) => (
           <div key={preview.id} className="relative group">
             <img
               src={preview.url}
               alt={preview.name}
-              className="w-full h-32 object-cover rounded border"
+              className={`w-full ${isMobile ? 'h-24' : 'h-32'} object-cover rounded border`}
             />
             <button
               onClick={() => removeImage(index)}

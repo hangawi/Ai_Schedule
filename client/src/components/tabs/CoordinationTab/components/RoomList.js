@@ -61,25 +61,6 @@ const RoomList = ({
 
   return (
     <div className="bg-slate-50 p-4 sm:p-6 rounded-lg min-h-full">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
-        <h2 className="text-3xl font-bold text-gray-800 mb-2 sm:mb-0">일정 맞추기</h2>
-        <div className="flex space-x-3">
-          <button
-            onClick={onCreateRoom}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center transition-all shadow-md hover:shadow-lg"
-          >
-            <PlusCircle size={18} className="mr-2" />
-            새 조율방 생성
-          </button>
-          <button
-            onClick={onJoinRoom}
-            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 flex items-center transition-all shadow-md hover:shadow-lg"
-          >
-            <LogIn size={18} className="mr-2" />
-            조율방 참여
-          </button>
-        </div>
-      </div>
 
       {hasRooms && (
         <div className="mb-6">
