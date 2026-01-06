@@ -135,13 +135,27 @@ ${schedules.map((s, idx) => `${idx}. ${s.title} (gradeLevel: ${s.gradeLevel || '
       return schedules;
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      console.error('[filterSchedulesByGrade] JSON 파싱 실패:', parseError);
+      return schedules;
+    }
+
     const suitableIndexes = parsed.suitableIndexes || [];
+
+    // suitableIndexes가 배열인지 확인
+    if (!Array.isArray(suitableIndexes)) {
+      console.warn('[filterSchedulesByGrade] suitableIndexes가 배열이 아님:', suitableIndexes);
+      return schedules;
+    }
 
     const filteredSchedules = schedules.filter((_, idx) => suitableIndexes.includes(idx));
     return filteredSchedules;
 
   } catch (error) {
+    console.error('[filterSchedulesByGrade] 오류:', error);
     return schedules;
   }
 }
@@ -199,7 +213,18 @@ ${scheduleList}
       return schedules.map(s => ({ ...s, category: '기타', priority: 5, imageTitle }));
     }
 
-    const categorizations = JSON.parse(jsonMatch[0]);
+    let categorizations;
+    try {
+      categorizations = JSON.parse(jsonMatch[0]);
+      // AI가 배열이 아닌 객체를 반환할 경우 처리
+      if (!Array.isArray(categorizations)) {
+        console.warn('[categorizeSchedulesBatch] AI가 배열이 아닌 값을 반환:', categorizations);
+        return schedules.map(s => ({ ...s, category: '기타', priority: 5, imageTitle }));
+      }
+    } catch (parseError) {
+      console.error('[categorizeSchedulesBatch] JSON 파싱 실패:', parseError);
+      return schedules.map(s => ({ ...s, category: '기타', priority: 5, imageTitle }));
+    }
 
     // 결과를 스케줄에 매핑
     return schedules.map((schedule, idx) => {
@@ -351,8 +376,10 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
 
     // 🔍 디버깅: 18-19시 사이 스케줄 확인
     allSchedules.forEach(s => {
-      const start = parseInt(s.startTime.split(':')[0]);
-      const end = parseInt(s.endTime.split(':')[0]);
+      if (s && s.startTime && s.endTime && typeof s.startTime === 'string' && typeof s.endTime === 'string') {
+        const start = parseInt(s.startTime.split(':')[0]);
+        const end = parseInt(s.endTime.split(':')[0]);
+      }
     });
 
     const originalCount = allSchedules.length;
@@ -861,12 +888,12 @@ async function optimizeSchedules(allSchedules, schedulesByImage, fixedSchedules 
     }
   }
 
-  // 🔍 디버깅: subjectLabel 확인 (학교 제외)
+  // 🔍 디버깅: subjectName 확인 (학교 제외)
   selectedSchedules
     .filter(s => s.category !== '학교')
     .slice(0, 10)
     .forEach((s, idx) => {
-      console.log(`  ${idx}. ${s.title} - subjectLabel: "${s.subjectLabel || 'null'}" (imageTitle: ${s.imageTitle})`);
+      console.log(`  ${idx}. ${s.title} - subjectName: "${s.subjectName || 'null'}", academyName: "${s.academyName || 'null'}" (imageTitle: ${s.imageTitle})`);
     });
 
   // 고정 일정을 최종 결과에 강제로 포함

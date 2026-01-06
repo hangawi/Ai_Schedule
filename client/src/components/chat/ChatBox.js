@@ -195,6 +195,7 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate, forceOpen = 
                 <MessageBubble
                   key={message.id}
                   message={message}
+                  isMobile={isMobile}
                   onConflictChoice={handleConflictChoice}
                   onTimeSelection={handleTimeSelection}
                   onAddSchedules={handleAddSchedules}
@@ -228,10 +229,23 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate, forceOpen = 
         <TimetableUploadWithChat
           onSchedulesExtracted={handleSchedulesExtracted}
           onClose={() => setShowTimetableUpload(false)}
+          isMobile={isMobile}
         />
       )}
 
       {/* 최적 시간표 모달 */}
+      {(() => {
+        if (showScheduleModal && extractedScheduleData) {
+          console.log('🚀 [ChatBox] ScheduleOptimizationModal 렌더링 준비:', {
+            showScheduleModal,
+            hasData: !!extractedScheduleData,
+            optimalCombinations: extractedScheduleData.optimalCombinations,
+            combinationsLength: extractedScheduleData.optimalCombinations?.length || 0,
+            firstCombinationLength: extractedScheduleData.optimalCombinations?.[0]?.length || 0
+          });
+        }
+        return null;
+      })()}
       {showScheduleModal && extractedScheduleData && (
         <ScheduleOptimizationModal
           combinations={extractedScheduleData.optimalCombinations}
@@ -247,6 +261,7 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate, forceOpen = 
           onClose={() => setShowScheduleModal(false)}
           userAge={extractedScheduleData.age}
           gradeLevel={extractedScheduleData.gradeLevel}
+          isMobile={isMobile}
         />
       )}
     </>

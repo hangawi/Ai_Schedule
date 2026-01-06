@@ -90,21 +90,34 @@ export const parseTime = (timeStr) => {
  * @param {Array<Object>} personalTimes - 개인 일정 목록.
  * @returns {{start: number, end: number}} 시간 범위 객체 (시작 시, 종료 시).
  */
-export const getTimeRange = (currentCombination, personalTimes) => {
+export const getTimeRange = (currentCombination, personalTimes, currentFixedSchedules) => {
+  console.log('⏱️ [getTimeRange] 입력:', {
+    currentCombinationLength: currentCombination?.length || 0,
+    personalTimesLength: personalTimes?.length || 0,
+    fixedSchedulesLength: currentFixedSchedules?.length || 0
+  });
   let minHour = 24;
   let maxHour = 0;
 
   const allSchedules = [...(currentCombination || []), ...(personalTimes || [])];
 
   allSchedules.forEach(schedule => {
-    if (schedule && schedule.startTime) {
-      const startHour = parseInt(schedule.startTime.split(':')[0], 10);
-      if (!isNaN(startHour)) minHour = Math.min(minHour, startHour);
+    // ⭐ startTime이 문자열인지 확인
+    if (schedule && schedule.startTime && typeof schedule.startTime === 'string') {
+      const startParts = schedule.startTime.split(':');
+      if (startParts.length >= 1) {
+        const startHour = parseInt(startParts[0], 10);
+        if (!isNaN(startHour)) minHour = Math.min(minHour, startHour);
+      }
     }
-    if (schedule && schedule.endTime) {
-      const endHour = parseInt(schedule.endTime.split(':')[0], 10);
-      const endMinute = parseInt(schedule.endTime.split(':')[1], 10);
-      if (!isNaN(endHour)) maxHour = Math.max(maxHour, endMinute > 0 ? endHour + 1 : endHour);
+    // ⭐ endTime이 문자열인지 확인
+    if (schedule && schedule.endTime && typeof schedule.endTime === 'string') {
+      const endParts = schedule.endTime.split(':');
+      if (endParts.length >= 2) {
+        const endHour = parseInt(endParts[0], 10);
+        const endMinute = parseInt(endParts[1], 10);
+        if (!isNaN(endHour)) maxHour = Math.max(maxHour, endMinute > 0 ? endHour + 1 : endHour);
+      }
     }
   });
 
@@ -122,8 +135,17 @@ export const getTimeRange = (currentCombination, personalTimes) => {
  * @returns {number} 두 시간의 차이 (분).
  */
 export const calculateTimeDifference = (oldTime, newTime) => {
-  const [oldHour, oldMin] = oldTime.split(':').map(Number);
-  const [newHour, newMin] = newTime.split(':').map(Number);
+  // ⭐ 타입 체크
+  if (!oldTime || !newTime || typeof oldTime !== 'string' || typeof newTime !== 'string') {
+    return 0;
+  }
+  const oldParts = oldTime.split(':');
+  const newParts = newTime.split(':');
+  if (oldParts.length < 2 || newParts.length < 2) {
+    return 0;
+  }
+  const [oldHour, oldMin] = oldParts.map(Number);
+  const [newHour, newMin] = newParts.map(Number);
   const oldMinutes = oldHour * 60 + oldMin;
   const newMinutes = newHour * 60 + newMin;
   return newMinutes - oldMinutes;
@@ -137,9 +159,20 @@ export const calculateTimeDifference = (oldTime, newTime) => {
  * @returns {string} 계산된 종료 시간 (HH:MM).
  */
 export const calculateEndTime = (startTime, durationMinutes) => {
-  const [hour, min] = startTime.split(':').map(Number);
+  // ⭐ 타입 체크
+  if (!startTime || typeof startTime !== 'string') {
+    return '00:00';
+  }
+  const parts = startTime.split(':');
+  if (parts.length < 2) {
+    return '00:00';
+  }
+  const [hour, min] = parts.map(Number);
+  if (isNaN(hour) || isNaN(min)) {
+    return '00:00';
+  }
   const totalStartMinutes = hour * 60 + min;
-  const endMinutesTotal = totalStartMinutes + durationMinutes;
+  const endMinutesTotal = totalStartMinutes + (durationMinutes || 0);
   const endHour = Math.floor(endMinutesTotal / 60) % 24;
   const endMin = endMinutesTotal % 60;
   return `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
@@ -153,8 +186,19 @@ export const calculateEndTime = (startTime, durationMinutes) => {
  * @returns {string} 조정된 시간 (HH:MM).
  */
 export const adjustTimeByMinutes = (time, minutesDiff) => {
-  const [hour, min] = time.split(':').map(Number);
-  const totalMinutes = hour * 60 + min + minutesDiff;
+  // ⭐ 타입 체크
+  if (!time || typeof time !== 'string') {
+    return '00:00';
+  }
+  const parts = time.split(':');
+  if (parts.length < 2) {
+    return '00:00';
+  }
+  const [hour, min] = parts.map(Number);
+  if (isNaN(hour) || isNaN(min)) {
+    return '00:00';
+  }
+  const totalMinutes = hour * 60 + min + (minutesDiff || 0);
   const newHour = Math.floor(totalMinutes / 60) % 24;
   const newMin = totalMinutes % 60;
   return `${String(newHour).padStart(2, '0')}:${String(newMin).padStart(2, '0')}`;

@@ -87,11 +87,18 @@ const ScheduleOptimizationModal = ({
   userAge,
   gradeLevel,
   isEmbedded = false,
+  isMobile = false,
   schedulesByImage = null,
   fixedSchedules = [],
   customSchedulesForLegend: customSchedulesForLegendProp = [],
   overallTitle = '업로드된 시간표'
 }) => {
+  console.log('📥 [ScheduleOptimizationModal] Props 수신:', {
+    initialCombinations,
+    combinationsLength: initialCombinations?.length || 0,
+    firstCombinationLength: initialCombinations?.[0]?.length || 0,
+    firstCombinationType: initialCombinations?.[0] ? typeof initialCombinations[0] : 'undefined'
+  });
   // 상태 관리
   const {
     modifiedCombinations,
@@ -136,18 +143,39 @@ const ScheduleOptimizationModal = ({
   useChatScroll(chatContainerRef, chatMessages);
 
   // 현재 조합 가져오기
+  console.log('🔍 [ScheduleOptimizationModal] 현재 조합 체크:', {
+    modifiedCombinations,
+    combinationsLength: modifiedCombinations?.length || 0,
+    currentIndex,
+    hasCurrentCombination: !!modifiedCombinations?.[currentIndex]
+  });
+
   if (!modifiedCombinations || modifiedCombinations.length === 0 || currentIndex >= modifiedCombinations.length) {
+    console.warn('⚠️ [ScheduleOptimizationModal] 조합 없음 - null 반환');
     return null;
   }
 
   const currentCombination = modifiedCombinations[currentIndex];
+  console.log('✅ [ScheduleOptimizationModal] 현재 조합:', {
+    currentCombination,
+    isArray: Array.isArray(currentCombination),
+    length: currentCombination?.length || 0,
+    firstSchedule: currentCombination?.[0]
+  });
   if (!currentCombination || !Array.isArray(currentCombination)) {
     return null;
   }
 
   // 변환
   const personalTimes = convertToPersonalTimes(currentCombination, hoveredImageIndex);
+  console.log('🔄 [ScheduleOptimizationModal] 변환 결과:', {
+    personalTimes,
+    personalTimesLength: personalTimes?.length || 0,
+    currentCombinationLength: currentCombination?.length || 0
+  });
+  
   const timeRange = getTimeRange(currentCombination, personalTimes, currentFixedSchedules);
+  console.log('⏰ [ScheduleOptimizationModal] timeRange:', timeRange);
 
   // 핸들러 생성
   const handlePrevious = createHandlePrevious(currentIndex, setCurrentIndex);
@@ -207,7 +235,16 @@ const ScheduleOptimizationModal = ({
   );
 
   const modalContent = (
-    <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full my-auto max-h-[85vh] overflow-hidden flex flex-col isolate" style={isEmbedded ? { maxWidth: '100%', maxHeight: '100%', height: '100%', borderRadius: 0, boxShadow: 'none' } : {}}>
+    <div
+      className="bg-white rounded-xl shadow-2xl w-full my-auto overflow-hidden flex flex-col isolate"
+      style={
+        isEmbedded
+          ? { maxWidth: '100%', maxHeight: '100%', height: '100%', borderRadius: 0, boxShadow: 'none' }
+          : isMobile
+          ? { maxWidth: '500px', width: '95%', maxHeight: '80vh', height: '80vh', borderRadius: '12px' }
+          : { maxWidth: '7xl', maxHeight: '85vh' }
+      }
+    >
       {/* 헤더 */}
       <ScheduleHeader onClose={onClose} isEmbedded={isEmbedded} />
 
@@ -293,7 +330,7 @@ const ScheduleOptimizationModal = ({
   return (
     <>
       {isEmbedded ? modalContent : (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1000] p-6 overflow-y-auto">
+        <div className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1000] overflow-y-auto ${isMobile ? 'p-2' : 'p-6'}`}>
           <div className="relative z-[1001]">
             {modalContent}
           </div>

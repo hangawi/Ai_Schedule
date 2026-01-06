@@ -60,21 +60,44 @@ export const convertToPersonalTimes = (currentCombination, hoveredImageIndex) =>
       ? currentCombination.filter(schedule => schedule.sourceImageIndex === hoveredImageIndex)
       : currentCombination;
 
+    console.log('🔍 [convertToPersonalTimes] 변환 시작:', {
+      total: currentCombination?.length || 0,
+      toShow: schedulesToShow?.length || 0,
+      hoveredIndex: hoveredImageIndex
+    });
+
     const dayMap = { 'MON': 1, 'TUE': 2, 'WED': 3, 'THU': 4, 'FRI': 5, 'SAT': 6, 'SUN': 7, '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6, '일': 7 };
 
-    return schedulesToShow.map((schedule, index) => {
-      if (!schedule || !schedule.days || schedule.days.length === 0) return null;
+    const result = schedulesToShow.map((schedule, index) => {
+      if (!schedule) {
+        console.warn(`   ⚠️ 스케줄 ${index}: null 또는 undefined`);
+        return null;
+      }
+
+      if (!schedule.days || schedule.days.length === 0) {
+        console.warn(`   ⚠️ 스케줄 ${index} "${schedule.title}": days가 없음`, schedule.days);
+        return null;
+      }
 
       const mappedDays = (Array.isArray(schedule.days) ? schedule.days : [schedule.days])
         .map(day => dayMap[day] || day)
         .filter(d => typeof d === 'number');
+
+      // ⭐ 변환 후 빈 배열이면 경고 및 제외
+      if (mappedDays.length === 0) {
+        console.warn(`   ⚠️ 스케줄 ${index} "${schedule.title}": days 변환 실패!`, {
+          original: schedule.days,
+          mapped: mappedDays
+        });
+        return null;
+      }
 
       let scheduleColor = '#9333ea'; // default purple
       if (schedule.sourceImageIndex !== undefined) {
         scheduleColor = getColorForImageIndex(schedule.sourceImageIndex).border;
       }
 
-      return {
+      const converted = {
         id: Date.now() + index,
         type: 'study',
         days: mappedDays,
@@ -85,8 +108,22 @@ export const convertToPersonalTimes = (currentCombination, hoveredImageIndex) =>
         isRecurring: true,
         ...schedule // 기타 속성 유지
       };
+
+      if (index < 3) {
+        console.log(`   ✅ 스케줄 ${index}: ${schedule.title}`, {
+          originalDays: schedule.days,
+          mappedDays: mappedDays,
+          time: `${schedule.startTime}-${schedule.endTime}`
+        });
+      }
+
+      return converted;
     }).filter(Boolean);
+
+    console.log(`📊 [convertToPersonalTimes] 변환 완료: ${schedulesToShow.length}개 → ${result.length}개`);
+    return result;
   } catch (error) {
+    console.error('❌ [convertToPersonalTimes] 에러:', error);
     return [];
   }
 };

@@ -261,20 +261,34 @@ exports.analyzeScheduleImages = async (req, res) => {
         }
 
         // sourceImageIndex 추가 (시간 수정 제거 - OCR이 정확히 인식하도록 프롬프트 개선)
-        const schedulesWithIndex = (parsedSchedules.schedules || []).map(schedule => {
-          // 🎨 디버깅: backgroundColor 확인
-          if (schedule.backgroundColor) {
-            console.log(`🎨 OCR 색상 추출됨: ${schedule.title} → backgroundColor: ${schedule.backgroundColor}`);
-          } else {
-            console.log(`⚪ OCR 색상 없음: ${schedule.title} → backgroundColor: ${schedule.backgroundColor || 'undefined'}`);
-          }
-          
-          return {
-            ...schedule,
-            sourceImage: file.originalname,
-            sourceImageIndex: i
-          };
-        });
+        const schedulesWithIndex = (parsedSchedules.schedules || [])
+          .filter(schedule => {
+            // ⭐ startTime과 endTime이 없는 스케줄은 제외 (OCR 오류 방지)
+            if (!schedule.startTime || !schedule.endTime) {
+              console.warn(`⚠️ [OCR 경고] 시간 정보가 누락된 스케줄 제외: ${schedule.title}`);
+              return false;
+            }
+            // ⭐ title이 없는 스케줄도 제외
+            if (!schedule.title || schedule.title.trim() === '') {
+              console.warn(`⚠️ [OCR 경고] 제목이 없는 스케줄 제외`);
+              return false;
+            }
+            return true;
+          })
+          .map(schedule => {
+            // 🎨 디버깅: backgroundColor 확인
+            if (schedule.backgroundColor) {
+              console.log(`🎨 OCR 색상 추출됨: ${schedule.title} → backgroundColor: ${schedule.backgroundColor}`);
+            } else {
+              console.log(`⚪ OCR 색상 없음: ${schedule.title} → backgroundColor: ${schedule.backgroundColor || 'undefined'}`);
+            }
+
+            return {
+              ...schedule,
+              sourceImage: file.originalname,
+              sourceImageIndex: i
+            };
+          });
 
         // imageTitle 추출 (AI가 분석한 제목)
         const extractedTitle = parsedSchedules.imageTitle || null;
@@ -408,10 +422,33 @@ exports.analyzeScheduleImages = async (req, res) => {
     // 5. ⭐ 자동 스케줄 최적화 (우선순위 기반 겹침 제거 + 학년부 필터링)
     const optimizationResult = await optimizeSchedules(allSchedules, titledImages);
 
+    // ⭐ optimalCombinations 생성 (클라이언트에서 기대하는 형식)
+    const optimalCombinations = [optimizationResult.optimizedSchedules];
+
+    // 🔍 디버깅: 최종 응답 데이터 확인
+    console.log('📤 [OCR] 클라이언트로 전송하는 데이터:');
+    console.log(`   - allSchedules: ${allSchedules.length}개`);
+    console.log(`   - optimizedSchedules: ${optimizationResult.optimizedSchedules.length}개`);
+    console.log(`   - optimalCombinations: ${optimalCombinations.length}개 조합`);
+    console.log(`   - optimalCombinations[0]: ${optimalCombinations[0]?.length || 0}개 스케줄`);
+    console.log(`   - schedulesByImage: ${processedSchedulesByImage.length}개 이미지`);
+    console.log(`   - baseSchedules: ${baseSchedules.length}개`);
+
+    // 첫 3개 스케줄 샘플 출력
+    if (optimalCombinations[0] && optimalCombinations[0].length > 0) {
+      console.log('   - 조합[0]의 첫 3개 스케줄:');
+      optimalCombinations[0].slice(0, 3).forEach((s, idx) => {
+        console.log(`      ${idx}. ${s.title} (${s.days?.join(',') || '?'} ${s.startTime}-${s.endTime})`);
+      });
+    } else {
+      console.warn('   ⚠️ 조합이 비어있습니다!');
+    }
+
     const responseData = {
       success: true,
       allSchedules: allSchedules, // 원본 전체 스케줄
       optimizedSchedules: optimizationResult.optimizedSchedules, // ⭐ 자동 최적화된 스케줄
+      optimalCombinations: optimalCombinations, // ⭐ 클라이언트가 기대하는 조합 배열
       optimizationAnalysis: optimizationResult.analysis, // 최적화 분석 정보
       totalSchedules: allSchedules.length,
       schedulesByImage: processedSchedulesByImage, // ⭐ academyName, subjectName이 추가된 이미지별 정보

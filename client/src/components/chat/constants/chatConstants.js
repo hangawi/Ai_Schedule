@@ -76,15 +76,15 @@ export const CHAT_SIZE = {
     HEIGHT: '1125px',
   },
   MOBILE: {
-    MAX_HEIGHT: '70vh',
-    HEIGHT: '750px',
-    MIN_HEIGHT: '600px',
+    MAX_HEIGHT: '55vh',
+    HEIGHT: '500px',
+    MIN_HEIGHT: '400px',
   },
   MESSAGE_AREA: {
     DESKTOP_MIN_HEIGHT: '525px',
     DESKTOP_MAX_HEIGHT: '525px',
-    MOBILE_MIN_HEIGHT: '300px',
-    MOBILE_MAX_HEIGHT: 'calc(60vh - 140px)',
+    MOBILE_MIN_HEIGHT: '200px',
+    MOBILE_MAX_HEIGHT: 'calc(45vh - 100px)',
   },
 };
 

@@ -9,7 +9,9 @@ import { useState, useRef, useEffect } from 'react';
 /**
  * 모달 상태 관리 Hook
  */
-export const useModalState = (initialCombinations, fixedSchedules, customSchedulesForLegendProp, modifiedCombinations) => {
+export const useModalState = (initialCombinations, fixedSchedules, customSchedulesForLegendProp) => {
+  // ⭐ modifiedCombinations를 useState로 초기화
+  const [modifiedCombinations, setModifiedCombinations] = useState(initialCombinations || []);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [applyScope, setApplyScope] = useState('month');
   const [originalSchedule, setOriginalSchedule] = useState(null);
@@ -48,7 +50,12 @@ export const useModalState = (initialCombinations, fixedSchedules, customSchedul
 
   // 모달이 열릴 때 원본 저장 및 환영 메시지
   useEffect(() => {
-    if (!originalSchedule && modifiedCombinations[currentIndex]) {
+    // ⭐ 안전 체크: modifiedCombinations가 배열이고 currentIndex가 유효한지 확인
+    if (!originalSchedule &&
+        Array.isArray(modifiedCombinations) &&
+        modifiedCombinations.length > 0 &&
+        currentIndex < modifiedCombinations.length &&
+        modifiedCombinations[currentIndex]) {
       setOriginalSchedule(JSON.parse(JSON.stringify(modifiedCombinations[currentIndex])));
     }
 
@@ -61,9 +68,11 @@ export const useModalState = (initialCombinations, fixedSchedules, customSchedul
       };
       setChatMessages([welcomeMessage]);
     }
-  }, [modifiedCombinations, currentIndex]);
+  }, [modifiedCombinations, currentIndex, originalSchedule, chatMessages.length]);
 
   return {
+    modifiedCombinations,
+    setModifiedCombinations,
     currentIndex,
     setCurrentIndex,
     applyScope,

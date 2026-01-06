@@ -89,6 +89,7 @@ const getTimestampColor = (message) => {
  */
 const MessageBubble = ({
   message,
+  isMobile = false,
   onConflictChoice,
   onTimeSelection,
   onAddSchedules,
@@ -106,7 +107,7 @@ const MessageBubble = ({
     <div
       className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
     >
-      <div className={`max-w-sm p-3 rounded-lg text-sm ${messageStyle}`}>
+      <div className={`max-w-sm ${isMobile ? 'p-2 text-xs' : 'p-3 text-sm'} rounded-lg ${messageStyle}`}>
         {/* 이미지 미리보기 (사용자 메시지만) */}
         {message.image && (
           <div className="mb-2">

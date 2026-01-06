@@ -55,6 +55,7 @@ const ScheduleView = ({
     <div style={{ width: '70%', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: '1px solid #e5e7eb' }}>
       <ScheduleOptimizationModal
         key={filteredSchedules && Array.isArray(filteredSchedules) ? JSON.stringify(filteredSchedules.map(s => s.title + s.startTime)) : 'default'}
+        combinations={filteredSchedules ? [filteredSchedules] : []}
         initialSchedules={filteredSchedules}
         schedulesByImage={schedulesByImage}
         fixedSchedules={fixedSchedules}

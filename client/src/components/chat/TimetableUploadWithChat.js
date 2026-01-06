@@ -65,9 +65,10 @@ import ScheduleView from './components/ScheduleView';
  * @param {object} props - 컴포넌트 props
  * @param {function} props.onSchedulesExtracted - 최종 확정된 스케줄을 상위 컴포넌트로 전달하는 콜백 함수.
  * @param {function} props.onClose - 모달을 닫을 때 호출되는 함수.
+ * @param {boolean} props.isMobile - 모바일 환경 여부.
  * @returns {JSX.Element}
  */
-const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
+const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose, isMobile = false }) => {
   // ========================================
   // 상태 관리 (커스텀 훅)
   // ========================================
@@ -214,10 +215,20 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
   // JSX 렌더링
   // ========================================
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg" style={{ width: '50vw', height: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
+      <div
+        className="bg-white rounded-lg"
+        style={{
+          width: isMobile ? '95%' : '50vw',
+          height: isMobile ? '80vh' : '85vh',
+          maxWidth: isMobile ? '500px' : '1200px',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}
+      >
         {/* 헤더 */}
-        <div className="flex justify-between items-center p-4 border-b" style={{ flexShrink: 0 }}>
+        <div className={`flex justify-between items-center border-b ${isMobile ? 'p-2' : 'p-4'}`} style={{ flexShrink: 0 }}>
           <div className="flex items-center gap-3">
             {showOptimizationModal && (
               <button
@@ -228,7 +239,7 @@ const TimetableUploadWithChat = ({ onSchedulesExtracted, onClose }) => {
                 <ArrowLeft size={20} />
               </button>
             )}
-            <h2 className="text-xl font-bold">{filteredSchedules ? '최적 시간표' : '시간표 이미지 업로드'}</h2>
+            <h2 className={`${isMobile ? 'text-base' : 'text-xl'} font-bold`}>{filteredSchedules ? '최적 시간표' : '시간표 이미지 업로드'}</h2>
           </div>
           <button
             onClick={onClose}

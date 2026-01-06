@@ -4,13 +4,17 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { Menu, LogOut, User, Calendar, Shield, Clipboard, ClipboardX, Phone, Trash2 } from 'lucide-react';
+import { auth } from '../../config/firebaseConfig';
 import { userService } from '../../services/userService';
+import { useChatEnhanced } from '../../hooks/useChat/enhanced';
 import SimplifiedScheduleDisplay from './SimplifiedScheduleDisplay';
 import BottomNavigation from './BottomNavigation';
 import MobilePersonalInfoEdit from './MobilePersonalInfoEdit';
 import MobileScheduleEdit from './MobileScheduleEdit';
 import ChatBox from '../chat/ChatBox';
 import './MobileScheduleView.css';
+
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
 const MobileScheduleView = ({ user }) => {
    const calendarRef = useRef(null);
@@ -28,6 +32,16 @@ const MobileScheduleView = ({ user }) => {
    const [defaultSchedule, setDefaultSchedule] = useState([]);
    const [scheduleExceptions, setScheduleExceptions] = useState([]);
    const [personalTimes, setPersonalTimes] = useState([]);
+
+   // 챗봇 연동을 위한 상태
+   const [globalEvents, setGlobalEvents] = useState([]);
+   const [eventAddedKey, setEventAddedKey] = useState(0);
+   const [eventActions, setEventActions] = useState({
+      addEvent: async () => {},
+      deleteEvent: async () => {},
+      editEvent: async () => {}
+   });
+   const isLoggedIn = !!user;
 
    // 헤더 상태
    const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
@@ -318,12 +332,246 @@ const MobileScheduleView = ({ user }) => {
       await fetchSchedule();
    };
 
-   // 채팅 메시지 처리 함수
-   const handleChatMessage = async (message) => {
-      console.log('모바일 채팅 메시지:', message);
-      // 메시지 처리 후 일정 새로고침
-      await fetchSchedule();
-      return { success: true, message: '일정이 업데이트되었습니다.' };
+   // 이벤트 포맷 함수
+   const formatEventForClient = (event, color) => {
+      if (!event || !event.startTime) {
+         return { ...event, date: '', time: '' };
+      }
+      const localStartTime = new Date(event.startTime);
+      const year = localStartTime.getFullYear();
+      const month = String(localStartTime.getMonth() + 1).padStart(2, '0');
+      const day = String(localStartTime.getDate()).padStart(2, '0');
+      const hours = String(localStartTime.getHours()).padStart(2, '0');
+      const minutes = String(localStartTime.getMinutes()).padStart(2, '0');
+
+      return {
+         id: event.id || event._id,
+         title: event.title,
+         date: `${year}-${month}-${day}`,
+         time: `${hours}:${minutes}`,
+         participants: event.participants ? event.participants.length : 0,
+         priority: event.priority || 3,
+         color: color || event.color || 'blue',
+      };
+   };
+
+   // 글로벌 이벤트 가져오기
+   const fetchGlobalEvents = useCallback(async () => {
+      if (!isLoggedIn) return;
+      try {
+         const currentUser = auth.currentUser;
+         if (!currentUser) return;
+
+         const response = await fetch(`${API_BASE_URL}/api/events`, {
+            headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
+         });
+         if (!response.ok) throw new Error('Failed to fetch events');
+         const data = await response.json();
+         const formattedEvents = data.events.map(event => formatEventForClient(event));
+         setGlobalEvents(formattedEvents);
+      } catch (error) {
+         console.error('이벤트 가져오기 실패:', error);
+      }
+   }, [isLoggedIn]);
+
+   // 글로벌 이벤트 추가
+   const handleAddGlobalEvent = useCallback(async eventData => {
+      try {
+         let date, time, duration;
+
+         if (eventData.startDateTime) {
+            const startDate = new Date(eventData.startDateTime);
+            const endDate = eventData.endDateTime ? new Date(eventData.endDateTime) : new Date(startDate.getTime() + 60 * 60 * 1000);
+
+            date = startDate.toISOString().split('T')[0];
+            time = startDate.toTimeString().substring(0, 5);
+            duration = Math.round((endDate - startDate) / (60 * 1000));
+         } else {
+            date = eventData.date;
+            time = eventData.time;
+            duration = eventData.duration || 60;
+         }
+
+         const payload = {
+            title: eventData.title,
+            date,
+            time,
+            duration,
+            priority: eventData.priority || 3,
+            participants: eventData.participants || [],
+            color: eventData.color || 'blue',
+         };
+
+         const currentUser = auth.currentUser;
+         if (!currentUser) throw new Error('로그인이 필요합니다.');
+
+         const response = await fetch(`${API_BASE_URL}/api/events`, {
+            method: 'POST',
+            headers: {
+               'Content-Type': 'application/json',
+               'Authorization': `Bearer ${await currentUser.getIdToken()}`
+            },
+            body: JSON.stringify(payload),
+         });
+
+         if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.msg || 'Failed to add event');
+         }
+         const savedEvent = await response.json();
+         const newEvent = formatEventForClient(savedEvent, eventData.color);
+         setGlobalEvents(prevEvents => [...prevEvents, newEvent]);
+         return newEvent;
+      } catch (error) {
+         throw error;
+      }
+   }, []);
+
+   // 글로벌 이벤트 삭제
+   const handleDeleteEvent = useCallback(async eventId => {
+      try {
+         const currentUser = auth.currentUser;
+         if (!currentUser) throw new Error('로그인이 필요합니다.');
+
+         const response = await fetch(`${API_BASE_URL}/api/events/${eventId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
+         });
+         if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.msg || 'Failed to delete event');
+         }
+         setGlobalEvents(prevEvents => prevEvents.filter(e => e.id !== eventId));
+      } catch (error) {
+         console.error('이벤트 삭제 실패:', error);
+         throw error;
+      }
+   }, []);
+
+   // 글로벌 이벤트 수정 (간단한 버전)
+   const handleEditEvent = useCallback(async (eventId, eventData) => {
+      try {
+         const currentUser = auth.currentUser;
+         if (!currentUser) throw new Error('로그인이 필요합니다.');
+
+         const response = await fetch(`${API_BASE_URL}/api/events/${eventId}`, {
+            method: 'PUT',
+            headers: {
+               'Content-Type': 'application/json',
+               'Authorization': `Bearer ${await currentUser.getIdToken()}`
+            },
+            body: JSON.stringify(eventData),
+         });
+
+         if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.msg || 'Failed to update event');
+         }
+         const updatedEvent = await response.json();
+         const formattedEvent = formatEventForClient(updatedEvent);
+         setGlobalEvents(prevEvents => prevEvents.map(e => e.id === eventId ? formattedEvent : e));
+         return formattedEvent;
+      } catch (error) {
+         console.error('이벤트 수정 실패:', error);
+         throw error;
+      }
+   }, []);
+
+   // eventActions 설정
+   useEffect(() => {
+      if (isLoggedIn) {
+         setEventActions({
+            addEvent: handleAddGlobalEvent,
+            deleteEvent: handleDeleteEvent,
+            editEvent: handleEditEvent
+         });
+      }
+   }, [isLoggedIn, handleAddGlobalEvent, handleDeleteEvent, handleEditEvent]);
+
+   // 글로벌 이벤트 가져오기
+   useEffect(() => {
+      if (isLoggedIn && eventAddedKey > 0) {
+         fetchGlobalEvents();
+      }
+   }, [eventAddedKey, isLoggedIn, fetchGlobalEvents]);
+
+   // useChatEnhanced 훅 사용
+   const chatEnhanced = useChatEnhanced(isLoggedIn, setEventAddedKey, eventActions);
+
+   // 채팅 메시지 처리 함수 (AI 연동)
+   const handleChatMessage = async (message, additionalContext = {}) => {
+      try {
+         // chatEnhanced가 준비되지 않았으면 에러 반환
+         if (!chatEnhanced || !chatEnhanced.handleChatMessage) {
+            console.error('챗봇이 아직 준비되지 않았습니다.');
+            return { success: false, message: '챗봇이 준비 중입니다. 잠시 후 다시 시도해주세요.' };
+         }
+
+         // PC 버전의 profile 탭과 동일한 방식으로 처리
+         const result = await chatEnhanced.handleChatMessage(message, {
+            context: 'profile',
+            tabType: 'local',
+            currentEvents: globalEvents,
+            ...additionalContext
+         });
+         // 메시지 처리 후 일정 새로고침
+         await fetchSchedule();
+         await fetchGlobalEvents();
+         return result;
+      } catch (error) {
+         console.error('채팅 메시지 처리 실패:', error);
+         return { success: false, message: '메시지 처리 중 오류가 발생했습니다.' };
+      }
+   };
+
+   // 음성인식 시작
+   const handleStartVoiceRecognition = () => {
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+         alert('이 브라우저는 음성 인식을 지원하지 않습니다.');
+         return;
+      }
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+
+      recognition.lang = 'ko-KR';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+         console.log('음성 인식 시작');
+         setIsVoiceEnabled(true);
+      };
+
+      recognition.onresult = async (event) => {
+         const transcript = event.results[0][0].transcript;
+         console.log('인식된 음성:', transcript);
+
+         // 채팅창 열기 (아직 안 열려있으면)
+         if (!isChatOpen) {
+            setIsChatOpen(true);
+         }
+
+         // 인식된 텍스트를 챗봇으로 전송
+         await handleChatMessage(transcript);
+      };
+
+      recognition.onerror = (event) => {
+         console.error('음성 인식 오류:', event.error);
+         setIsVoiceEnabled(false);
+         if (event.error === 'no-speech') {
+            alert('음성이 감지되지 않았습니다.');
+         } else if (event.error === 'not-allowed') {
+            alert('마이크 권한이 거부되었습니다.');
+         }
+      };
+
+      recognition.onend = () => {
+         console.log('음성 인식 종료');
+         setIsVoiceEnabled(false);
+      };
+
+      recognition.start();
    };
 
    // 편집 모드 시작
@@ -704,16 +952,17 @@ const MobileScheduleView = ({ user }) => {
             <BottomNavigation 
                onRefresh={fetchSchedule}
                onCamera={() => {
-                  console.log('카메라 기능 - 사진으로 시간표 만들기');
-                  alert('카메라 기능은 개발 중입니다.');
+                  // 채팅창 열기
+                  if (!isChatOpen) {
+                     setIsChatOpen(true);
+                  }
+                  // 사용자에게 안내
+                  alert('채팅창에서 이미지 업로드 버튼(회색 버튼)을 눌러주세요.');
                }}
                onChat={() => {
                   setIsChatOpen(!isChatOpen);
                }}
-               onMic={() => {
-                  console.log('음성 기능');
-                  alert('음성 기능은 개발 중입니다.');
-               }}
+               onMic={handleStartVoiceRecognition}
             />
          )}
 

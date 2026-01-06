@@ -40,6 +40,15 @@ import ScheduleGridSelector from '../../tabs/ScheduleGridSelector';
  * @returns {JSX.Element}
  */
 const ScheduleGrid = ({ personalTimes, currentFixedSchedules, hoveredImageIndex, timeRange }) => {
+  console.log('📊 [ScheduleGrid] Props 수신:', {
+    personalTimes,
+    personalTimesLength: personalTimes?.length || 0,
+    currentFixedSchedules,
+    fixedLength: currentFixedSchedules?.length || 0,
+    hoveredImageIndex,
+    timeRange
+  });
+
   return (
     <div className="px-5 py-4 overflow-y-auto flex-1">
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
