@@ -271,7 +271,9 @@ function App() {
                <Route path="/mobile/groups" element={
                   isLoggedIn ? <MobileGroupsView user={user} /> : <Navigate to="/auth" />
                } />
-               <Route path="/mobile/calendar" element={<MobileCalendarView />} />
+               <Route path="/mobile/calendar" element={
+                  isLoggedIn ? <MobileCalendarView user={user} /> : <Navigate to="/auth" />
+               } />
             </Routes>
             {isLoggedIn && sharedText && (
                <SharedTextModal text={sharedText} onClose={() => setSharedText(null)} onConfirm={handleConfirmSharedText} />
