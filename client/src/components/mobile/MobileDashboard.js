@@ -26,7 +26,7 @@ const MobileDashboard = ({ user }) => {
 
    // 메뉴 버튼 클릭 핸들러
    const handleScheduleClick = () => {
-      console.log('일정 버튼 클릭 - 내 프로필 탭으로 이동');
+      console.log('일정 버튼 클릭 - 빈 페이지(헤더만)로 이동');
       navigate('/mobile/schedule');
    };
 
@@ -36,7 +36,7 @@ const MobileDashboard = ({ user }) => {
    };
 
    const handleCalendarClick = () => {
-      console.log('달력 버튼 클릭 - FullCalendar로 이동');
+      console.log('달력 버튼 클릭 - 상세 일정(FullCalendar)으로 이동');
       navigate('/mobile/calendar');
    };
 
