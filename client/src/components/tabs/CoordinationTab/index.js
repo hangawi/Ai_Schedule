@@ -468,12 +468,16 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange }) => {
     window.addEventListener('clearCurrentRoom', handleClearCurrentRoom);
     window.addEventListener('restoreRoom', handleRestoreRoom);
     window.addEventListener('coordinationUpdate', handleCoordinationUpdate);
+    window.addEventListener('openCreateRoom', openCreateRoomModal);
+    window.addEventListener('openJoinRoom', openJoinRoomModal);
     return () => {
       window.removeEventListener('clearCurrentRoom', handleClearCurrentRoom);
       window.removeEventListener('restoreRoom', handleRestoreRoom);
       window.removeEventListener('coordinationUpdate', handleCoordinationUpdate);
+      window.removeEventListener('openCreateRoom', openCreateRoomModal);
+      window.removeEventListener('openJoinRoom', openJoinRoomModal);
     };
-  }, [setCurrentRoom, fetchRoomDetails, currentRoom]);
+  }, [setCurrentRoom, fetchRoomDetails, currentRoom, openCreateRoomModal, openJoinRoomModal]);
 
   // Initial data load
   useEffect(() => {

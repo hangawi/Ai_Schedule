@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, LogOut, Calendar, Clipboard, ClipboardX, Phone, User } from 'lucide-react';
 import CoordinationTab from '../tabs/CoordinationTab';
@@ -11,6 +11,25 @@ const MobileGroupsView = ({ user }) => {
    const [isClipboardMonitoring, setIsClipboardMonitoring] = useState(false);
    const [isBackgroundMonitoring, setIsBackgroundMonitoring] = useState(false);
    const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
+   const [isInRoom, setIsInRoom] = useState(false);
+
+   // 방 상태 추적
+   useEffect(() => {
+      const handleRestore = () => setIsInRoom(true);
+      const handleClear = () => setIsInRoom(false);
+      
+      // 초기 상태 확인 (URL 해시 확인)
+      if (window.location.hash.includes('coordination-room')) {
+         setIsInRoom(true);
+      }
+
+      window.addEventListener('restoreRoom', handleRestore);
+      window.addEventListener('clearCurrentRoom', handleClear);
+      return () => {
+         window.removeEventListener('restoreRoom', handleRestore);
+         window.removeEventListener('clearCurrentRoom', handleClear);
+      };
+   }, []);
 
    const handleLogout = () => {
       localStorage.removeItem('token');
@@ -109,9 +128,28 @@ const MobileGroupsView = ({ user }) => {
 
          {/* 페이지 제목 */}
          <div className="groups-page-title">
-            <h2>일정맞추기</h2>
-            {exchangeRequestCount > 0 && (
-               <span className="notification-badge">{exchangeRequestCount}</span>
+            <div className="title-with-badge">
+               <h2>일정맞추기</h2>
+               {exchangeRequestCount > 0 && (
+                  <span className="notification-badge">{exchangeRequestCount}</span>
+               )}
+            </div>
+            
+            {!isInRoom && (
+               <div className="group-action-buttons">
+                  <button 
+                     className="group-action-btn create-btn"
+                     onClick={() => window.dispatchEvent(new CustomEvent('openCreateRoom'))}
+                  >
+                     새 조율방 생성
+                  </button>
+                  <button 
+                     className="group-action-btn join-btn"
+                     onClick={() => window.dispatchEvent(new CustomEvent('openJoinRoom'))}
+                  >
+                     조율방 참여
+                  </button>
+               </div>
             )}
          </div>
          
