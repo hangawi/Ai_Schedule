@@ -11,28 +11,49 @@
 import React from 'react';
 import './BottomNavigation.css';
 
-const BottomNavigation = () => {
+const BottomNavigation = ({ 
+   onRefresh, 
+   onCamera, 
+   onChat, 
+   onMic 
+}) => {
    // 새로고침 버튼
    const handleRefresh = () => {
-      window.location.reload();
+      if (onRefresh) {
+         onRefresh();
+      } else {
+         window.location.reload();
+      }
    };
 
-   // 카메라 버튼 (향후 구현)
+   // 카메라 버튼 (사진으로 시간표 만들기)
    const handleCamera = () => {
-      console.log('카메라 버튼 클릭 - 향후 구현');
-      alert('카메라 기능은 곧 추가됩니다!');
+      if (onCamera) {
+         onCamera();
+      } else {
+         console.log('카메라 버튼 클릭');
+         alert('카메라 기능은 곧 추가됩니다!');
+      }
    };
 
-   // 채팅 버튼 (향후 구현)
+   // 채팅 버튼 (챗봇)
    const handleChat = () => {
-      console.log('채팅 버튼 클릭 - 향후 구현');
-      alert('채팅 기능은 곧 추가됩니다!');
+      if (onChat) {
+         onChat();
+      } else {
+         console.log('채팅 버튼 클릭');
+         alert('채팅 기능은 곧 추가됩니다!');
+      }
    };
 
-   // 마이크 버튼 (향후 구현)
+   // 마이크 버튼 (음성)
    const handleMic = () => {
-      console.log('마이크 버튼 클릭 - 향후 구현');
-      alert('마이크 기능은 곧 추가됩니다!');
+      if (onMic) {
+         onMic();
+      } else {
+         console.log('마이크 버튼 클릭');
+         alert('마이크 기능은 곧 추가됩니다!');
+      }
    };
 
    return (

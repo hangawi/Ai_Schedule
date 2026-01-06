@@ -60,7 +60,7 @@ import { addSchedulesToCalendar } from './utils/scheduleUtils';
  * @param {function} props.onEventUpdate - 스케줄이 추가/변경되었을 때 상위 컴포넌트에 알리는 콜백.
  * @returns {JSX.Element}
  */
-const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
+const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate, forceOpen = false }) => {
   // 상태 관리
   const {
     messages,
@@ -86,6 +86,13 @@ const ChatBox = ({ onSendMessage, speak, currentTab, onEventUpdate }) => {
 
   // 모바일 감지
   const isMobile = useMobileDetection();
+
+  // forceOpen prop 처리
+  React.useEffect(() => {
+    if (forceOpen) {
+      setIsOpen(true);
+    }
+  }, [forceOpen, setIsOpen]);
 
   // 자동 스크롤
   useScrollToBottom(messagesEndRef, messages);

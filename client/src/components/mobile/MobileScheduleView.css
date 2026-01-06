@@ -313,6 +313,52 @@
    background: #d1d5db;
 }
 
+.top-edit-buttons .edit-button.clear-button {
+   background: #fee2e2;
+   color: #dc2626;
+   border: 1px solid #fca5a5;
+   padding: 4px 8px;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+}
+
+.top-edit-buttons .edit-button.clear-button:hover {
+   background: #fecaca;
+}
+
+.top-edit-buttons .edit-button.clear-button:active {
+   background: #fca5a5;
+}
+
+.top-edit-buttons .edit-button.save-button {
+   background: #d1fae5;
+   color: #065f46;
+   border: 1px solid #6ee7b7;
+}
+
+.top-edit-buttons .edit-button.save-button:hover {
+   background: #a7f3d0;
+}
+
+.top-edit-buttons .edit-button.save-button:active {
+   background: #6ee7b7;
+}
+
+.top-edit-buttons .edit-button.cancel-button {
+   background: #f3f4f6;
+   color: #6b7280;
+   border: 1px solid #d1d5db;
+}
+
+.top-edit-buttons .edit-button.cancel-button:hover {
+   background: #e5e7eb;
+}
+
+.top-edit-buttons .edit-button.cancel-button:active {
+   background: #d1d5db;
+}
+
 .subsection-title {
    font-size: 14px;
    font-weight: 700;

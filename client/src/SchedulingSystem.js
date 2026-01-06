@@ -176,6 +176,18 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
      return savedTab || 'dashboard';
    });
 
+   // 모바일에서 PC 버전 강제 표시 플래그
+   const [forceDesktopMode, setForceDesktopMode] = useState(() => {
+     return localStorage.getItem('forceDesktopMode') === 'true';
+   });
+
+   // forceDesktopMode 플래그 확인 및 제거
+   useEffect(() => {
+     if (forceDesktopMode) {
+       localStorage.removeItem('forceDesktopMode');
+     }
+   }, [forceDesktopMode]);
+
    // 관리자 상태 변경 시 적절한 대시보드로 이동
    useEffect(() => {
      if (isAdmin) {
@@ -807,7 +819,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
             </nav>
 
             <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-               {isMobile ? (
+               {isMobile && !forceDesktopMode ? (
                   <MobileDashboard />
                ) : (
                   <>
@@ -847,7 +859,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
          />
 
          {/* 탭별 컨텍스트를 가진 ChatBox - 내 프로필 탭에서는 편집 모드일 때만 활성화 */}
-         {!isMobile && (activeTab !== 'profile' || isProfileEditing) && (
+         {(!isMobile || forceDesktopMode) && (activeTab !== 'profile' || isProfileEditing) && (
             <ChatBox
                onSendMessage={handleTabSpecificChatMessage}
                speak={speak}
@@ -870,7 +882,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
             />
          )}
 
-         {!isMobile && (
+         {(!isMobile || forceDesktopMode) && (
             <MobileStatusIndicator
                isListening={isListening}
                isBackgroundMonitoring={isBackgroundMonitoring}

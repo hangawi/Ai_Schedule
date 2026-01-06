@@ -3,10 +3,13 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { Menu, LogOut, User, Calendar, Shield, Clipboard, ClipboardX, Phone } from 'lucide-react';
+import { Menu, LogOut, User, Calendar, Shield, Clipboard, ClipboardX, Phone, Trash2 } from 'lucide-react';
 import { userService } from '../../services/userService';
 import SimplifiedScheduleDisplay from './SimplifiedScheduleDisplay';
 import BottomNavigation from './BottomNavigation';
+import MobilePersonalInfoEdit from './MobilePersonalInfoEdit';
+import MobileScheduleEdit from './MobileScheduleEdit';
+import ChatBox from '../chat/ChatBox';
 import './MobileScheduleView.css';
 
 const MobileScheduleView = ({ user }) => {
@@ -15,6 +18,11 @@ const MobileScheduleView = ({ user }) => {
    const [isLoading, setIsLoading] = useState(true);
    const [selectedDate, setSelectedDate] = useState(null);
    const [calendarView, setCalendarView] = useState('dayGridMonth');
+   const [showPersonalInfo, setShowPersonalInfo] = useState(false);
+   const [showScheduleEdit, setShowScheduleEdit] = useState(false);
+   const [isChatOpen, setIsChatOpen] = useState(false);
+   const [isEditing, setIsEditing] = useState(false);
+   const [initialState, setInitialState] = useState(null);
 
    // 스케줄 데이터
    const [defaultSchedule, setDefaultSchedule] = useState([]);
@@ -310,6 +318,79 @@ const MobileScheduleView = ({ user }) => {
       await fetchSchedule();
    };
 
+   // 채팅 메시지 처리 함수
+   const handleChatMessage = async (message) => {
+      console.log('모바일 채팅 메시지:', message);
+      // 메시지 처리 후 일정 새로고침
+      await fetchSchedule();
+      return { success: true, message: '일정이 업데이트되었습니다.' };
+   };
+
+   // 편집 모드 시작
+   const handleStartEdit = () => {
+      // 초기 상태 저장 (취소 시 복원용)
+      setInitialState({
+         defaultSchedule: [...defaultSchedule],
+         scheduleExceptions: [...scheduleExceptions],
+         personalTimes: [...personalTimes]
+      });
+      setIsEditing(true);
+      setIsChatOpen(false); // 기본은 닫힌 상태, 채팅 버튼으로 열기
+   };
+
+   // 취소 (초기 상태로 복원)
+   const handleCancel = () => {
+      if (initialState) {
+         setDefaultSchedule([...initialState.defaultSchedule]);
+         setScheduleExceptions([...initialState.scheduleExceptions]);
+         setPersonalTimes([...initialState.personalTimes]);
+      }
+      setIsEditing(false);
+      setIsChatOpen(false);
+      fetchSchedule(); // 서버 데이터로 새로고침
+   };
+
+   // 일정 저장
+   const handleSave = async () => {
+      try {
+         await userService.updateUserSchedule({
+            defaultSchedule,
+            scheduleExceptions,
+            personalTimes
+         });
+         alert('일정이 저장되었습니다!');
+         setIsEditing(false);
+         setIsChatOpen(false);
+         await fetchSchedule();
+      } catch (error) {
+         console.error('일정 저장 실패:', error);
+         alert('일정 저장에 실패했습니다.');
+      }
+   };
+
+   // 초기화 (현재 입력한 시간표 삭제)
+   const handleClearAll = async () => {
+      if (window.confirm('현재 시간표를 모두 삭제하시겠습니까?')) {
+         try {
+            await userService.updateUserSchedule({
+               defaultSchedule: [],
+               scheduleExceptions: [],
+               personalTimes: []
+            });
+            // 로컬 상태 업데이트
+            setDefaultSchedule([]);
+            setScheduleExceptions([]);
+            setPersonalTimes([]);
+            setEvents([]);
+            alert('시간표가 초기화되었습니다.');
+            await fetchSchedule();
+         } catch (error) {
+            console.error('초기화 실패:', error);
+            alert('초기화에 실패했습니다.');
+         }
+      }
+   };
+
    const renderEventContent = (eventInfo) => {
       return (
          <div style={{
@@ -411,6 +492,16 @@ const MobileScheduleView = ({ user }) => {
       window.location.href = '/auth';
    };
 
+   // 개인정보 수정 화면 표시
+   if (showPersonalInfo) {
+      return <MobilePersonalInfoEdit onBack={() => setShowPersonalInfo(false)} />;
+   }
+
+   // 일정 편집 화면 표시
+   if (showScheduleEdit) {
+      return <MobileScheduleEdit onBack={() => setShowScheduleEdit(false)} />;
+   }
+
    return (
       <div className="mobile-schedule-view">
          {/* 사이드바 오버레이 */}
@@ -509,26 +600,43 @@ const MobileScheduleView = ({ user }) => {
                   <div className="schedule-page-title">
                      <span>내 일정</span>
                      <div className="top-edit-buttons">
-                        <button
-                           className="edit-button"
-                           onClick={() => {
-                              localStorage.setItem('activeTab', 'profile');
-                              localStorage.setItem('profileEditMode', 'true');
-                              window.location.href = '/';
-                           }}
-                        >
-                           편집
-                        </button>
-                        <button
-                           className="edit-button"
-                           onClick={() => {
-                              localStorage.setItem('activeTab', 'profile');
-                              localStorage.setItem('showPersonalInfo', 'true');
-                              window.location.href = '/';
-                           }}
-                        >
-                           개인정보 수정
-                        </button>
+                        {!isEditing ? (
+                           <>
+                              <button
+                                 className="edit-button"
+                                 onClick={handleStartEdit}
+                              >
+                                 편집
+                              </button>
+                              <button
+                                 className="edit-button"
+                                 onClick={() => setShowPersonalInfo(true)}
+                              >
+                                 개인정보 수정
+                              </button>
+                           </>
+                        ) : (
+                           <>
+                              <button
+                                 className="edit-button cancel-button"
+                                 onClick={handleCancel}
+                              >
+                                 취소
+                              </button>
+                              <button
+                                 className="edit-button clear-button"
+                                 onClick={handleClearAll}
+                              >
+                                 초기화
+                              </button>
+                              <button
+                                 className="edit-button save-button"
+                                 onClick={handleSave}
+                              >
+                                 저장
+                              </button>
+                           </>
+                        )}
                      </div>
                   </div>
                   <div className="calendar-container">
@@ -538,9 +646,20 @@ const MobileScheduleView = ({ user }) => {
                         initialView="dayGridMonth"
                         timeZone="local"
                         headerToolbar={{
-                           left: 'prev,next',
+                           left: 'backToMonth prev,next',
                            center: 'title',
                            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                        }}
+                        customButtons={{
+                           backToMonth: {
+                              text: '◀ 월',
+                              click: function() {
+                                 const calendarApi = calendarRef.current?.getApi();
+                                 if (calendarApi) {
+                                    calendarApi.changeView('dayGridMonth');
+                                 }
+                              }
+                           }
                         }}
                         events={events}
                         dateClick={handleDateClick}
@@ -580,7 +699,33 @@ const MobileScheduleView = ({ user }) => {
             )}
          </div>
 
-         <BottomNavigation />
+         {/* 편집 모드일 때만 하단 네비게이션 표시 */}
+         {isEditing && (
+            <BottomNavigation 
+               onRefresh={fetchSchedule}
+               onCamera={() => {
+                  console.log('카메라 기능 - 사진으로 시간표 만들기');
+                  alert('카메라 기능은 개발 중입니다.');
+               }}
+               onChat={() => {
+                  setIsChatOpen(!isChatOpen);
+               }}
+               onMic={() => {
+                  console.log('음성 기능');
+                  alert('음성 기능은 개발 중입니다.');
+               }}
+            />
+         )}
+
+         {/* 채팅봇 - 편집 모드 */}
+         {isEditing && isChatOpen && (
+            <ChatBox
+               onSendMessage={handleChatMessage}
+               currentTab="profile"
+               onEventUpdate={fetchSchedule}
+               forceOpen={true}
+            />
+         )}
       </div>
    );
 };
