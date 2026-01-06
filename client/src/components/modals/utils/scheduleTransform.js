@@ -98,15 +98,15 @@ export const convertToPersonalTimes = (currentCombination, hoveredImageIndex) =>
       }
 
       const converted = {
+        ...schedule, // ⭐ 먼저 원본 속성 복사
         id: Date.now() + index,
         type: 'study',
-        days: mappedDays,
+        days: mappedDays, // ⭐ 그 다음 변환된 days로 덮어쓰기
         startTime: schedule.startTime,
         endTime: schedule.endTime,
         title: schedule.title || '수업',
         color: scheduleColor,
-        isRecurring: true,
-        ...schedule // 기타 속성 유지
+        isRecurring: true
       };
 
       if (index < 3) {
