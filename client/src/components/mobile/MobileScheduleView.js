@@ -7,6 +7,7 @@ const MobileScheduleView = ({ user }) => {
    const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
    const [isClipboardMonitoring, setIsClipboardMonitoring] = useState(false);
    const [isBackgroundMonitoring, setIsBackgroundMonitoring] = useState(false);
+   const [activeTab, setActiveTab] = useState('upcoming'); // 'past', 'recent', 'upcoming'
 
    const handleLogout = () => {
       localStorage.removeItem('token');
@@ -103,9 +104,33 @@ const MobileScheduleView = ({ user }) => {
             </div>
          </header>
 
-         {/* 빈 컨텐츠 영역 */}
-         <div className="schedule-content empty-state">
-            {/* 여기에 필요한 경우 빈 상태 메시지나 아이콘을 추가할 수 있습니다. */}
+         {/* 상단 탭 버튼 */}
+         <div className="schedule-tabs">
+            <button 
+               className={`tab-btn ${activeTab === 'past' ? 'active' : ''}`}
+               onClick={() => setActiveTab('past')}
+            >
+               지난 일정
+            </button>
+            <button 
+               className={`tab-btn ${activeTab === 'recent' ? 'active' : ''}`}
+               onClick={() => setActiveTab('recent')}
+            >
+               최근 일정
+            </button>
+            <button 
+               className={`tab-btn ${activeTab === 'upcoming' ? 'active' : ''}`}
+               onClick={() => setActiveTab('upcoming')}
+            >
+               예정 일정
+            </button>
+         </div>
+
+         {/* 컨텐츠 영역 */}
+         <div className="schedule-content">
+            {activeTab === 'past' && <div className="tab-content">지난 일정 내용이 여기에 표시됩니다.</div>}
+            {activeTab === 'recent' && <div className="tab-content">최근 일정 내용이 여기에 표시됩니다.</div>}
+            {activeTab === 'upcoming' && <div className="tab-content">예정 일정 내용이 여기에 표시됩니다.</div>}
          </div>
       </div>
    );
