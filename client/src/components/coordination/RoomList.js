@@ -156,13 +156,14 @@ const RoomList = ({
   roomExchangeCounts,
   onCreateRoom,
   onJoinRoom,
-  onRoomClick
+  onRoomClick,
+  hideHeader = false
 }) => {
   const hasRooms = (myRooms?.owned?.length > 0 || myRooms?.joined?.length > 0);
 
   return (
     <div className="bg-slate-50 p-4 sm:p-6 rounded-lg min-h-full">
-      <RoomListHeader onCreateRoom={onCreateRoom} onJoinRoom={onJoinRoom} />
+      {!hideHeader && <RoomListHeader onCreateRoom={onCreateRoom} onJoinRoom={onJoinRoom} />}
       {hasRooms ? (
         <div className="mb-6">
           <RoomTabs selectedTab={selectedTab} setSelectedTab={setSelectedTab} myRooms={myRooms} />

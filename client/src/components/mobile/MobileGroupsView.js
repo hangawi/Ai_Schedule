@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Menu, LogOut, Calendar, Clipboard, ClipboardX, Phone, User } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 import CoordinationTab from '../tabs/CoordinationTab';
@@ -7,6 +7,7 @@ import './MobileGroupsView.css';
 
 const MobileGroupsView = ({ user }) => {
    const navigate = useNavigate();
+   const location = useLocation();
    const [exchangeRequestCount, setExchangeRequestCount] = useState(0);
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
    const [isClipboardMonitoring, setIsClipboardMonitoring] = useState(false);
@@ -14,8 +15,13 @@ const MobileGroupsView = ({ user }) => {
    const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
    const [isInRoom, setIsInRoom] = useState(false);
 
-   // 방 상태 추적
+   // 방 상태 추적 및 초기화
    useEffect(() => {
+      // 컴포넌트 마운트 시 무조건 방 목록으로 초기화
+      localStorage.removeItem('currentRoomId');
+      localStorage.removeItem('currentRoomData');
+      window.dispatchEvent(new CustomEvent('clearCurrentRoom'));
+
       const handleRestore = () => setIsInRoom(true);
       const handleClear = () => setIsInRoom(false);
 
@@ -28,7 +34,7 @@ const MobileGroupsView = ({ user }) => {
          window.removeEventListener('restoreRoom', handleRestore);
          window.removeEventListener('clearCurrentRoom', handleClear);
       };
-   }, []);
+   }, [location.key]); // location.key가 바뀔 때마다 실행
 
    const handleLogout = async () => {
       try {
@@ -160,8 +166,10 @@ const MobileGroupsView = ({ user }) => {
          {/* 그룹 컨텐츠 */}
          <div className="groups-content">
             <CoordinationTab 
+               key={location.key}
                user={user} 
                onExchangeRequestCountChange={setExchangeRequestCount}
+               hideHeader={true}
             />
          </div>
       </div>
