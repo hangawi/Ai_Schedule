@@ -267,22 +267,338 @@
 }
 
 .tab-content {
+   min-height: 200px;
+}
+
+.tab-content.loading {
    background: white;
    border-radius: 12px;
-   padding: 20px;
+   padding: 40px 20px;
    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-   min-height: 200px;
    text-align: center;
    color: #6b7280;
    font-size: 14px;
 }
 
-/* 로딩 상태 */
-.loading-state {
+/* 빈 메시지 */
+.empty-message {
+   background: white;
+   border-radius: 12px;
+   padding: 40px 20px;
+   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+   text-align: center;
+   color: #9ca3af;
+   font-size: 14px;
+   margin: 0;
+}
+
+/* 일정 목록 */
+.event-list {
+   display: flex;
+   flex-direction: column;
+   gap: 12px;
+}
+
+/* 일정 카드 */
+.event-card {
+   background: white;
+   border: 1px solid #e5e7eb;
+   border-radius: 12px;
+   padding: 16px;
+   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+   transition: all 0.2s;
+}
+
+.event-card:active {
+   transform: scale(0.98);
+}
+
+.event-card.coordinated {
+   border-color: #10b981;
+   border-left-width: 4px;
+   background: linear-gradient(135deg, #10b98105 0%, #10b98110 100%);
+}
+
+.event-header {
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   margin-bottom: 8px;
+   gap: 8px;
+}
+
+.event-title {
+   font-size: 16px;
+   font-weight: 600;
+   color: #1f2937;
+   margin: 0;
+   flex: 1;
+}
+
+.coordinated-badge {
+   display: inline-block;
+   padding: 2px 8px;
+   background: #d1fae5;
+   color: #065f46;
+   font-size: 11px;
+   font-weight: 600;
+   border-radius: 12px;
+   flex-shrink: 0;
+}
+
+.event-room {
+   font-size: 12px;
+   color: #10b981;
+   margin: 4px 0 8px 0;
+   font-weight: 500;
+}
+
+.event-info {
+   display: flex;
+   flex-direction: column;
+   gap: 4px;
+   font-size: 13px;
+   color: #6b7280;
+}
+
+.event-info p {
+   margin: 0;
+}
+
+.event-date {
+   font-weight: 600;
+   color: #4b5563;
+}
+
+.event-time {
+   color: #6b7280;
+}
+
+.event-participants {
+   color: #9ca3af;
+   font-size: 12px;
+}
+
+/* ===================================
+   일정 상세 모달
+   =================================== */
+.modal-overlay {
+   position: fixed;
+   top: 0;
+   left: 0;
+   right: 0;
+   bottom: 0;
+   background: rgba(0, 0, 0, 0.6);
+   z-index: 2000;
+   animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+   from {
+      opacity: 0;
+   }
+   to {
+      opacity: 1;
+   }
+}
+
+@keyframes slideUp {
+   from {
+      transform: translateY(100%);
+   }
+   to {
+      transform: translateY(0);
+   }
+}
+
+.event-detail-modal {
+   position: fixed;
+   bottom: 0;
+   left: 0;
+   right: 0;
+   max-height: 85vh;
+   background: white;
+   border-radius: 20px 20px 0 0;
+   z-index: 2001;
+   overflow-y: auto;
+   animation: slideUp 0.3s ease-out;
+   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   padding: 20px;
+   border-bottom: 1px solid #e5e7eb;
+   position: sticky;
+   top: 0;
+   background: white;
+   z-index: 10;
+   border-radius: 20px 20px 0 0;
+}
+
+.modal-title {
+   font-size: 20px;
+   font-weight: 700;
+   color: #1f2937;
+   margin: 0;
+}
+
+.modal-close-btn {
+   background: #f3f4f6;
+   border: none;
+   border-radius: 50%;
+   width: 36px;
+   height: 36px;
    display: flex;
    align-items: center;
    justify-content: center;
-   height: 100%;
-   font-size: 16px;
+   cursor: pointer;
    color: #6b7280;
+   transition: all 0.2s;
+}
+
+.modal-close-btn:hover {
+   background: #e5e7eb;
+}
+
+.modal-close-btn:active {
+   background: #d1d5db;
+}
+
+.modal-content {
+   padding: 20px;
+   display: flex;
+   flex-direction: column;
+   gap: 20px;
+}
+
+.modal-section {
+   display: flex;
+   flex-direction: column;
+   gap: 8px;
+   padding-bottom: 20px;
+   border-bottom: 1px solid #f3f4f6;
+}
+
+.modal-section:last-child {
+   border-bottom: none;
+   padding-bottom: 0;
+}
+
+.modal-label {
+   display: flex;
+   align-items: center;
+   gap: 6px;
+   font-size: 13px;
+   font-weight: 600;
+   color: #6b7280;
+   text-transform: uppercase;
+   letter-spacing: 0.5px;
+}
+
+.modal-value {
+   font-size: 16px;
+   color: #1f2937;
+   font-weight: 500;
+   line-height: 1.5;
+}
+
+.modal-value-large {
+   font-size: 20px;
+   font-weight: 700;
+   color: #111827;
+   margin-bottom: 8px;
+}
+
+.duration-text {
+   color: #6b7280;
+   font-size: 14px;
+   font-weight: 400;
+}
+
+.modal-coordinated-info {
+   background: linear-gradient(135deg, #d1fae520 0%, #a7f3d030 100%);
+   padding: 16px;
+   border-radius: 12px;
+   border: 1px solid #10b981;
+   border-left-width: 4px;
+}
+
+.modal-coordinated-info .modal-label {
+   color: #065f46;
+}
+
+.modal-coordinated-info .modal-value {
+   color: #047857;
+   font-weight: 600;
+}
+
+/* 장소 클릭 가능 섹션 */
+.modal-location-section {
+   transition: all 0.2s;
+}
+
+.modal-location-section:hover {
+   background: #f9fafb;
+   border-radius: 8px;
+   padding: 12px;
+   margin: -12px;
+}
+
+.modal-location-value {
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   gap: 8px;
+}
+
+.map-hint {
+   font-size: 12px;
+   color: #3b82f6;
+   font-weight: 600;
+   white-space: nowrap;
+}
+
+/* ===================================
+   지도 모달
+   =================================== */
+.map-modal {
+   position: fixed;
+   bottom: 0;
+   left: 0;
+   right: 0;
+   max-height: 80vh;
+   background: white;
+   border-radius: 20px 20px 0 0;
+   z-index: 2002;
+   overflow-y: auto;
+   animation: slideUp 0.3s ease-out;
+   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.map-content {
+   padding: 20px;
+   display: flex;
+   flex-direction: column;
+   gap: 16px;
+}
+
+.map-address {
+   font-size: 15px;
+   color: #1f2937;
+   font-weight: 500;
+   margin: 0;
+   padding: 12px;
+   background: #f9fafb;
+   border-radius: 8px;
+   border-left: 3px solid #3b82f6;
+}
+
+.map-container {
+   width: 100%;
+   overflow: hidden;
+   border-radius: 12px;
+   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }

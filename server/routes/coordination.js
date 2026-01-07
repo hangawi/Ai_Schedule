@@ -31,6 +31,7 @@ const auth = require('../middleware/auth');
 router.post('/rooms', auth, coordinationController.createRoom);
 router.get('/rooms/exchange-counts', auth, coordinationController.getRoomExchangeCounts); // 이거를 먼저 배치
 router.get('/my-rooms', auth, coordinationController.getMyRooms);
+router.get('/my-confirmed-schedules', auth, coordinationController.getMyConfirmedSchedules);
 
 // Member time management (moved before dynamic room routes)
 router.post('/reset-carryover/:roomId', auth, coordinationController.resetCarryOverTimes);

@@ -214,3 +214,68 @@ exports.clearUserLogs = async (req, res) => {
       res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
    }
 };
+
+
+/**
+ * @desc    사용자의 모든 확정된 일정 조회 (모든 방의 confirmed timeSlots)
+ * @route   GET /api/coordination/my-confirmed-schedules
+ * @access  Private
+ */
+exports.getMyConfirmedSchedules = async (req, res) => {
+   try {
+      const userId = req.user.id;
+
+      // 사용자가 참여 중인 모든 방 조회
+      const rooms = await Room.find({
+         $or: [
+            { owner: userId },
+            { 'members.user': userId }
+         ]
+      }).populate('timeSlots.user', 'firstName lastName email')
+        .populate('owner', 'firstName lastName');
+
+      if (!rooms || rooms.length === 0) {
+         return res.json({ schedules: [] });
+      }
+
+      // 모든 방의 확정된 timeSlots 수집
+      const confirmedSchedules = [];
+
+      rooms.forEach(room => {
+         // 해당 사용자의 confirmed 상태인 timeSlots만 필터링
+         const userSlots = room.timeSlots.filter(slot => {
+            const slotUserId = slot.user?._id?.toString() || slot.user?.toString();
+            return slotUserId === userId && slot.status === 'confirmed';
+         });
+
+         userSlots.forEach(slot => {
+            // Event 형식과 유사하게 변환
+            confirmedSchedules.push({
+               id: slot._id,
+               title: slot.subject || '확정된 일정',
+               date: slot.date,
+               startTime: slot.startTime,
+               endTime: slot.endTime,
+               day: slot.day,
+               roomId: room._id,
+               roomName: room.name,
+               priority: slot.priority || 3,
+               category: 'coordination', // 조율 일정 구분
+               isCoordinated: true, // 일정 맞추기로 확정된 일정임을 표시
+               participants: room.members.length, // 방 멤버 수
+               color: 'green', // 확정 일정은 초록색으로 구분
+               assignedBy: slot.assignedBy,
+               assignedAt: slot.assignedAt
+            });
+         });
+      });
+
+      // 날짜순 정렬 (오래된 것 -> 최신 순)
+      confirmedSchedules.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      res.json({ schedules: confirmedSchedules });
+   } catch (error) {
+      console.error('Get confirmed schedules error:', error);
+      res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+   }
+};

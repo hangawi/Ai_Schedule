@@ -264,6 +264,8 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
    const [showTimeSelectionModal, setShowTimeSelectionModal] = useState(false);
    const [globalEvents, setGlobalEvents] = useState([]);
    const [eventsLoaded, setEventsLoaded] = useState(false);
+   const [personalTimes, setPersonalTimes] = useState([]); // 개인시간 (확정된 일정 포함)
+   const [personalTimesLoaded, setPersonalTimesLoaded] = useState(false);
    const [selectedProposal, setSelectedProposal] = useState(null);
    const [globalProposals, setGlobalProposals] = useState([]);
    const [showEditModal, setShowEditModal] = useState(false);
@@ -401,6 +403,53 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
          setEventsLoaded(true);
       } catch (error) {
          setEventsLoaded(true);
+      }
+   }, [isLoggedIn, handleLogout]);
+
+
+   /**
+    * fetchPersonalTimes
+    * @description 사용자의 개인시간(personalTimes)을 가져와 상태에 저장합니다.
+    * 일정 맞추기에서 확정된 일정도 여기에 포함됩니다.
+    */
+   const fetchPersonalTimes = useCallback(async () => {
+      if (!isLoggedIn) return;
+      try {
+         const currentUser = auth.currentUser;
+         if (!currentUser) {
+            handleLogout();
+            return;
+         }
+         const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+            headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
+         });
+         if (!response.ok) {
+            if (response.status === 401) handleLogout();
+            throw new Error('Failed to fetch personal times');
+         }
+         const data = await response.json();
+
+         // personalTimes를 Event 형식으로 변환
+         const formattedPersonalTimes = (data.personalTimes || [])
+            .filter(pt => pt.specificDate) // 특정 날짜가 있는 것만 (확정된 일정)
+            .map(pt => ({
+               id: `pt-${pt.id}`,
+               title: pt.title || '개인 일정',
+               date: pt.specificDate,
+               time: pt.startTime,
+               endTime: pt.endTime,
+               participants: 1,
+               priority: 3,
+               color: pt.color || '#10B981',
+               isCoordinated: pt.title && pt.title.includes('-'), // 타이틀에 '-'가 있으면 확정된 일정
+               roomName: pt.title && pt.title.includes('-') ? pt.title.split('-')[0].trim() : undefined
+            }));
+
+         setPersonalTimes(formattedPersonalTimes);
+         setPersonalTimesLoaded(true);
+      } catch (error) {
+         console.error('Fetch personal times error:', error);
+         setPersonalTimesLoaded(true);
       }
    }, [isLoggedIn, handleLogout]);
 
@@ -551,6 +600,13 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
       }
    }, [isLoggedIn, eventsLoaded, fetchEvents]);
 
+   // 확정된 일정 로드
+   useEffect(() => {
+      if (isLoggedIn && !personalTimesLoaded) {
+         fetchPersonalTimes();
+      }
+   }, [isLoggedIn, personalTimesLoaded, fetchPersonalTimes]);
+
    // eventAddedKey가 변경될 때마다 로컬 이벤트를 다시 가져옴 (실시간 동기화)
    useEffect(() => {
       if (isLoggedIn && eventAddedKey > 0) {
@@ -579,22 +635,37 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
    const USE_ENHANCED_CHAT = true;
    const { handleChatMessage } = USE_ENHANCED_CHAT ? chatEnhanced : chatLegacy;
 
-   const { todayEvents, upcomingEvents } = useMemo(() => {
+   const { pastEvents, todayEvents, upcomingEvents } = useMemo(() => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split('T')[0]; // "YYYY-MM-DD" 형식
 
-      const todayEvents = globalEvents.filter(event => {
+      // 30일 전 날짜
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+
+      // 모든 일정 병합 (나의 일정 + 개인시간(확정된 일정 포함))
+      const allEvents = [...globalEvents, ...personalTimes];
+
+      const pastEvents = allEvents.filter(event => {
          const eventDate = new Date(event.date);
-         return eventDate.getTime() === today.getTime();
+         eventDate.setHours(0, 0, 0, 0);
+         return eventDate >= thirtyDaysAgo && eventDate < today;
       });
 
-      const upcomingEvents = globalEvents.filter(event => {
+      const todayEvents = allEvents.filter(event => {
+         // 문자열 비교로 정확한 날짜 매칭
+         return event.date === todayStr;
+      });
+
+      const upcomingEvents = allEvents.filter(event => {
          const eventDate = new Date(event.date);
+         eventDate.setHours(0, 0, 0, 0);
          return eventDate > today;
       });
 
-      return { todayEvents, upcomingEvents };
-   }, [globalEvents]);
+      return { pastEvents, todayEvents, upcomingEvents };
+   }, [globalEvents, personalTimes]);
 
    // 탭별 챗봇 메시지 처리 함수
    const handleTabSpecificChatMessage = async (message, additionalContext = {}) => {
@@ -826,7 +897,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                   <MobileDashboard user={user} />
                ) : (
                   <>
-                     {activeTab === 'dashboard' && <DashboardTab onSelectTime={handleSelectProposalForTime} proposals={globalProposals} todayEvents={todayEvents} upcomingEvents={upcomingEvents} />}
+                     {activeTab === 'dashboard' && <DashboardTab pastEvents={pastEvents} todayEvents={todayEvents} upcomingEvents={upcomingEvents} />}
                {activeTab === 'proposals' && <ProposalsTab onSelectTime={handleSelectProposalForTime} proposals={globalProposals} />}
                {activeTab === 'events' && <EventsTab events={globalEvents} onAddEvent={handleAddGlobalEvent} isLoggedIn={isLoggedIn} onDeleteEvent={handleDeleteEvent} onEditEvent={handleEditEvent} />}
                {activeTab === 'googleCalendar' && <MyCalendar isListening={isListening} onEventAdded={eventAddedKey} isVoiceRecognitionEnabled={isVoiceRecognitionEnabled} onToggleVoiceRecognition={() => setIsVoiceRecognitionEnabled(prev => !prev)} />}

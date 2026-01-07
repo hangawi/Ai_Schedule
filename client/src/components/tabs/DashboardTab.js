@@ -57,48 +57,34 @@ const StatCard = ({ title, value, change, changeType }) => {
 };
 
 /**
- * [ProposalCard]
- * @description '진행 중인 조율' 항목 하나를 표시하기 위한 카드 컴포넌트
- * @param {object} proposal - 조율 제안 정보 객체
- * @param {function} onClick - '제안 준비됨' 상태의 카드를 클릭했을 때 호출될 함수
- * @returns {JSX.Element} 조율 제안 카드 컴포넌트
- */
-const ProposalCard = ({ proposal, onClick }) => {
-   const statusInfo = {
-      pending: { text: '대기 중', color: 'bg-yellow-100 text-yellow-800' },
-      in_progress: { text: '조율 중', color: 'bg-blue-100 text-blue-800' },
-      suggestions_ready: { text: '제안 준비됨', color: 'bg-purple-100 text-purple-800' },
-      finalized: { text: '확정됨', color: 'bg-green-100 text-green-800' },
-   };
-   return (
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer" onClick={proposal.status === 'suggestions_ready' ? () => onClick(proposal) : undefined}>
-         <div className="flex justify-between items-start">
-            <h4 className="font-medium text-gray-800 truncate pr-2">{proposal.title}</h4>
-            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusInfo[proposal.status]?.color || 'bg-gray-100'}`}>{statusInfo[proposal.status]?.text || proposal.status}</span>
-         </div>
-         <div className="mt-2 text-sm text-gray-500">
-            <p>진행자: {proposal.initiator}</p>
-            <p>참가자: {proposal.participants.length}명</p>
-         </div>
-      </div>
-   );
-};
-
-/**
  * [EventCard]
  * @description '오늘의 일정' 또는 '다가오는 일정' 항목 하나를 표시하기 위한 카드 컴포넌트
  * @param {string} title - 일정 제목
  * @param {string} time - 일정 시간
  * @param {number} participants - 참가자 수
  * @param {number} priority - 중요도 (1-5), 별 모양으로 시각화됨
+ * @param {boolean} isCoordinated - 일정 맞추기로 확정된 일정인지 여부
+ * @param {string} roomName - 조율방 이름 (isCoordinated일 때만)
  * @returns {JSX.Element} 일정 카드 컴포넌트
  */
-const EventCard = ({ title, time, participants, priority }) => {
-    const stars = Array.from({ length: 5 }, (_, i) => <Star key={i} size={14} className={i < priority ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'} />);
+const EventCard = ({ title, time, participants, priority, isCoordinated, roomName }) => {
+   const stars = Array.from({ length: 5 }, (_, i) => <Star key={i} size={14} className={i < priority ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'} />);
    return (
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
+      <div className={`bg-white p-4 rounded-lg shadow-sm border ${isCoordinated ? 'border-green-300' : 'border-gray-200'} hover:shadow-md transition-shadow cursor-pointer`}>
          <div className="flex justify-between items-start">
-            <h4 className="font-medium text-gray-800 truncate pr-2">{title}</h4>
+            <div className="flex-1">
+               <div className="flex items-center gap-2 mb-1">
+                  <h4 className="font-medium text-gray-800 truncate">{title}</h4>
+                  {isCoordinated && (
+                     <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full flex-shrink-0">
+                        확정
+                     </span>
+                  )}
+               </div>
+               {isCoordinated && roomName && (
+                  <p className="text-xs text-gray-500">📅 {roomName}</p>
+               )}
+            </div>
             <div className="flex flex-shrink-0">{stars}</div>
          </div>
          <div className="mt-2 text-sm text-gray-500">
@@ -112,13 +98,12 @@ const EventCard = ({ title, time, participants, priority }) => {
 /**
  * [DashboardTab]
  * @description 사용자의 일정 현황을 요약해서 보여주는 대시보드 탭의 메인 컴포넌트
- * @param {function} onSelectTime - '제안 준비됨' 상태의 조율 카드를 클릭했을 때 호출될 함수
- * @param {Array<object>} proposals - 진행 중인 조율 목록 데이터
+ * @param {Array<object>} pastEvents - 지난 일정 목록 (30일 전까지)
  * @param {Array<object>} todayEvents - 오늘의 일정 목록 데이터
  * @param {Array<object>} upcomingEvents - 다가오는 일정 목록 데이터
  * @returns {JSX.Element} 대시보드 탭 컴포넌트
  */
-const DashboardTab = ({ onSelectTime, proposals, todayEvents, upcomingEvents }) => {
+const DashboardTab = ({ pastEvents = [], todayEvents, upcomingEvents }) => {
    return (
       <div>
          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
@@ -131,39 +116,94 @@ const DashboardTab = ({ onSelectTime, proposals, todayEvents, upcomingEvents }) 
                </select>
             </div>
          </div>
+
+         {/* 통계 카드 */}
          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
-            <StatCard title="진행 중인 조율" value={proposals.filter(p => p.status !== 'finalized').length} change="+1" changeType="increase" />
+            <StatCard title="지난 일정 (30일)" value={pastEvents.length} change="0" changeType="neutral" />
             <StatCard title="오늘 일정" value={todayEvents.length} change="0" changeType="neutral" />
-            <StatCard title="다가오는 일정" value={upcomingEvents.length} change="+2" changeType="increase" />
+            <StatCard title="예정된 일정" value={upcomingEvents.length} change="+2" changeType="increase" />
          </div>
+
+         {/* 일정 섹션 */}
          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* 왼쪽 열 */}
             <div className="space-y-6">
+               {/* 지난 일정 (30일) */}
                <div>
                   <div className="flex justify-between items-center mb-4">
-                     <h3 className="text-lg font-semibold text-gray-800">진행 중인 조율</h3>
+                     <h3 className="text-lg font-semibold text-gray-800">지난 일정 (30일)</h3>
                      <button className="text-blue-500 text-sm font-medium hover:underline">모두 보기</button>
                   </div>
                   <div className="space-y-3">
-                     {proposals.slice(0, 3).map(proposal => <ProposalCard key={proposal.id || proposal._id} proposal={proposal} onClick={onSelectTime} />)}
-                  </div>
-               </div>
-               <div>
-                  <div className="flex justify-between items-center mb-4">
-                     <h3 className="text-lg font-semibold text-gray-800">다가오는 일정</h3>
-                     <button className="text-blue-500 text-sm font-medium hover:underline">모두 보기</button>
-                  </div>
-                  <div className="space-y-3">
-                     {upcomingEvents.slice(0, 3).map(event => <EventCard key={event.id} title={event.title} time={`${event.date} ${event.time}`} participants={event.participants} priority={event.priority} />)}
+                     {pastEvents.length > 0 ? (
+                        pastEvents.slice(0, 3).map(event => (
+                           <EventCard 
+                              key={event.id} 
+                              title={event.title} 
+                              time={`${event.date} ${event.time}`} 
+                              participants={event.participants} 
+                              priority={event.priority}
+                              isCoordinated={event.isCoordinated}
+                              roomName={event.roomName}
+                           />
+                        ))
+                     ) : (
+                        <p className="text-gray-500 text-sm">지난 30일간 일정이 없습니다.</p>
+                     )}
                   </div>
                </div>
             </div>
-            <div>
-               <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-gray-800">오늘의 일정</h3>
-                  <button className="text-blue-500 text-sm font-medium hover:underline">모두 보기</button>
+            
+            {/* 오른쪽 열 */}
+            <div className="space-y-6">
+               {/* 예정된 일정 */}
+               <div>
+                  <div className="flex justify-between items-center mb-4">
+                     <h3 className="text-lg font-semibold text-gray-800">예정된 일정</h3>
+                     <button className="text-blue-500 text-sm font-medium hover:underline">모두 보기</button>
+                  </div>
+                  <div className="space-y-3">
+                     {upcomingEvents.length > 0 ? (
+                        upcomingEvents.slice(0, 3).map(event => (
+                           <EventCard 
+                              key={event.id} 
+                              title={event.title} 
+                              time={`${event.date} ${event.time}`} 
+                              participants={event.participants} 
+                              priority={event.priority}
+                              isCoordinated={event.isCoordinated}
+                              roomName={event.roomName}
+                           />
+                        ))
+                     ) : (
+                        <p className="text-gray-500 text-sm">예정된 일정이 없습니다.</p>
+                     )}
+                  </div>
                </div>
-               <div className="space-y-3">
-                  {todayEvents.slice(0, 3).map(event => <EventCard key={event.id} title={event.title} time={`${event.time}`} participants={event.participants} priority={event.priority} />)}
+               
+               {/* 오늘의 일정 */}
+               <div>
+                  <div className="flex justify-between items-center mb-4">
+                     <h3 className="text-lg font-semibold text-gray-800">오늘의 일정</h3>
+                     <button className="text-blue-500 text-sm font-medium hover:underline">모두 보기</button>
+                  </div>
+                  <div className="space-y-3">
+                     {todayEvents.length > 0 ? (
+                        todayEvents.slice(0, 3).map(event => (
+                           <EventCard 
+                              key={event.id} 
+                              title={event.title} 
+                              time={`${event.time}`} 
+                              participants={event.participants} 
+                              priority={event.priority}
+                              isCoordinated={event.isCoordinated}
+                              roomName={event.roomName}
+                           />
+                        ))
+                     ) : (
+                        <p className="text-gray-500 text-sm">오늘 일정이 없습니다.</p>
+                     )}
+                  </div>
                </div>
             </div>
          </div>
