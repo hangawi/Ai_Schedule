@@ -757,7 +757,7 @@ const MobileCalendarView = ({ user }) => {
    }
 
    return (
-      <div className="mobile-calendar-view">
+      <div className={`mobile-calendar-view view-${calendarView}`}>
          {/* 사이드바 오버레이 */}
          {isSidebarOpen && (
             <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)}></div>
