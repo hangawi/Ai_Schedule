@@ -228,7 +228,6 @@ export const coordinationService = {
 
   // 요청 처리
   async handleRequest(requestId, action) {
-    console.log('🔍 [coordinationService.handleRequest] requestId:', requestId, 'action:', action);
     const token = await getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/coordination/requests/${requestId}/${action}`, {
       method: 'POST',
@@ -237,16 +236,13 @@ export const coordinationService = {
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({ msg: 'Unknown error' }));
-      console.error('🔍 [coordinationService.handleRequest] Error:', errData);
       throw new Error(errData.msg || `Failed to ${action} request`);
     }
 
     const result = await response.json();
-    console.log('🔍 [coordinationService.handleRequest] Response:', result);
     // 🔍 DEBUG: 응답에서 요청 상태 확인
     if (result.requests) {
       result.requests.forEach(req => {
-        console.log('🔍 [handleRequest] Request in response:', req._id, 'status:', req.status);
       });
     }
     return result;
@@ -273,12 +269,6 @@ export const coordinationService = {
 
     // 'approved' → 'accept', 'rejected' → 'reject' 변환
     const serverAction = action === 'approved' ? 'accept' : action === 'rejected' ? 'reject' : action;
-
-    console.log('📡 [coordinationService] Calling respondToExchangeRequest API');
-    console.log('   Room ID:', roomId);
-    console.log('   Request ID:', requestId);
-    console.log('   Action:', action, '→', serverAction);
-
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/exchange-requests/${requestId}/respond`, {
       method: 'POST',
       headers: {
@@ -495,12 +485,6 @@ export const coordinationService = {
 
     // 'approved' → 'accept', 'rejected' → 'reject' 변환
     const serverAction = action === 'approved' ? 'accept' : action === 'rejected' ? 'reject' : action;
-
-    console.log('🔗 [coordinationService] Calling respondToChainExchangeRequest API');
-    console.log('   Room ID:', roomId);
-    console.log('   Request ID:', requestId);
-    console.log('   Action:', action, '→', serverAction);
-
     const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${roomId}/chain-exchange-requests/${requestId}/respond`, {
       method: 'POST',
       headers: {
@@ -589,28 +573,11 @@ export const coordinationService = {
   async applyTravelMode(roomId, travelMode, enhancedSchedule) {
     const token = await getAuthToken();
 
-    // 🔍 디버깅: 전송 전 데이터 확인
-    console.log('🔍 [applyTravelMode] 전송 전 enhancedSchedule.timeSlots 첫 3개:',
-      enhancedSchedule.timeSlots?.slice(0, 3).map(s => ({
-        startTime: s.startTime,
-        endTime: s.endTime,
-        subject: s.subject,
-        date: s.date
-      }))
-    );
-
     const payload = { travelMode, enhancedSchedule };
     const jsonString = JSON.stringify(payload);
 
     // 🔍 디버깅: JSON 변환 후 다시 파싱해서 확인
     const parsed = JSON.parse(jsonString);
-    console.log('🔍 [applyTravelMode] JSON 변환 후 timeSlots 첫 3개:',
-      parsed.enhancedSchedule.timeSlots?.slice(0, 3).map(s => ({
-        startTime: s.startTime,
-        endTime: s.endTime,
-        subject: s.subject
-      }))
-    );
 
     const response = await fetch(
       `${API_BASE_URL}/api/coordination/rooms/${roomId}/apply-travel-mode`,
@@ -671,8 +638,6 @@ export const coordinationService = {
    */
   async validateScheduleWithTransportMode(roomId, transportMode, viewMode, currentWeekStartDate) {
     const token = await getAuthToken();
-
-    console.log('🔍 [validateScheduleWithTransportMode] 호출:', { roomId, transportMode, viewMode, currentWeekStartDate });
 
     const response = await fetch(
       `${API_BASE_URL}/api/coordination/rooms/${roomId}/validate-schedule`,

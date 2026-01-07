@@ -180,7 +180,6 @@ const AdminRoomManagement = () => {
 
       // 방 객체가 전달되었으면 멤버 정보 사용
       if (roomObj && roomObj.members) {
-        console.log('Room members from roomObj:', roomObj.members);
         setRoomMembers(roomObj.members);
         // 사용자 정보 가져오기
         await fetchMembersUserInfo(roomObj.members);
@@ -188,7 +187,6 @@ const AdminRoomManagement = () => {
         // 방 객체가 없으면 rooms 배열에서 찾기
         const foundRoom = rooms.find(r => r._id === roomId);
         if (foundRoom && foundRoom.members) {
-          console.log('Room members from foundRoom:', foundRoom.members);
           setRoomMembers(foundRoom.members);
           // 사용자 정보 가져오기
           await fetchMembersUserInfo(foundRoom.members);
@@ -231,7 +229,6 @@ const AdminRoomManagement = () => {
             return { ...member, userInfo: null };
           }
         } catch (err) {
-          console.error(`Failed to fetch user info for ${userId}:`, err);
           return { ...member, userInfo: null };
         }
       });
@@ -239,7 +236,6 @@ const AdminRoomManagement = () => {
       const membersWithUserInfo = await Promise.all(userInfoPromises);
       setRoomMembersWithUserInfo(membersWithUserInfo);
     } catch (err) {
-      console.error('Failed to fetch members user info:', err);
     }
   };
 

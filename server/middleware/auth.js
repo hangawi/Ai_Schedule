@@ -81,9 +81,7 @@ module.exports = async function (req, res, next) {
         try {
           user.firebaseUid = firebaseUid;
           await user.save();
-          console.log('[Auth Middleware] Updated firebaseUid for user:', user.email);
         } catch (updateErr) {
-          console.error('[Auth Middleware] Failed to update firebaseUid:', updateErr.message);
           // Continue with the found user even if update fails
         }
       }
@@ -110,7 +108,6 @@ module.exports = async function (req, res, next) {
           existingUser.firebaseUid = firebaseUid;
           await existingUser.save();
           user = existingUser;
-          console.log('[Auth Middleware] Found existing user by email, updated firebaseUid:', userEmail);
         } else {
           // Create new user in MongoDB
           user = new User({
@@ -124,10 +121,8 @@ module.exports = async function (req, res, next) {
             personalTimes: [],
           });
           await user.save();
-          console.log('[Auth Middleware] Created new user:', user.email);
         }
       } catch (createErr) {
-        console.error('[Auth Middleware] Failed to create new user:', createErr);
 
         // If duplicate key error, try to find and update the existing user
         if (createErr.code === 11000) {
@@ -136,7 +131,6 @@ module.exports = async function (req, res, next) {
             existingUser.firebaseUid = firebaseUid;
             await existingUser.save();
             user = existingUser;
-            console.log('[Auth Middleware] Recovered from duplicate error, updated user:', existingUser.email);
           } else {
             return res.status(500).json({
               success: false,
@@ -180,7 +174,6 @@ module.exports = async function (req, res, next) {
     next();
   } catch (err) {
     // Log authentication failure for security monitoring
-    console.error('[Auth Middleware] Token verification failed:', err.message);
 
     let errorMsg = 'Token is not valid';
     let errorCode = 'INVALID_TOKEN';

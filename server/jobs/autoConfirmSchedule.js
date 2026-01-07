@@ -46,15 +46,8 @@ async function confirmRoomSchedule(room) {
       `${room.owner.firstName || ''} ${room.owner.lastName || ''}`.trim() || 'System'
     );
     
-    console.log(`✅ [자동확정] 방 \$\s*\{\s*room\._id\s*\}\s* (\$\s*\{\s*room\.name\s*\}\s*): 성공적으로 확정됨`);
-    console.log(`   - 확정된 슬롯 수: \$\s*\{\s*result\.confirmedSlotsCount\s*\}\s*`);
-    console.log(`   - 병합된 슬롯 수: \$\s*\{\s*result\.mergedSlotsCount\s*\}\s*`);
-    console.log(`   - 영향받은 멤버 수: \$\s*\{\s*result\.affectedMembersCount\s*\}\s*`);
-    console.log(`   - 확정된 이동 모드: \$\s*\{\s*result\.confirmedTravelMode\s*\}\s*`);
-    
     return { success: true };
   } catch (error) {
-    console.error(`❌ [자동확정] 방 \$\s*\{\s*room\._id\s*\}\s* 확정 실패:`, error.message);
     return { success: false, error: error.message };
   }
 }
@@ -80,16 +73,12 @@ async function processAutoConfirm() {
       return;
     }
 
-    console.log(`\n🔔 [자동확정] \$\s*\{\s*roomsToConfirm\.length\s*\}\s*개 방의 자동 확정 시작...`);
-
     for (const room of roomsToConfirm) {
       await confirmRoomSchedule(room);
     }
 
-    console.log(`✅ [자동확정] 처리 완료\n`);
 
   } catch (error) {
-    console.error('❌ [자동확정] 처리 중 오류:', error);
   }
 }
 
@@ -103,7 +92,6 @@ function startAutoConfirmJob() {
     processAutoConfirm();
   });
 
-  console.log('✅ 자동 확정 Cron Job이 시작되었습니다. (매 1분마다 실행)');
 }
 
 module.exports = { startAutoConfirmJob };

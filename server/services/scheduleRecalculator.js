@@ -59,7 +59,6 @@ async function recalculateScheduleForDate(roomId, date) {
       .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
 
     if (slotsForDate.length === 0) {
-      console.log(`📅 [재계산] ${date}: 슬롯 없음 (스킵)`);
       return { recalculatedCount: 0, slots: [] };
     }
 
@@ -123,10 +122,8 @@ async function recalculateScheduleForDate(roomId, date) {
     await room.save();
 
     // 4. 재계산 완료 로그
-    console.log(`✅ [재계산 완료] ${date.toISOString().split('T')[0]}: ${slotsForDate.length}개 슬롯`);
     recalculatedSlots.forEach((slot, index) => {
-      console.log(`  ${index + 1}. ${slot.originalStartTime} → ${slot.startTime}-${slot.endTime}: 이동시간 ${slot.travelTimeBefore}분 (from ${slot.previousLocation})`);
-    });
+      });
 
     return {
       recalculatedCount: slotsForDate.length,
@@ -134,7 +131,6 @@ async function recalculateScheduleForDate(roomId, date) {
     };
 
   } catch (error) {
-    console.error('❌ 스케줄 재계산 실패:', error);
     throw error;
   }
 }
@@ -158,7 +154,6 @@ async function recalculateMultipleDates(roomId, dates) {
         ...result
       });
     } catch (error) {
-      console.error(`❌ [재계산 실패] ${date}:`, error);
       results.push({
         date,
         success: false,
@@ -168,8 +163,7 @@ async function recalculateMultipleDates(roomId, dates) {
   }
 
   const totalRecalculated = results.reduce((sum, r) => sum + (r.recalculatedCount || 0), 0);
-  console.log(`✅ [전체 재계산 완료] ${dates.length}개 날짜, 총 ${totalRecalculated}개 슬롯`);
-
+  
   return {
     totalDates: dates.length,
     totalRecalculated,

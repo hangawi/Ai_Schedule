@@ -137,7 +137,6 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
 
          onLoginSuccess(data.user, 'general');
       } catch (error) {
-         console.error('[LoginForm] Email login error:', error);
          showAlert('이메일/비밀번호가 일치하지 않습니다.', 'error', '로그인 실패');
       }
    };
@@ -175,7 +174,6 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
          localStorage.setItem('googleConnected', 'true');
          onLoginSuccess(data.user, 'google');
       } catch (error) {
-         console.error('[LoginForm] Google login error:', error);
          localStorage.setItem('googleConnected', 'false');
          showAlert(`Google 로그인 실패: ${error.message}`, 'error', 'Google 로그인 실패');
       }

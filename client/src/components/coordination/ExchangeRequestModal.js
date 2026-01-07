@@ -97,7 +97,6 @@ const ExchangeRequestModal = ({ isOpen, onClose, request, roomId, onRequestHandl
         }, 2000);
       }
     } catch (error) {
-      console.error('Exchange request response error:', error);
       setResponseMessage(
         error.response?.data?.message || '요청 처리 중 오류가 발생했습니다.'
       );

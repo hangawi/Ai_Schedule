@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, LogOut, Calendar, Clipboard, ClipboardX, Phone, User } from 'lucide-react';
+import { auth } from '../../config/firebaseConfig';
 import CoordinationTab from '../tabs/CoordinationTab';
 import './MobileGroupsView.css';
 
@@ -17,11 +18,9 @@ const MobileGroupsView = ({ user }) => {
    useEffect(() => {
       const handleRestore = () => setIsInRoom(true);
       const handleClear = () => setIsInRoom(false);
-      
-      // 초기 상태 확인 (URL 해시 확인)
-      if (window.location.hash.includes('coordination-room')) {
-         setIsInRoom(true);
-      }
+
+      // 초기 상태는 항상 방 목록 화면 (isInRoom = false)
+      // restoreRoom 이벤트가 발생할 때만 방에 들어가도록 함
 
       window.addEventListener('restoreRoom', handleRestore);
       window.addEventListener('clearCurrentRoom', handleClear);
@@ -31,9 +30,14 @@ const MobileGroupsView = ({ user }) => {
       };
    }, []);
 
-   const handleLogout = () => {
-      localStorage.removeItem('token');
-      window.location.href = '/auth';
+   const handleLogout = async () => {
+      try {
+         await auth.signOut();
+         localStorage.removeItem('loginMethod');
+         navigate('/auth');
+      } catch (error) {
+         console.error('Logout error:', error);
+      }
    };
 
    return (

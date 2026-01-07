@@ -85,7 +85,6 @@ const MemberLogsModal = ({ roomId, memberId, memberName, onClose, isAdmin = fals
       const memberLogs = data.logs.filter(log => log.userId === memberId);
       setLogs(memberLogs);
     } catch (err) {
-      console.error('Fetch member logs error:', err);
     } finally {
       setLoading(false);
     }
@@ -168,7 +167,6 @@ const MemberLogsModal = ({ roomId, memberId, memberName, onClose, isAdmin = fals
       alert(data.msg);
       await fetchMemberLogs(); // Refresh logs
     } catch (err) {
-      console.error('Clear member logs error:', err);
       alert(err.message || '로그 삭제 중 오류가 발생했습니다.');
     }
   };

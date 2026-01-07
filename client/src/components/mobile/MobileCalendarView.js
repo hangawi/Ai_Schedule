@@ -736,10 +736,14 @@ const MobileCalendarView = ({ user }) => {
       return null;
    };
 
-   const handleLogout = () => {
-      // 로그아웃 처리
-      localStorage.removeItem('token');
-      window.location.href = '/auth';
+   const handleLogout = async () => {
+      try {
+         await auth.signOut();
+         localStorage.removeItem('loginMethod');
+         navigate('/auth');
+      } catch (error) {
+         console.error('Logout error:', error);
+      }
    };
 
    // 개인정보 수정 화면 표시
@@ -766,16 +770,16 @@ const MobileCalendarView = ({ user }) => {
                <button className="sidebar-close-btn" onClick={() => setIsSidebarOpen(false)}>✕</button>
             </div>
             <div className="sidebar-menu">
-               <button className="sidebar-item" onClick={() => window.location.href = '/'}>
+               <button className="sidebar-item" onClick={() => navigate('/')}>
                   🏠 홈으로
                </button>
-               <button className="sidebar-item" onClick={() => window.location.href = '/mobile/schedule'}>
+               <button className="sidebar-item" onClick={() => navigate('/mobile/schedule')}>
                   📅 내 일정
                </button>
-               <button className="sidebar-item" onClick={() => window.location.href = '/mobile/groups'}>
+               <button className="sidebar-item" onClick={() => navigate('/mobile/groups')}>
                   👥 그룹
                </button>
-               <button className="sidebar-item" onClick={() => window.location.href = '/mobile/calendar'}>
+               <button className="sidebar-item" onClick={() => navigate('/mobile/calendar')}>
                   📆 달력
                </button>
             </div>
@@ -789,7 +793,7 @@ const MobileCalendarView = ({ user }) => {
                   <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(true)}>
                      <Menu size={24} />
                   </button>
-                  <div className="mobile-logo-btn" onClick={() => window.location.href = '/'}>
+                  <div className="mobile-logo-btn" onClick={() => navigate('/')}>
                      <img src="/image.png" alt="MeetAgent Logo" className="mobile-logo-img" />
                      <h1 className="mobile-logo-text">MeetAgent</h1>
                   </div>
@@ -798,7 +802,7 @@ const MobileCalendarView = ({ user }) => {
                {/* 오른쪽: 버튼들 */}
                <div className="mobile-header-right">
                   {/* 캘린더 버튼 */}
-                  <button className="mobile-icon-btn" onClick={() => window.location.href = '/'} title="캘린더">
+                  <button className="mobile-icon-btn" onClick={() => navigate('/')} title="캘린더">
                      <Calendar size={20} />
                   </button>
 
@@ -819,7 +823,7 @@ const MobileCalendarView = ({ user }) => {
                   </button>
 
                   {/* 프로필 버튼 */}
-                  <button className="mobile-profile-btn" onClick={() => window.location.href = '/'} title="프로필">
+                  <button className="mobile-profile-btn" onClick={() => navigate('/')} title="프로필">
                      {user && user.firstName ? user.firstName : <User size={18} />}
                   </button>
 

@@ -10,6 +10,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, LogOut, Calendar, Clipboard, ClipboardX, Phone, User } from 'lucide-react';
+import { auth } from '../../config/firebaseConfig';
 import './MobileDashboard.css';
 
 const MobileDashboard = ({ user }) => {
@@ -19,9 +20,14 @@ const MobileDashboard = ({ user }) => {
    const [isBackgroundMonitoring, setIsBackgroundMonitoring] = useState(false);
    const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
 
-   const handleLogout = () => {
-      localStorage.removeItem('token');
-      window.location.href = '/auth';
+   const handleLogout = async () => {
+      try {
+         await auth.signOut();
+         localStorage.removeItem('loginMethod');
+         navigate('/auth');
+      } catch (error) {
+         console.error('Logout error:', error);
+      }
    };
 
    // 메뉴 버튼 클릭 핸들러
