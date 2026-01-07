@@ -380,7 +380,9 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
             color: '#10B981', // 초록색
             location: ownerLocation || null, // 방장의 주소
             locationLat: room.owner.addressLat || null,
-            locationLng: room.owner.addressLng || null
+            locationLng: room.owner.addressLng || null,
+            transportMode: travelMode || null, // 교통수단
+            roomId: room._id.toString() // 방 ID (추가 정보 조회용)
           });
         }
       });
@@ -458,7 +460,10 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
               color: '#3B82F6', // 파란색 (방장 수업 시간)
               location: memberLocation || null, // 조원의 주소
               locationLat: member?.addressLat || null,
-              locationLng: member?.addressLng || null
+              locationLng: member?.addressLng || null,
+              transportMode: travelMode || null, // 교통수단
+              roomId: room._id.toString(), // 방 ID
+              hasTravelTime: room.travelTimeSlots && room.travelTimeSlots.length > 0 // 이동시간 존재 여부
             });
           }
         });
@@ -488,7 +493,10 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
               days: [dayOfWeek],
               isRecurring: false,
               specificDate: dateStr,
-              color: '#FFA500' // Orange color for travel time
+              color: '#FFA500', // Orange color for travel time
+              transportMode: travelMode || null, // 교통수단
+              roomId: room._id.toString(), // 방 ID
+              isTravelTime: true // 이동시간 플래그
             });
           }
         });

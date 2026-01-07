@@ -127,35 +127,108 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap }) => {
                   </div>
                </div>
 
-               {/* 장소 */}
-               <div
-                  className="modal-section modal-location-section"
-                  onClick={() => {
-                     // 우선순위: 1. 일정의 목적지 주소, 2. 사용자 주소
-                     const eventLocation = event.location;
-                     const userLocation = user && user.address
-                        ? (user.addressDetail ? `${user.address} ${user.addressDetail}` : user.address)
-                        : null;
+               {/* 장소 및 교통정보 통합 */}
+               <div className="modal-section modal-location-transport-section">
+                  {/* 장소 */}
+                  <div
+                     className="modal-location-section"
+                     onClick={() => {
+                        // 우선순위: 1. 일정의 목적지 주소, 2. 사용자 주소
+                        const eventLocation = event.location;
+                        const userLocation = user && user.address
+                           ? (user.addressDetail ? `${user.address} ${user.addressDetail}` : user.address)
+                           : null;
 
-                     const displayLocation = eventLocation || userLocation;
+                        const displayLocation = eventLocation || userLocation;
 
-                     if (displayLocation) {
-                        // 일정 목적지 주소를 사용하는 경우 좌표는 null
-                        onOpenMap(displayLocation, event.locationLat || user?.addressLat, event.locationLng || user?.addressLng);
-                     }
-                  }}
-                  style={{ cursor: (event.location || (user && user.address)) ? 'pointer' : 'default' }}
-               >
-                  <div className="modal-label">
-                     <MapPin size={16} />
-                     장소
+                        if (displayLocation) {
+                           // 일정 목적지 주소를 사용하는 경우 좌표는 null
+                           onOpenMap(displayLocation, event.locationLat || user?.addressLat, event.locationLng || user?.addressLng);
+                        }
+                     }}
+                     style={{ cursor: (event.location || (user && user.address)) ? 'pointer' : 'default' }}
+                  >
+                     <div className="modal-label">
+                        <MapPin size={16} />
+                        장소
+                     </div>
+                     <div className="modal-value modal-location-value">
+                        {event.location || (user && user.address
+                           ? (user.addressDetail ? `${user.address} ${user.addressDetail}` : user.address)
+                           : '장소 미정')}
+                        {(event.location || (user && user.address)) && <span className="map-hint">📍 지도 보기</span>}
+                     </div>
                   </div>
-                  <div className="modal-value modal-location-value">
-                     {event.location || (user && user.address
-                        ? (user.addressDetail ? `${user.address} ${user.addressDetail}` : user.address)
-                        : '장소 미정')}
-                     {(event.location || (user && user.address)) && <span className="map-hint">📍 지도 보기</span>}
-                  </div>
+
+                  {/* 교통정보 (이동시간 포함 일정만) */}
+                  {event.hasTravelTime && (
+                     <div className="modal-transport-section">
+                        <div className="modal-label">
+                           <MapPin size={16} />
+                           교통정보
+                        </div>
+                        <div className="modal-transport-info">
+                           {/* 교통수단 */}
+                           <div className="transport-row">
+                              <span className="transport-icon">
+                                 {event.transportMode === 'driving' && '🚗'}
+                                 {event.transportMode === 'transit' && '🚇'}
+                                 {event.transportMode === 'walking' && '🚶'}
+                                 {!event.transportMode && '🚗'}
+                              </span>
+                              <span className="transport-text">
+                                 {event.transportMode === 'driving' && '자동차'}
+                                 {event.transportMode === 'transit' && '대중교통'}
+                                 {event.transportMode === 'walking' && '도보'}
+                                 {!event.transportMode && '자동차'}
+                              </span>
+                           </div>
+
+                           {/* 이동시간 */}
+                           {event.travelStartTime && event.travelEndTime && (
+                              <div className="transport-row">
+                                 <Clock size={14} />
+                                 <span className="transport-text">
+                                    이동시간: {event.travelStartTime} ~ {event.travelEndTime}
+                                    {' '}({calculateDuration(event.travelStartTime, event.travelEndTime)})
+                                 </span>
+                              </div>
+                           )}
+
+                           {/* 경로 보기 버튼 */}
+                           {user && user.address && event.location && (
+                              <button
+                                 className="route-button"
+                                 onClick={(e) => {
+                                    e.stopPropagation();
+
+                                    // 출발지/도착지 정보
+                                    const startAddr = user.addressDetail ? `${user.address} ${user.addressDetail}` : user.address;
+                                    const endAddr = event.location;
+                                    const startLat = user.addressLat;
+                                    const startLng = user.addressLng;
+                                    const endLat = event.locationLat;
+                                    const endLng = event.locationLng;
+
+                                    // 좌표가 있으면 좌표 사용, 없으면 주소 사용
+                                    if (startLat && startLng && endLat && endLng) {
+                                       // 좌표 기반 카카오맵 길찾기
+                                       const kakaoMapUrl = `https://map.kakao.com/link/to/${encodeURIComponent(endAddr)},${endLat},${endLng}/from/${encodeURIComponent(startAddr)},${startLat},${startLng}`;
+                                       window.open(kakaoMapUrl, '_blank');
+                                    } else {
+                                       // 주소 기반 카카오맵 검색 (폴백)
+                                       const kakaoMapUrl = `https://map.kakao.com/link/search/${encodeURIComponent(endAddr)}`;
+                                       window.open(kakaoMapUrl, '_blank');
+                                       alert('정확한 경로를 보려면 주소 등록이 필요합니다.');
+                                    }
+                                 }}
+                              >
+                                 🗺️ 경로 보기
+                              </button>
+                           )}
+                        </div>
+                     </div>
+                  )}
                </div>
 
                {/* 인원수 */}
@@ -288,24 +361,103 @@ const MobileScheduleView = ({ user }) => {
          if (!response.ok) throw new Error('Failed to fetch personal times');
 
          const data = await response.json();
-         const formattedPersonalTimes = (data.personalTimes || [])
-            .filter(pt => pt.specificDate)
-            .map(pt => ({
-               id: `pt-${pt.id}`,
-               title: pt.title || '개인 일정',
-               date: pt.specificDate,
-               time: pt.startTime,
-               endTime: pt.endTime,
-               participants: 1,
-               priority: 3,
-               color: pt.color || '#10B981',
-               isCoordinated: pt.title && pt.title.includes('-'),
-               roomName: pt.title && pt.title.includes('-') ? pt.title.split('-')[0].trim() : undefined,
-               location: pt.location || null, // 일정의 목적지 주소
-               locationLat: pt.locationLat || null,
-               locationLng: pt.locationLng || null
-            }));
-         setPersonalTimes(formattedPersonalTimes);
+
+         // 이동시간과 수업시간 병합 로직
+         const personalTimesArray = data.personalTimes || [];
+         const mergedPersonalTimes = [];
+         const processedIds = new Set();
+
+         // 날짜별로 그룹화
+         const byDate = {};
+         personalTimesArray.forEach(pt => {
+            if (!pt.specificDate) return;
+            if (!byDate[pt.specificDate]) byDate[pt.specificDate] = [];
+            byDate[pt.specificDate].push(pt);
+         });
+
+         // 각 날짜별로 병합 처리
+         Object.keys(byDate).forEach(date => {
+            const dayEvents = byDate[date].sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+            dayEvents.forEach((pt, idx) => {
+               if (processedIds.has(pt.id)) return;
+
+               // 이동시간이면 다음 일정과 병합 시도
+               if (pt.title && pt.title.includes('이동시간')) {
+                  const nextEvent = dayEvents[idx + 1];
+                  // 다음 일정이 있고, 시간이 연속되고, 같은 방이면 병합
+                  if (nextEvent &&
+                      nextEvent.startTime === pt.endTime &&
+                      pt.title.split('-')[0].trim() === nextEvent.title.split('-')[0].trim()) {
+
+                     // 병합된 일정 생성
+                     mergedPersonalTimes.push({
+                        id: `pt-${nextEvent.id}`,
+                        title: nextEvent.title,
+                        date: nextEvent.specificDate,
+                        time: pt.startTime, // 이동시간의 시작
+                        endTime: nextEvent.endTime, // 수업시간의 종료
+                        participants: 1,
+                        priority: 3,
+                        color: nextEvent.color || '#3B82F6',
+                        isCoordinated: true,
+                        roomName: nextEvent.title.split('-')[0].trim(),
+                        location: nextEvent.location || null,
+                        locationLat: nextEvent.locationLat || null,
+                        locationLng: nextEvent.locationLng || null,
+                        transportMode: nextEvent.transportMode || pt.transportMode || null,
+                        hasTravelTime: true, // 이동시간 포함 플래그
+                        travelStartTime: pt.startTime,
+                        travelEndTime: pt.endTime
+                     });
+
+                     processedIds.add(pt.id);
+                     processedIds.add(nextEvent.id);
+                  } else {
+                     // 병합 실패 - 이동시간만 단독으로 표시
+                     mergedPersonalTimes.push({
+                        id: `pt-${pt.id}`,
+                        title: pt.title,
+                        date: pt.specificDate,
+                        time: pt.startTime,
+                        endTime: pt.endTime,
+                        participants: 1,
+                        priority: 3,
+                        color: pt.color || '#FFA500',
+                        isCoordinated: pt.title && pt.title.includes('-'),
+                        roomName: pt.title && pt.title.includes('-') ? pt.title.split('-')[0].trim() : undefined,
+                        location: pt.location || null,
+                        locationLat: pt.locationLat || null,
+                        locationLng: pt.locationLng || null,
+                        transportMode: pt.transportMode || null
+                     });
+                     processedIds.add(pt.id);
+                  }
+               } else {
+                  // 일반 일정 (이동시간 아님)
+                  mergedPersonalTimes.push({
+                     id: `pt-${pt.id}`,
+                     title: pt.title || '개인 일정',
+                     date: pt.specificDate,
+                     time: pt.startTime,
+                     endTime: pt.endTime,
+                     participants: 1,
+                     priority: 3,
+                     color: pt.color || '#10B981',
+                     isCoordinated: pt.title && pt.title.includes('-'),
+                     roomName: pt.title && pt.title.includes('-') ? pt.title.split('-')[0].trim() : undefined,
+                     location: pt.location || null,
+                     locationLat: pt.locationLat || null,
+                     locationLng: pt.locationLng || null,
+                     transportMode: pt.transportMode || null,
+                     hasTravelTime: pt.hasTravelTime || false
+                  });
+                  processedIds.add(pt.id);
+               }
+            });
+         });
+
+         setPersonalTimes(mergedPersonalTimes);
       } catch (error) {
          console.error('Fetch personal times error:', error);
       }
