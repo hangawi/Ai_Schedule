@@ -429,13 +429,13 @@
    gap: 16px;
    margin-bottom: 20px;
    flex-direction: row; 
-   overflow-x: auto;
+   overflow-x: auto; /* 내용이 많으면 스크롤 */
 }
 
 .preference-section,
 .personal-section {
    flex: 1;
-   min-width: 280px; /* 너무 좁아지지 않도록 최소 너비 설정 */
+   min-width: 0; /* Flexbox에서 줄어들 수 있게 허용 */
    background: white;
    border-radius: 12px;
    padding: 16px;
@@ -456,4 +456,16 @@
    margin-bottom: 12px;
    line-height: 1.4;
    word-break: keep-all;
+}
+
+/* 모바일 반응형 - 작은 화면 조정 */
+@media (max-width: 480px) {
+   .sections-container {
+      gap: 8px;
+   }
+   
+   .preference-section,
+   .personal-section {
+      padding: 12px;
+   }
 }
