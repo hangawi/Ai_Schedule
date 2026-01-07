@@ -596,11 +596,56 @@
    border-left: 3px solid #3b82f6;
 }
 
-.map-container {
-   width: 100%;
-   overflow: hidden;
-   border-radius: 12px;
-   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+/* 시간 분할 표시 (이동/수업) */
+.time-split-display {
+   display: flex;
+   flex-direction: column;
+   gap: 6px;
+}
+
+.time-total {
+   font-size: 16px;
+   font-weight: 600;
+   color: #1f2937;
+}
+
+.time-segments {
+   display: flex;
+   align-items: center;
+   flex-wrap: wrap;
+   gap: 8px;
+   font-size: 13px;
+   color: #4b5563;
+   background: #f3f4f6;
+   padding: 8px;
+   border-radius: 8px;
+}
+
+.time-segment {
+   display: flex;
+   align-items: center;
+   gap: 4px;
+}
+
+.segment-label {
+   font-size: 11px;
+   font-weight: 700;
+   padding: 2px 6px;
+   border-radius: 4px;
+   color: white;
+}
+
+.time-segment.travel .segment-label {
+   background-color: #f59e0b; /* 주황색 (이동) */
+}
+
+.time-segment.activity .segment-label {
+   background-color: #3b82f6; /* 파란색 (수업) */
+}
+
+.segment-divider {
+   color: #d1d5db;
+   font-weight: 300;
 }
 /* ===================================
    교통정보 섹션

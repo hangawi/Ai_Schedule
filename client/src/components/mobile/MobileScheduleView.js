@@ -51,7 +51,7 @@ const MapModal = ({ address, lat, lng, onClose }) => {
 /**
  * EventDetailModal - 일정 상세 모달
  */
-const EventDetailModal = ({ event, user, onClose, onOpenMap }) => {
+const EventDetailModal = ({ event, user, onClose, onOpenMap, previousLocation }) => {
    if (!event) return null;
 
    // 날짜 포맷팅
@@ -76,6 +76,40 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap }) => {
       if (hours > 0 && mins > 0) return `${hours}시간 ${mins}분`;
       if (hours > 0) return `${hours}시간`;
       return `${mins}분`;
+   };
+
+   // 시간 표시 포맷 (이동시간 분리)
+   const renderTimeSection = () => {
+      if (event.hasTravelTime && event.travelStartTime && event.travelEndTime) {
+         return (
+            <div className="time-split-display">
+               <div className="time-total">
+                  {event.travelStartTime} ~ {event.endTime} 
+                  <span className="duration-text"> ({calculateDuration(event.travelStartTime, event.endTime)})</span>
+               </div>
+               <div className="time-segments">
+                  <div className="time-segment travel">
+                     <span className="segment-label">이동</span> 
+                     {event.travelStartTime}~{event.travelEndTime}
+                  </div>
+                  <div className="segment-divider">|</div>
+                  <div className="time-segment activity">
+                     <span className="segment-label">수업</span>
+                     {event.time}~{event.endTime}
+                  </div>
+               </div>
+            </div>
+         );
+      }
+      
+      return (
+         <div className="modal-value">
+            {event.time} ~ {event.endTime}
+            {event.time && event.endTime && (
+               <span className="duration-text"> ({calculateDuration(event.time, event.endTime)})</span>
+            )}
+         </div>
+      );
    };
 
    return (
@@ -119,12 +153,7 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap }) => {
                      <Clock size={16} />
                      시간
                   </div>
-                  <div className="modal-value">
-                     {event.time} ~ {event.endTime}
-                     {event.time && event.endTime && (
-                        <span className="duration-text"> ({calculateDuration(event.time, event.endTime)})</span>
-                     )}
-                  </div>
+                  {renderTimeSection()}
                </div>
 
                {/* 장소 및 교통정보 통합 */}
@@ -184,17 +213,6 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap }) => {
                               </span>
                            </div>
 
-                           {/* 이동시간 */}
-                           {event.travelStartTime && event.travelEndTime && (
-                              <div className="transport-row">
-                                 <Clock size={14} />
-                                 <span className="transport-text">
-                                    이동시간: {event.travelStartTime} ~ {event.travelEndTime}
-                                    {' '}({calculateDuration(event.travelStartTime, event.travelEndTime)})
-                                 </span>
-                              </div>
-                           )}
-
                            {/* 경로 보기 버튼 */}
                            {user && user.address && event.location && (
                               <button
@@ -202,11 +220,25 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap }) => {
                                  onClick={(e) => {
                                     e.stopPropagation();
 
-                                    // 출발지/도착지 정보
-                                    const startAddr = user.addressDetail ? `${user.address} ${user.addressDetail}` : user.address;
+                                    // 🚀 출발지 결정 로직 개선
+                                    // 1. 이전 일정이 있으면 그곳을 출발지로 설정 (previousLocation)
+                                    // 2. 없으면 내 집을 출발지로 설정 (user.address)
+                                    let startAddr, startLat, startLng;
+
+                                    if (previousLocation) {
+                                       startAddr = previousLocation.address;
+                                       startLat = previousLocation.lat;
+                                       startLng = previousLocation.lng;
+                                       console.log('📍 출발지: 이전 일정 장소', startAddr);
+                                    } else {
+                                       startAddr = user.addressDetail ? `${user.address} ${user.addressDetail}` : user.address;
+                                       startLat = user.addressLat;
+                                       startLng = user.addressLng;
+                                       console.log('🏠 출발지: 내 집', startAddr);
+                                    }
+
+                                    // 도착지 정보
                                     const endAddr = event.location;
-                                    const startLat = user.addressLat;
-                                    const startLng = user.addressLng;
                                     const endLat = event.locationLat;
                                     const endLng = event.locationLng;
 
@@ -217,6 +249,8 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap }) => {
                                        window.open(kakaoMapUrl, '_blank');
                                     } else {
                                        // 주소 기반 카카오맵 검색 (폴백)
+                                       // 출발지도 쿼리에 포함하면 좋지만, 카카오맵 웹 URL 스키마 한계로 도착지 검색만 우선 수행
+                                       // (길찾기 파라미터가 복잡함)
                                        const kakaoMapUrl = `https://map.kakao.com/link/search/${encodeURIComponent(endAddr)}`;
                                        window.open(kakaoMapUrl, '_blank');
                                        alert('정확한 경로를 보려면 주소 등록이 필요합니다.');
@@ -298,28 +332,7 @@ const MobileScheduleView = ({ user }) => {
 
    const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
-   // 일정 클릭 핸들러
-   const handleEventClick = (event) => {
-      setSelectedEvent(event);
-   };
-
-   // 모달 닫기
-   const handleCloseModal = () => {
-      setSelectedEvent(null);
-   };
-
-   // 지도 모달 열기
-   const handleOpenMap = (address, lat, lng) => {
-      setSelectedLocation({ address, lat, lng });
-      setShowMapModal(true);
-   };
-
-   // 지도 모달 닫기
-   const handleCloseMapModal = () => {
-      setShowMapModal(false);
-      setSelectedLocation(null);
-   };
-
+   // 1. API 호출 함수 정의
    // 나의 일정 가져오기
    const fetchEvents = useCallback(async () => {
       try {
@@ -463,7 +476,7 @@ const MobileScheduleView = ({ user }) => {
       }
    }, [API_BASE_URL]);
 
-   // 데이터 로드
+   // 2. 데이터 로드 Effect
    useEffect(() => {
       const loadData = async () => {
          await Promise.all([fetchEvents(), fetchPersonalTimes()]);
@@ -472,7 +485,7 @@ const MobileScheduleView = ({ user }) => {
       loadData();
    }, [fetchEvents, fetchPersonalTimes]);
 
-   // 일정 필터링 및 시간순 정렬
+   // 3. useMemo (일정 필터링)
    const { pastEvents, todayEvents, upcomingEvents } = useMemo(() => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -516,6 +529,61 @@ const MobileScheduleView = ({ user }) => {
 
       return { pastEvents, todayEvents, upcomingEvents };
    }, [globalEvents, personalTimes]);
+
+   // 4. 핸들러 함수들
+   // 일정 클릭 핸들러
+   const handleEventClick = (event) => {
+      setSelectedEvent(event);
+   };
+
+   // 이전 일정의 위치 찾기
+   const getPreviousEventLocation = useCallback((currentEvent) => {
+      if (!currentEvent) return null;
+
+      // 현재 탭에 맞는 이벤트 목록 선택
+      let currentList = [];
+      if (activeTab === 'past') currentList = pastEvents;
+      else if (activeTab === 'today') currentList = todayEvents;
+      else if (activeTab === 'upcoming') currentList = upcomingEvents;
+
+      // 현재 이벤트의 인덱스 찾기
+      const currentIndex = currentList.findIndex(e => e.id === currentEvent.id);
+      
+      // 이전 이벤트가 있으면 그 위치 반환
+      if (currentIndex > 0) {
+         const prevEvent = currentList[currentIndex - 1];
+         // 같은 날짜인지 확인
+         if (prevEvent.date === currentEvent.date) {
+             // 이전 일정의 목적지 (location) 확인
+             if (prevEvent.location && prevEvent.locationLat && prevEvent.locationLng) {
+                 return {
+                     address: prevEvent.location,
+                     lat: prevEvent.locationLat,
+                     lng: prevEvent.locationLng,
+                     name: prevEvent.location // 장소 이름
+                 };
+             }
+         }
+      }
+      return null;
+   }, [activeTab, pastEvents, todayEvents, upcomingEvents]);
+
+   // 모달 닫기
+   const handleCloseModal = () => {
+      setSelectedEvent(null);
+   };
+
+   // 지도 모달 열기
+   const handleOpenMap = (address, lat, lng) => {
+      setSelectedLocation({ address, lat, lng });
+      setShowMapModal(true);
+   };
+
+   // 지도 모달 닫기
+   const handleCloseMapModal = () => {
+      setShowMapModal(false);
+      setSelectedLocation(null);
+   };
 
    const handleLogout = async () => {
       try {
@@ -695,6 +763,7 @@ const MobileScheduleView = ({ user }) => {
                user={user}
                onClose={handleCloseModal}
                onOpenMap={handleOpenMap}
+               previousLocation={getPreviousEventLocation(selectedEvent)}
             />
          )}
 
