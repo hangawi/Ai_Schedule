@@ -131,24 +131,30 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap }) => {
                <div
                   className="modal-section modal-location-section"
                   onClick={() => {
-                     if (user && user.address) {
-                        const fullAddress = user.addressDetail
-                           ? `${user.address} ${user.addressDetail}`
-                           : user.address;
-                        onOpenMap(fullAddress, user.addressLat, user.addressLng);
+                     // 우선순위: 1. 일정의 목적지 주소, 2. 사용자 주소
+                     const eventLocation = event.location;
+                     const userLocation = user && user.address
+                        ? (user.addressDetail ? `${user.address} ${user.addressDetail}` : user.address)
+                        : null;
+
+                     const displayLocation = eventLocation || userLocation;
+
+                     if (displayLocation) {
+                        // 일정 목적지 주소를 사용하는 경우 좌표는 null
+                        onOpenMap(displayLocation, event.locationLat || user?.addressLat, event.locationLng || user?.addressLng);
                      }
                   }}
-                  style={{ cursor: user && user.address ? 'pointer' : 'default' }}
+                  style={{ cursor: (event.location || (user && user.address)) ? 'pointer' : 'default' }}
                >
                   <div className="modal-label">
                      <MapPin size={16} />
                      장소
                   </div>
                   <div className="modal-value modal-location-value">
-                     {user && user.address
+                     {event.location || (user && user.address
                         ? (user.addressDetail ? `${user.address} ${user.addressDetail}` : user.address)
-                        : '장소 미정'}
-                     {user && user.address && <span className="map-hint">📍 지도 보기</span>}
+                        : '장소 미정')}
+                     {(event.location || (user && user.address)) && <span className="map-hint">📍 지도 보기</span>}
                   </div>
                </div>
 
@@ -261,7 +267,8 @@ const MobileScheduleView = ({ user }) => {
             endTime: event.endTime,
             participants: event.participants || 1,
             priority: event.priority || 3,
-            color: event.color || 'blue'
+            color: event.color || 'blue',
+            location: event.location || null // 일정의 목적지 주소
          }));
          setGlobalEvents(formattedEvents);
       } catch (error) {
@@ -293,7 +300,10 @@ const MobileScheduleView = ({ user }) => {
                priority: 3,
                color: pt.color || '#10B981',
                isCoordinated: pt.title && pt.title.includes('-'),
-               roomName: pt.title && pt.title.includes('-') ? pt.title.split('-')[0].trim() : undefined
+               roomName: pt.title && pt.title.includes('-') ? pt.title.split('-')[0].trim() : undefined,
+               location: pt.location || null, // 일정의 목적지 주소
+               locationLat: pt.locationLat || null,
+               locationLng: pt.locationLng || null
             }));
          setPersonalTimes(formattedPersonalTimes);
       } catch (error) {

@@ -363,6 +363,11 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
 
         if (!isDuplicate) {
           // 조원: 수업시간만 저장 (이동시간 제외)
+          // 장소는 방장의 주소
+          const ownerLocation = room.owner.addressDetail
+            ? `${room.owner.address} ${room.owner.addressDetail}`
+            : room.owner.address;
+
           user.personalTimes.push({
             id: nextId++,
             title: `${room.name} - ${ownerName}`,
@@ -372,7 +377,10 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
             days: [dayOfWeek],
             isRecurring: false,
             specificDate: dateStr,
-            color: '#10B981' // 초록색
+            color: '#10B981', // 초록색
+            location: ownerLocation || null, // 방장의 주소
+            locationLat: room.owner.addressLat || null,
+            locationLng: room.owner.addressLng || null
           });
         }
       });
@@ -432,6 +440,12 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
 
           if (!isDuplicate) {
             // 방장: 이동시간 포함하여 저장
+            // 장소는 해당 조원의 주소
+            const member = userMap.get(userId);
+            const memberLocation = member && member.addressDetail
+              ? `${member.address} ${member.addressDetail}`
+              : member?.address;
+
             owner.personalTimes.push({
               id: nextId++,
               title: `${room.name} - ${memberName}`,
@@ -441,7 +455,10 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
               days: [dayOfWeek],
               isRecurring: false,
               specificDate: dateStr,
-              color: '#3B82F6' // 파란색 (방장 수업 시간)
+              color: '#3B82F6', // 파란색 (방장 수업 시간)
+              location: memberLocation || null, // 조원의 주소
+              locationLat: member?.addressLat || null,
+              locationLng: member?.addressLng || null
             });
           }
         });

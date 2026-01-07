@@ -32,17 +32,69 @@ exports.connectCalendar = async (req, res) => {
 // @access  Private
 exports.getUserSchedule = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('defaultSchedule scheduleExceptions personalTimes');
+    const user = await User.findById(req.user.id).select('defaultSchedule scheduleExceptions personalTimes firstName lastName');
     if (!user) {
       return res.status(404).json({ msg: 'User not found' });
+    }
+
+    // personalTimes 처리: 확정된 일정이면 조원/방장 주소 추가
+    let personalTimesWithLocation = [];
+    if (user.personalTimes && user.personalTimes.length > 0) {
+      personalTimesWithLocation = await Promise.all(
+        user.personalTimes.map(async (pt) => {
+          const ptObj = pt.toObject ? pt.toObject() : pt;
+
+          // 이미 location이 있으면 그대로 반환
+          if (ptObj.location) {
+            return ptObj;
+          }
+
+          // 확정된 일정인지 확인 (title에 '-'가 포함되어 있음)
+          if (ptObj.title && ptObj.title.includes('-')) {
+            try {
+              // "방이름 - 조원이름" 형식에서 조원 이름 추출
+              const parts = ptObj.title.split('-');
+              if (parts.length >= 2) {
+                const memberName = parts[1].trim();
+
+                // 조원 이름으로 사용자 찾기 (firstName + lastName 또는 lastName + firstName)
+                const targetUser = await User.findOne({
+                  $or: [
+                    { $expr: { $eq: [{ $concat: ['$firstName', ' ', '$lastName'] }, memberName] } },
+                    { $expr: { $eq: [{ $concat: ['$lastName', '$firstName'] }, memberName.replace(/\s+/g, '')] } },
+                    { name: memberName }
+                  ]
+                }).select('address addressDetail addressLat addressLng').lean();
+
+                if (targetUser && targetUser.address) {
+                  // 조원의 주소 정보 추가
+                  return {
+                    ...ptObj,
+                    location: targetUser.addressDetail
+                      ? `${targetUser.address} ${targetUser.addressDetail}`
+                      : targetUser.address,
+                    locationLat: targetUser.addressLat || null,
+                    locationLng: targetUser.addressLng || null
+                  };
+                }
+              }
+            } catch (err) {
+              console.error('Error finding member address:', err);
+            }
+          }
+
+          return ptObj;
+        })
+      );
     }
 
     res.json({
       defaultSchedule: user.defaultSchedule,
       scheduleExceptions: user.scheduleExceptions,
-      personalTimes: user.personalTimes || []
+      personalTimes: personalTimesWithLocation
     });
   } catch (err) {
+    console.error('getUserSchedule error:', err);
     res.status(500).send('Server Error');
   }
 };
