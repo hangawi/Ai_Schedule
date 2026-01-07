@@ -228,19 +228,66 @@
 }
 
 /* 페이지 제목 */
-.calendar-page-title {
+.schedule-page-title {
    font-size: 20px;
    font-weight: 700;
    color: #1f2937;
    padding: 16px 20px 12px 20px;
    background: white;
    border-bottom: 2px solid #e5e7eb;
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
 }
 
-.calendar-page-title h2 {
-   margin: 0;
+.schedule-page-title span {
    font-size: 20px;
    font-weight: 700;
+}
+
+.top-edit-buttons {
+   display: flex;
+   gap: 8px;
+}
+
+.edit-button {
+   padding: 6px 12px;
+   font-size: 13px;
+   font-weight: 600;
+   border-radius: 8px;
+   border: none;
+   background: #f3f4f6;
+   color: #4b5563;
+   cursor: pointer;
+   transition: all 0.2s;
+   white-space: nowrap;
+}
+
+.edit-button:hover {
+   background: #e5e7eb;
+}
+
+.save-button {
+   background: #dcfce7;
+   color: #15803d;
+}
+
+.save-button:hover {
+   background: #bbf7d0;
+}
+
+.clear-button {
+   background: #fee2e2;
+   color: #dc2626;
+}
+
+.clear-button:hover {
+   background: #fecaca;
+}
+
+.cancel-button {
+   background: #f3f4f6;
+   color: #6b7280;
 }
 
 .calendar-container {
@@ -255,7 +302,7 @@
 }
 
 .fc .fc-toolbar {
-   flex-wrap: wrap;
+   flex-wrap: nowrap !important;
    gap: 8px;
    margin-bottom: 16px;
 }
@@ -264,6 +311,7 @@
    font-size: 18px;
    font-weight: 600;
    color: #1f2937;
+   white-space: nowrap;
 }
 
 .fc .fc-button {
@@ -274,6 +322,7 @@
    background: white;
    color: #374151;
    transition: all 0.2s;
+   white-space: nowrap;
 }
 
 .fc .fc-button:hover {
@@ -353,28 +402,6 @@
    .calendar-container {
       padding: 12px;
    }
-   
-   .fc .fc-toolbar {
-      font-size: 12px;
-   }
-   
-   .fc .fc-toolbar-title {
-      font-size: 16px;
-   }
-   
-   .fc .fc-button {
-      padding: 4px 8px;
-      font-size: 11px;
-   }
-   
-   .fc .fc-col-header-cell {
-      font-size: 11px;
-   }
-   
-   .fc .fc-daygrid-day-number {
-      font-size: 13px;
-      padding: 6px;
-   }
 }
 
 /* ===================================
@@ -401,11 +428,14 @@
    display: flex;
    gap: 16px;
    margin-bottom: 20px;
+   flex-direction: row; 
+   overflow-x: auto;
 }
 
 .preference-section,
 .personal-section {
    flex: 1;
+   min-width: 280px; /* 너무 좁아지지 않도록 최소 너비 설정 */
    background: white;
    border-radius: 12px;
    padding: 16px;
@@ -425,12 +455,5 @@
    color: #6b7280;
    margin-bottom: 12px;
    line-height: 1.4;
-}
-
-/* 모바일 반응형 - 작은 화면에서는 세로로 쌓기 */
-@media (max-width: 640px) {
-   .sections-container {
-      flex-direction: column;
-      gap: 12px;
-   }
+   word-break: keep-all;
 }
