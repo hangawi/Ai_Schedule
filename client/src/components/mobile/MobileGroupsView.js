@@ -139,7 +139,7 @@ const MobileGroupsView = ({ user }) => {
          {/* 페이지 제목 */}
          <div className="groups-page-title">
             <div className="title-with-badge">
-               <h2>일정맞추기</h2>
+               <h2>그룹</h2>
                {exchangeRequestCount > 0 && (
                   <span className="notification-badge">{exchangeRequestCount}</span>
                )}
@@ -171,6 +171,7 @@ const MobileGroupsView = ({ user }) => {
                onExchangeRequestCountChange={setExchangeRequestCount}
                hideHeader={true}
                initialClear={true}
+               isMobile={true}
             />
          </div>
       </div>

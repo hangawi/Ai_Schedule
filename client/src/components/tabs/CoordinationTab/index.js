@@ -105,6 +105,7 @@ import {
   LoadingSpinner,
   ErrorDisplay
 } from './components';
+import { Clock, Users, Mail, Settings } from 'lucide-react';
 
 /**
  * [CoordinationTab]
@@ -115,7 +116,7 @@ import {
  * @param {function} onExchangeRequestCountChange - 상위 컴포넌트로 교환 요청 개수 변경을 알리는 콜백 함수
  * @returns {JSX.Element} '협업' 탭의 JSX 엘리먼트
  */
-const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = false, initialClear = false }) => {
+const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = false, initialClear = false, isMobile = false }) => {
   // Custom hooks - order matters for dependencies
   const { customAlert, showAlert, closeAlert } = useAlertState();
   const { sentRequests, receivedRequests, setSentRequests, setReceivedRequests, loadSentRequests, loadReceivedRequests, chainExchangeRequests, setChainExchangeRequests, loadChainExchangeRequests } = useRequests(user);
@@ -125,6 +126,9 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
   
   // 강제 재렌더링용 카운터
   const [renderKey, setRenderKey] = useState(0);
+
+  // 모바일 탭 상태 (timetable, members, requests, settings)
+  const [mobileTab, setMobileTab] = useState('timetable');
 
   // 4.txt: 연쇄 교환 요청 모달 상태
   const [showChainExchangeModal, setShowChainExchangeModal] = useState(false);
@@ -802,11 +806,329 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
   if (isLoading) return <LoadingSpinner />;
   if (error) return <ErrorDisplay error={error} />;
 
+  // 공통 모달 렌더링 함수
+  const renderCommonModals = () => (
+    <>
+      {/* Modals */}
+      {showManageRoomModal && currentRoom && (
+        <RoomManagementModal
+          room={currentRoom}
+          onClose={handleCloseManageRoomModal}
+          updateRoom={updateRoom}
+          deleteRoom={deleteRoom}
+          defaultTab={roomModalDefaultTab}
+          onRoomUpdated={(updatedRoom) => { setCurrentRoom(updatedRoom); fetchMyRooms(); }}
+        />
+      )}
+
+      {showRequestModal && slotToRequest && (
+        <RequestSlotModal
+          onClose={closeRequestModal}
+          onRequest={createHandleRequestFromModal(currentRoom, slotToRequest, handleRequestSlot, closeRequestModal)}
+          slotInfo={slotToRequest}
+        />
+      )}
+
+      {showChangeRequestModal && slotToChange && (
+        <ChangeRequestModal
+          onClose={closeChangeRequestModal}
+          onRequestChange={createHandleChangeRequest(currentRoom, slotToChange, handleRequestSlot)}
+          slotToChange={slotToChange}
+        />
+      )}
+
+      <CustomAlertModal
+        isOpen={customAlert.show}
+        onClose={closeAlert}
+        title="알림"
+        message={customAlert.message}
+        type={customAlert.type || "warning"}
+        showCancel={false}
+      />
+
+      <MemberStatsModal
+        isOpen={memberStatsModal.isOpen}
+        onClose={() => setMemberStatsModal({ isOpen: false, member: null })}
+        member={memberStatsModal.member}
+        isOwner={currentRoom && user && (currentRoom.owner._id === user.id || currentRoom.owner === user.id)}
+        currentRoom={currentRoom}
+      />
+
+      <CustomAlertModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={executeDeleteAllSlots}
+        title="시간표 전체 삭제"
+        message="정말로 모든 시간표를 삭제하시겠습니까? 자동 배정으로 생성된 시간표와 협의 내역이 모두 사라지며, 이 작업은 되돌릴 수 없습니다."
+        type="danger"
+        confirmText="삭제"
+        cancelText="취소"
+        showCancel={true}
+      />
+
+      {showDetailGrid && selectedDate && (
+        <CoordinationDetailGrid
+          selectedDate={selectedDate}
+          timeSlots={getCurrentScheduleData().timeSlots}
+          travelSlots={getCurrentScheduleData().travelSlots || []}
+          travelMode={getCurrentScheduleData().travelMode}
+          members={currentRoom.members || []}
+          currentUser={user}
+          isRoomOwner={isOwner}
+          roomData={currentRoom}
+          showMerged={showMerged}
+          onClose={handleCloseDetailGrid}
+          onSlotSelect={null}
+          selectedSlots={[]}
+          onRequestSlot={handleRequestSlot}
+          onRemoveSlot={async (slotData) => {
+            await removeTimeSlot(currentRoom._id, slotData.day, slotData.startTime, slotData.endTime);
+            await fetchRoomDetails(currentRoom._id);
+          }}
+          ownerOriginalSchedule={ownerScheduleCache}
+        />
+      )}
+
+      {showMemberScheduleModal && selectedMemberId && (
+        <MemberScheduleModal
+          memberId={selectedMemberId}
+          onClose={() => { setShowMemberScheduleModal(false); setSelectedMemberId(null); }}
+        />
+      )}
+
+      <ChainExchangeRequestModal
+        isOpen={showChainExchangeModal}
+        onClose={() => { setShowChainExchangeModal(false); setSelectedChainRequest(null); }}
+        request={selectedChainRequest}
+        roomId={selectedChainRequest?.roomId}
+        onRequestHandled={handleChainExchangeRequestHandled}
+      />
+
+      <CustomAlertModal
+        isOpen={showWalkingErrorModal}
+        onClose={handleCloseWalkingErrorModal}
+        title="도보 모드 사용 불가"
+        message={walkingErrorMessage}
+        type="warning"
+        showCancel={false}
+      />
+    </>
+  );
+
   // In-Room View
   if (currentRoom) {
     // isOwner는 이미 167번 줄에서 계산됨
     const scheduleData = getCurrentScheduleData();
 
+    // 📱 모바일 레이아웃
+    if (isMobile) {
+      return (
+        <div className="flex flex-col h-[calc(100vh-60px)] bg-gray-50">
+          {/* 상단 헤더 */}
+          <RoomHeader
+            currentRoom={currentRoom}
+            user={user}
+            isOwner={isOwner}
+            onManageRoom={openManageRoomModal}
+            onOpenLogs={openLogsModal}
+            onBackToRoomList={handleBackToRoomList}
+            onLeaveRoom={handleLeaveRoom}
+            isMobile={true}
+          />
+
+          {/* 메인 컨텐츠 영역 (스크롤 가능) */}
+          <div className="flex-1 overflow-y-auto pb-20">
+            {/* 1. 시간표 탭 */}
+            {mobileTab === 'timetable' && (
+              <div className="p-2">
+                <ScheduleErrorAlert scheduleError={scheduleError} />
+                <UnassignedMembersAlert unassignedMembersInfo={unassignedMembersInfo} />
+                <ConflictSuggestionsAlert conflictSuggestions={conflictSuggestions} />
+                
+                {currentRoom?.autoConfirmAt && (
+                  <AutoConfirmBanner
+                    key={new Date(currentRoom.autoConfirmAt).getTime()}
+                    autoConfirmAt={currentRoom.autoConfirmAt}
+                    isOwner={isOwner}
+                  />
+                )}
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2">
+                  <TimetableControls
+                    viewMode={viewMode}
+                    setViewMode={setViewMode}
+                    showFullDay={showFullDay}
+                    setShowFullDay={setShowFullDay}
+                    showMerged={showMerged}
+                    setShowMerged={setShowMerged}
+                    travelMode={travelMode}
+                    onTravelModeChange={handleTravelModeChange}
+                    onConfirmTravelMode={handleConfirmTravelMode}
+                    isTravelCalculating={isTravelCalculating}
+                    currentRoom={currentRoom}
+                    isOwner={isOwner}
+                    scheduleStartHour={scheduleStartHour}
+                    scheduleEndHour={scheduleEndHour}
+                    isMobile={true}
+                  />
+
+                  <TravelErrorAlert travelError={travelError && !travelError.includes('도보 이동 시간이 1시간을 초과') ? travelError : null} />
+
+                  {viewMode === 'week' ? (
+                    <TimetableGrid
+                      key={`week-${effectiveShowFullDay ? 'full' : 'basic'}-${showMerged ? 'merged' : 'split'}-${travelMode}-${renderKey}`}
+                      roomId={currentRoom._id}
+                      roomSettings={{ ...currentRoom.settings, startHour: effectiveShowFullDay ? 0 : scheduleStartHour, endHour: effectiveShowFullDay ? 24 : scheduleEndHour }}
+                      timeSlots={scheduleData.timeSlots}
+                      travelSlots={scheduleData.travelSlots || []}
+                      travelMode={scheduleData.travelMode}
+                      myTravelDuration={scheduleData.myTravelDuration}
+                      members={currentRoom.members || []}
+                      roomData={currentRoom}
+                      currentUser={user}
+                      isRoomOwner={isOwner}
+                      selectedSlots={[]}
+                      onSlotSelect={null}
+                      onWeekChange={handleWeekChange}
+                      ownerOriginalSchedule={ownerScheduleCache}
+                      initialStartDate={currentWeekStartDate}
+                      calculateEndTime={calculateEndTime}
+                      readOnly={isOwner}
+                      showMerged={showMerged}
+                      onOpenChangeRequestModal={openChangeRequestModal}
+                      isMobile={true}
+                    />
+                  ) : (
+                    <CoordinationCalendarView
+                      key={`calendar-${viewMode}-${renderKey}`}
+                      roomData={currentRoom}
+                      timeSlots={scheduleData.timeSlots}
+                      travelSlots={scheduleData.travelSlots || []}
+                      travelMode={scheduleData.travelMode}
+                      myTravelDuration={scheduleData.myTravelDuration}
+                      members={currentRoom.members || []}
+                      currentUser={user}
+                      isRoomOwner={isOwner}
+                      onDateClick={handleDateClick}
+                      selectedDate={selectedDate}
+                      viewMode={viewMode}
+                      currentWeekStartDate={currentWeekStartDate}
+                      onWeekChange={handleWeekChange}
+                      showFullDay={effectiveShowFullDay}
+                      showMerged={showMerged}
+                      ownerOriginalSchedule={ownerScheduleCache}
+                      isMobile={true}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 2. 멤버 탭 */}
+            {mobileTab === 'members' && (
+              <div className="p-2">
+                <MemberList
+                  currentRoom={currentRoom}
+                  user={user}
+                  isOwner={isOwner}
+                  onMemberClick={handleMemberClick}
+                  onMemberScheduleClick={handleMemberScheduleClick}
+                  showAlert={showAlert}
+                  isMobile={true}
+                />
+              </div>
+            )}
+
+            {/* 3. 요청 탭 */}
+            {mobileTab === 'requests' && (
+              <div className="p-2">
+                <RequestSection
+                  currentRoom={currentRoom}
+                  currentUser={user}
+                  requestViewMode={requestViewMode}
+                  setRequestViewMode={setRequestViewMode}
+                  receivedRequests={receivedRequests}
+                  sentRequests={sentRequests}
+                  showAllRequests={showAllRequests}
+                  setShowAllRequests={setShowAllRequests}
+                  expandedSections={expandedSections}
+                  setExpandedSections={setExpandedSections}
+                  handleRequestWithUpdate={handleRequestWithUpdateCallback}
+                  handleCancelRequest={handleCancelRequestCallback}
+                  isMobile={true}
+                />
+              </div>
+            )}
+
+            {/* 4. 관리 탭 (방장 전용) */}
+            {mobileTab === 'settings' && isOwner && (
+              <div className="p-2">
+                <AutoSchedulerPanel
+                  options={scheduleOptions}
+                  setOptions={setScheduleOptions}
+                  onRun={handleRunAutoScheduleCallback}
+                  isLoading={isScheduling}
+                  currentRoom={currentRoom}
+                  onResetCarryOverTimes={handleResetCarryOverTimesCallback}
+                  onResetCompletedTimes={handleResetCompletedTimesCallback}
+                  onClearAllCarryOverHistories={handleClearAllCarryOverHistoriesCallback}
+                  onDeleteAllSlots={handleDeleteAllSlots}
+                  onConfirmSchedule={handleConfirmSchedule}
+                  currentWeekStartDate={currentWeekStartDate}
+                  setAutoConfirmDuration={setAutoConfirmDuration}
+                  isMobile={true}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* 하단 탭 네비게이션 */}
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-16 z-50 px-2 pb-safe">
+            <button
+              onClick={() => setMobileTab('timetable')}
+              className={`flex flex-col items-center justify-center w-full h-full ${mobileTab === 'timetable' ? 'text-blue-600' : 'text-gray-500'}`}
+            >
+              <Clock size={24} />
+              <span className="text-xs mt-1 font-medium">시간표</span>
+            </button>
+            <button
+              onClick={() => setMobileTab('members')}
+              className={`flex flex-col items-center justify-center w-full h-full ${mobileTab === 'members' ? 'text-blue-600' : 'text-gray-500'}`}
+            >
+              <Users size={24} />
+              <span className="text-xs mt-1 font-medium">멤버</span>
+            </button>
+            <button
+              onClick={() => setMobileTab('requests')}
+              className={`flex flex-col items-center justify-center w-full h-full ${mobileTab === 'requests' ? 'text-blue-600' : 'text-gray-500'}`}
+            >
+              <div className="relative">
+                <Mail size={24} />
+                {receivedRequests.filter(r => r.status === 'pending').length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white"></span>
+                )}
+              </div>
+              <span className="text-xs mt-1 font-medium">요청</span>
+            </button>
+            {isOwner && (
+              <button
+                onClick={() => setMobileTab('settings')}
+                className={`flex flex-col items-center justify-center w-full h-full ${mobileTab === 'settings' ? 'text-blue-600' : 'text-gray-500'}`}
+              >
+                <Settings size={24} />
+                <span className="text-xs mt-1 font-medium">관리</span>
+              </button>
+            )}
+          </div>
+
+          {/* 모달 렌더링 (공통) */}
+          {/* ... 기존 모달 코드 재사용 ... */}
+          {renderCommonModals()}
+        </div>
+      );
+    }
+
+    // 🖥️ PC 레이아웃 (기존 코드)
     return (
       <div className="p-1">
         <RoomHeader
@@ -950,110 +1272,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
           </div>
         </div>
 
-        {/* Modals */}
-        {showManageRoomModal && currentRoom && (
-          <RoomManagementModal
-            room={currentRoom}
-            onClose={handleCloseManageRoomModal}
-            updateRoom={updateRoom}
-            deleteRoom={deleteRoom}
-            defaultTab={roomModalDefaultTab}
-            onRoomUpdated={(updatedRoom) => { setCurrentRoom(updatedRoom); fetchMyRooms(); }}
-          />
-        )}
-
-
-        {showRequestModal && slotToRequest && (
-          <RequestSlotModal
-            onClose={closeRequestModal}
-            onRequest={createHandleRequestFromModal(currentRoom, slotToRequest, handleRequestSlot, closeRequestModal)}
-            slotInfo={slotToRequest}
-          />
-        )}
-
-        {showChangeRequestModal && slotToChange && (
-          <ChangeRequestModal
-            onClose={closeChangeRequestModal}
-            onRequestChange={createHandleChangeRequest(currentRoom, slotToChange, handleRequestSlot)}
-            slotToChange={slotToChange}
-          />
-        )}
-
-        <CustomAlertModal
-          isOpen={customAlert.show}
-          onClose={closeAlert}
-          title="알림"
-          message={customAlert.message}
-          type={customAlert.type || "warning"}
-          showCancel={false}
-        />
-
-        <MemberStatsModal
-          isOpen={memberStatsModal.isOpen}
-          onClose={() => setMemberStatsModal({ isOpen: false, member: null })}
-          member={memberStatsModal.member}
-          isOwner={currentRoom && user && (currentRoom.owner._id === user.id || currentRoom.owner === user.id)}
-          currentRoom={currentRoom}
-        />
-
-        <CustomAlertModal
-          isOpen={showDeleteConfirm}
-          onClose={() => setShowDeleteConfirm(false)}
-          onConfirm={executeDeleteAllSlots}
-          title="시간표 전체 삭제"
-          message="정말로 모든 시간표를 삭제하시겠습니까? 자동 배정으로 생성된 시간표와 협의 내역이 모두 사라지며, 이 작업은 되돌릴 수 없습니다."
-          type="danger"
-          confirmText="삭제"
-          cancelText="취소"
-          showCancel={true}
-        />
-
-        {showDetailGrid && selectedDate && (
-          <CoordinationDetailGrid
-            selectedDate={selectedDate}
-            timeSlots={scheduleData.timeSlots}
-                  travelSlots={scheduleData.travelSlots || []}
-                  travelMode={scheduleData.travelMode}
-            members={currentRoom.members || []}
-            currentUser={user}
-            isRoomOwner={isOwner}
-            roomData={currentRoom}
-            showMerged={showMerged}
-            onClose={handleCloseDetailGrid}
-            onSlotSelect={null}
-            selectedSlots={[]}
-            onRequestSlot={handleRequestSlot}
-            onRemoveSlot={async (slotData) => {
-              await removeTimeSlot(currentRoom._id, slotData.day, slotData.startTime, slotData.endTime);
-              await fetchRoomDetails(currentRoom._id);
-            }}
-            ownerOriginalSchedule={ownerScheduleCache}
-          />
-        )}
-
-        {showMemberScheduleModal && selectedMemberId && (
-          <MemberScheduleModal
-            memberId={selectedMemberId}
-            onClose={() => { setShowMemberScheduleModal(false); setSelectedMemberId(null); }}
-          />
-        )}
-
-        <ChainExchangeRequestModal
-          isOpen={showChainExchangeModal}
-          onClose={() => { setShowChainExchangeModal(false); setSelectedChainRequest(null); }}
-          request={selectedChainRequest}
-          roomId={selectedChainRequest?.roomId}
-          onRequestHandled={handleChainExchangeRequestHandled}
-        />
-
-        <CustomAlertModal
-          isOpen={showWalkingErrorModal}
-          onClose={handleCloseWalkingErrorModal}
-          title="도보 모드 사용 불가"
-          message={walkingErrorMessage}
-          type="warning"
-          showCancel={false}
-        />
+        {renderCommonModals()}
       </div>
     );
   }
