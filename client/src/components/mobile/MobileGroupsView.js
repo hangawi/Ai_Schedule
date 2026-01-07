@@ -170,6 +170,7 @@ const MobileGroupsView = ({ user }) => {
                user={user} 
                onExchangeRequestCountChange={setExchangeRequestCount}
                hideHeader={true}
+               initialClear={true}
             />
          </div>
       </div>

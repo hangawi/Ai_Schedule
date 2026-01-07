@@ -115,7 +115,7 @@ import {
  * @param {function} onExchangeRequestCountChange - 상위 컴포넌트로 교환 요청 개수 변경을 알리는 콜백 함수
  * @returns {JSX.Element} '협업' 탭의 JSX 엘리먼트
  */
-const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = false }) => {
+const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = false, initialClear = false }) => {
   // Custom hooks - order matters for dependencies
   const { customAlert, showAlert, closeAlert } = useAlertState();
   const { sentRequests, receivedRequests, setSentRequests, setReceivedRequests, loadSentRequests, loadReceivedRequests, chainExchangeRequests, setChainExchangeRequests, loadChainExchangeRequests } = useRequests(user);
@@ -139,7 +139,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
     submitTimeSlots, assignTimeSlot, removeTimeSlot,
     createRequest, cancelRequest, handleRequest,
     setAutoConfirmDuration
-  } = useCoordination(user?.id, onExchangeRequestCountChange, loadSentRequests, showAlert);
+  } = useCoordination(user?.id, onExchangeRequestCountChange, loadSentRequests, showAlert, initialClear);
   const { roomExchangeCounts, setRoomExchangeCounts, loadRoomExchangeCounts, getRoomRequestCount } = useRoomExchangeCounts(user, myRooms, receivedRequests);
 
   const {

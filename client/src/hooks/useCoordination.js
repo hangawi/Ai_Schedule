@@ -59,7 +59,7 @@ import { coordinationService } from '../services/coordinationService';
  * @property {Function} handleRequest - 받은 요청을 수락하거나 거절하는 함수
  * @property {Function} cancelRequest - 보낸 요청을 취소하는 함수
  */
-export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentRequests, showAlert) => {
+export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentRequests, showAlert, skipRestore = false) => {
   const [currentRoomState, setCurrentRoomState] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -80,6 +80,14 @@ export const useCoordination = (userId, onRefreshExchangeCount, onRefreshSentReq
   // 페이지 로드 시 또는 사용자 ID가 변경될 때 로컬 스토리지에서 현재 방 정보를 복원합니다.
   useEffect(() => {
     const restoreCurrentRoom = async () => {
+      // 복원 건너뛰기 옵션이 켜져있으면 초기화만 하고 종료
+      if (skipRestore) {
+        setCurrentRoomState(null);
+        localStorage.removeItem('currentRoomId');
+        localStorage.removeItem('currentRoomData');
+        return;
+      }
+
       if (!userId) {
         // 사용자가 없으면 방 상태 클리어
         setCurrentRoomState(null);
