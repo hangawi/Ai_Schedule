@@ -642,22 +642,17 @@ const MobileCalendarView = ({ user }) => {
    };
 
    const renderEventContent = (eventInfo) => {
+      // 이벤트의 배경색을 가져옴 (없으면 기본 파란색)
+      const color = eventInfo.event.backgroundColor || '#3b82f6';
+      
       return (
-         <div style={{
-            padding: '2px 4px',
-            fontSize: '10px',
-            fontWeight: '600',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            color: '#ffffff'
+         <div className="event-line-marker" style={{
+            backgroundColor: color,
+            height: '5px',
+            width: '100%',
+            borderRadius: '2px',
+            marginTop: '2px'
          }}>
-            {eventInfo.timeText && (
-               <div style={{ fontSize: '9px', opacity: 0.9 }}>
-                  {eventInfo.timeText}
-               </div>
-            )}
-            <div>{eventInfo.event.title}</div>
          </div>
       );
    };
