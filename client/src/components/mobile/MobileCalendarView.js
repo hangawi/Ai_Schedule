@@ -163,7 +163,7 @@ const MobileCalendarView = ({ user }) => {
                   end.setHours(endHour, endMin, 0, 0);
 
                   tempEvents.push({
-                     title: pt.name || '개인',
+                     title: pt.name || pt.title || '개인',
                      start: formatLocalDateTime(start),
                      end: formatLocalDateTime(end),
                      backgroundColor: '#ef4444',
@@ -186,7 +186,7 @@ const MobileCalendarView = ({ user }) => {
                   end.setHours(endHour, endMin, 0, 0);
 
                   tempEvents.push({
-                     title: pt.name || '개인',
+                     title: pt.name || pt.title || '개인',
                      start: formatLocalDateTime(start),
                      end: formatLocalDateTime(end),
                      backgroundColor: '#ef4444',
@@ -325,7 +325,22 @@ const MobileCalendarView = ({ user }) => {
 
    const handleViewChange = (viewInfo) => {
       setCalendarView(viewInfo.view.type);
+      // 주/일 뷰에서는 현재 보이는 날짜로 선택 날짜 자동 설정
       if (viewInfo.view.type !== 'dayGridMonth') {
+         // 주 뷰일 경우 시작 날짜, 일 뷰일 경우 해당 날짜
+         // viewInfo.start는 해당 뷰의 시작 날짜임
+         // 사용자가 보기 편하게 오늘 날짜가 뷰 안에 있다면 오늘로, 아니면 시작 날짜로 설정
+         const today = new Date();
+         const viewStart = viewInfo.view.currentStart;
+         const viewEnd = viewInfo.view.currentEnd;
+         
+         if (today >= viewStart && today < viewEnd) {
+            setSelectedDate(today);
+         } else {
+            setSelectedDate(viewStart);
+         }
+      } else {
+         // 월 뷰로 돌아오면 선택 해제 (깔끔하게)
          setSelectedDate(null);
       }
    };
@@ -642,9 +657,18 @@ const MobileCalendarView = ({ user }) => {
    };
 
    const renderEventContent = (eventInfo) => {
-      // 이벤트의 배경색을 가져옴 (없으면 기본 파란색)
+      // 주/일간 뷰(timeGrid)일 때는 기본 렌더링 사용 (색상 블록 + 텍스트)
+      if (eventInfo.view.type !== 'dayGridMonth') {
+         return (
+            <div style={{ padding: '2px' }}>
+               <div style={{ fontWeight: 'bold' }}>{eventInfo.event.title}</div>
+               <div style={{ fontSize: '0.85em' }}>{eventInfo.timeText}</div>
+            </div>
+         );
+      }
+
+      // 월간 뷰(dayGrid)일 때만 가로줄(Line) 스타일
       const color = eventInfo.event.backgroundColor || '#3b82f6';
-      
       return (
          <div className="event-line-marker" style={{
             backgroundColor: color,
@@ -659,41 +683,145 @@ const MobileCalendarView = ({ user }) => {
 
    const getEventsForDate = (date) => {
       if (!date) return [];
-      const dateStr = date.toISOString().split('T')[0];
+      
+      // 로컬 시간대 기준으로 YYYY-MM-DD 문자열 생성
+      const targetDateStr = date.toLocaleDateString('en-CA'); // YYYY-MM-DD 형식 (한국 시간 기준)
+
       return events.filter(event => {
-         const eventDateStr = event.start.toISOString().split('T')[0];
-         return eventDateStr === dateStr;
+         const eventStart = new Date(event.start);
+         if (isNaN(eventStart.getTime())) return false;
+         
+         const eventDateStr = eventStart.toLocaleDateString('en-CA');
+         return eventDateStr === targetDateStr;
       });
    };
 
    const renderBottomSection = () => {
-      if (selectedDate && calendarView === 'dayGridMonth') {
-         const dayEvents = getEventsForDate(selectedDate);
+      // 1. 주/일간 뷰 (Split View): 하단에 텍스트 리스트 표시
+      if (calendarView !== 'dayGridMonth') {
+         const targetDate = selectedDate || new Date();
+         
+         // 필터링: 선호시간('가능') 제외하고 실제 일정(개인시간, 확정일정)만 표시
+         const dayEvents = getEventsForDate(targetDate)
+            .filter(event => event.title !== '가능' && event.title !== '선호시간')
+            .sort((a, b) => new Date(a.start) - new Date(b.start));
+
          return (
-            <div className="date-detail-section">
+            <div className="split-view-list">
+               <div className="split-list-header">
+                  {targetDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
+               </div>
+               
+               {dayEvents.length === 0 ? (
+                  <div className="split-no-events">일정이 없습니다</div>
+               ) : (
+                  dayEvents.map((event, idx) => (
+                     <div key={idx} className="split-list-item">
+                        <div className="split-item-time">
+                           {new Date(event.start).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                           <br />~ {new Date(event.end).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                        <div 
+                           className="split-item-content"
+                           style={{ backgroundColor: event.backgroundColor || '#3b82f6' }}
+                        >
+                           {event.title}
+                        </div>
+                     </div>
+                  ))
+               )}
+            </div>
+         );
+      }
+
+      // 2. 월간 뷰 (Month View): 날짜 선택 시 하단 시트(Timeline) 표시
+      if (selectedDate) {
+         const dayEvents = getEventsForDate(selectedDate);
+         
+         // 시간대별 그리드 생성 (06:00 ~ 24:00)
+         const startHour = 6;
+         const endHour = 24;
+         const totalHours = endHour - startHour;
+
+         // 위치 계산 함수
+         const getPosition = (dateStr) => {
+            const date = new Date(dateStr);
+            const h = date.getHours();
+            const m = date.getMinutes();
+            
+            // 시작 시간보다 이르면 0으로 보정
+            if (h < startHour) return 0;
+            
+            const position = ((h - startHour) * 60 + m) / (totalHours * 60) * 100;
+            return Math.min(Math.max(position, 0), 100);
+         };
+
+         return (
+            <div className="date-detail-sheet">
                <div className="detail-header">
                   <h3>{selectedDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}</h3>
                   <button className="close-btn" onClick={() => setSelectedDate(null)}>✕</button>
                </div>
-               <div className="detail-events">
-                  {dayEvents.length === 0 ? (
-                     <p className="no-events">등록된 일정이 없습니다</p>
-                  ) : (
-                     dayEvents.map((event, idx) => (
-                        <div key={idx} className="event-item" style={{ borderLeftColor: event.borderColor }}>
-                           <div className="event-time">
-                              {event.start.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} - 
-                              {event.end.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                           </div>
-                           <div className="event-title">{event.title}</div>
+               
+               <div className="timeline-container">
+                  {/* 시간 축 */}
+                  <div className="time-axis">
+                     {Array.from({ length: totalHours + 1 }, (_, i) => startHour + i).map((hour, i) => (
+                        <div key={hour} className="time-slot" style={{ top: `${(i / totalHours) * 100}%` }}>
+                           <span>{hour}:00</span>
                         </div>
-                     ))
-                  )}
+                     ))}
+                  </div>
+
+                  {/* 일정 영역 */}
+                  <div className="events-area">
+                     {/* 가로선 */}
+                     {Array.from({ length: totalHours + 1 }, (_, i) => (
+                        <div key={i} className="grid-line" style={{ top: `${(i / totalHours) * 100}%` }}></div>
+                     ))}
+
+                     {/* 이벤트 블록 */}
+                     {dayEvents.map((event, idx) => {
+                        const top = getPosition(event.start);
+                        const bottom = getPosition(event.end);
+                        const height = Math.max(bottom - top, 2); // 최소 높이 보장
+
+                        return (
+                           <div 
+                              key={idx} 
+                              className="timeline-event-block"
+                              style={{
+                                 top: `${top}%`,
+                                 height: `${height}%`,
+                                 backgroundColor: event.backgroundColor || '#3b82f6',
+                                 borderColor: event.borderColor || '#2563eb',
+                                 opacity: 0.9,
+                                 zIndex: 10
+                              }}
+                           >
+                              <div className="event-info">
+                                 <span className="event-title">{event.title}</span>
+                                 {height > 5 && (
+                                    <span className="event-time">
+                                       {new Date(event.start).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} - 
+                                       {new Date(event.end).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                 )}
+                              </div>
+                           </div>
+                        );
+                     })}
+                     
+                     {dayEvents.length === 0 && (
+                        <div className="no-events-message">일정이 없습니다</div>
+                     )}
+                  </div>
                </div>
             </div>
          );
       }
 
+      // 날짜 선택이 없을 때 (기존 일정 관리 탭 유지)
       if (calendarView === 'dayGridMonth') {
          return (
             <div className="management-section">

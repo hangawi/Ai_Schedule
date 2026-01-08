@@ -374,16 +374,54 @@
    background: #f9fafb;
 }
 
-.fc .fc-event {
+/* ===================================
+   FullCalendar 이벤트 스타일 (뷰별 분기)
+   =================================== */
+
+/* 공통: 이벤트 텍상 색상 */
+.fc-event {
+   color: #fff !important;
+}
+
+/* 1. 월간 뷰 (DayGrid): 가느다란 줄(Line) 스타일 */
+.fc-daygrid-view .fc-event {
    background: transparent !important;
    border: none !important;
    padding: 0 !important;
    box-shadow: none !important;
    cursor: pointer;
+   display: flex;
+   align-items: center;
+   height: auto !important;
+   margin: 1px 0 !important;
 }
 
-.fc .fc-daygrid-event-dot {
-   display: none;
+.fc-daygrid-view .event-line-marker {
+   display: block !important;
+}
+
+/* 2. 주/일간 뷰 (TimeGrid): 꽉 찬 블록 스타일 */
+.fc-timegrid-view .fc-event {
+   border-radius: 4px !important;
+   padding: 2px 4px !important;
+   border: none !important;
+   box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+   opacity: 0.9;
+}
+
+.fc-timegrid-view .event-line-marker {
+   display: none !important; /* TimeGrid에서는 라인 마커 숨김 */
+}
+
+/* TimeGrid 이벤트 내부 텍스트 복구 */
+.fc-timegrid-event .fc-event-main {
+   padding: 2px;
+   font-size: 11px;
+   font-weight: 600;
+}
+
+.fc .fc-daygrid-event-h-harness {
+   margin-top: 1px !important;
 }
 
 .fc .fc-col-header-cell {
@@ -440,8 +478,184 @@
 }
 
 /* ===================================
-   일정 관리 섹션
+   화면 분할 (Split View - 주/일간 뷰용)
    =================================== */
+.mobile-calendar-view.split-mode .calendar-container {
+   height: 50vh !important; /* 상단 50% */
+   flex: none;
+   border-bottom: 1px solid #e5e7eb;
+   overflow-y: hidden; /* 캘린더 내부 스크롤 대신 전체 스크롤 방지 */
+}
+
+.split-view-list {
+   flex: 1; /* 나머지 50% */
+   background: white;
+   overflow-y: auto;
+   padding: 16px 20px;
+}
+
+.split-list-header {
+   font-size: 16px;
+   font-weight: 700;
+   color: #1f2937;
+   margin-bottom: 12px;
+   padding-bottom: 8px;
+   border-bottom: 2px solid #f3f4f6;
+}
+
+.split-list-item {
+   display: flex;
+   align-items: center;
+   padding: 12px 0;
+   border-bottom: 1px solid #f3f4f6;
+}
+
+.split-item-time {
+   width: 100px;
+   font-size: 14px;
+   font-weight: 600;
+   color: #4b5563;
+   flex-shrink: 0;
+}
+
+.split-item-content {
+   flex: 1;
+   padding: 8px 12px;
+   border-radius: 8px;
+   color: white;
+   font-size: 14px;
+   font-weight: 500;
+}
+
+.split-no-events {
+   text-align: center;
+   color: #9ca3af;
+   padding: 40px 0;
+   font-size: 14px;
+}
+
+/* ===================================
+   하단 상세 시트 (Timeline - 월간 뷰용)
+   =================================== */
+.date-detail-sheet {
+   position: fixed;
+   bottom: 0;
+   left: 0;
+   right: 0;
+   height: 45vh; /* 화면의 45% 차지 */
+   background: white;
+   border-top-left-radius: 20px;
+   border-top-right-radius: 20px;
+   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+   z-index: 100;
+   display: flex;
+   flex-direction: column;
+   animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+   from { transform: translateY(100%); }
+   to { transform: translateY(0); }
+}
+
+.detail-header {
+   padding: 16px 20px;
+   border-bottom: 1px solid #e5e7eb;
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   background: #f9fafb;
+   border-top-left-radius: 20px;
+   border-top-right-radius: 20px;
+}
+
+.detail-header h3 {
+   margin: 0;
+   font-size: 18px;
+   font-weight: 700;
+   color: #1f2937;
+}
+
+.timeline-container {
+   flex: 1;
+   display: flex;
+   overflow-y: auto; /* 세로 스크롤 허용 */
+   padding: 10px;
+   position: relative;
+}
+
+.time-axis {
+   width: 50px;
+   position: relative;
+   border-right: 1px solid #e5e7eb;
+   height: 1200px; /* 18시간 * 60px/시간 충분한 높이 */
+}
+
+.time-slot {
+   position: absolute;
+   width: 100%;
+   text-align: right;
+   padding-right: 8px;
+   font-size: 12px;
+   color: #6b7280;
+   transform: translateY(-50%); /* 텍스트 수직 중앙 정렬 */
+}
+
+.events-area {
+   flex: 1;
+   position: relative;
+   height: 1200px; /* time-axis와 동일한 높이 */
+}
+
+.grid-line {
+   position: absolute;
+   left: 0;
+   right: 0;
+   height: 1px;
+   background-color: #f3f4f6;
+}
+
+.timeline-event-block {
+   position: absolute;
+   left: 4px;
+   right: 4px;
+   border-radius: 4px;
+   padding: 4px 8px;
+   color: white;
+   font-size: 12px;
+   overflow: hidden;
+   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+   border-left: 3px solid rgba(0,0,0,0.2);
+}
+
+.event-info {
+   display: flex;
+   flex-direction: column;
+}
+
+.event-title {
+   font-weight: 700;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis;
+}
+
+.event-time {
+   font-size: 10px;
+   opacity: 0.9;
+}
+
+.no-events-message {
+   position: absolute;
+   top: 50%;
+   left: 50%;
+   transform: translate(-50%, -50%);
+   color: #9ca3af;
+   font-size: 14px;
+}
+
+/* ===================================
+   일정 관리 섹션 (기존 스타일 유지)
 .management-section {
    padding: 16px;
    background: #f9fafb;
