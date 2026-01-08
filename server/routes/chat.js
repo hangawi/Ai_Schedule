@@ -15,4 +15,7 @@ router.post('/:roomId', chatController.sendMessage);
 // AI 일정 제안 확정
 router.post('/:roomId/confirm', chatController.confirmSchedule);
 
+// 메시지 읽음 처리
+router.post('/:roomId/read', chatController.markAsRead);
+
 module.exports = router;

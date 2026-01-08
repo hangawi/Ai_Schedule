@@ -1,6 +1,7 @@
 const Room = require('../models/room');
 const User = require('../models/user');
 const ActivityLog = require('../models/ActivityLog');
+const ChatMessage = require('../models/ChatMessage');
 const schedulingAlgorithm = require('../services/schedulingAlgorithm');
 
 // @desc    Create a new coordination room
@@ -574,15 +575,41 @@ exports.getMyRooms = async (req, res) => {
          .populate('owner', 'firstName lastName email firebaseUid')
          .populate('members.user', 'firstName lastName email firebaseUid');
 
-      // Add member count to each room
-      const formatRoom = room => ({
-         ...room.toObject(),
-         memberCount: room.members.length,
-      });
+      // Add member count and unread message count
+      const formatRoom = async (room) => {
+         const roomObj = room.toObject();
+         
+         // Find current user's lastReadAt
+         const member = roomObj.members.find(m => 
+            (m.user._id ? m.user._id.toString() : m.user.toString()) === req.user.id
+         );
+         
+         let unreadCount = 0;
+         if (member && member.lastReadAt) {
+            unreadCount = await ChatMessage.countDocuments({
+               room: room._id,
+               createdAt: { $gt: member.lastReadAt }
+            });
+         } else if (member) {
+            // lastReadAt이 없으면(신규 기능 도입 전 멤버) 모든 메시지를 안 읽은 것으로 간주하거나 0으로 처리
+            // 여기서는 lastMessageAt이 있으면 1로 표시하거나 0으로 처리. 
+            // 안전하게 0으로 시작.
+            unreadCount = 0;
+         }
+
+         return {
+            ...roomObj,
+            memberCount: room.members.length,
+            unreadCount
+         };
+      };
+
+      const ownedRoomsWithUnread = await Promise.all(ownedRooms.map(formatRoom));
+      const joinedRoomsWithUnread = await Promise.all(joinedRooms.map(formatRoom));
 
       res.json({
-         owned: ownedRooms.map(formatRoom),
-         joined: joinedRooms.map(formatRoom),
+         owned: ownedRoomsWithUnread,
+         joined: joinedRoomsWithUnread,
       });
    } catch (error) {
       res.status(500).json({ msg: 'Server error' });

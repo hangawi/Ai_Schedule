@@ -45,6 +45,9 @@ exports.sendMessage = async (req, res) => {
     });
     await message.save();
     
+    // Update Room's lastMessageAt
+    await Room.findByIdAndUpdate(roomId, { lastMessageAt: new Date() });
+    
     // Populate sender info for frontend
     await message.populate('sender', 'firstName lastName email');
 
@@ -125,6 +128,26 @@ exports.confirmSchedule = async (req, res) => {
 
   } catch (error) {
     console.error('Confirm schedule error:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// @desc    Mark room messages as read
+// @route   POST /api/chat/:roomId/read
+// @access  Private
+exports.markAsRead = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const userId = req.user.id;
+
+    await Room.updateOne(
+      { _id: roomId, 'members.user': userId },
+      { $set: { 'members.$.lastReadAt': new Date() } }
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Mark as read error:', error);
     res.status(500).json({ msg: 'Server error' });
   }
 };

@@ -264,12 +264,20 @@ const RoomSchema = new mongoose.Schema({
       default: 3,
       min: 1,
       max: 5
+    },
+    lastReadAt: { // 🆕 마지막으로 채팅을 읽은 시간
+      type: Date,
+      default: Date.now
     }
   }],
   inviteCode: {
     type: String,
     unique: true,
     required: true
+  },
+  lastMessageAt: { // 🆕 방의 마지막 메시지 시간
+    type: Date,
+    default: Date.now
   },
   maxMembers: {
     type: Number,

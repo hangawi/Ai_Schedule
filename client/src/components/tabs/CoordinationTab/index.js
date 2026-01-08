@@ -399,17 +399,20 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
     // 🚀 대화형 모드 분기 (Conversational Mode)
     if (currentRoom.mode === 'conversational') {
       return (
-        <ConversationalRoomView 
-          currentRoom={currentRoom} 
-          user={user} 
-          isOwner={isOwner} 
-          isMobile={isMobile}
-          onManageRoom={openManageRoomModal}
-          onBackToRoomList={handleBackToRoomList}
-          onLeaveRoom={handleLeaveRoom}
-          onMemberClick={handleMemberClick}
-          onMemberScheduleClick={handleMemberScheduleClick}
-        />
+        <>
+          <ConversationalRoomView 
+            currentRoom={currentRoom} 
+            user={user} 
+            isOwner={isOwner} 
+            isMobile={isMobile}
+            onManageRoom={openManageRoomModal}
+            onBackToRoomList={handleBackToRoomList}
+            onLeaveRoom={handleLeaveRoom}
+            onMemberClick={handleMemberClick}
+            onMemberScheduleClick={handleMemberScheduleClick}
+          />
+          {renderCommonModals()}
+        </>
       );
     }
 

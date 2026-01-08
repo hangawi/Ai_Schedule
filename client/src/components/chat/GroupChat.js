@@ -16,6 +16,9 @@ const GroupChat = ({ roomId, user, isMobile }) => {
   useEffect(() => {
     // 채팅 내역 불러오기
     fetchMessages();
+    
+    // 읽음 처리 알림
+    markMessagesAsRead();
 
     // 소켓 연결
     socketRef.current = io(API_BASE_URL, { transports: ['websocket', 'polling'] });
@@ -58,9 +61,26 @@ const GroupChat = ({ roomId, user, isMobile }) => {
     }
   };
 
+  const markMessagesAsRead = async () => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      await fetch(`${API_BASE_URL}/api/chat/${roomId}/read`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (error) {
+      console.error('Failed to mark messages as read:', error);
+    }
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  // 메시지 리스트가 업데이트될 때마다 스크롤 하단으로 이동
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   // 2. 메시지 전송
   const handleSend = async (e) => {
@@ -81,6 +101,7 @@ const GroupChat = ({ roomId, user, isMobile }) => {
         body: JSON.stringify({ content, type: 'text' })
       });
       // 소켓으로 내 메시지도 돌아오므로 여기서 setMessages 안 해도 됨 (중복 방지)
+      // 하지만 소켓 반응이 느릴 수 있으므로 전송 직후 스크롤 시도는 유지 (혹은 소켓 수신 시 처리)
     } catch (error) {
       console.error('Send error:', error);
     }

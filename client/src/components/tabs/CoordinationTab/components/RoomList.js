@@ -137,15 +137,24 @@ const RoomCard = ({ room, selectedTab, exchangeCount, onClick }) => (
     onClick={onClick}
   >
     <div className="flex justify-between items-start mb-3">
-      <div className="flex items-center">
-        <h4 className="text-lg font-bold text-gray-900 truncate pr-2">{translateEnglishDays(room.name)}</h4>
+      <div className="flex flex-wrap items-center gap-2">
+        <h4 className="text-lg font-bold text-gray-900 truncate max-w-[150px]">{translateEnglishDays(room.name)}</h4>
+        
+        {/* 교환 요청 배지 */}
         {exchangeCount > 0 && (
-          <span className="ml-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[20px] h-5 flex items-center justify-center">
-            {exchangeCount}
+          <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full" title="새로운 교환 요청">
+            요청 {exchangeCount}
+          </span>
+        )}
+
+        {/* 🆕 안 읽은 채팅 배지 */}
+        {room.unreadCount > 0 && (
+          <span className="bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1" title="읽지 않은 메시지">
+            채팅 {room.unreadCount}
           </span>
         )}
       </div>
-      <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${selectedTab === 'owned' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
+      <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${selectedTab === 'owned' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
         {selectedTab === 'owned' ? '방장' : '멤버'}
       </span>
     </div>
