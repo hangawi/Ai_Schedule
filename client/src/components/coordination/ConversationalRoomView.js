@@ -33,6 +33,7 @@ const ConversationalRoomView = ({
         onBackToRoomList={onBackToRoomList} 
         onLeaveRoom={onLeaveRoom} 
         isMobile={isMobile}
+        onToggleMembers={() => setShowMembers(!showMembers)} // 추가: 토글 함수 전달
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -43,16 +44,6 @@ const ConversationalRoomView = ({
             user={user} 
             isMobile={isMobile} 
           />
-          
-          {/* 모바일: 멤버 목록 토글 버튼 */}
-          {isMobile && (
-            <button 
-              onClick={() => setShowMembers(!showMembers)}
-              className="absolute top-4 right-4 bg-white/90 p-2 rounded-full shadow-md border border-gray-200 z-10 text-gray-600"
-            >
-              {showMembers ? <Info size={20} /> : <Users size={20} />}
-            </button>
-          )}
         </div>
 
         {/* 사이드 패널: 멤버 목록 및 정보 (PC: 우측 고정, 모바일: 오버레이) */}

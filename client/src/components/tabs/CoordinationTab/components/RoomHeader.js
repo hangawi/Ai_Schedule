@@ -4,7 +4,7 @@
  * ===================================================================================================
  */
 import React from 'react';
-import { FileText, Settings, ChevronLeft } from 'lucide-react';
+import { FileText, Settings, Users } from 'lucide-react';
 import { translateEnglishDays } from '../../../../utils';
 import { isRoomOwner } from '../../../../utils/coordinationUtils';
 
@@ -21,7 +21,8 @@ const RoomHeader = ({
   onOpenLogs,
   onBackToRoomList,
   onLeaveRoom,
-  isMobile
+  isMobile,
+  onToggleMembers // 추가: 참여자 목록 토글 함수
 }) => {
   // 대화형 모드인지 확인
   const isConversational = currentRoom?.mode === 'conversational';
@@ -51,20 +52,32 @@ const RoomHeader = ({
                 </button>
               )}
             </div>
-                          </div>
-                          <div className="flex items-center text-xs text-gray-500 space-x-3">
-                            <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-700">CODE: {currentRoom.inviteCode}</span>
-                            <span>👥 {currentRoom.memberCount || currentRoom.members?.length}명</span>
-                            <button 
-                              onClick={onBackToRoomList} 
-                              className="ml-auto px-3 py-1.5 bg-gray-200 text-gray-700 rounded-md font-bold hover:bg-gray-300 transition-colors"
-                            >
-                              목록
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    }    // PC용 슬림 헤더
+          </div>
+          <div className="flex items-center text-xs text-gray-500 space-x-2">
+            <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-700">CODE: {currentRoom.inviteCode}</span>
+            <span>👥 {currentRoom.memberCount || currentRoom.members?.length}명</span>
+            
+            <div className="ml-auto flex items-center gap-2">
+              <button 
+                onClick={onBackToRoomList} 
+                className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-md font-bold hover:bg-gray-300 transition-colors"
+              >
+                목록
+              </button>
+
+              {/* 참여자 목록 토글 버튼 */}
+              <button 
+                onClick={onToggleMembers}
+                className="p-1.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors"
+                title="참여자 목록"
+              >
+                <Users size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }    // PC용 슬림 헤더
     return (
       <div className="bg-white px-6 py-4 rounded-xl shadow-sm mb-4 border border-gray-200 flex justify-between items-center">
         <div className="flex-1">

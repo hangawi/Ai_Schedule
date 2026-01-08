@@ -112,15 +112,25 @@ const GroupChat = ({ roomId, user, isMobile }) => {
       {/* 메시지 리스트 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg, idx) => {
-          // 1. 보낸 사람 ID 추출
-          const msgSenderId = typeof msg.sender === 'object' ? msg.sender._id : msg.sender;
+          // 1. 보낸 사람 식별자 추출 (이메일 우선, 없으면 ID)
+          const senderObj = msg.sender;
+          const senderEmail = typeof senderObj === 'object' ? senderObj.email : null;
+          const senderId = typeof senderObj === 'object' ? (senderObj._id || senderObj.id) : senderObj;
           
-          // 2. 내 ID 추출 (user prop 또는 auth 객체 사용)
-          const myId = user?.id || user?._id || auth.currentUser?.uid;
+          // 2. 내 식별자 추출
+          const myEmail = user?.email;
+          const myId = user?._id || user?.id;
 
-          // 3. 비교 (문자열 변환 후 비교)
-          const isMe = msgSenderId && myId && msgSenderId.toString() === myId.toString();
+          // 3. 비교 (이메일이 있으면 이메일로, 없으면 ID로)
+          let isMe = false;
+          if (senderEmail && myEmail) {
+            isMe = senderEmail === myEmail;
+          } else {
+            isMe = senderId && myId && senderId.toString() === myId.toString();
+          }
           
+          // console.log(`Msg ${idx}: Me=${myEmail}/${myId}, Sender=${senderEmail}/${senderId}, Match=${isMe}`);
+
           const isSystem = msg.type === 'system';
 
           if (isSystem) {
