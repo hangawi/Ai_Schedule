@@ -51,6 +51,7 @@ const RoomCreationModal = ({ onClose, onCreateRoom, ownerProfileSchedule: initia
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [maxMembers, setMaxMembers] = useState(100);
+  const [mode, setMode] = useState('standard'); // 'standard' or 'conversational'
   const [settings, setSettings] = useState({
     startHour: 9,
     endHour: 18,
@@ -268,6 +269,7 @@ useEffect(() => {
       name: name.trim(),
       description: description.trim(),
       maxMembers,
+      mode, // 'standard' 또는 'conversational'
       settings: {
         ...settings,
         // 빈 roomExceptions 배열은 보내지 않도록 필터링
@@ -315,6 +317,32 @@ useEffect(() => {
             />
           </div>
           
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">조율 모드</label>
+            <div className="grid grid-cols-2 gap-3">
+              <div 
+                className={`border rounded-lg p-3 cursor-pointer transition-all ${mode === 'standard' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}
+                onClick={() => setMode('standard')}
+              >
+                <div className="flex items-center mb-1">
+                  <input type="radio" checked={mode === 'standard'} readOnly className="mr-2" />
+                  <span className="text-sm font-bold text-gray-800">표준 모드</span>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">기존의 수동 배정 및 자동 알고리즘 방식</p>
+              </div>
+              <div 
+                className={`border rounded-lg p-3 cursor-pointer transition-all ${mode === 'conversational' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}
+                onClick={() => setMode('conversational')}
+              >
+                <div className="flex items-center mb-1">
+                  <input type="radio" checked={mode === 'conversational'} readOnly className="mr-2" />
+                  <span className="text-sm font-bold text-gray-800">대화형 모드</span>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">AI가 채팅 대화를 분석해 자동으로 일정 생성</p>
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">최대 멤버 수</label>
             <input

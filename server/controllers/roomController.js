@@ -8,7 +8,7 @@ const schedulingAlgorithm = require('../services/schedulingAlgorithm');
 // @access  Private
 exports.createRoom = async (req, res) => {
    try {
-      const { name, description, maxMembers, settings } = req.body;
+      const { name, description, maxMembers, mode, settings } = req.body;
 
       if (!name || name.trim().length === 0) {
          return res.status(400).json({ msg: '방 이름은 필수입니다.' });
@@ -29,6 +29,7 @@ exports.createRoom = async (req, res) => {
          owner: req.user.id,
          inviteCode,
          maxMembers: maxMembers || 10,
+         mode: mode || 'standard',
          settings: settings || {},
       });
 

@@ -73,6 +73,7 @@ import {
 import { Clock, Users, Mail, Settings, MessageSquare, X, Menu as MenuIcon, Info } from 'lucide-react';
 import ChatBox from '../../chat/ChatBox';
 import { useChatEnhanced } from '../../../hooks/useChat/enhanced';
+import ConversationalRoomView from '../../coordination/ConversationalRoomView';
 
 /**
  * [CoordinationTab]
@@ -138,8 +139,14 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
 
   // 모바일 그룹 뷰의 커스텀 이벤트 리스너 추가
   useEffect(() => {
-    const handleOpenCreateRoom = () => openCreateRoomModal();
-    const handleOpenJoinRoom = () => openJoinRoomModal();
+    const handleOpenCreateRoom = () => {
+      console.log('🚀 [CoordinationTab] openCreateRoom 이벤트 수신');
+      openCreateRoomModal();
+    };
+    const handleOpenJoinRoom = () => {
+      console.log('🚀 [CoordinationTab] openJoinRoom 이벤트 수신');
+      openJoinRoomModal();
+    };
 
     window.addEventListener('openCreateRoom', handleOpenCreateRoom);
     window.addEventListener('openJoinRoom', handleOpenJoinRoom);
@@ -368,6 +375,12 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
       {showChangeRequestModal && slotToChange && (
         <ChangeRequestModal onClose={closeChangeRequestModal} onRequestChange={createHandleChangeRequest(currentRoom, slotToChange, handleRequestSlot)} slotToChange={slotToChange} />
       )}
+      {showCreateRoomModal && (
+        <RoomCreationModal onClose={closeCreateRoomModal} onCreateRoom={handleCreateRoom} ownerProfileSchedule={user ? { defaultSchedule: user.defaultSchedule, scheduleExceptions: user.scheduleExceptions, personalTimes: user.personalTimes } : null} />
+      )}
+      {showJoinRoomModal && (
+        <RoomJoinModal onClose={closeJoinRoomModal} onJoinRoom={handleJoinRoom} />
+      )}
       <CustomAlertModal isOpen={customAlert.show} onClose={closeAlert} title="알림" message={customAlert.message} type={customAlert.type || "warning"} showCancel={false} />
       <MemberStatsModal isOpen={memberStatsModal.isOpen} onClose={() => setMemberStatsModal({ isOpen: false, member: null })} member={memberStatsModal.member} isOwner={isOwner} currentRoom={currentRoom} />
       <CustomAlertModal isOpen={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} onConfirm={async () => { await coordinationService.deleteAllTimeSlots(currentRoom._id); setCurrentRoom(null); await handleTravelModeChangeInternal('normal'); }} title="삭제" message="전체 삭제하시겠습니까?" type="danger" showCancel={true} />
@@ -382,6 +395,24 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
 
   if (currentRoom) {
     const scheduleData = getCurrentScheduleData();
+
+    // 🚀 대화형 모드 분기 (Conversational Mode)
+    if (currentRoom.mode === 'conversational') {
+      return (
+        <ConversationalRoomView 
+          currentRoom={currentRoom} 
+          user={user} 
+          isOwner={isOwner} 
+          isMobile={isMobile}
+          onManageRoom={openManageRoomModal}
+          onBackToRoomList={handleBackToRoomList}
+          onLeaveRoom={handleLeaveRoom}
+          onMemberClick={handleMemberClick}
+          onMemberScheduleClick={handleMemberScheduleClick}
+        />
+      );
+    }
+
     if (isMobile) {
       return (
         <div className="flex flex-col h-[calc(100vh-60px)] bg-gray-50 relative overflow-hidden">
@@ -442,15 +473,20 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
                 </div>
               </div>
             )}
-            
-            {/* 채팅봇 - 플로팅 버튼으로 표시 (위치 고정) */}
-            <ChatBox 
-               onSendMessage={handleChatMessage} 
-               currentTab="coordination" 
-               onEventUpdate={() => fetchRoomDetails(currentRoom._id, true)} 
-               isMobile={true}
-               positionClass="bottom-[76px] right-4"
-            />
+            <button onClick={() => setIsChatOpen(!isChatOpen)} className="fixed bottom-20 right-4 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center z-50 active:bg-blue-700 transition-all border-4 border-white">
+               {isChatOpen ? <X size={28} /> : <MessageSquare size={28} />}
+            </button>
+            {isChatOpen && (
+               <div className="fixed bottom-24 right-4 z-40">
+                  <ChatBox 
+                     onSendMessage={handleChatMessage} 
+                     currentTab="coordination" 
+                     onEventUpdate={() => fetchRoomDetails(currentRoom._id, true)} 
+                     forceOpen={true} 
+                     isMobile={true} 
+                  />
+               </div>
+            )}
           </div>
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-16 z-50 px-2 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
             <button onClick={() => setMobileTab('info')} className={`flex flex-col items-center justify-center w-1/2 h-full transition-colors ${mobileTab === 'info' ? 'text-blue-600' : 'text-gray-400'}`} >
@@ -488,9 +524,9 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
               <TimetableControls viewMode={viewMode} setViewMode={setViewMode} showFullDay={showFullDay} setShowFullDay={setShowFullDay} showMerged={showMerged} setShowMerged={setShowMerged} travelMode={travelMode} onTravelModeChange={handleTravelModeChange} onConfirmTravelMode={handleConfirmTravelMode} isTravelCalculating={isTravelCalculating} currentRoom={currentRoom} isOwner={isOwner} scheduleStartHour={scheduleStartHour} scheduleEndHour={scheduleEndHour} />
               <TravelErrorAlert travelError={travelError} />
               {viewMode === 'week' ? (
-                <TimetableGrid key={`week-${effectiveShowFullDay ? 'full' : 'basic'}-${showMerged ? 'merged' : 'split'}-${travelMode}-${renderKey}`} roomId={currentRoom._id} roomSettings={{ ...currentRoom.settings, startHour: effectiveShowFullDay ? 0 : scheduleStartHour, endHour: effectiveShowFullDay ? 24 : scheduleEndHour }} timeSlots={scheduleData.timeSlots} travelSlots={scheduleData.travelSlots || []} travelMode={scheduleData.travelMode} myTravelDuration={scheduleData.myTravelDuration} members={currentRoom.members || []} roomData={currentRoom} currentUser={user} isRoomOwner={isOwner} selectedSlots={[]} onSlotSelect={null} onWeekChange={handleWeekChange} ownerOriginalSchedule={ownerScheduleCache} initialStartDate={currentWeekStartDate} calculateEndTime={calculateEndTime} readOnly={isOwner} showMerged={showMerged} onOpenChangeRequestModal={openChangeRequestModal} />
+                <TimetableGrid key={`week-${effectiveShowFullDay ? 'full' : 'basic'}-${showMerged ? 'merged' : 'split'}-${travelMode}-${renderKey}`} roomId={currentRoom._id} roomSettings={{ ...currentRoom.settings, startHour: effectiveShowFullDay ? 0 : scheduleStartHour, endHour: effectiveShowFullDay ? 24 : scheduleEndHour }} timeSlots={scheduleData.timeSlots} travelSlots={scheduleData.travelSlots || []} travelMode={scheduleData.travelMode} myTravelDuration={scheduleData.myTravelDuration} members={currentRoom.members || []} roomData={currentRoom} currentUser={user} isRoomOwner={isOwner} selectedSlots={[]} onSlotSelect={null} onWeekChange={handleWeekChange} ownerOriginalSchedule={ownerScheduleCache} initialStartDate={currentWeekStartDate} calculateEndTime={calculateEndTime} readOnly={isOwner} showMerged={showMerged} onOpenChangeRequestModal={openChangeRequestModal} isMobile={true} />
               ) : (
-                <CoordinationCalendarView key={`calendar-${viewMode}-${renderKey}`} roomData={currentRoom} timeSlots={scheduleData.timeSlots} travelSlots={scheduleData.travelSlots || []} travelMode={scheduleData.travelMode} myTravelDuration={scheduleData.myTravelDuration} members={currentRoom.members || []} currentUser={user} isRoomOwner={isOwner} onDateClick={handleDateClick} selectedDate={selectedDate} viewMode={viewMode} currentWeekStartDate={currentWeekStartDate} onWeekChange={handleWeekChange} showFullDay={effectiveShowFullDay} showMerged={showMerged} ownerOriginalSchedule={ownerScheduleCache} />
+                <CoordinationCalendarView key={`calendar-${viewMode}-${renderKey}`} roomData={currentRoom} timeSlots={scheduleData.timeSlots} travelSlots={scheduleData.travelSlots || []} travelMode={scheduleData.travelMode} myTravelDuration={scheduleData.myTravelDuration} members={currentRoom.members || []} currentUser={user} isRoomOwner={isOwner} onDateClick={handleDateClick} selectedDate={selectedDate} viewMode={viewMode} currentWeekStartDate={currentWeekStartDate} onWeekChange={handleWeekChange} showFullDay={effectiveShowFullDay} showMerged={showMerged} ownerOriginalSchedule={ownerScheduleCache} isMobile={true} />
               )}
             </div>
           </div>
@@ -503,10 +539,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
   return (
     <>
       <RoomList myRooms={myRooms} selectedTab={selectedTab} setSelectedTab={setSelectedTab} roomExchangeCounts={roomExchangeCounts} onRoomClick={handleRoomClick} onCreateRoom={openCreateRoomModal} onJoinRoom={openJoinRoomModal} hideHeader={hideHeader} />
-      {showCreateRoomModal && ( <RoomCreationModal onClose={closeCreateRoomModal} onCreateRoom={handleCreateRoom} ownerProfileSchedule={user ? { defaultSchedule: user.defaultSchedule, scheduleExceptions: user.scheduleExceptions, personalTimes: user.personalTimes } : null} /> )}
-      {showJoinRoomModal && ( <RoomJoinModal onClose={closeJoinRoomModal} onJoinRoom={handleJoinRoom} /> )}
-      <CustomAlertModal isOpen={customAlert.show} onClose={closeAlert} title="알림" message={customAlert.message} type={customAlert.type || "warning"} showCancel={false} />
-      <ChainExchangeRequestModal isOpen={showChainExchangeModal} onClose={() => { setShowChainExchangeModal(false); setSelectedChainRequest(null); }} request={selectedChainRequest} roomId={selectedChainRequest?.roomId} onRequestHandled={handleChainExchangeRequestHandled} />
+      {renderCommonModals()}
     </>
   );
 };

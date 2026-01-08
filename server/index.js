@@ -138,6 +138,7 @@ app.use('/api/ocr', require('./routes/ocr'));
 app.use('/api/ocr-chat', require('./routes/ocrChat'));
 app.use('/api/schedule', require('./routes/scheduleOptimizer'));
 app.use('/api/schedule', require('./routes/fixedSchedule'));
+app.use('/api/chat', require('./routes/chat'));
 app.use('/api/nview', require('./routes/nview'));
 app.use('/api/admin', require('./routes/admin'));
 

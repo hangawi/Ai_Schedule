@@ -451,6 +451,12 @@ const RoomSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // 방의 조율 모드 (표준 또는 대화형)
+  mode: {
+    type: String,
+    enum: ['standard', 'conversational'],
+    default: 'standard'
+  },
   // 방장의 기준 위치 (이동시간 계산 시작점)
   ownerHomeLocation: {
     type: {
