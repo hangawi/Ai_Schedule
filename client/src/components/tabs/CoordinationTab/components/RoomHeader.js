@@ -2,52 +2,16 @@
  * ===================================================================================================
  * [파일명] RoomHeader.js - 협업 방 상세 뷰의 헤더 컴포넌트
  * ===================================================================================================
- *
- * 📍 위치: [프론트엔드] > [client/src/components/tabs/CoordinationTab/components/RoomHeader.js]
- *
- * 🎯 주요 기능:
- *    - 현재 선택된 협업 방의 주요 정보(이름, 설명, 초대코드, 멤버 수 등)를 표시.
- *    - 사용자의 역할(방장/멤버)에 따라 다른 액션 버튼을 조건부로 렌더링.
- *    - 방장에게는 '방 관리', '로그 보기' 버튼을 제공.
- *    - 일반 멤버에게는 '방 나가기' 버튼을 제공.
- *    - 모든 사용자에게 '방 목록으로 돌아가기' 기능을 제공.
- *
- * 🔗 연결된 파일:
- *    - ../index.js (CoordinationTab): 이 컴포넌트를 사용하며 모든 데이터와 핸들러를 props로 제공.
- *    - ../../../../utils/coordinationUtils.js: 사용자가 방장인지 판별하는 `isRoomOwner` 유틸리티 함수.
- *
- * 💡 UI 위치:
- *    - [협업] 탭 > (방 선택 후) > 페이지 최상단
- *
- * ✏️ 수정 가이드:
- *    - 이 파일을 수정하면: 방 상세 뷰의 헤더 정보 및 버튼 레이아웃이 변경됩니다.
- *    - 새로운 방 정보 추가: JSX 내에 새로운 정보를 표시하는 엘리먼트를 추가합니다.
- *    - 새로운 액션 버튼 추가: 부모 컴포넌트(`CoordinationTab`)로부터 새로운 핸들러를 props로 받아와 버튼과 연결합니다.
- *
- * 📝 참고사항:
- *    - 이 컴포넌트는 데이터를 받아 표시하고, 이벤트 발생 시 상위로 콜백을 전달하는 Presentational Component입니다.
- *    - `isOwner` prop을 통해 사용자의 역할에 따라 UI가 동적으로 변경되는 것이 핵심입니다.
- *    - `translateEnglishDays` 유틸리티를 사용하여 방 이름이나 설명에 포함된 영어 요일을 한국어로 번역하여 표시합니다.
- *
- * ===================================================================================================
  */
 import React from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, Settings, ChevronLeft } from 'lucide-react';
 import { translateEnglishDays } from '../../../../utils';
 import { isRoomOwner } from '../../../../utils/coordinationUtils';
 
 /**
  * [RoomHeader]
  * @description 현재 선택된 협업 방의 상세 정보와 관련 액션 버튼들을 담고 있는 헤더 컴포넌트.
- *              사용자의 권한(방장 여부)에 따라 다른 버튼을 보여줍니다.
- * @param {object} currentRoom - 현재 방의 정보 객체.
- * @param {object} user - 현재 로그인한 사용자 정보 객체.
- * @param {boolean} isOwner - 현재 사용자가 방장인지 여부.
- * @param {function} onManageRoom - '방 관리' 버튼 클릭 시 호출될 핸들러.
- * @param {function} onOpenLogs - '로그 보기' 버튼 클릭 시 호출될 핸들러.
- * @param {function} onBackToRoomList - '방 목록으로 돌아가기' 버튼 클릭 시 호출될 핸들러.
- * @param {function} onLeaveRoom - '방 나가기' 버튼 클릭 시 호출될 핸들러.
- * @returns {JSX.Element} 방 헤더 컴포넌트의 JSX 엘리먼트.
+ *              '표준 모드'와 '대화형 모드'에 따라 다른 디자인을 보여줍니다.
  */
 const RoomHeader = ({
   currentRoom,
@@ -56,8 +20,115 @@ const RoomHeader = ({
   onManageRoom,
   onOpenLogs,
   onBackToRoomList,
-  onLeaveRoom
+  onLeaveRoom,
+  isMobile
 }) => {
+  // 대화형 모드인지 확인
+  const isConversational = currentRoom?.mode === 'conversational';
+
+  // =================================================================================
+  // [Case 1] 대화형 모드 (Compact & Slim Design)
+  // 채팅창 공간 확보를 위해 높이를 줄인 디자인을 사용합니다.
+  // =================================================================================
+  if (isConversational) {
+    if (isMobile) {
+      // 모바일용 콤팩트 헤더
+      return (
+        <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-30">
+          <div className="flex justify-between items-center mb-2">
+            <div className="flex-1 min-w-0 pr-2">
+              <h2 className="text-lg font-bold text-gray-800 truncate">{translateEnglishDays(currentRoom.name)}</h2>
+              <p className="text-xs text-gray-500 truncate">{translateEnglishDays(currentRoom.description || ' ')}</p>
+            </div>
+            <div className="flex gap-2 flex-shrink-0">
+              {isOwner ? (
+                <button onClick={onManageRoom} className="p-2 text-blue-600 bg-blue-50 rounded-full hover:bg-blue-100">
+                  <Settings size={18} />
+                </button>
+              ) : (
+                <button onClick={onLeaveRoom} className="px-3 py-1.5 text-xs bg-orange-100 text-orange-600 rounded-md font-bold">
+                  나가기
+                </button>
+              )}
+            </div>
+                          </div>
+                          <div className="flex items-center text-xs text-gray-500 space-x-3">
+                            <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-700">CODE: {currentRoom.inviteCode}</span>
+                            <span>👥 {currentRoom.memberCount || currentRoom.members?.length}명</span>
+                            <button 
+                              onClick={onBackToRoomList} 
+                              className="ml-auto px-3 py-1.5 bg-gray-200 text-gray-700 rounded-md font-bold hover:bg-gray-300 transition-colors"
+                            >
+                              목록
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }    // PC용 슬림 헤더
+    return (
+      <div className="bg-white px-6 py-4 rounded-xl shadow-sm mb-4 border border-gray-200 flex justify-between items-center">
+        <div className="flex-1">
+          <div className="flex items-center gap-3 mb-1">
+            <h2 className="text-xl font-bold text-gray-800">{translateEnglishDays(currentRoom.name)}</h2>
+            <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100">
+              {currentRoom.inviteCode}
+            </span>
+          </div>
+          <div className="flex items-center gap-4 text-sm text-gray-600">
+            <p className="max-w-md truncate">{translateEnglishDays(currentRoom.description || '설명 없음')}</p>
+            <span className="w-px h-3 bg-gray-300"></span>
+            <div className="flex items-center gap-1">
+              <span className="font-medium">방장:</span> 
+              {isOwner ? `${user.firstName} ${user.lastName}` : `${currentRoom.owner?.firstName || ''} ${currentRoom.owner?.lastName || ''}`}
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="font-medium">멤버:</span> 
+              {currentRoom.memberCount || currentRoom.members?.length} / {currentRoom.maxMembers}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onBackToRoomList}
+            className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+          >
+            목록으로
+          </button>
+          
+          {isOwner ? (
+            <>
+              <button
+                onClick={onOpenLogs}
+                className="px-3 py-2 text-sm bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 transition-colors font-medium flex items-center border border-yellow-200"
+                title="로그 보기"
+              >
+                <FileText size={16} className="mr-1" /> 로그
+              </button>
+              <button
+                onClick={onManageRoom}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
+              >
+                방 관리
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={onLeaveRoom}
+              className="px-4 py-2 text-sm bg-orange-50 text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors font-medium"
+            >
+              방 나가기
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // =================================================================================
+  // [Case 2] 표준 모드 (Original Large Design)
+  // 기존의 풍성한 카드 형태 디자인을 유지합니다.
+  // =================================================================================
   return (
     <div className="bg-white p-6 rounded-xl shadow-lg mb-6 border border-gray-200">
       <div className="flex justify-between items-start">

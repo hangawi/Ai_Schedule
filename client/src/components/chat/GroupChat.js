@@ -112,7 +112,15 @@ const GroupChat = ({ roomId, user, isMobile }) => {
       {/* 메시지 리스트 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg, idx) => {
-          const isMe = msg.sender?._id === user?.id || msg.sender === user?.id;
+          // 1. 보낸 사람 ID 추출
+          const msgSenderId = typeof msg.sender === 'object' ? msg.sender._id : msg.sender;
+          
+          // 2. 내 ID 추출 (user prop 또는 auth 객체 사용)
+          const myId = user?.id || user?._id || auth.currentUser?.uid;
+
+          // 3. 비교 (문자열 변환 후 비교)
+          const isMe = msgSenderId && myId && msgSenderId.toString() === myId.toString();
+          
           const isSystem = msg.type === 'system';
 
           if (isSystem) {
@@ -126,18 +134,28 @@ const GroupChat = ({ roomId, user, isMobile }) => {
           }
 
           return (
-            <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+            <div key={idx} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-3`}>
               {!isMe && (
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs mr-2 font-bold flex-shrink-0">
-                  {msg.sender?.firstName?.[0] || '?'}
+                <div className="flex flex-col items-center mr-2 self-start">
+                  <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-white text-xs font-bold overflow-hidden">
+                    {msg.sender?.profileImage ? (
+                      <img src={msg.sender.profileImage} alt="profile" className="w-full h-full object-cover" />
+                    ) : (
+                      msg.sender?.firstName?.[0] || '?'
+                    )}
+                  </div>
                 </div>
               )}
-              <div className={`max-w-[70%] p-3 rounded-lg shadow-sm ${
-                isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none'
-              }`}>
-                {!isMe && <p className="text-xs text-gray-500 mb-1 font-semibold">{msg.sender?.firstName}</p>}
-                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                <span className={`text-[10px] block mt-1 ${isMe ? 'text-blue-200' : 'text-gray-400'} text-right`}>
+              <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%]`}>
+                {!isMe && <span className="text-xs text-gray-500 mb-1 ml-1">{msg.sender?.firstName}</span>}
+                <div className={`px-3 py-2 rounded-xl shadow-sm relative text-sm break-words ${
+                  isMe 
+                    ? 'bg-yellow-300 text-black rounded-tr-none' 
+                    : 'bg-white text-black border border-gray-200 rounded-tl-none'
+                }`}>
+                  {msg.content}
+                </div>
+                <span className="text-[10px] text-gray-400 mt-1 px-1">
                   {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
