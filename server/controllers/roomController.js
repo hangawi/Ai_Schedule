@@ -590,6 +590,7 @@ exports.getMyRooms = async (req, res) => {
                room: room._id,
                createdAt: { $gt: member.lastReadAt }
             });
+            console.log(`[Unread] Room ${room.name}: ${unreadCount} (LastRead: ${member.lastReadAt})`);
          } else if (member) {
             // lastReadAt이 없으면(신규 기능 도입 전 멤버) 모든 메시지를 안 읽은 것으로 간주하거나 0으로 처리
             // 여기서는 lastMessageAt이 있으면 1로 표시하거나 0으로 처리. 

@@ -149,7 +149,7 @@ const RoomCard = ({ room, selectedTab, exchangeCount, onClick }) => (
 
         {/* 🆕 안 읽은 채팅 배지 */}
         {room.unreadCount > 0 && (
-          <span className="bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1" title="읽지 않은 메시지">
+          <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1" title="읽지 않은 메시지">
             채팅 {room.unreadCount}
           </span>
         )}
