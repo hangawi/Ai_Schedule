@@ -14,6 +14,7 @@ const MobileGroupsView = ({ user }) => {
    const [isBackgroundMonitoring, setIsBackgroundMonitoring] = useState(false);
    const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
    const [isInRoom, setIsInRoom] = useState(false);
+   const [effectiveIsInRoom, setEffectiveIsInRoom] = useState(false);
 
    // 방 상태 추적 및 초기화
    useEffect(() => {
@@ -22,11 +23,14 @@ const MobileGroupsView = ({ user }) => {
       localStorage.removeItem('currentRoomData');
       window.dispatchEvent(new CustomEvent('clearCurrentRoom'));
 
-      const handleRestore = () => setIsInRoom(true);
-      const handleClear = () => setIsInRoom(false);
-
-      // 초기 상태는 항상 방 목록 화면 (isInRoom = false)
-      // restoreRoom 이벤트가 발생할 때만 방에 들어가도록 함
+      const handleRestore = () => {
+         setIsInRoom(true);
+         setEffectiveIsInRoom(true);
+      };
+      const handleClear = () => {
+         setIsInRoom(false);
+         setEffectiveIsInRoom(false);
+      };
 
       window.addEventListener('restoreRoom', handleRestore);
       window.addEventListener('clearCurrentRoom', handleClear);
@@ -34,7 +38,12 @@ const MobileGroupsView = ({ user }) => {
          window.removeEventListener('restoreRoom', handleRestore);
          window.removeEventListener('clearCurrentRoom', handleClear);
       };
-   }, [location.key]); // location.key가 바뀔 때마다 실행
+   }, [location.key]);
+
+   // isInRoom 상태가 변경될 때마다 effectiveIsInRoom 동기화
+   useEffect(() => {
+      setEffectiveIsInRoom(isInRoom || !!localStorage.getItem('currentRoomId'));
+   }, [isInRoom]);
 
    const handleLogout = async () => {
       try {
@@ -136,16 +145,16 @@ const MobileGroupsView = ({ user }) => {
             </div>
          </header>
 
-         {/* 페이지 제목 */}
-         <div className="groups-page-title">
-            <div className="title-with-badge">
-               <h2>그룹</h2>
-               {exchangeRequestCount > 0 && (
-                  <span className="notification-badge">{exchangeRequestCount}</span>
-               )}
-            </div>
-            
-            {!isInRoom && (
+         {/* 페이지 제목 (방 목록일 때만 표시) */}
+         {!effectiveIsInRoom && (
+            <div className="groups-page-title">
+               <div className="title-with-badge">
+                  <h2>그룹</h2>
+                  {exchangeRequestCount > 0 && (
+                     <span className="notification-badge">{exchangeRequestCount}</span>
+                  )}
+               </div>
+               
                <div className="group-action-buttons">
                   <button 
                      className="group-action-btn create-btn"
@@ -160,8 +169,8 @@ const MobileGroupsView = ({ user }) => {
                      조율방 참여
                   </button>
                </div>
-            )}
-         </div>
+            </div>
+         )}
          
          {/* 그룹 컨텐츠 */}
          <div className="groups-content">
@@ -172,6 +181,7 @@ const MobileGroupsView = ({ user }) => {
                hideHeader={true}
                initialClear={true}
                isMobile={true}
+               onRoomStatusChange={setIsInRoom}
             />
          </div>
       </div>

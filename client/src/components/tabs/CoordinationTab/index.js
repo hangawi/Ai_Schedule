@@ -432,10 +432,14 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
                {isChatOpen ? <X size={28} /> : <MessageSquare size={28} />}
             </button>
             {isChatOpen && (
-               <div className="fixed inset-0 z-40 bg-white flex flex-col pt-safe-top pb-20" style={{ top: '60px' }}>
-                  <div className="flex-1 overflow-hidden relative">
-                     <ChatBox onSendMessage={handleChatMessage} currentTab="coordination" onEventUpdate={() => fetchRoomDetails(currentRoom._id, true)} forceOpen={true} isMobile={true} />
-                  </div>
+               <div className="fixed bottom-24 right-4 z-40">
+                  <ChatBox 
+                     onSendMessage={handleChatMessage} 
+                     currentTab="coordination" 
+                     onEventUpdate={() => fetchRoomDetails(currentRoom._id, true)} 
+                     forceOpen={true} 
+                     isMobile={true} 
+                  />
                </div>
             )}
           </div>
