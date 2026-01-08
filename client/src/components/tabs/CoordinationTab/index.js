@@ -136,6 +136,20 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
     closeRequestModal, openChangeRequestModal, closeChangeRequestModal
   } = useCoordinationModals();
 
+  // 모바일 그룹 뷰의 커스텀 이벤트 리스너 추가
+  useEffect(() => {
+    const handleOpenCreateRoom = () => openCreateRoomModal();
+    const handleOpenJoinRoom = () => openJoinRoomModal();
+
+    window.addEventListener('openCreateRoom', handleOpenCreateRoom);
+    window.addEventListener('openJoinRoom', handleOpenJoinRoom);
+
+    return () => {
+      window.removeEventListener('openCreateRoom', handleOpenCreateRoom);
+      window.removeEventListener('openJoinRoom', handleOpenJoinRoom);
+    };
+  }, [openCreateRoomModal, openJoinRoomModal]);
+
   const isOwner = currentRoom && user ? isRoomOwner(user, currentRoom) : false;
 
   const {
@@ -428,20 +442,15 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
                 </div>
               </div>
             )}
-            <button onClick={() => setIsChatOpen(!isChatOpen)} className="fixed bottom-20 right-4 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center z-50 active:bg-blue-700 transition-all border-4 border-white">
-               {isChatOpen ? <X size={28} /> : <MessageSquare size={28} />}
-            </button>
-            {isChatOpen && (
-               <div className="fixed bottom-24 right-4 z-40">
-                  <ChatBox 
-                     onSendMessage={handleChatMessage} 
-                     currentTab="coordination" 
-                     onEventUpdate={() => fetchRoomDetails(currentRoom._id, true)} 
-                     forceOpen={true} 
-                     isMobile={true} 
-                  />
-               </div>
-            )}
+            
+            {/* 채팅봇 - 플로팅 버튼으로 표시 (위치 고정) */}
+            <ChatBox 
+               onSendMessage={handleChatMessage} 
+               currentTab="coordination" 
+               onEventUpdate={() => fetchRoomDetails(currentRoom._id, true)} 
+               isMobile={true}
+               positionClass="bottom-[76px] right-4"
+            />
           </div>
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-16 z-50 px-2 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
             <button onClick={() => setMobileTab('info')} className={`flex flex-col items-center justify-center w-1/2 h-full transition-colors ${mobileTab === 'info' ? 'text-blue-600' : 'text-gray-400'}`} >
