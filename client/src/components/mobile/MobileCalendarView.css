@@ -291,9 +291,44 @@
 }
 
 .calendar-container {
-   flex: 1;
-   padding: 16px;
-   overflow-y: auto;
+   height: 55%; /* 상단 55% 고정 */
+   flex: none; /* flex-grow 방지 */
+   padding: 0;
+   overflow: hidden;
+   position: relative;
+   background: #f9fafb;
+   border-bottom: 1px solid #e5e7eb;
+}
+
+.calendar-wrapper {
+   height: 100%;
+   background: white;
+   position: relative;
+   z-index: 10;
+   /* transform은 JS에서 제어 */
+}
+
+/* 잡아당길 때 보이는 안내 문구 */
+.pull-indicator {
+   position: absolute;
+   left: 0;
+   right: 0;
+   height: 50px;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   font-size: 14px;
+   font-weight: 600;
+   color: #6b7280;
+   z-index: 5;
+}
+
+.pull-indicator.top {
+   top: 0;
+}
+
+.pull-indicator.bottom {
+   bottom: 0;
 }
 
 /* FullCalendar 모바일 최적화 스타일 */

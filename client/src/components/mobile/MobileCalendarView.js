@@ -23,25 +23,27 @@ const MobileCalendarView = ({ user }) => {
    const calendarRef = useRef(null);
    const [events, setEvents] = useState([]);
    const [isLoading, setIsLoading] = useState(true);
-   const [selectedDate, setSelectedDate] = useState(null);
+   const [selectedDate, setSelectedDate] = useState(new Date()); 
    const [calendarView, setCalendarView] = useState('dayGridMonth');
    const [showPersonalInfo, setShowPersonalInfo] = useState(false);
    const [showScheduleEdit, setShowScheduleEdit] = useState(false);
    const [isChatOpen, setIsChatOpen] = useState(false);
    const [isEditing, setIsEditing] = useState(false);
    const [initialState, setInitialState] = useState(null);
+   const [currentTitle, setCurrentTitle] = useState('');
 
-   // 상세 모달 상태
+   const [touchStart, setTouchStart] = useState(null);
+   const [translateY, setTranslateY] = useState(0);
+   const [isSwiping, setIsSwiping] = useState(false);
+
    const [selectedEvent, setSelectedEvent] = useState(null);
    const [showMapModal, setShowMapModal] = useState(false);
    const [selectedLocation, setSelectedLocation] = useState(null);
 
-   // 스케줄 데이터
    const [defaultSchedule, setDefaultSchedule] = useState([]);
    const [scheduleExceptions, setScheduleExceptions] = useState([]);
    const [personalTimes, setPersonalTimes] = useState([]);
 
-   // 챗봇 연동을 위한 상태
    const [globalEvents, setGlobalEvents] = useState([]);
    const [eventAddedKey, setEventAddedKey] = useState(0);
    const [eventActions, setEventActions] = useState({
@@ -51,13 +53,11 @@ const MobileCalendarView = ({ user }) => {
    });
    const isLoggedIn = !!user;
 
-   // 헤더 상태
    const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
    const [isClipboardMonitoring, setIsClipboardMonitoring] = useState(false);
    const [isBackgroundMonitoring, setIsBackgroundMonitoring] = useState(false);
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-   // 로컬 시간대로 날짜 문자열 생성 (UTC 변환 방지)
    const formatLocalDateTime = (date) => {
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -70,19 +70,14 @@ const MobileCalendarView = ({ user }) => {
 
    const mergeSlots = (slots) => {
       if (slots.length === 0) return [];
-      
       const sorted = [...slots].sort((a, b) => new Date(a.start) - new Date(b.start));
       const merged = [];
       let current = { ...sorted[0] };
-      
       for (let i = 1; i < sorted.length; i++) {
          const slot = sorted[i];
          const currentEnd = new Date(current.end);
          const slotStart = new Date(slot.start);
-         
-         if (currentEnd.getTime() === slotStart.getTime() && 
-             current.title === slot.title &&
-             current.backgroundColor === slot.backgroundColor) {
+         if (currentEnd.getTime() === slotStart.getTime() && current.title === slot.title && current.backgroundColor === slot.backgroundColor) {
             current.end = slot.end;
          } else {
             merged.push(current);
@@ -106,12 +101,13 @@ const MobileCalendarView = ({ user }) => {
          if (defaultSchedule && defaultSchedule.length > 0) {
             defaultSchedule
                .filter(slot => slot.specificDate ? slot.specificDate === dateStr : slot.dayOfWeek === dayOfWeek)
-               .forEach(slot => {
+               .forEach((slot, slotIdx) => {
                   const [sh, sm] = slot.startTime.split(':').map(Number);
                   const [eh, em] = slot.endTime.split(':').map(Number);
                   const start = new Date(d); start.setHours(sh, sm, 0, 0);
                   const end = new Date(d); end.setHours(eh, em, 0, 0);
                   tempEvents.push({
+                     id: `default-${slotIdx}-${dateStr}`,
                      title: '가능',
                      start: formatLocalDateTime(start),
                      end: formatLocalDateTime(end),
@@ -125,7 +121,7 @@ const MobileCalendarView = ({ user }) => {
          }
 
          if (personalTimes && personalTimes.length > 0) {
-            personalTimes.forEach(pt => {
+            personalTimes.forEach((pt, ptIdx) => {
                const adjustedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
                const hasRecurringTime = (pt.isRecurring !== false) &&
                   ((pt.days && pt.days.includes(adjustedDayOfWeek)) ||
@@ -137,6 +133,7 @@ const MobileCalendarView = ({ user }) => {
                   const start = new Date(d); start.setHours(sh, sm, 0, 0);
                   const end = new Date(d); end.setHours(eh, em, 0, 0);
                   tempEvents.push({
+                     id: pt.id || `pt-${ptIdx}-${dateStr}`,
                      title: pt.name || pt.title || '개인',
                      start: formatLocalDateTime(start),
                      end: formatLocalDateTime(end),
@@ -144,7 +141,11 @@ const MobileCalendarView = ({ user }) => {
                      borderColor: '#dc2626',
                      textColor: '#ffffff',
                      display: 'block',
-                     dateKey: dateStr
+                     dateKey: dateStr,
+                     location: pt.location,
+                     locationLat: pt.locationLat,
+                     locationLng: pt.locationLng,
+                     originalData: pt
                   });
                }
             });
@@ -152,7 +153,7 @@ const MobileCalendarView = ({ user }) => {
       }
 
       if (scheduleExceptions && scheduleExceptions.length > 0) {
-         scheduleExceptions.forEach(exception => {
+         scheduleExceptions.forEach((exception, exIdx) => {
             if (exception.title === '휴무일' || exception.isHoliday || !exception.specificDate) return;
             const eventDate = new Date(exception.specificDate);
             const startTime = exception.startTime.includes('T') ? new Date(exception.startTime) : (() => {
@@ -164,6 +165,7 @@ const MobileCalendarView = ({ user }) => {
                const d = new Date(eventDate); d.setHours(h, m, 0, 0); return d;
             })();
             tempEvents.push({
+               id: exception.id || `ex-${exIdx}-${exception.specificDate}`,
                title: exception.title || '예외',
                start: formatLocalDateTime(startTime),
                end: formatLocalDateTime(endTime),
@@ -171,7 +173,11 @@ const MobileCalendarView = ({ user }) => {
                borderColor: '#8b5cf6',
                textColor: '#ffffff',
                display: 'block',
-               dateKey: exception.specificDate
+               dateKey: exception.specificDate,
+               location: exception.location,
+               locationLat: exception.locationLat,
+               locationLng: exception.locationLng,
+               originalData: exception
             });
          });
       }
@@ -224,6 +230,9 @@ const MobileCalendarView = ({ user }) => {
          participants: event.participants ? event.participants.length : 0,
          priority: event.priority || 3,
          color: color || event.color || 'blue',
+         location: event.location,
+         locationLat: event.locationLat,
+         locationLng: event.locationLng
       };
    };
 
@@ -398,25 +407,42 @@ const MobileCalendarView = ({ user }) => {
    };
 
    const handleDateClick = (arg) => {
-      if (calendarView === 'dayGridMonth') {
-         calendarRef.current?.getApi().changeView('timeGridDay', arg.date);
-      }
+      // 뷰 전환 없이 선택 날짜만 업데이트 -> 하단 리스트 갱신
+      setSelectedDate(arg.date);
    };
 
    const handleEventClick = (clickInfo) => {
       const eventObj = clickInfo.event;
-      if (calendarView === 'dayGridMonth') {
-         calendarRef.current?.getApi().changeView('timeGridDay', eventObj.start);
+      
+      // '가능'이나 '선호시간' 클릭 시에는 해당 날짜 선택 효과만 줌
+      if (eventObj.title === '가능' || eventObj.title === '선호시간') {
+         setSelectedDate(eventObj.start);
          return;
       }
-      if (eventObj.title === '가능' || eventObj.title === '선호시간') return;
-      const originalEvent = events.find(e => e.title === eventObj.title && new Date(e.start).getTime() === eventObj.start.getTime());
+
+      // 실제 일정 클릭 시: 날짜 선택 + 상세 모달 표시
+      setSelectedDate(eventObj.start);
+
+      const originalEvent = events.find(e => e.id === eventObj.id);
       if (originalEvent) {
          setSelectedEvent({
             ...originalEvent,
             date: new Date(originalEvent.start).toLocaleDateString('en-CA'),
             time: new Date(originalEvent.start).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }),
             endTime: new Date(originalEvent.end).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            location: originalEvent.location || null,
+            participants: originalEvent.participants || 1,
+            isCoordinated: originalEvent.isCoordinated || false,
+            hasTravelTime: originalEvent.hasTravelTime || false
+         });
+      } else {
+         // id로 못 찾으면 최소 정보로 구성 (fallback)
+         setSelectedEvent({
+            title: eventObj.title,
+            date: eventObj.start.toLocaleDateString('en-CA'),
+            time: eventObj.start.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            endTime: eventObj.end ? eventObj.end.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : '',
+            backgroundColor: eventObj.backgroundColor
          });
       }
    };
@@ -435,6 +461,7 @@ const MobileCalendarView = ({ user }) => {
 
    const handleViewChange = (viewInfo) => {
       setCalendarView(viewInfo.view.type);
+      setCurrentTitle(viewInfo.view.title); 
       if (viewInfo.view.type !== 'dayGridMonth') {
          const today = new Date();
          const vs = viewInfo.view.currentStart;
@@ -450,104 +477,101 @@ const MobileCalendarView = ({ user }) => {
       catch (error) { console.error('Logout error:', error); }
    };
 
+   const handleTouchStart = (e) => {
+      setTouchStart(e.targetTouches[0].clientY);
+      setIsSwiping(true);
+   };
+
+   const handleTouchMove = (e) => {
+      if (touchStart === null) return;
+      const currentY = e.targetTouches[0].clientY;
+      const diff = currentY - touchStart;
+      setTranslateY(diff * 0.5); 
+   };
+
+   const handleTouchEnd = () => {
+      if (touchStart === null) return;
+      const minSwipeDistance = 80;
+      const calendarApi = calendarRef.current?.getApi();
+      if (calendarApi) {
+         if (translateY < -minSwipeDistance) calendarApi.next(); 
+         else if (translateY > minSwipeDistance) calendarApi.prev();
+      }
+      setIsSwiping(false);
+      setTranslateY(0);
+      setTouchStart(null);
+   };
+
    const renderBottomSection = () => {
-      // 1. 일간 뷰 (timeGridDay): 하단에 텍스트 리스트 표시 (Split View)
-      if (calendarView === 'timeGridDay') {
-         const targetDate = selectedDate || new Date();
-         
-         const dayEvents = getEventsForDate(targetDate)
-            .filter(e => e.title !== '가능' && e.title !== '선호시간')
-            .sort((a, b) => new Date(a.start) - new Date(b.start));
-
-         return (
-            <div className="split-view-list">
-               <div className="split-list-header">
-                  {targetDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
+      // 1. 편집 모드일 때: '일정 관리' 섹션 표시
+      if (isEditing) {
+         if (calendarView === 'dayGridMonth') {
+            return (
+               <div className="management-section">
+                  <div className="section-tabs"><h3 className="section-title">일정 관리</h3></div>
+                  <div className="sections-container">
+                     <div className="preference-section"><h4 className="subsection-title">선호시간</h4><p className="section-description">클릭 또는 챗봇으로 추가한 가능한 시간들 (자동배정 시 사용됨)</p><SimplifiedScheduleDisplay schedule={defaultSchedule} type="preference" /></div>
+                     <div className="personal-section"><h4 className="subsection-title">개인시간</h4><p className="section-description">자동 스케줄링 시 이 시간들은 제외됩니다</p><SimplifiedScheduleDisplay schedule={personalTimes} type="personal" /></div>
+                  </div>
                </div>
-               
-               {dayEvents.length === 0 ? (
-                  <div className="split-no-events">일정이 없습니다</div>
-               ) : (
-                  <div className="split-list-scroll-area">
-                     {dayEvents.map((event, idx) => (
-                        <div 
-                           key={idx} 
-                           className="split-list-item" 
-                           onClick={() => handleSplitItemClick(event)}
-                           style={{ cursor: 'pointer' }}
-                        >
-                           <div className="split-item-time">
-                              {new Date(event.start).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                              <br />~ {new Date(event.end).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                           </div>
-                           <div 
-                              className="split-item-content"
-                              style={{ backgroundColor: event.backgroundColor || '#3b82f6' }}
-                           >
-                              {event.title}
-                           </div>
+            );
+         }
+         return null;
+      }
+
+      // 2. 기본 상태 (모든 뷰): 하단에 선택된 날짜(또는 오늘)의 일정 리스트 표시
+      const targetDate = selectedDate || new Date();
+      
+      // 필터링: 선호시간('가능') 제외하고 실제 일정(개인시간, 확정일정)만 표시
+      const dayEvents = getEventsForDate(targetDate)
+         .filter(e => e.title !== '가능' && e.title !== '선호시간')
+         .sort((a, b) => new Date(a.start) - new Date(b.start));
+
+      // 컨테이너 스타일 결정 (월간 뷰는 하단 시트, 나머지는 고정 영역)
+      // 사용자가 월간 뷰에서도 하단에 항상 보이길 원하므로 split-view-list 스타일로 통일하는 것이 안전함
+      // 하지만 월간 뷰에서 달력을 가리면 안되므로 높이를 조절하거나 overlay 방식 유지 필요
+      // 요청: "들어가자마자 밑에 오늘의 일정이 보여야 된다" -> 고정된 영역이 더 적합해 보임.
+      
+      const containerClass = calendarView === 'dayGridMonth' ? 'date-detail-sheet' : 'split-view-list';
+      
+      // 월간 뷰일 때 하단 시트가 초기 진입 시 안 보이는 문제를 해결하기 위해
+      // date-detail-sheet 클래스를 사용하더라도 animation을 제거하거나 초기 상태를 visible로 해야 함.
+      // 여기서는 그냥 split-view-list 스타일을 사용하여 달력 아래에 붙입니다. (높이 제한 필요)
+
+      return (
+         <div className="split-view-list" style={calendarView === 'dayGridMonth' ? { height: '40%', borderTop: '1px solid #e5e7eb' } : {}}>
+            <div className="split-list-header">
+               {targetDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
+               {/* 닫기 버튼 제거 (항상 표시하므로) */}
+            </div>
+            
+            {dayEvents.length === 0 ? (
+               <div className="split-no-events">일정이 없습니다</div>
+            ) : (
+               <div className="split-list-scroll-area">
+                  {dayEvents.map((event, idx) => (
+                     <div 
+                        key={idx} 
+                        className="split-list-item" 
+                        onClick={() => handleSplitItemClick(event)}
+                        style={{ cursor: 'pointer' }}
+                     >
+                        <div className="split-item-time">
+                           {new Date(event.start).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                           <br />~ {new Date(event.end).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
                         </div>
-                     ))}
-                  </div>
-               )}
-            </div>
-         );
-      }
-
-      // 2. 월간 뷰 (Month View): 날짜 선택 시 하단 시트(Timeline) 표시
-      if (calendarView === 'dayGridMonth' && selectedDate) {
-         const dayEvents = getEventsForDate(selectedDate);
-         const startHour = 6, endHour = 24, totalHours = endHour - startHour;
-         const getPos = (dStr) => {
-            const d = new Date(dStr);
-            if (d.getHours() < startHour) return 0;
-            return ((d.getHours() - startHour) * 60 + d.getMinutes()) / (totalHours * 60) * 100;
-         };
-         return (
-            <div className="date-detail-sheet">
-               <div className="detail-header">
-                  <h3>{selectedDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}</h3>
-                  <button className="close-btn" onClick={() => setSelectedDate(null)}>✕</button>
+                        <div 
+                           className="split-item-content"
+                           style={{ backgroundColor: event.backgroundColor || '#3b82f6' }}
+                        >
+                           {event.title}
+                        </div>
+                     </div>
+                  ))}
                </div>
-               <div className="timeline-container">
-                  <div className="time-axis">
-                     {Array.from({ length: totalHours + 1 }, (_, i) => startHour + i).map((h, i) => (
-                        <div key={h} className="time-slot" style={{ top: `${(i / totalHours) * 100}%` }}><span>{h}:00</span></div>
-                     ))}
-                  </div>
-                  <div className="events-area">
-                     {Array.from({ length: totalHours + 1 }, (_, i) => <div key={i} className="grid-line" style={{ top: `${(i / totalHours) * 100}%` }}></div>)}
-                     {dayEvents.map((event, idx) => {
-                        const top = getPos(event.start), bottom = getPos(event.end), height = Math.max(bottom - top, 2);
-                        return (
-                           <div key={idx} className="timeline-event-block" style={{ top: `${top}%`, height: `${height}%`, backgroundColor: event.backgroundColor || '#3b82f6', borderColor: event.borderColor || '#2563eb', opacity: 0.9, zIndex: 10 }}>
-                              <div className="event-info">
-                                 <span className="event-title">{event.title}</span>
-                                 {height > 5 && <span className="event-time">{new Date(event.start).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} - {new Date(event.end).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>}
-                              </div>
-                           </div>
-                        );
-                     })}
-                     {dayEvents.length === 0 && <div className="no-events-message">일정이 없습니다</div>}
-                  </div>
-               </div>
-            </div>
-         );
-      }
-
-      // 3. 기타 (관리 탭 - 월간 뷰에서 날짜 선택 안 했을 때)
-      if (calendarView === 'dayGridMonth') {
-         return (
-            <div className="management-section">
-               <div className="section-tabs"><h3 className="section-title">일정 관리</h3></div>
-               <div className="sections-container">
-                  <div className="preference-section"><h4 className="subsection-title">선호시간</h4><p className="section-description">클릭 또는 챗봇으로 추가한 가능한 시간들</p><SimplifiedScheduleDisplay schedule={defaultSchedule} type="preference" /></div>
-                  <div className="personal-section"><h4 className="subsection-title">개인시간</h4><p className="section-description">자동 스케줄링 시 이 시간들은 제외됩니다</p><SimplifiedScheduleDisplay schedule={personalTimes} type="personal" /></div>
-               </div>
-            </div>
-         );
-      }
-      return null;
+            )}
+         </div>
+      );
    };
 
    if (showPersonalInfo) return <MobilePersonalInfoEdit onBack={() => setShowPersonalInfo(false)} />;
@@ -585,7 +609,7 @@ const MobileCalendarView = ({ user }) => {
             {isLoading ? <div className="loading-state">로딩 중...</div> :
                <>
                   <div className="schedule-page-title">
-                     <span>달력</span>
+                     <span>{currentTitle || '달력'}</span>
                      <div className="top-edit-buttons">
                         {!isEditing ? (
                            <>
@@ -601,8 +625,17 @@ const MobileCalendarView = ({ user }) => {
                         )}
                      </div>
                   </div>
-                  <div className="calendar-container">
-                     <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]} initialView="dayGridMonth" timeZone="local" headerToolbar={{ left: 'backToMonth prev,next', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' }} customButtons={{ backToMonth: { text: '◀ 월', click: () => calendarRef.current?.getApi().changeView('dayGridMonth') } }} events={events} dateClick={handleDateClick} eventClick={handleEventClick} eventContent={renderEventContent} viewDidMount={handleViewChange} datesSet={handleViewChange} height="auto" locale="ko" buttonText={{ month: '월', week: '주', day: '일' }} slotMinTime="06:00:00" slotMaxTime="24:00:00" allDaySlot={false} nowIndicator={true} dayMaxEvents={2} moreLinkText={(num) => `+${num}개`} eventDisplay="block" displayEventTime={false} navLinks={true} navLinkDayClick={(date) => calendarRef.current?.getApi().changeView('timeGridDay', date)} />
+                  <div 
+                     className="calendar-container"
+                     onTouchStart={handleTouchStart}
+                     onTouchMove={handleTouchMove}
+                     onTouchEnd={handleTouchEnd}
+                  >
+                     <div className="pull-indicator top">{translateY > 0 ? '이전 달' : ''}</div>
+                     <div className="pull-indicator bottom">{translateY < 0 ? '다음 달' : ''}</div>
+                     <div className="calendar-wrapper" style={{ transform: `translateY(${translateY}px)`, transition: isSwiping ? 'none' : 'transform 0.3s ease-out', padding: '16px' }}>
+                        <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]} initialView="dayGridMonth" timeZone="local" headerToolbar={isEditing ? { left: 'backToMonth prev,next', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' } : false} customButtons={{ backToMonth: { text: '◀ 월', click: () => calendarRef.current?.getApi().changeView('dayGridMonth') } }} events={events} dateClick={handleDateClick} eventClick={handleEventClick} eventContent={renderEventContent} viewDidMount={handleViewChange} datesSet={handleViewChange} height="auto" locale="ko" buttonText={{ month: '월', week: '주', day: '일' }} slotMinTime="06:00:00" slotMaxTime="24:00:00" allDaySlot={false} nowIndicator={true} dayMaxEvents={2} moreLinkText={(num) => `+${num}개`} eventDisplay="block" displayEventTime={false} navLinks={true} navLinkDayClick={(date) => calendarRef.current?.getApi().changeView('timeGridDay', date)} />
+                     </div>
                   </div>
                   {renderBottomSection()}
                </>
