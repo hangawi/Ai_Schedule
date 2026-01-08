@@ -637,32 +637,42 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
 
    const { pastEvents, todayEvents, upcomingEvents } = useMemo(() => {
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString().split('T')[0]; // "YYYY-MM-DD" 형식
+      const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
       // 30일 전 날짜
-      const thirtyDaysAgo = new Date(today);
-      thirtyDaysAgo.setDate(today.getDate() - 30);
+      const thirtyDaysAgoDate = new Date(today);
+      thirtyDaysAgoDate.setDate(today.getDate() - 30);
+      const thirtyDaysAgoStr = new Date(thirtyDaysAgoDate.getTime() - (thirtyDaysAgoDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
       // 모든 일정 병합 (나의 일정 + 개인시간(확정된 일정 포함))
       const allEvents = [...globalEvents, ...personalTimes];
 
-      const pastEvents = allEvents.filter(event => {
-         const eventDate = new Date(event.date);
-         eventDate.setHours(0, 0, 0, 0);
-         return eventDate >= thirtyDaysAgo && eventDate < today;
-      });
+      // 시간순 정렬 함수 (오름차순)
+      const sortByDateTime = (a, b) => {
+         const dateCompare = a.date.localeCompare(b.date);
+         if (dateCompare !== 0) return dateCompare;
+         const timeA = a.time || '00:00';
+         const timeB = b.time || '00:00';
+         return timeA.localeCompare(timeB);
+      };
 
-      const todayEvents = allEvents.filter(event => {
-         // 문자열 비교로 정확한 날짜 매칭
-         return event.date === todayStr;
-      });
+      const pastEvents = allEvents
+         .filter(event => {
+            return event.date >= thirtyDaysAgoStr && event.date < todayStr;
+         })
+         .sort(sortByDateTime);
 
-      const upcomingEvents = allEvents.filter(event => {
-         const eventDate = new Date(event.date);
-         eventDate.setHours(0, 0, 0, 0);
-         return eventDate > today;
-      });
+      const todayEvents = allEvents
+         .filter(event => {
+            return event.date === todayStr;
+         })
+         .sort(sortByDateTime);
+
+      const upcomingEvents = allEvents
+         .filter(event => {
+            return event.date > todayStr;
+         })
+         .sort(sortByDateTime);
 
       return { pastEvents, todayEvents, upcomingEvents };
    }, [globalEvents, personalTimes]);

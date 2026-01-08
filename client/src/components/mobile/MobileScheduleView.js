@@ -488,20 +488,19 @@ const MobileScheduleView = ({ user }) => {
    // 3. useMemo (일정 필터링)
    const { pastEvents, todayEvents, upcomingEvents } = useMemo(() => {
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString().split('T')[0];
-      const thirtyDaysAgo = new Date(today);
-      thirtyDaysAgo.setDate(today.getDate() - 30);
+      const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+      
+      // 30일 전 날짜 계산
+      const thirtyDaysAgoDate = new Date(today);
+      thirtyDaysAgoDate.setDate(today.getDate() - 30);
+      const thirtyDaysAgoStr = new Date(thirtyDaysAgoDate.getTime() - (thirtyDaysAgoDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
       const allEvents = [...globalEvents, ...personalTimes];
 
       // 시간순 정렬 함수
       const sortByDateTime = (a, b) => {
-         // 날짜 비교
          const dateCompare = a.date.localeCompare(b.date);
          if (dateCompare !== 0) return dateCompare;
-
-         // 같은 날이면 시간 비교
          const timeA = a.time || '00:00';
          const timeB = b.time || '00:00';
          return timeA.localeCompare(timeB);
@@ -509,9 +508,7 @@ const MobileScheduleView = ({ user }) => {
 
       const pastEvents = allEvents
          .filter(event => {
-            const eventDate = new Date(event.date);
-            eventDate.setHours(0, 0, 0, 0);
-            return eventDate >= thirtyDaysAgo && eventDate < today;
+            return event.date >= thirtyDaysAgoStr && event.date < todayStr;
          })
          .sort(sortByDateTime);
 
@@ -520,11 +517,7 @@ const MobileScheduleView = ({ user }) => {
          .sort(sortByDateTime);
 
       const upcomingEvents = allEvents
-         .filter(event => {
-            const eventDate = new Date(event.date);
-            eventDate.setHours(0, 0, 0, 0);
-            return eventDate > today;
-         })
+         .filter(event => event.date > todayStr)
          .sort(sortByDateTime);
 
       return { pastEvents, todayEvents, upcomingEvents };
