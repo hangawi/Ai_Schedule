@@ -89,6 +89,12 @@ const MobileCalendarView = ({ user }) => {
    };
 
    const convertScheduleToEvents = useCallback((defaultSchedule, scheduleExceptions, personalTimes) => {
+      console.log('📅 [달력] convertScheduleToEvents 실행', {
+         defaultScheduleCount: defaultSchedule?.length || 0,
+         scheduleExceptionsCount: scheduleExceptions?.length || 0,
+         personalTimesCount: personalTimes?.length || 0
+      });
+
       const tempEvents = [];
       const today = new Date();
       const startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
@@ -126,6 +132,20 @@ const MobileCalendarView = ({ user }) => {
                const hasRecurringTime = (pt.isRecurring !== false) &&
                   ((pt.days && pt.days.includes(adjustedDayOfWeek)) ||
                    (pt.daysOfWeek && pt.daysOfWeek.includes(dayOfWeek)));
+
+               if (ptIdx === 0 && dateStr === '2026-01-09') {
+                  console.log('📅 [점심시간 체크]', {
+                     title: pt.title,
+                     dateStr,
+                     dayOfWeek,
+                     adjustedDayOfWeek,
+                     days: pt.days,
+                     daysOfWeek: pt.daysOfWeek,
+                     isRecurring: pt.isRecurring,
+                     hasRecurringTime,
+                     specificDate: pt.specificDate
+                  });
+               }
 
                if (hasRecurringTime || (pt.isRecurring === false && pt.specificDate === dateStr)) {
                   const [sh, sm] = pt.startTime.split(':').map(Number);
@@ -199,12 +219,16 @@ const MobileCalendarView = ({ user }) => {
    const fetchSchedule = useCallback(async () => {
       try {
          setIsLoading(true);
+         console.log('📅 [달력] fetchSchedule 시작');
          const data = await userService.getUserSchedule();
+         console.log('📅 [달력] 데이터 수신:', {
+            defaultSchedule: data.defaultSchedule?.length || 0,
+            scheduleExceptions: data.scheduleExceptions?.length || 0,
+            personalTimes: data.personalTimes?.length || 0
+         });
          setDefaultSchedule(data.defaultSchedule || []);
          setScheduleExceptions(data.scheduleExceptions || []);
          setPersonalTimes(data.personalTimes || []);
-         const calendarEvents = convertScheduleToEvents(data.defaultSchedule || [], data.scheduleExceptions || [], data.personalTimes || []);
-         setEvents(calendarEvents);
       } catch (err) {
          console.error('일정 로딩 실패:', err);
       } finally {
@@ -213,6 +237,31 @@ const MobileCalendarView = ({ user }) => {
    }, [convertScheduleToEvents]);
 
    useEffect(() => { fetchSchedule(); }, [fetchSchedule]);
+
+   // personalTimes/defaultSchedule/scheduleExceptions 변경 시 events 재계산
+   useEffect(() => {
+      // isLoading이 false일 때 (즉, 데이터 로딩이 완료되었을 때) 실행
+      if (!isLoading && calendarRef.current) {
+          console.log('📅 [달력] 상태 변경 감지 - events 재계산 및 FullCalendar 업데이트', {
+              defaultSchedule: defaultSchedule?.length || 0,
+              personalTimes: personalTimes?.length || 0,
+          });
+          
+          const calendarApi = calendarRef.current.getApi();
+          const calendarEvents = convertScheduleToEvents(defaultSchedule, scheduleExceptions, personalTimes);
+          
+          console.log('📅 [달력] 재계산된 이벤트:', calendarEvents.length);
+  
+          // React 상태 업데이트 (하단 리스트 등 다른 UI 요소에 필요)
+          setEvents(calendarEvents);
+  
+          // FullCalendar API를 직접 사용하여 이벤트 소스를 완전히 교체
+          calendarApi.removeAllEvents();
+          calendarApi.addEventSource(calendarEvents);
+          
+          console.log('📅 [달력] FullCalendar API로 이벤트 소스 업데이트 완료');
+      }
+  }, [defaultSchedule, scheduleExceptions, personalTimes, isLoading, convertScheduleToEvents, calendarRef]);
 
    const formatEventForClient = (event, color) => {
       if (!event || !event.startTime) return { ...event, date: '', time: '' };
@@ -634,15 +683,55 @@ const MobileCalendarView = ({ user }) => {
                      <div className="pull-indicator top">{translateY > 0 ? '이전 달' : ''}</div>
                      <div className="pull-indicator bottom">{translateY < 0 ? '다음 달' : ''}</div>
                      <div className="calendar-wrapper" style={{ transform: `translateY(${translateY}px)`, transition: isSwiping ? 'none' : 'transform 0.3s ease-out', padding: '16px' }}>
-                        <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]} initialView="dayGridMonth" timeZone="local" headerToolbar={isEditing ? { left: 'backToMonth prev,next', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' } : false} customButtons={{ backToMonth: { text: '◀ 월', click: () => calendarRef.current?.getApi().changeView('dayGridMonth') } }} events={events} dateClick={handleDateClick} eventClick={handleEventClick} eventContent={renderEventContent} viewDidMount={handleViewChange} datesSet={handleViewChange} height="auto" locale="ko" buttonText={{ month: '월', week: '주', day: '일' }} slotMinTime="06:00:00" slotMaxTime="24:00:00" allDaySlot={false} nowIndicator={true} dayMaxEvents={2} moreLinkText={(num) => `+${num}개`} eventDisplay="block" displayEventTime={false} navLinks={true} navLinkDayClick={(date) => calendarRef.current?.getApi().changeView('timeGridDay', date)} />
+                        <FullCalendar
+                           ref={calendarRef}
+                           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                           initialView="dayGridMonth"
+                           timeZone="local"
+                           headerToolbar={isEditing ? { left: 'backToMonth prev,next', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' } : false}
+                           customButtons={{ backToMonth: { text: '◀ 월', click: () => calendarRef.current?.getApi().changeView('dayGridMonth') } }}
+                           events={events}
+                           dateClick={handleDateClick}
+                           eventClick={handleEventClick}
+                           eventContent={renderEventContent}
+                           viewDidMount={handleViewChange}
+                           datesSet={handleViewChange}
+                           height="auto"
+                           locale="ko"
+                           buttonText={{ month: '월', week: '주', day: '일' }}
+                           slotMinTime="06:00:00"
+                           slotMaxTime="24:00:00"
+                           allDaySlot={false}
+                           nowIndicator={true}
+                           dayMaxEvents={2}
+                           moreLinkText={(num) => `+${num}개`}
+                           eventDisplay="block"
+                           displayEventTime={false}
+                           navLinks={true}
+                           navLinkDayClick={(date) => calendarRef.current?.getApi().changeView('timeGridDay', date)}
+                        />
                      </div>
                   </div>
                   {renderBottomSection()}
                </>
             }
          </div>
-         {isEditing && <BottomNavigation onRefresh={fetchSchedule} onCamera={() => { if (!isChatOpen) setIsChatOpen(true); alert('이미지 업로드 버튼을 눌러주세요.'); }} onChat={() => setIsChatOpen(!isChatOpen)} onMic={handleStartVoiceRecognition} />}
-         {isEditing && isChatOpen && <ChatBox onSendMessage={handleChatMessage} currentTab="profile" onEventUpdate={fetchSchedule} forceOpen={true} />}
+         {/* 하단 네비게이션 바 - 항상 표시 */}
+         <BottomNavigation 
+            onRefresh={fetchSchedule} 
+            onChat={() => setIsChatOpen(!isChatOpen)} 
+            onMic={handleStartVoiceRecognition} 
+         />
+         
+         {/* 챗봇 - isChatOpen이 true일 때만 표시 */}
+         {isChatOpen && (
+            <ChatBox 
+               onSendMessage={handleChatMessage} 
+               currentTab="profile" 
+               onEventUpdate={fetchSchedule} 
+               forceOpen={true} 
+            />
+         )}
          {selectedEvent && <EventDetailModal event={selectedEvent} user={user} onClose={() => setSelectedEvent(null)} onOpenMap={handleOpenMap} previousLocation={null} />}
          {showMapModal && selectedLocation && <MapModal address={selectedLocation.address} lat={selectedLocation.lat} lng={selectedLocation.lng} onClose={handleCloseMapModal} />}
       </div>

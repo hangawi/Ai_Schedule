@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Menu, LogOut, User, Calendar, Clipboard, ClipboardX, Phone, X, MapPin, Clock, Users } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 import EventDetailModal, { MapModal } from './EventDetailModal';
+import BottomNavigation from './BottomNavigation';
 import './MobileScheduleView.css';
 
 /**
@@ -503,6 +504,12 @@ const MobileScheduleView = ({ user }) => {
                onClose={handleCloseMapModal}
             />
          )}
+
+         {/* 하단 네비게이션 바 */}
+         <BottomNavigation
+            onRefresh={() => window.location.reload()}
+            onChat={() => alert('챗봇 기능은 달력 페이지에서 사용 가능합니다.')}
+         />
       </div>
    );
 };

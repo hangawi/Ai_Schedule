@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Menu, LogOut, Calendar, Clipboard, ClipboardX, Phone, User } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 import CoordinationTab from '../tabs/CoordinationTab';
+import BottomNavigation from './BottomNavigation';
 import './MobileGroupsView.css';
 
 const MobileGroupsView = ({ user }) => {
@@ -184,6 +185,12 @@ const MobileGroupsView = ({ user }) => {
                onRoomStatusChange={setIsInRoom}
             />
          </div>
+
+         {/* 하단 네비게이션 바 */}
+         <BottomNavigation
+            onRefresh={() => window.location.reload()}
+            onChat={() => alert('챗봇 기능은 달력 페이지에서 사용 가능합니다.')}
+         />
       </div>
    );
 };
