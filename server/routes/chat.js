@@ -18,6 +18,9 @@ router.post('/:roomId/upload', chatController.uploadFile);
 // AI 일정 제안 확정
 router.post('/:roomId/confirm', chatController.confirmSchedule);
 
+// AI 일정 제안 거절
+router.post('/:roomId/reject', chatController.rejectSchedule);
+
 // 메시지 읽음 처리
 router.post('/:roomId/read', chatController.markAsRead);
 

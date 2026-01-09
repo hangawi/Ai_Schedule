@@ -37,7 +37,8 @@
       "mcp__serena__think_about_task_adherence",
       "Bash(npm install:*)",
       "mcp__serena__think_about_whether_you_are_done",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(if not exist \"server\\\\prompts\" mkdir \"server\\\\prompts\")"
     ]
   }
 }

@@ -242,9 +242,32 @@ const GroupChat = ({ roomId, user, isMobile }) => {
   };
 
   // 4. 일정 거절 핸들러
-  const handleRejectSchedule = () => {
-    setSuggestion(null);
-    showToast('일정 제안을 거절했습니다.', 'info');
+  const handleRejectSchedule = async () => {
+    if (!suggestion) return;
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_BASE_URL}/api/chat/${roomId}/reject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(suggestion)
+      });
+
+      if (!res.ok) {
+        throw new Error('일정 거절 처리에 실패했습니다.');
+      }
+
+      // 성공
+      showToast('🚫 일정 제안을 거절했습니다.', 'info');
+      setSuggestion(null); // 카드 닫기
+
+    } catch (error) {
+      console.error('Reject error:', error);
+      showToast('❌ 거절 처리에 실패했습니다.', 'error');
+    }
   };
 
   return (

@@ -1,6 +1,8 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const ChatMessage = require('../models/ChatMessage');
 const Room = require('../models/room');
+const RejectedSuggestion = require('../models/RejectedSuggestion');
+const { generateSchedulePrompt } = require('../prompts/scheduleAnalysis');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -48,64 +50,8 @@ exports.analyzeConversation = async (roomId) => {
       `${m.sender.firstName || 'User'}: ${m.content}`
     ).join('\n');
 
-    const today = new Date().toISOString().split('T')[0];
-    const dayOfWeek = new Date().toLocaleDateString('ko-KR', { weekday: 'long' });
-
-    // 3. Gemini 프롬프트 구성 (개선된 버전)
-    const prompt = `
-      Current Date: ${today} (${dayOfWeek})
-      Current Time: ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-      Year: 2026
-
-      You are a meeting schedule extraction AI. Analyze the following Korean/English conversation and determine if group members have clearly agreed on a specific meeting schedule.
-
-      Conversation:
-      ${conversationText}
-
-      EXTRACTION RULES:
-      1. **Agreement Detection**: Only extract if there is CLEAR confirmation from at least 2 participants
-         - Korean: "좋아요", "네", "오케이", "알겠습니다", "괜찮아요", "좋죠", "오키" etc.
-         - English: "Okay", "Sure", "Sounds good", "Let's do it", "Agreed" etc.
-
-      2. **Date Parsing**:
-         - "내일" (tomorrow) → ${today} + 1 day
-         - "모레" (day after tomorrow) → ${today} + 2 day
-         - "다음주 월요일" → next Monday from ${today}
-         - "1월 15일" → 2026-01-15
-         - Always use YYYY-MM-DD format
-
-      3. **Time Parsing**:
-         - "2시" or "오후 2시" → 14:00
-         - "오전 10시" → 10:00
-         - "2시 반" → 14:30
-         - "10시부터 12시까지" → startTime: 10:00, endTime: 12:00
-         - If only start time given, add 1 hour for end time
-         - Always use HH:MM format (24-hour)
-
-      4. **Location**: Extract if mentioned (e.g., "강남역 스타벅스", "회의실 A")
-
-      5. **Summary**: Brief description of meeting type (e.g., "미팅", "회의", "점심 식사")
-
-      6. **Rejection Cases** (agreed: false):
-         - Unclear time/date
-         - Participants rejecting ("안 돼요", "힘들어요", "어려울 것 같아요")
-         - Still discussing without final agreement
-         - Only one person suggesting without confirmation
-
-      Output Format (JSON ONLY, no markdown):
-      {
-        "agreed": true,
-        "summary": "회의",
-        "date": "2026-01-15",
-        "startTime": "14:00",
-        "endTime": "15:00",
-        "location": "강남역 스타벅스"
-      }
-
-      If no clear agreement: { "agreed": false }
-
-      Return ONLY the JSON object, no other text.
-    `;
+    // 3. Gemini 프롬프트 구성 (개선된 버전 - 별도 파일로 분리)
+    const prompt = generateSchedulePrompt(conversationText, new Date());
 
     // 4. Gemini 호출 (타임아웃 설정)
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
@@ -164,6 +110,13 @@ exports.analyzeConversation = async (roomId) => {
       if (proposedDate < todayDate) {
         console.warn('⚠️ [AI Schedule] Proposed date is in the past:', analysisResult.date);
         // 과거 날짜는 경고만 하고 진행 (사용자가 과거 일정을 확정할 수도 있음)
+      }
+
+      // 거절 내역 체크 (중복 제안 방지)
+      const isRejected = await RejectedSuggestion.isRejected(roomId, analysisResult);
+      if (isRejected) {
+        console.log(`🚫 [AI Schedule] Suggestion already rejected for room ${roomId}:`, analysisResult);
+        return;
       }
 
       console.log(`💡 [AI Schedule] Valid schedule detected for room ${roomId}:`, analysisResult);

@@ -195,6 +195,60 @@ exports.confirmSchedule = async (req, res) => {
   }
 };
 
+
+// @desc    Reject suggested schedule
+// @route   POST /api/chat/:roomId/reject
+// @access  Private
+exports.rejectSchedule = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { date, startTime, endTime, summary, location } = req.body;
+    const userId = req.user.id;
+
+    // RejectedSuggestion 모델 import 필요
+    const RejectedSuggestion = require('../models/RejectedSuggestion');
+
+    // 1. Save rejected suggestion
+    const rejectedSuggestion = new RejectedSuggestion({
+      room: roomId,
+      suggestion: {
+        summary,
+        date,
+        startTime,
+        endTime,
+        location: location || ''
+      },
+      rejectedBy: userId,
+      rejectedAt: new Date()
+    });
+
+    await rejectedSuggestion.save();
+
+    // 2. Broadcast system message
+    const systemMsg = new ChatMessage({
+      room: roomId,
+      sender: userId,
+      content: `🚫 AI 일정 제안을 거절했습니다 (${date} ${startTime} ${summary})`,
+      type: 'system'
+    });
+    await systemMsg.save();
+    await systemMsg.populate('sender', 'firstName lastName');
+
+    if (global.io) {
+      global.io.to(`room-${roomId}`).emit('chat-message', systemMsg);
+      global.io.to(`room-${roomId}`).emit('schedule-rejected'); // 클라이언트가 제안 카드 숨기도록
+    }
+
+    console.log(`🚫 [Chat] Schedule rejected for room ${roomId}:`, { date, startTime, summary });
+
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('Reject schedule error:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
 // @desc    Mark room messages as read
 // @route   POST /api/chat/:roomId/read
 // @access  Private
