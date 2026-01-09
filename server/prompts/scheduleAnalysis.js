@@ -19,10 +19,21 @@ function generateSchedulePrompt(conversationText, currentDate = new Date()) {
 
   return `You are an intelligent meeting schedule extraction AI. Your task is to analyze natural conversations in Korean and English to detect when group members have agreed on a specific meeting time.
 
-## Current Context
-- Today's Date: ${today} (${dayOfWeek})
-- Current Time: ${currentTime}
-- Year: ${year}
+## Current Context (CRITICALLY IMPORTANT - READ CAREFULLY!)
+- **TODAY IS: ${today} (${dayOfWeek})**
+- **Current Time**: ${currentTime}
+- **Year**: ${year}
+
+**CRITICAL**: When you see "다음주 X요일" (next week X day), you MUST calculate the date correctly:
+1. Today is ${today} which is ${dayOfWeek}
+2. "다음주" means THE WEEK AFTER this current week
+3. You must count forward to find the correct date in the NEXT week
+4. DO NOT use today's date. DO NOT use this week's date.
+
+**Example Calculation**:
+- If today is 2026-01-10 (금요일/Friday)
+- "다음주 화요일" = NEXT Tuesday = 2026-01-14 (NOT 2026-01-10!)
+- "다음주 토요일" = NEXT Saturday = 2026-01-18 (NOT 2026-01-10!)
 
 ## Conversation to Analyze
 ${conversationText}
@@ -37,12 +48,15 @@ Carefully read the conversation above and determine if the participants have rea
    - If someone rejects or expresses difficulty, it's not an agreement
 
 2. **Date & Time Understanding**: Use your natural language understanding
-   - "내일" = tomorrow from ${today}
-   - "모레" = day after tomorrow
-   - "다음주 월요일/화요일/수요일/목요일/금요일/토요일/일요일" = next week's specific day
-   - "이번주 X요일" = this week's X day (if it hasn't passed yet)
+   - "내일" = tomorrow (${today} + 1 day)
+   - "모레" = day after tomorrow (${today} + 2 days)
+   - **"다음주 X요일"** = NEXT week's X day (NOT this week!)
+     - Today is ${today} (${dayOfWeek})
+     - "다음주 토요일" means the Saturday of NEXT week, NOT this Saturday
+     - Count 7+ days forward to find next week's day
+   - "이번주 X요일" = this week's X day (only if it hasn't passed yet)
    - "1월 15일", "15일" = specific date in ${year}
-   - Calculate dates accurately based on ${today} being ${dayOfWeek}
+   - **IMPORTANT**: "다음주" always means the week AFTER the current week
 
 3. **Time Parsing**: Convert to 24-hour format
    - "오전 10시" → 10:00
@@ -117,6 +131,22 @@ Expected Output (if today is 2026-01-10 금요일):
   "endTime": "17:00",
   "location": ""
 }
+
+Example 5:
+User A: 님들 우리 다음주 토요일 오후 2시에 밥약속 어떰?
+User B: 좋아요
+User C: ㅇㅋ
+
+Expected Output (if today is 2026-01-10 금요일):
+{
+  "agreed": true,
+  "summary": "밥약속",
+  "date": "2026-01-18",
+  "startTime": "14:00",
+  "endTime": "15:00",
+  "location": ""
+}
+Note: 다음주 토요일 = NEXT Saturday (2026-01-18), NOT this Saturday (2026-01-11)
 
 ## Output Format
 Return ONLY a valid JSON object with no additional text, markdown, or code blocks.

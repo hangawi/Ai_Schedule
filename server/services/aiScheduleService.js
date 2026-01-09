@@ -106,7 +106,8 @@ exports.analyzeConversation = async (roomId) => {
 
       // 과거 날짜 검증
       const proposedDate = new Date(analysisResult.date);
-      const todayDate = new Date(today);
+      const todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0); // 시간을 00:00:00으로 설정
       if (proposedDate < todayDate) {
         console.warn('⚠️ [AI Schedule] Proposed date is in the past:', analysisResult.date);
         // 과거 날짜는 경고만 하고 진행 (사용자가 과거 일정을 확정할 수도 있음)

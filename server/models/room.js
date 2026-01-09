@@ -25,7 +25,7 @@ const TimeSlotSchema = new mongoose.Schema({
   day: {
     type: String,
     required: true,
-    enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+    enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
   },
   date: {
     type: Date,
@@ -410,10 +410,10 @@ const RoomSchema = new mongoose.Schema({
       required: true
     },
     day: {
-      type: String,
-      required: true,
-      enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
-    },
+    type: String,
+    required: true,
+    enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+  },
     startTime: {
       type: String,
       required: true

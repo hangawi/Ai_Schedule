@@ -28,7 +28,11 @@ const GroupChat = ({ roomId, user, isMobile }) => {
 
     // 소켓 연결
     socketRef.current = io(API_BASE_URL, { transports: ['websocket', 'polling'] });
-    socketRef.current.emit('join-room', roomId);
+    
+    // 연결 완료 후 room join
+    socketRef.current.on('connect', () => {
+      socketRef.current.emit('join-room', roomId);
+    });
 
     // 메시지 수신
     socketRef.current.on('chat-message', (newMessage) => {
@@ -112,6 +116,8 @@ const GroupChat = ({ roomId, user, isMobile }) => {
       const token = await auth.currentUser?.getIdToken();
       const formData = new FormData();
       formData.append('file', file);
+      // 한글 파일명을 명시적으로 UTF-8 문자열로 전송
+      formData.append('originalFileName', file.name);
 
       const res = await fetch(`${API_BASE_URL}/api/chat/${roomId}/upload`, {
         method: 'POST',
@@ -328,18 +334,7 @@ const GroupChat = ({ roomId, user, isMobile }) => {
             fileUrl = `${API_BASE_URL}${fileUrl}`;
           }
 
-          // 디버깅
-          if (isFile) {
-            console.log('📎 File message:', {
-              fileName,
-              fileType: msg.fileType,
-              isImage: isImage,
-              originalUrl: msg.fileUrl,
-              finalUrl: fileUrl
-            });
-          }
-
-          return (
+return (
             <React.Fragment key={idx}>
               {/* 날짜 구분선 */}
               {showDateDivider && (

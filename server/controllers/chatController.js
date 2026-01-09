@@ -95,8 +95,10 @@ exports.uploadFile = [
         return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
       };
 
-      // 한글 파일명 디코딩 (multer는 latin1로 인코딩함)
-      const originalFileName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+      // 한글 파일명 처리: 클라이언트에서 보낸 UTF-8 파일명 사용
+      // req.body.originalFileName이 있으면 사용, 없으면 fallback으로 Buffer 디코딩
+      const originalFileName = req.body.originalFileName || 
+        Buffer.from(req.file.originalname, 'latin1').toString('utf8');
       
       // 파일 URL 생성 (서버의 static 경로)
       const fileUrl = `/uploads/${req.file.filename}`;
