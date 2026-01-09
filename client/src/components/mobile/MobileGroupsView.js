@@ -186,11 +186,13 @@ const MobileGroupsView = ({ user }) => {
             />
          </div>
 
-         {/* 하단 네비게이션 바 */}
-         <BottomNavigation
-            onRefresh={() => window.location.reload()}
-            onChat={() => alert('챗봇 기능은 달력 페이지에서 사용 가능합니다.')}
-         />
+         {/* 하단 네비게이션 바 (방 목록에 있을 때만 표시) */}
+         {!effectiveIsInRoom && (
+            <BottomNavigation
+               onRefresh={() => window.location.reload()}
+               onChat={() => alert('챗봇 기능은 달력 페이지에서 사용 가능합니다.')}
+            />
+         )}
       </div>
    );
 };

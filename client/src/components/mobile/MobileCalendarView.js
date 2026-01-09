@@ -237,6 +237,20 @@ const MobileCalendarView = ({ user }) => {
    }, [convertScheduleToEvents]);
 
    useEffect(() => { fetchSchedule(); }, [fetchSchedule]);
+   
+   // 챗봇 등 외부에서 calendarUpdate 이벤트를 발생시킬 때 스케줄을 다시 불러옴
+   useEffect(() => {
+       const handleCalendarUpdate = (event) => {
+           console.log('📅 [달력] calendarUpdate 이벤트 수신:', event.detail);
+           fetchSchedule(); // Re-fetch data when a calendar update event is received
+       };
+   
+       window.addEventListener('calendarUpdate', handleCalendarUpdate);
+   
+       return () => {
+           window.removeEventListener('calendarUpdate', handleCalendarUpdate);
+       };
+   }, [fetchSchedule]);
 
    // personalTimes/defaultSchedule/scheduleExceptions 변경 시 events 재계산
    useEffect(() => {
