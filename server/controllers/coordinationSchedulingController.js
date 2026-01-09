@@ -838,12 +838,17 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
       mergedSlots.forEach(slot => {
         const dayOfWeek = getDayOfWeekNumber(slot.day);
         const dateStr = slot.date.toISOString().split('T')[0];
-        const isDuplicate = user.personalTimes.some(pt => 
+        const isDuplicate = user.personalTimes.some(pt =>
           pt.specificDate === dateStr &&
           pt.startTime === slot.startTime &&
           pt.endTime === slot.endTime
         );
         if (!isDuplicate) {
+          // 🔧 조원: 방장의 주소 저장
+          const ownerLocation = room.owner.addressDetail
+            ? `${room.owner.address} ${room.owner.addressDetail}`
+            : room.owner.address;
+
           user.personalTimes.push({
             id: nextId++,
             title: `${room.name} - ${ownerName}`,
@@ -853,7 +858,12 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
             days: [dayOfWeek],
             isRecurring: false,
             specificDate: dateStr,
-            color: '#10B981'
+            color: '#10B981',
+            location: ownerLocation || null, // 방장의 주소
+            locationLat: room.owner.addressLat || null,
+            locationLng: room.owner.addressLng || null,
+            transportMode: travelMode || null, // 교통수단
+            roomId: room._id.toString() // 방 ID
           });
         }
       });
@@ -893,13 +903,19 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
         mergedSlots.forEach(slot => {
           const dayOfWeek = getDayOfWeekNumber(slot.day);
           const dateStr = slot.date.toISOString().split('T')[0];
-          const isDuplicate = owner.personalTimes.some(pt => 
+          const isDuplicate = owner.personalTimes.some(pt =>
             pt.specificDate === dateStr &&
             pt.startTime === slot.startTime &&
             pt.endTime === slot.endTime &&
             pt.title.includes(memberName)
           );
           if (!isDuplicate) {
+            // 🔧 방장 수업시간: 조원의 주소 저장
+            const member = userMap.get(userId);
+            const memberLocation = member && member.addressDetail
+              ? `${member.address} ${member.addressDetail}`
+              : member?.address;
+
             owner.personalTimes.push({
               id: nextId++,
               title: `${room.name} - ${memberName}`,
@@ -909,13 +925,25 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
               days: [dayOfWeek],
               isRecurring: false,
               specificDate: dateStr,
-              color: '#3B82F6'
+              color: '#3B82F6',
+              location: memberLocation || null, // 조원의 주소
+              locationLat: member?.addressLat || null,
+              locationLng: member?.addressLng || null,
+              transportMode: travelMode || null, // 교통수단
+              roomId: room._id.toString(), // 방 ID
+              hasTravelTime: room.travelTimeSlots && room.travelTimeSlots.length > 0 // 이동시간 존재 여부
             });
           }
         });
       }
       
       // 방장의 이동시간 슬롯 추가
+      console.log('🔍 [방장 이동시간 처리 시작]', {
+        hasTravelTimeSlots: !!(room.travelTimeSlots && room.travelTimeSlots.length > 0),
+        travelTimeSlotsCount: room.travelTimeSlots?.length || 0,
+        roomName: room.name
+      });
+
       if (room.travelTimeSlots && room.travelTimeSlots.length > 0) {
         room.travelTimeSlots.forEach(travelSlot => {
           const dayOfWeek = getDayOfWeekNumber(travelSlot.day);
@@ -927,6 +955,26 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
             pt.title.includes('이동시간')
           );
           if (!isDuplicate) {
+            // 🔧 이동시간의 목적지는 해당 조원의 주소
+            const travelUserId = (travelSlot.user._id || travelSlot.user).toString();
+            const travelMember = userMap.get(travelUserId);
+            const memberLocation = travelMember && travelMember.addressDetail
+              ? `${travelMember.address} ${travelMember.addressDetail}`
+              : travelMember?.address;
+
+            console.log('🚗 [이동시간 저장]', {
+              travelUserId,
+              travelMember: travelMember ? {
+                name: `${travelMember.firstName} ${travelMember.lastName}`,
+                address: travelMember.address,
+                addressDetail: travelMember.addressDetail
+              } : null,
+              memberLocation,
+              dateStr,
+              startTime: travelSlot.startTime,
+              endTime: travelSlot.endTime
+            });
+
             owner.personalTimes.push({
               id: nextId++,
               title: `${room.name} - 이동시간`,
@@ -936,7 +984,13 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
               days: [dayOfWeek],
               isRecurring: false,
               specificDate: dateStr,
-              color: '#FFA500'
+              color: '#FFA500',
+              location: memberLocation || null, // 조원의 주소
+              locationLat: travelMember?.addressLat || null,
+              locationLng: travelMember?.addressLng || null,
+              transportMode: travelMode || null, // 교통수단
+              roomId: room._id.toString(), // 방 ID
+              isTravelTime: true // 이동시간 플래그
             });
           }
         });

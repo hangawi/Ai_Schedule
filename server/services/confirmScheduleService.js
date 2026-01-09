@@ -470,6 +470,12 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
       }
 
       // 방장의 이동시간 슬롯 추가 (travel mode only)
+      console.log('🔍 [방장 이동시간 처리 시작]', {
+        hasTravelTimeSlots: !!(room.travelTimeSlots && room.travelTimeSlots.length > 0),
+        travelTimeSlotsCount: room.travelTimeSlots?.length || 0,
+        roomName: room.name
+      });
+
       if (room.travelTimeSlots && room.travelTimeSlots.length > 0) {
         room.travelTimeSlots.forEach(travelSlot => {
           const dayOfWeek = getDayOfWeekNumber(travelSlot.day);
@@ -484,6 +490,26 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
           );
 
           if (!isDuplicate) {
+            // 🔧 이동시간의 목적지는 해당 조원의 주소
+            const travelUserId = (travelSlot.user._id || travelSlot.user).toString();
+            const travelMember = userMap.get(travelUserId);
+            const memberLocation = travelMember && travelMember.addressDetail
+              ? `${travelMember.address} ${travelMember.addressDetail}`
+              : travelMember?.address;
+
+            console.log('🚗 [이동시간 저장]', {
+              travelUserId,
+              travelMember: travelMember ? {
+                name: `${travelMember.firstName} ${travelMember.lastName}`,
+                address: travelMember.address,
+                addressDetail: travelMember.addressDetail
+              } : null,
+              memberLocation,
+              dateStr,
+              startTime: travelSlot.startTime,
+              endTime: travelSlot.endTime
+            });
+
             owner.personalTimes.push({
               id: nextId++,
               title: `${room.name} - 이동시간`,
@@ -494,6 +520,9 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
               isRecurring: false,
               specificDate: dateStr,
               color: '#FFA500', // Orange color for travel time
+              location: memberLocation || null, // 조원의 주소
+              locationLat: travelMember?.addressLat || null,
+              locationLng: travelMember?.addressLng || null,
               transportMode: travelMode || null, // 교통수단
               roomId: room._id.toString(), // 방 ID
               isTravelTime: true // 이동시간 플래그

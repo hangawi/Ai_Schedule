@@ -269,7 +269,15 @@ const UserSchema = new mongoose.Schema({
     }], // 1: 월, 2: 화, ..., 7: 일
     isRecurring: { type: Boolean, default: true },
     specificDate: { type: String }, // YYYY-MM-DD 형식의 특정 날짜 (반복되지 않는 개인시간용)
-    color: { type: String } // 색상 정보
+    color: { type: String }, // 색상 정보
+    // 🔧 확정된 일정 관련 필드 추가
+    location: { type: String }, // 장소 주소
+    locationLat: { type: Number }, // 위도
+    locationLng: { type: Number }, // 경도
+    transportMode: { type: String }, // 교통수단 (driving, transit, walking)
+    roomId: { type: String }, // 조율방 ID
+    isTravelTime: { type: Boolean }, // 이동시간 여부
+    hasTravelTime: { type: Boolean } // 이동시간 포함 여부
   }],
 
   // 방별로 삭제된 선호시간 추적 (확정 시 삭제된 defaultSchedule 백업)

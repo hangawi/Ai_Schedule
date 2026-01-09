@@ -115,13 +115,29 @@ const MobileScheduleView = ({ user }) => {
 
                // 이동시간이면 다음 일정과 병합 시도
                if (pt.title && pt.title.includes('이동시간')) {
+                  console.log('📱 [클라이언트] 이동시간 감지:', {
+                     title: pt.title,
+                     ptLocation: pt.location,
+                     ptLocationLat: pt.locationLat,
+                     ptLocationLng: pt.locationLng,
+                     startTime: pt.startTime,
+                     endTime: pt.endTime
+                  });
+
                   const nextEvent = dayEvents[idx + 1];
                   // 다음 일정이 있고, 시간이 연속되고, 같은 방이면 병합
                   if (nextEvent &&
                       nextEvent.startTime === pt.endTime &&
                       pt.title.split('-')[0].trim() === nextEvent.title.split('-')[0].trim()) {
 
+                     console.log('📱 [클라이언트] 병합 시작:', {
+                        ptLocation: pt.location,
+                        nextEventLocation: nextEvent.location,
+                        finalLocation: pt.location || nextEvent.location || null
+                     });
+
                      // 병합된 일정 생성
+                     // 🔧 이동시간의 목적지(pt.location)를 우선 사용 (조원 주소)
                      mergedPersonalTimes.push({
                         id: `pt-${nextEvent.id}`,
                         title: nextEvent.title,
@@ -133,9 +149,9 @@ const MobileScheduleView = ({ user }) => {
                         color: nextEvent.color || '#3B82F6',
                         isCoordinated: true,
                         roomName: nextEvent.title.split('-')[0].trim(),
-                        location: nextEvent.location || null,
-                        locationLat: nextEvent.locationLat || null,
-                        locationLng: nextEvent.locationLng || null,
+                        location: pt.location || nextEvent.location || null, // 이동시간 목적지 우선
+                        locationLat: pt.locationLat || nextEvent.locationLat || null,
+                        locationLng: pt.locationLng || nextEvent.locationLng || null,
                         transportMode: nextEvent.transportMode || pt.transportMode || null,
                         hasTravelTime: true, // 이동시간 포함 플래그
                         travelStartTime: pt.startTime,
