@@ -227,36 +227,46 @@
    background: #f3f4f6;
 }
 
-/* 탭 스타일 */
-.schedule-tabs {
+/* 상단 헤더 (전체 일정 + 오늘 버튼) */
+.schedule-header {
    display: flex;
-   padding: 12px 16px;
-   gap: 8px;
+   justify-content: space-between;
+   align-items: center;
+   padding: 16px;
    background: white;
    border-bottom: 1px solid #e5e7eb;
 }
 
-.tab-btn {
-   flex: 1;
-   padding: 10px;
+.schedule-title {
+   font-size: 20px;
+   font-weight: 700;
+   color: #1f2937;
+   margin: 0;
+}
+
+.today-btn {
+   display: flex;
+   align-items: center;
+   gap: 6px;
+   padding: 8px 16px;
    border: none;
    border-radius: 8px;
-   background: #f3f4f6;
-   color: #6b7280;
+   background: #3b82f6;
+   color: white;
    font-size: 14px;
    font-weight: 600;
    cursor: pointer;
    transition: all 0.2s;
-}
-
-.tab-btn:hover {
-   background: #e5e7eb;
-}
-
-.tab-btn.active {
-   background: #3b82f6;
-   color: white;
    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+}
+
+.today-btn:hover {
+   background: #2563eb;
+   box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+}
+
+.today-btn:active {
+   transform: scale(0.95);
 }
 
 .schedule-content {
@@ -319,6 +329,30 @@
    background: linear-gradient(135deg, #10b98105 0%, #10b98110 100%);
 }
 
+/* 오늘 일정 스타일 */
+.event-card.today {
+   border-color: #fbbf24;
+   border-left-width: 4px;
+   background: linear-gradient(135deg, #fef3c710 0%, #fde68a15 100%);
+}
+
+/* 오늘 일정 하이라이트 애니메이션 */
+.event-card.highlight {
+   animation: highlightPulse 1.5s ease-in-out 2;
+   box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.3);
+}
+
+@keyframes highlightPulse {
+   0%, 100% {
+      background: linear-gradient(135deg, #fef3c710 0%, #fde68a15 100%);
+      box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.3);
+   }
+   50% {
+      background: linear-gradient(135deg, #fef3c730 0%, #fde68a40 100%);
+      box-shadow: 0 0 0 8px rgba(251, 191, 36, 0.4);
+   }
+}
+
 .event-header {
    display: flex;
    justify-content: space-between;
@@ -335,6 +369,25 @@
    flex: 1;
 }
 
+/* 배지 컨테이너 */
+.event-badges {
+   display: flex;
+   align-items: center;
+   gap: 6px;
+   flex-shrink: 0;
+}
+
+/* 오늘 배지 */
+.today-badge {
+   display: inline-block;
+   padding: 2px 8px;
+   background: #fef3c7;
+   color: #92400e;
+   font-size: 11px;
+   font-weight: 600;
+   border-radius: 12px;
+}
+
 .coordinated-badge {
    display: inline-block;
    padding: 2px 8px;
@@ -343,7 +396,6 @@
    font-size: 11px;
    font-weight: 600;
    border-radius: 12px;
-   flex-shrink: 0;
 }
 
 .event-room {

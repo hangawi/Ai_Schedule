@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, LogOut, User, Calendar, Clipboard, ClipboardX, Phone, X, MapPin, Clock, Users } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
@@ -9,17 +9,21 @@ import './MobileScheduleView.css';
 /**
  * EventCard - 일정 카드 컴포넌트
  */
-const EventCard = ({ event, onClick }) => {
+const EventCard = ({ event, onClick, isToday, isHighlighted, cardRef }) => {
    return (
       <div
-         className={`event-card ${event.isCoordinated ? 'coordinated' : ''}`}
+         ref={cardRef}
+         className={`event-card ${event.isCoordinated ? 'coordinated' : ''} ${isToday ? 'today' : ''} ${isHighlighted ? 'highlight' : ''}`}
          onClick={() => onClick(event)}
       >
          <div className="event-header">
             <h4 className="event-title">{event.title}</h4>
-            {event.isCoordinated && (
-               <span className="coordinated-badge">확정</span>
-            )}
+            <div className="event-badges">
+               {isToday && <span className="today-badge">오늘</span>}
+               {event.isCoordinated && (
+                  <span className="coordinated-badge">확정</span>
+               )}
+            </div>
          </div>
          {event.isCoordinated && event.roomName && (
             <p className="event-room">📅 {event.roomName}</p>
@@ -39,15 +43,18 @@ const MobileScheduleView = ({ user }) => {
    const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
    const [isClipboardMonitoring, setIsClipboardMonitoring] = useState(false);
    const [isBackgroundMonitoring, setIsBackgroundMonitoring] = useState(false);
-   const [activeTab, setActiveTab] = useState('upcoming'); // 'past', 'today', 'upcoming'
    const [selectedEvent, setSelectedEvent] = useState(null); // 선택된 일정
    const [showMapModal, setShowMapModal] = useState(false); // 지도 모달 표시 여부
    const [selectedLocation, setSelectedLocation] = useState(null); // 선택된 장소
+   const [highlightToday, setHighlightToday] = useState(false); // 오늘 일정 하이라이트
 
    // 데이터 상태
    const [globalEvents, setGlobalEvents] = useState([]);
    const [personalTimes, setPersonalTimes] = useState([]);
    const [dataLoaded, setDataLoaded] = useState(false);
+
+   // 오늘 일정으로 스크롤하기 위한 ref
+   const todayRef = useRef(null);
 
    const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -220,15 +227,10 @@ const MobileScheduleView = ({ user }) => {
       loadData();
    }, [fetchEvents, fetchPersonalTimes]);
 
-   // 3. useMemo (일정 필터링)
-   const { pastEvents, todayEvents, upcomingEvents } = useMemo(() => {
+   // 3. useMemo (전체 일정 시간순 정렬)
+   const { allEvents, todayStr } = useMemo(() => {
       const today = new Date();
       const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-      
-      // 30일 전 날짜 계산
-      const thirtyDaysAgoDate = new Date(today);
-      thirtyDaysAgoDate.setDate(today.getDate() - 30);
-      const thirtyDaysAgoStr = new Date(thirtyDaysAgoDate.getTime() - (thirtyDaysAgoDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
       const allEvents = [...globalEvents, ...personalTimes];
 
@@ -241,21 +243,10 @@ const MobileScheduleView = ({ user }) => {
          return timeA.localeCompare(timeB);
       };
 
-      const pastEvents = allEvents
-         .filter(event => {
-            return event.date >= thirtyDaysAgoStr && event.date < todayStr;
-         })
-         .sort(sortByDateTime);
-
-      const todayEvents = allEvents
-         .filter(event => event.date === todayStr)
-         .sort(sortByDateTime);
-
-      const upcomingEvents = allEvents
-         .filter(event => event.date > todayStr)
-         .sort(sortByDateTime);
-
-      return { pastEvents, todayEvents, upcomingEvents };
+      return {
+         allEvents: allEvents.sort(sortByDateTime),
+         todayStr
+      };
    }, [globalEvents, personalTimes]);
 
    // 4. 핸들러 함수들
@@ -268,18 +259,12 @@ const MobileScheduleView = ({ user }) => {
    const getPreviousEventLocation = useCallback((currentEvent) => {
       if (!currentEvent) return null;
 
-      // 현재 탭에 맞는 이벤트 목록 선택
-      let currentList = [];
-      if (activeTab === 'past') currentList = pastEvents;
-      else if (activeTab === 'today') currentList = todayEvents;
-      else if (activeTab === 'upcoming') currentList = upcomingEvents;
-
       // 현재 이벤트의 인덱스 찾기
-      const currentIndex = currentList.findIndex(e => e.id === currentEvent.id);
-      
+      const currentIndex = allEvents.findIndex(e => e.id === currentEvent.id);
+
       // 이전 이벤트가 있으면 그 위치 반환
       if (currentIndex > 0) {
-         const prevEvent = currentList[currentIndex - 1];
+         const prevEvent = allEvents[currentIndex - 1];
          // 같은 날짜인지 확인
          if (prevEvent.date === currentEvent.date) {
              // 이전 일정의 목적지 (location) 확인
@@ -294,7 +279,17 @@ const MobileScheduleView = ({ user }) => {
          }
       }
       return null;
-   }, [activeTab, pastEvents, todayEvents, upcomingEvents]);
+   }, [allEvents]);
+
+   // 오늘 버튼 클릭 핸들러
+   const handleScrollToToday = () => {
+      if (todayRef.current) {
+         todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+         setHighlightToday(true);
+         // 3초 후 하이라이트 제거
+         setTimeout(() => setHighlightToday(false), 3000);
+      }
+   };
 
    // 모달 닫기
    const handleCloseModal = () => {
@@ -413,25 +408,12 @@ const MobileScheduleView = ({ user }) => {
             </div>
          </header>
 
-         {/* 상단 탭 버튼 */}
-         <div className="schedule-tabs">
-            <button
-               className={`tab-btn ${activeTab === 'past' ? 'active' : ''}`}
-               onClick={() => setActiveTab('past')}
-            >
-               지난 일정 ({pastEvents.length})
-            </button>
-            <button
-               className={`tab-btn ${activeTab === 'today' ? 'active' : ''}`}
-               onClick={() => setActiveTab('today')}
-            >
-               오늘 일정 ({todayEvents.length})
-            </button>
-            <button
-               className={`tab-btn ${activeTab === 'upcoming' ? 'active' : ''}`}
-               onClick={() => setActiveTab('upcoming')}
-            >
-               예정 일정 ({upcomingEvents.length})
+         {/* 상단 헤더: 전체 일정 + 오늘 버튼 */}
+         <div className="schedule-header">
+            <h2 className="schedule-title">전체 일정</h2>
+            <button className="today-btn" onClick={handleScrollToToday}>
+               <Calendar size={16} />
+               오늘
             </button>
          </div>
 
@@ -439,48 +421,26 @@ const MobileScheduleView = ({ user }) => {
          <div className="schedule-content">
             {!dataLoaded ? (
                <div className="tab-content loading">로딩 중...</div>
+            ) : allEvents.length === 0 ? (
+               <p className="empty-message">일정이 없습니다.</p>
             ) : (
-               <>
-                  {activeTab === 'past' && (
-                     <div className="tab-content">
-                        {pastEvents.length === 0 ? (
-                           <p className="empty-message">지난 30일간 일정이 없습니다.</p>
-                        ) : (
-                           <div className="event-list">
-                              {pastEvents.map(event => (
-                                 <EventCard key={event.id} event={event} onClick={handleEventClick} />
-                              ))}
-                           </div>
-                        )}
-                     </div>
-                  )}
-                  {activeTab === 'today' && (
-                     <div className="tab-content">
-                        {todayEvents.length === 0 ? (
-                           <p className="empty-message">오늘 일정이 없습니다.</p>
-                        ) : (
-                           <div className="event-list">
-                              {todayEvents.map(event => (
-                                 <EventCard key={event.id} event={event} onClick={handleEventClick} />
-                              ))}
-                           </div>
-                        )}
-                     </div>
-                  )}
-                  {activeTab === 'upcoming' && (
-                     <div className="tab-content">
-                        {upcomingEvents.length === 0 ? (
-                           <p className="empty-message">예정된 일정이 없습니다.</p>
-                        ) : (
-                           <div className="event-list">
-                              {upcomingEvents.map(event => (
-                                 <EventCard key={event.id} event={event} onClick={handleEventClick} />
-                              ))}
-                           </div>
-                        )}
-                     </div>
-                  )}
-               </>
+               <div className="event-list">
+                  {allEvents.map((event) => {
+                     const isToday = event.date === todayStr;
+                     const isFirstToday = isToday && allEvents.find(e => e.date === todayStr)?.id === event.id;
+
+                     return (
+                        <EventCard
+                           key={event.id}
+                           event={event}
+                           onClick={handleEventClick}
+                           isToday={isToday}
+                           isHighlighted={isToday && highlightToday}
+                           cardRef={isFirstToday ? todayRef : null}
+                        />
+                     );
+                  })}
+               </div>
             )}
          </div>
 

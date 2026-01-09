@@ -351,8 +351,14 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
 
   const executeDeleteAllSlots = async () => {
     if (!currentRoom?._id) return;
-    try { const updatedRoom = await coordinationService.deleteAllTimeSlots(currentRoom._id); setCurrentRoom(updatedRoom); await handleTravelModeChangeInternal('normal'); showAlert('삭제되었습니다.'); }
-    catch (error) { showAlert(`실패: ${error.message}`, 'error'); }
+    try {
+      await coordinationService.deleteAllTimeSlots(currentRoom._id);
+      await handleTravelModeChangeInternal('normal');
+      await fetchRoomDetails(currentRoom._id);
+      showAlert('삭제되었습니다.');
+    } catch (error) {
+      showAlert(`실패: ${error.message}`, 'error');
+    }
     setShowDeleteConfirm(false);
   };
 
@@ -383,7 +389,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
       )}
       <CustomAlertModal isOpen={customAlert.show} onClose={closeAlert} title="알림" message={customAlert.message} type={customAlert.type || "warning"} showCancel={false} />
       <MemberStatsModal isOpen={memberStatsModal.isOpen} onClose={() => setMemberStatsModal({ isOpen: false, member: null })} member={memberStatsModal.member} isOwner={isOwner} currentRoom={currentRoom} />
-      <CustomAlertModal isOpen={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} onConfirm={async () => { await coordinationService.deleteAllTimeSlots(currentRoom._id); setCurrentRoom(null); await handleTravelModeChangeInternal('normal'); }} title="삭제" message="전체 삭제하시겠습니까?" type="danger" showCancel={true} />
+      <CustomAlertModal isOpen={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} onConfirm={executeDeleteAllSlots} title="삭제" message="전체 삭제하시겠습니까?" type="danger" showCancel={true} />
       {showDetailGrid && selectedDate && (
         <CoordinationDetailGrid selectedDate={selectedDate} timeSlots={getCurrentScheduleData().timeSlots} travelSlots={getCurrentScheduleData().travelSlots || []} travelMode={getCurrentScheduleData().travelMode} members={currentRoom.members || []} currentUser={user} isRoomOwner={isOwner} roomData={currentRoom} showMerged={showMerged} onClose={handleCloseDetailGrid} selectedSlots={[]} onRequestSlot={handleRequestSlot} onRemoveSlot={async (s) => { await removeTimeSlot(currentRoom._id, s.day, s.startTime, s.endTime); await fetchRoomDetails(currentRoom._id); }} ownerOriginalSchedule={ownerScheduleCache} />
       )}
