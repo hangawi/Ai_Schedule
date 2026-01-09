@@ -307,9 +307,10 @@ const GroupChat = ({ roomId, user, isMobile }) => {
 
           // 디버깅
           if (isFile) {
-            console.log('File message:', {
+            console.log('📎 File message:', {
               fileName,
               fileType: msg.fileType,
+              isImage: isImage,
               originalUrl: msg.fileUrl,
               finalUrl: fileUrl
             });
@@ -354,41 +355,32 @@ const GroupChat = ({ roomId, user, isMobile }) => {
                 <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%]`}>
                   {!isMe && <span className="text-xs text-gray-500 mb-1 ml-1">{msg.sender?.firstName}</span>}
                   {isImage ? (
-                    <div className="flex flex-col gap-1">
-                      <div className="relative">
+                    <div className={`flex flex-row gap-1 items-end ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                         <img
                           src={fileUrl}
                           alt={fileName}
-                          className="w-[100px] h-[100px] object-cover rounded-lg shadow-md"
-                          style={{ display: 'block' }}
-                          onLoad={(e) => {
-                            // Image loaded successfully
-                          }}
+                          className="object-cover rounded-lg shadow-md cursor-pointer"
+                          style={{ width: '150px', height: '150px', minWidth: '150px', minHeight: '150px', maxWidth: '150px', maxHeight: '150px' }}
+                          onClick={() => window.open(fileUrl, '_blank')}
                           onError={(e) => {
-                            console.error('❌ Image load error:', fileUrl);
-                            e.target.style.display = 'none';
-                            const errorDiv = e.target.nextElementSibling;
-                            if (errorDiv && errorDiv.classList.contains('image-error')) {
-                              errorDiv.style.display = 'flex';
-                            }
-                          }}
-                        />
-                        {/* 이미지 로드 실패 시 표시될 대체 UI */}
-                        <div className="image-error hidden flex-col items-center justify-center p-3 bg-gray-100 rounded-lg min-w-[100px] min-h-[80px]">
-                          <ImageIcon size={24} className="text-gray-400 mb-1" />
-                          <p className="text-xs text-gray-600 text-center">{fileName}</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleFileDownload(fileUrl, fileName);
+                          console.error('❌ Image load error:', fileUrl);
                         }}
-                        className={`${isMe ? 'self-start' : 'self-end'} p-1.5 rounded-full bg-gray-200 hover:bg-gray-300 transition-colors`}
-                        title="다운로드"
-                      >
-                        <Download size={16} className="text-gray-700" />
-                      </button>
+                        />
+                      <div className="flex flex-col gap-1 items-center mb-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleFileDownload(fileUrl, fileName);
+                          }}
+                          className="p-1.5 rounded-full bg-gray-200 hover:bg-gray-300 transition-all"
+                          title="다운로드"
+                        >
+                          <Download size={14} className="text-gray-700" />
+                        </button>
+                        <span className="text-[10px] text-gray-400">
+                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
                     </div>
                   ) : (
                     <div className={`rounded-xl shadow-sm relative overflow-hidden ${
@@ -419,10 +411,12 @@ const GroupChat = ({ roomId, user, isMobile }) => {
                       </div>
                     </div>
                   )}
-                  {/* 시간 표시 */}
-                  <span className="text-[10px] text-gray-400 mt-1 px-1">
-                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+                  {/* 시간 표시 (이미지가 아닐 때만) */}
+                  {!isImage && (
+                    <span className="text-[10px] text-gray-400 mt-1 px-1">
+                      {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
                 </div>
               </div>
               )}
@@ -443,16 +437,18 @@ const GroupChat = ({ roomId, user, isMobile }) => {
               )}
               <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%]`}>
                 {!isMe && <span className="text-xs text-gray-500 mb-1 ml-1">{msg.sender?.firstName}</span>}
-                <div className={`px-3 py-2 rounded-xl shadow-sm relative text-sm break-words ${
-                  isMe
-                    ? 'bg-yellow-300 text-black rounded-tr-none'
-                    : 'bg-white text-black border border-gray-200 rounded-tl-none'
-                }`}>
-                  {msg.content}
+                <div className={`flex flex-row gap-1 items-end ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                  <div className={`px-3 py-2 rounded-xl shadow-sm relative text-sm break-words ${
+                    isMe
+                      ? 'bg-yellow-300 text-black rounded-tr-none'
+                      : 'bg-white text-black border border-gray-200 rounded-tl-none'
+                  }`}>
+                    {msg.content}
+                  </div>
+                  <span className="text-[10px] text-gray-400 mb-0.5">
+                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
                 </div>
-                <span className="text-[10px] text-gray-400 mt-1 px-1">
-                  {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
               </div>
             </div>
               )}
