@@ -230,6 +230,19 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
     return () => { socket.disconnect(); };
   }, [currentRoom?._id, fetchRoomDetails, showAlert]);
 
+  // CustomEvent 리스너: 채팅에서 일정 확정 시 새로고침
+  useEffect(() => {
+    const handleScheduleConfirmed = async () => {
+      if (currentRoom?._id) {
+        await fetchRoomDetails(currentRoom._id);
+        window.dispatchEvent(new CustomEvent('refreshUser'));
+      }
+    };
+
+    window.addEventListener('schedule-confirmed', handleScheduleConfirmed);
+    return () => window.removeEventListener('schedule-confirmed', handleScheduleConfirmed);
+  }, [currentRoom?._id, fetchRoomDetails]);
+
   useEffect(() => {
     if (currentRoom?.owner?.defaultSchedule) {
       setOwnerScheduleCache({

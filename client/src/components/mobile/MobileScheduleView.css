@@ -309,6 +309,30 @@
    gap: 12px;
 }
 
+/* 날짜 구분선 (카톡 스타일) */
+.date-divider {
+   display: flex;
+   align-items: center;
+   margin: 20px 0 16px 0;
+   gap: 12px;
+}
+
+.date-divider-line {
+   flex: 1;
+   height: 1px;
+   background: linear-gradient(to right, transparent, #e5e7eb, transparent);
+}
+
+.date-divider-label {
+   font-size: 13px;
+   font-weight: 600;
+   color: #6b7280;
+   background: #f9fafb;
+   padding: 4px 12px;
+   border-radius: 12px;
+   white-space: nowrap;
+}
+
 /* 일정 카드 */
 .event-card {
    background: white;

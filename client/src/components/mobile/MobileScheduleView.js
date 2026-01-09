@@ -291,6 +291,28 @@ const MobileScheduleView = ({ user }) => {
       }
    };
 
+   // 날짜 라벨 생성 (카톡 스타일)
+   const getDateLabel = (dateStr) => {
+      const today = new Date();
+      const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = new Date(yesterday.getTime() - (yesterday.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+      if (dateStr === todayStr) {
+         return '오늘';
+      } else if (dateStr === yesterdayStr) {
+         return '어제';
+      } else {
+         const [year, month, day] = dateStr.split('-');
+         const date = new Date(dateStr);
+         const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+         const weekday = weekdays[date.getDay()];
+         return `${year}년 ${parseInt(month)}월 ${parseInt(day)}일 ${weekday}요일`;
+      }
+   };
+
    // 모달 닫기
    const handleCloseModal = () => {
       setSelectedEvent(null);
@@ -425,19 +447,31 @@ const MobileScheduleView = ({ user }) => {
                <p className="empty-message">일정이 없습니다.</p>
             ) : (
                <div className="event-list">
-                  {allEvents.map((event) => {
+                  {allEvents.map((event, index) => {
                      const isToday = event.date === todayStr;
                      const isFirstToday = isToday && allEvents.find(e => e.date === todayStr)?.id === event.id;
 
+                     // 이전 이벤트와 날짜가 다르면 날짜 구분선 표시
+                     const prevEvent = index > 0 ? allEvents[index - 1] : null;
+                     const showDateDivider = !prevEvent || prevEvent.date !== event.date;
+
                      return (
-                        <EventCard
-                           key={event.id}
-                           event={event}
-                           onClick={handleEventClick}
-                           isToday={isToday}
-                           isHighlighted={isToday && highlightToday}
-                           cardRef={isFirstToday ? todayRef : null}
-                        />
+                        <React.Fragment key={event.id}>
+                           {showDateDivider && (
+                              <div className="date-divider">
+                                 <div className="date-divider-line"></div>
+                                 <span className="date-divider-label">{getDateLabel(event.date)}</span>
+                                 <div className="date-divider-line"></div>
+                              </div>
+                           )}
+                           <EventCard
+                              event={event}
+                              onClick={handleEventClick}
+                              isToday={isToday}
+                              isHighlighted={isToday && highlightToday}
+                              cardRef={isFirstToday ? todayRef : null}
+                           />
+                        </React.Fragment>
                      );
                   })}
                </div>

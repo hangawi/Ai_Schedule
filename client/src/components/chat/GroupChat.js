@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-import { Send, Calendar, Check, X, Bot } from 'lucide-react';
+import { Send, Calendar, Check, X, Bot, Paperclip, Download, FileText, Image as ImageIcon } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
@@ -9,8 +9,14 @@ const GroupChat = ({ roomId, user, isMobile }) => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [suggestion, setSuggestion] = useState(null); // AI 제안 상태
+  const [isUploading, setIsUploading] = useState(false); // 파일 업로드 중
+  const [isConfirming, setIsConfirming] = useState(false); // 일정 확정 중
+  const [toast, setToast] = useState(null); // 토스트 알림 { message, type }
+  const [isUserScrolling, setIsUserScrolling] = useState(false); // 사용자가 스크롤 중인지
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const socketRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // 1. 초기 로드 및 소켓 연결
   useEffect(() => {
@@ -73,14 +79,106 @@ const GroupChat = ({ roomId, user, isMobile }) => {
     }
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (force = false) => {
+    if (force || !isUserScrolling) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  // 스크롤 위치 감지
+  const handleScroll = () => {
+    if (!messagesContainerRef.current) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 50; // 하단 50px 이내
+
+    setIsUserScrolling(!isAtBottom);
+  };
+
+  // 파일 업로드 핸들러
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 파일 크기 체크 (10MB 제한)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('파일 크기는 10MB 이하여야 합니다.');
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch(`${API_BASE_URL}/api/chat/${roomId}/upload`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!res.ok) throw new Error('파일 업로드 실패');
+
+      // 업로드 성공 시 소켓으로 메시지가 전달됨
+    } catch (error) {
+      console.error('File upload error:', error);
+      alert('파일 업로드에 실패했습니다.');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // 파일 다운로드 핸들러
+  const handleFileDownload = async (fileUrl, fileName) => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch(fileUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch file');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName || 'download';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('다운로드에 실패했습니다.');
+    }
   };
 
   // 메시지 리스트가 업데이트될 때마다 스크롤 하단으로 이동
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // 토스트 자동 닫기
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  // 토스트 표시 헬퍼 함수
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+  };
 
   // 2. 메시지 전송
   const handleSend = async (e) => {
@@ -107,65 +205,231 @@ const GroupChat = ({ roomId, user, isMobile }) => {
     }
   };
 
-  // 3. 일정 확정 핸들러
+  // 3. 일정 확정 핸들러 (개선됨)
   const handleConfirmSchedule = async () => {
-    if (!suggestion) return;
+    if (!suggestion || isConfirming) return;
+
+    setIsConfirming(true);
 
     try {
       const token = await auth.currentUser?.getIdToken();
-      await fetch(`${API_BASE_URL}/api/chat/${roomId}/confirm`, {
+      const res = await fetch(`${API_BASE_URL}/api/chat/${roomId}/confirm`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(suggestion) // { date, startTime, endTime, summary }
+        body: JSON.stringify(suggestion)
       });
+
+      if (!res.ok) {
+        throw new Error('일정 확정에 실패했습니다.');
+      }
+
+      // 성공
+      showToast('✅ 일정이 확정되었습니다!', 'success');
       setSuggestion(null); // 카드 닫기
+
+      // 일정 탭 새로고침을 위한 이벤트 발생 (상위 컴포넌트에서 처리 가능)
+      window.dispatchEvent(new CustomEvent('schedule-confirmed'));
+
     } catch (error) {
       console.error('Confirm error:', error);
-      alert('일정 확정에 실패했습니다.');
+      showToast('❌ 일정 확정에 실패했습니다.', 'error');
+    } finally {
+      setIsConfirming(false);
     }
   };
 
+  // 4. 일정 거절 핸들러
+  const handleRejectSchedule = () => {
+    setSuggestion(null);
+    showToast('일정 제안을 거절했습니다.', 'info');
+  };
+
   return (
-    <div className="flex flex-col h-full bg-gray-100">
+    <div className="flex flex-col h-full bg-gray-100 relative">
       {/* 메시지 리스트 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-4"
+      >
         {messages.map((msg, idx) => {
-          // 1. 보낸 사람 식별자 추출 (이메일 우선, 없으면 ID)
+          // 보낸 사람 식별
           const senderObj = msg.sender;
           const senderEmail = typeof senderObj === 'object' ? senderObj.email : null;
           const senderId = typeof senderObj === 'object' ? (senderObj._id || senderObj.id) : senderObj;
-          
-          // 2. 내 식별자 추출
           const myEmail = user?.email;
           const myId = user?._id || user?.id;
-
-          // 3. 비교 (이메일이 있으면 이메일로, 없으면 ID로)
           let isMe = false;
           if (senderEmail && myEmail) {
             isMe = senderEmail === myEmail;
           } else {
             isMe = senderId && myId && senderId.toString() === myId.toString();
           }
-          
-          // console.log(`Msg ${idx}: Me=${myEmail}/${myId}, Sender=${senderEmail}/${senderId}, Match=${isMe}`);
+
+          // 날짜 구분선 체크
+          const currentMsgDate = new Date(msg.createdAt).toLocaleDateString('ko-KR');
+          const prevMsg = idx > 0 ? messages[idx - 1] : null;
+          const prevMsgDate = prevMsg ? new Date(prevMsg.createdAt).toLocaleDateString('ko-KR') : null;
+          const showDateDivider = !prevMsg || currentMsgDate !== prevMsgDate;
+
+          // 날짜 포맷
+          const getDateLabel = (dateStr) => {
+            const msgDate = new Date(dateStr);
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const msgDateStr = msgDate.toLocaleDateString('ko-KR');
+            const todayStr = today.toLocaleDateString('ko-KR');
+            const yesterdayStr = yesterday.toLocaleDateString('ko-KR');
+            if (msgDateStr === todayStr) return '오늘';
+            if (msgDateStr === yesterdayStr) return '어제';
+            const year = msgDate.getFullYear();
+            const month = msgDate.getMonth() + 1;
+            const day = msgDate.getDate();
+            const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+            const weekday = weekdays[msgDate.getDay()];
+            return `${year}년 ${month}월 ${day}일 ${weekday}요일`;
+          };
 
           const isSystem = msg.type === 'system';
+          const isFile = msg.type === 'file';
+          const isImage = msg.fileType?.startsWith('image/');
+          const fileName = msg.fileName || '파일';
 
-          if (isSystem) {
-            return (
-              <div key={idx} className="flex justify-center my-2">
-                <span className="bg-gray-200 text-gray-600 text-xs py-1 px-3 rounded-full">
-                  {msg.content}
-                </span>
-              </div>
-            );
+          // 파일 URL 구성 (디버깅 추가)
+          let fileUrl = msg.fileUrl;
+          if (fileUrl && !fileUrl.startsWith('http')) {
+            fileUrl = `${API_BASE_URL}${fileUrl}`;
+          }
+
+          // 디버깅
+          if (isFile) {
+            console.log('File message:', {
+              fileName,
+              fileType: msg.fileType,
+              originalUrl: msg.fileUrl,
+              finalUrl: fileUrl
+            });
           }
 
           return (
-            <div key={idx} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-3`}>
+            <React.Fragment key={idx}>
+              {/* 날짜 구분선 */}
+              {showDateDivider && (
+                <div className="flex items-center justify-center my-6">
+                  <div className="flex-1 h-px bg-gray-300"></div>
+                  <span className="px-4 text-xs text-gray-500 font-medium bg-gray-100 rounded-full py-1">
+                    {getDateLabel(msg.createdAt)}
+                  </span>
+                  <div className="flex-1 h-px bg-gray-300"></div>
+                </div>
+              )}
+
+              {/* 시스템 메시지 */}
+              {isSystem && (
+                <div className="flex justify-center my-2">
+                  <span className="bg-gray-200 text-gray-600 text-xs py-1 px-3 rounded-full">
+                    {msg.content}
+                  </span>
+                </div>
+              )}
+
+              {/* 파일 메시지 */}
+              {isFile && !isSystem && (
+                  <div className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-2`}>
+                {!isMe && (
+                  <div className="flex flex-col items-center mr-2 self-start">
+                    <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-white text-xs font-bold overflow-hidden">
+                      {msg.sender?.profileImage ? (
+                        <img src={msg.sender.profileImage} alt="profile" className="w-full h-full object-cover" />
+                      ) : (
+                        msg.sender?.firstName?.[0] || '?'
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%]`}>
+                  {!isMe && <span className="text-xs text-gray-500 mb-1 ml-1">{msg.sender?.firstName}</span>}
+                  {isImage ? (
+                    <div className="flex flex-col gap-1">
+                      <div className="relative">
+                        <img
+                          src={fileUrl}
+                          alt={fileName}
+                          className="w-[100px] h-[100px] object-cover rounded-lg shadow-md"
+                          style={{ display: 'block' }}
+                          onLoad={(e) => {
+                            // Image loaded successfully
+                          }}
+                          onError={(e) => {
+                            console.error('❌ Image load error:', fileUrl);
+                            e.target.style.display = 'none';
+                            const errorDiv = e.target.nextElementSibling;
+                            if (errorDiv && errorDiv.classList.contains('image-error')) {
+                              errorDiv.style.display = 'flex';
+                            }
+                          }}
+                        />
+                        {/* 이미지 로드 실패 시 표시될 대체 UI */}
+                        <div className="image-error hidden flex-col items-center justify-center p-3 bg-gray-100 rounded-lg min-w-[100px] min-h-[80px]">
+                          <ImageIcon size={24} className="text-gray-400 mb-1" />
+                          <p className="text-xs text-gray-600 text-center">{fileName}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFileDownload(fileUrl, fileName);
+                        }}
+                        className={`${isMe ? 'self-start' : 'self-end'} p-1.5 rounded-full bg-gray-200 hover:bg-gray-300 transition-colors`}
+                        title="다운로드"
+                      >
+                        <Download size={16} className="text-gray-700" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className={`rounded-xl shadow-sm relative overflow-hidden ${
+                      isMe
+                        ? 'bg-yellow-300 rounded-tr-none'
+                        : 'bg-white border border-gray-200 rounded-tl-none'
+                    }`}>
+                      {/* 문서 파일 */}
+                      <div className="px-3 py-2 flex items-center gap-2 min-w-[200px]">
+                        <div className="p-2 bg-gray-100 rounded-lg">
+                          {msg.fileType?.includes('pdf') ? (
+                            <FileText size={24} className="text-red-500" />
+                          ) : (
+                            <FileText size={24} className="text-gray-500" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{fileName}</p>
+                          <p className="text-xs text-gray-500">{msg.fileSize || ''}</p>
+                        </div>
+                        <button
+                          onClick={() => handleFileDownload(fileUrl, fileName)}
+                          className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
+                          title="다운로드"
+                        >
+                          <Download size={18} className="text-gray-600" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {/* 시간 표시 */}
+                  <span className="text-[10px] text-gray-400 mt-1 px-1">
+                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              </div>
+              )}
+
+              {/* 일반 텍스트 메시지 */}
+              {!isSystem && !isFile && (
+            <div className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-2`}>
               {!isMe && (
                 <div className="flex flex-col items-center mr-2 self-start">
                   <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-white text-xs font-bold overflow-hidden">
@@ -180,8 +444,8 @@ const GroupChat = ({ roomId, user, isMobile }) => {
               <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%]`}>
                 {!isMe && <span className="text-xs text-gray-500 mb-1 ml-1">{msg.sender?.firstName}</span>}
                 <div className={`px-3 py-2 rounded-xl shadow-sm relative text-sm break-words ${
-                  isMe 
-                    ? 'bg-yellow-300 text-black rounded-tr-none' 
+                  isMe
+                    ? 'bg-yellow-300 text-black rounded-tr-none'
                     : 'bg-white text-black border border-gray-200 rounded-tl-none'
                 }`}>
                   {msg.content}
@@ -191,6 +455,8 @@ const GroupChat = ({ roomId, user, isMobile }) => {
                 </span>
               </div>
             </div>
+              )}
+            </React.Fragment>
           );
         })}
         
@@ -199,46 +465,132 @@ const GroupChat = ({ roomId, user, isMobile }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* AI 일정 제안 팝업 */}
+      {/* 하단으로 스크롤 버튼 */}
+      {isUserScrolling && (
+        <button
+          onClick={() => scrollToBottom(true)}
+          className="absolute bottom-24 right-6 bg-blue-600 text-white p-3 rounded-full shadow-lg hover:bg-blue-700 transition-all z-20 animate-bounce-in"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M16.707 10.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-6-6a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l4.293-4.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+        </button>
+      )}
+
+      {/* AI 일정 제안 팝업 (개선된 UI) */}
       {suggestion && (
-        <div className="mx-4 mb-4 bg-white border border-blue-200 rounded-xl shadow-lg p-4 animate-slide-up relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-          <div className="flex justify-between items-start mb-2">
-            <div className="flex items-center text-blue-600 font-bold">
-              <Bot size={18} className="mr-2" />
-              AI 일정 제안
+        <div className="mx-3 md:mx-4 mb-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-2xl shadow-xl p-4 md:p-5 relative overflow-hidden animate-bounce-in">
+          {/* 배경 장식 */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-200 rounded-full blur-3xl opacity-30 -mr-16 -mt-16"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-200 rounded-full blur-3xl opacity-30 -ml-16 -mb-16"></div>
+
+          {/* 좌측 강조선 */}
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-blue-500 to-indigo-600"></div>
+
+          <div className="relative z-10">
+            <div className="flex justify-between items-start mb-3">
+              <div className="flex items-center space-x-2">
+                <div className="bg-blue-600 p-2 rounded-xl">
+                  <Bot size={20} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-blue-700 font-bold text-sm">AI가 일정을 분석했어요</p>
+                  <p className="text-blue-500 text-xs">아래 일정으로 확정할까요?</p>
+                </div>
+              </div>
+              <button
+                onClick={handleRejectSchedule}
+                className="text-gray-400 hover:text-gray-600 hover:bg-white/50 rounded-full p-1 transition-all"
+                disabled={isConfirming}
+              >
+                <X size={20} />
+              </button>
             </div>
-            <button onClick={() => setSuggestion(null)} className="text-gray-400 hover:text-gray-600">
-              <X size={18} />
-            </button>
-          </div>
-          <div className="mb-4">
-            <h3 className="text-lg font-bold text-gray-800">{suggestion.summary || '새로운 일정'}</h3>
-            <div className="flex items-center text-gray-600 mt-1">
-              <Calendar size={16} className="mr-2" />
-              <span>{suggestion.date} {suggestion.startTime} ~ {suggestion.endTime}</span>
+
+            <div className="bg-white rounded-xl p-4 mb-4 shadow-sm border border-blue-100">
+              <h3 className="text-xl font-bold text-gray-800 mb-2 flex items-center">
+                📅 {suggestion.summary || '새로운 일정'}
+              </h3>
+              <div className="space-y-2">
+                <div className="flex items-center text-gray-700">
+                  <Calendar size={16} className="mr-2 text-blue-600" />
+                  <span className="font-medium">{suggestion.date}</span>
+                </div>
+                <div className="flex items-center text-gray-700">
+                  <span className="mr-2 text-blue-600">🕐</span>
+                  <span>{suggestion.startTime} ~ {suggestion.endTime}</span>
+                </div>
+                {suggestion.location && (
+                  <div className="flex items-center text-gray-600">
+                    <span className="mr-2">📍</span>
+                    <span>{suggestion.location}</span>
+                  </div>
+                )}
+              </div>
             </div>
-            {suggestion.location && <p className="text-sm text-gray-500 mt-1 ml-6">📍 {suggestion.location}</p>}
+
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <button
+                onClick={handleConfirmSchedule}
+                disabled={isConfirming}
+                className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-2.5 sm:py-3 rounded-xl text-sm font-bold hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 flex items-center justify-center transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+              >
+                {isConfirming ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                    확정 중...
+                  </>
+                ) : (
+                  <>
+                    <Check size={16} className="mr-1" /> 일정 확정하기
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleRejectSchedule}
+                disabled={isConfirming}
+                className="flex-1 bg-white text-gray-700 py-2.5 sm:py-3 rounded-xl text-sm font-bold hover:bg-gray-50 disabled:opacity-50 border border-gray-200 transition-all shadow-sm hover:shadow"
+              >
+                다시 논의하기
+              </button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button 
-              onClick={handleConfirmSchedule}
-              className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center justify-center transition-colors"
-            >
-              <Check size={16} className="mr-1" /> 확정하기
-            </button>
-            <button 
-              onClick={() => setSuggestion(null)}
-              className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors"
-            >
-              거절
-            </button>
-          </div>
+        </div>
+      )}
+
+      {/* 토스트 알림 (반응형) */}
+      {toast && (
+        <div className={`fixed top-4 left-4 right-4 md:left-auto md:right-4 md:max-w-md z-50 px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 animate-slide-down ${
+          toast.type === 'success' ? 'bg-green-500 text-white' :
+          toast.type === 'error' ? 'bg-red-500 text-white' :
+          'bg-blue-500 text-white'
+        }`}>
+          <span className="font-medium text-sm">{toast.message}</span>
         </div>
       )}
 
       {/* 입력창 */}
       <form onSubmit={handleSend} className="bg-white p-3 border-t border-gray-200 flex items-center gap-2">
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          className="hidden"
+          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="text-gray-500 hover:text-blue-600 p-2 rounded-full hover:bg-gray-100 disabled:opacity-50 transition-colors"
+          title="파일 첨부"
+        >
+          {isUploading ? (
+            <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent"></div>
+          ) : (
+            <Paperclip size={20} />
+          )}
+        </button>
         <input
           type="text"
           className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
@@ -246,8 +598,8 @@ const GroupChat = ({ roomId, user, isMobile }) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
         />
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           disabled={!input.trim()}
           className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors"
         >

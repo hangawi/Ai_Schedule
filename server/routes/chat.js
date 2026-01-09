@@ -12,6 +12,9 @@ router.get('/:roomId', chatController.getMessages);
 // 메시지 전송
 router.post('/:roomId', chatController.sendMessage);
 
+// 파일 업로드
+router.post('/:roomId/upload', chatController.uploadFile);
+
 // AI 일정 제안 확정
 router.post('/:roomId/confirm', chatController.confirmSchedule);
 

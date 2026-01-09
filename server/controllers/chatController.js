@@ -1,6 +1,7 @@
 const ChatMessage = require('../models/ChatMessage');
 const Room = require('../models/room');
 const aiScheduleService = require('../services/aiScheduleService');
+const upload = require('../middleware/upload');
 
 // @desc    Get chat history
 // @route   GET /api/chat/:roomId
@@ -70,6 +71,68 @@ exports.sendMessage = async (req, res) => {
     res.status(500).json({ msg: 'Server error' });
   }
 };
+
+// @desc    Upload file
+// @route   POST /api/chat/:roomId/upload
+// @access  Private
+exports.uploadFile = [
+  upload.single('file'),
+  async (req, res) => {
+    try {
+      const { roomId } = req.params;
+      const userId = req.user.id;
+
+      if (!req.file) {
+        return res.status(400).json({ msg: '파일이 업로드되지 않았습니다.' });
+      }
+
+      // 파일 크기 포맷팅
+      const formatFileSize = (bytes) => {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+      };
+
+      // 한글 파일명 디코딩 (multer는 latin1로 인코딩함)
+      const originalFileName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+      
+      // 파일 URL 생성 (서버의 static 경로)
+      const fileUrl = `/uploads/${req.file.filename}`;
+
+      // 메시지 생성
+      const message = new ChatMessage({
+        room: roomId,
+        sender: userId,
+        content: originalFileName, // 디코딩된 파일명
+        type: 'file',
+        fileUrl,
+        fileName: originalFileName,
+        fileType: req.file.mimetype,
+        fileSize: formatFileSize(req.file.size)
+      });
+
+      await message.save();
+
+      // Update Room's lastMessageAt
+      await Room.findByIdAndUpdate(roomId, { lastMessageAt: new Date() });
+
+      // Populate sender info
+      await message.populate('sender', 'firstName lastName email');
+
+      // Broadcast via Socket
+      if (global.io) {
+        global.io.to(`room-${roomId}`).emit('chat-message', message);
+      }
+
+      res.status(201).json(message);
+    } catch (error) {
+      console.error('File upload error:', error);
+      res.status(500).json({ msg: 'Server error' });
+    }
+  }
+];
 
 // @desc    Confirm suggested schedule
 // @route   POST /api/chat/:roomId/confirm

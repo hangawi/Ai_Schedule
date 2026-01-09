@@ -102,12 +102,13 @@ app.use(
       directives: {
         ...helmet.contentSecurityPolicy.getDefaultDirectives(),
         "script-src": ["'self'", "https://accounts.google.com/gsi/client"],
-        "img-src": ["'self'", "data:", "https://img.icons8.com"],
+        "img-src": ["'self'", "data:", "https://img.icons8.com", "blob:", "http://localhost:5000", "http://localhost:3000"],
         "connect-src": ["'self'", "https://accounts.google.com/gsi/", "https://generativelanguage.googleapis.com"],
       },
     },
     crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
     crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
 app.use(compression()); // 응답 압축
@@ -122,6 +123,9 @@ if (process.env.NODE_ENV !== 'production') {
     next();
   });
 }
+
+// 업로드된 파일 정적 제공
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // =================================================================
 // API 라우트 설정
