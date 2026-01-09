@@ -255,11 +255,12 @@ const MobileCalendarView = ({ user }) => {
           // React 상태 업데이트 (하단 리스트 등 다른 UI 요소에 필요)
           setEvents(calendarEvents);
   
-          // FullCalendar API를 직접 사용하여 이벤트 소스를 완전히 교체
-          calendarApi.removeAllEvents();
-          calendarApi.addEventSource(calendarEvents);
-          
-          console.log('📅 [달력] FullCalendar API로 이벤트 소스 업데이트 완료');
+          // FullCalendar API 호출을 마이크로태스크로 연기하여 React 렌더링 사이클 완료 후 실행
+          Promise.resolve().then(() => {
+              calendarApi.removeAllEvents();
+              calendarApi.addEventSource(calendarEvents);
+              console.log('📅 [달력] FullCalendar API로 이벤트 소스 업데이트 완료 (Deferred)');
+          });
       }
   }, [defaultSchedule, scheduleExceptions, personalTimes, isLoading, convertScheduleToEvents, calendarRef]);
 
