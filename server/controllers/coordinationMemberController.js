@@ -63,7 +63,6 @@ exports.removeMember = async (req, res) => {
         `${removedName}님을 강퇴함`
       );
     } catch (logError) {
-      console.error('Activity log error:', logError);
     }
 
     res.json({
@@ -138,7 +137,6 @@ exports.leaveRoom = async (req, res) => {
         '방에서 퇴장'
       );
     } catch (logError) {
-      console.error('Activity log error:', logError);
     }
 
     res.json({
@@ -148,7 +146,6 @@ exports.leaveRoom = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Leave room error:', error);
     res.status(500).json({ msg: 'Server error' });
   }
 };

@@ -103,13 +103,6 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
           const lat = place.geometry?.location?.lat();
           const lng = place.geometry?.location?.lng();
 
-          console.log('🎯 [주소선택]', {
-            address: place.formatted_address,
-            lat: lat,
-            lng: lng,
-            hasGeometry: !!place.geometry
-          });
-
           setInputValue(place.formatted_address);
           onChange({
             address: place.formatted_address,
@@ -136,7 +129,6 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
         pacContainers.forEach(container => container.remove());
       };
     } catch (error) {
-      console.error('Autocomplete 초기화 오류:', error);
     }
   }, [isLoaded, onChange]);
 
@@ -146,21 +138,13 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
-      console.log('⌨️ [엔터키] 감지');
 
       // pac-container 찾기
       const pacContainer = document.querySelector('.pac-container');
       const pacItems = document.querySelectorAll('.pac-item');
 
-      console.log('📋 [자동완성 상태]', {
-        containerExists: !!pacContainer,
-        itemCount: pacItems.length,
-        inputValue: inputValue
-      });
-
       // 자동완성 항목이 있으면 첫 번째 항목 선택
       if (pacItems && pacItems.length > 0) {
-        console.log('✅ [첫번째 항목 선택]');
         e.preventDefault();
 
         // pac-container가 숨겨져 있으면 보이게 만들기
@@ -178,13 +162,11 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
         firstItem.dispatchEvent(clickEvent);
       } else {
         // 자동완성 목록이 없으면 Geocoding API로 좌표 찾기
-        console.log('🔎 [엔터키] 자동완성 목록 없음 - Geocoding으로 좌표 찾기');
 
         if (inputValue && inputValue.trim()) {
           e.preventDefault();
           e.stopPropagation();
 
-          console.log('🌍 [Geocoding] 주소 검색 중:', inputValue);
 
           const geocoder = new window.google.maps.Geocoder();
           geocoder.geocode(
@@ -198,12 +180,6 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
                 const lat = result.geometry.location.lat();
                 const lng = result.geometry.location.lng();
 
-                console.log('✅ [Geocoding 성공]', {
-                  address: result.formatted_address,
-                  lat: lat,
-                  lng: lng
-                });
-
                 setInputValue(result.formatted_address);
                 onChange({
                   address: result.formatted_address,
@@ -212,7 +188,6 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
                   placeId: result.place_id
                 });
               } else {
-                console.error('❌ [Geocoding 실패]', status);
                 alert('주소를 찾을 수 없습니다. 자동완성 목록에서 선택해주세요.');
               }
             }

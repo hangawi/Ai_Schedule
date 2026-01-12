@@ -37,7 +37,6 @@ exports.verifyAdminCode = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Verify admin code error:', error);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
@@ -61,7 +60,6 @@ exports.revokeAdmin = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Revoke admin error:', error);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
@@ -98,7 +96,6 @@ exports.getAllUsers = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get all users error:', error);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
@@ -107,8 +104,6 @@ exports.getAllUsers = async (req, res) => {
 exports.deleteUser = async (req, res) => {
   try {
     const { userId } = req.params;
-
-    console.log('Delete user request - userId:', userId);
 
     // userId 유효성 검사
     if (!userId || userId === 'undefined' || userId === 'null') {
@@ -125,17 +120,13 @@ exports.deleteUser = async (req, res) => {
       return res.status(404).json({ msg: '사용자를 찾을 수 없습니다.' });
     }
 
-    console.log('Deleting user:', user.email);
-
     // Firebase 사용자 삭제 (firebaseUid가 있는 경우)
     if (user.firebaseUid) {
       try {
         await firebaseAuth.deleteUser(user.firebaseUid);
-        console.log('Firebase user deleted:', user.firebaseUid);
       } catch (firebaseErr) {
         // Firebase 사용자가 없을 수 있음 (이미 삭제됨)
         if (firebaseErr.code !== 'auth/user-not-found') {
-          console.error('Firebase user deletion error:', firebaseErr.message);
         }
       }
     }
@@ -151,25 +142,19 @@ exports.deleteUser = async (req, res) => {
 
     // 같은 이메일을 가진 모든 사용자 삭제 (중복 제거)
     const deleteResult = await User.deleteMany({ email: user.email });
-    console.log('Deleted users count:', deleteResult.deletedCount);
 
     if (!deleteResult || deleteResult.deletedCount === 0) {
-      console.error('User deletion failed - no document deleted');
       return res.status(500).json({ msg: '사용자 삭제에 실패했습니다.' });
     }
 
     // 삭제 검증
     const verifyDeleted = await User.findOne({ email: user.email });
     if (verifyDeleted) {
-      console.error('User deletion verification failed - user still exists:', user.email);
       return res.status(500).json({ msg: '사용자 삭제에 실패했습니다. 다시 시도해주세요.' });
     }
 
-    console.log('User deleted successfully:', user.email);
-
     res.json({ msg: '회원이 삭제되었습니다.' });
   } catch (error) {
-    console.error('Delete user error:', error);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
@@ -194,7 +179,6 @@ exports.promoteUser = async (req, res) => {
       user
     });
   } catch (error) {
-    console.error('Promote user error:', error);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
@@ -224,7 +208,6 @@ exports.demoteUser = async (req, res) => {
       user
     });
   } catch (error) {
-    console.error('Demote user error:', error);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
@@ -263,7 +246,6 @@ exports.getAllRooms = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get all rooms error:', error);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
@@ -286,7 +268,6 @@ exports.deleteRoom = async (req, res) => {
 
     res.json({ msg: '방이 삭제되었습니다.' });
   } catch (error) {
-    console.error('Delete room error:', error);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
@@ -304,12 +285,10 @@ exports.getRoomLogs = async (req, res) => {
 
     // 관리자 초기화 시점 이후의 로그만 조회
     const clearedAt = room.logsClearedAt?.admin;
-    console.log('Admin clearedAt:', clearedAt);
 
     const query = { roomId };
     if (clearedAt) {
       query.createdAt = { $gt: clearedAt };
-      console.log('Filtering logs after:', clearedAt);
     }
 
     const allLogs = await ActivityLog.find(query)
@@ -339,7 +318,6 @@ exports.getRoomLogs = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get room logs error:', error);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
@@ -361,8 +339,6 @@ exports.clearRoomLogs = async (req, res) => {
     room.logsClearedAt.admin = new Date();
     room.markModified('logsClearedAt');
     await room.save();
-    
-    console.log('Admin cleared logs at:', room.logsClearedAt.admin);
 
     res.json({
       success: true,
@@ -370,7 +346,6 @@ exports.clearRoomLogs = async (req, res) => {
       clearedAt: room.logsClearedAt.admin
     });
   } catch (error) {
-    console.error('Clear room logs error:', error);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
@@ -398,7 +373,6 @@ exports.getDashboardStats = async (req, res) => {
       recentSignups
     });
   } catch (error) {
-    console.error('Get dashboard stats error:', error);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
@@ -414,11 +388,6 @@ exports.getRecentActivities = async (req, res) => {
       .select('firstName lastName email createdAt')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit));
-
-    console.log('Recent users count:', recentUsers.length);
-    if (recentUsers.length > 0) {
-      console.log('Latest user:', recentUsers[0].email, recentUsers[0].createdAt);
-    }
 
     recentUsers.forEach(user => {
       activities.push({
@@ -469,7 +438,6 @@ exports.getRecentActivities = async (req, res) => {
       activities: activities.slice(0, parseInt(limit))
     });
   } catch (error) {
-    console.error('Get recent activities error:', error);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
@@ -488,7 +456,6 @@ exports.getUserById = async (req, res) => {
 
     res.json({ user });
   } catch (error) {
-    console.error('Get user by ID error:', error);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
@@ -514,8 +481,6 @@ exports.clearUserLogs = async (req, res) => {
     room.memberLogsClearedAt.admin[userId] = new Date();
     room.markModified('memberLogsClearedAt');
     await room.save();
-
-    console.log('Admin cleared member logs for user:', userId, 'at:', room.memberLogsClearedAt.admin[userId]);
 
     res.json({
       success: true,

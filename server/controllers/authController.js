@@ -53,7 +53,6 @@ exports.register = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('[Register] Error:', err);
     res.status(500).json({ msg: '서버 오류: ' + err.message });
   }
 };
@@ -81,7 +80,6 @@ exports.login = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('[Login] Error:', err);
     res.status(500).json({ msg: '서버 오류: ' + err.message });
   }
 };
@@ -110,7 +108,6 @@ exports.googleAuth = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('[Google Auth] Error:', err);
     res.status(500).json({ msg: 'Google 인증 실패: ' + err.message });
   }
 };
@@ -129,7 +126,6 @@ exports.getLoggedInUser = async (req, res) => {
 
     res.json(user);
   } catch (err) {
-    console.error('[Get Logged In User] Error:', err);
     res.status(500).send('Server Error');
   }
 };
@@ -160,10 +156,8 @@ exports.deleteAccount = async (req, res) => {
     if (user.firebaseUid) {
       try {
         await firebaseAuth.deleteUser(user.firebaseUid);
-        console.log('Firebase user deleted:', user.firebaseUid);
       } catch (firebaseErr) {
         if (firebaseErr.code !== 'auth/user-not-found') {
-          console.error('Firebase user deletion error:', firebaseErr.message);
         }
       }
     }
@@ -180,11 +174,9 @@ exports.deleteAccount = async (req, res) => {
     // 사용자 삭제
     await User.findByIdAndDelete(userId);
 
-    console.log('User account deleted:', user.email);
 
     res.json({ msg: '회원탈퇴가 완료되었습니다.' });
   } catch (err) {
-    console.error('Delete account error:', err);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
