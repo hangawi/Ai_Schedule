@@ -2,6 +2,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const ChatMessage = require('../models/ChatMessage');
 const Room = require('../models/room');
 const RejectedSuggestion = require('../models/RejectedSuggestion');
+const ScheduleSuggestion = require('../models/ScheduleSuggestion');
 const { generateSchedulePrompt } = require('../prompts/scheduleAnalysis');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -90,6 +91,14 @@ exports.analyzeConversation = async (roomId) => {
         return;
       }
 
+      // endTime이 없으면 startTime + 1시간으로 자동 생성
+      if (!analysisResult.endTime) {
+        const [hours, minutes] = analysisResult.startTime.split(':').map(Number);
+        const endHours = (hours + 1) % 24;
+        analysisResult.endTime = `${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        console.log(`ℹ️ [AI Schedule] Auto-generated endTime: ${analysisResult.endTime}`);
+      }
+
       // 날짜 형식 검증 (YYYY-MM-DD)
       const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
       if (!dateRegex.test(analysisResult.date)) {
@@ -122,9 +131,43 @@ exports.analyzeConversation = async (roomId) => {
 
       console.log(`💡 [AI Schedule] Valid schedule detected for room ${roomId}:`, analysisResult);
 
-      // Socket 이벤트 발송
+      // 7. ScheduleSuggestion DB에 저장
+      const room = await Room.findById(roomId);
+      if (!room) {
+        console.error('❌ [AI Schedule] Room not found:', roomId);
+        return;
+      }
+
+      // 모든 방 멤버를 memberResponses에 추가 (pending 상태)
+      const memberResponses = room.members.map(member => ({
+        user: member.user,
+        status: 'pending',
+        respondedAt: null,
+        personalTimeId: null
+      }));
+
+      // ScheduleSuggestion 생성
+      const suggestion = new ScheduleSuggestion({
+        room: roomId,
+        summary: analysisResult.summary,
+        date: analysisResult.date,
+        startTime: analysisResult.startTime,
+        endTime: analysisResult.endTime,
+        location: analysisResult.location || '',
+        memberResponses,
+        status: 'future',
+        aiResponse: analysisResult
+      });
+
+      await suggestion.save();
+      console.log(`✅ [AI Schedule] Suggestion saved to DB:`, suggestion._id);
+
+      // Socket 이벤트 발송 (제안 ID 포함)
       if (global.io) {
-        global.io.to(`room-${roomId}`).emit('schedule-suggestion', analysisResult);
+        global.io.to(`room-${roomId}`).emit('schedule-suggestion', {
+          ...analysisResult,
+          suggestionId: suggestion._id.toString()
+        });
       }
     } else {
       console.log(`ℹ️ [AI Schedule] No clear agreement detected in room ${roomId}`);

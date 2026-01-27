@@ -13,6 +13,8 @@ const GroupChat = ({ roomId, user, isMobile }) => {
   const [isConfirming, setIsConfirming] = useState(false); // 일정 확정 중
   const [toast, setToast] = useState(null); // 토스트 알림 { message, type }
   const [isUserScrolling, setIsUserScrolling] = useState(false); // 사용자가 스크롤 중인지
+  const [showConfirmModal, setShowConfirmModal] = useState(false); // 확인 모달 표시 여부
+  const [conflictInfo, setConflictInfo] = useState(null); // 충돌 정보
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const socketRef = useRef(null);
@@ -171,6 +173,13 @@ const GroupChat = ({ roomId, user, isMobile }) => {
     scrollToBottom();
   }, [messages]);
 
+  // AI 제안 카드가 표시될 때 스크롤 하단으로 이동
+  useEffect(() => {
+    if (suggestion) {
+      setTimeout(() => scrollToBottom(true), 100); // 애니메이션 후 스크롤
+    }
+  }, [suggestion]);
+
   // 토스트 자동 닫기
   useEffect(() => {
     if (toast) {
@@ -211,11 +220,49 @@ const GroupChat = ({ roomId, user, isMobile }) => {
     }
   };
 
-  // 3. 일정 확정 핸들러 (개선됨)
+  // 3. 일정 확정 핸들러 (1단계: 충돌 체크 후 모달 표시)
   const handleConfirmSchedule = async () => {
     if (!suggestion || isConfirming) return;
 
     setIsConfirming(true);
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+
+      // 먼저 충돌 체크 API 호출
+      const res = await fetch(`${API_BASE_URL}/api/chat/${roomId}/check-conflict`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(suggestion)
+      });
+
+      if (!res.ok) {
+        throw new Error('충돌 체크에 실패했습니다.');
+      }
+
+      const conflictData = await res.json();
+
+      // 충돌 정보를 state에 저장하고 모달 표시
+      setConflictInfo(conflictData);
+      setShowConfirmModal(true);
+
+    } catch (error) {
+      console.error('Conflict check error:', error);
+      showToast('❌ 충돌 체크에 실패했습니다.', 'error');
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  // 4. 실제 일정 확정 핸들러 (2단계: 모달에서 확인 후 실행)
+  const handleActualConfirm = async () => {
+    if (!suggestion || isConfirming) return;
+
+    setIsConfirming(true);
+    setShowConfirmModal(false); // 모달 닫기
 
     try {
       const token = await auth.currentUser?.getIdToken();
@@ -235,6 +282,7 @@ const GroupChat = ({ roomId, user, isMobile }) => {
       // 성공
       showToast('✅ 일정이 확정되었습니다!', 'success');
       setSuggestion(null); // 카드 닫기
+      setConflictInfo(null); // 충돌 정보 초기화
 
       // 일정 탭 새로고침을 위한 이벤트 발생 (상위 컴포넌트에서 처리 가능)
       window.dispatchEvent(new CustomEvent('schedule-confirmed'));
@@ -247,7 +295,7 @@ const GroupChat = ({ roomId, user, isMobile }) => {
     }
   };
 
-  // 4. 일정 거절 핸들러
+  // 5. 일정 거절 핸들러
   const handleRejectSchedule = async () => {
     if (!suggestion) return;
 
@@ -580,6 +628,135 @@ return (
           'bg-blue-500 text-white'
         }`}>
           <span className="font-medium text-sm">{toast.message}</span>
+        </div>
+      )}
+
+      {/* 확인 모달 (선호시간 충돌 정보 표시) */}
+      {showConfirmModal && conflictInfo && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto">
+            <div className="p-6">
+              {/* 헤더 */}
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-800">일정 확정 확인</h2>
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              {/* 일정 정보 */}
+              <div className="bg-blue-50 rounded-xl p-4 mb-4 border border-blue-200">
+                <h3 className="text-lg font-bold text-gray-800 mb-2">
+                  📅 {suggestion?.summary || '새로운 일정'}
+                </h3>
+                <div className="space-y-1 text-sm text-gray-700">
+                  <div className="flex items-center">
+                    <Calendar size={16} className="mr-2 text-blue-600" />
+                    <span>{suggestion?.date}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="mr-2 text-blue-600">🕐</span>
+                    <span>{suggestion?.startTime} ~ {suggestion?.endTime}</span>
+                  </div>
+                  {suggestion?.location && (
+                    <div className="flex items-center">
+                      <span className="mr-2">📍</span>
+                      <span>{suggestion?.location}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 충돌 정보 */}
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">멤버 가능 여부</h3>
+
+                {conflictInfo.hasConflict ? (
+                  <div className="space-y-3">
+                    {/* 경고 메시지 */}
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                      <div className="flex items-start">
+                        <span className="text-yellow-600 mr-2">⚠️</span>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-yellow-800 mb-1">
+                            {conflictInfo.conflictCount}명의 멤버가 이 시간에 이미 다른 약속이 있습니다
+                          </p>
+                          <p className="text-xs text-yellow-700">
+                            충돌이 있어도 일정을 확정할 수 있지만, 멤버들과 다시 상의하는 것을 권장합니다.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 충돌 상세 정보 */}
+                    <div className="space-y-2">
+                      {conflictInfo.conflicts.map((conflict, idx) => (
+                        <div key={idx} className="bg-red-50 border border-red-200 rounded-lg p-3">
+                          <p className="text-sm font-medium text-red-800 mb-1">
+                            👤 {conflict.userName}
+                          </p>
+                          <ul className="text-xs text-red-700 space-y-1 ml-4">
+                            {conflict.reasons.map((reason, ridx) => (
+                              <li key={ridx}>
+                                • {reason.type === 'confirmed' && `${reason.title} (${reason.time}) [확정됨]`}
+                                {reason.type === 'personal' && `${reason.title} (${reason.time})`}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 가능한 멤버 */}
+                    {conflictInfo.availableCount > 0 && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                        <p className="text-sm font-medium text-green-800">
+                          ✅ 가능한 멤버 ({conflictInfo.availableCount}명)
+                        </p>
+                        <p className="text-xs text-green-700 mt-1">
+                          {conflictInfo.availableMembers.map(m => m.userName).join(', ')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-center">
+                      <span className="text-green-600 text-2xl mr-3">✅</span>
+                      <div>
+                        <p className="text-sm font-medium text-green-800">
+                          모든 멤버가 이 시간에 가능합니다!
+                        </p>
+                        <p className="text-xs text-green-700 mt-1">
+                          총 {conflictInfo.totalMembers}명의 멤버 모두 충돌이 없습니다.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 버튼 */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleActualConfirm}
+                  disabled={isConfirming}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-xl text-sm font-bold hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 transition-all"
+                >
+                  {isConfirming ? '확정 중...' : '일정 추가'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

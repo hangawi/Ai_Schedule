@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import GroupChat from '../chat/GroupChat';
 import MemberList from './MemberList';
+import SuggestionModal from '../chat/SuggestionModal';
 import { RoomHeader } from '../tabs/CoordinationTab/components'; // 헤더 재사용
 import { Users, Info } from 'lucide-react';
 
@@ -21,19 +22,21 @@ const ConversationalRoomView = ({
   onMemberScheduleClick
 }) => {
   const [showMembers, setShowMembers] = useState(false); // 모바일에서 멤버 목록 토글
+  const [showSuggestions, setShowSuggestions] = useState(false); // 일정 관리 모달 토글
 
   return (
     <div className="flex flex-col h-full bg-gray-50 relative">
       {/* 헤더 (기존 컴포넌트 재사용) */}
-      <RoomHeader 
-        currentRoom={currentRoom} 
-        user={user} 
-        isOwner={isOwner} 
-        onManageRoom={onManageRoom} 
-        onBackToRoomList={onBackToRoomList} 
-        onLeaveRoom={onLeaveRoom} 
+      <RoomHeader
+        currentRoom={currentRoom}
+        user={user}
+        isOwner={isOwner}
+        onManageRoom={onManageRoom}
+        onBackToRoomList={onBackToRoomList}
+        onLeaveRoom={onLeaveRoom}
         isMobile={isMobile}
         onToggleMembers={() => setShowMembers(!showMembers)} // 추가: 토글 함수 전달
+        onToggleSuggestions={() => setShowSuggestions(!showSuggestions)} // 추가: 일정 관리 토글
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -82,6 +85,14 @@ const ConversationalRoomView = ({
           </div>
         )}
       </div>
+
+      {/* 일정 관리 모달 */}
+      <SuggestionModal
+        isOpen={showSuggestions}
+        onClose={() => setShowSuggestions(false)}
+        roomId={currentRoom._id}
+        isMobile={isMobile}
+      />
     </div>
   );
 };

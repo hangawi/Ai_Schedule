@@ -4,7 +4,7 @@
  * ===================================================================================================
  */
 import React from 'react';
-import { FileText, Settings, Users } from 'lucide-react';
+import { FileText, Settings, Users, Calendar } from 'lucide-react';
 import { translateEnglishDays } from '../../../../utils';
 import { isRoomOwner } from '../../../../utils/coordinationUtils';
 
@@ -22,7 +22,8 @@ const RoomHeader = ({
   onBackToRoomList,
   onLeaveRoom,
   isMobile,
-  onToggleMembers // 추가: 참여자 목록 토글 함수
+  onToggleMembers, // 추가: 참여자 목록 토글 함수
+  onToggleSuggestions // 추가: 일정 관리 모달 토글 함수
 }) => {
   // 대화형 모드인지 확인
   const isConversational = currentRoom?.mode === 'conversational';
@@ -58,15 +59,24 @@ const RoomHeader = ({
             <span>👥 {currentRoom.memberCount || currentRoom.members?.length}명</span>
             
             <div className="ml-auto flex items-center gap-2">
-              <button 
-                onClick={onBackToRoomList} 
+              <button
+                onClick={onBackToRoomList}
                 className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-md font-bold hover:bg-gray-300 transition-colors"
               >
                 목록
               </button>
 
+              {/* 일정 관리 토글 버튼 */}
+              <button
+                onClick={onToggleSuggestions}
+                className="p-1.5 bg-green-50 text-green-600 rounded-md hover:bg-green-100 transition-colors"
+                title="일정 관리"
+              >
+                <Calendar size={16} />
+              </button>
+
               {/* 참여자 목록 토글 버튼 */}
-              <button 
+              <button
                 onClick={onToggleMembers}
                 className="p-1.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors"
                 title="참여자 목록"
@@ -108,7 +118,16 @@ const RoomHeader = ({
           >
             목록으로
           </button>
-          
+
+          {/* 일정 관리 버튼 */}
+          <button
+            onClick={onToggleSuggestions}
+            className="px-3 py-2 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium flex items-center border border-green-200"
+            title="일정 관리"
+          >
+            <Calendar size={16} className="mr-1" /> 일정
+          </button>
+
           {isOwner ? (
             <>
               <button

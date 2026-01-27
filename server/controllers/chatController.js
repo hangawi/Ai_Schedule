@@ -1,6 +1,10 @@
 const ChatMessage = require('../models/ChatMessage');
 const Room = require('../models/room');
+const User = require('../models/user');
+const ScheduleSuggestion = require('../models/ScheduleSuggestion');
+const RejectedSuggestion = require('../models/RejectedSuggestion');
 const aiScheduleService = require('../services/aiScheduleService');
+const preferenceService = require('../services/preferenceService');
 const upload = require('../middleware/upload');
 
 // @desc    Get chat history
@@ -136,6 +140,47 @@ exports.uploadFile = [
   }
 ];
 
+// @desc    Check schedule conflict with member preferences
+// @route   POST /api/chat/:roomId/check-conflict
+// @access  Private
+exports.checkScheduleConflict = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { date, startTime, endTime, summary } = req.body;
+
+    // 필수 필드 검증
+    if (!date || !startTime || !endTime) {
+      return res.status(400).json({ msg: 'Missing required fields: date, startTime, endTime' });
+    }
+
+    // preferenceService를 사용하여 충돌 체크
+    const conflictInfo = await preferenceService.checkTimeConflict(roomId, {
+      date,
+      startTime,
+      endTime,
+      summary
+    });
+
+    // 충돌 메시지 생성
+    const message = preferenceService.generateConflictMessage(conflictInfo);
+
+    // 클라이언트에 충돌 정보 반환
+    res.json({
+      hasConflict: conflictInfo.hasConflict,
+      conflicts: conflictInfo.conflicts,
+      availableMembers: conflictInfo.availableMembers,
+      totalMembers: conflictInfo.totalMembers,
+      conflictCount: conflictInfo.conflictCount,
+      availableCount: conflictInfo.availableCount,
+      message
+    });
+
+  } catch (error) {
+    console.error('❌ [Check Conflict] Error:', error);
+    res.status(500).json({ msg: 'Server error', error: error.message });
+  }
+};
+
 // @desc    Confirm suggested schedule
 // @route   POST /api/chat/:roomId/confirm
 // @access  Private
@@ -268,5 +313,183 @@ exports.markAsRead = async (req, res) => {
   } catch (error) {
     console.error('Mark as read error:', error);
     res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// ===================================================================================================
+// 일정 제안 관리 API
+// ===================================================================================================
+
+// @desc    Get schedule suggestions for a room
+// @route   GET /api/chat/:roomId/suggestions
+// @access  Private
+exports.getSuggestions = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { status } = req.query; // 'future', 'today', 'past', 'all'
+
+    // 모든 제안의 상태 업데이트
+    await ScheduleSuggestion.updateExpiredSuggestions();
+
+    let query = { room: roomId };
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+
+    const suggestions = await ScheduleSuggestion.find(query)
+      .populate('memberResponses.user', 'firstName lastName email')
+      .sort({ date: 1, startTime: 1 });
+
+    res.json(suggestions);
+  } catch (error) {
+    console.error('Get suggestions error:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// @desc    Accept a schedule suggestion
+// @route   POST /api/chat/:roomId/suggestions/:suggestionId/accept
+// @access  Private
+exports.acceptSuggestion = async (req, res) => {
+  try {
+    const { roomId, suggestionId } = req.params;
+    const userId = req.user.id;
+
+    // 1. 제안 조회
+    const suggestion = await ScheduleSuggestion.findById(suggestionId);
+    if (!suggestion) {
+      return res.status(404).json({ msg: 'Suggestion not found' });
+    }
+
+    // 2. 사용자 정보 조회
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ msg: 'User not found' });
+    }
+
+    // 3. 개인 캘린더에 일정 추가 (personalTimes에 추가)
+    const newPersonalTime = {
+      id: user.personalTimes.length > 0
+        ? Math.max(...user.personalTimes.map(pt => pt.id)) + 1
+        : 1,
+      title: `[약속] ${suggestion.summary}`,
+      type: 'event',
+      startTime: suggestion.startTime,
+      endTime: suggestion.endTime,
+      days: [], // 반복 없음
+      isRecurring: false,
+      specificDate: suggestion.date, // 특정 날짜에만
+      color: '#3b82f6', // 파란색
+      location: suggestion.location || '',
+      roomId: roomId
+    };
+
+    user.personalTimes.push(newPersonalTime);
+    await user.save();
+
+    // 4. 제안의 memberResponses 업데이트
+    await suggestion.acceptByUser(userId, newPersonalTime.id);
+
+    // 5. 시스템 메시지 전송
+    const systemMsg = new ChatMessage({
+      room: roomId,
+      sender: userId,
+      content: `✅ ${user.firstName}님이 일정을 수락했습니다: ${suggestion.date} ${suggestion.startTime} ${suggestion.summary}`,
+      type: 'system'
+    });
+    await systemMsg.save();
+    await systemMsg.populate('sender', 'firstName lastName');
+
+    // 6. Socket 이벤트 발송
+    const updatedSuggestion = await ScheduleSuggestion.findById(suggestionId).populate('memberResponses.user', 'firstName lastName email');
+    if (global.io) {
+      global.io.to(`room-${roomId}`).emit('chat-message', systemMsg);
+      global.io.to(`room-${roomId}`).emit('suggestion-updated', {
+        suggestionId,
+        userId,
+        status: 'accepted',
+        memberResponses: updatedSuggestion.memberResponses
+      });
+    }
+
+    res.json({
+      success: true,
+      suggestion: updatedSuggestion
+    });
+
+  } catch (error) {
+    console.error('Accept suggestion error:', error);
+    res.status(500).json({ msg: 'Server error', error: error.message });
+  }
+};
+
+// @desc    Reject a schedule suggestion
+// @route   POST /api/chat/:roomId/suggestions/:suggestionId/reject
+// @access  Private
+exports.rejectSuggestion = async (req, res) => {
+  try {
+    const { roomId, suggestionId } = req.params;
+    const userId = req.user.id;
+
+    // 1. 제안 조회
+    const suggestion = await ScheduleSuggestion.findById(suggestionId);
+    if (!suggestion) {
+      return res.status(404).json({ msg: 'Suggestion not found' });
+    }
+
+    // 2. 사용자 정보 조회
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ msg: 'User not found' });
+    }
+
+    // 3. 제안의 memberResponses 업데이트
+    await suggestion.rejectByUser(userId);
+
+    // 4. RejectedSuggestion에도 기록 (중복 제안 방지)
+    const rejectedSuggestion = new RejectedSuggestion({
+      room: roomId,
+      suggestion: {
+        summary: suggestion.summary,
+        date: suggestion.date,
+        startTime: suggestion.startTime,
+        endTime: suggestion.endTime,
+        location: suggestion.location
+      },
+      rejectedBy: userId,
+      rejectedAt: new Date()
+    });
+    await rejectedSuggestion.save();
+
+    // 5. 시스템 메시지 전송
+    const systemMsg = new ChatMessage({
+      room: roomId,
+      sender: userId,
+      content: `🚫 ${user.firstName}님이 일정을 거절했습니다: ${suggestion.date} ${suggestion.startTime} ${suggestion.summary}`,
+      type: 'system'
+    });
+    await systemMsg.save();
+    await systemMsg.populate('sender', 'firstName lastName');
+
+    // 6. Socket 이벤트 발송
+    const updatedSuggestion = await ScheduleSuggestion.findById(suggestionId).populate('memberResponses.user', 'firstName lastName email');
+    if (global.io) {
+      global.io.to(`room-${roomId}`).emit('chat-message', systemMsg);
+      global.io.to(`room-${roomId}`).emit('suggestion-updated', {
+        suggestionId,
+        userId,
+        status: 'rejected',
+        memberResponses: updatedSuggestion.memberResponses
+      });
+    }
+
+    res.json({
+      success: true,
+      suggestion: updatedSuggestion
+    });
+
+  } catch (error) {
+    console.error('Reject suggestion error:', error);
+    res.status(500).json({ msg: 'Server error', error: error.message });
   }
 };

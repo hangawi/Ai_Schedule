@@ -15,6 +15,9 @@ router.post('/:roomId', chatController.sendMessage);
 // 파일 업로드
 router.post('/:roomId/upload', chatController.uploadFile);
 
+// AI 일정 제안 충돌 체크
+router.post('/:roomId/check-conflict', chatController.checkScheduleConflict);
+
 // AI 일정 제안 확정
 router.post('/:roomId/confirm', chatController.confirmSchedule);
 
@@ -23,5 +26,10 @@ router.post('/:roomId/reject', chatController.rejectSchedule);
 
 // 메시지 읽음 처리
 router.post('/:roomId/read', chatController.markAsRead);
+
+// 일정 제안 관리
+router.get('/:roomId/suggestions', chatController.getSuggestions);
+router.post('/:roomId/suggestions/:suggestionId/accept', chatController.acceptSuggestion);
+router.post('/:roomId/suggestions/:suggestionId/reject', chatController.rejectSuggestion);
 
 module.exports = router;
