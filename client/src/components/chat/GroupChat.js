@@ -1,20 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-import { Send, Calendar, Check, X, Bot, Paperclip, Download, FileText, Image as ImageIcon } from 'lucide-react';
+import { Send, Paperclip, Download, FileText } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
+import SuggestionModal from './SuggestionModal';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
-const GroupChat = ({ roomId, user, isMobile }) => {
+const GroupChat = ({ roomId, user, isMobile, typoCorrection = false }) => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const [suggestion, setSuggestion] = useState(null); // AI 제안 상태
   const [isUploading, setIsUploading] = useState(false); // 파일 업로드 중
-  const [isConfirming, setIsConfirming] = useState(false); // 일정 확정 중
   const [toast, setToast] = useState(null); // 토스트 알림 { message, type }
   const [isUserScrolling, setIsUserScrolling] = useState(false); // 사용자가 스크롤 중인지
-  const [showConfirmModal, setShowConfirmModal] = useState(false); // 확인 모달 표시 여부
-  const [conflictInfo, setConflictInfo] = useState(null); // 충돌 정보
+  const [showSuggestionModal, setShowSuggestionModal] = useState(false); // 일정관리 모달 표시
+  const [isCorrecting, setIsCorrecting] = useState(false); // AI 오타 교정 중
+  const [deleteTarget, setDeleteTarget] = useState(null); // 삭제 대상 메시지
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const socketRef = useRef(null);
@@ -42,16 +42,9 @@ const GroupChat = ({ roomId, user, isMobile }) => {
       scrollToBottom();
     });
 
-    // AI 일정 제안 수신
-    socketRef.current.on('schedule-suggestion', (data) => {
-      console.log('💡 AI Suggestion received:', data);
-      setSuggestion(data); // 제안 카드 표시
-    });
-
-    // 일정 확정 시 새로고침 신호
-    socketRef.current.on('schedule-confirmed-refresh', () => {
-      // 필요 시 상위 컴포넌트에 알림 (일정표 갱신 등)
-      setSuggestion(null); // 제안 카드 닫기
+    // 메시지 삭제 수신
+    socketRef.current.on('message-deleted', ({ messageId }) => {
+      setMessages((prev) => prev.filter(msg => msg._id !== messageId));
     });
 
     return () => {
@@ -99,6 +92,30 @@ const GroupChat = ({ roomId, user, isMobile }) => {
     const isAtBottom = scrollHeight - scrollTop - clientHeight < 50; // 하단 50px 이내
 
     setIsUserScrolling(!isAtBottom);
+  };
+
+  // 메시지 삭제 핸들러
+  const handleDeleteMessage = async (messageId) => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_BASE_URL}/api/chat/${roomId}/message/${messageId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        // 삭제 성공 시 로컬 상태에서 바로 제거
+        setMessages(prev => prev.filter(msg => msg._id !== messageId));
+      } else {
+        const data = await res.json();
+        showToast(data.msg || '삭제에 실패했습니다.', 'error');
+      }
+      setDeleteTarget(null);
+    } catch (error) {
+      console.error('Delete message error:', error);
+      showToast('삭제에 실패했습니다.', 'error');
+      setDeleteTarget(null);
+    }
   };
 
   // 파일 업로드 핸들러
@@ -173,12 +190,6 @@ const GroupChat = ({ roomId, user, isMobile }) => {
     scrollToBottom();
   }, [messages]);
 
-  // AI 제안 카드가 표시될 때 스크롤 하단으로 이동
-  useEffect(() => {
-    if (suggestion) {
-      setTimeout(() => scrollToBottom(true), 100); // 애니메이션 후 스크롤
-    }
-  }, [suggestion]);
 
   // 토스트 자동 닫기
   useEffect(() => {
@@ -200,14 +211,39 @@ const GroupChat = ({ roomId, user, isMobile }) => {
     e.preventDefault();
     if (!input.trim()) return;
 
-    const content = input;
+    let content = input;
     setInput(''); // UI 즉시 반응
 
     try {
       const token = await auth.currentUser?.getIdToken();
+
+      // AI 오타 교정이 활성화된 경우
+      if (typoCorrection) {
+        setIsCorrecting(true);
+        try {
+          const correctionRes = await fetch(`${API_BASE_URL}/api/chat/correct-typo`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({ text: content })
+          });
+          const correctionData = await correctionRes.json();
+          if (correctionData.corrected) {
+            content = correctionData.corrected;
+          }
+        } catch (correctionError) {
+          console.error('Typo correction error:', correctionError);
+          // 오류 시 원본 텍스트 사용
+        } finally {
+          setIsCorrecting(false);
+        }
+      }
+
       await fetch(`${API_BASE_URL}/api/chat/${roomId}`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
@@ -220,108 +256,9 @@ const GroupChat = ({ roomId, user, isMobile }) => {
     }
   };
 
-  // 3. 일정 확정 핸들러 (1단계: 충돌 체크 후 모달 표시)
-  const handleConfirmSchedule = async () => {
-    if (!suggestion || isConfirming) return;
-
-    setIsConfirming(true);
-
-    try {
-      const token = await auth.currentUser?.getIdToken();
-
-      // 먼저 충돌 체크 API 호출
-      const res = await fetch(`${API_BASE_URL}/api/chat/${roomId}/check-conflict`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(suggestion)
-      });
-
-      if (!res.ok) {
-        throw new Error('충돌 체크에 실패했습니다.');
-      }
-
-      const conflictData = await res.json();
-
-      // 충돌 정보를 state에 저장하고 모달 표시
-      setConflictInfo(conflictData);
-      setShowConfirmModal(true);
-
-    } catch (error) {
-      console.error('Conflict check error:', error);
-      showToast('❌ 충돌 체크에 실패했습니다.', 'error');
-    } finally {
-      setIsConfirming(false);
-    }
-  };
-
-  // 4. 실제 일정 확정 핸들러 (2단계: 모달에서 확인 후 실행)
-  const handleActualConfirm = async () => {
-    if (!suggestion || isConfirming) return;
-
-    setIsConfirming(true);
-    setShowConfirmModal(false); // 모달 닫기
-
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      const res = await fetch(`${API_BASE_URL}/api/chat/${roomId}/confirm`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(suggestion)
-      });
-
-      if (!res.ok) {
-        throw new Error('일정 확정에 실패했습니다.');
-      }
-
-      // 성공
-      showToast('✅ 일정이 확정되었습니다!', 'success');
-      setSuggestion(null); // 카드 닫기
-      setConflictInfo(null); // 충돌 정보 초기화
-
-      // 일정 탭 새로고침을 위한 이벤트 발생 (상위 컴포넌트에서 처리 가능)
-      window.dispatchEvent(new CustomEvent('schedule-confirmed'));
-
-    } catch (error) {
-      console.error('Confirm error:', error);
-      showToast('❌ 일정 확정에 실패했습니다.', 'error');
-    } finally {
-      setIsConfirming(false);
-    }
-  };
-
-  // 5. 일정 거절 핸들러
-  const handleRejectSchedule = async () => {
-    if (!suggestion) return;
-
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      const res = await fetch(`${API_BASE_URL}/api/chat/${roomId}/reject`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(suggestion)
-      });
-
-      if (!res.ok) {
-        throw new Error('일정 거절 처리에 실패했습니다.');
-      }
-
-      // 성공
-      showToast('🚫 일정 제안을 거절했습니다.', 'info');
-      setSuggestion(null); // 카드 닫기
-
-    } catch (error) {
-      console.error('Reject error:', error);
-      showToast('❌ 거절 처리에 실패했습니다.', 'error');
-    }
+  // 3. AI 제안 메시지 클릭 시 일정관리 모달 열기
+  const handleOpenSuggestionModal = () => {
+    setShowSuggestionModal(true);
   };
 
   return (
@@ -404,6 +341,18 @@ return (
                 </div>
               )}
 
+              {/* AI 제안 메시지 (클릭 가능) */}
+              {msg.type === 'ai-suggestion' && (
+                <div className="flex justify-center my-2">
+                  <span
+                    onClick={handleOpenSuggestionModal}
+                    className="bg-gray-200 text-gray-600 text-xs py-1 px-3 rounded-full cursor-pointer"
+                  >
+                    {msg.content}
+                  </span>
+                </div>
+              )}
+
               {/* 파일 메시지 */}
               {isFile && !isSystem && (
                   <div className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-2`}>
@@ -425,9 +374,9 @@ return (
                         <img
                           src={fileUrl}
                           alt={fileName}
-                          className="object-cover rounded-lg shadow-md cursor-pointer"
+                          className={`object-cover rounded-lg shadow-md cursor-pointer ${isMe ? 'hover:opacity-80' : ''}`}
                           style={{ width: '150px', height: '150px', minWidth: '150px', minHeight: '150px', maxWidth: '150px', maxHeight: '150px' }}
-                          onClick={() => window.open(fileUrl, '_blank')}
+                          onClick={() => isMe ? setDeleteTarget(msg) : window.open(fileUrl, '_blank')}
                           onError={(e) => {
                           console.error('❌ Image load error:', fileUrl);
                         }}
@@ -449,11 +398,14 @@ return (
                       </div>
                     </div>
                   ) : (
-                    <div className={`rounded-xl shadow-sm relative overflow-hidden ${
-                      isMe
-                        ? 'bg-yellow-300 rounded-tr-none'
-                        : 'bg-white border border-gray-200 rounded-tl-none'
-                    }`}>
+                    <div
+                      onClick={() => isMe && setDeleteTarget(msg)}
+                      className={`rounded-xl shadow-sm relative overflow-hidden ${
+                        isMe
+                          ? 'bg-yellow-300 rounded-tr-none cursor-pointer hover:bg-yellow-400 transition-colors'
+                          : 'bg-white border border-gray-200 rounded-tl-none'
+                      }`}
+                    >
                       {/* 문서 파일 */}
                       <div className="px-3 py-2 flex items-center gap-2 min-w-[200px]">
                         <div className="p-2 bg-gray-100 rounded-lg">
@@ -468,7 +420,10 @@ return (
                           <p className="text-xs text-gray-500">{msg.fileSize || ''}</p>
                         </div>
                         <button
-                          onClick={() => handleFileDownload(fileUrl, fileName)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleFileDownload(fileUrl, fileName);
+                          }}
                           className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
                           title="다운로드"
                         >
@@ -488,7 +443,7 @@ return (
               )}
 
               {/* 일반 텍스트 메시지 */}
-              {!isSystem && !isFile && (
+              {!isSystem && !isFile && msg.type !== 'ai-suggestion' && (
             <div className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-2`}>
               {!isMe && (
                 <div className="flex flex-col items-center mr-2 self-start">
@@ -504,11 +459,14 @@ return (
               <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%]`}>
                 {!isMe && <span className="text-xs text-gray-500 mb-1 ml-1">{msg.sender?.firstName}</span>}
                 <div className={`flex flex-row gap-1 items-end ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                  <div className={`px-3 py-2 rounded-xl shadow-sm relative text-sm break-words ${
-                    isMe
-                      ? 'bg-yellow-300 text-black rounded-tr-none'
-                      : 'bg-white text-black border border-gray-200 rounded-tl-none'
-                  }`}>
+                  <div
+                    onClick={() => isMe && setDeleteTarget(msg)}
+                    className={`px-3 py-2 rounded-xl shadow-sm relative text-sm break-words ${
+                      isMe
+                        ? 'bg-yellow-300 text-black rounded-tr-none cursor-pointer hover:bg-yellow-400 transition-colors'
+                        : 'bg-white text-black border border-gray-200 rounded-tl-none'
+                    }`}
+                  >
                     {msg.content}
                   </div>
                   <span className="text-[10px] text-gray-400 mb-0.5">
@@ -522,8 +480,6 @@ return (
           );
         })}
         
-        {/* AI Suggestion Card (채팅창 하단에 고정되지 않고 흐름 속에 삽입되거나, 오버레이로 뜸) 
-            여기서는 채팅 흐름 하단에 고정된 오버레이로 처리 */}
         <div ref={messagesEndRef} />
       </div>
 
@@ -539,86 +495,6 @@ return (
         </button>
       )}
 
-      {/* AI 일정 제안 팝업 (개선된 UI) */}
-      {suggestion && (
-        <div className="mx-3 md:mx-4 mb-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-2xl shadow-xl p-4 md:p-5 relative overflow-hidden animate-bounce-in">
-          {/* 배경 장식 */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-200 rounded-full blur-3xl opacity-30 -mr-16 -mt-16"></div>
-          <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-200 rounded-full blur-3xl opacity-30 -ml-16 -mb-16"></div>
-
-          {/* 좌측 강조선 */}
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-blue-500 to-indigo-600"></div>
-
-          <div className="relative z-10">
-            <div className="flex justify-between items-start mb-3">
-              <div className="flex items-center space-x-2">
-                <div className="bg-blue-600 p-2 rounded-xl">
-                  <Bot size={20} className="text-white" />
-                </div>
-                <div>
-                  <p className="text-blue-700 font-bold text-sm">AI가 일정을 분석했어요</p>
-                  <p className="text-blue-500 text-xs">아래 일정으로 확정할까요?</p>
-                </div>
-              </div>
-              <button
-                onClick={handleRejectSchedule}
-                className="text-gray-400 hover:text-gray-600 hover:bg-white/50 rounded-full p-1 transition-all"
-                disabled={isConfirming}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="bg-white rounded-xl p-4 mb-4 shadow-sm border border-blue-100">
-              <h3 className="text-xl font-bold text-gray-800 mb-2 flex items-center">
-                📅 {suggestion.summary || '새로운 일정'}
-              </h3>
-              <div className="space-y-2">
-                <div className="flex items-center text-gray-700">
-                  <Calendar size={16} className="mr-2 text-blue-600" />
-                  <span className="font-medium">{suggestion.date}</span>
-                </div>
-                <div className="flex items-center text-gray-700">
-                  <span className="mr-2 text-blue-600">🕐</span>
-                  <span>{suggestion.startTime} ~ {suggestion.endTime}</span>
-                </div>
-                {suggestion.location && (
-                  <div className="flex items-center text-gray-600">
-                    <span className="mr-2">📍</span>
-                    <span>{suggestion.location}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-              <button
-                onClick={handleConfirmSchedule}
-                disabled={isConfirming}
-                className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-2.5 sm:py-3 rounded-xl text-sm font-bold hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 flex items-center justify-center transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
-              >
-                {isConfirming ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                    확정 중...
-                  </>
-                ) : (
-                  <>
-                    <Check size={16} className="mr-1" /> 일정 확정하기
-                  </>
-                )}
-              </button>
-              <button
-                onClick={handleRejectSchedule}
-                disabled={isConfirming}
-                className="flex-1 bg-white text-gray-700 py-2.5 sm:py-3 rounded-xl text-sm font-bold hover:bg-gray-50 disabled:opacity-50 border border-gray-200 transition-all shadow-sm hover:shadow"
-              >
-                다시 논의하기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 토스트 알림 (반응형) */}
       {toast && (
@@ -631,130 +507,44 @@ return (
         </div>
       )}
 
-      {/* 확인 모달 (선호시간 충돌 정보 표시) */}
-      {showConfirmModal && conflictInfo && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto">
-            <div className="p-6">
-              {/* 헤더 */}
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-800">일정 확정 확인</h2>
-                <button
-                  onClick={() => setShowConfirmModal(false)}
-                  className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
-                >
-                  <X size={24} />
-                </button>
-              </div>
+      {/* 일정관리 모달 (SuggestionModal) */}
+      <SuggestionModal
+        isOpen={showSuggestionModal}
+        onClose={() => setShowSuggestionModal(false)}
+        roomId={roomId}
+        socket={socketRef.current}
+        isMobile={isMobile}
+      />
 
-              {/* 일정 정보 */}
-              <div className="bg-blue-50 rounded-xl p-4 mb-4 border border-blue-200">
-                <h3 className="text-lg font-bold text-gray-800 mb-2">
-                  📅 {suggestion?.summary || '새로운 일정'}
-                </h3>
-                <div className="space-y-1 text-sm text-gray-700">
-                  <div className="flex items-center">
-                    <Calendar size={16} className="mr-2 text-blue-600" />
-                    <span>{suggestion?.date}</span>
-                  </div>
-                  <div className="flex items-center">
-                    <span className="mr-2 text-blue-600">🕐</span>
-                    <span>{suggestion?.startTime} ~ {suggestion?.endTime}</span>
-                  </div>
-                  {suggestion?.location && (
-                    <div className="flex items-center">
-                      <span className="mr-2">📍</span>
-                      <span>{suggestion?.location}</span>
-                    </div>
-                  )}
+      {/* 메시지 삭제 확인 모달 */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-5 mx-4 max-w-sm w-full shadow-xl">
+            <h3 className="text-lg font-bold text-gray-800 mb-2">메시지 삭제</h3>
+            <p className="text-sm text-gray-600 mb-4">이 메시지를 삭제하시겠습니까?</p>
+            <div className="bg-gray-100 rounded-lg p-3 mb-4">
+              {deleteTarget.type === 'file' ? (
+                <div className="flex items-center gap-2">
+                  <FileText size={20} className="text-gray-500" />
+                  <p className="text-sm text-gray-700 truncate">{deleteTarget.fileName || '파일'}</p>
                 </div>
-              </div>
-
-              {/* 충돌 정보 */}
-              <div className="mb-6">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">멤버 가능 여부</h3>
-
-                {conflictInfo.hasConflict ? (
-                  <div className="space-y-3">
-                    {/* 경고 메시지 */}
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                      <div className="flex items-start">
-                        <span className="text-yellow-600 mr-2">⚠️</span>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-yellow-800 mb-1">
-                            {conflictInfo.conflictCount}명의 멤버가 이 시간에 이미 다른 약속이 있습니다
-                          </p>
-                          <p className="text-xs text-yellow-700">
-                            충돌이 있어도 일정을 확정할 수 있지만, 멤버들과 다시 상의하는 것을 권장합니다.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 충돌 상세 정보 */}
-                    <div className="space-y-2">
-                      {conflictInfo.conflicts.map((conflict, idx) => (
-                        <div key={idx} className="bg-red-50 border border-red-200 rounded-lg p-3">
-                          <p className="text-sm font-medium text-red-800 mb-1">
-                            👤 {conflict.userName}
-                          </p>
-                          <ul className="text-xs text-red-700 space-y-1 ml-4">
-                            {conflict.reasons.map((reason, ridx) => (
-                              <li key={ridx}>
-                                • {reason.type === 'confirmed' && `${reason.title} (${reason.time}) [확정됨]`}
-                                {reason.type === 'personal' && `${reason.title} (${reason.time})`}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* 가능한 멤버 */}
-                    {conflictInfo.availableCount > 0 && (
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                        <p className="text-sm font-medium text-green-800">
-                          ✅ 가능한 멤버 ({conflictInfo.availableCount}명)
-                        </p>
-                        <p className="text-xs text-green-700 mt-1">
-                          {conflictInfo.availableMembers.map(m => m.userName).join(', ')}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div className="flex items-center">
-                      <span className="text-green-600 text-2xl mr-3">✅</span>
-                      <div>
-                        <p className="text-sm font-medium text-green-800">
-                          모든 멤버가 이 시간에 가능합니다!
-                        </p>
-                        <p className="text-xs text-green-700 mt-1">
-                          총 {conflictInfo.totalMembers}명의 멤버 모두 충돌이 없습니다.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 버튼 */}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowConfirmModal(false)}
-                  className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all"
-                >
-                  취소
-                </button>
-                <button
-                  onClick={handleActualConfirm}
-                  disabled={isConfirming}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-xl text-sm font-bold hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 transition-all"
-                >
-                  {isConfirming ? '확정 중...' : '일정 추가'}
-                </button>
-              </div>
+              ) : (
+                <p className="text-sm text-gray-700 line-clamp-3">{deleteTarget.content}</p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="flex-1 py-2 px-4 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => handleDeleteMessage(deleteTarget._id)}
+                className="flex-1 py-2 px-4 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium"
+              >
+                삭제
+              </button>
             </div>
           </div>
         </div>
@@ -772,7 +562,7 @@ return (
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          disabled={isUploading}
+          disabled={isUploading || isCorrecting}
           className="text-gray-500 hover:text-blue-600 p-2 rounded-full hover:bg-gray-100 disabled:opacity-50 transition-colors"
           title="파일 첨부"
         >
@@ -785,16 +575,21 @@ return (
         <input
           type="text"
           className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
-          placeholder="메시지를 입력하세요..."
+          placeholder={isCorrecting ? "오타 교정 중..." : "메시지를 입력하세요..."}
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          disabled={isCorrecting}
         />
         <button
           type="submit"
-          disabled={!input.trim()}
+          disabled={!input.trim() || isCorrecting}
           className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors"
         >
-          <Send size={20} />
+          {isCorrecting ? (
+            <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+          ) : (
+            <Send size={20} />
+          )}
         </button>
       </form>
     </div>

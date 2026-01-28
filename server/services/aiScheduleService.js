@@ -41,20 +41,29 @@ exports.analyzeConversation = async (roomId) => {
     const sortedMessages = messages.reverse();
 
     // 마지막 메시지가 AI 제안이면 스킵 (중복 분석 방지)
-    if (sortedMessages[sortedMessages.length - 1].type === 'suggestion') {
+    if (sortedMessages[sortedMessages.length - 1].type === 'suggestion' ||
+        sortedMessages[sortedMessages.length - 1].type === 'ai-suggestion') {
       console.log(`ℹ️ [AI Schedule] Skipping - last message is already a suggestion`);
       return;
     }
 
-    // 2. 대화 텍스트 변환
-    const conversationText = sortedMessages.map(m => 
-      `${m.sender.firstName || 'User'}: ${m.content}`
+    // 2. 기존 활성 일정 가져오기
+    const existingSuggestions = await ScheduleSuggestion.find({
+      room: roomId,
+      status: { $in: ['pending', 'future'] }
+    }).populate('suggestedBy', 'firstName lastName').populate('memberResponses.user', 'firstName lastName');
+
+    console.log(`📋 [AI Schedule] Found ${existingSuggestions.length} existing suggestions in room ${roomId}`);
+
+    // 3. 대화 텍스트 변환
+    const conversationText = sortedMessages.map(m =>
+      `${m.sender?.firstName || 'User'}: ${m.content}`
     ).join('\n');
 
-    // 3. Gemini 프롬프트 구성 (개선된 버전 - 별도 파일로 분리)
-    const prompt = generateSchedulePrompt(conversationText, new Date());
+    // 4. Gemini 프롬프트 구성 (기존 일정 정보 포함)
+    const prompt = generateSchedulePrompt(conversationText, new Date(), existingSuggestions);
 
-    // 4. Gemini 호출 (타임아웃 설정)
+    // 5. Gemini 호출
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -74,117 +83,289 @@ exports.analyzeConversation = async (roomId) => {
     } catch (parseError) {
       console.error('❌ [AI Schedule] JSON parse failed:', parseError);
       console.error('AI Response:', text);
-      return; // JSON 파싱 실패 시 조용히 종료
-    }
-
-    // 5. 응답 검증
-    if (!analysisResult || typeof analysisResult.agreed !== 'boolean') {
-      console.error('❌ [AI Schedule] Invalid response structure:', analysisResult);
       return;
     }
 
-    // 6. 일정 합의가 감지되면 추가 검증 후 클라이언트에 제안 전송
-    if (analysisResult.agreed) {
-      // 필수 필드 검증
-      if (!analysisResult.date || !analysisResult.startTime || !analysisResult.summary) {
-        console.error('❌ [AI Schedule] Missing required fields:', analysisResult);
-        return;
-      }
+    // 6. action에 따른 처리
+    const action = analysisResult.action;
+    console.log(`🎯 [AI Schedule] Action: ${action}`);
 
-      // endTime이 없으면 startTime + 1시간으로 자동 생성
-      if (!analysisResult.endTime) {
-        const [hours, minutes] = analysisResult.startTime.split(':').map(Number);
-        const endHours = (hours + 1) % 24;
-        analysisResult.endTime = `${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-        console.log(`ℹ️ [AI Schedule] Auto-generated endTime: ${analysisResult.endTime}`);
-      }
+    if (action === 'none' || action === 'response') {
+      // 아무것도 안 함 또는 기존 일정에 대한 응답
+      console.log(`ℹ️ [AI Schedule] ${action}: ${analysisResult.reason || 'No action needed'}`);
+      return;
+    }
 
-      // 날짜 형식 검증 (YYYY-MM-DD)
-      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (!dateRegex.test(analysisResult.date)) {
-        console.error('❌ [AI Schedule] Invalid date format:', analysisResult.date);
-        return;
-      }
-
-      // 시간 형식 검증 (HH:MM)
-      const timeRegex = /^\d{2}:\d{2}$/;
-      if (!timeRegex.test(analysisResult.startTime) || !timeRegex.test(analysisResult.endTime)) {
-        console.error('❌ [AI Schedule] Invalid time format:', analysisResult);
-        return;
-      }
-
-      // 과거 날짜 검증
-      const proposedDate = new Date(analysisResult.date);
-      const todayDate = new Date();
-      todayDate.setHours(0, 0, 0, 0); // 시간을 00:00:00으로 설정
-      if (proposedDate < todayDate) {
-        console.warn('⚠️ [AI Schedule] Proposed date is in the past:', analysisResult.date);
-        // 과거 날짜는 경고만 하고 진행 (사용자가 과거 일정을 확정할 수도 있음)
-      }
-
-      // 거절 내역 체크 (중복 제안 방지)
-      const isRejected = await RejectedSuggestion.isRejected(roomId, analysisResult);
-      if (isRejected) {
-        console.log(`🚫 [AI Schedule] Suggestion already rejected for room ${roomId}:`, analysisResult);
-        return;
-      }
-
-      console.log(`💡 [AI Schedule] Valid schedule detected for room ${roomId}:`, analysisResult);
-
-      // 7. ScheduleSuggestion DB에 저장
-      const room = await Room.findById(roomId);
-      if (!room) {
-        console.error('❌ [AI Schedule] Room not found:', roomId);
-        return;
-      }
-
-      // 모든 방 멤버를 memberResponses에 추가 (pending 상태)
-      const memberResponses = room.members.map(member => ({
-        user: member.user,
-        status: 'pending',
-        respondedAt: null,
-        personalTimeId: null
-      }));
-
-      // ScheduleSuggestion 생성
-      const suggestion = new ScheduleSuggestion({
-        room: roomId,
-        summary: analysisResult.summary,
-        date: analysisResult.date,
-        startTime: analysisResult.startTime,
-        endTime: analysisResult.endTime,
-        location: analysisResult.location || '',
-        memberResponses,
-        status: 'future',
-        aiResponse: analysisResult
-      });
-
-      await suggestion.save();
-      console.log(`✅ [AI Schedule] Suggestion saved to DB:`, suggestion._id);
-
-      // Socket 이벤트 발송 (제안 ID 포함)
-      if (global.io) {
-        global.io.to(`room-${roomId}`).emit('schedule-suggestion', {
-          ...analysisResult,
-          suggestionId: suggestion._id.toString()
-        });
-      }
-    } else {
-      console.log(`ℹ️ [AI Schedule] No clear agreement detected in room ${roomId}`);
+    if (action === 'new') {
+      // 새 일정 생성
+      await handleNewSchedule(roomId, analysisResult.data, sortedMessages);
+    } else if (action === 'extend') {
+      // 기존 일정 확장
+      await handleExtendSchedule(roomId, analysisResult.targetId, analysisResult.data, sortedMessages);
+    } else if (action === 'cancel') {
+      // 일정 취소
+      await handleCancelSchedule(roomId, analysisResult.targetId, analysisResult.reason, sortedMessages);
     }
 
   } catch (error) {
     console.error('❌ [AI Schedule] Analysis failed:', error);
-
-    // 에러 타입별 상세 로깅
     if (error.message?.includes('API key')) {
       console.error('  → Gemini API key issue. Check GEMINI_API_KEY env variable.');
     } else if (error.message?.includes('quota')) {
       console.error('  → API quota exceeded. Check Gemini API usage.');
-    } else if (error.message?.includes('timeout')) {
-      console.error('  → Request timeout. Gemini API may be slow.');
-    } else {
-      console.error('  → Unexpected error:', error.message);
     }
   }
 };
+
+/**
+ * 새 일정 생성 처리
+ */
+async function handleNewSchedule(roomId, data, sortedMessages) {
+  if (!data || !data.date || !data.startTime || !data.summary) {
+    console.error('❌ [AI Schedule] Missing required fields for new schedule:', data);
+    return;
+  }
+
+  // endTime 자동 생성
+  if (!data.endTime) {
+    data.endTime = calculateEndTime(data.startTime, data.summary);
+  }
+
+  // 날짜/시간 형식 검증
+  if (!validateDateTimeFormat(data)) return;
+
+  // 거절 내역 체크
+  const isRejected = await RejectedSuggestion.isRejected(roomId, data);
+  if (isRejected) {
+    console.log(`🚫 [AI Schedule] Suggestion already rejected for room ${roomId}:`, data);
+    return;
+  }
+
+  console.log(`💡 [AI Schedule] Creating new schedule for room ${roomId}:`, data);
+
+  // 방 정보 가져오기
+  const room = await Room.findById(roomId);
+  if (!room) {
+    console.error('❌ [AI Schedule] Room not found:', roomId);
+    return;
+  }
+
+  // 마지막 메시지 작성자를 제안자로 설정
+  const lastMessage = sortedMessages[sortedMessages.length - 1];
+  const suggestedByUserId = lastMessage?.sender?._id || lastMessage?.sender;
+
+  // 모든 방 멤버를 memberResponses에 추가
+  const memberResponses = room.members.map(member => {
+    const memberId = member.user.toString();
+    const suggesterId = suggestedByUserId?.toString();
+    const isSuggester = memberId === suggesterId;
+    return {
+      user: member.user,
+      status: isSuggester ? 'accepted' : 'pending',
+      respondedAt: isSuggester ? new Date() : null,
+      personalTimeId: null
+    };
+  });
+
+  // ScheduleSuggestion 생성
+  const suggestion = new ScheduleSuggestion({
+    room: roomId,
+    summary: data.summary,
+    date: data.date,
+    startTime: data.startTime,
+    endTime: data.endTime,
+    location: data.location || '',
+    memberResponses,
+    status: 'future',
+    aiResponse: data,
+    suggestedBy: suggestedByUserId
+  });
+
+  await suggestion.save();
+  console.log(`✅ [AI Schedule] New suggestion saved:`, suggestion._id);
+
+  // 시스템 메시지 생성
+  const suggesterName = lastMessage?.sender?.firstName || '사용자';
+  await sendSystemMessage(roomId, suggestedByUserId,
+    `${suggesterName}님이 ${data.date} 일정을 제안하였습니다`,
+    'ai-suggestion', suggestion._id);
+}
+
+/**
+ * 기존 일정 확장 처리
+ */
+async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
+  if (!targetId || !data) {
+    console.error('❌ [AI Schedule] Missing targetId or data for extend');
+    return;
+  }
+
+  const suggestion = await ScheduleSuggestion.findById(targetId);
+  if (!suggestion) {
+    console.error('❌ [AI Schedule] Target suggestion not found:', targetId);
+    return;
+  }
+
+  console.log(`🔄 [AI Schedule] Extending schedule ${targetId}:`, data);
+
+  // 일정 업데이트
+  if (data.summary) suggestion.summary = data.summary;
+  if (data.endTime) suggestion.endTime = data.endTime;
+  if (data.location) suggestion.location = data.location;
+  if (data.startTime) suggestion.startTime = data.startTime;
+
+  await suggestion.save();
+  console.log(`✅ [AI Schedule] Schedule extended:`, suggestion._id);
+
+  // 시스템 메시지
+  const lastMessage = sortedMessages[sortedMessages.length - 1];
+  await sendSystemMessage(roomId, lastMessage?.sender?._id,
+    `일정이 수정되었습니다: ${suggestion.summary}`,
+    'system');
+
+  // Socket 이벤트 발송
+  if (global.io) {
+    global.io.to(`room-${roomId}`).emit('suggestion-updated', {
+      suggestionId: suggestion._id,
+      suggestion: suggestion
+    });
+  }
+}
+
+/**
+ * 일정 취소 처리
+ */
+async function handleCancelSchedule(roomId, targetId, reason, sortedMessages) {
+  if (!targetId) {
+    console.error('❌ [AI Schedule] Missing targetId for cancel');
+    return;
+  }
+
+  const suggestion = await ScheduleSuggestion.findById(targetId).populate('memberResponses.user');
+  if (!suggestion) {
+    console.error('❌ [AI Schedule] Target suggestion not found:', targetId);
+    return;
+  }
+
+  // 제안자 확인
+  const lastMessage = sortedMessages[sortedMessages.length - 1];
+  const requesterId = lastMessage?.sender?._id?.toString() || lastMessage?.sender?.toString();
+  const suggesterId = suggestion.suggestedBy?.toString();
+
+  // 제안자가 아닌 사람이 취소 요청하면 무시
+  if (requesterId !== suggesterId) {
+    console.log(`ℹ️ [AI Schedule] Cancel request from non-suggester, ignoring`);
+    return;
+  }
+
+  // 제안자 제외하고 수락한 사람 수 확인
+  const acceptedOthers = suggestion.memberResponses.filter(r =>
+    r.status === 'accepted' && r.user?._id?.toString() !== suggesterId
+  );
+
+  console.log(`📊 [AI Schedule] Accepted others (excluding suggester): ${acceptedOthers.length}`);
+
+  if (acceptedOthers.length >= 2) {
+    // 2명 이상 수락한 경우: 제안자만 불참 처리
+    console.log(`⚠️ [AI Schedule] 2+ others accepted, only marking suggester as rejected`);
+
+    const suggesterResponse = suggestion.memberResponses.find(
+      r => r.user?._id?.toString() === suggesterId
+    );
+    if (suggesterResponse) {
+      suggesterResponse.status = 'rejected';
+      suggesterResponse.respondedAt = new Date();
+    }
+    await suggestion.save();
+
+    // 시스템 메시지
+    const suggesterName = lastMessage?.sender?.firstName || '제안자';
+    await sendSystemMessage(roomId, lastMessage?.sender?._id,
+      `${suggesterName}님이 일정에서 빠졌습니다. 나머지 인원으로 진행됩니다: ${suggestion.date} ${suggestion.summary}`,
+      'system');
+
+  } else {
+    // 2명 미만 수락: 일정 완전 취소
+    console.log(`🗑️ [AI Schedule] Cancelling schedule completely`);
+
+    suggestion.status = 'cancelled';
+    await suggestion.save();
+
+    // 시스템 메시지
+    const suggesterName = lastMessage?.sender?.firstName || '제안자';
+    await sendSystemMessage(roomId, lastMessage?.sender?._id,
+      `${suggesterName}님이 일정을 취소하였습니다: ${suggestion.date} ${suggestion.summary}`,
+      'system');
+  }
+
+  // Socket 이벤트 발송
+  if (global.io) {
+    global.io.to(`room-${roomId}`).emit('suggestion-updated', {
+      suggestionId: suggestion._id,
+      suggestion: suggestion
+    });
+  }
+}
+
+/**
+ * 시스템 메시지 전송 헬퍼
+ */
+async function sendSystemMessage(roomId, senderId, content, type, suggestionId = null) {
+  const systemMessage = new ChatMessage({
+    room: roomId,
+    sender: senderId,
+    content,
+    type,
+    suggestionId
+  });
+  await systemMessage.save();
+  await systemMessage.populate('sender', 'firstName lastName email');
+
+  if (global.io) {
+    global.io.to(`room-${roomId}`).emit('chat-message', systemMessage);
+  }
+}
+
+/**
+ * endTime 자동 계산
+ */
+function calculateEndTime(startTime, summary) {
+  const summaryLower = (summary || '').toLowerCase();
+  let duration = 1;
+
+  const mealKeywords = ['밥', '저녁', '점심', '아침', '식사', '회식', '술', '맥주', '치킨'];
+  const activityKeywords = ['볼링', '영화', '노래방', '당구', '게임', '카페', '쇼핑', '운동', '헬스', 'pc방', '피시방'];
+
+  const hasMeal = mealKeywords.some(k => summaryLower.includes(k));
+  const hasActivity = activityKeywords.some(k => summaryLower.includes(k));
+
+  if (hasMeal && hasActivity) {
+    duration = 3;
+  } else if (hasMeal || hasActivity) {
+    duration = 2;
+  } else if (summaryLower.includes('회의') || summaryLower.includes('미팅') || summaryLower.includes('스터디')) {
+    duration = 1;
+  }
+
+  const [hours, minutes] = startTime.split(':').map(Number);
+  const endHours = (hours + duration) % 24;
+  return `${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+/**
+ * 날짜/시간 형식 검증
+ */
+function validateDateTimeFormat(data) {
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  const timeRegex = /^\d{2}:\d{2}$/;
+
+  if (!dateRegex.test(data.date)) {
+    console.error('❌ [AI Schedule] Invalid date format:', data.date);
+    return false;
+  }
+  if (!timeRegex.test(data.startTime) || !timeRegex.test(data.endTime)) {
+    console.error('❌ [AI Schedule] Invalid time format:', data);
+    return false;
+  }
+  return true;
+}

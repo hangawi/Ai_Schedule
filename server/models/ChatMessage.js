@@ -17,12 +17,18 @@ const ChatMessageSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['text', 'system', 'suggestion', 'file'], // suggestion: AI 일정 제안, file: 파일 메시지
+    enum: ['text', 'system', 'suggestion', 'file', 'ai-suggestion'], // ai-suggestion: AI 일정 제안 알림 (클릭 가능)
     default: 'text'
   },
   suggestionData: {
     // AI가 제안한 일정 데이터 (날짜, 시간 등)
     type: mongoose.Schema.Types.Mixed,
+    default: null
+  },
+  // AI 제안 메시지와 연결된 ScheduleSuggestion ID
+  suggestionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ScheduleSuggestion',
     default: null
   },
   // 파일 메시지 관련 필드

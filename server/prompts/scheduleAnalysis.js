@@ -5,309 +5,194 @@
  *
  * 설계 철학:
  * - 하드코딩된 규칙 제거, LLM의 자연어 이해 능력에 전적으로 의존
- * - Few-shot learning: 다양한 실제 대화 예시로 패턴 학습
+ * - 기존 일정 상태를 인식하여 중복 생성 방지, 확장, 취소 판단
  * - 한국어 원어민 관점: 한국어 문화와 맥락을 자연스럽게 이해
- * - 컨텍스트만 제공: 오늘 날짜만 알려주고 모든 계산/판단은 LLM이 수행
  */
 
 /**
  * 일정 분석 프롬프트 생성
  * @param {string} conversationText - 분석할 대화 내용
  * @param {Date} currentDate - 현재 날짜
+ * @param {Array} existingSuggestions - 기존 활성 일정 목록
  * @returns {string} Gemini API용 프롬프트
  */
-function generateSchedulePrompt(conversationText, currentDate = new Date()) {
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth() + 1;
-  const date = currentDate.getDate();
-  const dayOfWeek = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'][currentDate.getDay()];
-  const today = currentDate.toISOString().split('T')[0];
+function generateSchedulePrompt(conversationText, currentDate = new Date(), existingSuggestions = []) {
+  // 한국 시간대(KST, UTC+9) 기준으로 날짜 계산
+  const kstDate = new Date(currentDate.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+  const year = kstDate.getFullYear();
+  const month = kstDate.getMonth() + 1;
+  const date = kstDate.getDate();
+  const dayIndex = kstDate.getDay();
+  const dayOfWeek = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'][dayIndex];
+  const today = `${year}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
 
-  return `당신은 한국어 그룹 채팅에서 일정 약속이 성사되었는지를 판단하는 전문 AI입니다.
+  // 이번주와 다음주의 요일별 날짜 계산
+  const formatDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+  // 이번주 날짜들 (일요일부터 토요일까지)
+  const thisWeekDates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(kstDate);
+    d.setDate(kstDate.getDate() - dayIndex + i);
+    thisWeekDates.push(`${dayNames[i]}=${formatDate(d)}`);
+  }
+
+  // 다음주 날짜들
+  const nextWeekDates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(kstDate);
+    d.setDate(kstDate.getDate() - dayIndex + 7 + i);
+    nextWeekDates.push(`${dayNames[i]}=${formatDate(d)}`);
+  }
+
+  // 디버그 로그
+  console.log(`📅 [Prompt] 오늘: ${today} (${dayOfWeek})`);
+  console.log(`📅 [Prompt] 이번주: ${thisWeekDates.join(', ')}`);
+  console.log(`📅 [Prompt] 다음주: ${nextWeekDates.join(', ')}`);
+
+  // 기존 일정 정보 포맷팅
+  let existingSchedulesText = '';
+  if (existingSuggestions && existingSuggestions.length > 0) {
+    existingSchedulesText = `
+## 현재 이 채팅방에 등록된 일정들
+${existingSuggestions.map((s, i) => {
+  const acceptedCount = s.memberResponses?.filter(r => r.status === 'accepted').length || 0;
+  const pendingCount = s.memberResponses?.filter(r => r.status === 'pending').length || 0;
+  return `[일정 ${i + 1}] ID: ${s._id}
+- 내용: ${s.summary}
+- 날짜: ${s.date} ${s.startTime}~${s.endTime}
+- 장소: ${s.location || '미정'}
+- 제안자: ${s.suggestedBy?.firstName || '알 수 없음'}
+- 수락: ${acceptedCount}명 / 대기: ${pendingCount}명`;
+}).join('\n\n')}
+
+**중요**: 위 일정들이 이미 존재합니다. 대화가 이 일정에 대한 것인지 판단하세요.
+`;
+  } else {
+    existingSchedulesText = `
+## 현재 이 채팅방에 등록된 일정
+없음
+`;
+  }
+
+  return `당신은 한국어 그룹 채팅에서 일정 관련 대화를 분석하는 전문 AI입니다.
 
 ## 현재 날짜 및 시간
 오늘은 ${year}년 ${month}월 ${date}일, ${dayOfWeek}입니다. (${today})
 
+## 이번주/다음주 달력
+이번주: ${thisWeekDates.join(', ')}
+다음주: ${nextWeekDates.join(', ')}
+${existingSchedulesText}
 ## 분석할 대화
 ${conversationText}
 
 ## 당신의 임무
-위 대화를 읽고 참여자들이 **구체적인 일정에 합의했는지** 판단하세요.
-한국인이 자연스럽게 대화하듯이, 맥락과 문화를 이해하며 읽으세요.
+위 대화를 읽고 어떤 action을 취해야 하는지 판단하세요.
+대화의 맥락, 기존 일정 상태, 참여자들의 의도를 종합적으로 고려하세요.
 
-## 합의 판단 기준
+## Action 유형
 
-**진짜 합의로 봐야 하는 경우:**
-- 최소 2명 이상 참여 (한 명이 제안하고, 다른 사람이 동의)
-- 긍정 응답 예시: "좋아요", "네", "ㅇㅋ", "ㄱㄱ", "오키", "알겠습니다", "그래", "좋아", "ㄱ" 등
-- 짧은 반응도 OK: "ㅇㅋ", "ㄱㄱ" 같은 답변도 합의로 인정
+### 1. "new" - 새로운 일정 생성
+기존 일정과 관련 없는 **새로운** 약속이 합의되었을 때.
+- 최소 2명 이상 참여 (제안 + 동의)
+- 구체적인 날짜/시간이 합의됨
+- 기존 일정과 다른 새로운 약속
 
-**합의가 아닌 경우:**
-- 한 명만 얘기하고 아무도 대답 안 함
-- 질문만 하고 답이 없음
-- 거절하는 사람이 있음: "힘들 것 같아", "안 될 듯", "못 갈 것 같아"
-- 아직 조율 중: "어때?", "괜찮을까?" 하고 끝남
-- 장난이나 농담
+### 2. "response" - 기존 일정에 대한 응답 (무시)
+기존 일정에 대해 동의/응답하는 것일 때. 새 일정 생성 불필요.
+- "ㅇㅋ", "ㄱㄱ", "나도 갈게" 등 기존 일정에 대한 동의
+- 이미 등록된 일정과 같은 내용을 다시 언급
 
-**판단 요령:**
-대화를 읽었을 때 "아, 이 사람들 약속 잡았구나" 하는 느낌이 드나요?
-그러면 합의입니다. 애매하면 합의 아닙니다.
+### 3. "extend" - 기존 일정 확장/수정
+기존 일정에 **추가 활동**이 합의되었을 때.
+- "밥 먹고 PC방 ㄱ?" → 기존 밥약속에 PC방 추가
+- "그 다음에 노래방 가자" → 기존 일정 뒤에 추가
+- 기존 일정의 시간/장소 변경 합의
+
+### 4. "cancel" - 일정 취소 요청
+제안자가 일정을 취소하려는 의도가 보일 때.
+- "아 미안 일 생겼어", "ㅈㅅ 못 갈 것 같아"
+- "그날 안 될 것 같아 취소하자"
+
+### 5. "none" - 아무 action 없음
+- 아직 합의가 안 됨
+- 단순 잡담
+- 불확실한 상황 ("보고 결정하자", "모르겠어")
+
+## 판단 원칙
+
+1. **기존 일정 우선 확인**: 대화가 기존 일정에 관한 것인지 먼저 판단
+2. **중복 생성 금지**: 같은 내용의 일정을 또 만들지 않음
+3. **맥락 이해**: 한국인이 자연스럽게 대화를 이해하듯이 판단
+4. **불확실하면 none**: 애매하면 action 없음
 
 ## 한국어 시간 표현 이해
 
-한국 사람들은 날짜와 시간을 이렇게 말합니다:
-
-**날짜 표현:**
+**날짜:**
 - "내일" → 오늘 다음날
 - "모레" → 오늘 다음다음날
-- "금요일", "월요일" 등 → 가장 가까운 해당 요일 (이번주에 안 지났으면 이번주, 지났으면 다음주)
-- "이번주 금요일" → 이번 주의 금요일 (아직 안 지난 경우에만 의미 있음)
+- "금요일" → 가장 가까운 금요일
 - "다음주 월요일" → 다음 주의 월요일
-- "1월 15일", "15일" → 구체적인 날짜
 
-**시간 표현과 맥락:**
-한국어에서는 시간을 말할 때 오전/오후를 생략하는 경우가 많습니다.
-맥락으로 판단하세요:
-
-- "6시", "7시" 같은 시간을 말할 때:
-  - "밥", "저녁", "술", "회식"과 함께 → 저녁 시간대 (18시~20시)
-  - "점심"과 함께 → 낮 12~14시
-  - "아침"과 함께 → 아침 6~9시
-  - "회의"와 함께 → 상황에 따라 오전 10시 또는 저녁 6시
-
-- "오전 10시" → 10:00 (명확)
-- "오후 2시" → 14:00 (명확)
-- "낮 12시" → 12:00
-- "저녁 7시" → 19:00
-
-**시간 길이:**
-시작 시간만 말하면 보통 1시간으로 가정하세요.
-"2시부터 4시까지" 처럼 범위를 주면 그대로 사용하세요.
-
-## 예시로 배우기
-
----
-**예시 1: 간단한 합의**
-
-철수: 내일 오후 2시에 회의 어때?
-영희: 좋아요
-민수: 네 괜찮아요
-
-**분석:** 3명 참여. 철수가 제안, 영희와 민수가 동의. 명확한 합의.
-
-오늘이 2026-01-27 (월요일)이면:
-{
-  "agreed": true,
-  "summary": "회의",
-  "date": "2026-01-28",
-  "startTime": "14:00",
-  "endTime": "15:00",
-  "location": ""
-}
-
----
-**예시 2: 줄임말로 합의**
-
-지민: 우리 금요일 밥이나 먹을까? 내가쏜다 금요일 6시 어떻냐
-태형: ㅇㅋ
-정국: 좋아요
-
-**분석:** 3명 참여. "금요일 6시 밥" → 금요일은 가장 가까운 금요일, "6시"+"밥" 맥락으로 저녁 18시.
-
-오늘이 2026-01-27 (화요일)이면:
-{
-  "agreed": true,
-  "summary": "밥약속",
-  "date": "2026-01-31",
-  "startTime": "18:00",
-  "endTime": "19:00",
-  "location": ""
-}
-
-설명: 화요일인데 금요일이라고 했으면 이번주 금요일 (1/31). "6시 밥"은 저녁 식사니까 18:00.
-
----
-**예시 3: 응답 없음 - 합의 아님**
-
-유진: 우리 다음주 화요일 저녁에 만날래?
-(아무도 대답 안 함)
-
-**분석:** 유진 혼자만 말함. 합의 아님.
-
-{
-  "agreed": false
-}
-
----
-**예시 4: 거절 - 합의 아님**
-
-서준: 토요일 오전 10시 운동 어때?
-하윤: 나는 힘들 것 같아 ㅠㅠ
-
-**분석:** 하윤이 거절함. 합의 아님.
-
-{
-  "agreed": false
-}
-
----
-**예시 5: 구체적인 날짜와 장소**
-
-나연: 2월 3일 오후 3시에 강남역 스타벅스에서 만나자
-사나: ㅇㅋ
-모모: ㄱㄱ
-
-**분석:** 3명 참여. 구체적인 날짜, 시간, 장소 모두 제시됨. 합의.
-
-오늘이 2026-01-27이면:
-{
-  "agreed": true,
-  "summary": "미팅",
-  "date": "2026-02-03",
-  "startTime": "15:00",
-  "endTime": "16:00",
-  "location": "강남역 스타벅스"
-}
-
----
-**예시 6: 다음주 월요일**
-
-윤아: 다음주 월요일 오전 10시에 회의실에서 회의
-태연: 좋아요
-서현: 넵
-
-**분석:** "다음주 월요일" = 다음 주의 월요일. 명확한 합의.
-
-오늘이 2026-01-27 (월요일)이면:
-{
-  "agreed": true,
-  "summary": "회의",
-  "date": "2026-02-03",
-  "startTime": "10:00",
-  "endTime": "11:00",
-  "location": "회의실"
-}
-
-설명: 오늘이 월요일인데 "다음주 월요일"이면 7일 후 (2/3).
-
----
-**예시 7: 저녁 약속 시간**
-
-준호: 님들 오랜만에 내일 6시쯤 밥 ㄱㄱ?
-찬열: ㅇㅋ
-카이: ㄱㄱ
-
-**분석:** "내일 6시쯤 밥" → 저녁 식사 약속. "6시 밥"은 한국에서 저녁 6시(18:00)를 의미.
-
-오늘이 2026-01-27이면:
-{
-  "agreed": true,
-  "summary": "밥약속",
-  "date": "2026-01-28",
-  "startTime": "18:00",
-  "endTime": "19:00",
-  "location": ""
-}
-
-설명: "6시 밥"은 저녁 식사 = 18:00. 아침 6시(06:00)나 점심 2시(14:00)가 아님.
-
----
-**예시 8: 아직 조율 중 - 합의 아님**
-
-수지: 이번주 어때?
-현아: 무슨 요일?
-수지: 금요일이나 토요일
-현아: 금요일이 나을 것 같은데
-
-**분석:** 아직 의견 조율 중. 최종 확정 안 됨. 합의 아님.
-
-{
-  "agreed": false
-}
-
----
-**예시 9: 시간 범위 명시**
-
-민호: 목요일 오후 2시부터 4시까지 스터디
-온유: ㅇㅋ
-키: 좋아요
-
-**분석:** 시작/종료 시간 명시됨. 합의.
-
-오늘이 2026-01-27 (화요일)이면:
-{
-  "agreed": true,
-  "summary": "스터디",
-  "date": "2026-01-30",
-  "startTime": "14:00",
-  "endTime": "16:00",
-  "location": ""
-}
-
----
-**예시 10: 다음주 토요일**
-
-예린: 다음주 토요일 오후 2시에 밥약속 어떰?
-신비: 좋아요
-은하: ㅇㅋ
-
-**분석:** "다음주 토요일" = 다음 주의 토요일.
-
-오늘이 2026-01-27 (월요일)이면:
-{
-  "agreed": true,
-  "summary": "밥약속",
-  "date": "2026-02-01",
-  "startTime": "14:00",
-  "endTime": "15:00",
-  "location": ""
-}
-
-설명: 이번주 토요일은 1/31, 다음주 토요일은 2/1.
-
----
+**시간 (맥락 중요):**
+- "6시" + "밥/저녁/술" → 18:00 (저녁)
+- "6시" + "아침" → 06:00
+- "2시" + "점심" → 14:00
+- "오후 3시" → 15:00 (명확)
 
 ## 출력 형식
 
-JSON만 출력하세요. 설명이나 마크다운 불필요.
+JSON만 출력하세요. 설명 불필요.
 
-**합의가 있으면:**
+**새 일정 생성 (action: "new"):**
 {
-  "agreed": true,
-  "summary": "회의",
-  "date": "2026-01-28",
-  "startTime": "14:00",
-  "endTime": "15:00",
-  "location": "강남역"
+  "action": "new",
+  "data": {
+    "summary": "밥약속",
+    "date": "2026-01-28",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "location": ""
+  }
 }
 
-**합의가 없으면:**
+**기존 일정 응답 - 무시 (action: "response"):**
 {
-  "agreed": false
+  "action": "response",
+  "targetId": "기존일정ID",
+  "reason": "기존 밥약속에 대한 동의"
 }
 
-**주의:**
-- summary: 한국어로 간단히 (예: "회의", "밥약속", "미팅", "스터디")
-- date: YYYY-MM-DD 형식
-- startTime, endTime: HH:MM 24시간 형식
-- location: 언급 없으면 빈 문자열 ""
+**기존 일정 확장 (action: "extend"):**
+{
+  "action": "extend",
+  "targetId": "기존일정ID",
+  "data": {
+    "summary": "밥약속 + PC방",
+    "endTime": "21:00",
+    "location": "강남"
+  }
+}
+
+**일정 취소 (action: "cancel"):**
+{
+  "action": "cancel",
+  "targetId": "기존일정ID",
+  "reason": "제안자가 일정 취소 요청"
+}
+
+**아무것도 안 함 (action: "none"):**
+{
+  "action": "none",
+  "reason": "아직 합의 안 됨"
+}
 
 ## 분석 시작
 
-위의 대화를 분석하세요.
-한국인처럼 생각하고, 예시에서 배운 패턴을 적용하세요.
-
-체크리스트:
-1. 2명 이상이 참여해서 누군가 제안하고 다른 사람이 동의했나?
-2. 구체적인 날짜와 시간이 합의되었나?
-3. 시간 표현에 맥락이 있나? (밥=저녁, 점심=낮 등)
-4. 장소가 언급되었나?
-5. 이 일정을 한마디로 뭐라고 부를까? (회의? 밥? 미팅?)
-
-당신은 고급 언어 모델입니다. 자연스럽게 이해하고 판단하세요.
-명확하게 약속이 잡혔다 싶으면 추출하고, 애매하면 agreed: false 하세요.
-
-지금 분석 결과를 JSON으로만 출력:`;
+대화를 분석하고 적절한 action을 JSON으로 출력하세요.
+기존 일정이 있다면 그것과의 관계를 반드시 고려하세요.`;
 }
 
 module.exports = {

@@ -13,7 +13,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Calendar, Clock, MapPin, Users, Check, XCircle } from 'lucide-react';
+import { X, Calendar, Clock, MapPin, Users, Check, XCircle, Trash2 } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 import { io } from 'socket.io-client';
 
@@ -52,10 +52,13 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
 
-  // 현재 사용자 ID 가져오기 (Firebase UID 사용)
+  // 현재 사용자 정보 가져오기 (email로 비교)
   useEffect(() => {
     if (isOpen && auth.currentUser) {
-      setCurrentUser({ _id: auth.currentUser.uid });
+      setCurrentUser({
+        _id: auth.currentUser.uid,
+        email: auth.currentUser.email
+      });
     }
   }, [isOpen]);
 
@@ -96,10 +99,26 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
       });
     };
 
+    const handleSuggestionDeleted = (data) => {
+      console.log('🗑️ Suggestion deleted:', data);
+      // 삭제된 제안을 목록에서 제거
+      setSuggestions((prev) => {
+        const updated = { ...prev };
+        for (const category of ['past', 'today', 'future']) {
+          updated[category] = updated[category].filter(
+            (s) => s._id !== data.suggestionId
+          );
+        }
+        return updated;
+      });
+    };
+
     socket.on('suggestion-updated', handleSuggestionUpdated);
+    socket.on('suggestion-deleted', handleSuggestionDeleted);
 
     return () => {
       socket.off('suggestion-updated', handleSuggestionUpdated);
+      socket.off('suggestion-deleted', handleSuggestionDeleted);
     };
   }, [socket, isOpen]);
 
@@ -179,11 +198,44 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
     }
   };
 
-  // 현재 사용자의 응답 상태 확인
+  const handleDelete = async (suggestionId) => {
+    if (!window.confirm('정말로 이 일정 제안을 삭제하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_BASE_URL}/api/chat/${roomId}/suggestions/${suggestionId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        console.log('🗑️ Deleted suggestion:', suggestionId);
+        // 로컬 상태도 즉시 업데이트
+        fetchSuggestions();
+      } else {
+        const error = await res.json();
+        alert(error.message || '일정 삭제에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('Failed to delete suggestion:', error);
+      alert('일정 삭제 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 현재 사용자가 제안자인지 확인 (email로 비교)
+  const isOwner = (suggestion) => {
+    if (!currentUser?.email || !suggestion.suggestedBy) return false;
+    const suggestedByEmail = suggestion.suggestedBy.email;
+    return suggestedByEmail === currentUser.email;
+  };
+
+  // 현재 사용자의 응답 상태 확인 (email로 비교)
   const getUserResponse = (suggestion) => {
-    if (!currentUser) return null;
+    if (!currentUser?.email) return null;
     return suggestion.memberResponses?.find(
-      (r) => r.user._id === currentUser._id
+      (r) => r.user?.email === currentUser.email
     );
   };
 
@@ -197,30 +249,67 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
     return { total, accepted, rejected, pending };
   };
 
+  // 제안 시간 포맷 함수
+  const formatSuggestionTime = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${month}/${day} ${hours}:${minutes}`;
+  };
+
   // 제안 카드 렌더링
   const renderSuggestion = (suggestion) => {
     const userResponse = getUserResponse(suggestion);
     const stats = getResponseStats(suggestion);
+    const canDelete = isOwner(suggestion);
 
     return (
-      <div key={suggestion._id} className="bg-white border border-gray-200 rounded-lg p-4 mb-3 shadow-sm">
+      <div key={suggestion._id} className="bg-white border border-gray-200 rounded-lg p-4 mb-3 shadow-sm relative">
+        {/* 제안 시간 (오른쪽 상단) */}
+        {suggestion.createdAt && (
+          <div className="absolute top-2 right-3 text-xs text-gray-400">
+            {formatSuggestionTime(suggestion.createdAt)}
+          </div>
+        )}
+
         {/* 제안 정보 */}
         <div className="mb-3">
-          <div className="flex items-start justify-between mb-2">
-            <h3 className="text-lg font-bold text-gray-800">{suggestion.summary}</h3>
-            {userResponse && (
-              <span
-                className={`px-2 py-1 text-xs rounded-full font-medium ${
-                  userResponse.status === 'accepted'
-                    ? 'bg-green-100 text-green-700'
-                    : userResponse.status === 'rejected'
-                    ? 'bg-red-100 text-red-700'
-                    : 'bg-yellow-100 text-yellow-700'
-                }`}
-              >
-                {userResponse.status === 'accepted' ? '참석' : userResponse.status === 'rejected' ? '불참' : '대기중'}
-              </span>
-            )}
+          <div className="flex items-start justify-between mb-2 pr-16">
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-gray-800">{suggestion.summary}</h3>
+              {suggestion.suggestedBy && (
+                <p className="text-xs text-gray-500 mt-0.5">
+                  제안자: {suggestion.suggestedBy.firstName} {suggestion.suggestedBy.lastName}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {userResponse && (
+                <span
+                  className={`px-2 py-1 text-xs rounded-full font-medium ${
+                    userResponse.status === 'accepted'
+                      ? 'bg-green-100 text-green-700'
+                      : userResponse.status === 'rejected'
+                      ? 'bg-red-100 text-red-700'
+                      : 'bg-yellow-100 text-yellow-700'
+                  }`}
+                >
+                  {userResponse.status === 'accepted' ? '참석' : userResponse.status === 'rejected' ? '불참' : '대기중'}
+                </span>
+              )}
+              {canDelete && (
+                <button
+                  onClick={() => handleDelete(suggestion._id)}
+                  className="p-1.5 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                  title="삭제 (제안자만 가능)"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="space-y-1 text-sm text-gray-600">
@@ -292,10 +381,10 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
           </div>
         )}
 
-        {/* 이미 응답한 경우 */}
-        {userResponse?.status !== 'pending' && (
+        {/* 이미 응답한 경우 (userResponse가 있고 pending이 아닐 때만) */}
+        {userResponse && userResponse.status !== 'pending' && (
           <div className="text-center text-sm text-gray-500">
-            {userResponse?.status === 'accepted' ? '✓ 참석으로 응답하셨습니다' : '✗ 불참으로 응답하셨습니다'}
+            {userResponse.status === 'accepted' ? '참석으로 응답하셨습니다' : '불참으로 응답하셨습니다'}
           </div>
         )}
       </div>

@@ -6,11 +6,17 @@ const auth = require('../middleware/auth');
 // 모든 채팅 API는 인증 필요
 router.use(auth);
 
+// AI 오타 교정 (roomId 없는 경로이므로 먼저 정의)
+router.post('/correct-typo', chatController.correctTypo);
+
 // 채팅 내역 조회
 router.get('/:roomId', chatController.getMessages);
 
 // 메시지 전송
 router.post('/:roomId', chatController.sendMessage);
+
+// 메시지 삭제
+router.delete('/:roomId/message/:messageId', chatController.deleteMessage);
 
 // 파일 업로드
 router.post('/:roomId/upload', chatController.uploadFile);
@@ -31,5 +37,6 @@ router.post('/:roomId/read', chatController.markAsRead);
 router.get('/:roomId/suggestions', chatController.getSuggestions);
 router.post('/:roomId/suggestions/:suggestionId/accept', chatController.acceptSuggestion);
 router.post('/:roomId/suggestions/:suggestionId/reject', chatController.rejectSuggestion);
+router.delete('/:roomId/suggestions/:suggestionId', chatController.deleteSuggestion);
 
 module.exports = router;

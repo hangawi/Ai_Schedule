@@ -10,19 +10,33 @@ import { Users, Info } from 'lucide-react';
  * - 기존의 시간표 그리드 대신 채팅창이 메인
  * - 우측(PC) 또는 탭(모바일)에 멤버 목록 및 정보 표시
  */
-const ConversationalRoomView = ({ 
-  currentRoom, 
-  user, 
-  isOwner, 
+const ConversationalRoomView = ({
+  currentRoom,
+  user,
+  isOwner,
   isMobile,
-  onManageRoom, 
-  onBackToRoomList, 
+  onManageRoom,
+  onBackToRoomList,
   onLeaveRoom,
   onMemberClick,
   onMemberScheduleClick
 }) => {
   const [showMembers, setShowMembers] = useState(false); // 모바일에서 멤버 목록 토글
   const [showSuggestions, setShowSuggestions] = useState(false); // 일정 관리 모달 토글
+  const [typoCorrection, setTypoCorrection] = useState(() => {
+    // localStorage에서 상태 복원
+    const saved = localStorage.getItem('typoCorrection');
+    return saved === 'true';
+  });
+
+  // 오타 교정 토글 핸들러
+  const handleToggleTypoCorrection = () => {
+    setTypoCorrection(prev => {
+      const newValue = !prev;
+      localStorage.setItem('typoCorrection', String(newValue));
+      return newValue;
+    });
+  };
 
   return (
     <div className="flex flex-col h-full bg-gray-50 relative">
@@ -35,17 +49,20 @@ const ConversationalRoomView = ({
         onBackToRoomList={onBackToRoomList}
         onLeaveRoom={onLeaveRoom}
         isMobile={isMobile}
-        onToggleMembers={() => setShowMembers(!showMembers)} // 추가: 토글 함수 전달
-        onToggleSuggestions={() => setShowSuggestions(!showSuggestions)} // 추가: 일정 관리 토글
+        onToggleMembers={() => setShowMembers(!showMembers)}
+        onToggleSuggestions={() => setShowSuggestions(!showSuggestions)}
+        typoCorrection={typoCorrection}
+        onToggleTypoCorrection={handleToggleTypoCorrection}
       />
 
       <div className="flex flex-1 overflow-hidden">
         {/* 메인 영역: 그룹 채팅 */}
         <div className="flex-1 flex flex-col relative">
-          <GroupChat 
-            roomId={currentRoom._id} 
-            user={user} 
-            isMobile={isMobile} 
+          <GroupChat
+            roomId={currentRoom._id}
+            user={user}
+            isMobile={isMobile}
+            typoCorrection={typoCorrection}
           />
         </div>
 

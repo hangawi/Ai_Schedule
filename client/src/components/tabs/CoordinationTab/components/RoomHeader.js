@@ -4,7 +4,7 @@
  * ===================================================================================================
  */
 import React from 'react';
-import { FileText, Settings, Users, Calendar } from 'lucide-react';
+import { FileText, Settings, Users, Calendar, List, Sparkles, LogOut } from 'lucide-react';
 import { translateEnglishDays } from '../../../../utils';
 import { isRoomOwner } from '../../../../utils/coordinationUtils';
 
@@ -23,7 +23,9 @@ const RoomHeader = ({
   onLeaveRoom,
   isMobile,
   onToggleMembers, // 추가: 참여자 목록 토글 함수
-  onToggleSuggestions // 추가: 일정 관리 모달 토글 함수
+  onToggleSuggestions, // 추가: 일정 관리 모달 토글 함수
+  typoCorrection, // 추가: AI 오타 교정 ON/OFF 상태
+  onToggleTypoCorrection // 추가: AI 오타 교정 토글 함수
 }) => {
   // 대화형 모드인지 확인
   const isConversational = currentRoom?.mode === 'conversational';
@@ -48,8 +50,8 @@ const RoomHeader = ({
                   <Settings size={18} />
                 </button>
               ) : (
-                <button onClick={onLeaveRoom} className="px-3 py-1.5 text-xs bg-orange-100 text-orange-600 rounded-md font-bold">
-                  나가기
+                <button onClick={onLeaveRoom} className="p-2 text-orange-600 bg-orange-50 rounded-full hover:bg-orange-100" title="방 나가기">
+                  <LogOut size={18} />
                 </button>
               )}
             </div>
@@ -58,15 +60,17 @@ const RoomHeader = ({
             <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-700">CODE: {currentRoom.inviteCode}</span>
             <span>👥 {currentRoom.memberCount || currentRoom.members?.length}명</span>
             
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-1.5">
+              {/* 방 목록 버튼 */}
               <button
                 onClick={onBackToRoomList}
-                className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-md font-bold hover:bg-gray-300 transition-colors"
+                className="p-1.5 bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200 transition-colors"
+                title="방 목록"
               >
-                목록
+                <List size={16} />
               </button>
 
-              {/* 일정 관리 토글 버튼 */}
+              {/* 일정 관리 버튼 */}
               <button
                 onClick={onToggleSuggestions}
                 className="p-1.5 bg-green-50 text-green-600 rounded-md hover:bg-green-100 transition-colors"
@@ -75,13 +79,27 @@ const RoomHeader = ({
                 <Calendar size={16} />
               </button>
 
-              {/* 참여자 목록 토글 버튼 */}
+              {/* 참여자 목록 버튼 */}
               <button
                 onClick={onToggleMembers}
                 className="p-1.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors"
                 title="참여자 목록"
               >
                 <Users size={16} />
+              </button>
+
+              {/* AI 오타 교정 토글 */}
+              <button
+                onClick={onToggleTypoCorrection}
+                className={`p-1.5 rounded-md transition-colors flex items-center gap-1 ${
+                  typoCorrection
+                    ? 'bg-purple-500 text-white'
+                    : 'bg-gray-100 text-gray-400'
+                }`}
+                title={typoCorrection ? 'AI 오타 교정 ON' : 'AI 오타 교정 OFF'}
+              >
+                <Sparkles size={14} />
+                <span className="text-[10px] font-bold">{typoCorrection ? 'ON' : 'OFF'}</span>
               </button>
             </div>
           </div>
@@ -112,11 +130,13 @@ const RoomHeader = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* 방 목록 버튼 */}
           <button
             onClick={onBackToRoomList}
-            className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+            className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+            title="방 목록"
           >
-            목록으로
+            <List size={18} />
           </button>
 
           {/* 일정 관리 버튼 */}
@@ -126,6 +146,20 @@ const RoomHeader = ({
             title="일정 관리"
           >
             <Calendar size={16} className="mr-1" /> 일정
+          </button>
+
+          {/* AI 오타 교정 토글 */}
+          <button
+            onClick={onToggleTypoCorrection}
+            className={`px-3 py-2 text-sm rounded-lg transition-colors font-medium flex items-center gap-1.5 ${
+              typoCorrection
+                ? 'bg-purple-500 text-white'
+                : 'bg-gray-100 text-gray-500 border border-gray-200'
+            }`}
+            title={typoCorrection ? 'AI 오타 교정 ON' : 'AI 오타 교정 OFF'}
+          >
+            <Sparkles size={16} />
+            <span>{typoCorrection ? 'ON' : 'OFF'}</span>
           </button>
 
           {isOwner ? (
@@ -147,9 +181,10 @@ const RoomHeader = ({
           ) : (
             <button
               onClick={onLeaveRoom}
-              className="px-4 py-2 text-sm bg-orange-50 text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors font-medium"
+              className="p-2 bg-orange-50 text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors"
+              title="방 나가기"
             >
-              방 나가기
+              <LogOut size={18} />
             </button>
           )}
         </div>

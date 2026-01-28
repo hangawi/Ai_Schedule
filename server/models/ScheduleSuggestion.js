@@ -83,6 +83,12 @@ const ScheduleSuggestionSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  // 제안을 생성한 사용자 (채팅에서 일정을 처음 언급한 사람)
+  suggestedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
   // 원본 AI 응답 (디버깅용)
   aiResponse: {
     type: mongoose.Schema.Types.Mixed,

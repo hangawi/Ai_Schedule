@@ -6,6 +6,10 @@ const RejectedSuggestion = require('../models/RejectedSuggestion');
 const aiScheduleService = require('../services/aiScheduleService');
 const preferenceService = require('../services/preferenceService');
 const upload = require('../middleware/upload');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+// Gemini AI 인스턴스
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // @desc    Get chat history
 // @route   GET /api/chat/:roomId
@@ -72,6 +76,41 @@ exports.sendMessage = async (req, res) => {
     res.status(201).json(message);
   } catch (error) {
     console.error('Send message error:', error);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+// @desc    Delete a message
+// @route   DELETE /api/chat/:roomId/message/:messageId
+// @access  Private
+exports.deleteMessage = async (req, res) => {
+  try {
+    const { roomId, messageId } = req.params;
+    const userId = req.user.id;
+
+    // 메시지 찾기
+    const message = await ChatMessage.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({ msg: '메시지를 찾을 수 없습니다.' });
+    }
+
+    // 본인 메시지인지 확인
+    if (message.sender.toString() !== userId) {
+      return res.status(403).json({ msg: '본인의 메시지만 삭제할 수 있습니다.' });
+    }
+
+    // 메시지 삭제
+    await ChatMessage.findByIdAndDelete(messageId);
+
+    // 소켓으로 삭제 이벤트 브로드캐스트
+    if (global.io) {
+      global.io.to(`room-${roomId}`).emit('message-deleted', { messageId });
+    }
+
+    res.json({ success: true, messageId });
+  } catch (error) {
+    console.error('Delete message error:', error);
     res.status(500).json({ msg: 'Server error' });
   }
 };
@@ -275,7 +314,7 @@ exports.rejectSchedule = async (req, res) => {
     const systemMsg = new ChatMessage({
       room: roomId,
       sender: userId,
-      content: `🚫 AI 일정 제안을 거절했습니다 (${date} ${startTime} ${summary})`,
+      content: `AI 일정 제안을 거절했습니다`,
       type: 'system'
     });
     await systemMsg.save();
@@ -338,6 +377,7 @@ exports.getSuggestions = async (req, res) => {
 
     const suggestions = await ScheduleSuggestion.find(query)
       .populate('memberResponses.user', 'firstName lastName email')
+      .populate('suggestedBy', 'firstName lastName email')
       .sort({ date: 1, startTime: 1 });
 
     res.json(suggestions);
@@ -394,7 +434,7 @@ exports.acceptSuggestion = async (req, res) => {
     const systemMsg = new ChatMessage({
       room: roomId,
       sender: userId,
-      content: `✅ ${user.firstName}님이 일정을 수락했습니다: ${suggestion.date} ${suggestion.startTime} ${suggestion.summary}`,
+      content: `${user.firstName}님이 일정에 참석했습니다: ${suggestion.date} ${suggestion.startTime} ${suggestion.summary}`,
       type: 'system'
     });
     await systemMsg.save();
@@ -419,6 +459,59 @@ exports.acceptSuggestion = async (req, res) => {
 
   } catch (error) {
     console.error('Accept suggestion error:', error);
+    res.status(500).json({ msg: 'Server error', error: error.message });
+  }
+};
+
+// @desc    Delete a schedule suggestion (only by suggestedBy user)
+// @route   DELETE /api/chat/:roomId/suggestions/:suggestionId
+// @access  Private
+exports.deleteSuggestion = async (req, res) => {
+  try {
+    const { roomId, suggestionId } = req.params;
+    const userId = req.user.id;
+
+    // 1. 제안 조회
+    const suggestion = await ScheduleSuggestion.findById(suggestionId);
+    if (!suggestion) {
+      return res.status(404).json({ msg: 'Suggestion not found' });
+    }
+
+    // 2. 권한 체크: suggestedBy가 현재 사용자인지 확인
+    if (!suggestion.suggestedBy || suggestion.suggestedBy.toString() !== userId) {
+      return res.status(403).json({ msg: '제안을 삭제할 권한이 없습니다. 제안자만 삭제할 수 있습니다.' });
+    }
+
+    // 3. 제안 삭제
+    await ScheduleSuggestion.findByIdAndDelete(suggestionId);
+
+    // 4. 사용자 정보 조회
+    const user = await User.findById(userId);
+
+    // 5. 시스템 메시지 전송
+    const systemMsg = new ChatMessage({
+      room: roomId,
+      sender: userId,
+      content: `${user.firstName}님이 일정 제안을 삭제했습니다: ${suggestion.date} ${suggestion.startTime} ${suggestion.summary}`,
+      type: 'system'
+    });
+    await systemMsg.save();
+    await systemMsg.populate('sender', 'firstName lastName');
+
+    // 6. Socket 이벤트 발송
+    if (global.io) {
+      global.io.to(`room-${roomId}`).emit('chat-message', systemMsg);
+      global.io.to(`room-${roomId}`).emit('suggestion-deleted', {
+        suggestionId
+      });
+    }
+
+    console.log(`🗑️ [Chat] Suggestion deleted for room ${roomId}:`, suggestionId);
+
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('Delete suggestion error:', error);
     res.status(500).json({ msg: 'Server error', error: error.message });
   }
 };
@@ -465,7 +558,7 @@ exports.rejectSuggestion = async (req, res) => {
     const systemMsg = new ChatMessage({
       room: roomId,
       sender: userId,
-      content: `🚫 ${user.firstName}님이 일정을 거절했습니다: ${suggestion.date} ${suggestion.startTime} ${suggestion.summary}`,
+      content: `${user.firstName}님이 일정에 불참했습니다: ${suggestion.date} ${suggestion.startTime} ${suggestion.summary}`,
       type: 'system'
     });
     await systemMsg.save();
@@ -491,5 +584,77 @@ exports.rejectSuggestion = async (req, res) => {
   } catch (error) {
     console.error('Reject suggestion error:', error);
     res.status(500).json({ msg: 'Server error', error: error.message });
+  }
+};
+
+// @desc    AI 오타 교정
+// @route   POST /api/chat/correct-typo
+// @access  Private
+exports.correctTypo = async (req, res) => {
+  try {
+    const { text } = req.body;
+
+    if (!text || !text.trim()) {
+      return res.json({ corrected: text || '' });
+    }
+
+    // 텍스트가 너무 짧거나 이미 정상적이면 그대로 반환
+    if (text.length < 2) {
+      return res.json({ corrected: text });
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    const prompt = `당신은 한국어 채팅 메시지 교정 전문가입니다.
+
+[상황]
+사용자가 모바일이나 PC에서 빠르게 타이핑하다가 오타가 발생한 채팅 메시지를 보냈습니다.
+당신의 역할은 이 메시지에서 사용자가 실제로 무슨 말을 하려고 했는지 의도를 정확히 파악하여 자연스러운 한국어 문장으로 복원하는 것입니다.
+
+[한글 키보드 오타의 특성]
+- 한글은 자음과 모음이 조합되어 글자가 완성되는 구조입니다.
+- 빠르게 타이핑할 때 타이밍이 어긋나면 자음/모음이 분리되거나 순서가 뒤바뀔 수 있습니다.
+- 쌍자음(ㄲ,ㄸ,ㅃ,ㅆ,ㅉ)을 치려다 단자음이 두 번 입력되기도 합니다.
+- Shift 키 타이밍 문제로 의도치 않은 문자가 입력될 수 있습니다.
+- 받침이 다음 글자의 초성으로 넘어가거나, 초성이 이전 글자의 받침으로 붙는 경우도 있습니다.
+
+[판단 원칙]
+1. 분리된 자음/모음들을 조합했을 때 어떤 단어가 되는지 추론하세요.
+2. 문맥상 가장 자연스럽고 일상적인 대화체 표현을 선택하세요.
+3. 한국인이 일상 채팅에서 실제로 쓸 법한 문장인지 검증하세요.
+4. 여러 해석이 가능하다면 대화 상황에서 가장 흔히 쓰이는 표현을 선택하세요.
+
+[유지해야 할 것]
+- ㅋㅋㅋ, ㅎㅎㅎ, ㅠㅠ 등 감정 표현 자음
+- 이모티콘, 이모지
+- 숫자, 영어 단어
+- ?!, ... 등 문장부호
+- 의도적인 줄임말이나 신조어
+
+[출력 규칙]
+- 오직 교정된 문장만 출력하세요.
+- 설명, 따옴표, 부연 없이 결과 텍스트만 반환하세요.
+- 오타가 없다고 판단되면 원문 그대로 반환하세요.
+
+[입력 메시지]
+${text}
+
+[교정된 메시지]`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    let corrected = response.text().trim();
+
+    // 응답이 비어있거나 이상한 경우 원본 반환
+    if (!corrected || corrected.length === 0 || corrected.length > text.length * 3) {
+      corrected = text;
+    }
+
+    res.json({ corrected });
+
+  } catch (error) {
+    console.error('Typo correction error:', error);
+    // 오류 시 원본 텍스트 반환 (사용자 경험 유지)
+    res.json({ corrected: req.body.text || '' });
   }
 };
