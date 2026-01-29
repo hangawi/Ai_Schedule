@@ -75,7 +75,7 @@ const ScheduleSuggestionSchema = new mongoose.Schema({
   // 제안 상태
   status: {
     type: String,
-    enum: ['future', 'today', 'past'],
+    enum: ['future', 'today', 'past', 'cancelled'],
     default: 'future'
   },
   // 제안 생성 시간

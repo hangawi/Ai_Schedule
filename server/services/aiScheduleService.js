@@ -26,10 +26,10 @@ exports.analyzeConversation = async (roomId) => {
     // 분석 시작 시간 기록
     analysisTimestamps.set(roomId, now);
 
-    // 1. 최근 대화 내용 가져오기 (최근 20개)
+    // 1. 최근 대화 내용 가져오기 (최근 5개만 - 가장 최근 맥락 우선)
     const messages = await ChatMessage.find({ room: roomId })
       .sort({ createdAt: -1 })
-      .limit(20)
+      .limit(5)
       .populate('sender', 'firstName lastName');
 
     if (messages.length < 3) {
@@ -55,16 +55,25 @@ exports.analyzeConversation = async (roomId) => {
 
     console.log(`📋 [AI Schedule] Found ${existingSuggestions.length} existing suggestions in room ${roomId}`);
 
-    // 3. 대화 텍스트 변환
-    const conversationText = sortedMessages.map(m =>
+    // 3. 대화 텍스트 변환 (시스템 메시지 제외, 사용자 메시지만)
+    const userMessages = sortedMessages.filter(m => m.type === 'text' || !m.type);
+    const conversationText = userMessages.map(m =>
       `${m.sender?.firstName || 'User'}: ${m.content}`
     ).join('\n');
+
+    console.log(`💬 [AI Schedule] Analyzing ${userMessages.length} user messages (filtered from ${sortedMessages.length} total)`);
+    console.log(`💬 [Conversation Text]:\n${conversationText}\n`);
 
     // 4. Gemini 프롬프트 구성 (기존 일정 정보 포함)
     const prompt = generateSchedulePrompt(conversationText, new Date(), existingSuggestions);
 
     // 5. Gemini 호출
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      generationConfig: {
+        temperature: 0, // 더 결정적인 출력
+      }
+    });
     const result = await model.generateContent(prompt);
     const response = await result.response;
     let text = response.text().trim();
@@ -96,15 +105,18 @@ exports.analyzeConversation = async (roomId) => {
       return;
     }
 
+    // 사용자 메시지만 필터링 (시스템 메시지 제외)
+    const userMessagesForAction = sortedMessages.filter(m => m.type === 'text' || !m.type);
+
     if (action === 'new') {
       // 새 일정 생성
-      await handleNewSchedule(roomId, analysisResult.data, sortedMessages);
+      await handleNewSchedule(roomId, analysisResult.data, userMessagesForAction, existingSuggestions);
     } else if (action === 'extend') {
       // 기존 일정 확장
-      await handleExtendSchedule(roomId, analysisResult.targetId, analysisResult.data, sortedMessages);
+      await handleExtendSchedule(roomId, analysisResult.targetId, analysisResult.data, userMessagesForAction);
     } else if (action === 'cancel') {
       // 일정 취소
-      await handleCancelSchedule(roomId, analysisResult.targetId, analysisResult.reason, sortedMessages);
+      await handleCancelSchedule(roomId, analysisResult.targetId, analysisResult.reason, userMessagesForAction);
     }
 
   } catch (error) {
@@ -120,7 +132,7 @@ exports.analyzeConversation = async (roomId) => {
 /**
  * 새 일정 생성 처리
  */
-async function handleNewSchedule(roomId, data, sortedMessages) {
+async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestions = []) {
   if (!data || !data.date || !data.startTime || !data.summary) {
     console.error('❌ [AI Schedule] Missing required fields for new schedule:', data);
     return;
@@ -133,6 +145,30 @@ async function handleNewSchedule(roomId, data, sortedMessages) {
 
   // 날짜/시간 형식 검증
   if (!validateDateTimeFormat(data)) return;
+
+  // 🆕 기존 일정과 중복 체크
+  const isDuplicate = existingSuggestions.some(existing => {
+    // 같은 날짜인지 확인
+    if (existing.date !== data.date) return false;
+
+    // 시간이 비슷한지 확인 (±1시간)
+    const existingHour = parseInt(existing.startTime.split(':')[0]);
+    const newHour = parseInt(data.startTime.split(':')[0]);
+    const hourDiff = Math.abs(existingHour - newHour);
+
+    // 같은 날짜에 시간이 2시간 이내 차이면 중복으로 간주
+    if (hourDiff <= 2) {
+      console.log(`🔄 [AI Schedule] Duplicate detected - existing: ${existing.date} ${existing.startTime}, new: ${data.date} ${data.startTime}`);
+      return true;
+    }
+
+    return false;
+  });
+
+  if (isDuplicate) {
+    console.log(`🚫 [AI Schedule] Skipping duplicate suggestion for room ${roomId}:`, data);
+    return;
+  }
 
   // 거절 내역 체크
   const isRejected = await RejectedSuggestion.isRejected(roomId, data);
@@ -150,7 +186,7 @@ async function handleNewSchedule(roomId, data, sortedMessages) {
     return;
   }
 
-  // 마지막 메시지 작성자를 제안자로 설정
+  // 마지막 메시지 작성자를 제안자로 설정 (sortedMessages는 이미 userMessages로 필터링됨)
   const lastMessage = sortedMessages[sortedMessages.length - 1];
   const suggestedByUserId = lastMessage?.sender?._id || lastMessage?.sender;
 
@@ -208,6 +244,12 @@ async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
 
   console.log(`🔄 [AI Schedule] Extending schedule ${targetId}:`, data);
 
+  // 변경 전 값 저장
+  const oldStartTime = suggestion.startTime;
+  const oldEndTime = suggestion.endTime;
+  const oldSummary = suggestion.summary;
+  const oldLocation = suggestion.location;
+
   // 일정 업데이트
   if (data.summary) suggestion.summary = data.summary;
   if (data.endTime) suggestion.endTime = data.endTime;
@@ -217,11 +259,30 @@ async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
   await suggestion.save();
   console.log(`✅ [AI Schedule] Schedule extended:`, suggestion._id);
 
-  // 시스템 메시지
+  // 시스템 메시지 생성 (변경 내용에 따라 다르게)
   const lastMessage = sortedMessages[sortedMessages.length - 1];
-  await sendSystemMessage(roomId, lastMessage?.sender?._id,
-    `일정이 수정되었습니다: ${suggestion.summary}`,
-    'system');
+  let systemMessageContent;
+
+  // 시간이 변경된 경우
+  if (data.startTime || data.endTime) {
+    const newStartTime = suggestion.startTime;
+    const newEndTime = suggestion.endTime;
+    systemMessageContent = `일정 시간이 변경되었습니다: ${oldStartTime}~${oldEndTime} → ${newStartTime}~${newEndTime}`;
+  }
+  // 내용이 변경된 경우
+  else if (data.summary) {
+    systemMessageContent = `일정 내용이 변경되었습니다: ${oldSummary} → ${suggestion.summary}`;
+  }
+  // 장소가 변경된 경우
+  else if (data.location) {
+    systemMessageContent = `일정 장소가 변경되었습니다: ${suggestion.summary} (${oldLocation || '미정'} → ${suggestion.location})`;
+  }
+  // 기본
+  else {
+    systemMessageContent = `일정이 수정되었습니다: ${suggestion.summary}`;
+  }
+
+  await sendSystemMessage(roomId, lastMessage?.sender?._id, systemMessageContent, 'system');
 
   // Socket 이벤트 발송
   if (global.io) {

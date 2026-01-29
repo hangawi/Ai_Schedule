@@ -539,6 +539,14 @@ exports.rejectSuggestion = async (req, res) => {
     // 3. 제안의 memberResponses 업데이트
     await suggestion.rejectByUser(userId);
 
+    // 3.5. 전원 불참 체크
+    const allRejected = suggestion.memberResponses.every(r => r.status === 'rejected');
+    if (allRejected) {
+      suggestion.status = 'cancelled';
+      await suggestion.save();
+      console.log(`🗑️ [Chat] All members rejected - suggestion cancelled:`, suggestionId);
+    }
+
     // 4. RejectedSuggestion에도 기록 (중복 제안 방지)
     const rejectedSuggestion = new RejectedSuggestion({
       room: roomId,
@@ -555,10 +563,14 @@ exports.rejectSuggestion = async (req, res) => {
     await rejectedSuggestion.save();
 
     // 5. 시스템 메시지 전송
+    const messageContent = allRejected
+      ? `모든 멤버가 불참하여 일정이 취소되었습니다: ${suggestion.date} ${suggestion.startTime} ${suggestion.summary}`
+      : `${user.firstName}님이 일정에 불참했습니다: ${suggestion.date} ${suggestion.startTime} ${suggestion.summary}`;
+
     const systemMsg = new ChatMessage({
       room: roomId,
       sender: userId,
-      content: `${user.firstName}님이 일정에 불참했습니다: ${suggestion.date} ${suggestion.startTime} ${suggestion.summary}`,
+      content: messageContent,
       type: 'system'
     });
     await systemMsg.save();
