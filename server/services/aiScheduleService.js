@@ -374,6 +374,14 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
       console.log(`⏰ [AI Schedule] Converted endTime 24:00 → 23:59`);
     }
 
+    // memberResponses 먼저 업데이트 (참석자 수 계산을 위해)
+    userResponse.status = 'accepted';
+    userResponse.respondedAt = new Date();
+
+    // 🆕 참석자 수 계산 (accepted 상태인 멤버 수 - 현재 사용자 포함)
+    const acceptedCount = suggestion.memberResponses.filter(r => r.status === 'accepted').length;
+    console.log(`👥 [AI Schedule] Accepted participants: ${acceptedCount}`);
+
     const newPersonalTime = {
       id: user.personalTimes.length > 0
         ? Math.max(...user.personalTimes.map(pt => pt.id)) + 1
@@ -387,16 +395,16 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
       specificDate: suggestion.date,
       color: '#3b82f6',
       location: suggestion.location || '',
-      roomId: roomId
+      roomId: roomId,
+      participants: acceptedCount,  // 🆕 실제 참석자 수
+      suggestionId: suggestion._id.toString()  // 🆕 원본 일정 ID (추후 동기화용)
     };
 
     user.personalTimes.push(newPersonalTime);
     await user.save();
     console.log(`📅 [AI Schedule] Added to user's personal calendar (personalTime id: ${newPersonalTime.id})`);
 
-    // memberResponses 업데이트
-    userResponse.status = 'accepted';
-    userResponse.respondedAt = new Date();
+    // personalTimeId 업데이트
     userResponse.personalTimeId = newPersonalTime.id;
     await suggestion.save();
     console.log(`💾 [AI Schedule] Suggestion saved (accepted)`);

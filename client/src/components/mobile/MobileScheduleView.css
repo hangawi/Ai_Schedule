@@ -353,6 +353,14 @@
    background: linear-gradient(135deg, #10b98105 0%, #10b98110 100%);
 }
 
+/* 🆕 확정된 일정 스타일 (참석자 2명 이상) */
+.event-card.confirmed {
+   border-color: #10b981;
+   border-left-width: 4px;
+   background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 20%, #d1fae5 100%);
+   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+}
+
 /* 오늘 일정 스타일 */
 .event-card.today {
    border-color: #fbbf24;

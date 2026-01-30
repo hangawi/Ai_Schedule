@@ -205,6 +205,23 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
      }
    }, [isAdmin]);
 
+   // 🆕 페이지 새로고침 시 채팅방 복원
+   useEffect(() => {
+     const currentRoomId = localStorage.getItem('currentRoomId');
+     const savedTab = localStorage.getItem('activeTab');
+
+     // 새로고침 시 coordination 탭이고 currentRoomId가 있으면 채팅방 복원
+     if (savedTab === 'coordination' && currentRoomId) {
+       // CoordinationTab이 마운트될 때까지 약간 대기 후 복원 이벤트 발송
+       setTimeout(() => {
+         console.log('🔄 페이지 새로고침 - 채팅방 복원:', currentRoomId);
+         window.dispatchEvent(new CustomEvent('restoreRoom', {
+           detail: { roomId: currentRoomId }
+         }));
+       }, 100);
+     }
+   }, []); // 최초 마운트 시 한 번만 실행
+
    /**
     * enhancedSetActiveTab
     * @description 활성 탭을 변경하고, 브라우저 히스토리에 상태를 저장하는 함수

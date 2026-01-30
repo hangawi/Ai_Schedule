@@ -16,6 +16,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Calendar, Clock, MapPin, Users, Check, XCircle, Trash2 } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 import { io } from 'socket.io-client';
+import ScheduleDetailModal from './ScheduleDetailModal';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -51,6 +52,8 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
   });
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null); // 🆕 사용자 전체 프로필 (주소 포함)
+  const [selectedSuggestion, setSelectedSuggestion] = useState(null); // 🆕 상세 모달용
 
   // 현재 사용자 정보 가져오기 (email로 비교)
   useEffect(() => {
@@ -59,8 +62,30 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
         _id: auth.currentUser.uid,
         email: auth.currentUser.email
       });
+
+      // 🆕 사용자 전체 프로필 가져오기 (주소 포함)
+      fetchUserProfile();
     }
   }, [isOpen]);
+
+  // 🆕 사용자 프로필 가져오기
+  const fetchUserProfile = async () => {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUserProfile(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch user profile:', error);
+    }
+  };
 
   // 제안 목록 불러오기
   useEffect(() => {
@@ -278,7 +303,11 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
         {/* 제안 정보 */}
         <div className="mb-3">
           <div className="flex items-start justify-between mb-2 pr-16">
-            <div className="flex-1">
+            <div
+              className="flex-1 cursor-pointer hover:bg-gray-50 -m-2 p-2 rounded transition-colors"
+              onClick={() => setSelectedSuggestion(suggestion)}
+              title="클릭하여 상세보기"
+            >
               <h3 className="text-lg font-bold text-gray-800">{suggestion.summary}</h3>
               {suggestion.suggestedBy && (
                 <p className="text-xs text-gray-500 mt-0.5">
@@ -320,7 +349,11 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
             </div>
           </div>
 
-          <div className="space-y-1 text-sm text-gray-600">
+          <div
+            className="space-y-1 text-sm text-gray-600 cursor-pointer hover:bg-gray-50 -m-2 p-2 rounded transition-colors"
+            onClick={() => setSelectedSuggestion(suggestion)}
+            title="클릭하여 지도 및 경로 보기"
+          >
             <div className="flex items-center gap-2">
               <Calendar size={14} />
               <span>{suggestion.date}</span>
@@ -329,11 +362,14 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
               <Clock size={14} />
               <span>{suggestion.startTime} ~ {suggestion.endTime}</span>
             </div>
+            <div className="flex items-center gap-2">
+              <MapPin size={14} className={suggestion.location ? 'text-blue-500' : ''} />
+              <span className={suggestion.location ? 'text-blue-600 font-medium' : 'text-gray-400'}>
+                {suggestion.location || '미정'}
+              </span>
+            </div>
             {suggestion.location && (
-              <div className="flex items-center gap-2">
-                <MapPin size={14} />
-                <span>{suggestion.location}</span>
-              </div>
+              <p className="text-xs text-blue-500 ml-5">📍 지도 및 대중교통 경로 보기</p>
             )}
           </div>
         </div>
@@ -465,6 +501,14 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
           )}
         </div>
       </div>
+
+      {/* 🆕 상세 모달 */}
+      <ScheduleDetailModal
+        isOpen={!!selectedSuggestion}
+        onClose={() => setSelectedSuggestion(null)}
+        suggestion={selectedSuggestion}
+        userAddress={userProfile?.address}
+      />
     </div>
   );
 };

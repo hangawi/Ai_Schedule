@@ -10,10 +10,13 @@ import './MobileScheduleView.css';
  * EventCard - 일정 카드 컴포넌트
  */
 const EventCard = ({ event, onClick, isToday, isHighlighted, cardRef }) => {
+   // 🆕 확정 조건: isCoordinated이고 참석자 2명 이상
+   const isConfirmed = event.isCoordinated && event.participants >= 2;
+
    return (
       <div
          ref={cardRef}
-         className={`event-card ${event.isCoordinated ? 'coordinated' : ''} ${isToday ? 'today' : ''} ${isHighlighted ? 'highlight' : ''}`}
+         className={`event-card ${isConfirmed ? 'confirmed' : event.isCoordinated ? 'coordinated' : ''} ${isToday ? 'today' : ''} ${isHighlighted ? 'highlight' : ''}`}
          onClick={() => onClick(event)}
       >
          <div className="event-header">
@@ -152,7 +155,7 @@ const MobileScheduleView = ({ user }) => {
                         date: nextEvent.specificDate,
                         time: pt.startTime, // 이동시간의 시작
                         endTime: nextEvent.endTime, // 수업시간의 종료
-                        participants: 1,
+                        participants: pt.participants || nextEvent.participants || 1,  // 🆕 실제 참석자 수
                         priority: 3,
                         color: nextEvent.color || '#3B82F6',
                         isCoordinated: true,
@@ -163,7 +166,8 @@ const MobileScheduleView = ({ user }) => {
                         transportMode: nextEvent.transportMode || pt.transportMode || null,
                         hasTravelTime: true, // 이동시간 포함 플래그
                         travelStartTime: pt.startTime,
-                        travelEndTime: pt.endTime
+                        travelEndTime: pt.endTime,
+                        suggestionId: pt.suggestionId || nextEvent.suggestionId || null  // 🆕 원본 일정 ID
                      });
 
                      processedIds.add(pt.id);
@@ -176,7 +180,7 @@ const MobileScheduleView = ({ user }) => {
                         date: pt.specificDate,
                         time: pt.startTime,
                         endTime: pt.endTime,
-                        participants: 1,
+                        participants: pt.participants || 1,  // 🆕 실제 참석자 수
                         priority: 3,
                         color: pt.color || '#FFA500',
                         isCoordinated: pt.title && pt.title.includes('-'),
@@ -184,7 +188,8 @@ const MobileScheduleView = ({ user }) => {
                         location: pt.location || null,
                         locationLat: pt.locationLat || null,
                         locationLng: pt.locationLng || null,
-                        transportMode: pt.transportMode || null
+                        transportMode: pt.transportMode || null,
+                        suggestionId: pt.suggestionId || null  // 🆕 원본 일정 ID
                      });
                      processedIds.add(pt.id);
                   }
@@ -196,7 +201,7 @@ const MobileScheduleView = ({ user }) => {
                      date: pt.specificDate,
                      time: pt.startTime,
                      endTime: pt.endTime,
-                     participants: 1,
+                     participants: pt.participants || 1,  // 🆕 DB에서 가져온 실제 참석자 수
                      priority: 3,
                      color: pt.color || '#10B981',
                      isCoordinated: pt.title && pt.title.includes('-'),
@@ -205,7 +210,8 @@ const MobileScheduleView = ({ user }) => {
                      locationLat: pt.locationLat || null,
                      locationLng: pt.locationLng || null,
                      transportMode: pt.transportMode || null,
-                     hasTravelTime: pt.hasTravelTime || false
+                     hasTravelTime: pt.hasTravelTime || false,
+                     suggestionId: pt.suggestionId || null  // 🆕 원본 일정 ID
                   });
                   processedIds.add(pt.id);
                }

@@ -69,8 +69,10 @@ const StatCard = ({ title, value, change, changeType }) => {
  */
 const EventCard = ({ title, time, participants, priority, isCoordinated, roomName }) => {
    const stars = Array.from({ length: 5 }, (_, i) => <Star key={i} size={14} className={i < priority ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'} />);
+   // 🆕 확정 조건: 참석자 2명 이상 (isCoordinated는 확정 여부를 나타냄)
+   const isConfirmed = isCoordinated && participants >= 2;
    return (
-      <div className={`bg-white p-4 rounded-lg shadow-sm border ${isCoordinated ? 'border-green-300' : 'border-gray-200'} hover:shadow-md transition-shadow cursor-pointer`}>
+      <div className={`p-4 rounded-lg shadow-sm border ${isConfirmed ? 'bg-green-50 border-green-300' : 'bg-white border-gray-200'} hover:shadow-md transition-shadow cursor-pointer`}>
          <div className="flex justify-between items-start">
             <div className="flex-1">
                <div className="flex items-center gap-2 mb-1">
