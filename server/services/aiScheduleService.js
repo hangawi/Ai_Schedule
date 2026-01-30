@@ -15,16 +15,8 @@ const analysisTimestamps = new Map();
  */
 exports.analyzeConversation = async (roomId) => {
   try {
-    // 0. 중복 분석 방지 (30초 이내 재분석 방지)
-    const now = Date.now();
-    const lastAnalysis = analysisTimestamps.get(roomId);
-    if (lastAnalysis && now - lastAnalysis < 30000) {
-      console.log(`⏳ [AI Schedule] Skipping analysis for room ${roomId} - analyzed ${Math.floor((now - lastAnalysis) / 1000)}s ago`);
-      return;
-    }
-
-    // 분석 시작 시간 기록
-    analysisTimestamps.set(roomId, now);
+    // 🆕 30초 버퍼 제거 - 모든 메시지를 즉시 분석하여 실시간 응답 가능
+    // (이전: 30초 이내 재분석 방지로 실시간 참석/불참 처리가 불가능했음)
 
     // 1. 최근 대화 내용 가져오기 (최근 5개만 - 가장 최근 맥락 우선)
     const messages = await ChatMessage.find({ room: roomId })
@@ -98,10 +90,16 @@ exports.analyzeConversation = async (roomId) => {
     // 6. action에 따른 처리
     const action = analysisResult.action;
     console.log(`🎯 [AI Schedule] Action: ${action}`);
+    console.log(`📊 [AI Schedule] Analysis result:`, JSON.stringify(analysisResult, null, 2));
 
-    if (action === 'none' || action === 'response') {
-      // 아무것도 안 함 또는 기존 일정에 대한 응답
-      console.log(`ℹ️ [AI Schedule] ${action}: ${analysisResult.reason || 'No action needed'}`);
+    if (action === 'none') {
+      console.log(`ℹ️ [AI Schedule] none: ${analysisResult.reason || 'No action needed'}`);
+      return;
+    }
+
+    if (action === 'response') {
+      // 🆕 자동 참석/불참 처리
+      await handleAutoResponse(roomId, analysisResult, sortedMessages);
       return;
     }
 
@@ -290,6 +288,135 @@ async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
       suggestionId: suggestion._id,
       suggestion: suggestion
     });
+  }
+}
+
+/**
+ * 🆕 자동 참석/불참 처리
+ */
+async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
+  const { targetId, sentiment, reason } = analysisResult;
+
+  console.log(`📥 [AI Schedule] handleAutoResponse called:`, { targetId, sentiment, reason });
+
+  if (!targetId) {
+    console.log(`ℹ️ [AI Schedule] response without targetId: ${reason || 'No action needed'}`);
+    return;
+  }
+
+  const suggestion = await ScheduleSuggestion.findById(targetId).populate('memberResponses.user');
+  if (!suggestion) {
+    console.error('❌ [AI Schedule] Target suggestion not found:', targetId);
+    return;
+  }
+
+  // 마지막 메시지 작성자 확인
+  const lastMessage = sortedMessages[sortedMessages.length - 1];
+  const userId = lastMessage?.sender?._id?.toString() || lastMessage?.sender?.toString();
+
+  if (!userId) {
+    console.error('❌ [AI Schedule] Cannot identify user from last message');
+    return;
+  }
+
+  // 사용자의 응답 찾기
+  const userResponse = suggestion.memberResponses.find(
+    r => r.user?._id?.toString() === userId
+  );
+
+  if (!userResponse) {
+    console.error('❌ [AI Schedule] User not found in memberResponses:', userId);
+    return;
+  }
+
+  // 🆕 이미 응답한 사용자는 재처리 안 함
+  if (userResponse.status !== 'pending') {
+    console.log(`ℹ️ [AI Schedule] User already responded (${userResponse.status}), skipping`);
+    return;
+  }
+
+  // sentiment에 따라 자동 처리
+  if (sentiment === 'accept') {
+    console.log(`✅ [AI Schedule] Auto-accepting for user ${userId}`);
+
+    // 🆕 사용자 개인 캘린더에 일정 추가 (personalTimes)
+    const User = require('../models/user');
+    const user = await User.findById(userId);
+    if (!user) {
+      console.error('❌ [AI Schedule] User not found:', userId);
+      return;
+    }
+
+    // 🆕 24:00을 23:59로 변환 (User 스키마 validation)
+    let endTime = suggestion.endTime;
+    if (endTime === '24:00') {
+      endTime = '23:59';
+      console.log(`⏰ [AI Schedule] Converted endTime 24:00 → 23:59`);
+    }
+
+    const newPersonalTime = {
+      id: user.personalTimes.length > 0
+        ? Math.max(...user.personalTimes.map(pt => pt.id)) + 1
+        : 1,
+      title: `[약속] ${suggestion.summary}`,
+      type: 'event',
+      startTime: suggestion.startTime,
+      endTime: endTime,
+      days: [],
+      isRecurring: false,
+      specificDate: suggestion.date,
+      color: '#3b82f6',
+      location: suggestion.location || '',
+      roomId: roomId
+    };
+
+    user.personalTimes.push(newPersonalTime);
+    await user.save();
+    console.log(`📅 [AI Schedule] Added to user's personal calendar (personalTime id: ${newPersonalTime.id})`);
+
+    // memberResponses 업데이트
+    userResponse.status = 'accepted';
+    userResponse.respondedAt = new Date();
+    userResponse.personalTimeId = newPersonalTime.id;
+    await suggestion.save();
+    console.log(`💾 [AI Schedule] Suggestion saved (accepted)`);
+
+    // 시스템 메시지
+    const userName = lastMessage?.sender?.firstName || '사용자';
+    await sendSystemMessage(roomId, userId,
+      `${userName}님이 일정에 참석합니다: ${suggestion.date} ${suggestion.summary}`,
+      'system');
+    console.log(`📨 [AI Schedule] System message sent (accepted)`);
+
+  } else if (sentiment === 'reject') {
+    console.log(`❌ [AI Schedule] Auto-rejecting for user ${userId}`);
+    userResponse.status = 'rejected';
+    userResponse.respondedAt = new Date();
+    await suggestion.save();
+    console.log(`💾 [AI Schedule] Suggestion saved (rejected)`);
+
+    // 시스템 메시지
+    const userName = lastMessage?.sender?.firstName || '사용자';
+    await sendSystemMessage(roomId, userId,
+      `${userName}님이 일정에 불참합니다: ${suggestion.date} ${suggestion.summary}`,
+      'system');
+    console.log(`📨 [AI Schedule] System message sent (rejected)`);
+
+  } else {
+    // sentiment 없거나 알 수 없는 경우 - 단순 응답으로 처리
+    console.log(`ℹ️ [AI Schedule] response without sentiment: ${reason || 'No action needed'}`);
+    return;
+  }
+
+  // Socket 이벤트 발송
+  if (global.io) {
+    global.io.to(`room-${roomId}`).emit('suggestion-updated', {
+      suggestionId: suggestion._id,
+      suggestion: suggestion
+    });
+    console.log(`📡 [AI Schedule] Socket event 'suggestion-updated' emitted`);
+  } else {
+    console.warn(`⚠️ [AI Schedule] global.io is not available, socket event not sent`);
   }
 }
 

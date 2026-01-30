@@ -40,7 +40,8 @@
       "Bash(cat:*)",
       "Bash(if not exist \"server\\\\prompts\" mkdir \"server\\\\prompts\")",
       "Bash(npx eslint:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(npm test)"
     ]
   }
 }
