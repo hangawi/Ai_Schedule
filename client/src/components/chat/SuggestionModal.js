@@ -294,10 +294,18 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
                       ? 'bg-green-100 text-green-700'
                       : userResponse.status === 'rejected'
                       ? 'bg-red-100 text-red-700'
+                      : activeTab === 'past'
+                      ? 'bg-gray-100 text-gray-600'
                       : 'bg-yellow-100 text-yellow-700'
                   }`}
                 >
-                  {userResponse.status === 'accepted' ? '참석' : userResponse.status === 'rejected' ? '불참' : '대기중'}
+                  {userResponse.status === 'accepted'
+                    ? '참석'
+                    : userResponse.status === 'rejected'
+                    ? '불참'
+                    : activeTab === 'past'
+                    ? '종료됨'
+                    : '대기중'}
                 </span>
               )}
               {canDelete && (

@@ -50,52 +50,41 @@ const MemberItemKakao = ({
 
   return (
     <div
-      className="flex items-center p-3 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer rounded-lg"
+      className="flex items-center px-5 py-3"
       onClick={() => onMemberClick && onMemberClick(memberData._id || memberData.id)}
     >
       {/* 프로필 아바타 */}
-      <div
-        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0 shadow-sm"
-        style={{ backgroundColor: memberColor }}
-      >
-        {initial}
+      <div className="relative flex-shrink-0">
+        <div
+          className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-xl"
+          style={{ backgroundColor: memberColor }}
+        >
+          {initial}
+        </div>
+        {/* 방장 표시 - 프로필 위에 작은 아이콘 */}
+        {memberIsOwner && (
+          <div className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+            <Crown size={12} className="text-white fill-white" />
+          </div>
+        )}
       </div>
 
       {/* 조원 정보 */}
-      <div className="flex-1 ml-3 min-w-0">
+      <div className="flex-1 ml-4 min-w-0">
         <div className="flex items-center gap-2">
-          {/* 이름 */}
-          <span className={`text-base font-medium truncate ${
-            memberIsOwner ? 'text-amber-700' : isCurrentUserMember ? 'text-blue-700' : 'text-gray-900'
-          }`}>
-            {memberName}
-          </span>
-
-          {/* 방장 아이콘 */}
-          {memberIsOwner && (
-            <Crown size={16} className="text-amber-500 fill-amber-500 flex-shrink-0" />
-          )}
-
           {/* 본인 표시 */}
-          {isCurrentUserMember && !memberIsOwner && (
-            <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded flex-shrink-0">
+          {isCurrentUserMember && (
+            <span className="text-sm px-1.5 py-0.5 bg-gray-200 text-gray-700 rounded flex-shrink-0 font-medium">
               나
             </span>
           )}
-        </div>
 
-        {/* 참여일 또는 추가 정보 */}
-        <div className="text-xs text-gray-500 mt-0.5">
-          {new Date(member.joinedAt || new Date()).toLocaleDateString('ko-KR', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          })} 참여
+          {/* 이름 */}
+          <span className="text-base font-normal text-gray-900 truncate">
+            {memberName}
+          </span>
         </div>
       </div>
-
-      {/* 온라인 상태 표시 (옵션) */}
-      <div className="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0 ml-2"></div>
     </div>
   );
 };
@@ -115,9 +104,9 @@ const MemberListKakao = ({
   return (
     <div className="flex flex-col h-full bg-white">
       {/* 헤더 */}
-      <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
-        <h3 className="text-sm font-bold text-gray-700">
-          대화 상대 {memberCount}
+      <div className="px-5 py-4 flex-shrink-0">
+        <h3 className="text-sm font-medium text-gray-600">
+          대화상대 {memberCount}
         </h3>
       </div>
 

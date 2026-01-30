@@ -45,6 +45,8 @@ exports.sendMessage = async (req, res) => {
     const { content, type = 'text' } = req.body;
     const userId = req.user.id;
 
+    console.log(`📨 [Chat] New message - Room: ${roomId}, User: ${userId}, Content: "${content}"`);
+
     // 1. Save Message
     const message = new ChatMessage({
       room: roomId,
@@ -53,6 +55,7 @@ exports.sendMessage = async (req, res) => {
       type
     });
     await message.save();
+    console.log(`✅ [Chat] Message saved: ${message._id}`);
     
     // Update Room's lastMessageAt
     await Room.findByIdAndUpdate(roomId, { lastMessageAt: new Date() });
@@ -63,16 +66,21 @@ exports.sendMessage = async (req, res) => {
     // 2. Broadcast via Socket
     if (global.io) {
       global.io.to(`room-${roomId}`).emit('chat-message', message);
+      console.log(`📡 [Chat] Message broadcast to room-${roomId}`);
+    } else {
+      console.log(`⚠️ [Chat] Socket.io not available, message not broadcast`);
     }
 
     // 3. Trigger AI Analysis (Async - don't wait)
     // Only analyze for text messages
     if (type === 'text') {
+      console.log(`🤖 [Chat] Triggering AI analysis for room ${roomId}`);
       aiScheduleService.analyzeConversation(roomId).catch(err => {
         console.error('AI Analysis Trigger Error:', err);
       });
     }
 
+    console.log(`📤 [Chat] Sending response to client`);
     res.status(201).json(message);
   } catch (error) {
     console.error('Send message error:', error);

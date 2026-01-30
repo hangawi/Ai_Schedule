@@ -47,6 +47,16 @@ exports.analyzeConversation = async (roomId) => {
 
     console.log(`📋 [AI Schedule] Found ${existingSuggestions.length} existing suggestions in room ${roomId}`);
 
+    // 🔍 상세 로그: 기존 일정 목록
+    if (existingSuggestions.length > 0) {
+      console.log('🔍 [AI Schedule] 기존 일정 상세 목록:');
+      existingSuggestions.forEach((s, i) => {
+        console.log(`   [${i + 1}] ID: ${s._id} | 날짜: ${s.date} | 시간: ${s.startTime}~${s.endTime} | 내용: ${s.summary}`);
+      });
+    } else {
+      console.log('🔍 [AI Schedule] 기존 일정 목록: 비어있음');
+    }
+
     // 3. 대화 텍스트 변환 (시스템 메시지 제외, 사용자 메시지만)
     const userMessages = sortedMessages.filter(m => m.type === 'text' || !m.type);
     const conversationText = userMessages.map(m =>
@@ -91,6 +101,16 @@ exports.analyzeConversation = async (roomId) => {
     const action = analysisResult.action;
     console.log(`🎯 [AI Schedule] Action: ${action}`);
     console.log(`📊 [AI Schedule] Analysis result:`, JSON.stringify(analysisResult, null, 2));
+
+    // 🔍 response action인 경우 targetId 검증
+    if (action === 'response' && analysisResult.targetId) {
+      const targetSchedule = existingSuggestions.find(s => s._id.toString() === analysisResult.targetId);
+      if (targetSchedule) {
+        console.log(`✅ [AI Schedule] targetId 검증: ${analysisResult.targetId} (날짜: ${targetSchedule.date}, 내용: ${targetSchedule.summary})`);
+      } else {
+        console.log(`❌ [AI Schedule] targetId 검증 실패: ${analysisResult.targetId} - 기존 일정 목록에 없음!`);
+      }
+    }
 
     if (action === 'none') {
       console.log(`ℹ️ [AI Schedule] none: ${analysisResult.reason || 'No action needed'}`);
