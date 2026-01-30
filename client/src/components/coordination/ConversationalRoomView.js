@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import GroupChat from '../chat/GroupChat';
 import MemberList from './MemberList';
+import MemberListKakao from './MemberListKakao';
 import SuggestionModal from '../chat/SuggestionModal';
 import { RoomHeader } from '../tabs/CoordinationTab/components'; // 헤더 재사용
 import { Users, LogOut, X, Calendar, Sparkles, Settings, FileText } from 'lucide-react';
@@ -100,18 +101,13 @@ const ConversationalRoomView = ({
             </div>
 
             {/* Drawer Content: 조원 목록 */}
-            <div className="flex-1 overflow-y-auto p-4">
-              <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                <Users size={16} />
-                조원 목록
-              </h4>
-              <MemberList
+            <div className="flex-1 overflow-hidden">
+              <MemberListKakao
                 currentRoom={currentRoom}
                 user={user}
                 isOwner={isOwner}
                 onMemberClick={onMemberClick}
                 onMemberScheduleClick={onMemberScheduleClick}
-                isMobile={isMobile}
               />
             </div>
 
