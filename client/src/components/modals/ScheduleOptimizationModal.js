@@ -143,25 +143,12 @@ const ScheduleOptimizationModal = ({
   useChatScroll(chatContainerRef, chatMessages);
 
   // 현재 조합 가져오기
-  console.log('🔍 [ScheduleOptimizationModal] 현재 조합 체크:', {
-    modifiedCombinations,
-    combinationsLength: modifiedCombinations?.length || 0,
-    currentIndex,
-    hasCurrentCombination: !!modifiedCombinations?.[currentIndex]
-  });
-
   if (!modifiedCombinations || modifiedCombinations.length === 0 || currentIndex >= modifiedCombinations.length) {
     console.warn('⚠️ [ScheduleOptimizationModal] 조합 없음 - null 반환');
     return null;
   }
 
   const currentCombination = modifiedCombinations[currentIndex];
-  console.log('✅ [ScheduleOptimizationModal] 현재 조합:', {
-    currentCombination,
-    isArray: Array.isArray(currentCombination),
-    length: currentCombination?.length || 0,
-    firstSchedule: currentCombination?.[0]
-  });
   if (!currentCombination || !Array.isArray(currentCombination)) {
     return null;
   }

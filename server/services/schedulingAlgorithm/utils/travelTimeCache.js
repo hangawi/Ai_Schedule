@@ -53,11 +53,9 @@ class TravelTimeCache {
     // TTL 확인
     if (Date.now() - cached.timestamp > this.TTL) {
       this.cache.delete(key);
-      console.log(`🗑️  [캐시] 만료된 항목 삭제: ${key.substring(0, 50)}...`);
       return null;
     }
 
-    console.log(`✅ [캐시 HIT] ${key.substring(0, 50)}... → ${cached.travelTime}분`);
     return cached.travelTime;
   }
 
@@ -77,7 +75,6 @@ class TravelTimeCache {
       
       const travelTime = this.get(origin, destination, mode);
       if (travelTime !== null) {
-        console.log(`🔄 [캐시 fallback] ${excludeMode}모드 실패 → ${mode}모드 캐시 사용: ${travelTime}분`);
         return travelTime;
       }
     }
@@ -100,7 +97,6 @@ class TravelTimeCache {
       // 가장 오래된 항목 삭제 (FIFO)
       const firstKey = this.cache.keys().next().value;
       this.cache.delete(firstKey);
-      console.log(`🗑️  [캐시] 용량 초과로 가장 오래된 항목 삭제`);
     }
 
     this.cache.set(key, {
@@ -108,7 +104,6 @@ class TravelTimeCache {
       timestamp: Date.now()
     });
 
-    console.log(`💾 [캐시 저장] ${key.substring(0, 50)}... → ${travelTime}분`);
   }
 
   /**
@@ -129,7 +124,6 @@ class TravelTimeCache {
   clear() {
     const size = this.cache.size;
     this.cache.clear();
-    console.log(`🗑️  [캐시] 전체 초기화 (${size}개 항목 삭제)`);
   }
 
   /**
@@ -147,7 +141,6 @@ class TravelTimeCache {
     }
 
     if (deletedCount > 0) {
-      console.log(`🗑️  [캐시] 정리 완료 (${deletedCount}개 만료 항목 삭제)`);
     }
 
     return deletedCount;

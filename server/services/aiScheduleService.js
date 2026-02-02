@@ -25,7 +25,6 @@ exports.analyzeConversation = async (roomId) => {
       .populate('sender', 'firstName lastName');
 
     if (messages.length < 3) {
-      console.log(`ℹ️ [AI Schedule] Not enough messages in room ${roomId} (${messages.length} messages)`);
       return;
     }
 
@@ -35,7 +34,6 @@ exports.analyzeConversation = async (roomId) => {
     // 마지막 메시지가 AI 제안이면 스킵 (중복 분석 방지)
     if (sortedMessages[sortedMessages.length - 1].type === 'suggestion' ||
         sortedMessages[sortedMessages.length - 1].type === 'ai-suggestion') {
-      console.log(`ℹ️ [AI Schedule] Skipping - last message is already a suggestion`);
       return;
     }
 
@@ -45,16 +43,12 @@ exports.analyzeConversation = async (roomId) => {
       status: { $in: ['pending', 'future'] }
     }).populate('suggestedBy', 'firstName lastName').populate('memberResponses.user', 'firstName lastName');
 
-    console.log(`📋 [AI Schedule] Found ${existingSuggestions.length} existing suggestions in room ${roomId}`);
 
     // 🔍 상세 로그: 기존 일정 목록
     if (existingSuggestions.length > 0) {
-      console.log('🔍 [AI Schedule] 기존 일정 상세 목록:');
       existingSuggestions.forEach((s, i) => {
-        console.log(`   [${i + 1}] ID: ${s._id} | 날짜: ${s.date} | 시간: ${s.startTime}~${s.endTime} | 내용: ${s.summary}`);
       });
     } else {
-      console.log('🔍 [AI Schedule] 기존 일정 목록: 비어있음');
     }
 
     // 3. 대화 텍스트 변환 (시스템 메시지 제외, 사용자 메시지만)
@@ -63,8 +57,6 @@ exports.analyzeConversation = async (roomId) => {
       `${m.sender?.firstName || 'User'}: ${m.content}`
     ).join('\n');
 
-    console.log(`💬 [AI Schedule] Analyzing ${userMessages.length} user messages (filtered from ${sortedMessages.length} total)`);
-    console.log(`💬 [Conversation Text]:\n${conversationText}\n`);
 
     // 4. Gemini 프롬프트 구성 (기존 일정 정보 포함)
     const prompt = generateSchedulePrompt(conversationText, new Date(), existingSuggestions);
@@ -99,21 +91,16 @@ exports.analyzeConversation = async (roomId) => {
 
     // 6. action에 따른 처리
     const action = analysisResult.action;
-    console.log(`🎯 [AI Schedule] Action: ${action}`);
-    console.log(`📊 [AI Schedule] Analysis result:`, JSON.stringify(analysisResult, null, 2));
 
     // 🔍 response action인 경우 targetId 검증
     if (action === 'response' && analysisResult.targetId) {
       const targetSchedule = existingSuggestions.find(s => s._id.toString() === analysisResult.targetId);
       if (targetSchedule) {
-        console.log(`✅ [AI Schedule] targetId 검증: ${analysisResult.targetId} (날짜: ${targetSchedule.date}, 내용: ${targetSchedule.summary})`);
       } else {
-        console.log(`❌ [AI Schedule] targetId 검증 실패: ${analysisResult.targetId} - 기존 일정 목록에 없음!`);
       }
     }
 
     if (action === 'none') {
-      console.log(`ℹ️ [AI Schedule] none: ${analysisResult.reason || 'No action needed'}`);
       return;
     }
 
@@ -176,7 +163,6 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
 
     // 같은 날짜에 시간이 2시간 이내 차이면 중복으로 간주
     if (hourDiff <= 2) {
-      console.log(`🔄 [AI Schedule] Duplicate detected - existing: ${existing.date} ${existing.startTime}, new: ${data.date} ${data.startTime}`);
       return true;
     }
 
@@ -184,18 +170,15 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
   });
 
   if (isDuplicate) {
-    console.log(`🚫 [AI Schedule] Skipping duplicate suggestion for room ${roomId}:`, data);
     return;
   }
 
   // 거절 내역 체크
   const isRejected = await RejectedSuggestion.isRejected(roomId, data);
   if (isRejected) {
-    console.log(`🚫 [AI Schedule] Suggestion already rejected for room ${roomId}:`, data);
     return;
   }
 
-  console.log(`💡 [AI Schedule] Creating new schedule for room ${roomId}:`, data);
 
   // 방 정보 가져오기
   const room = await Room.findById(roomId);
@@ -236,7 +219,6 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
   });
 
   await suggestion.save();
-  console.log(`✅ [AI Schedule] New suggestion saved:`, suggestion._id);
 
   // 🆕 제안자(생성자)의 personalTime 생성
   if (suggestedByUserId) {
@@ -276,7 +258,6 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
           suggesterResponse.personalTimeId = newPersonalTime.id;
           await suggestion.save();
         }
-        console.log(`📅 [AI Schedule] Created personalTime for suggester (id: ${newPersonalTime.id})`);
       }
     } catch (err) {
       console.error(`⚠️ [AI Schedule] Failed to create suggester personalTime:`, err.message);
@@ -305,7 +286,6 @@ async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
     return;
   }
 
-  console.log(`🔄 [AI Schedule] Extending schedule ${targetId}:`, data);
 
   // 변경 전 값 저장
   const oldStartTime = suggestion.startTime;
@@ -320,7 +300,6 @@ async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
   if (data.startTime) suggestion.startTime = data.startTime;
 
   await suggestion.save();
-  console.log(`✅ [AI Schedule] Schedule extended:`, suggestion._id);
 
   // 🆕 수락한 모든 사용자의 personalTimes 동기화 (장소, 시간, 제목 등)
   const User = require('../models/user');
@@ -341,7 +320,6 @@ async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
             }
             if (changed) {
               await syncUser.save();
-              console.log(`🔄 [AI Schedule] Synced personalTime for user ${syncUser._id}`);
             }
           }
         }
@@ -391,10 +369,8 @@ async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
 async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
   const { targetId, sentiment, reason } = analysisResult;
 
-  console.log(`📥 [AI Schedule] handleAutoResponse called:`, { targetId, sentiment, reason });
 
   if (!targetId) {
-    console.log(`ℹ️ [AI Schedule] response without targetId: ${reason || 'No action needed'}`);
     return;
   }
 
@@ -425,13 +401,11 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
 
   // 🆕 이미 응답한 사용자는 재처리 안 함
   if (userResponse.status !== 'pending') {
-    console.log(`ℹ️ [AI Schedule] User already responded (${userResponse.status}), skipping`);
     return;
   }
 
   // sentiment에 따라 자동 처리
   if (sentiment === 'accept') {
-    console.log(`✅ [AI Schedule] Auto-accepting for user ${userId}`);
 
     // 🆕 사용자 개인 캘린더에 일정 추가 (personalTimes)
     const User = require('../models/user');
@@ -445,7 +419,6 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
     let endTime = suggestion.endTime;
     if (endTime === '24:00') {
       endTime = '23:59';
-      console.log(`⏰ [AI Schedule] Converted endTime 24:00 → 23:59`);
     }
 
     // memberResponses 먼저 업데이트 (참석자 수 계산을 위해)
@@ -454,7 +427,6 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
 
     // 🆕 참석자 수 계산 (accepted 상태인 멤버 수 - 현재 사용자 포함)
     const acceptedCount = suggestion.memberResponses.filter(r => r.status === 'accepted').length;
-    console.log(`👥 [AI Schedule] Accepted participants: ${acceptedCount}`);
 
     const newPersonalTime = {
       id: user.personalTimes.length > 0
@@ -476,12 +448,10 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
 
     user.personalTimes.push(newPersonalTime);
     await user.save();
-    console.log(`📅 [AI Schedule] Added to user's personal calendar (personalTime id: ${newPersonalTime.id})`);
 
     // personalTimeId 업데이트
     userResponse.personalTimeId = newPersonalTime.id;
     await suggestion.save();
-    console.log(`💾 [AI Schedule] Suggestion saved (accepted)`);
 
     // 🆕 이미 수락한 다른 사용자들의 personalTimes.participants도 최신화
     for (const response of suggestion.memberResponses) {
@@ -493,7 +463,6 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
             if (pt) {
               pt.participants = acceptedCount;
               await otherUser.save();
-              console.log(`🔄 [AI Schedule] Synced participants(${acceptedCount}) for user ${otherUser._id}`);
             }
           }
         } catch (syncErr) {
@@ -507,25 +476,20 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
     await sendSystemMessage(roomId, userId,
       `${userName}님이 일정에 참석합니다: ${suggestion.date} ${suggestion.summary}`,
       'system');
-    console.log(`📨 [AI Schedule] System message sent (accepted)`);
 
   } else if (sentiment === 'reject') {
-    console.log(`❌ [AI Schedule] Auto-rejecting for user ${userId}`);
     userResponse.status = 'rejected';
     userResponse.respondedAt = new Date();
     await suggestion.save();
-    console.log(`💾 [AI Schedule] Suggestion saved (rejected)`);
 
     // 시스템 메시지
     const userName = lastMessage?.sender?.firstName || '사용자';
     await sendSystemMessage(roomId, userId,
       `${userName}님이 일정에 불참합니다: ${suggestion.date} ${suggestion.summary}`,
       'system');
-    console.log(`📨 [AI Schedule] System message sent (rejected)`);
 
   } else {
     // sentiment 없거나 알 수 없는 경우 - 단순 응답으로 처리
-    console.log(`ℹ️ [AI Schedule] response without sentiment: ${reason || 'No action needed'}`);
     return;
   }
 
@@ -535,7 +499,6 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
       suggestionId: suggestion._id,
       suggestion: suggestion
     });
-    console.log(`📡 [AI Schedule] Socket event 'suggestion-updated' emitted`);
   } else {
     console.warn(`⚠️ [AI Schedule] global.io is not available, socket event not sent`);
   }
@@ -563,7 +526,6 @@ async function handleCancelSchedule(roomId, targetId, reason, sortedMessages) {
 
   // 제안자가 아닌 사람이 취소 요청하면 무시
   if (requesterId !== suggesterId) {
-    console.log(`ℹ️ [AI Schedule] Cancel request from non-suggester, ignoring`);
     return;
   }
 
@@ -572,11 +534,9 @@ async function handleCancelSchedule(roomId, targetId, reason, sortedMessages) {
     r.status === 'accepted' && r.user?._id?.toString() !== suggesterId
   );
 
-  console.log(`📊 [AI Schedule] Accepted others (excluding suggester): ${acceptedOthers.length}`);
 
   if (acceptedOthers.length >= 2) {
     // 2명 이상 수락한 경우: 제안자만 불참 처리
-    console.log(`⚠️ [AI Schedule] 2+ others accepted, only marking suggester as rejected`);
 
     const suggesterResponse = suggestion.memberResponses.find(
       r => r.user?._id?.toString() === suggesterId
@@ -595,7 +555,6 @@ async function handleCancelSchedule(roomId, targetId, reason, sortedMessages) {
 
   } else {
     // 2명 미만 수락: 일정 완전 취소
-    console.log(`🗑️ [AI Schedule] Cancelling schedule completely`);
 
     suggestion.status = 'cancelled';
     await suggestion.save();

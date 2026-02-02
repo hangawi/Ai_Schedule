@@ -136,7 +136,6 @@ function splitBlockToAvoidProhibited(totalMinutes, availableSlots, blockedTimes,
 
   // 모든 시간을 배정할 수 있었는지 확인
   if (remainingMinutes > 0) {
-    console.log(`⚠️ [블록 분할 실패] 금지시간을 피하면서 ${totalMinutes}분을 배정할 수 없습니다. (남은 시간: ${remainingMinutes}분)`);
     return []; // 실패
   }
 

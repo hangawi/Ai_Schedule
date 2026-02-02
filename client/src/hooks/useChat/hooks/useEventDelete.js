@@ -73,18 +73,18 @@ export const useEventDelete = (setEventAddedKey) => {
     if (message.includes('선호시간') || message.includes('선호 시간')) {
       deleteOnlyPreferredTime = true;
       if (chatResponse.title) delete chatResponse.title;
-      console.log('🔍 "선호시간 삭제" 감지 → 선호시간만 삭제');
+
     } else if (message.includes('개인일정') || message.includes('개인 일정')) {
       deleteOnlyPersonalTime = true;
       if (chatResponse.title) delete chatResponse.title;
-      console.log('🔍 "개인일정 삭제" 감지 → 개인일정만 삭제');
+
     }
 
     const hasDeleteAllKeyword = DELETE_ALL_KEYWORDS.some(keyword => message.includes(keyword));
 
     if (hasDeleteAllKeyword && !chatResponse.title && !deleteOnlyPreferredTime && !deleteOnlyPersonalTime) {
       chatResponse.title = '전체';
-      console.log('🔍 "전부 삭제" 키워드 감지 → title을 "전체"로 설정');
+
     }
 
     if (!chatResponse.startDateTime && chatResponse.date) {
@@ -216,7 +216,6 @@ export const useEventDelete = (setEventAddedKey) => {
     setEventAddedKey(prevKey => prevKey + 1);
     const deletedTitle = (context.context === 'profile' && context.tabType === 'local') || context.tabType === 'local' ? eventToDelete.title : eventToDelete.summary;
     
-    console.log('✅ [DELETE] 완료 =================');
     return { success: true, message: `${deletedTitle || '일정'}을 삭제했어요!`, data: chatResponse };
   }, [setEventAddedKey]);
 

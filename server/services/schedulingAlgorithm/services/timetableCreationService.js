@@ -16,9 +16,7 @@ const { getMemberPriority } = require('../helpers/memberHelper');
  * @returns {Array} 병합된 스케줄 배열
  */
 const mergeConsecutiveSchedules = (schedules) => {
-  console.log(`🔄 [mergeConsecutiveSchedules] 입력: ${schedules.length}개 스케줄`);
   if (!schedules || schedules.length === 0) {
-    console.log('🔄 [mergeConsecutiveSchedules] 빈 배열 반환');
     return schedules;
   }
 
@@ -28,7 +26,6 @@ const mergeConsecutiveSchedules = (schedules) => {
   schedules.forEach(schedule => {
     // startTime이나 endTime이 없는 스케줄은 건너뛰기
     if (!schedule.startTime || !schedule.endTime) {
-      console.log('⚠️ [병합] startTime 또는 endTime이 없는 스케줄 건너뛰기:', schedule);
       return;
     }
     
@@ -56,7 +53,6 @@ const mergeConsecutiveSchedules = (schedules) => {
     group.sort((a, b) => {
       // 방어 코드: startTime이 없는 경우 처리
       if (!a.startTime || !b.startTime) {
-        console.log('⚠️ [병합 정렬] startTime이 없는 스케줄 발견:', { a, b });
         return 0;
       }
       const timeA = parseInt(a.startTime.replace(':', ''));
@@ -101,11 +97,9 @@ const mergeConsecutiveSchedules = (schedules) => {
     merged.push(current);
   });
 
-  console.log(`🔄 [mergeConsecutiveSchedules] 출력: ${merged.length}개 스케줄 (${schedules.length}개에서 병합)`);
   
   // 병합 전후 비교 로그
   if (schedules.length !== merged.length) {
-    console.log(`   ✅ ${schedules.length - merged.length}개 스케줄이 병합되었습니다!`);
     
     // 병합된 결과 상세 출력 (날짜별로 그룹화하여 표시)
     const mergedByDate = {};
@@ -115,7 +109,6 @@ const mergeConsecutiveSchedules = (schedules) => {
       mergedByDate[key].push(`${s.startTime}~${s.endTime}`);
     });
     
-    console.log('   📋 [병합 후] 스케줄:');
     Object.keys(mergedByDate).sort().forEach(date => {
       console.log(`      ${date}: ${mergedByDate[date].join(', ')}`);
     });
@@ -153,7 +146,6 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
 
   // 타임테이블 생성 로그 (디버깅용)
   const ownerSchedule = owner.user?.defaultSchedule || owner.defaultSchedule || [];
-  console.log('\n🔍 [타임테이블] 생성:', ownerRangeStart.toISOString().split('T')[0], '~', ownerRangeEnd.toISOString().split('T')[0]);
 
   // Step 1: 방장의 가능한 시간대 수집
   const ownerAvailableSlots = createOwnerAvailableSlots(owner, ownerRangeStart, ownerRangeEnd);
@@ -181,7 +173,6 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
     // 개인 시간표(defaultSchedule) 처리
     if (user.defaultSchedule && Array.isArray(user.defaultSchedule)) {
       const validSchedules = filterValidSchedules(user.defaultSchedule);
-      console.log(`   📋 ${memberName}의 선호시간: ${validSchedules.length}개`);
       
 
 
@@ -203,7 +194,6 @@ const createTimetableFromPersonalSchedules = (members, owner, startDate, numWeek
       schedulesToUse.forEach(schedule => {
         const { dayOfWeek, startTime, endTime, specificDate } = schedule;
         const schedulePriority = schedule.priority || priority;
-        console.log(`      ⏰ ${memberName}: dayOfWeek=${dayOfWeek}, ${startTime}-${endTime}, specificDate=${specificDate}`);
 
         // 주말 제외
         if (isWeekendDay(dayOfWeek)) return;

@@ -82,14 +82,9 @@ export const useCoordinationExchange = () => {
 
       const { parsed } = await parseResponse.json();
 
-      console.log('🔍 [useChat] Parsed response:', parsed);
-      console.log('🔍 [useChat] Context pendingRequest:', context.pendingRequest);
-
       // Handle different message types
       if (parsed.type === 'time_change' || parsed.type === 'date_change') {
         // Execute immediately without confirmation
-        console.log(`✅ [useChat] ${parsed.type} detected, executing immediately`);
-        console.log('🚀 [useChat] Executing request:', parsed);
 
         // Call smart-exchange API directly with viewMode info
         const viewMode = getViewMode();

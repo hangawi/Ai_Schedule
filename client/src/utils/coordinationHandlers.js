@@ -279,7 +279,6 @@ export const handleRunAutoSchedule = async (
     
     // ===== warnings 처리 (선호시간 부족 알림) =====
     if (warnings && warnings.length > 0) {
-      console.log('⚠️ [자동배정] warnings 수신:', warnings);
       // warnings를 state에 저장하여 UI 상단에 표시
       setWarnings(warnings);
     } else {
@@ -398,23 +397,14 @@ export const handleRequestWithUpdate = async (
   showAlert
 ) => {
   try {
-    console.log('🔍 [handleRequestWithUpdate] Request type:', request?.type);
-    console.log('🔍 [handleRequestWithUpdate] Request ID:', requestId);
-    console.log('🔍 [handleRequestWithUpdate] Action:', action);
-
     // exchange_request 타입은 별도의 API 사용
     let result;
     if (request?.type === 'exchange_request') {
-      console.log('✅ [handleRequestWithUpdate] Using exchange request API');
       const { coordinationService } = await import('../services/coordinationService');
       result = await coordinationService.respondToExchangeRequest(currentRoom._id, requestId, action);
     } else {
-      console.log('✅ [handleRequestWithUpdate] Using regular request API');
       result = await handleRequest(requestId, action);
     }
-
-    // 🔍 DEBUG: API 응답 확인
-    console.log('🔍 [handleRequestWithUpdate] API response:', result);
 
     showAlert(`요청을 ${action === 'approved' ? '승인' : '거절'}했습니다.`);
 
@@ -497,12 +487,6 @@ export const createChangeRequestData = (slotToChange, currentRoom, user) => {
  */
 export const handleValidateScheduleWithTransportMode = async (currentRoom, transportMode, showAlert, viewMode, currentWeekStartDate) => {
   try {
-    console.log('\n' + '🔍'.repeat(50));
-    console.log('🔍 [handleValidateScheduleWithTransportMode] 스케줄 검증 시작');
-    console.log(`   roomId: ${currentRoom._id}`);
-    console.log(`   transportMode: ${transportMode}`);
-    console.log('🔍'.repeat(50) + '\n');
-
     // 1. API 호출하여 검증 수행
     const response = await coordinationService.validateScheduleWithTransportMode(
       currentRoom._id,
@@ -511,19 +495,14 @@ export const handleValidateScheduleWithTransportMode = async (currentRoom, trans
       currentWeekStartDate
     );
 
-    console.log('✅ [handleValidateScheduleWithTransportMode] 검증 결과:', response);
-
     // 2. 검증 결과 처리
     if (response.success && response.isValid) {
       // 검증 성공
-      console.log('✅ 스케줄이 유효합니다!');
       // 성공 시 알림 표시 (옵션)
       // showAlert(`${transportMode} 모드로 스케줄이 유효합니다.`, 'success');
       return { isValid: true, warnings: [] };
     } else if (response.success && !response.isValid) {
       // 검증 실패 - 경고 표시
-      console.log('⚠️ 스케줄 검증 실패:', response.warnings);
-      
       const warnings = response.warnings || [];
       
       // ✅ 멤버별로 그룹화

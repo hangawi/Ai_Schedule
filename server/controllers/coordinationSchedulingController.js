@@ -1,5 +1,4 @@
 // 조정 스케줄링 컨트롤러 (리팩토링 버전)
-console.log('🚀🚀🚀 coordinationSchedulingController.js 로드됨 - 수정버전 실행중');
 const Room = require('../models/room');
 const User = require('../models/user');
 const ActivityLog = require('../models/ActivityLog');
@@ -56,7 +55,6 @@ const {
 // @route   POST /api/coordination/rooms/:roomId/auto-schedule
 // @access  Private (Room Owner only)
 exports.runAutoSchedule = async (req, res) => {
-  console.log('>>> runAutoSchedule 시작 - 선호시간 체크 적용 버전 <<<');
   try {
     const { roomId } = req.params;
     const { 
@@ -131,7 +129,6 @@ exports.runAutoSchedule = async (req, res) => {
         
         console.log(`
 🔍 [사전체크] ${memberName} 선호시간 계산 시작`);
-        console.log(`  - defaultSchedule 개수: ${(user.defaultSchedule || []).length}`);
         
         let totalPreferredMinutes = 0;
         
@@ -163,24 +160,20 @@ exports.runAutoSchedule = async (req, res) => {
               return s.dayOfWeek === dayOfWeek;
             });
             
-            console.log(`    매칭된 스케줄: ${daySchedules.length}개`);
             
             for (const schedule of daySchedules) {
               const [startHour, startMin] = schedule.startTime.split(':').map(Number);
               const [endHour, endMin] = schedule.endTime.split(':').map(Number);
               const minutes = (endHour * 60 + endMin) - (startHour * 60 + startMin);
               weekPreferredMinutes += minutes;
-              console.log(`      ${schedule.startTime}-${schedule.endTime}: ${minutes}분 추가 (priority=${schedule.priority})`);
             }
           }
           
-          console.log(`  [${weekIndex + 1}주차] 선호시간 합계: ${weekPreferredMinutes}분 (필요: ${requiredMinutesPerWeek}분)`);
           
           totalPreferredMinutes += weekPreferredMinutes;
           
           // 이번 주 선호시간이 부족하면 기록하고 중단
           if (weekPreferredMinutes < requiredMinutesPerWeek) {
-            console.log(`    ⚠️ 부족! (부족분: ${requiredMinutesPerWeek - weekPreferredMinutes}분)`);
             break; // 한 주라도 부족하면 중단 (하지만 totalPreferredMinutes는 유지)
           }
         }
@@ -198,7 +191,6 @@ exports.runAutoSchedule = async (req, res) => {
 
       // 부족한 멤버가 있으면 확인 요청 응답
       if (insufficientMembers.length > 0) {
-        console.log('⚠️ 선호시간 부족한 멤버 발견:', insufficientMembers);
         return res.status(200).json({
           needsConfirmation: true,
           insufficientMembers,
@@ -233,7 +225,6 @@ exports.runAutoSchedule = async (req, res) => {
     );
 
     if (preferenceWarnings.length > 0) {
-      console.log(`⚠️  [경고] ${preferenceWarnings.length}개 주차에서 선호시간 부족:`);
       preferenceWarnings.forEach(w => {
         console.log(`   - ${w.message}`);
       });
@@ -381,7 +372,6 @@ exports.runAutoSchedule = async (req, res) => {
     const autoConfirmDurationMinutes = room.autoConfirmDuration || 5;
     const autoConfirmDelay = autoConfirmDurationMinutes * 60 * 1000;
     room.autoConfirmAt = new Date(Date.now() + autoConfirmDelay);
-    console.log(`⏰ [자동배정] 자동 확정 타이머 설정: ${autoConfirmDurationMinutes}분 후`);
 
     // 자동배정은 항상 normal 모드로 실행
     room.currentTravelMode = 'normal';
@@ -942,11 +932,6 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
       }
       
       // 방장의 이동시간 슬롯 추가
-      console.log('🔍 [방장 이동시간 처리 시작]', {
-        hasTravelTimeSlots: !!(room.travelTimeSlots && room.travelTimeSlots.length > 0),
-        travelTimeSlotsCount: room.travelTimeSlots?.length || 0,
-        roomName: room.name
-      });
 
       if (room.travelTimeSlots && room.travelTimeSlots.length > 0) {
         room.travelTimeSlots.forEach(travelSlot => {
@@ -966,18 +951,6 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
               ? `${travelMember.address} ${travelMember.addressDetail}`
               : travelMember?.address;
 
-            console.log('🚗 [이동시간 저장]', {
-              travelUserId,
-              travelMember: travelMember ? {
-                name: `${travelMember.firstName} ${travelMember.lastName}`,
-                address: travelMember.address,
-                addressDetail: travelMember.addressDetail
-              } : null,
-              memberLocation,
-              dateStr,
-              startTime: travelSlot.startTime,
-              endTime: travelSlot.endTime
-            });
 
             owner.personalTimes.push({
               id: nextId++,

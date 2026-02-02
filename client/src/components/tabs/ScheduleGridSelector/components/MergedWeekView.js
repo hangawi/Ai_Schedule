@@ -114,11 +114,6 @@ const MergedWeekView = ({
    * - 자정 넘김: 오늘 밤(~23:50) + 내일 새벽(00:00~) 두 블록으로 분할
    */
   const getDaySchedules = (dayOfWeek, targetDate) => {
-    console.log('📅 [MergedWeekView.getDaySchedules] 입력:', {
-      dayOfWeek,
-      targetDate,
-      allPersonalTimesLength: allPersonalTimes?.length || 0
-    });
     /**
      * 1. personalTimes 필터링
      *
@@ -176,11 +171,6 @@ const MergedWeekView = ({
       return !isSleepTime;
     });
 
-    console.log('✅ [MergedWeekView.getDaySchedules] personalFiltered:', {
-      dayOfWeek,
-      count: personalFiltered.length,
-      first3: personalFiltered.slice(0, 3).map(p => ({ title: p.title, startTime: p.startTime, days: p.days }))
-    });
 
     /**
      * 2. schedule 필터링

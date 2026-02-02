@@ -79,7 +79,7 @@ export const useAuth = () => {
                });
                setIsLoggedIn(true);
                setUser(userData);
-               console.log('✅ [useAuth] setUser 완료! 새로운 user 상태 설정됨');
+
             } else {
                console.error('[useAuth] Failed to fetch user data, status:', response.status);
                // Don't log out on API errors - user is still authenticated in Firebase
@@ -127,10 +127,7 @@ export const useAuth = () => {
 
       // Listen for refreshUser events (e.g., after schedule confirmation)
       const handleRefreshUser = async () => {
-         console.log('🔥🔥🔥 [useAuth] refreshUser 이벤트 수신!');
-         console.log('📊 [useAuth] fetchUser 호출 전 user.personalTimes:', user?.personalTimes?.length || 0);
          await fetchUser();
-         console.log('✅ [useAuth] fetchUser 완료!');
       };
 
       window.addEventListener('userProfileUpdated', handleProfileUpdate);

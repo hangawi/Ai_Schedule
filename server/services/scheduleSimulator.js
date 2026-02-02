@@ -97,7 +97,6 @@ const calculateTravelTime = async (fromUserId, toUserId, room, effectiveTravelMo
  * @returns {Object} { isValid: boolean, reason: string (internal only) }
  */
 async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTime, duration) {
-  console.log(`🔍 [시뮬레이션 시작] 조원: ${userId}, 날짜: ${targetDate}, 시간: ${targetTime}, 길이: ${duration}분`);
 
   try {
     // ① 해당 날짜의 전체 슬롯 조회
@@ -107,14 +106,12 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
       .populate('timeSlots.user', '_id addressLat addressLng');
 
     if (!room) {
-      console.log(`❌ [시뮬레이션 실패] 방을 찾을 수 없음`);
       return { isValid: false, reason: '방을 찾을 수 없습니다.' };
     }
 
     // ⚠️ effectiveTravelMode 계산 (smartExchange와 동일)
     const effectiveTravelMode = room.confirmedTravelMode || room.currentTravelMode || room.travelMode;
 
-    console.log(`📋 [시뮬레이션] 방 정보: travelMode=${room.travelMode}, effectiveTravelMode=${effectiveTravelMode}, 전체 슬롯=${room.timeSlots.length}개`);
 
     const targetDateStr = new Date(targetDate).toISOString().split('T')[0];
 
@@ -132,14 +129,11 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
       date: targetDate
     };
 
-    console.log(`📝 [시뮬레이션] 해당 날짜 기존 슬롯: ${slotsOnDate.length}개`);
-    console.log(`➕ [시뮬레이션] 새 슬롯 추가: ${targetTime} - ${newSlot.endTime}`);
 
     const allSlots = [...slotsOnDate, newSlot].sort((a, b) => {
       return timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
     });
 
-    console.log(`📊 [시뮬레이션] 전체 슬롯 (정렬 후): ${allSlots.length}개`);
 
     // ③ 모든 슬롯의 이동시간 재계산 (서버 로직과 동일하게!)
     const slotsWithTravel = [];
@@ -222,7 +216,6 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
 
         // 슬롯의 이동시간이 다른 슬롯의 이동시간과 충돌
         if (slotTravelStart < otherTravelEnd && slotTravelEnd > otherTravelStart) {
-          console.log(`❌ [시뮬레이션 충돌] 이동시간 vs 이동시간: Slot ${i+1}(${slot.travelStartTime}-${slot.travelEndTime}) vs Slot ${j+1}(${other.travelStartTime}-${other.travelEndTime})`);
           return {
             isValid: false,
             reason: `이동시간이 다른 조원의 이동시간과 충돌합니다. (Slot ${i+1} travel vs Slot ${j+1} travel)`
@@ -231,7 +224,6 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
 
         // 슬롯의 이동시간이 다른 슬롯의 수업시간과 충돌
         if (slotTravelStart < otherClassEnd && slotTravelEnd > otherClassStart) {
-          console.log(`❌ [시뮬레이션 충돌] 이동시간 vs 수업시간: Slot ${i+1}(${slot.travelStartTime}-${slot.travelEndTime}) vs Slot ${j+1}(${other.classStartTime}-${other.classEndTime})`);
           return {
             isValid: false,
             reason: `이동시간이 다른 조원의 수업시간과 충돌합니다. (Slot ${i+1} travel vs Slot ${j+1} class)`
@@ -240,7 +232,6 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
 
         // 슬롯의 수업시간이 다른 슬롯의 이동시간과 충돌
         if (slotClassStart < otherTravelEnd && slotClassEnd > otherTravelStart) {
-          console.log(`❌ [시뮬레이션 충돌] 수업시간 vs 이동시간: Slot ${i+1}(${slot.classStartTime}-${slot.classEndTime}) vs Slot ${j+1}(${other.travelStartTime}-${other.travelEndTime})`);
           return {
             isValid: false,
             reason: `수업시간이 다른 조원의 이동시간과 충돌합니다. (Slot ${i+1} class vs Slot ${j+1} travel)`
@@ -249,7 +240,6 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
 
         // 슬롯의 수업시간이 다른 슬롯의 수업시간과 충돌
         if (slotClassStart < otherClassEnd && slotClassEnd > otherClassStart) {
-          console.log(`❌ [시뮬레이션 충돌] 수업시간 vs 수업시간: Slot ${i+1}(${slot.classStartTime}-${slot.classEndTime}) vs Slot ${j+1}(${other.classStartTime}-${other.classEndTime})`);
           return {
             isValid: false,
             reason: `수업시간이 다른 조원의 수업시간과 충돌합니다. (Slot ${i+1} class vs Slot ${j+1} class)`
@@ -333,7 +323,6 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
             }
             if (current) preferredRanges.push(current);
 
-            console.log(`🔍 [선호시간 병합] ${rawRanges.length}개 → ${preferredRanges.length}개:`, preferredRanges.map(r => `${minutesToTime(r.start)}-${minutesToTime(r.end)}`).join(', '));
 
             // 새 슬롯의 실제 시작 (이동시간 포함) & 종료 시간
             const actualStart = timeToMinutes(newSlotWithTravel.travelStartTime);
@@ -345,7 +334,6 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
             );
 
             if (!isWithinPreferred) {
-              console.log(`❌ [시뮬레이션 실패] 선호시간 침범: 실제 ${newSlotWithTravel.travelStartTime}-${newSlotWithTravel.classEndTime}, 병합된 선호시간: ${preferredRanges.map(r => `${minutesToTime(r.start)}-${minutesToTime(r.end)}`).join(', ')}`);
 
               // 최소 가능 시간 계산
               const travelTime = newSlotWithTravel.travelTime;
@@ -366,7 +354,6 @@ async function simulateScheduleWithNewSlot(roomId, userId, targetDate, targetTim
     }
 
     // ⑦ 모든 검증 통과
-    console.log(`✅ [시뮬레이션 성공] 해당 시간에 배치 가능`);
     return { isValid: true, reason: '가능합니다.' };
 
   } catch (error) {

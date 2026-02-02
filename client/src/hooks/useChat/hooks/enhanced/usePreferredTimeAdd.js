@@ -122,10 +122,6 @@ export const usePreferredTimeAdd = (setEventAddedKey) => {
 
       const savedData = await serverResponse.json();
 
-      console.log('✅ [선호시간 추가] 서버 응답:', savedData);
-      console.log('✅ [선호시간 추가] 요청 데이터:', requestData);
-      console.log('🔵 [선호시간 추가] defaultSchedule에 저장됨:', requestData.defaultSchedule);
-
       // 중복 체크
       if (savedData.isDuplicate) {
         return {

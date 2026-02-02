@@ -39,8 +39,6 @@ const assignByPublicTransport = async (
     roomExceptions = []     // 추가
   } = options;
 
-  console.log('🚌 ===== 대중교통 모드 배정 시작 =====');
-  console.log(`   이동수단: ${transportMode}, 최소 수업시간: ${minClassDurationMinutes}분`);
   
   // ===== 알림 수집용 배열 =====
   const warnings = [];
@@ -48,7 +46,6 @@ const assignByPublicTransport = async (
   // 모든 슬롯을 날짜/시간 순으로 정렬
   const sortedKeys = Object.keys(timetable).sort();
   if (sortedKeys.length === 0) {
-    console.log('   → 배정 가능한 슬롯 없음');
     return;
   }
 
@@ -66,11 +63,6 @@ const assignByPublicTransport = async (
   // 요일별 순차 배정
   for (const [dayOfWeekStr, daySlotKeys] of Object.entries(slotsByDay)) {
     const dayOfWeek = parseInt(dayOfWeekStr); // 🔧 문자열을 숫자로 변환
-    console.log(`
-
-${'='.repeat(60)}`);
-    console.log(`📅📅📅 [${DAY_MAP[dayOfWeek]}] 배정 시작 (요일 코드: ${dayOfWeek})`);
-    console.log(`${'='.repeat(60)}`);
 
     // 아직 배정되지 않은 멤버 목록
     let unassignedMembers = members.filter(m => {
@@ -82,14 +74,12 @@ ${'='.repeat(60)}`);
     });
 
     if (unassignedMembers.length === 0) {
-      console.log('   → 모든 멤버 배정 완료');
       continue;
     }
 
     // 첫 번째 학생은 가장 이른 시간에 배정 (방장 위치 기준)
     // owner는 파라미터로 전달받음
     if (!owner || !owner.user?.addressLat || !owner.user?.addressLng) {
-      console.log('   ⚠️  방장 위치 정보 없음 - 대중교통 모드 사용 불가');
       return;
     }
 
@@ -114,10 +104,8 @@ ${'='.repeat(60)}`);
     // 거리 순으로 재정렬
     unassignedMembers = initialSorted.map(item => item.member);
 
-    console.log(`   정렬 결과:`);
     initialSorted.forEach((item, idx) => {
       const name = item.member.user.displayName || item.member.user._id.toString().substring(0, 8);
-      console.log(`   ${idx + 1}. ${name}: ${item.travelTimeMinutes}분`);
     });
 
     // 순차적으로 가장 가까운 멤버 찾아서 배정
@@ -138,13 +126,11 @@ ${'='.repeat(60)}`);
 
       if (!result) {
         // 조건 충족하는 멤버 없음 - 다음 날로
-        console.log(`   → [${DAY_MAP[dayOfWeek]}] 더 이상 배정 불가, 다음 요일로 이동`);
         break;
       }
 
       // ===== allFailed 처리: 실패 정보를 warnings에 추가 =====
       if (result.allFailed) {
-        console.log(`   ⚠️  [${DAY_MAP[dayOfWeek]}] 모든 멤버 배정 실패:`);
         result.failedMembers.forEach(fm => {
           if (fm.hasNoPreference) {
             console.log(`     - ${fm.memberName}: ${fm.reason}`);
@@ -156,7 +142,6 @@ ${'='.repeat(60)}`);
               day: DAY_MAP[dayOfWeek]
             });
           } else if (fm.preferenceInsufficient) {
-            console.log(`     - ${fm.memberName}: 선호시간 부족 (필요: ${fm.requiredMinutes}분, 가용: ${fm.availableMinutes}분)`);
             warnings.push({
               type: 'insufficient_preference',
               memberId: fm.memberId,
@@ -186,9 +171,6 @@ ${'='.repeat(60)}`);
       
       console.log(`
 📌 [배정 결과] ${memberName}`);
-      console.log(`   반환된 요일: ${day || '정보없음'}`);
-      console.log(`   현재 처리중인 요일: ${DAY_MAP[dayOfWeek]} (${dayOfWeek})`);
-      console.log(`   배정 시간: ${slot.startTime}-${slot.endTime}`);
 
       // 배정 슬롯 생성 및 할당
       const assignedSlots = await assignTimeSlot(
@@ -204,7 +186,6 @@ ${'='.repeat(60)}`);
 
       if (assignedSlots > 0) {
         const travelInfo = slot.travelStartTime ? ` (이동: ${slot.travelStartTime}-${slot.travelEndTime})` : '';
-        console.log(`   ✅ ${memberName} 배정 완료: ${slot.startTime}-${slot.endTime}${travelInfo} (${assignedSlots}슬롯)`);
 
         // 현재 위치를 이 멤버 위치로 업데이트
         currentLocation = {
@@ -220,17 +201,14 @@ ${'='.repeat(60)}`);
         if (assigned >= required) {
           // 완료된 멤버는 목록에서 제거
           unassignedMembers = unassignedMembers.filter(m => m.user._id.toString() !== memberId);
-          console.log(`      → ${memberName} 필요량 충족 (${assigned}/${required}슬롯)`);
         }
       } else {
-        console.log(`   ⚠️  ${memberName} 슬롯 배정 실패`);
         // 배정 실패한 멤버는 목록에서 제거 (무한루프 방지)
         unassignedMembers = unassignedMembers.filter(m => m.user._id.toString() !== memberId);
       }
     }
   }
 
-  console.log('🚌 ===== 대중교통 모드 배정 완료 =====');
   
   // ===== 알림 반환 =====
   return { warnings };
@@ -280,25 +258,21 @@ const assignTimeSlot = async (
     });
 
     if (!slotKey) {
-      console.log(`      ⚠️  슬롯 키 없음: ${slotTime}`);
       continue;
     }
 
     const slot = timetable[slotKey];
     if (!slot) {
-      console.log(`      ⚠️  슬롯 데이터 없음: ${slotKey}`);
       continue;
     }
 
     if (slot.assignedTo) {
-      console.log(`      ⚠️  이미 배정된 슬롯: ${slotTime}`);
       continue;
     }
 
     // 멤버가 이 슬롯을 사용 가능한지 확인
     const canUse = slot.available.some(a => a.memberId === memberId && !a.isOwner);
     if (!canUse) {
-      console.log(`      ⚠️  사용 불가 슬롯: ${slotTime}`);
       continue;
     }
 
@@ -310,7 +284,6 @@ const assignTimeSlot = async (
 
     const blockedTime = isTimeInBlockedRange(slotStartTime, slotEndTime, allBlockedTimes);
     if (blockedTime) {
-      console.log(`      ❌ [금지시간 침범] ${slotStartTime}-${slotEndTime}이(가) ${blockedTime.name || '금지 시간'}(${blockedTime.startTime}-${blockedTime.endTime})과 겹침`);
       continue; // 금지시간을 침범하는 슬롯은 건너뜀
     }
 

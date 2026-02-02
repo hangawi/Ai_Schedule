@@ -71,9 +71,7 @@ const mergeSlotsPerUser = (slotsByUserAndDate) => {
 const addSlotsToMembersPersonalTimes = async (mergedSlotsByUser, autoAssignedSlots, room, userMap) => {
   const ownerName = `${room.owner.firstName || ''} ${room.owner.lastName || ''}`.trim() || '방장';
 
-  console.log('🔥🔥🔥 [confirmSchedule] ===== 조원 personalTimes 추가 시작 =====');
   for (const [userId, mergedSlots] of Object.entries(mergedSlotsByUser)) {
-    console.log(`📝 [조원 처리] userId: ${userId}, mergedSlots: ${mergedSlots.length}개`);
 
     let user = userMap.get(userId);
     if (!user) {
@@ -108,7 +106,6 @@ const addSlotsToMembersPersonalTimes = async (mergedSlotsByUser, autoAssignedSlo
       );
 
       if (!isDuplicate) {
-        console.log(`   ✅ [조원 추가] ${slot.startTime}-${slot.endTime} (${dateStr})`);
         // 조원: 수업시간만 저장 (이동시간 제외)
         user.personalTimes.push({
           id: nextId++,
@@ -134,10 +131,8 @@ const addSlotsToMembersPersonalTimes = async (mergedSlotsByUser, autoAssignedSlo
  * @param {Map} userMap - 사용자 맵
  */
 const addSlotsToOwnerPersonalTimes = async (mergedSlotsByUser, autoAssignedSlots, room, userMap) => {
-  console.log('🔥🔥🔥 [confirmSchedule] ===== 방장 personalTimes 추가 시작 =====');
 
   const ownerId = (room.owner._id || room.owner).toString();
-  console.log(`📝 [방장 처리] ownerId: ${ownerId}`);
 
   let owner = userMap.get(ownerId);
   if (!owner) {
@@ -158,7 +153,6 @@ const addSlotsToOwnerPersonalTimes = async (mergedSlotsByUser, autoAssignedSlots
 
   // 이동시간 슬롯도 포함하여 선호시간 삭제
   if (room.travelTimeSlots && room.travelTimeSlots.length > 0) {
-    console.log(`   📌 [방장 선호시간 삭제] 이동시간 슬롯 ${room.travelTimeSlots.length}개 추가`);
     ownerSlotsForDeletion.push(...room.travelTimeSlots);
   }
 
@@ -183,12 +177,6 @@ const addSlotsToOwnerPersonalTimes = async (mergedSlotsByUser, autoAssignedSlots
       const dayOfWeek = getDayOfWeekNumber(slot.day);
       const dateStr = slot.date.toISOString().split('T')[0];
 
-      console.log(`   🔍 [방장 수업 추가 준비] ${memberName}:`, {
-        원본시간: `${slot.originalStartTime || '없음'}-${slot.originalEndTime || '없음'}`,
-        조정시간: `${slot.startTime}-${slot.endTime}`,
-        날짜: dateStr,
-        조정여부: slot.adjustedForTravelTime
-      });
 
       // 중복 체크 (같은 날짜, 같은 시간, 같은 조원)
       const isDuplicate = owner.personalTimes.some(pt =>
@@ -216,14 +204,8 @@ const addSlotsToOwnerPersonalTimes = async (mergedSlotsByUser, autoAssignedSlots
   }
 
   // 방장의 이동시간 슬롯 추가 (travel mode only)
-  console.log(`🔍 [디버깅] room.travelTimeSlots 상태:`, {
-    존재여부: !!room.travelTimeSlots,
-    개수: room.travelTimeSlots?.length || 0,
-    샘플: room.travelTimeSlots?.slice(0, 2)
-  });
 
   if (room.travelTimeSlots && room.travelTimeSlots.length > 0) {
-    console.log(`   [방장 이동시간 추가] ${room.travelTimeSlots.length}개`);
 
     room.travelTimeSlots.forEach(travelSlot => {
       const dayOfWeek = getDayOfWeekNumber(travelSlot.day);
@@ -238,7 +220,6 @@ const addSlotsToOwnerPersonalTimes = async (mergedSlotsByUser, autoAssignedSlots
       );
 
       if (!isDuplicate) {
-        console.log(`   ✅ [이동시간 추가] ${travelSlot.startTime}-${travelSlot.endTime} (${dateStr})`);
         owner.personalTimes.push({
           id: nextId++,
           title: `${room.name} - 이동시간`,
@@ -251,7 +232,6 @@ const addSlotsToOwnerPersonalTimes = async (mergedSlotsByUser, autoAssignedSlots
           color: '#FFA500' // Orange color for travel time
         });
       } else {
-        console.log(`   ⚠️ [중복 스킵] ${travelSlot.startTime}-${travelSlot.endTime} (${dateStr})`);
       }
     });
   }
@@ -268,11 +248,9 @@ const saveUserWithRetry = async (user, maxRetries = VALIDATION_RULES.MAX_USER_SA
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       await currentUser.save();
-      console.log(`   ✅ [사용자 저장 성공] userId: ${user._id}, personalTimes: ${currentUser.personalTimes?.length}개`);
       return; // 성공
     } catch (error) {
       if (error.name === 'VersionError' && attempt < maxRetries) {
-        console.log(`⚠️ VersionError for user ${user._id}, retrying (${attempt}/${maxRetries})...`);
 
         // 최신 버전 다시 조회
         const freshUser = await User.findById(user._id);
@@ -302,13 +280,10 @@ const saveUserWithRetry = async (user, maxRetries = VALIDATION_RULES.MAX_USER_SA
  * @param {Map} userMap - 사용자 맵
  */
 const saveAllUsers = async (userMap) => {
-  console.log('🔥🔥🔥 [confirmSchedule] ===== 사용자 저장 시작 =====');
-  console.log(`📊 [사용자 저장] 총 ${userMap.size}명 저장 예정`);
 
   const updatePromises = Array.from(userMap.values()).map(user => saveUserWithRetry(user));
   await Promise.all(updatePromises);
 
-  console.log('✅✅✅ [confirmSchedule] ===== 모든 사용자 저장 완료! =====');
 };
 
 /**
@@ -328,7 +303,6 @@ const saveRoomAfterConfirm = async (room, travelMode) => {
       break;
     } catch (error) {
       if (error.name === 'VersionError' && attempt < VALIDATION_RULES.MAX_RETRIES) {
-        console.log(`⚠️ VersionError for room ${room._id}, retrying (${attempt}/${VALIDATION_RULES.MAX_RETRIES})...`);
 
         const Room = require('../../../models/room');
         const freshRoom = await Room.findById(room._id);
@@ -366,7 +340,6 @@ const finalizeConfirmation = async (autoAssignedSlots, room, travelMode) => {
   room.confirmedAt = new Date();
   if (travelMode) {
     room.confirmedTravelMode = travelMode;
-    console.log(`✅ [확정] 이동수단 모드 저장: ${travelMode}`);
 
     // 일반 모드로 확정하는 경우, 이동시간 슬롯 제거
     if (travelMode === 'normal') {
@@ -374,7 +347,6 @@ const finalizeConfirmation = async (autoAssignedSlots, room, travelMode) => {
       room.timeSlots = room.timeSlots.filter(slot => !slot.isTravel);
       room.travelTimeSlots = [];
       const afterCount = room.timeSlots.length;
-      console.log(`🔄 [confirmSchedule] 일반 모드 확정: 이동시간 슬롯 ${beforeCount - afterCount}개 제거`);
     }
   }
 
@@ -405,7 +377,6 @@ const logConfirmActivity = async (roomId, userId, userName, slotsCount, mergedCo
  * @param {string} roomId - 방 ID
  */
 const emitConfirmEvent = (roomId) => {
-  console.log('🔥🔥🔥 [confirmSchedule] ===== Socket.io 이벤트 전송 시작 =====');
 
   if (global.io) {
     global.io.to(`room-${roomId}`).emit('schedule-confirmed', {
@@ -413,7 +384,6 @@ const emitConfirmEvent = (roomId) => {
       message: '자동배정 시간이 확정되었습니다.',
       timestamp: new Date()
     });
-    console.log(`📡 [수동확정] Socket 이벤트 전송: room-${roomId}`);
   }
 };
 

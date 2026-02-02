@@ -1037,8 +1037,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
   sortSlotsByDistance(slots, owner, memberLocations) {
     // 🔧 수정: 날짜별로 그룹화 후, 각 날짜 내에서 거리 순서로 정렬
     
-    console.log('🔍 [거리 순서 정렬 시작]');
-
     // 1️⃣ 날짜별로 슬롯 그룹화
     const slotsByDate = {};
     
@@ -1090,8 +1088,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         let currentLat = owner.addressLat;
         let currentLng = owner.addressLng;
 
-        console.log(`🔍 [${dateStr}] 거리 정렬 시작 - 방장 위치에서 출발`);
-
         while (remaining.length > 0) {
           let closestIndex = 0;
           let closestDistance = Infinity;
@@ -1134,7 +1130,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
             currentLat = userLocation.lat;
             currentLng = userLocation.lng;
             
-            console.log(`🔍 [거리 정렬] ${userLocation.name} (${closestSlot.startTime}) - 거리: ${Math.round(closestDistance * 1000)}m`);
+
           }
         }
       }
@@ -1142,18 +1138,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
       // 방장 슬롯 + 거리 순서로 정렬된 조원 슬롯을 날짜별로 추가
       allSlots.push(...ownerSlots, ...orderedMembers);
     }
-
-    console.log('🔍 [최종 정렬 결과]:');
-    allSlots.forEach((slot, idx) => {
-      let userId = slot.user;
-      if (typeof userId === 'object' && userId !== null) {
-        userId = userId._id || userId.id;
-      }
-      const userLocation = memberLocations[userId?.toString()];
-      const dateStr = this.toLocalDateString(slot.date);
-      const isOwner = userId && userId.toString() === owner._id.toString();
-      console.log(`  [${idx + 1}] ${dateStr} ${slot.startTime}-${slot.endTime}: ${isOwner ? '방장' : userLocation?.name || '?'}`);
-    });
 
     return allSlots;
   }
@@ -1223,8 +1207,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
     const memberPreferences = this.buildMemberPreferences(currentRoom);
 
     // 🔍 디버깅: 선호시간 정보 출력
-    console.log('🔍 [선호시간 정보 (memberPreferences)]:', memberPreferences);
-
     // 1. Merge raw slots into activity blocks
     const mergedSlots = mergeConsecutiveTimeSlots(currentRoom.timeSlots);
 
@@ -1246,16 +1228,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
         sortedMergedSlots = this.sortSlotsByDistance(mergedSlots, owner, memberLocations);
 
         // 🔍 디버깅: 거리 순서 출력
-        console.log('🔍 [거리 순서 정렬 결과]:');
-        sortedMergedSlots.forEach((slot, idx) => {
-            let userId = slot.user;
-            if (typeof userId === 'object' && userId !== null) {
-                userId = userId._id || userId.id;
-            }
-            const userLocation = memberLocations[userId?.toString()];
-            const dateStr = this.toLocalDateString(slot.date);
-            console.log(`  [${idx + 1}] ${dateStr} ${slot.startTime}-${slot.endTime}: ${userLocation?.name || '방장'}`);
-        });
     }
 
     // 🆕 이동시간 슬롯을 저장할 배열 추가
@@ -1354,11 +1326,11 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                     name: '방장',
                     color: '#4B5563'
                 };
-                console.log(`🔍 [${memberLocation.name}] 방장에서 출발 (새로운 날짜: ${slotDate})`);
+
             } else {
                 // 같은 날짜면 이전 학생에서 출발
                 actualPreviousLocation = previousLocation;
-                console.log(`🔍 [${memberLocation.name}] ${previousLocation.name}에서 출발 (같은 날짜: ${slotDate})`);
+
             }
 
             // 이전 위치에서 현재 학생 위치로 이동 시간 계산
@@ -1404,7 +1376,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                 newActivityStartTimeMinutes = newTravelEndTimeMinutes;
                 newActivityEndTimeMinutes = newActivityStartTimeMinutes + activityDurationMinutes;
                 
-                console.log(`🔍 [연속 배치] ${memberLocation.name}: 이전 종료(${this.formatTime(lastAssignedSlot.endMinutes)}) → 이동(${this.formatTime(newTravelStartMinutes)}-${this.formatTime(newTravelEndTimeMinutes)}) → 수업(${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)})`);
+
             } else {
                 // 새로운 날짜 또는 첫 슬롯: 원래 시간 기준
                 newActivityStartTimeMinutes = slotStartMinutes;
@@ -1412,7 +1384,7 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                 newTravelStartMinutes = slotStartMinutes - travelDurationMinutes;
                 newTravelEndTimeMinutes = slotStartMinutes;
                 
-                console.log(`🔍 [원래 시간 배치] ${memberLocation.name}: 이동(${this.formatTime(newTravelStartMinutes)}-${this.formatTime(newTravelEndTimeMinutes)}) → 수업(${this.formatTime(newActivityStartTimeMinutes)}-${this.formatTime(newActivityEndTimeMinutes)})`);
+
             }
 
 
@@ -1654,12 +1626,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                     previousSlotIndex = slotIndex;
                     previousLocation = memberLocation;  // 🔧 수정: 같은 날짜 내 연속 이동
                     
-                    console.log(`✅ [분할 배치 성공] ${memberLocation.name}:`, {
-                        원래날짜: slotDate,
-                        블록수: alternativePlacement.blocks.length,
-                        마지막블록: `${lastBlockDateStr} ${this.formatTime(lastBlock.activityEndMinutes)}`
-                    });
-                    
                     continue;
                 } else if (alternativePlacement.success) {
                     // 다른 요일에 배치 성공
@@ -1804,12 +1770,6 @@ ${previousLocation.name} → ${memberLocation.name}: ${travelDurationMinutes}분
                     previousSlotIndex = slotIndex;
                     previousLocation = memberLocation;  // 🔧 수정: 같은 날짜 내 연속 이동
                     
-                    console.log(`✅ [재배정 성공] ${memberLocation.name}:`, {
-                        원래날짜: slotDate,
-                        배치날짜: alternativePlacement.dateStr,
-                        수업시간: `${this.formatTime(actualActivityStartMinutes)} - ${this.formatTime(actualActivityEndMinutes)}`
-                    });
-                    
                     continue;
                 } else {
                     console.log(`❌ [재배정 실패] ${slotDate} - ${memberLocation.name}`, {
@@ -1890,14 +1850,6 @@ travelSlotsArray.push(travelSlotData);
             allResultSlots.push(...travelSlots10min, ...activitySlots10min);
             
             // 🔍 배치 성공 로그
-            console.log(`✅ [배치 성공] ${memberLocation.name}:`, {
-                원래날짜: slotDate,
-                배치날짜: targetDate,
-                이동시간: `${this.formatTime(newTravelStartMinutes)} - ${this.formatTime(newTravelEndTimeMinutes)} (${travelDurationMinutes}분)`,
-                수업시간: `${this.formatTime(newActivityStartTimeMinutes)} - ${this.formatTime(newActivityEndTimeMinutes)} (${activityDurationMinutes}분)`,
-                출발지: actualPreviousLocation.name
-            });
-
             // 🔧 수정: targetDate로 기록 (거리 연속 배치 지원)
             if (!assignedSlotsByDate[targetDate]) {
                 assignedSlotsByDate[targetDate] = [];

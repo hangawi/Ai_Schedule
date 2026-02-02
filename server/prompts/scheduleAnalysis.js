@@ -54,11 +54,6 @@ function generateSchedulePrompt(conversationText, currentDate = new Date(), exis
     weekAfterNextDates.push(`${dayNames[i]}=${formatDate(d)}`);
   }
 
-  // 디버그 로그
-  console.log(`📅 [Prompt] 오늘: ${today} (${dayOfWeek})`);
-  console.log(`📅 [Prompt] 이번주: ${thisWeekDates.join(', ')}`);
-  console.log(`📅 [Prompt] 다음주: ${nextWeekDates.join(', ')}`);
-  console.log(`📅 [Prompt] 다다음주: ${weekAfterNextDates.join(', ')}`);
 
   // 기존 일정 정보 포맷팅
   let existingSchedulesText = '';

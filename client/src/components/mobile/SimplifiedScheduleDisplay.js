@@ -11,7 +11,6 @@ const SimplifiedScheduleDisplay = ({ schedule, type = 'preference' }) => {
       const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
 
       schedule.forEach(slot => {
-         console.log(`🔍 [${type}] 슬롯 처리 중:`, slot);
          let key;
 
          if (slot.specificDate) {
@@ -79,7 +78,6 @@ const SimplifiedScheduleDisplay = ({ schedule, type = 'preference' }) => {
          groups[key] = merged;
       });
 
-      console.log(`✅ [${type}] 그룹화 및 병합 결과:`, groups);
       return groups;
    }, [schedule]);
 

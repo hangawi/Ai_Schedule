@@ -187,7 +187,6 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
 
       if (res.ok) {
         const data = await res.json();
-        console.log('✅ Accepted suggestion:', data);
         // 로컬 상태도 즉시 업데이트
         fetchSuggestions();
       } else {

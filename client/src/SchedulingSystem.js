@@ -746,10 +746,8 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
 
                // 응답 처리: pendingRequest 상태 업데이트
                if (result.needsConfirmation && result.pendingRequest) {
-                  console.log('✅ [SchedulingSystem] Saving pending request:', result.pendingRequest);
                   setPendingRequest(result.pendingRequest);
                } else if (result.clearPending) {
-                  console.log('✅ [SchedulingSystem] Clearing pending request');
                   setPendingRequest(null);
                }
 

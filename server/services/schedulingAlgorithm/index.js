@@ -5,7 +5,6 @@
  * 원본 schedulingAlgorithm.js (2160줄)을 모듈화하여 ~300줄로 축소했습니다.
  */
 
-console.log('🚀🚀🚀 schedulingAlgorithm/index.js 로드됨 - 수정버전');
 
 // Constants
 const { SLOTS_PER_HOUR } = require('./constants/timeConstants');
@@ -57,8 +56,6 @@ class SchedulingAlgorithm {
    */
   async runAutoSchedule(members, owner, roomTimeSlots, options, deferredAssignments = []) {
     console.log('\n\n' + '='.repeat(80));
-    console.log('🚀🚀🚀 runAutoSchedule 호출됨!');
-    console.log('받은 options:', JSON.stringify(options, null, 2));
     console.log('='.repeat(80) + '\n');
     
     // Input validation
@@ -104,18 +101,14 @@ class SchedulingAlgorithm {
     
     console.log(`
 🔍 [필터링 확인]`);
-    console.log(`   방장 ID: ${ownerId.substring(0, 8)}...`);
-    console.log(`   전체 멤버: ${members.length}명`);
     members.forEach(m => {
       const memberId = m.user._id.toString();
       const memberName = m.user?.firstName || m.user?.name || 'Unknown';
       const isOwner = memberId === ownerId ? '👑 방장' : '👤 조원';
       console.log(`      ${isOwner} ${memberName} (${memberId.substring(0, 8)}...)`);
     });
-    console.log(`   필터링 후: ${nonOwnerMembers.length}명`);
     nonOwnerMembers.forEach(m => {
       const memberName = m.user?.firstName || m.user?.name || 'Unknown';
-      console.log(`      👤 ${memberName}`);
     });
 
     // 멤버별 필요 슬롯 계산
@@ -132,7 +125,6 @@ class SchedulingAlgorithm {
     // 멤버 선호시간 로드
 
     // 타임테이블 생성
-    console.log('📊 [타임테이블 생성 시작]');
     let timetable = createTimetableFromPersonalSchedules(
       nonOwnerMembers, // 🔧 FIX: members → nonOwnerMembers (방장 제외)
       owner,
@@ -180,13 +172,11 @@ class SchedulingAlgorithm {
     }
 
     // 🔍 타임테이블 슬롯 검증 (화요일 9-12시 확인)
-    console.log('\n🔍 ===== 타임테이블 슬롯 검증 =====');
     const sortedSlotKeys = Object.keys(timetable).sort();
     const debugNonOwnerMembers = members.filter(m => (m.user?._id || m.user).toString() !== ownerId);
 
     debugNonOwnerMembers.forEach((member, idx) => {
       const memberId = (member.user?._id || member.user).toString();
-      console.log(`\n👤 멤버 ${idx + 1} (${memberId.substring(0, 8)}...):`);
 
       // 해당 멤버가 사용 가능한 모든 슬롯 찾기
       const memberSlots = sortedSlotKeys.filter(key => {
@@ -195,8 +185,6 @@ class SchedulingAlgorithm {
       });
 
       if (memberSlots.length === 0) {
-        console.log('   ❌ 이 멤버는 타임테이블에 사용 가능한 슬롯이 하나도 없습니다!');
-        console.log('   → 원인: 선호시간이 현재 날짜 범위에 없거나, specificDate로만 설정되어 있을 수 있습니다.');
         return;
       }
 
@@ -210,7 +198,6 @@ class SchedulingAlgorithm {
 
       // 모든 날짜 출력 (처음 10일)
       const dates = Object.keys(slotsByDate).sort().slice(0, 10);
-      console.log(`   📊 총 ${memberSlots.length}개 슬롯, ${dates.length}일간 분포:`);
       dates.forEach(date => {
         const daySlots = slotsByDate[date];
         const times = daySlots.map(k => k.split('-').slice(3).join(':')).sort();
@@ -232,10 +219,8 @@ class SchedulingAlgorithm {
         }
         timeRanges.push(rangeStart === prevTime ? rangeStart : `${rangeStart}~${prevTime}`);
 
-        console.log(`   📅 ${date}: ${daySlots.length}슬롯 - ${timeRanges.join(', ')}`);
       });
     });
-    console.log('🔍 ==============================\n');
 
     // Phase 0: 지연 배정 처리
     processDeferredAssignments(timetable, assignments, deferredAssignments);
@@ -253,17 +238,9 @@ class SchedulingAlgorithm {
     const warnings = [];
 
     // 배정 전략 선택: 대중교통 모드 vs 시간 순서 배정
-    console.log('\n' + '🚦'.repeat(40));
-    console.log(`🔍 [배정 전략] transportMode="${transportMode}"`);
-    console.log(`🔍 조건: transportMode === 'transit' ? ${transportMode === 'transit'}`);
-    console.log(`🔍 조건: transportMode === 'driving' ? ${transportMode === 'driving'}`);
-    console.log(`🔍 조건: transportMode === 'walking' ? ${transportMode === 'walking'}`);
-    console.log(`🔍 조건: transportMode === 'bicycling' ? ${transportMode === 'bicycling'}`);
-    console.log('🚦'.repeat(40));
 
     if (transportMode === 'transit' || transportMode === 'driving' || transportMode === 'walking' || transportMode === 'bicycling') {
       // 대중교통/이동수단 모드: 최단거리 우선 배정
-      console.log(`   → 대중교통 모드 진입 (assignByPublicTransport)`);
       const publicTransportResult = await assignByPublicTransport(timetable, assignments, memberRequiredSlots, ownerId, members, owner, {
         transportMode,
         minClassDurationMinutes,
@@ -277,7 +254,6 @@ class SchedulingAlgorithm {
       }
     } else {
       // 일반 모드: 시간 순서 우선 배정 (minClassDurationMinutes 기준)
-      console.log(`   → 일반 모드 진입 (assignByTimeOrder)`);
       const blockedTimes = roomSettings.blockedTimes || [];
       
       // 선호시간 부족 검증
@@ -304,7 +280,6 @@ class SchedulingAlgorithm {
         });
 
         const availableMinutes = availableSlots * MINUTES_PER_SLOT;
-        console.log(`   📊 ${memberName}: 전체 슬롯 ${totalSlots}개, 선호시간 슬롯 ${availableSlots}개 (${availableMinutes}분), 필요 ${requiredMinutes}분`);
         
         if (availableMinutes < requiredMinutes) {
           warnings.push({

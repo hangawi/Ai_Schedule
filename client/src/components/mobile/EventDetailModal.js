@@ -228,12 +228,11 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap, onDelete, previousL
                                        startAddr = previousLocation.address;
                                        startLat = previousLocation.lat;
                                        startLng = previousLocation.lng;
-                                       console.log('📍 출발지: 이전 일정 장소', startAddr);
+
                                     } else {
                                        startAddr = user.addressDetail ? `${user.address} ${user.addressDetail}` : user.address;
                                        startLat = user.addressLat;
                                        startLng = user.addressLng;
-                                       console.log('🏠 출발지: 내 집', startAddr);
                                     }
 
                                     // 도착지 정보

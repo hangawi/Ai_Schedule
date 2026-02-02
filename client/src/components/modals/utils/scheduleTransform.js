@@ -60,11 +60,6 @@ export const convertToPersonalTimes = (currentCombination, hoveredImageIndex) =>
       ? currentCombination.filter(schedule => schedule.sourceImageIndex === hoveredImageIndex)
       : currentCombination;
 
-    console.log('🔍 [convertToPersonalTimes] 변환 시작:', {
-      total: currentCombination?.length || 0,
-      toShow: schedulesToShow?.length || 0,
-      hoveredIndex: hoveredImageIndex
-    });
 
     const dayMap = { 'MON': 1, 'TUE': 2, 'WED': 3, 'THU': 4, 'FRI': 5, 'SAT': 6, 'SUN': 7, '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6, '일': 7 };
 

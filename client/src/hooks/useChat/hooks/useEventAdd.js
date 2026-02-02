@@ -65,8 +65,6 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
       return { success: false, message: '일정 추가 기능이 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.' };
     }
 
-    console.log('📅 [일정 추가] 시작:', { title: chatResponse.title, startDateTime: chatResponse.startDateTime });
-
     if (!chatResponse.title) chatResponse.title = '약속';
     if (!chatResponse.endDateTime && chatResponse.startDateTime) {
       try {
@@ -233,8 +231,6 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
     }
 
     const responseData = await response.json();
-
-    console.log('✅ [일정 추가] 성공:', { title: chatResponse.title, responseData });
 
     // UI 갱신
     if (context.context === 'profile' || context.context === 'events') {

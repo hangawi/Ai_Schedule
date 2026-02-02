@@ -475,11 +475,6 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
       }
 
       // 방장의 이동시간 슬롯 추가 (travel mode only)
-      console.log('🔍 [방장 이동시간 처리 시작]', {
-        hasTravelTimeSlots: !!(room.travelTimeSlots && room.travelTimeSlots.length > 0),
-        travelTimeSlotsCount: room.travelTimeSlots?.length || 0,
-        roomName: room.name
-      });
 
       if (room.travelTimeSlots && room.travelTimeSlots.length > 0) {
         room.travelTimeSlots.forEach(travelSlot => {
@@ -502,18 +497,6 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
               ? `${travelMember.address} ${travelMember.addressDetail}`
               : travelMember?.address;
 
-            console.log('🚗 [이동시간 저장]', {
-              travelUserId,
-              travelMember: travelMember ? {
-                name: `${travelMember.firstName} ${travelMember.lastName}`,
-                address: travelMember.address,
-                addressDetail: travelMember.addressDetail
-              } : null,
-              memberLocation,
-              dateStr,
-              startTime: travelSlot.startTime,
-              endTime: travelSlot.endTime
-            });
 
             owner.personalTimes.push({
               id: nextId++,

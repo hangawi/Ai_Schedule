@@ -51,31 +51,19 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
  * @returns {Promise<void>}
  */
 const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTravelMode = null, targetUserId = null) => {
-  console.log('🔥🔥🔥 [recalculateTravelTimeSlotsForDate] 함수 호출됨!', {
-    날짜: new Date(date).toISOString().split('T')[0],
-    forceTravelMode: forceTravelMode,
-    'room.confirmedTravelMode': room.confirmedTravelMode,
-    'room.currentTravelMode': room.currentTravelMode,
-    'room.travelMode': room.travelMode
-  });
 
   // 🔧 수정: forceTravelMode 파라미터 우선 사용
   const effectiveTravelMode = forceTravelMode || room.confirmedTravelMode || room.currentTravelMode || room.travelMode;
 
-  console.log('🔥🔥🔥 [effectiveTravelMode 계산 결과]:', effectiveTravelMode);
 
   if (!effectiveTravelMode || effectiveTravelMode === 'normal') {
-    console.log('⏭️ [이동시간 재계산] 일반 모드이므로 스킵:', effectiveTravelMode);
     return; // 일반 모드면 이동시간 없음
   }
 
-  console.log('✅ [이동시간 재계산] 시작:', { date: new Date(date).toISOString().split('T')[0], mode: effectiveTravelMode });
 
   const dateStr = new Date(date).toISOString().split('T')[0];
 
   // ① 해당 날짜의 이동시간 슬롯 모두 삭제 (isTravel 또는 subject로 판별)
-  console.log('🗑️ [삭제 시작] 삭제 전 전체 슬롯:', room.timeSlots.length);
-  console.log('🔍 [room.travelTimeSlots]:', room.travelTimeSlots?.length || 0, '개');
   
   // ✅ room.travelTimeSlots에서 해당 날짜의 이동시간 삭제 (핵심 수정!)
   if (room.travelTimeSlots && room.travelTimeSlots.length > 0) {
@@ -116,9 +104,7 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
     });
     
     const afterCount = room.travelTimeSlots.length;
-    console.log(`🗑️ [travelTimeSlots 삭제] ${beforeCount}개 → ${afterCount}개 (${deletedFromTravelTimeSlots.length}개 삭제)`);
     if (deletedFromTravelTimeSlots.length > 0) {
-      console.log('🗑️ [삭제된 travelTimeSlots]:', deletedFromTravelTimeSlots);
     }
   }
   
@@ -132,14 +118,7 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
   });
   
   if (dec22Slots.length > 0) {
-    console.log('🔍🔍🔍 [12/22 12:00-14:00 사이 슬롯들]:', dec22Slots.map(s => ({
-      시간: `${s.startTime}-${s.endTime}`,
-      subject: s.subject,
-      isTravel: s.isTravel,
-      '모든_속성': Object.keys(s).filter(k => k !== '_id' && k !== '__v')
-    })));
   } else {
-    console.log('⚠️ [12/22 12:00-14:00 사이에 슬롯 없음]');
   }
   
   // 🔍 해당 날짜의 모든 슬롯 출력
@@ -148,7 +127,6 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
     return slotDate === dateStr;
   });
   
-  console.log(`🔍 [${dateStr}] 해당 날짜의 모든 슬롯 (${targetDateSlots.length}개):`);
   targetDateSlots.forEach((slot, idx) => {
     console.log(`  [${idx + 1}] ${slot.startTime}-${slot.endTime}:`, {
       subject: slot.subject,
@@ -196,11 +174,6 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
     }
   });
   
-  console.log('🗑️ [삭제 완료]', {
-    삭제된_슬롯: slotsToDelete.length,
-    삭제_후_전체: room.timeSlots.length,
-    삭제된_상세: slotsToDelete
-  });
 
   // ② 해당 날짜의 모든 수업 슬롯 가져오기 (시간순 정렬)
   // ⭐ 중요: targetUserId가 있어도 전체 슬롯을 가져와야 previousSlot 컨텍스트 유지됨!
@@ -215,14 +188,8 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
       return aMinutes - bMinutes;
     });
 
-  console.log(`📋 [전체 수업 슬롯] ${classSlots.length}개:`, classSlots.map(s => ({
-    시간: `${s.startTime}-${s.endTime}`,
-    user: String(s.user._id || s.user),
-    subject: s.subject
-  })));
 
   if (classSlots.length === 0) {
-    console.log('⏭️ [이동시간 재계산] 수업 슬롯 없음, 스킵');
     return;
   }
 
@@ -235,7 +202,6 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
     if (targetUserId) {
       const slotUserId = String(slot.user._id || slot.user);
       if (slotUserId !== String(targetUserId)) {
-        console.log(`  ⏭️ [슬롯 ${i+1}] 스킵 (다른 사용자): ${slot.startTime}-${slot.endTime}`);
         continue; // 다른 사용자의 슬롯은 건드리지 않음
       }
     }
@@ -307,7 +273,6 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
     }
 
     // ④ 금지시간 체크 및 수업시간 조정
-    console.log(`  📊 [슬롯 ${i+1}/${classSlots.length}] ${slot.startTime}-${slot.endTime}, 이동시간: ${travelDurationMinutes}분`);
 
     if (travelDurationMinutes > 0) {
       // 🔒 금지시간 정보 가져오기
@@ -329,12 +294,10 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
         // 첫 번째 슬롯: 원래 시간 유지, 이동시간 역산
         travelStartMinutes = classStartMinutes - travelDurationMinutes;
         travelEndMinutes = classStartMinutes;
-        console.log(`  🔍 [첫 슬롯] 원래 시간 유지, 이동: ${String(Math.floor(travelStartMinutes / 60)).padStart(2, '0')}:${String(travelStartMinutes % 60).padStart(2, '0')}-${slot.startTime}`);
       } else {
         // 이전 슬롯이 있음: 수업 시작 시간을 기준으로 이동시간 역산
         const prevEnd = previousSlot.endTime.split(':');
         const previousEndMinutes = parseInt(prevEnd[0]) * 60 + parseInt(prevEnd[1]);
-        console.log(`  🔍 [이전 슬롯] ${previousSlot.startTime}-${previousSlot.endTime}, 종료: ${previousEndMinutes}분`);
 
         // 🔧 이동시간을 수업 시작 시간 기준으로 역산
         travelEndMinutes = classStartMinutes;
@@ -347,7 +310,6 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
         // 🔒 수업시간 자동 조정 비활성화 (사용자가 지정한 시간 유지)
         // 원래 시간과 다르면 슬롯 시간 업데이트
         // if (adjustedClassStartMinutes !== classStartMinutes) {
-        //   console.log(`  ⚠️  [수업시간 조정] ${slot.startTime}-${slot.endTime} → ${String(Math.floor(adjustedClassStartMinutes / 60)).padStart(2, '0')}:${String(adjustedClassStartMinutes % 60).padStart(2, '0')}-${String(Math.floor(adjustedClassEndMinutes / 60)).padStart(2, '0')}:${String(adjustedClassEndMinutes % 60).padStart(2, '0')}`);
         //
         //   classStartMinutes = adjustedClassStartMinutes;
         //   classEndMinutes = adjustedClassEndMinutes;
@@ -373,10 +335,8 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
 
       if (blockedTime) {
         if (travelBlockedTime) {
-          console.log(`  ⚠️  [금지시간 침범] 이동시간 ${travelStartTime}-${travelEndTime}이(가) ${blockedTime.name || '금지시간'}(${blockedTime.startTime}-${blockedTime.endTime})과 겹침`);
         }
         if (classBlockedTime) {
-          console.log(`  ⚠️  [금지시간 침범] 수업시간 ${travelEndTime}-${classEndTime}이(가) ${blockedTime.name || '금지시간'}(${blockedTime.startTime}-${blockedTime.endTime})과 겹침`);
         }
         
         // 🔧 이동시간이 금지시간 이후부터 시작하도록 수업시간 조정
@@ -397,7 +357,6 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
         // 🔥 Mongoose 배열 수정 추적을 위해 markModified 호출
         room.markModified('timeSlots');
         
-        console.log(`  ✅ [수업시간 조정] ${slot.startTime}-${slot.endTime}로 이동 (금지시간 ${blockedTime.endTime} 이후 + 이동시간 ${travelDurationMinutes}분)`);
       }
 
       // 시작 시간 계산
@@ -452,8 +411,6 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
       // 🔍 members에서 조원의 색상 가져오기
       const userId = slot.user._id || slot.user;
       const userColor = room.getUserColor(userId);
-      console.log(`  🎨 [색상 확인] userId: ${userId}, userColor: ${userColor}`);
-      console.log(`  ➕ [이동시간 슬롯 생성] ${startTime}-${endTime} (${travelDurationMinutes}분)`);
       
       // 거리 정보 계산
       const speeds = {
@@ -486,37 +443,23 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
         }
       };
 
-      console.log(`    ✅ [생성] ${startTime}-${endTime}`);
-      console.log(`       🔍 [travelSlot 상세]:`, {
-        color: travelSlot.color,
-        from: travelSlot.from,
-        to: travelSlot.to,
-        travelMode: travelSlot.travelMode,
-        travelInfo: travelSlot.travelInfo,
-        isTravel: travelSlot.isTravel
-      });
 
       room.timeSlots.push(travelSlot);
     } else {
-      console.log(`  ⏭️ [이동시간 없음] ${travelDurationMinutes}분`);
     }
   }
 
   // 디버깅: 실제로 추가되었는지 확인
   const travelSlotsCount = room.timeSlots.filter(s => s.isTravel === true).length;
   const travelSlotsBySubject = room.timeSlots.filter(s => s.subject === '이동시간').length;
-  console.log(`✅ [이동시간 재계산] ${dateStr}: ${classSlots.length}개 수업 슬롯 처리 완료`);
-  console.log(`   📊 [확인] isTravel===true: ${travelSlotsCount}개, subject==='이동시간': ${travelSlotsBySubject}개`);
   
   // 🔍 해당 날짜의 최종 슬롯 상태 출력 (디버깅용)
   const finalSlots = room.timeSlots.filter(s => {
     const slotDate = new Date(s.date).toISOString().split('T')[0];
     return slotDate === dateStr;
   });
-  console.log(`🔍🔍🔍 [${dateStr} 최종 슬롯 상태] 총 ${finalSlots.length}개:`);
   finalSlots.forEach((s, idx) => {
     const userId = s.user._id || s.user;
-    console.log(`  [${idx + 1}] ${s.startTime}-${s.endTime}: ${s.subject || '수업'}, isTravel: ${s.isTravel}, user: ${userId}`);
   });
   
   // ✅ room.timeSlots의 이동시간을 room.travelTimeSlots에도 추가
@@ -530,7 +473,6 @@ const recalculateTravelTimeSlotsForDate = async (room, date, ownerId, forceTrave
       room.travelTimeSlots = [];
     }
     room.travelTimeSlots.push(...newTravelSlots);
-    console.log(`✅ [travelTimeSlots 추가] ${newTravelSlots.length}개 추가, 총 ${room.travelTimeSlots.length}개`);
   }
 };
 
@@ -655,16 +597,6 @@ exports.smartExchange = async (req, res) => {
     const sourceDayStr = (type === 'time_change' && sourceDay) ? sourceDay : null;
 
     // 🚀🚀🚀 [ENTRY POINT] 함수 진입 확인
-    console.log('🚀🚀🚀 [smartExchange] API 호출됨!', {
-      userId: req.user.id,
-      roomId,
-      type,
-      targetDay,
-      targetTime,
-      sourceDayStr,
-      sourceWeekOffset,
-      viewMode
-    });
 
     // Verify room exists
     const room = await Room.findById(roomId)
@@ -686,21 +618,6 @@ exports.smartExchange = async (req, res) => {
 
     // 🔍 [ROOM INFO] 방 정보 확인
     const effectiveTravelMode = room.confirmedTravelMode || room.currentTravelMode || room.travelMode;
-    console.log('🔥🔥🔥 [smartExchange] effectiveTravelMode 계산:', {
-      confirmedTravelMode: room.confirmedTravelMode,
-      currentTravelMode: room.currentTravelMode,
-      travelMode: room.travelMode,
-      '최종_effectiveTravelMode': effectiveTravelMode
-    });
-    console.log('🔍 [smartExchange] 방 정보:', {
-      travelMode: room.travelMode,
-      currentTravelMode: room.currentTravelMode,
-      confirmedTravelMode: room.confirmedTravelMode,
-      effectiveTravelMode: effectiveTravelMode,
-      totalTimeSlots: room.timeSlots.length,
-      travelSlots: room.timeSlots.filter(s => s.isTravel).length,
-      classSlots: room.timeSlots.filter(s => !s.isTravel).length
-    });
 
     // Map day names to English
     const dayMap = {
@@ -1201,7 +1118,6 @@ exports.smartExchange = async (req, res) => {
 
     // 🆕 이동시간 모드일 때 시뮬레이션으로 검증
     if (effectiveTravelMode && effectiveTravelMode !== 'normal') {
-      console.log(`🔍 [검증] 이동시간 시뮬레이션 시작: ${targetDay} ${finalNewStartTime}`);
 
       const { simulateScheduleWithNewSlot } = require('../services/scheduleSimulator');
 
@@ -1216,7 +1132,6 @@ exports.smartExchange = async (req, res) => {
       );
 
       if (!simulationResult.isValid) {
-        console.log(`❌ [검증 실패] ${simulationResult.reason}`);
         return res.status(400).json({
           success: false,
           message: '해당 시간에 배치할 수 없습니다. 다른 시간을 선택해주세요.',
@@ -1224,7 +1139,6 @@ exports.smartExchange = async (req, res) => {
         });
       }
 
-      console.log(`✅ [검증 통과] 시뮬레이션 성공`);
     }
 
     // Check if target slot exists
@@ -1240,13 +1154,11 @@ exports.smartExchange = async (req, res) => {
 
     // Case 1: Target slot is empty → Immediate swap
     if (!occupiedSlot) {
-      console.log('📍 [smartExchange] Case 1 진입: 타겟 슬롯이 비어있음 (즉시 이동)');
 
       // 🛑 [검증 Phase] 이동시간 포함 시 선호시간 침범 여부 확인
       if (effectiveTravelMode && effectiveTravelMode !== 'normal') {
         let predictedTravelMinutes = 0;
         try {
-           console.log('🔍 [검증] 이동시간 예측 시작...');
            // 1. 해당 날짜(targetDate)의 기존 슬롯들 가져오기
            const slotsOnTargetDate = room.timeSlots.filter(slot => {
              const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
@@ -1275,29 +1187,24 @@ exports.smartExchange = async (req, res) => {
              const prevUser = await User.findById(prevUserId);
              fromLat = prevUser?.addressLat;
              fromLng = prevUser?.addressLng;
-             console.log(`  - 이전 수업(${prevSlot.subject}) 종료 위치: ${prevUser?.firstName}`);
              
              // 만약 이전 수업이 있는데 주소가 없으면? 방장 집에서 출발하는 것으로 가정? 아니면 0분?
              // 일단 방장 집 체크
              if (!fromLat && prevUserId.toString() === room.owner._id.toString()) {
                 fromLat = room.owner.addressLat;
                 fromLng = room.owner.addressLng;
-                console.log('  - 이전 수업 주소 없음 -> 방장 집 위치 사용');
              }
            } else {
              fromLat = room.owner.addressLat;
              fromLng = room.owner.addressLng;
-             console.log('  - 이전 수업 없음 -> 방장 집 위치 사용');
            }
 
            const myUser = await User.findById(req.user.id);
-           console.log(`  🔍 [좌표 확인] 출발(${fromLat}, ${fromLng}) -> 도착(${myUser?.firstName}: ${myUser?.addressLat}, ${myUser?.addressLng})`);
            
            if (fromLat && fromLng && myUser?.addressLat && myUser?.addressLng) {
               const distance = calculateDistance(fromLat, fromLng, myUser.addressLat, myUser.addressLng);
               const speed = { driving: 40, transit: 30, walking: 5, bicycling: 15 }[effectiveTravelMode] || 30;
               predictedTravelMinutes = Math.ceil((distance / speed) * 60 / 10) * 10;
-              console.log(`  ✅ [계산 성공] 거리: ${distance.toFixed(2)}km, 속도: ${speed}km/h, 시간: ${predictedTravelMinutes}분`);
            } else {
               console.warn(`  ⚠️ [계산 실패] 좌표 정보 누락. fromLat: ${!!fromLat}, fromLng: ${!!fromLng}, toLat: ${!!myUser?.addressLat}`);
            }
@@ -1308,7 +1215,6 @@ exports.smartExchange = async (req, res) => {
         // 4. 선호시간 침범 확인
         if (predictedTravelMinutes > 0) {
            const actualStartMin = (newStartH * 60 + newStartM) - predictedTravelMinutes;
-           console.log(`🔍 [검증] 요청시간: ${newStartTime}, 실제시작: ${minutesToTime(actualStartMin)} (${predictedTravelMinutes}분 이동)`);
            
            // 4-1. 방장의 선호시간(ownerMergedRanges) 체크 (가장 중요!)
            const isOwnerPreferred = ownerMergedRanges.some(range => 
@@ -1324,7 +1230,6 @@ exports.smartExchange = async (req, res) => {
                   suggestion = ` 최소 ${suggestedTime}부터 가능합니다.`;
               }
 
-              console.log(`⛔ [거부] 방장 선호시간 침범! 요청된 실제 시작: ${minutesToTime(actualStartMin)}`);
               return res.status(400).json({
                   success: false,
                   message: `이동시간(${predictedTravelMinutes}분)을 고려하면 ${minutesToTime(actualStartMin)}에 시작해야 합니다. 이는 방장의 선호시간을 벗어납니다.${suggestion}`,
@@ -1340,7 +1245,6 @@ exports.smartExchange = async (req, res) => {
            
            if (!isPreferred) {
               const minPossibleTime = minutesToTime(memberMergedRanges[0].startMinutes + predictedTravelMinutes);
-              console.log(`⛔ [거부] 공통 선호시간 침범! 최소 가능 시간: ${minPossibleTime}`);
               return res.status(400).json({
                   success: false,
                   message: `이동시간(${predictedTravelMinutes}분)을 고려하면 ${minutesToTime(actualStartMin)}에 시작해야 합니다. 이는 공통 선호시간을 벗어납니다. 최소 ${minPossibleTime}부터 가능합니다.`,
@@ -1381,12 +1285,10 @@ exports.smartExchange = async (req, res) => {
          const isTravel = slot.isTravel === true || slot.subject === '이동시간' || slot.subject === 'Travel Time';
          
          if (isTravel && slotUserIdStr === myUserIdStr && (slotDateStr === oldSlotDate || slotDateStr === targetDateStr)) {
-            console.log(`  🔥 [삭제] 고아 슬롯 방지: ${slotDateStr} ${slot.startTime}`);
             return false; 
          }
          return true;
       });
-      console.log(`🗑️ 삭제 완료: ${initialCount - room.timeSlots.length}개 슬롯 제거됨`);
 
 
       // 🆕 이동시간 재계산 및 새 수업 배치 로직 시작...
@@ -1420,7 +1322,6 @@ exports.smartExchange = async (req, res) => {
 
       if (calcMode && calcMode !== 'normal') {
         try {
-          console.log(`🔍 [실제 적용] 이동시간 계산 시작 (${calcMode})`);
           
           let fromLat, fromLng;
           if (previousSlot) {
@@ -1440,13 +1341,11 @@ exports.smartExchange = async (req, res) => {
           }
 
           const currentUser = await User.findById(req.user.id);
-          console.log(`  - 좌표: 출발(${fromLat}, ${fromLng}) -> 도착(${currentUser?.addressLat}, ${currentUser?.addressLng})`);
 
           if (fromLat && fromLng && currentUser?.addressLat && currentUser?.addressLng) {
             const distance = calculateDistance(fromLat, fromLng, currentUser.addressLat, currentUser.addressLng);
             const speed = { driving: 40, transit: 30, walking: 5, bicycling: 15 }[calcMode] || 30;
             travelDurationMinutes = Math.ceil((distance / speed) * 60 / 10) * 10;
-            console.log(`  ✅ [계산 성공] ${travelDurationMinutes}분`);
           } else {
             console.warn(`  ⚠️ [계산 실패] 좌표 누락`);
           }
@@ -1493,40 +1392,25 @@ exports.smartExchange = async (req, res) => {
       }
 
       room.timeSlots.push(slotData);
-      console.log(`  ✅ [슬롯 생성] ${finalNewStartTime}-${finalNewEndTime} (병합된 1개 슬롯)`);
 
       // 🆕 이동시간 재계산: 원본 날짜와 목표 날짜 모두
       const oldDateStr = new Date(allSlotsInBlock[0].date).toISOString().split('T')[0];
       const newDateStr = targetDate.toISOString().split('T')[0];
 
-      console.log('🔥🔥🔥 [smartExchange Case 1] 이동시간 재계산 시작!', {
-        travelMode: effectiveTravelMode,
-        oldDate: oldDateStr,
-        newDate: newDateStr,
-        isSameDate: oldDateStr === newDateStr
-      });
-      console.log('🔥 [Case 1] 재계산 전 슬롯 개수:', room.timeSlots.length);
 
       if (oldDateStr === newDateStr) {
         // ⭐ 같은 날짜 내에서 이동: 한 번만 재계산 (전체)
-        console.log('⚠️  [같은 날짜 이동] 전체 재계산 1회만 수행');
         await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode, null);
-        console.log('🔥 [Case 1] 재계산 완료 (같은 날짜 - 전체 사용자)');
       } else {
         // ✅ 다른 날짜로 이동: 원래 날짜 전체, 새 날짜는 이동한 사용자만
         await recalculateTravelTimeSlotsForDate(room, new Date(allSlotsInBlock[0].date), room.owner._id, effectiveTravelMode, null);
-        console.log('🔥 [Case 1] 첫 번째 재계산 완료 (원래 날짜 - 전체 사용자)');
 
         await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode, req.user.id);
-        console.log('🔥 [Case 1] 두 번째 재계산 완료 (도착 날짜 - 이동한 사용자만)');
       }
 
-      console.log('✅ [smartExchange Case 1] 이동시간 재계산 완료');
       const travelSlots = room.timeSlots.filter(s => s.isTravel);
-      console.log('📊 [재계산 후] 전체 슬롯:', room.timeSlots.length, '개, 이동시간:', travelSlots.length, '개');
 
       await room.save();
-      console.log('💾 [DB 저장] 완료');
       await room.populate('timeSlots.user', '_id firstName lastName email');
 
       // Log activity
@@ -1575,7 +1459,6 @@ exports.smartExchange = async (req, res) => {
 
     // Auto-placement if no specific time requested
     if (!targetTime) {
-      console.log('📍 [smartExchange] Case 2 진입: 자동 배치 (targetTime 없음)');
       const allSlotsOnTargetDate = room.timeSlots.filter(slot => {
         const slotDate = new Date(slot.date).toISOString().split('T')[0];
         return slotDate === targetDate.toISOString().split('T')[0];
@@ -1649,35 +1532,20 @@ exports.smartExchange = async (req, res) => {
         };
 
         room.timeSlots.push(classSlotData);
-        console.log(`  ✅ [슬롯 생성] ${autoStartTime}-${autoEndTime} (병합된 1개 슬롯)`);
 
         // ✅ 이동시간 재계산 (Case 1과 동일한 방식) - 이동한 사용자만 재계산
-        console.log('🔥🔥🔥 [smartExchange Case 2] 이동시간 재계산 시작!', {
-          travelMode: effectiveTravelMode,
-          oldDate: oldSlotDate,
-          newDate: targetDateStr,
-          userId: req.user.id,
-          isSameDate: oldSlotDate === targetDateStr
-        });
-        console.log('🔥 [Case 2] 재계산 전 슬롯 개수:', room.timeSlots.length);
 
         if (oldSlotDate === targetDateStr) {
           // ⭐ 같은 날짜 내에서 이동: 한 번만 재계산 (전체)
-          console.log('⚠️  [같은 날짜 이동] 전체 재계산 1회만 수행');
           await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode, null);
-          console.log('🔥 [Case 2] 재계산 완료 (같은 날짜 - 전체 사용자)');
         } else {
           // ✅ 다른 날짜로 이동: 원래 날짜 전체, 새 날짜는 이동한 사용자만
           await recalculateTravelTimeSlotsForDate(room, new Date(oldSlotDate), room.owner._id, effectiveTravelMode, null);
-          console.log('🔥 [Case 2] 첫 번째 재계산 완료 (원래 날짜 - 전체 사용자)');
 
           await recalculateTravelTimeSlotsForDate(room, targetDate, room.owner._id, effectiveTravelMode, req.user.id);
-          console.log('🔥 [Case 2] 두 번째 재계산 완료 (도착 날짜 - 이동한 사용자만)');
         }
         
-        console.log('✅ [smartExchange Case 2] 이동시간 재계산 완료');
         const travelSlots = room.timeSlots.filter(s => s.isTravel);
-        console.log('📊 [재계산 후] 전체 슬롯:', room.timeSlots.length, '개, 이동시간:', travelSlots.length, '개');
 
         await room.save();
         await room.populate('timeSlots.user', '_id firstName lastName email');
@@ -1727,7 +1595,6 @@ exports.smartExchange = async (req, res) => {
     }
 
     // Case 3: Create yield request (target slot is occupied)
-    console.log('📍 [smartExchange] Case 3 진입: 타겟 슬롯이 다른 사용자에게 점유됨 (양보 요청 생성)');
     const occupiedUserId = (occupiedSlot.user._id || occupiedSlot.user).toString();
 
     const yieldRequest = {

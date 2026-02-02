@@ -72,17 +72,11 @@ const createOwnerAvailableSlots = (owner, rangeStart, rangeEnd) => {
   const ownerScheduleExceptions = owner.user?.scheduleExceptions || owner.scheduleExceptions || [];
 
   if (!ownerSchedule || !Array.isArray(ownerSchedule)) {
-    console.log('⚠️ 방장 스케줄이 없습니다:', { hasUser: !!owner.user, hasDefaultSchedule: !!owner.defaultSchedule });
     return ownerAvailableSlots;
   }
 
-  console.log('\n🔍 방장 스케줄 처리:');
-  console.log('  총 스케줄:', ownerSchedule.length);
-  console.log('  총 선호시간(챗봇):', ownerScheduleExceptions.length);
-  console.log('  배정 범위:', rangeStart.toISOString().split('T')[0], '~', rangeEnd.toISOString().split('T')[0]);
 
   const validSchedules = filterValidSchedules(ownerSchedule);
-  console.log('  유효한 스케줄:', validSchedules.length);
 
   let specificDateCount = 0;
   let recurringCount = 0;
@@ -170,10 +164,6 @@ const createOwnerAvailableSlots = (owner, rangeStart, rangeEnd) => {
     }
   });
 
-  console.log('  specificDate 스케줄:', specificDateCount, '개');
-  console.log('  반복 스케줄:', recurringCount, '개');
-  console.log('  챗봇 선호시간:', exceptionCount, '개');
-  console.log('  생성된 슬롯:', ownerAvailableSlots.size, '개');
 
   return ownerAvailableSlots;
 };
@@ -238,7 +228,6 @@ const removeOwnerPersonalTimes = (ownerAvailableSlots, owner, rangeStart, rangeE
 const removeBlockedTimes = (ownerAvailableSlots, blockedTimes, rangeStart, rangeEnd) => {
   if (!blockedTimes || !Array.isArray(blockedTimes) || blockedTimes.length === 0) return;
 
-  console.log('\n🚫 [금지시간] 제거 시작:', blockedTimes.length, '개');
 
   blockedTimes.forEach(blockedTime => {
     if (!blockedTime.startTime || !blockedTime.endTime) return;
@@ -261,10 +250,8 @@ const removeBlockedTimes = (ownerAvailableSlots, blockedTimes, rangeStart, range
       currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
 
-    console.log(`  🚫 ${blockedTime.name || '금지시간'} (${blockedTime.startTime}-${blockedTime.endTime}):`, removedCount, '슬롯 제거');
   });
 
-  console.log('✅ [금지시간] 제거 완료\n');
 };
 
 /**

@@ -76,7 +76,6 @@ exports.createRequest = async (req, res) => {
 
     // 🆕 이동시간 충돌 시뮬레이션 (조원이 시간을 요청할 때)
     if (room.travelMode && room.travelMode !== 'normal' && (type === 'time_request' || type === 'slot_swap')) {
-      console.log(`🔍 [요청 검증] 이동시간 시뮬레이션 시작: travelMode=${room.travelMode}, type=${type}`);
 
       const { simulateScheduleWithNewSlot } = require('../../services/scheduleSimulator');
 
@@ -85,7 +84,6 @@ exports.createRequest = async (req, res) => {
       const [endH, endM] = timeSlot.endTime.split(':').map(Number);
       const duration = (endH * 60 + endM) - (startH * 60 + startM);
 
-      console.log(`📊 [요청 검증] 시뮬레이션 파라미터: 날짜=${timeSlot.date}, 시간=${timeSlot.startTime}, 길이=${duration}분`);
 
       const simulationResult = await simulateScheduleWithNewSlot(
         roomId,
@@ -96,7 +94,6 @@ exports.createRequest = async (req, res) => {
       );
 
       if (!simulationResult.isValid) {
-        console.log(`❌ [요청 거부] 시뮬레이션 실패: ${simulationResult.reason}`);
         return res.status(400).json({
           success: false,
           msg: "해당 시간은 선택할 수 없습니다."
@@ -104,7 +101,6 @@ exports.createRequest = async (req, res) => {
         });
       }
 
-      console.log(`✅ [요청 검증] 시뮬레이션 통과`);
     }
 
     // Generate descriptive message if not provided
@@ -218,10 +214,6 @@ exports.handleRequest = async (req, res) => {
       const { requestId, action } = req.params;
       const { message } = req.body;
 
-      console.log('🎯 ========== HANDLE REQUEST ==========');
-      console.log('📋 Request ID:', requestId);
-      console.log('📋 Action:', action);
-      console.log('👤 User ID:', req.user.id);
 
       // 액션 검증
       const validationError = validateAction(action);
@@ -261,16 +253,10 @@ exports.handleRequest = async (req, res) => {
       request.respondedBy = req.user.id;
       request.response = message || '';
 
-      console.log('📊 Before processing - Total timeSlots:', room.timeSlots.length);
 
       if (action === 'approved') {
-         console.log('✅ Action is APPROVED - processing request...');
          const { type, timeSlot: ts, targetSlot, targetUser, requester } = request;
          const timeSlot = (ts && Object.keys(ts).length > 0) ? ts : targetSlot;
-         console.log('📋 Request type:', type);
-         console.log('📋 TimeSlot:', JSON.stringify(timeSlot), ts ? '(from timeSlot)' : '(from targetSlot fallback)');
-         console.log('📋 TimeSlot.date:', timeSlot?.date ? new Date(timeSlot.date).toISOString() : 'undefined');
-         console.log('📋 Requester:', requester._id || requester);
 
          if (type === 'slot_release') {
             room.timeSlots = room.timeSlots.filter(slot => {
@@ -295,9 +281,7 @@ exports.handleRequest = async (req, res) => {
                 room.markModified('timeSlots');
             }
          } else if (type === 'time_request' || type === 'time_change') {
-            console.log('🔍 [DEBUG] Entered time_request/time_change block');
             if (targetUser) {
-               console.log('🔍 [DEBUG] targetUser exists:', targetUser._id || targetUser);
 
                const requesterOriginalSlots = [];
                if (request.requesterSlots && request.requesterSlots.length > 0) {
@@ -319,7 +303,6 @@ exports.handleRequest = async (req, res) => {
                      });
                   });
                }
-               console.log(`💾 [EARLY] Saved ${requesterOriginalSlots.length} requester's original slots for potential restoration`);
 
                const requesterHasSlot = room.timeSlots.some(slot => {
                   const slotUserId = slot.user._id || slot.user;
@@ -341,13 +324,9 @@ exports.handleRequest = async (req, res) => {
                if (requesterHasSlot) {
                   // 중복이므로 아무것도 하지 않음
                } else {
-                  console.log(`📊 Total slots in room: ${room.timeSlots.length}`);
-                  console.log(`📊 Target user ID: ${targetUser._id}`);
-                  console.log(`📊 Looking for day: ${timeSlot.day}, time: ${timeSlot.startTime}-${timeSlot.endTime}`);
 
                   const overlappingSlots = findOverlappingSlots(room.timeSlots, targetUser._id, timeSlot);
 
-                  console.log(`📊 Found ${overlappingSlots.length} overlapping slots from target user`);
                   if (overlappingSlots.length > 0) {
                      console.log(`   Overlapping slots:`, overlappingSlots.map(s => ({
                         date: new Date(s.date).toISOString().split('T')[0],
@@ -374,7 +353,6 @@ exports.handleRequest = async (req, res) => {
                      }, 0);
 
                      // 🎯 Stage 1: Check if direct exchange is possible (mutual preferred time compatibility)
-                     console.log('🔍 Stage 1: Checking mutual preferred time compatibility...');
 
                      // Get requester's member data
                      const requesterMember = room.members.find(m =>
@@ -408,21 +386,13 @@ exports.handleRequest = async (req, res) => {
                            });
                         }
 
-                        console.log('🔍 Stage 1 Results:', {
-                           isTargetSlotInRequesterPreferred,
-                           areRequesterSlotsInTargetPreferred
-                        });
 
                         // 🔧 교환 요청의 경우: 요청자가 이미 타겟 시간을 원한다고 명시했으므로
                         // 타겟이 요청자의 시간을 받을 수 있는지만 확인하면 됨
                         // If both conditions are met, execute direct exchange
                         if (areRequesterSlotsInTargetPreferred) {
-                           console.log('✅ Stage 1: Direct exchange possible! Target can accept requester\'s time.');
-                           console.log('🔄 Executing direct exchange...');
-                           console.log('📊 Before exchange - Total timeSlots:', room.timeSlots.length);
 
                            // Step 1: Remove requester's current slots (if any)
-                           console.log('🗑️ Removing requester\'s original slots...');
                            if (request.requesterSlots && request.requesterSlots.length > 0) {
                               request.requesterSlots.forEach(reqSlot => {
                                  const reqDateStr = reqSlot.date ? new Date(reqSlot.date).toISOString().split('T')[0] : null;
@@ -442,25 +412,21 @@ exports.handleRequest = async (req, res) => {
                                  });
                                  if (index !== -1) {
                                     room.timeSlots.splice(index, 1);
-                                    console.log(`   ❌ Removed requester's slot: ${reqSlot.startTime}-${reqSlot.endTime}`);
                                  }
                               });
                               room.markModified('timeSlots');
                            }
 
                            // Step 2: Remove target's slots (overlappingSlots)
-                           console.log(`🗑️ Removing ${overlappingSlots.length} target's slots...`);
                            overlappingSlots.forEach(slot => {
                               const index = room.timeSlots.findIndex(s => s._id.equals(slot._id));
                               if (index !== -1) {
                                  room.timeSlots.splice(index, 1);
-                                 console.log(`   ❌ Removed target's slot: ${new Date(slot.date).toISOString().split('T')[0]} ${slot.startTime}-${slot.endTime}`);
                               }
                            });
                            room.markModified('timeSlots');
 
                            // Step 3: Add requester to target's position (requester gets overlappingSlots)
-                           console.log(`➕ Adding requester to target's position...`);
                            overlappingSlots.forEach(slot => {
                               room.timeSlots.push({
                                  user: requester._id,
@@ -474,11 +440,9 @@ exports.handleRequest = async (req, res) => {
                                  assignedAt: new Date()
                               });
                            });
-                           console.log(`   ✅ Added ${overlappingSlots.length} slots for requester`);
 
                            // Step 4: Add target user to requester's original position (if requesterSlots exists)
                            if (request.requesterSlots && request.requesterSlots.length > 0) {
-                              console.log(`➕ Adding target user to requester's original position...`);
                               request.requesterSlots.forEach(reqSlot => {
                                  room.timeSlots.push({
                                     user: targetUser._id,
@@ -492,7 +456,6 @@ exports.handleRequest = async (req, res) => {
                                     assignedAt: new Date()
                                  });
                               });
-                              console.log(`   ✅ Added ${request.requesterSlots.length} slots for target user`);
                            }
 
                            // Step 5: Update request status
@@ -501,13 +464,11 @@ exports.handleRequest = async (req, res) => {
                            request.respondedBy = req.user.id;
                            request.response = '직접 교환이 완료되었습니다.';
 
-                           console.log('📊 After exchange - Total timeSlots:', room.timeSlots.length);
                            room.markModified('timeSlots');
                            room.markModified('requests');
 
                            await room.save();
 
-                           console.log('✅ Stage 1: Direct exchange completed successfully!');
 
                            return res.json({
                               success: true,
@@ -516,18 +477,14 @@ exports.handleRequest = async (req, res) => {
                            });
                         }
 
-                        console.log('⚠️ Stage 1: Direct exchange not possible. Proceeding to Stage 2...');
                      }
 
-                     console.log(`🔍 Stage 2: Checking if B has empty time BEFORE modifying any slots...`);
 
                      // ✅ Include both defaultSchedule AND scheduleExceptions
                      const targetUserSchedule = [
                         ...(targetUser.defaultSchedule || []),
                         ...(targetUser.scheduleExceptions || [])
                      ];
-                     console.log(`🔍 targetUser: ${targetUser.firstName} ${targetUser.lastName}`);
-                     console.log(`🔍 targetUserSchedule 길이: ${targetUserSchedule.length} (defaultSchedule: ${targetUser.defaultSchedule?.length || 0}, scheduleExceptions: ${targetUser.scheduleExceptions?.length || 0})`);
 
                      let bestCandidate = null;
 
@@ -552,14 +509,12 @@ exports.handleRequest = async (req, res) => {
                            requestEnd
                         );
 
-                        console.log(`🔍 Generated ${candidates.length} candidates for B's relocation`);
 
                         for (const candidate of candidates) {
                            const newStartMinutes = candidate.startMinutes;
                            const newEndMinutes = newStartMinutes + totalDuration;
                            const newDateStr = candidate.date.toISOString().split('T')[0];
 
-                           console.log(`   🔍 Checking: ${DAY_NAMES[candidate.dayOfWeek]} ${toTimeString(newStartMinutes)}-${toTimeString(newEndMinutes)} (${newDateStr})`);
 
                            // 🔒 방장 스케줄 검증 추가
                            const ownerSchedule = [
@@ -588,10 +543,8 @@ exports.handleRequest = async (req, res) => {
                            });
 
                            if (!ownerAvailableAtTime) {
-                              console.log(`   ❌ Owner not available at this time, skipping...`);
                               continue;
                            }
-                           console.log(`   ✅ Owner is available at this time`);
 
                            const hasConflict = room.timeSlots.some(slot => {
                               const slotDateStr = new Date(slot.date).toISOString().split('T')[0];
@@ -604,26 +557,21 @@ exports.handleRequest = async (req, res) => {
                               if (overlaps) {
                                  const slotUserId = slot.user._id || slot.user;
                                  const slotUserName = slot.user?.firstName || 'Unknown';
-                                 console.log(`   ⚠️  Conflict: overlaps with ${slotUserName}'s slot ${slot.startTime}-${slot.endTime}`);
                               }
 
                               return overlaps;
                            });
 
                            if (!hasConflict) {
-                              console.log(`   ✅ No conflict! Selected this candidate.`);
                               bestCandidate = candidate;
                               break;
                            } else {
-                              console.log(`   ❌ Has conflict, trying next candidate...`);
                            }
                         }
                      }
 
                      if (bestCandidate) {
-                        console.log(`✅ B has empty time - Proceeding with normal slot exchange`);
 
-                        console.log(`🗑️ Removing ${request.requesterSlots ? request.requesterSlots.length : 0} requester's original slots`);
                         if (request.requesterSlots && request.requesterSlots.length > 0) {
                            request.requesterSlots.forEach(reqSlot => {
                               const reqDateStr = reqSlot.date ? new Date(reqSlot.date).toISOString().split('T')[0] : null;
@@ -643,23 +591,19 @@ exports.handleRequest = async (req, res) => {
                               });
                               if (index !== -1) {
                                  room.timeSlots.splice(index, 1);
-                                 console.log(`   ❌ Removed C's slot: ${reqSlot.startTime}-${reqSlot.endTime}`);
                               }
                            });
                            room.markModified('timeSlots');
                         }
 
-                        console.log(`🗑️ Removing ${overlappingSlots.length} overlapping slots from target user (B)`);
                         overlappingSlots.forEach(slot => {
                            const index = room.timeSlots.findIndex(s => s._id.equals(slot._id));
                            if (index !== -1) {
                               room.timeSlots.splice(index, 1);
-                              console.log(`   ❌ Removed B's slot: ${new Date(slot.date).toISOString().split('T')[0]} ${slot.startTime}-${slot.endTime}`);
                            }
                         });
                         room.markModified('timeSlots');
 
-                        console.log(`📊 After removals - Total timeSlots: ${room.timeSlots.length}`);
 
                         room.timeSlots.push({
                            user: requester._id,
@@ -676,7 +620,6 @@ exports.handleRequest = async (req, res) => {
                         const newEndMinutes = newStartMinutes + totalDuration;
 
                         const numSlots = Math.ceil(totalDuration / 30);
-                        console.log(`📦 Creating ${numSlots} slots (30-min each) from ${toTimeString(newStartMinutes)} to ${toTimeString(newEndMinutes)}`);
 
                         for (let i = 0; i < numSlots; i++) {
                            const slotStart = newStartMinutes + (i * 30);
@@ -719,10 +662,8 @@ exports.handleRequest = async (req, res) => {
                            }
                         );
 
-                        console.log('✅ Normal slot exchange completed');
 
                      } else {
-                        console.log(`⚠️ B has NO empty time - Starting chain request WITHOUT modifying any slots`);
 
                         const requesterOriginalSlots = [];
                         if (request.requesterSlots && request.requesterSlots.length > 0) {
@@ -818,7 +759,6 @@ exports.handleRequest = async (req, res) => {
                      room.markModified('timeSlots');
                      room.markModified('requests');
                   } else {
-                     console.log('⚠️ No overlapping slots found');
                      request.status = 'approved';
                      request.respondedAt = new Date();
                      request.respondedBy = req.user.id;
@@ -827,11 +767,9 @@ exports.handleRequest = async (req, res) => {
                }
             }
          } else if (type === 'chain_request') {
-            console.log('🔗 Processing chain_request approval...');
 
             const chainData = request.chainData;
             if (!chainData) {
-               console.log('❌ No chainData found');
             } else {
                const originalRequesterId = chainData.originalRequester.toString();
                const intermediateUserId = chainData.intermediateUser.toString();
@@ -862,7 +800,6 @@ exports.handleRequest = async (req, res) => {
                });
 
                if (dSlotsToRemove.length === 0) {
-                  console.log('❌ D has no slots to exchange');
                   request.status = 'rejected';
                   request.response = 'D의 슬롯을 찾을 수 없습니다.';
                   room.markModified('requests');
@@ -1071,7 +1008,6 @@ exports.handleRequest = async (req, res) => {
                         originalRequest.response = `연쇄 조정 완료 - D가 승인`;
                      }
 
-                     console.log('✅ Chain request completed successfully!');
                   } else {
                      request.status = 'rejected';
                      request.response = `D(${dUserData?.firstName})가 이번 주 선호시간이 없어 조정이 실패했습니다. D의 이번 주 선호시간을 확인해주세요.`;
@@ -1091,7 +1027,6 @@ exports.handleRequest = async (req, res) => {
 
          await room.save();
       } else if (action === 'rejected') {
-         console.log('❌ Action is REJECTED - saving status...');
          room.markModified('requests');
          await room.save();
       }
@@ -1260,10 +1195,6 @@ exports.handleChainConfirmation = async (req, res) => {
       const { requestId } = req.params;
       const { action } = req.body; // 'proceed' or 'cancel'
 
-      console.log('🔗 ========== CHAIN CONFIRMATION ==========');
-      console.log('📋 Request ID:', requestId);
-      console.log('📋 Action:', action);
-      console.log('👤 User ID:', req.user.id);
 
       if (!['proceed', 'cancel'].includes(action)) {
          return res.status(400).json({ msg: '유효하지 않은 액션입니다. proceed 또는 cancel만 허용됩니다.' });
@@ -1306,7 +1237,6 @@ exports.handleChainConfirmation = async (req, res) => {
          request.respondedAt = new Date();
 
          await room.save();
-         console.log('❌ Chain exchange cancelled by requester');
 
          return res.json({
             success: true,
@@ -1319,7 +1249,6 @@ exports.handleChainConfirmation = async (req, res) => {
       }
 
       // action === 'proceed': 연쇄 조정 진행
-      console.log('✅ Proceeding with chain exchange');
 
       const { firstCandidate, intermediateUser, intermediateSlot, candidateUsers } = request.chainData;
       const targetUser = await User.findById(intermediateUser);
@@ -1359,7 +1288,6 @@ exports.handleChainConfirmation = async (req, res) => {
       request.response = `연쇄 조정 진행 중 - ${firstCandidate.userName}님에게 요청 전송됨`;
 
       await room.save();
-      console.log(`✅ Chain exchange request created, waiting for ${firstCandidate.userName}'s response`);
 
       const updatedRoom = await Room.findById(room._id)
          .populate('requests.requester', 'firstName lastName email')
