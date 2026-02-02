@@ -272,57 +272,6 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
     }
   }
 
-  // 🆕 최근 대화에서 동의 표현을 한 다른 사용자들 자동 참석 처리
-  const acceptPatterns = /ㅇㅋ|ㄱㄱ|좋아|오케이|ㅇㅇ|고고|가자|갈게|나도|간다|가능|ㄱㄴ|됨|돼|할게|갈겡|가즈아|가야지|그래/;
-  const autoAcceptedUsers = []; // 🆕 자동 참석 처리된 사용자 추적
-  for (const msg of sortedMessages) {
-    const msgSenderId = msg.sender?._id?.toString() || msg.sender?.toString();
-    if (!msgSenderId || msgSenderId === suggestedByUserId?.toString()) continue;
-    if (!msg.content || !acceptPatterns.test(msg.content)) continue;
-
-    // 이 사용자의 memberResponse를 accepted로 변경
-    const memberResp = suggestion.memberResponses.find(
-      r => r.user.toString() === msgSenderId
-    );
-    if (memberResp && memberResp.status === 'pending') {
-      memberResp.status = 'accepted';
-      memberResp.respondedAt = new Date();
-
-      // personalTime 생성
-      try {
-        const User = require('../models/user');
-        const agreeUser = await User.findById(msgSenderId);
-        if (agreeUser) {
-          let endTime = data.endTime;
-          if (endTime === '24:00') endTime = '23:59';
-          const acceptedCount = suggestion.memberResponses.filter(r => r.status === 'accepted').length;
-          const newPt = {
-            id: agreeUser.personalTimes.length > 0
-              ? Math.max(...agreeUser.personalTimes.map(pt => pt.id)) + 1
-              : 1,
-            title: `[약속] ${data.summary}`,
-            type: 'event',
-            startTime: data.startTime,
-            endTime: endTime,
-            days: [],
-            isRecurring: false,
-            specificDate: data.date,
-            color: '#3b82f6',
-            location: data.location || '',
-            roomId: roomId,
-            participants: acceptedCount,
-            suggestionId: suggestion._id.toString()
-          };
-          agreeUser.personalTimes.push(newPt);
-          await agreeUser.save();
-          memberResp.personalTimeId = newPt.id;
-          autoAcceptedUsers.push({ userId: msgSenderId, userName: msg.sender?.firstName || '사용자' }); // 🆕
-        }
-      } catch (err) {
-        console.error(`⚠️ [AI Schedule] Failed to auto-accept user:`, err.message);
-      }
-    }
-  }
   await suggestion.save();
 
   // 시스템 메시지 생성
@@ -330,13 +279,6 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
   await sendSystemMessage(roomId, suggestedByUserId,
     `${suggesterName}님이 ${data.date} 일정을 제안하였습니다`,
     'ai-suggestion', suggestion._id);
-
-  // 🆕 자동 참석 처리된 사용자들에게 참석 알림 전송
-  for (const accepted of autoAcceptedUsers) {
-    await sendSystemMessage(roomId, accepted.userId,
-      `${accepted.userName}님이 일정에 참석합니다: ${data.date} ${data.summary}`,
-      'system', suggestion._id);
-  }
 }
 
 /**
