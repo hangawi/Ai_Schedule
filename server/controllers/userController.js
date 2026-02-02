@@ -131,20 +131,79 @@ exports.getUserSchedule = async (req, res) => {
 
     // participants가 없는 확정 일정에 대해 방 멤버 수로 보정
     const Room = require('../models/room');
+    const ScheduleSuggestion = require('../models/scheduleSuggestion');
     const roomCache = new Map();
+    const suggestionCache = new Map();
     for (let i = 0; i < personalTimesWithLocation.length; i++) {
       const pt = personalTimesWithLocation[i];
       if (!pt.participants && pt.roomId) {
         try {
-          let room = roomCache.get(pt.roomId);
+          let room = roomCache.get(pt.roomId.toString());
           if (!room) {
-            room = await Room.findById(pt.roomId).select('members owner').lean();
-            if (room) roomCache.set(pt.roomId, room);
+            room = await Room.findById(pt.roomId)
+              .populate('members.user', 'firstName lastName')
+              .populate('owner', 'firstName lastName')
+              .lean();
+            if (room) roomCache.set(pt.roomId.toString(), room);
           }
           if (room) {
             personalTimesWithLocation[i] = {
               ...pt,
               participants: 1 + (room.members ? room.members.length : 0)
+            };
+          }
+        } catch (e) {
+          // room not found, skip
+        }
+      }
+
+      // 참석자 이름 추가: suggestionId 또는 roomId 기반
+      if (pt.suggestionId) {
+        try {
+          let suggestion = suggestionCache.get(pt.suggestionId);
+          if (!suggestion) {
+            suggestion = await ScheduleSuggestion.findById(pt.suggestionId)
+              .populate('memberResponses.user', 'firstName lastName')
+              .lean();
+            if (suggestion) suggestionCache.set(pt.suggestionId, suggestion);
+          }
+          if (suggestion) {
+            const acceptedNames = suggestion.memberResponses
+              .filter(r => r.status === 'accepted' && r.user)
+              .map(r => r.user.firstName || '');
+            const totalMembers = suggestion.memberResponses.length;
+            personalTimesWithLocation[i] = {
+              ...personalTimesWithLocation[i],
+              participantNames: acceptedNames,
+              totalMembers: totalMembers
+            };
+          }
+        } catch (e) {
+          // suggestion not found, skip
+        }
+      } else if (pt.roomId && !personalTimesWithLocation[i].participantNames) {
+        // roomId만 있는 경우 (일정맞추기 확정 일정) - 방 멤버 이름 조회
+        try {
+          let room = roomCache.get(pt.roomId.toString());
+          if (!room) {
+            room = await Room.findById(pt.roomId)
+              .populate('members.user', 'firstName lastName')
+              .populate('owner', 'firstName lastName')
+              .lean();
+            if (room) roomCache.set(pt.roomId.toString(), room);
+          }
+          if (room) {
+            const memberNames = [];
+            if (room.owner && room.owner.firstName) memberNames.push(room.owner.firstName);
+            if (room.members) {
+              room.members.forEach(m => {
+                if (m.user && m.user.firstName) memberNames.push(m.user.firstName);
+              });
+            }
+            personalTimesWithLocation[i] = {
+              ...personalTimesWithLocation[i],
+              participantNames: memberNames,
+              totalMembers: memberNames.length
             };
           }
         } catch (e) {

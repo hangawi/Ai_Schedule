@@ -67,10 +67,12 @@ const StatCard = ({ title, value, change, changeType }) => {
  * @param {string} roomName - 조율방 이름 (isCoordinated일 때만)
  * @returns {JSX.Element} 일정 카드 컴포넌트
  */
-const EventCard = ({ title, time, participants, priority, isCoordinated, roomName }) => {
+const EventCard = ({ title, time, participants, priority, isCoordinated, roomName, participantNames, totalMembers }) => {
+   const [showNames, setShowNames] = React.useState(false);
    const stars = Array.from({ length: 5 }, (_, i) => <Star key={i} size={14} className={i < priority ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'} />);
    // 🆕 확정 조건: 참석자 2명 이상 (isCoordinated는 확정 여부를 나타냄)
    const isConfirmed = isCoordinated && participants >= 2;
+   const hasNameInfo = participantNames && participantNames.length > 0;
    return (
       <div className={`p-4 rounded-lg shadow-sm border ${isConfirmed ? 'bg-green-50 border-green-300' : 'bg-white border-gray-200'} hover:shadow-md transition-shadow cursor-pointer`}>
          <div className="flex justify-between items-start">
@@ -91,7 +93,22 @@ const EventCard = ({ title, time, participants, priority, isCoordinated, roomNam
          </div>
          <div className="mt-2 text-sm text-gray-500">
             <p>{time}</p>
-            <p>참가자: {participants}명</p>
+            <p
+               className={hasNameInfo ? 'cursor-pointer hover:text-blue-500 transition-colors' : ''}
+               onClick={hasNameInfo ? (e) => { e.stopPropagation(); setShowNames(!showNames); } : undefined}
+            >
+               참가자: {participants}명{totalMembers > 0 && ` / ${totalMembers}명`}
+               {hasNameInfo && <span className="ml-1 text-xs">{showNames ? '▲' : '▼'}</span>}
+            </p>
+            {showNames && hasNameInfo && (
+               <div className="mt-1 flex flex-wrap gap-1">
+                  {participantNames.map((name, idx) => (
+                     <span key={idx} className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                        {name}
+                     </span>
+                  ))}
+               </div>
+            )}
          </div>
       </div>
    );
@@ -147,6 +164,8 @@ const DashboardTab = ({ pastEvents = [], todayEvents, upcomingEvents }) => {
                               priority={event.priority}
                               isCoordinated={event.isCoordinated}
                               roomName={event.roomName}
+                              participantNames={event.participantNames}
+                              totalMembers={event.totalMembers}
                            />
                         ))
                      ) : (
@@ -175,6 +194,8 @@ const DashboardTab = ({ pastEvents = [], todayEvents, upcomingEvents }) => {
                               priority={event.priority}
                               isCoordinated={event.isCoordinated}
                               roomName={event.roomName}
+                              participantNames={event.participantNames}
+                              totalMembers={event.totalMembers}
                            />
                         ))
                      ) : (
@@ -200,6 +221,8 @@ const DashboardTab = ({ pastEvents = [], todayEvents, upcomingEvents }) => {
                               priority={event.priority}
                               isCoordinated={event.isCoordinated}
                               roomName={event.roomName}
+                              participantNames={event.participantNames}
+                              totalMembers={event.totalMembers}
                            />
                         ))
                      ) : (

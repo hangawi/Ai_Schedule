@@ -465,7 +465,9 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                locationLat: pt.locationLat || null,
                locationLng: pt.locationLng || null,
                transportMode: pt.transportMode || null,
-               suggestionId: pt.suggestionId || null
+               suggestionId: pt.suggestionId || null,
+               participantNames: pt.participantNames || [],
+               totalMembers: pt.totalMembers || 0
             }));
 
          // 🔍 디버그: 매핑 후 데이터 확인

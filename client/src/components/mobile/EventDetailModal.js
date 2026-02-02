@@ -269,7 +269,22 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap, onDelete, previousL
                      <Users size={16} />
                      인원수
                   </div>
-                  <div className="modal-value">👥 {event.participants || 1}명</div>
+                  <div className="modal-value">👥 {event.participants || 1}명{event.totalMembers > 0 && ` / ${event.totalMembers}명`}</div>
+                  {event.participantNames && event.participantNames.length > 0 && (
+                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                        {event.participantNames.map((name, idx) => (
+                           <span key={idx} style={{
+                              padding: '2px 8px',
+                              backgroundColor: '#DBEAFE',
+                              color: '#1D4ED8',
+                              fontSize: '12px',
+                              borderRadius: '9999px'
+                           }}>
+                              {name}
+                           </span>
+                        ))}
+                     </div>
+                  )}
                </div>
 
                {/* 조율방 정보 (확정된 일정일 경우) */}

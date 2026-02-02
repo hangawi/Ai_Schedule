@@ -96,6 +96,10 @@ const generatePersonalEvents = (personalTimes, timeMin, timeMax) => {
           end: endDate,
           allDay: false,
           isPersonal: true, // Flag for styling
+          participants: pt.participants || 1,
+          participantNames: pt.participantNames || [],
+          totalMembers: pt.totalMembers || 0,
+          location: pt.location || null,
         });
       }
     });

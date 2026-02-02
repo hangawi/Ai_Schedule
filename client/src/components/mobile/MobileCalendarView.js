@@ -148,6 +148,8 @@ const MobileCalendarView = ({ user }) => {
                      locationLat: pt.locationLat,
                      locationLng: pt.locationLng,
                      participants: pt.participants || 1,
+                     participantNames: pt.participantNames || [],
+                     totalMembers: pt.totalMembers || 0,
                      isCoordinated: !!(pt.suggestionId || (pt.title && pt.title.includes('-'))),
                      originalData: pt
                   });

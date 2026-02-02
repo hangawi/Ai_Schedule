@@ -53,8 +53,25 @@ const EventDetailsModal = ({ event, onClose, onDelete, onEdit }) => {
         <h2 className="text-2xl font-bold mb-4 text-gray-800">{event.title}</h2>
         <p className="text-gray-700 mb-2"><strong>시작:</strong> {formatDateTime(event.start)}</p>
         <p className="text-gray-700 mb-4"><strong>종료:</strong> {formatDateTime(event.end)}</p>
-        {event.description && <p className="text-gray-700 mb-4"><strong>설명:</strong> {event.description}</p>}
-        
+        {event.description && <p className="text-gray-700 mb-2"><strong>설명:</strong> {event.description}</p>}
+        {event.location && <p className="text-gray-700 mb-2"><strong>장소:</strong> {event.location}</p>}
+        {(event.participants || event.participantNames) && (
+          <div className="mb-4">
+            <p className="text-gray-700 mb-1">
+              <strong>참가자:</strong> 👥 {event.participants || 0}명{event.totalMembers > 0 && ` / ${event.totalMembers}명`}
+            </p>
+            {event.participantNames && event.participantNames.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {event.participantNames.map((name, idx) => (
+                  <span key={idx} className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                    {name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex justify-end space-x-3 mt-6">
           <button
             onClick={onClose}

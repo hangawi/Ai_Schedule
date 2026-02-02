@@ -171,7 +171,9 @@ const MobileScheduleView = ({ user }) => {
                         hasTravelTime: true, // 이동시간 포함 플래그
                         travelStartTime: pt.startTime,
                         travelEndTime: pt.endTime,
-                        suggestionId: pt.suggestionId || nextEvent.suggestionId || null  // 🆕 원본 일정 ID
+                        suggestionId: pt.suggestionId || nextEvent.suggestionId || null,  // 🆕 원본 일정 ID
+                        participantNames: nextEvent.participantNames || pt.participantNames || [],
+                        totalMembers: nextEvent.totalMembers || pt.totalMembers || 0
                      });
 
                      processedIds.add(pt.id);
@@ -193,7 +195,9 @@ const MobileScheduleView = ({ user }) => {
                         locationLat: pt.locationLat || null,
                         locationLng: pt.locationLng || null,
                         transportMode: pt.transportMode || null,
-                        suggestionId: pt.suggestionId || null  // 🆕 원본 일정 ID
+                        suggestionId: pt.suggestionId || null,  // 🆕 원본 일정 ID
+                        participantNames: pt.participantNames || [],
+                        totalMembers: pt.totalMembers || 0
                      });
                      processedIds.add(pt.id);
                   }
@@ -215,7 +219,9 @@ const MobileScheduleView = ({ user }) => {
                      locationLng: pt.locationLng || null,
                      transportMode: pt.transportMode || null,
                      hasTravelTime: pt.hasTravelTime || false,
-                     suggestionId: pt.suggestionId || null  // 🆕 원본 일정 ID
+                     suggestionId: pt.suggestionId || null,  // 🆕 원본 일정 ID
+                     participantNames: pt.participantNames || [],
+                     totalMembers: pt.totalMembers || 0
                   });
                   processedIds.add(pt.id);
                }
