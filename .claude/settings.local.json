@@ -42,7 +42,8 @@
       "Bash(npx eslint:*)",
       "Bash(node:*)",
       "Bash(npm test)",
-      "mcp__serena__check_onboarding_performed"
+      "mcp__serena__check_onboarding_performed",
+      "Bash(timeout:*)"
     ]
   }
 }

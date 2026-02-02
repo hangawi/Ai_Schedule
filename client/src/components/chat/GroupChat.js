@@ -335,7 +335,10 @@ return (
               {/* 시스템 메시지 */}
               {isSystem && (
                 <div className="flex justify-center my-2">
-                  <span className="bg-gray-200 text-gray-600 text-xs py-1 px-3 rounded-full">
+                  <span
+                    onClick={msg.suggestionId ? handleOpenSuggestionModal : undefined}
+                    className={`bg-gray-200 text-gray-600 text-xs py-1 px-3 rounded-full${msg.suggestionId ? ' cursor-pointer hover:bg-gray-300 transition-colors' : ''}`}
+                  >
                     {msg.content}
                   </span>
                 </div>

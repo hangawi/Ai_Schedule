@@ -512,10 +512,27 @@ exports.deleteSuggestion = async (req, res) => {
       return res.status(403).json({ msg: '제안을 삭제할 권한이 없습니다. 제안자만 삭제할 수 있습니다.' });
     }
 
-    // 3. 제안 삭제
+    // 3. 수락한 멤버들의 personalTimes에서 해당 일정 제거
+    for (const response of suggestion.memberResponses) {
+      if (response.status === 'accepted' && response.personalTimeId) {
+        try {
+          const member = await User.findById(response.user);
+          if (member) {
+            member.personalTimes = member.personalTimes.filter(
+              pt => pt.suggestionId !== suggestionId
+            );
+            await member.save();
+          }
+        } catch (err) {
+          console.error(`⚠️ Failed to remove personalTime for user ${response.user}:`, err.message);
+        }
+      }
+    }
+
+    // 4. 제안 삭제
     await ScheduleSuggestion.findByIdAndDelete(suggestionId);
 
-    // 4. 사용자 정보 조회
+    // 5. 사용자 정보 조회
     const user = await User.findById(userId);
 
     // 5. 시스템 메시지 전송
@@ -567,7 +584,14 @@ exports.rejectSuggestion = async (req, res) => {
     // 3. 제안의 memberResponses 업데이트
     await suggestion.rejectByUser(userId);
 
-    // 3.5. 전원 불참 체크
+    // 3.5. 불참한 사용자의 personalTime에서 해당 일정 제거
+    const userResponse = suggestion.memberResponses.find(r => r.user.toString() === userId);
+    if (userResponse && userResponse.personalTimeId) {
+      user.personalTimes = user.personalTimes.filter(pt => pt.suggestionId !== suggestionId);
+      await user.save();
+    }
+
+    // 3.6. 전원 불참 체크
     const allRejected = suggestion.memberResponses.every(r => r.status === 'rejected');
     if (allRejected) {
       suggestion.status = 'cancelled';

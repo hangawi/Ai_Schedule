@@ -51,11 +51,17 @@ exports.analyzeConversation = async (roomId) => {
     } else {
     }
 
-    // 3. 대화 텍스트 변환 (시스템 메시지 제외, 사용자 메시지만)
+    // 3. 대화 텍스트 변환 (사용자 메시지 + AI 시스템 메시지를 컨텍스트로 포함)
     const userMessages = sortedMessages.filter(m => m.type === 'text' || !m.type);
-    const conversationText = userMessages.map(m =>
-      `${m.sender?.firstName || 'User'}: ${m.content}`
-    ).join('\n');
+    const contextMessages = sortedMessages.filter(m =>
+      m.type === 'text' || !m.type || m.type === 'ai-suggestion' || m.type === 'system'
+    );
+    const conversationText = contextMessages.map(m => {
+      if (m.type === 'ai-suggestion' || m.type === 'system') {
+        return `[AI시스템]: ${m.content}`;
+      }
+      return `${m.sender?.firstName || 'User'}: ${m.content}`;
+    }).join('');
 
 
     // 4. Gemini 프롬프트 구성 (기존 일정 정보 포함)
@@ -266,11 +272,71 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
     }
   }
 
+  // 🆕 최근 대화에서 동의 표현을 한 다른 사용자들 자동 참석 처리
+  const acceptPatterns = /ㅇㅋ|ㄱㄱ|좋아|오케이|ㅇㅇ|고고|가자|갈게|나도|간다|가능|ㄱㄴ|됨|돼|할게|갈겡|가즈아|가야지|그래/;
+  const autoAcceptedUsers = []; // 🆕 자동 참석 처리된 사용자 추적
+  for (const msg of sortedMessages) {
+    const msgSenderId = msg.sender?._id?.toString() || msg.sender?.toString();
+    if (!msgSenderId || msgSenderId === suggestedByUserId?.toString()) continue;
+    if (!msg.content || !acceptPatterns.test(msg.content)) continue;
+
+    // 이 사용자의 memberResponse를 accepted로 변경
+    const memberResp = suggestion.memberResponses.find(
+      r => r.user.toString() === msgSenderId
+    );
+    if (memberResp && memberResp.status === 'pending') {
+      memberResp.status = 'accepted';
+      memberResp.respondedAt = new Date();
+
+      // personalTime 생성
+      try {
+        const User = require('../models/user');
+        const agreeUser = await User.findById(msgSenderId);
+        if (agreeUser) {
+          let endTime = data.endTime;
+          if (endTime === '24:00') endTime = '23:59';
+          const acceptedCount = suggestion.memberResponses.filter(r => r.status === 'accepted').length;
+          const newPt = {
+            id: agreeUser.personalTimes.length > 0
+              ? Math.max(...agreeUser.personalTimes.map(pt => pt.id)) + 1
+              : 1,
+            title: `[약속] ${data.summary}`,
+            type: 'event',
+            startTime: data.startTime,
+            endTime: endTime,
+            days: [],
+            isRecurring: false,
+            specificDate: data.date,
+            color: '#3b82f6',
+            location: data.location || '',
+            roomId: roomId,
+            participants: acceptedCount,
+            suggestionId: suggestion._id.toString()
+          };
+          agreeUser.personalTimes.push(newPt);
+          await agreeUser.save();
+          memberResp.personalTimeId = newPt.id;
+          autoAcceptedUsers.push({ userId: msgSenderId, userName: msg.sender?.firstName || '사용자' }); // 🆕
+        }
+      } catch (err) {
+        console.error(`⚠️ [AI Schedule] Failed to auto-accept user:`, err.message);
+      }
+    }
+  }
+  await suggestion.save();
+
   // 시스템 메시지 생성
   const suggesterName = lastMessage?.sender?.firstName || '사용자';
   await sendSystemMessage(roomId, suggestedByUserId,
     `${suggesterName}님이 ${data.date} 일정을 제안하였습니다`,
     'ai-suggestion', suggestion._id);
+
+  // 🆕 자동 참석 처리된 사용자들에게 참석 알림 전송
+  for (const accepted of autoAcceptedUsers) {
+    await sendSystemMessage(roomId, accepted.userId,
+      `${accepted.userName}님이 일정에 참석합니다: ${data.date} ${data.summary}`,
+      'system', suggestion._id);
+  }
 }
 
 /**
@@ -295,77 +361,114 @@ async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
   const oldSummary = suggestion.summary;
   const oldLocation = suggestion.location;
 
-  // 이미 같은 값이면 스킵 (중복 extend 방지)
-  const noChange =
-    (!data.summary || data.summary === oldSummary) &&
-    (!data.endTime || data.endTime === oldEndTime) &&
-    (!data.startTime || data.startTime === oldStartTime) &&
-    (!data.location || data.location === oldLocation);
-  if (noChange) {
+  // 🆕 sentiment는 별도 보관 후 data에서 제거 (일정 필드가 아님)
+  const sentiment = data.sentiment;
+  delete data.sentiment;
+
+  // 🆕 변경되지 않은 필드를 data에서 제거 (중복 알림 방지)
+  if (data.summary && data.summary === oldSummary) delete data.summary;
+  if (data.endTime && data.endTime === oldEndTime) delete data.endTime;
+  if (data.startTime && data.startTime === oldStartTime) delete data.startTime;
+  if (data.location && data.location === oldLocation) delete data.location;
+
+  // 모든 필드가 제거되었으면 (실제 변경 없음) sentiment만 처리
+  const hasDataChange = data.summary || data.endTime || data.startTime || data.location;
+  if (!hasDataChange && !sentiment) {
     console.log('[AI분석] 이미 같은 값 - extend 스킵:', { targetId, data, old: { oldSummary, oldStartTime, oldEndTime, oldLocation } });
     return;
   }
 
-  // 일정 업데이트
+  // 일정 업데이트 (변경된 필드만)
   if (data.summary) suggestion.summary = data.summary;
   if (data.endTime) suggestion.endTime = data.endTime;
   if (data.location) suggestion.location = data.location;
   if (data.startTime) suggestion.startTime = data.startTime;
 
-  await suggestion.save();
+  if (hasDataChange) {
+    await suggestion.save();
+  }
 
   // 🆕 수락한 모든 사용자의 personalTimes 동기화 (장소, 시간, 제목 등)
-  const User = require('../models/user');
-  for (const response of suggestion.memberResponses) {
-    if (response.status === 'accepted' && response.personalTimeId) {
-      try {
-        const syncUser = await User.findById(response.user);
-        if (syncUser) {
-          const pt = syncUser.personalTimes.find(p => p.id === response.personalTimeId);
-          if (pt) {
-            let changed = false;
-            if (data.location) { pt.location = data.location; changed = true; }
-            if (data.summary) { pt.title = `[약속] ${data.summary}`; changed = true; }
-            if (data.startTime) { pt.startTime = data.startTime; changed = true; }
-            if (data.endTime) {
-              pt.endTime = data.endTime === '24:00' ? '23:59' : data.endTime;
-              changed = true;
-            }
-            if (changed) {
-              await syncUser.save();
+  if (hasDataChange) {
+    const User = require('../models/user');
+    for (const response of suggestion.memberResponses) {
+      if (response.status === 'accepted' && response.personalTimeId) {
+        try {
+          const syncUser = await User.findById(response.user);
+          if (syncUser) {
+            const pt = syncUser.personalTimes.find(p => p.id === response.personalTimeId);
+            if (pt) {
+              let changed = false;
+              if (data.location) { pt.location = data.location; changed = true; }
+              if (data.summary) { pt.title = `[약속] ${data.summary}`; changed = true; }
+              if (data.startTime) { pt.startTime = data.startTime; changed = true; }
+              if (data.endTime) {
+                pt.endTime = data.endTime === '24:00' ? '23:59' : data.endTime;
+                changed = true;
+              }
+              if (changed) {
+                await syncUser.save();
+              }
             }
           }
+        } catch (syncErr) {
+          console.error(`⚠️ [AI Schedule] Failed to sync personalTime:`, syncErr.message);
         }
-      } catch (syncErr) {
-        console.error(`⚠️ [AI Schedule] Failed to sync personalTime:`, syncErr.message);
       }
     }
   }
 
-  // 시스템 메시지 생성 (변경 내용에 따라 다르게)
+  // 🆕 시스템 메시지 생성 (변경된 항목별로 각각 전송)
   const lastMessage = sortedMessages[sortedMessages.length - 1];
-  let systemMessageContent;
 
-  // 시간이 변경된 경우
-  if (data.startTime || data.endTime) {
-    const newStartTime = suggestion.startTime;
-    const newEndTime = suggestion.endTime;
-    systemMessageContent = `일정 시간이 변경되었습니다: ${oldStartTime}~${oldEndTime} → ${newStartTime}~${newEndTime}`;
-  }
-  // 내용이 변경된 경우
-  else if (data.summary) {
-    systemMessageContent = `일정 내용이 변경되었습니다: ${oldSummary} → ${suggestion.summary}`;
-  }
-  // 장소가 변경된 경우
-  else if (data.location) {
-    systemMessageContent = `일정 장소가 변경되었습니다: ${suggestion.summary} (${oldLocation || '미정'} → ${suggestion.location})`;
-  }
-  // 기본
-  else {
-    systemMessageContent = `일정이 수정되었습니다: ${suggestion.summary}`;
+  if (hasDataChange) {
+    // 시간이 변경된 경우
+    if (data.startTime || data.endTime) {
+      const newStartTime = suggestion.startTime;
+      const newEndTime = suggestion.endTime;
+      await sendSystemMessage(roomId, lastMessage?.sender?._id,
+        `일정 시간이 변경되었습니다: ${oldStartTime}~${oldEndTime} → ${newStartTime}~${newEndTime}`,
+        'system', suggestion._id);
+    }
+    // 장소가 변경된 경우
+    if (data.location) {
+      await sendSystemMessage(roomId, lastMessage?.sender?._id,
+        `일정 장소가 변경되었습니다: ${suggestion.summary} (${oldLocation || '미정'} → ${suggestion.location})`,
+        'system', suggestion._id);
+    }
+    // 내용이 변경된 경우
+    if (data.summary) {
+      await sendSystemMessage(roomId, lastMessage?.sender?._id,
+        `일정 내용이 변경되었습니다: ${oldSummary} → ${suggestion.summary}`,
+        'system', suggestion._id);
+    }
   }
 
-  await sendSystemMessage(roomId, lastMessage?.sender?._id, systemMessageContent, 'system');
+  // 🆕 extend에 sentiment 처리 (AI가 넣어줬거나, 코드에서 자동 감지)
+  let detectedSentiment = sentiment;
+
+  // AI가 sentiment를 안 넣었을 경우, 마지막 메시지에서 직접 감지
+  if (!detectedSentiment && lastMessage?.content) {
+    const msgText = lastMessage.content;
+    const rejectPattern = /못\s*가|못\s*감|불참|불가능|패스|안\s*갈게|빠질게|안될것같아|안\s*될\s*것\s*같아|시험이라|일있어|약속있어|바빠서|일\s*생김|안됨|ㅈㅅ|못\s*갈\s*것\s*같아|안\s*갈래/;
+
+    if (rejectPattern.test(msgText)) {
+      detectedSentiment = 'reject';
+    } else if (hasDataChange) {
+      // 🆕 핵심: 장소/시간/활동을 적극적으로 제안하는 사람 = 암묵적 참석
+      // "코엑스로 하자 12시까지 놀자" → 본인도 당연히 가는 것
+      detectedSentiment = 'accept';
+    }
+  }
+
+  if (detectedSentiment) {
+    const sentimentResult = {
+      targetId: targetId,
+      sentiment: detectedSentiment,
+      reason: 'extend와 함께 감지된 참석/불참 의사'
+    };
+    await handleAutoResponse(roomId, sentimentResult, sortedMessages);
+  }
 
   // Socket 이벤트 발송
   if (global.io) {
@@ -414,6 +517,7 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
 
   // 🆕 이미 응답한 사용자는 재처리 안 함
   if (userResponse.status !== 'pending') {
+    console.log(`[AI분석] 이미 응답 완료 - user: ${userId}, status: ${userResponse.status}, sentiment: ${sentiment}`);
     return;
   }
 
@@ -488,18 +592,32 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
     const userName = lastMessage?.sender?.firstName || '사용자';
     await sendSystemMessage(roomId, userId,
       `${userName}님이 일정에 참석합니다: ${suggestion.date} ${suggestion.summary}`,
-      'system');
+      'system', suggestion._id);
 
   } else if (sentiment === 'reject') {
     userResponse.status = 'rejected';
     userResponse.respondedAt = new Date();
+
+    // 🆕 이미 수락해서 personalTime이 있었다면 제거
+    if (userResponse.personalTimeId) {
+      const User = require('../models/user');
+      const rejectUser = await User.findById(userId);
+      if (rejectUser) {
+        rejectUser.personalTimes = rejectUser.personalTimes.filter(
+          pt => pt.suggestionId !== suggestion._id.toString()
+        );
+        await rejectUser.save();
+      }
+      userResponse.personalTimeId = null;
+    }
+
     await suggestion.save();
 
     // 시스템 메시지
     const userName = lastMessage?.sender?.firstName || '사용자';
     await sendSystemMessage(roomId, userId,
       `${userName}님이 일정에 불참합니다: ${suggestion.date} ${suggestion.summary}`,
-      'system');
+      'system', suggestion._id);
 
   } else {
     // sentiment 없거나 알 수 없는 경우 - 단순 응답으로 처리
@@ -551,6 +669,16 @@ async function handleCancelSchedule(roomId, targetId, reason, sortedMessages) {
   if (acceptedOthers.length >= 2) {
     // 2명 이상 수락한 경우: 제안자만 불참 처리
 
+    // 제안자의 personalTime 제거
+    const User = require('../models/user');
+    const suggesterUser = await User.findById(suggesterId);
+    if (suggesterUser) {
+      suggesterUser.personalTimes = suggesterUser.personalTimes.filter(
+        pt => pt.suggestionId !== targetId.toString()
+      );
+      await suggesterUser.save();
+    }
+
     const suggesterResponse = suggestion.memberResponses.find(
       r => r.user?._id?.toString() === suggesterId
     );
@@ -564,10 +692,28 @@ async function handleCancelSchedule(roomId, targetId, reason, sortedMessages) {
     const suggesterName = lastMessage?.sender?.firstName || '제안자';
     await sendSystemMessage(roomId, lastMessage?.sender?._id,
       `${suggesterName}님이 일정에서 빠졌습니다. 나머지 인원으로 진행됩니다: ${suggestion.date} ${suggestion.summary}`,
-      'system');
+      'system', suggestion._id);
 
   } else {
     // 2명 미만 수락: 일정 완전 취소
+
+    // 모든 수락 멤버의 personalTime 제거
+    const User = require('../models/user');
+    for (const response of suggestion.memberResponses) {
+      if (response.status === 'accepted' && response.personalTimeId) {
+        try {
+          const member = await User.findById(response.user._id || response.user);
+          if (member) {
+            member.personalTimes = member.personalTimes.filter(
+              pt => pt.suggestionId !== targetId.toString()
+            );
+            await member.save();
+          }
+        } catch (err) {
+          console.error(`⚠️ [AI Schedule] Failed to remove personalTime on cancel:`, err.message);
+        }
+      }
+    }
 
     suggestion.status = 'cancelled';
     await suggestion.save();
@@ -576,7 +722,7 @@ async function handleCancelSchedule(roomId, targetId, reason, sortedMessages) {
     const suggesterName = lastMessage?.sender?.firstName || '제안자';
     await sendSystemMessage(roomId, lastMessage?.sender?._id,
       `${suggesterName}님이 일정을 취소하였습니다: ${suggestion.date} ${suggestion.summary}`,
-      'system');
+      'system', suggestion._id);
   }
 
   // Socket 이벤트 발송
