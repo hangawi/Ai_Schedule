@@ -91,6 +91,8 @@ exports.analyzeConversation = async (roomId) => {
 
     // 6. action에 따른 처리
     const action = analysisResult.action;
+    console.log('[AI분석] 대화:', conversationText);
+    console.log('[AI분석] 결과:', JSON.stringify(analysisResult, null, 2));
 
     // 🔍 response action인 경우 targetId 검증
     if (action === 'response' && analysisResult.targetId) {
@@ -292,6 +294,17 @@ async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
   const oldEndTime = suggestion.endTime;
   const oldSummary = suggestion.summary;
   const oldLocation = suggestion.location;
+
+  // 이미 같은 값이면 스킵 (중복 extend 방지)
+  const noChange =
+    (!data.summary || data.summary === oldSummary) &&
+    (!data.endTime || data.endTime === oldEndTime) &&
+    (!data.startTime || data.startTime === oldStartTime) &&
+    (!data.location || data.location === oldLocation);
+  if (noChange) {
+    console.log('[AI분석] 이미 같은 값 - extend 스킵:', { targetId, data, old: { oldSummary, oldStartTime, oldEndTime, oldLocation } });
+    return;
+  }
 
   // 일정 업데이트
   if (data.summary) suggestion.summary = data.summary;

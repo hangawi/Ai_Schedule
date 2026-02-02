@@ -489,6 +489,35 @@ const MobileCalendarView = ({ user }) => {
       }
    };
 
+   const handleDeleteScheduleEvent = async (event) => {
+      try {
+         const currentUser = auth.currentUser;
+         if (!currentUser) return;
+         const token = await currentUser.getIdToken();
+
+         if (event.id && event.id.startsWith('pt-')) {
+            const personalTimeId = event.id.replace('pt-', '');
+            const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule/${personalTimeId}`, {
+               method: 'DELETE',
+               headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!response.ok) throw new Error('Failed to delete personal time');
+         } else {
+            const response = await fetch(`${API_BASE_URL}/api/events/${event.id}`, {
+               method: 'DELETE',
+               headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!response.ok) throw new Error('Failed to delete event');
+         }
+
+         setSelectedEvent(null);
+         await fetchSchedule();
+      } catch (error) {
+         console.error('Delete event error:', error);
+         alert('일정 삭제에 실패했습니다.');
+      }
+   };
+
    const handleSplitItemClick = (event) => {
       setSelectedEvent({
          ...event,
@@ -725,7 +754,7 @@ const MobileCalendarView = ({ user }) => {
                forceOpen={true} 
             />
          )}
-         {selectedEvent && <EventDetailModal event={selectedEvent} user={user} onClose={() => setSelectedEvent(null)} onOpenMap={handleOpenMap} previousLocation={null} />}
+         {selectedEvent && <EventDetailModal event={selectedEvent} user={user} onClose={() => setSelectedEvent(null)} onOpenMap={handleOpenMap} onDelete={handleDeleteScheduleEvent} previousLocation={null} />}
          {showMapModal && selectedLocation && <MapModal address={selectedLocation.address} lat={selectedLocation.lat} lng={selectedLocation.lng} onClose={handleCloseMapModal} />}
       </div>
    );
