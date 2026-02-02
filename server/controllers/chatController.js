@@ -416,6 +416,11 @@ exports.acceptSuggestion = async (req, res) => {
     }
 
     // 3. 개인 캘린더에 일정 추가 (personalTimes에 추가)
+    // 🆕 먼저 수락 처리 후 참석자 수 계산
+    await suggestion.acceptByUser(userId, null); // personalTimeId는 아래에서 업데이트
+
+    const acceptedCount = suggestion.memberResponses.filter(r => r.status === 'accepted').length;
+
     const newPersonalTime = {
       id: user.personalTimes.length > 0
         ? Math.max(...user.personalTimes.map(pt => pt.id)) + 1
@@ -423,20 +428,48 @@ exports.acceptSuggestion = async (req, res) => {
       title: `[약속] ${suggestion.summary}`,
       type: 'event',
       startTime: suggestion.startTime,
-      endTime: suggestion.endTime,
-      days: [], // 반복 없음
+      endTime: suggestion.endTime === '24:00' ? '23:59' : suggestion.endTime,
+      days: [],
       isRecurring: false,
-      specificDate: suggestion.date, // 특정 날짜에만
-      color: '#3b82f6', // 파란색
+      specificDate: suggestion.date,
+      color: '#3b82f6',
       location: suggestion.location || '',
-      roomId: roomId
+      roomId: roomId,
+      participants: acceptedCount,
+      suggestionId: suggestion._id.toString()
     };
 
     user.personalTimes.push(newPersonalTime);
     await user.save();
 
-    // 4. 제안의 memberResponses 업데이트
-    await suggestion.acceptByUser(userId, newPersonalTime.id);
+    // 4. personalTimeId 업데이트
+    const userResponse = suggestion.memberResponses.find(
+      r => r.user.toString() === userId.toString() || r.user._id?.toString() === userId.toString()
+    );
+    if (userResponse) {
+      userResponse.personalTimeId = newPersonalTime.id;
+      await suggestion.save();
+    }
+
+    // 🆕 이미 수락한 다른 사용자들의 participants 동기화
+    for (const response of suggestion.memberResponses) {
+      const respUserId = response.user._id?.toString() || response.user.toString();
+      if (response.status === 'accepted' && response.personalTimeId && respUserId !== userId.toString()) {
+        try {
+          const otherUser = await User.findById(response.user._id || response.user);
+          if (otherUser) {
+            const pt = otherUser.personalTimes.find(p => p.id === response.personalTimeId);
+            if (pt) {
+              pt.participants = acceptedCount;
+              await otherUser.save();
+              console.log(`🔄 [Accept] Synced participants(${acceptedCount}) for user ${otherUser._id}`);
+            }
+          }
+        } catch (syncErr) {
+          console.error(`⚠️ [Accept] Failed to sync participants:`, syncErr.message);
+        }
+      }
+    }
 
     // 5. 시스템 메시지 전송
     const systemMsg = new ChatMessage({

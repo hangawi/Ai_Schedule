@@ -238,6 +238,51 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
   await suggestion.save();
   console.log(`✅ [AI Schedule] New suggestion saved:`, suggestion._id);
 
+  // 🆕 제안자(생성자)의 personalTime 생성
+  if (suggestedByUserId) {
+    try {
+      const User = require('../models/user');
+      const suggester = await User.findById(suggestedByUserId);
+      if (suggester) {
+        let endTime = data.endTime;
+        if (endTime === '24:00') endTime = '23:59';
+
+        const newPersonalTime = {
+          id: suggester.personalTimes.length > 0
+            ? Math.max(...suggester.personalTimes.map(pt => pt.id)) + 1
+            : 1,
+          title: `[약속] ${data.summary}`,
+          type: 'event',
+          startTime: data.startTime,
+          endTime: endTime,
+          days: [],
+          isRecurring: false,
+          specificDate: data.date,
+          color: '#3b82f6',
+          location: data.location || '',
+          roomId: roomId,
+          participants: 1,
+          suggestionId: suggestion._id.toString()
+        };
+
+        suggester.personalTimes.push(newPersonalTime);
+        await suggester.save();
+
+        // memberResponses에 personalTimeId 업데이트
+        const suggesterResponse = suggestion.memberResponses.find(
+          r => r.user.toString() === suggestedByUserId.toString()
+        );
+        if (suggesterResponse) {
+          suggesterResponse.personalTimeId = newPersonalTime.id;
+          await suggestion.save();
+        }
+        console.log(`📅 [AI Schedule] Created personalTime for suggester (id: ${newPersonalTime.id})`);
+      }
+    } catch (err) {
+      console.error(`⚠️ [AI Schedule] Failed to create suggester personalTime:`, err.message);
+    }
+  }
+
   // 시스템 메시지 생성
   const suggesterName = lastMessage?.sender?.firstName || '사용자';
   await sendSystemMessage(roomId, suggestedByUserId,
@@ -276,6 +321,35 @@ async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
 
   await suggestion.save();
   console.log(`✅ [AI Schedule] Schedule extended:`, suggestion._id);
+
+  // 🆕 수락한 모든 사용자의 personalTimes 동기화 (장소, 시간, 제목 등)
+  const User = require('../models/user');
+  for (const response of suggestion.memberResponses) {
+    if (response.status === 'accepted' && response.personalTimeId) {
+      try {
+        const syncUser = await User.findById(response.user);
+        if (syncUser) {
+          const pt = syncUser.personalTimes.find(p => p.id === response.personalTimeId);
+          if (pt) {
+            let changed = false;
+            if (data.location) { pt.location = data.location; changed = true; }
+            if (data.summary) { pt.title = `[약속] ${data.summary}`; changed = true; }
+            if (data.startTime) { pt.startTime = data.startTime; changed = true; }
+            if (data.endTime) {
+              pt.endTime = data.endTime === '24:00' ? '23:59' : data.endTime;
+              changed = true;
+            }
+            if (changed) {
+              await syncUser.save();
+              console.log(`🔄 [AI Schedule] Synced personalTime for user ${syncUser._id}`);
+            }
+          }
+        }
+      } catch (syncErr) {
+        console.error(`⚠️ [AI Schedule] Failed to sync personalTime:`, syncErr.message);
+      }
+    }
+  }
 
   // 시스템 메시지 생성 (변경 내용에 따라 다르게)
   const lastMessage = sortedMessages[sortedMessages.length - 1];
@@ -408,6 +482,25 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
     userResponse.personalTimeId = newPersonalTime.id;
     await suggestion.save();
     console.log(`💾 [AI Schedule] Suggestion saved (accepted)`);
+
+    // 🆕 이미 수락한 다른 사용자들의 personalTimes.participants도 최신화
+    for (const response of suggestion.memberResponses) {
+      if (response.status === 'accepted' && response.personalTimeId && response.user?._id?.toString() !== userId) {
+        try {
+          const otherUser = await User.findById(response.user._id || response.user);
+          if (otherUser) {
+            const pt = otherUser.personalTimes.find(p => p.id === response.personalTimeId);
+            if (pt) {
+              pt.participants = acceptedCount;
+              await otherUser.save();
+              console.log(`🔄 [AI Schedule] Synced participants(${acceptedCount}) for user ${otherUser._id}`);
+            }
+          }
+        } catch (syncErr) {
+          console.error(`⚠️ [AI Schedule] Failed to sync participants for user:`, syncErr.message);
+        }
+      }
+    }
 
     // 시스템 메시지
     const userName = lastMessage?.sender?.firstName || '사용자';

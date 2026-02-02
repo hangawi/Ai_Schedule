@@ -89,11 +89,6 @@ const MobileCalendarView = ({ user }) => {
    };
 
    const convertScheduleToEvents = useCallback((defaultSchedule, scheduleExceptions, personalTimes) => {
-      console.log('📅 [달력] convertScheduleToEvents 실행', {
-         defaultScheduleCount: defaultSchedule?.length || 0,
-         scheduleExceptionsCount: scheduleExceptions?.length || 0,
-         personalTimesCount: personalTimes?.length || 0
-      });
 
       const tempEvents = [];
       const today = new Date();
@@ -133,19 +128,6 @@ const MobileCalendarView = ({ user }) => {
                   ((pt.days && pt.days.includes(adjustedDayOfWeek)) ||
                    (pt.daysOfWeek && pt.daysOfWeek.includes(dayOfWeek)));
 
-               if (ptIdx === 0 && dateStr === '2026-01-09') {
-                  console.log('📅 [점심시간 체크]', {
-                     title: pt.title,
-                     dateStr,
-                     dayOfWeek,
-                     adjustedDayOfWeek,
-                     days: pt.days,
-                     daysOfWeek: pt.daysOfWeek,
-                     isRecurring: pt.isRecurring,
-                     hasRecurringTime,
-                     specificDate: pt.specificDate
-                  });
-               }
 
                if (hasRecurringTime || (pt.isRecurring === false && pt.specificDate === dateStr)) {
                   const [sh, sm] = pt.startTime.split(':').map(Number);
@@ -165,6 +147,8 @@ const MobileCalendarView = ({ user }) => {
                      location: pt.location,
                      locationLat: pt.locationLat,
                      locationLng: pt.locationLng,
+                     participants: pt.participants || 1,
+                     isCoordinated: !!(pt.suggestionId || (pt.title && pt.title.includes('-'))),
                      originalData: pt
                   });
                }
@@ -219,13 +203,7 @@ const MobileCalendarView = ({ user }) => {
    const fetchSchedule = useCallback(async () => {
       try {
          setIsLoading(true);
-         console.log('📅 [달력] fetchSchedule 시작');
          const data = await userService.getUserSchedule();
-         console.log('📅 [달력] 데이터 수신:', {
-            defaultSchedule: data.defaultSchedule?.length || 0,
-            scheduleExceptions: data.scheduleExceptions?.length || 0,
-            personalTimes: data.personalTimes?.length || 0
-         });
          setDefaultSchedule(data.defaultSchedule || []);
          setScheduleExceptions(data.scheduleExceptions || []);
          setPersonalTimes(data.personalTimes || []);
@@ -241,7 +219,6 @@ const MobileCalendarView = ({ user }) => {
    // 챗봇 등 외부에서 calendarUpdate 이벤트를 발생시킬 때 스케줄을 다시 불러옴
    useEffect(() => {
        const handleCalendarUpdate = (event) => {
-           console.log('📅 [달력] calendarUpdate 이벤트 수신:', event.detail);
            fetchSchedule(); // Re-fetch data when a calendar update event is received
        };
    
@@ -256,16 +233,10 @@ const MobileCalendarView = ({ user }) => {
    useEffect(() => {
       // isLoading이 false일 때 (즉, 데이터 로딩이 완료되었을 때) 실행
       if (!isLoading && calendarRef.current) {
-          console.log('📅 [달력] 상태 변경 감지 - events 재계산 및 FullCalendar 업데이트', {
-              defaultSchedule: defaultSchedule?.length || 0,
-              personalTimes: personalTimes?.length || 0,
-          });
-          
           const calendarApi = calendarRef.current.getApi();
           const calendarEvents = convertScheduleToEvents(defaultSchedule, scheduleExceptions, personalTimes);
           
-          console.log('📅 [달력] 재계산된 이벤트:', calendarEvents.length);
-  
+
           // React 상태 업데이트 (하단 리스트 등 다른 UI 요소에 필요)
           setEvents(calendarEvents);
   
@@ -273,7 +244,6 @@ const MobileCalendarView = ({ user }) => {
           Promise.resolve().then(() => {
               calendarApi.removeAllEvents();
               calendarApi.addEventSource(calendarEvents);
-              console.log('📅 [달력] FullCalendar API로 이벤트 소스 업데이트 완료 (Deferred)');
           });
       }
   }, [defaultSchedule, scheduleExceptions, personalTimes, isLoading, convertScheduleToEvents, calendarRef]);
@@ -291,7 +261,7 @@ const MobileCalendarView = ({ user }) => {
          title: event.title,
          date: `${year}-${month}-${day}`,
          time: `${hours}:${minutes}`,
-         participants: event.participants ? event.participants.length : 0,
+         participants: Array.isArray(event.participants) ? event.participants.length : (event.participants || 0),
          priority: event.priority || 3,
          color: color || event.color || 'blue',
          location: event.location,
@@ -487,7 +457,15 @@ const MobileCalendarView = ({ user }) => {
       // 실제 일정 클릭 시: 날짜 선택 + 상세 모달 표시
       setSelectedDate(eventObj.start);
 
-      const originalEvent = events.find(e => e.id === eventObj.id);
+      let originalEvent = events.find(e => e.id === eventObj.id);
+      // ID 매칭 실패 시 시간+제목으로 fallback 매칭
+      if (!originalEvent) {
+         const eventStart = eventObj.start?.toISOString();
+         originalEvent = events.find(e => {
+            const eStart = new Date(e.start).toISOString();
+            return eStart === eventStart && e.title === eventObj.title;
+         });
+      }
       if (originalEvent) {
          setSelectedEvent({
             ...originalEvent,

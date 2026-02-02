@@ -812,6 +812,9 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
       });
     }
     
+    // 참석자 수 계산 (방장 + 조원)
+    const participantCount = 1 + (room.members ? room.members.length : Object.keys(mergedSlotsByUser).length);
+
     // User 객체를 Map으로 관리
     const userMap = new Map();
     const ownerName = `${room.owner.firstName || ''} ${room.owner.lastName || ''}`.trim() || '방장';
@@ -863,13 +866,13 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
             locationLat: room.owner.addressLat || null,
             locationLng: room.owner.addressLng || null,
             transportMode: travelMode || null, // 교통수단
-            roomId: room._id.toString() // 방 ID
+            roomId: room._id.toString(), // 방 ID
+            participants: participantCount // 참석자 수
           });
         }
       });
     }
-    
-    // 방장 처리
+        // 방장 처리
     const ownerId = (room.owner._id || room.owner).toString();
     let owner = userMap.get(ownerId);
     if (!owner) {
@@ -931,7 +934,8 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
               locationLng: member?.addressLng || null,
               transportMode: travelMode || null, // 교통수단
               roomId: room._id.toString(), // 방 ID
-              hasTravelTime: room.travelTimeSlots && room.travelTimeSlots.length > 0 // 이동시간 존재 여부
+              hasTravelTime: room.travelTimeSlots && room.travelTimeSlots.length > 0, // 이동시간 존재 여부
+              participants: participantCount // 참석자 수
             });
           }
         });
@@ -990,7 +994,8 @@ exports.confirmSchedule = exports.confirmSchedule = async (req, res) => {
               locationLng: travelMember?.addressLng || null,
               transportMode: travelMode || null, // 교통수단
               roomId: room._id.toString(), // 방 ID
-              isTravelTime: true // 이동시간 플래그
+              isTravelTime: true, // 이동시간 플래그
+              participants: participantCount // 참석자 수
             });
           }
         });

@@ -273,6 +273,7 @@
    flex: 1;
    overflow-y: auto;
    padding: 16px;
+   padding-bottom: 90px;
    background: #f9fafb;
 }
 
@@ -333,10 +334,11 @@
    white-space: nowrap;
 }
 
-/* 일정 카드 */
+/* 일정 카드 — 통일된 깔끔한 스타일 */
 .event-card {
    background: white;
    border: 1px solid #e5e7eb;
+   border-left: 4px solid #3b82f6;
    border-radius: 12px;
    padding: 16px;
    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -347,41 +349,29 @@
    transform: scale(0.98);
 }
 
-.event-card.coordinated {
-   border-color: #10b981;
-   border-left-width: 4px;
-   background: linear-gradient(135deg, #10b98105 0%, #10b98110 100%);
-}
-
-/* 🆕 확정된 일정 스타일 (참석자 2명 이상) */
+/* 조율/확정 — 배경 없이 뱃지로만 구분 */
+.event-card.coordinated,
 .event-card.confirmed {
-   border-color: #10b981;
-   border-left-width: 4px;
-   background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 20%, #d1fae5 100%);
-   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+   /* 배경·그림자 변경 없음, 기본 카드와 동일 */
 }
 
-/* 오늘 일정 스타일 */
+/* 오늘 일정 — 배경 없이 뱃지("오늘")로만 구분 */
 .event-card.today {
-   border-color: #fbbf24;
-   border-left-width: 4px;
-   background: linear-gradient(135deg, #fef3c710 0%, #fde68a15 100%);
+   /* 배경 변경 없음, 기본 카드와 동일 */
 }
 
-/* 오늘 일정 하이라이트 애니메이션 */
+/* 오늘 일정 하이라이트 애니메이션 (포커스 시) */
 .event-card.highlight {
    animation: highlightPulse 1.5s ease-in-out 2;
-   box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.3);
+   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25);
 }
 
 @keyframes highlightPulse {
    0%, 100% {
-      background: linear-gradient(135deg, #fef3c710 0%, #fde68a15 100%);
-      box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.3);
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25);
    }
    50% {
-      background: linear-gradient(135deg, #fef3c730 0%, #fde68a40 100%);
-      box-shadow: 0 0 0 8px rgba(251, 191, 36, 0.4);
+      box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.35);
    }
 }
 
@@ -801,4 +791,45 @@
 
 .route-button:active {
    transform: translateY(0);
+}
+
+/* ===================================
+   삭제 버튼
+   =================================== */
+.modal-delete-section {
+   padding-top: 12px;
+   border-top: 1px solid #f3f4f6;
+}
+
+.event-delete-btn {
+   width: 100%;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   gap: 8px;
+   padding: 14px;
+   background: #fef2f2;
+   color: #dc2626;
+   border: 1px solid #fecaca;
+   border-radius: 12px;
+   font-size: 15px;
+   font-weight: 600;
+   cursor: pointer;
+   transition: all 0.2s;
+}
+
+.event-delete-btn:hover {
+   background: #fee2e2;
+   border-color: #fca5a5;
+}
+
+.event-delete-btn:active {
+   transform: scale(0.98);
+   background: #fecaca;
+}
+
+.event-delete-btn:disabled {
+   opacity: 0.5;
+   cursor: not-allowed;
+   transform: none;
 }

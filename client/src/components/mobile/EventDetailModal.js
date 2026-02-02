@@ -1,5 +1,5 @@
-import React from 'react';
-import { Calendar, Clock, MapPin, Users, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Calendar, Clock, MapPin, Users, X, Trash2 } from 'lucide-react';
 import './MobileScheduleView.css'; // 스타일 재사용
 
 /**
@@ -49,7 +49,8 @@ export const MapModal = ({ address, lat, lng, onClose }) => {
 /**
  * EventDetailModal - 일정 상세 모달
  */
-const EventDetailModal = ({ event, user, onClose, onOpenMap, previousLocation }) => {
+const EventDetailModal = ({ event, user, onClose, onOpenMap, onDelete, previousLocation }) => {
+   const [isDeleting, setIsDeleting] = useState(false);
    if (!event) return null;
 
    // 날짜 포맷팅
@@ -277,6 +278,28 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap, previousLocation })
                   <div className="modal-section modal-coordinated-info">
                      <div className="modal-label">조율방</div>
                      <div className="modal-value">📅 {event.roomName}</div>
+                  </div>
+               )}
+                           {/* 삭제 버튼 (지난 일정만) */}
+               {onDelete && (() => {
+                  const todayStr = new Date().toISOString().split('T')[0];
+                  return event.date < todayStr;
+               })() && (
+                  <div className="modal-delete-section">
+                     <button
+                        className="event-delete-btn"
+                        onClick={() => {
+                           if (isDeleting) return;
+                           if (window.confirm('이 일정을 삭제하시겠습니까?')) {
+                              setIsDeleting(true);
+                              onDelete(event).finally(() => setIsDeleting(false));
+                           }
+                        }}
+                        disabled={isDeleting}
+                     >
+                        <Trash2 size={16} />
+                        {isDeleting ? '삭제 중...' : '이 일정 삭제'}
+                     </button>
                   </div>
                )}
             </div>

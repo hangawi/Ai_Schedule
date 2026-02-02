@@ -41,7 +41,8 @@
       "Bash(if not exist \"server\\\\prompts\" mkdir \"server\\\\prompts\")",
       "Bash(npx eslint:*)",
       "Bash(node:*)",
-      "Bash(npm test)"
+      "Bash(npm test)",
+      "mcp__serena__check_onboarding_performed"
     ]
   }
 }

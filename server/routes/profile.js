@@ -190,4 +190,39 @@ router.post('/schedule', auth, async (req, res) => {
   }
 });
 
+// @route   DELETE api/users/profile/schedule/:personalTimeId
+// @desc    Delete a personal time entry
+// @access  Private
+router.delete('/schedule/:personalTimeId', auth, async (req, res) => {
+  try {
+    const { personalTimeId } = req.params;
+    console.log('[profile.js DELETE /schedule] Request for user:', req.user.id, 'personalTimeId:', personalTimeId);
+
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ msg: '사용자를 찾을 수 없습니다.' });
+    }
+
+    const initialLength = user.personalTimes.length;
+    user.personalTimes = user.personalTimes.filter(pt => pt._id.toString() !== personalTimeId);
+
+    if (user.personalTimes.length === initialLength) {
+      return res.status(404).json({ msg: '해당 개인 일정을 찾을 수 없습니다.' });
+    }
+
+    await user.save();
+    console.log('[profile.js DELETE /schedule] Personal time deleted successfully');
+
+    res.json({
+      success: true,
+      msg: '개인 일정이 삭제되었습니다.',
+      personalTimes: user.personalTimes
+    });
+  } catch (err) {
+    console.error('[profile.js DELETE /schedule] Error:', err);
+    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+  }
+});
+
 module.exports = router;

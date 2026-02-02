@@ -34,6 +34,9 @@ const EventCard = ({ event, onClick, isToday, isHighlighted, cardRef }) => {
          <div className="event-info">
             <p className="event-date">{event.date}</p>
             <p className="event-time">{event.time} ~ {event.endTime}</p>
+            {event.location && (
+               <p className="event-location">📍 {event.location}</p>
+            )}
             <p className="event-participants">👥 {event.participants}명</p>
          </div>
       </div>
@@ -104,6 +107,7 @@ const MobileScheduleView = ({ user }) => {
 
          const data = await response.json();
 
+         // 🔍 디버그: 서버에서 받은 원본 데이터 확인
          // 이동시간과 수업시간 병합 로직
          const personalTimesArray = data.personalTimes || [];
          const mergedPersonalTimes = [];
@@ -183,7 +187,7 @@ const MobileScheduleView = ({ user }) => {
                         participants: pt.participants || 1,  // 🆕 실제 참석자 수
                         priority: 3,
                         color: pt.color || '#FFA500',
-                        isCoordinated: pt.title && pt.title.includes('-'),
+                        isCoordinated: !!(pt.suggestionId || (pt.title && pt.title.includes('-'))),
                         roomName: pt.title && pt.title.includes('-') ? pt.title.split('-')[0].trim() : undefined,
                         location: pt.location || null,
                         locationLat: pt.locationLat || null,
@@ -204,7 +208,7 @@ const MobileScheduleView = ({ user }) => {
                      participants: pt.participants || 1,  // 🆕 DB에서 가져온 실제 참석자 수
                      priority: 3,
                      color: pt.color || '#10B981',
-                     isCoordinated: pt.title && pt.title.includes('-'),
+                     isCoordinated: !!(pt.suggestionId || (pt.title && pt.title.includes('-'))),
                      roomName: pt.title && pt.title.includes('-') ? pt.title.split('-')[0].trim() : undefined,
                      location: pt.location || null,
                      locationLat: pt.locationLat || null,
@@ -218,6 +222,7 @@ const MobileScheduleView = ({ user }) => {
             });
          });
 
+         // 🔍 디버그: 병합 후 데이터 확인
          setPersonalTimes(mergedPersonalTimes);
       } catch (error) {
          console.error('Fetch personal times error:', error);
@@ -233,8 +238,8 @@ const MobileScheduleView = ({ user }) => {
       loadData();
    }, [fetchEvents, fetchPersonalTimes]);
 
-   // 3. useMemo (전체 일정 시간순 정렬)
-   const { allEvents, todayStr } = useMemo(() => {
+   // 3. useMemo (전체 일정 시간순 정렬 + 가장 가까운 일정 인덱스)
+   const { allEvents, todayStr, closestEventIndex } = useMemo(() => {
       const today = new Date();
       const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
@@ -249,11 +254,34 @@ const MobileScheduleView = ({ user }) => {
          return timeA.localeCompare(timeB);
       };
 
+      const sorted = allEvents.sort(sortByDateTime);
+
+      // 오늘 첫 일정 인덱스, 없으면 가장 가까운 미래 일정 인덱스
+      let closestIdx = -1;
+      const todayIdx = sorted.findIndex(e => e.date === todayStr);
+      if (todayIdx !== -1) {
+         closestIdx = todayIdx;
+      } else {
+         closestIdx = sorted.findIndex(e => e.date > todayStr);
+      }
+
       return {
-         allEvents: allEvents.sort(sortByDateTime),
-         todayStr
+         allEvents: sorted,
+         todayStr,
+         closestEventIndex: closestIdx
       };
    }, [globalEvents, personalTimes]);
+
+   // 3-1. 데이터 로드 후 가장 가까운 일정으로 자동 스크롤
+   useEffect(() => {
+      if (dataLoaded && todayRef.current) {
+         // 약간의 딜레이로 DOM 렌더링 완료 후 스크롤
+         const timer = setTimeout(() => {
+            todayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+         }, 300);
+         return () => clearTimeout(timer);
+      }
+   }, [dataLoaded]);
 
    // 4. 핸들러 함수들
    // 일정 클릭 핸들러
@@ -330,7 +358,40 @@ const MobileScheduleView = ({ user }) => {
       setShowMapModal(true);
    };
 
-   // 지도 모달 닫기
+   // 일정 삭제 핸들러
+   const handleDeleteEvent = async (event) => {
+      try {
+         const currentUser = auth.currentUser;
+         if (!currentUser) return;
+         const token = await currentUser.getIdToken();
+
+         if (event.id && event.id.startsWith('pt-')) {
+            // Personal Time 삭제
+            const personalTimeId = event.id.replace('pt-', '');
+            const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule/${personalTimeId}`, {
+               method: 'DELETE',
+               headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!response.ok) throw new Error('Failed to delete personal time');
+         } else {
+            // Global Event 삭제
+            const response = await fetch(`${API_BASE_URL}/api/events/${event.id}`, {
+               method: 'DELETE',
+               headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!response.ok) throw new Error('Failed to delete event');
+         }
+
+         // 삭제 성공 시 모달 닫고 데이터 새로고침
+         setSelectedEvent(null);
+         await Promise.all([fetchEvents(), fetchPersonalTimes()]);
+      } catch (error) {
+         console.error('Delete event error:', error);
+         alert('일정 삭제에 실패했습니다.');
+      }
+   };
+
+      // 지도 모달 닫기
    const handleCloseMapModal = () => {
       setShowMapModal(false);
       setSelectedLocation(null);
@@ -455,7 +516,7 @@ const MobileScheduleView = ({ user }) => {
                <div className="event-list">
                   {allEvents.map((event, index) => {
                      const isToday = event.date === todayStr;
-                     const isFirstToday = isToday && allEvents.find(e => e.date === todayStr)?.id === event.id;
+                     const isClosest = index === closestEventIndex;
 
                      // 이전 이벤트와 날짜가 다르면 날짜 구분선 표시
                      const prevEvent = index > 0 ? allEvents[index - 1] : null;
@@ -475,7 +536,7 @@ const MobileScheduleView = ({ user }) => {
                               onClick={handleEventClick}
                               isToday={isToday}
                               isHighlighted={isToday && highlightToday}
-                              cardRef={isFirstToday ? todayRef : null}
+                              cardRef={isClosest ? todayRef : null}
                            />
                         </React.Fragment>
                      );
@@ -491,6 +552,7 @@ const MobileScheduleView = ({ user }) => {
                user={user}
                onClose={handleCloseModal}
                onOpenMap={handleOpenMap}
+               onDelete={handleDeleteEvent}
                previousLocation={getPreviousEventLocation(selectedEvent)}
             />
          )}

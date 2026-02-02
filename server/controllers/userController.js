@@ -59,17 +59,6 @@ exports.getUserSchedule = async (req, res) => {
 
                 // 🔧 "이동시간"인 경우 특별 처리
                 if (memberName === '이동시간') {
-                  console.log('🔍 [이동시간 실시간 조회 시작]', {
-                    title: ptObj.title,
-                    hasLocation: !!ptObj.location,
-                    location: ptObj.location,
-                    roomId: ptObj.roomId,
-                    isTravelTime: ptObj.isTravelTime,
-                    specificDate: ptObj.specificDate,
-                    startTime: ptObj.startTime,
-                    endTime: ptObj.endTime
-                  });
-
                   // 이동시간의 경우 roomId와 travelTimeSlots를 통해 조원 주소를 찾음
                   if (ptObj.roomId && ptObj.isTravelTime) {
                     try {
@@ -77,12 +66,6 @@ exports.getUserSchedule = async (req, res) => {
                       const room = await Room.findById(ptObj.roomId)
                         .populate('travelTimeSlots.user', 'address addressDetail addressLat addressLng')
                         .lean();
-
-                      console.log('🔍 [Room 조회 결과]', {
-                        roomId: ptObj.roomId,
-                        roomFound: !!room,
-                        travelTimeSlotsCount: room?.travelTimeSlots?.length || 0
-                      });
 
                       if (room && room.travelTimeSlots) {
                         // 같은 날짜, 같은 시간의 travelTimeSlot 찾기
@@ -93,26 +76,11 @@ exports.getUserSchedule = async (req, res) => {
                                  slot.endTime === ptObj.endTime;
                         });
 
-                        console.log('🔍 [매칭 슬롯 검색]', {
-                          matchingSlotFound: !!matchingSlot,
-                          matchingSlot: matchingSlot ? {
-                            date: new Date(matchingSlot.date).toISOString().split('T')[0],
-                            startTime: matchingSlot.startTime,
-                            endTime: matchingSlot.endTime,
-                            user: matchingSlot.user
-                          } : null
-                        });
-
                         if (matchingSlot && matchingSlot.user) {
                           const finalLocation = matchingSlot.user.addressDetail
                             ? `${matchingSlot.user.address} ${matchingSlot.user.addressDetail}`
                             : matchingSlot.user.address;
 
-                          console.log('✅ [이동시간 주소 찾음]', {
-                            location: finalLocation,
-                            lat: matchingSlot.user.addressLat,
-                            lng: matchingSlot.user.addressLng
-                          });
 
                           return {
                             ...ptObj,
@@ -127,7 +95,6 @@ exports.getUserSchedule = async (req, res) => {
                     }
                   }
 
-                  console.log('⚠️ [이동시간 주소 못 찾음 - 원본 반환]', ptObj);
                   return ptObj;
                 }
 
@@ -161,6 +128,31 @@ exports.getUserSchedule = async (req, res) => {
         })
       );
     }
+
+    // participants가 없는 확정 일정에 대해 방 멤버 수로 보정
+    const Room = require('../models/room');
+    const roomCache = new Map();
+    for (let i = 0; i < personalTimesWithLocation.length; i++) {
+      const pt = personalTimesWithLocation[i];
+      if (!pt.participants && pt.roomId) {
+        try {
+          let room = roomCache.get(pt.roomId);
+          if (!room) {
+            room = await Room.findById(pt.roomId).select('members owner').lean();
+            if (room) roomCache.set(pt.roomId, room);
+          }
+          if (room) {
+            personalTimesWithLocation[i] = {
+              ...pt,
+              participants: 1 + (room.members ? room.members.length : 0)
+            };
+          }
+        } catch (e) {
+          // room not found, skip
+        }
+      }
+    }
+
 
     res.json({
       defaultSchedule: user.defaultSchedule,

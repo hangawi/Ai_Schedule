@@ -323,6 +323,9 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
       });
     }
 
+    // 참석자 수 계산 (방장 + 조원)
+    const participantCount = 1 + (room.members ? room.members.length : Object.keys(mergedSlotsByUser).length);
+
     // 5. 각 조원의 personalTimes에 추가 + 선호시간 삭제
     const userMap = new Map();
     const ownerName = `${room.owner.firstName || ''} ${room.owner.lastName || ''}`.trim() || '방장';
@@ -382,7 +385,8 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
             locationLat: room.owner.addressLat || null,
             locationLng: room.owner.addressLng || null,
             transportMode: travelMode || null, // 교통수단
-            roomId: room._id.toString() // 방 ID (추가 정보 조회용)
+            roomId: room._id.toString(), // 방 ID (추가 정보 조회용)
+            participants: participantCount // 참석자 수
           });
         }
       });
@@ -463,7 +467,8 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
               locationLng: member?.addressLng || null,
               transportMode: travelMode || null, // 교통수단
               roomId: room._id.toString(), // 방 ID
-              hasTravelTime: room.travelTimeSlots && room.travelTimeSlots.length > 0 // 이동시간 존재 여부
+              hasTravelTime: room.travelTimeSlots && room.travelTimeSlots.length > 0, // 이동시간 존재 여부
+              participants: participantCount // 참석자 수
             });
           }
         });
@@ -525,7 +530,8 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
               locationLng: travelMember?.addressLng || null,
               transportMode: travelMode || null, // 교통수단
               roomId: room._id.toString(), // 방 ID
-              isTravelTime: true // 이동시간 플래그
+              isTravelTime: true, // 이동시간 플래그
+              participants: participantCount // 참석자 수
             });
           }
         });

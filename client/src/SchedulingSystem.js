@@ -447,6 +447,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
          const data = await response.json();
 
          // personalTimes를 Event 형식으로 변환
+         // 🔍 디버그: 서버에서 받은 원본 데이터 확인
          const formattedPersonalTimes = (data.personalTimes || [])
             .filter(pt => pt.specificDate) // 특정 날짜가 있는 것만 (확정된 일정)
             .map(pt => ({
@@ -455,13 +456,19 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                date: pt.specificDate,
                time: pt.startTime,
                endTime: pt.endTime,
-               participants: 1,
+               participants: pt.participants || 1,
                priority: 3,
                color: pt.color || '#10B981',
                isCoordinated: pt.title && pt.title.includes('-'), // 타이틀에 '-'가 있으면 확정된 일정
-               roomName: pt.title && pt.title.includes('-') ? pt.title.split('-')[0].trim() : undefined
+               roomName: pt.title && pt.title.includes('-') ? pt.title.split('-')[0].trim() : undefined,
+               location: pt.location || null,
+               locationLat: pt.locationLat || null,
+               locationLng: pt.locationLng || null,
+               transportMode: pt.transportMode || null,
+               suggestionId: pt.suggestionId || null
             }));
 
+         // 🔍 디버그: 매핑 후 데이터 확인
          setPersonalTimes(formattedPersonalTimes);
          setPersonalTimesLoaded(true);
       } catch (error) {
