@@ -105,6 +105,10 @@
    display: flex;
    align-items: center;
    justify-content: center;
+   white-space: nowrap;
+   max-width: 80px;
+   overflow: hidden;
+   text-overflow: ellipsis;
 }
 
 .mobile-voice-btn {

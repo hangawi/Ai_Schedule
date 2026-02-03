@@ -355,6 +355,9 @@ const MobileCalendarView = ({ user }) => {
                   }
                   // [약속] 태그가 있으면 조율 일정으로 표시
                   const isCoordinated = e.title && e.title.includes('[약속]');
+                  // 생일 이벤트 감지 (Google Calendar 특수 이벤트 - 삭제 불가)
+                  const isBirthdayEvent = e.googleEventId?.includes('_') &&
+                     (e.title?.includes('생일') || e.title?.toLowerCase().includes('birthday'));
                   return {
                      id: e.id,
                      googleEventId: e.googleEventId,
@@ -366,6 +369,7 @@ const MobileCalendarView = ({ user }) => {
                      color: isCoordinated ? '#3b82f6' : '#22c55e',
                      isGoogleEvent: true,
                      isCoordinated: isCoordinated,
+                     isBirthdayEvent: isBirthdayEvent,
                      location: e.location || null,
                      description: e.description || '',
                   };
@@ -611,6 +615,11 @@ const MobileCalendarView = ({ user }) => {
 
          // 구글 캘린더 이벤트 삭제
          if (event.isGoogleEvent && event.googleEventId) {
+            // 생일 이벤트는 삭제 불가
+            if (event.isBirthdayEvent) {
+               alert('생일 이벤트는 Google 연락처에서 관리되어 삭제할 수 없습니다.');
+               return;
+            }
             await googleCalendarService.deleteEvent(event.googleEventId);
             setSelectedEvent(null);
             await fetchSchedule();
