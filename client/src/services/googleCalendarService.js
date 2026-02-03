@@ -78,7 +78,6 @@ export const updateEvent = async (eventId, title, description, startDateTime, en
  * 구글 캘린더 이벤트 삭제
  */
 export const deleteEvent = async (eventId) => {
-  console.log('[googleCalendarService.deleteEvent] 삭제 요청:', eventId);
   const headers = await getAuthHeader();
   const res = await fetch(`${API_BASE_URL}/api/calendar/events/${eventId}`, {
     method: 'DELETE',
@@ -87,7 +86,6 @@ export const deleteEvent = async (eventId) => {
 
   // 204 No Content는 성공
   if (res.status === 204) {
-    console.log('[googleCalendarService.deleteEvent] 삭제 성공 (204)');
     return true;
   }
 
@@ -96,9 +94,8 @@ export const deleteEvent = async (eventId) => {
     try {
       const errorData = await res.json();
       errorMsg = errorData.msg || errorData.error || errorMsg;
-      console.error('[googleCalendarService.deleteEvent] 에러:', errorData);
     } catch (e) {
-      console.error('[googleCalendarService.deleteEvent] 에러 (응답 파싱 실패):', res.status);
+      // 응답 파싱 실패
     }
     throw new Error(errorMsg);
   }

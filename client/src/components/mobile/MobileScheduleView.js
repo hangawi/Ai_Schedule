@@ -388,13 +388,6 @@ const MobileScheduleView = ({ user }) => {
          if (!currentUser) return;
          const token = await currentUser.getIdToken();
 
-         console.log('[handleDeleteEvent] 삭제 시도:', {
-            id: event.id,
-            googleEventId: event.googleEventId,
-            isGoogleEvent: event.isGoogleEvent,
-            title: event.title
-         });
-
          if (event.id && event.id.startsWith('pt-')) {
             // Personal Time 삭제
             const personalTimeId = event.id.replace('pt-', '');
@@ -409,9 +402,8 @@ const MobileScheduleView = ({ user }) => {
                alert('생일 이벤트는 Google 연락처에서 관리되어 삭제할 수 없습니다.');
                return;
             }
-            // 🆕 구글 캘린더 이벤트 삭제
+            // 구글 캘린더 이벤트 삭제
             const googleEventId = event.googleEventId || event.id.replace('google-', '');
-            console.log('[handleDeleteEvent] 구글 이벤트 삭제 호출, googleEventId:', googleEventId);
             await googleCalendarService.deleteEvent(googleEventId);
          } else {
             // Global Event 삭제

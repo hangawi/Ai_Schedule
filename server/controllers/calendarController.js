@@ -140,11 +140,9 @@ exports.createGoogleCalendarEvent = async (req, res) => {
 exports.deleteGoogleCalendarEvent = async (req, res) => {
   try {
     const { eventId } = req.params;
-    console.log('[deleteGoogleCalendarEvent] 삭제 요청 eventId:', eventId);
     
     const user = await User.findById(req.user.id);
     if (!user || !user.google || !user.google.refreshToken) {
-      console.log('[deleteGoogleCalendarEvent] 사용자 또는 토큰 없음');
       return res.status(401).json({ msg: 'Google 계정이 연결되지 않았거나 토큰이 없습니다.' });
     }
 
@@ -168,9 +166,8 @@ exports.deleteGoogleCalendarEvent = async (req, res) => {
           user.google.refreshToken = tokens.refresh_token;
         }
         await user.save();
-        console.log('[deleteGoogleCalendarEvent] 토큰 갱신 저장 완료');
       } catch (tokenSaveErr) {
-        console.error('[deleteGoogleCalendarEvent] 토큰 저장 실패:', tokenSaveErr.message);
+        // 토큰 저장 실패 무시
       }
     });
 
@@ -178,45 +175,34 @@ exports.deleteGoogleCalendarEvent = async (req, res) => {
     try {
       const { credentials } = await oauth2Client.refreshAccessToken();
       oauth2Client.setCredentials(credentials);
-      console.log('[deleteGoogleCalendarEvent] 토큰 새로고침 성공');
     } catch (refreshErr) {
-      console.warn('[deleteGoogleCalendarEvent] 토큰 새로고침 실패, 기존 토큰으로 시도:', refreshErr.message);
+      // 기존 토큰으로 시도
     }
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-    // google- 접두사가 있으면 제거 (클라이언트에서 잘못 전송한 경우)
+    // google- 접두사가 있으면 제거
     let cleanEventId = eventId;
     if (eventId.startsWith('google-')) {
       cleanEventId = eventId.replace('google-', '');
-      console.log('[deleteGoogleCalendarEvent] google- 접두사 제거:', cleanEventId);
     }
-
-    console.log('[deleteGoogleCalendarEvent] Google API 호출, cleanEventId:', cleanEventId);
     
     await calendar.events.delete({
       calendarId: 'primary',
       eventId: cleanEventId,
     });
 
-    console.log('[deleteGoogleCalendarEvent] 삭제 성공');
     res.status(204).send();
 
   } catch (error) {
-    console.error('[deleteGoogleCalendarEvent] 에러 발생:');
-    console.error('  - message:', error.message);
-    console.error('  - code:', error.code);
-    console.error('  - errors:', JSON.stringify(error.errors, null, 2));
-    
     // 404/410 에러인 경우 (이미 삭제됨 또는 존재하지 않음) 성공으로 처리
     if (error.code === 404 || error.code === 410 || 
         error.message?.includes('Not Found') || 
         error.message?.includes('Resource has been deleted')) {
-      console.log('[deleteGoogleCalendarEvent] 이벤트가 이미 삭제되었거나 존재하지 않음 - 성공으로 처리');
       return res.status(204).send();
     }
     
-    // 403 에러 (권한 없음) - 다른 사람 일정 삭제 시도
+    // 403 에러 (권한 없음)
     if (error.code === 403) {
       return res.status(403).json({ msg: '이 이벤트를 삭제할 권한이 없습니다.' });
     }
