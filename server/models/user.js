@@ -279,7 +279,8 @@ const UserSchema = new mongoose.Schema({
     isTravelTime: { type: Boolean }, // 이동시간 여부
     hasTravelTime: { type: Boolean }, // 이동시간 포함 여부
     participants: { type: Number },  // 참석자 수 (AI 일정 조율)
-    suggestionId: { type: String }   // ScheduleSuggestion ID (동기화용)
+    suggestionId: { type: String },  // ScheduleSuggestion ID (동기화용)
+    googleEventId: { type: String }  // Google Calendar 이벤트 ID (업데이트/삭제용)
   }],
 
   // 방별로 삭제된 선호시간 추적 (확정 시 삭제된 defaultSchedule 백업)

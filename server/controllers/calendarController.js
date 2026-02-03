@@ -34,17 +34,28 @@ const updateAccessToken = async (user) => {
 exports.getCalendarEvents = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
-    if (!user || !user.google || !user.google.accessToken) {
+    if (!user || !user.google || !user.google.refreshToken) {
       return res.status(401).json({ msg: 'Google 계정이 연결되지 않았거나 토큰이 없습니다.' });
     }
 
-    let oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({ access_token: user.google.accessToken });
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
+    oauth2Client.setCredentials({
+      access_token: user.google.accessToken,
+      refresh_token: user.google.refreshToken,
+    });
 
-    // Access Token 만료 확인 및 갱신
-    if (oauth2Client.isTokenExpiring()) {
-      oauth2Client = await updateAccessToken(user);
-    }
+    // 토큰 갱신 이벤트 처리
+    oauth2Client.on('tokens', async (tokens) => {
+      user.google.accessToken = tokens.access_token;
+      if (tokens.refresh_token) {
+        user.google.refreshToken = tokens.refresh_token;
+      }
+      await user.save();
+    });
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
@@ -63,24 +74,37 @@ exports.getCalendarEvents = async (req, res) => {
     res.json(events);
 
   } catch (error) {
+    console.error('getCalendarEvents error:', error.message);
     res.status(500).json({ msg: '캘린더 이벤트를 가져오는 데 실패했습니다.' });
   }
 };
 
 exports.createGoogleCalendarEvent = async (req, res) => {
   try {
+    console.log('[createGoogleCalendarEvent] 요청 받음:', req.body);
     const user = await User.findById(req.user.id);
-    if (!user || !user.google || !user.google.accessToken) {
+    if (!user || !user.google || !user.google.refreshToken) {
       return res.status(401).json({ msg: 'Google 계정이 연결되지 않았거나 토큰이 없습니다.' });
     }
 
-    let oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({ access_token: user.google.accessToken });
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
+    oauth2Client.setCredentials({
+      access_token: user.google.accessToken,
+      refresh_token: user.google.refreshToken,
+    });
 
-    // Access Token 만료 확인 및 갱신
-    if (oauth2Client.isTokenExpiring()) {
-      oauth2Client = await updateAccessToken(user);
-    }
+    // 토큰 갱신 이벤트 처리
+    oauth2Client.on('tokens', async (tokens) => {
+      user.google.accessToken = tokens.access_token;
+      if (tokens.refresh_token) {
+        user.google.refreshToken = tokens.refresh_token;
+      }
+      await user.save();
+    });
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
@@ -91,11 +115,11 @@ exports.createGoogleCalendarEvent = async (req, res) => {
       description: description,
       start: {
         dateTime: startDateTime,
-        timeZone: 'Asia/Seoul', // 또는 사용자의 타임존
+        timeZone: 'Asia/Seoul',
       },
       end: {
         dateTime: endDateTime,
-        timeZone: 'Asia/Seoul', // 또는 사용자의 타임존
+        timeZone: 'Asia/Seoul',
       },
     };
 
@@ -104,39 +128,99 @@ exports.createGoogleCalendarEvent = async (req, res) => {
       resource: event,
     });
 
+    console.log('[createGoogleCalendarEvent] ✅ 구글 캘린더 생성 성공:', response.data.id, response.data.summary);
     res.status(201).json(response.data);
 
   } catch (error) {
+    console.error('createGoogleCalendarEvent error:', error.message);
     res.status(500).json({ msg: 'Google 캘린더 이벤트를 생성하는 데 실패했습니다.' });
   }
 };
 
 exports.deleteGoogleCalendarEvent = async (req, res) => {
   try {
+    const { eventId } = req.params;
+    console.log('[deleteGoogleCalendarEvent] 삭제 요청 eventId:', eventId);
+    
     const user = await User.findById(req.user.id);
-    if (!user || !user.google || !user.google.accessToken) {
+    if (!user || !user.google || !user.google.refreshToken) {
+      console.log('[deleteGoogleCalendarEvent] 사용자 또는 토큰 없음');
       return res.status(401).json({ msg: 'Google 계정이 연결되지 않았거나 토큰이 없습니다.' });
     }
 
-    let oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({ access_token: user.google.accessToken });
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
+    oauth2Client.setCredentials({
+      access_token: user.google.accessToken,
+      refresh_token: user.google.refreshToken,
+    });
 
-    // Access Token 만료 확인 및 갱신
-    if (oauth2Client.isTokenExpiring()) {
-      oauth2Client = await updateAccessToken(user);
+    // 토큰 새로고침 핸들러
+    oauth2Client.on('tokens', async (tokens) => {
+      try {
+        if (tokens.access_token) {
+          user.google.accessToken = tokens.access_token;
+        }
+        if (tokens.refresh_token) {
+          user.google.refreshToken = tokens.refresh_token;
+        }
+        await user.save();
+        console.log('[deleteGoogleCalendarEvent] 토큰 갱신 저장 완료');
+      } catch (tokenSaveErr) {
+        console.error('[deleteGoogleCalendarEvent] 토큰 저장 실패:', tokenSaveErr.message);
+      }
+    });
+
+    // 토큰이 만료되었을 수 있으므로 강제 새로고침 시도
+    try {
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      oauth2Client.setCredentials(credentials);
+      console.log('[deleteGoogleCalendarEvent] 토큰 새로고침 성공');
+    } catch (refreshErr) {
+      console.warn('[deleteGoogleCalendarEvent] 토큰 새로고침 실패, 기존 토큰으로 시도:', refreshErr.message);
     }
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-    const { eventId } = req.params;
 
+    // google- 접두사가 있으면 제거 (클라이언트에서 잘못 전송한 경우)
+    let cleanEventId = eventId;
+    if (eventId.startsWith('google-')) {
+      cleanEventId = eventId.replace('google-', '');
+      console.log('[deleteGoogleCalendarEvent] google- 접두사 제거:', cleanEventId);
+    }
+
+    console.log('[deleteGoogleCalendarEvent] Google API 호출, cleanEventId:', cleanEventId);
+    
     await calendar.events.delete({
       calendarId: 'primary',
-      eventId: eventId,
+      eventId: cleanEventId,
     });
 
-    res.status(204).json({ msg: '이벤트가 성공적으로 삭제되었습니다.' });
+    console.log('[deleteGoogleCalendarEvent] 삭제 성공');
+    res.status(204).send();
 
   } catch (error) {
+    console.error('[deleteGoogleCalendarEvent] 에러 발생:');
+    console.error('  - message:', error.message);
+    console.error('  - code:', error.code);
+    console.error('  - errors:', JSON.stringify(error.errors, null, 2));
+    
+    // 404/410 에러인 경우 (이미 삭제됨 또는 존재하지 않음) 성공으로 처리
+    if (error.code === 404 || error.code === 410 || 
+        error.message?.includes('Not Found') || 
+        error.message?.includes('Resource has been deleted')) {
+      console.log('[deleteGoogleCalendarEvent] 이벤트가 이미 삭제되었거나 존재하지 않음 - 성공으로 처리');
+      return res.status(204).send();
+    }
+    
+    // 403 에러 (권한 없음) - 다른 사람 일정 삭제 시도
+    if (error.code === 403) {
+      return res.status(403).json({ msg: '이 이벤트를 삭제할 권한이 없습니다.' });
+    }
+    
     res.status(500).json({ msg: 'Google 캘린더 이벤트를 삭제하는 데 실패했습니다.', error: error.message });
   }
 };
@@ -144,23 +228,32 @@ exports.deleteGoogleCalendarEvent = async (req, res) => {
 exports.updateGoogleCalendarEvent = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
-    if (!user || !user.google || !user.google.accessToken) {
+    if (!user || !user.google || !user.google.refreshToken) {
       return res.status(401).json({ msg: 'Google 계정이 연결되지 않았거나 토큰이 없습니다.' });
     }
 
-    let oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({ access_token: user.google.accessToken });
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
+    oauth2Client.setCredentials({
+      access_token: user.google.accessToken,
+      refresh_token: user.google.refreshToken,
+    });
 
-    // Access Token 만료 확인 및 갱신
-    if (oauth2Client.isTokenExpiring()) {
-      oauth2Client = await updateAccessToken(user);
-    }
+    oauth2Client.on('tokens', async (tokens) => {
+      user.google.accessToken = tokens.access_token;
+      if (tokens.refresh_token) {
+        user.google.refreshToken = tokens.refresh_token;
+      }
+      await user.save();
+    });
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
     const { eventId } = req.params;
     const { title, description, startDateTime, endDateTime, etag } = req.body;
 
-    // 시작 시간과 종료 시간 유효성 검사
     if (new Date(startDateTime) >= new Date(endDateTime)) {
       return res.status(400).json({ msg: '종료 시간은 시작 시간보다 늦어야 합니다.' });
     }
@@ -182,14 +275,13 @@ exports.updateGoogleCalendarEvent = async (req, res) => {
       calendarId: 'primary',
       eventId: eventId,
       resource: event,
-      headers: { 'If-Match': etag }, // etag를 If-Match 헤더로 전송
+      headers: { 'If-Match': etag },
     });
 
     res.status(200).json(response.data);
 
   } catch (error) {
-    if (error.response && error.response.data && error.response.data.error && error.response.data.error.errors) {
-    }
+    console.error('updateGoogleCalendarEvent error:', error.message);
     res.status(500).json({ msg: 'Google 캘린더 이벤트를 업데이트하는 데 실패했습니다.', error: error.message });
   }
 };

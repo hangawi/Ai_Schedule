@@ -112,6 +112,67 @@ exports.googleAuth = async (req, res) => {
   }
 };
 
+// @desc    Google Calendar 동의 URL 생성
+// @route   GET /api/auth/google/calendar-consent
+// @access  Private
+const getCalendarConsentUrl = async (req, res) => {
+  try {
+    const authUrl = client.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent',
+      scope: [
+        'https://www.googleapis.com/auth/calendar',
+        'https://www.googleapis.com/auth/calendar.events',
+      ],
+      state: req.user.id,
+      redirect_uri: process.env.GOOGLE_CALENDAR_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI,
+    });
+
+    res.json({ url: authUrl });
+  } catch (err) {
+    res.status(500).json({ msg: 'OAuth URL 생성 실패: ' + err.message });
+  }
+};
+
+// @desc    Google Calendar OAuth 콜백 처리
+// @route   GET /api/auth/google/calendar-callback
+// @access  Public
+const calendarCallback = async (req, res) => {
+  try {
+    const { code, state: userId } = req.query;
+
+    if (!code || !userId) {
+      return res.redirect(`${process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000'}/auth?calendarError=missing_params`);
+    }
+
+    const callbackUri = process.env.GOOGLE_CALENDAR_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI;
+    const callbackClient = new OAuth2Client(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      callbackUri
+    );
+
+    const { tokens } = await callbackClient.getToken(code);
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.redirect(`${process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000'}/auth?calendarError=user_not_found`);
+    }
+
+    if (!user.google) user.google = {};
+    user.google.accessToken = tokens.access_token;
+    if (tokens.refresh_token) {
+      user.google.refreshToken = tokens.refresh_token;
+    }
+    await user.save();
+
+    res.redirect(`${process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000'}/auth?calendarConnected=true`);
+  } catch (err) {
+    console.error('Calendar callback error:', err);
+    res.redirect(`${process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000'}/auth?calendarError=token_exchange_failed`);
+  }
+};
+
 // @desc    Get logged in user
 // @route   GET /api/auth
 // @access  Private
@@ -180,3 +241,6 @@ exports.deleteAccount = async (req, res) => {
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }
 };
+
+exports.getCalendarConsentUrl = getCalendarConsentUrl;
+exports.calendarCallback = calendarCallback;

@@ -37,7 +37,7 @@
  * ===================================================================================================
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { signInWithPopup, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, googleProvider } from '../../config/firebaseConfig';
 import CustomAlertModal from '../modals/CustomAlertModal';
@@ -70,6 +70,56 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
       showCancel: false,
       onConfirm: null,
    });
+
+   // 구글 캘린더 동의 후 복귀 처리
+   useEffect(() => {
+      const params = new URLSearchParams(window.location.search);
+      const calendarConnected = params.get('calendarConnected');
+      const calendarError = params.get('calendarError');
+
+      if (calendarConnected === 'true') {
+         const pendingUser = localStorage.getItem('pendingGoogleUser');
+         if (pendingUser) {
+            localStorage.removeItem('pendingGoogleUser');
+            window.history.replaceState({}, document.title, window.location.pathname);
+            // 서버에서 최신 user 정보 다시 조회 (refreshToken 반영)
+            const parsedUser = JSON.parse(pendingUser);
+            const fetchUpdatedUser = async () => {
+               try {
+                  // Firebase 초기화 완료 대기
+                  const currentUser = await new Promise((resolve) => {
+                     if (auth.currentUser) return resolve(auth.currentUser);
+                     const unsub = auth.onAuthStateChanged((u) => { unsub(); resolve(u); });
+                  });
+                  if (currentUser) {
+                     const idToken = await currentUser.getIdToken();
+                     const res = await fetch(`${API_BASE_URL}/api/auth/google`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` }
+                     });
+                     if (res.ok) {
+                        const data = await res.json();
+                        onLoginSuccess(data.user, 'google');
+                        return;
+                     }
+                  }
+               } catch (e) {
+                  console.warn('최신 유저 정보 조회 실패, 캐시 사용:', e);
+               }
+               onLoginSuccess(parsedUser, 'google');
+            };
+            fetchUpdatedUser();
+         }
+      } else if (calendarError) {
+         const pendingUser = localStorage.getItem('pendingGoogleUser');
+         if (pendingUser) {
+            localStorage.removeItem('pendingGoogleUser');
+            window.history.replaceState({}, document.title, window.location.pathname);
+            // 에러가 있어도 로그인은 진행 (캘린더 없이)
+            onLoginSuccess(JSON.parse(pendingUser), 'google');
+         }
+      }
+   }, [onLoginSuccess]);
 
    /**
     * showAlert - 알림 모달 표시 함수
@@ -172,6 +222,25 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
          }
 
          localStorage.setItem('googleConnected', 'true');
+
+         // 구글 캘린더 refreshToken이 없으면 동의 화면으로 이동
+         if (!data.user.google || !data.user.google.refreshToken) {
+            try {
+               const consentRes = await fetch(`${API_BASE_URL}/api/auth/google/calendar-consent`, {
+                  headers: { 'Authorization': `Bearer ${idToken}` }
+               });
+               const consentData = await consentRes.json();
+               if (consentRes.ok && consentData.url) {
+                  // 로그인 정보를 임시 저장 후 동의 페이지로 이동
+                  localStorage.setItem('pendingGoogleUser', JSON.stringify(data.user));
+                  window.location.href = consentData.url;
+                  return;
+               }
+            } catch (consentError) {
+               console.warn('캘린더 동의 요청 실패, 일반 진입:', consentError);
+            }
+         }
+
          onLoginSuccess(data.user, 'google');
       } catch (error) {
          localStorage.setItem('googleConnected', 'false');

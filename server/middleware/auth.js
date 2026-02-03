@@ -96,8 +96,8 @@ module.exports = async function (req, res, next) {
         // Parse display name
         const displayName = firebaseUserRecord.displayName || '';
         const nameParts = displayName.split(' ');
-        const firstName = nameParts[0] || '';
-        const lastName = nameParts.slice(1).join(' ') || '';
+        const firstName = nameParts[0] || 'User';
+        const lastName = nameParts.slice(1).join(' ') || '-';
 
         const userEmail = (decodedToken.email || firebaseUserRecord.email || '').toLowerCase();
 

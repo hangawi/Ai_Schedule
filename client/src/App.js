@@ -257,7 +257,14 @@ function App() {
       >
          <Router>
             <Routes>
-               <Route path="/auth" element={isLoggedIn ? <Navigate to="/" /> : <AuthScreen onLoginSuccess={handleLoginSuccess} />} />
+               <Route path="/auth" element={
+                  (() => {
+                     const params = new URLSearchParams(window.location.search);
+                     const hasCalendarCallback = params.get('calendarConnected') || params.get('calendarError');
+                     if (isLoggedIn && !hasCalendarCallback) return <Navigate to="/" />;
+                     return <AuthScreen onLoginSuccess={handleLoginSuccess} />;
+                  })()
+               } />
                <Route path="/" element={
                   isLoggedIn ? (
                      <AdminProvider user={user}>

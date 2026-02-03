@@ -167,6 +167,22 @@ export const createEnhancedIntentRouter = (handlers) => {
 async function routeSingleAction(action, context, message, handlers) {
     const { intent } = action;
 
+    // 🔄 구글 캘린더 사용자: 모든 추가 intent를 handleEventAdd로 라우팅 (구글 캘린더에 저장)
+    const isGoogleCalendarUser = context.tabType === 'google';
+    if (isGoogleCalendarUser) {
+      // 단일 일정 추가 (선호시간/개인시간/일반 일정 모두 구글 캘린더로)
+      if (action.startDateTime &&
+          (intent === 'add_preferred_time' || intent === 'add_personal_time' || intent === 'add_event')) {
+        console.log(`[Google Calendar] ${intent} → handleEventAdd로 리다이렉트`);
+        return await handlers.handleEventAdd(action, context);
+      }
+      // 반복 선호시간도 반복 일정으로 라우팅 (handleRecurringEventAdd는 이미 구글 캘린더 지원)
+      if (intent === 'add_recurring_preferred_time' && action.dates) {
+        console.log(`[Google Calendar] ${intent} → handleRecurringEventAdd로 리다이렉트`);
+        return await handlers.handleRecurringEventAdd(action, context);
+      }
+    }
+
     // 🆕 선호시간 추가
     if (intent === 'add_preferred_time' && action.startDateTime) {
       return await handlers.handlePreferredTimeAdd(action, context);

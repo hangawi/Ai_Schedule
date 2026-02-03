@@ -45,7 +45,8 @@
       "mcp__serena__check_onboarding_performed",
       "Bash(timeout:*)",
       "Bash(find:*)",
-      "mcp__serena__list_memories"
+      "mcp__serena__list_memories",
+      "Bash(curl:*)"
     ]
   }
 }

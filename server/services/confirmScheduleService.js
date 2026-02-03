@@ -7,6 +7,109 @@
 
 const User = require('../models/user');
 const ActivityLog = require('../models/ActivityLog');
+const { google } = require('googleapis');
+
+/**
+ * 구글 캘린더에 확정 일정 동기화
+ * refreshToken이 있는 사용자만 구글 캘린더에 이벤트 생성
+ */
+const syncToGoogleCalendar = async (user, personalTimeEntry, participantNames = []) => {
+  if (!user.google || !user.google.refreshToken) return;
+
+  try {
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
+    oauth2Client.setCredentials({ refresh_token: user.google.refreshToken });
+
+    // accessToken 갱신
+    const { credentials } = await oauth2Client.refreshAccessToken();
+    oauth2Client.setCredentials(credentials);
+    if (credentials.access_token) {
+      user.google.accessToken = credentials.access_token;
+    }
+    if (credentials.refresh_token) {
+      user.google.refreshToken = credentials.refresh_token;
+    }
+
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    const dateStr = personalTimeEntry.specificDate;
+    let startTime = personalTimeEntry.startTime;
+    let endTime = personalTimeEntry.endTime;
+    let endDateStr = dateStr;
+
+    // 00:00은 다음날 자정을 의미 - 23:59로 변환
+    if (endTime === '00:00' || endTime === '24:00') {
+      endTime = '23:59';
+    }
+
+    // startTime >= endTime인 경우 (예: 22:00 ~ 00:00) 종료일을 다음날로
+    const startMinutes = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]);
+    const endMinutes = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1]);
+    if (startMinutes >= endMinutes) {
+      const nextDay = new Date(dateStr);
+      nextDay.setDate(nextDay.getDate() + 1);
+      endDateStr = nextDay.toISOString().split('T')[0];
+    }
+
+    const startDateTime = `${dateStr}T${startTime}:00+09:00`;
+    const endDateTime = `${endDateStr}T${endTime}:00+09:00`;
+
+    // description 구성: 장소 + 참석자 수 + 참석자 이름
+    let descParts = [];
+    if (personalTimeEntry.location) {
+      descParts.push(`📍 장소: ${personalTimeEntry.location}`);
+    }
+    if (personalTimeEntry.participants) {
+      descParts.push(`👥 참석자: ${personalTimeEntry.participants}명`);
+    }
+    if (participantNames && participantNames.length > 0) {
+      descParts.push(`📋 참석: ${participantNames.join(', ')}`);
+    }
+
+    const eventResource = {
+      summary: personalTimeEntry.title,
+      description: descParts.join('\n'),
+      start: { dateTime: startDateTime, timeZone: 'Asia/Seoul' },
+      end: { dateTime: endDateTime, timeZone: 'Asia/Seoul' },
+      location: personalTimeEntry.location || undefined,
+    };
+
+    // 기존 이벤트가 있으면 업데이트
+    if (personalTimeEntry.googleEventId) {
+      try {
+        await calendar.events.update({
+          calendarId: 'primary',
+          eventId: personalTimeEntry.googleEventId,
+          resource: eventResource,
+        });
+        console.log(`[Google Calendar] ✅ 이벤트 업데이트: ${personalTimeEntry.title}`);
+        return;
+      } catch (updateErr) {
+        console.warn(`[Google Calendar] 업데이트 실패, 새로 생성: ${updateErr.message}`);
+      }
+    }
+
+    // 새 이벤트 생성
+    const insertResult = await calendar.events.insert({
+      calendarId: 'primary',
+      resource: eventResource,
+    });
+
+    // googleEventId 저장 (추후 업데이트용)
+    if (insertResult.data.id) {
+      personalTimeEntry.googleEventId = insertResult.data.id;
+      await user.save();
+    }
+
+    console.log(`[Google Calendar] ✅ 새 이벤트 생성: ${personalTimeEntry.title}`);
+  } catch (error) {
+    console.warn(`[Google Calendar 동기화 실패] userId=${user._id}: ${error.message}`);
+  }
+};
 
 /**
  * 시간 문자열을 분 단위로 변환 (예: "09:30" -> 570)
@@ -521,6 +624,22 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
       }
     }
 
+    // 5-3. 구글 캘린더 동기화 (refreshToken이 있는 사용자만)
+    const googleSyncPromises = [];
+    for (const user of userMap.values()) {
+      if (user.google && user.google.refreshToken && user.personalTimes) {
+        // 이번 확정에서 새로 추가된 personalTimes만 동기화
+        const newEntries = user.personalTimes.filter(pt =>
+          pt.roomId === room._id.toString() && !pt.isTravelTime
+        );
+        for (const entry of newEntries) {
+          googleSyncPromises.push(syncToGoogleCalendar(user, entry));
+        }
+      }
+    }
+    // 구글 동기화는 실패해도 확정 프로세스를 막지 않음
+    await Promise.allSettled(googleSyncPromises);
+
     // 6. 모든 사용자 한 번에 저장 (각 사용자는 한 번만 저장됨) with retry logic
     const updatePromises = Array.from(userMap.values()).map(user => saveUserWithRetry(user));
     await Promise.all(updatePromises);
@@ -571,5 +690,6 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
 }
 
 module.exports = {
-  confirmScheduleLogic
+  confirmScheduleLogic,
+  syncToGoogleCalendar
 };

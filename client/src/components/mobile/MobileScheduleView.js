@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { Menu, LogOut, User, Calendar, Clipboard, ClipboardX, Phone, X, MapPin, Clock, Users } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
+import * as googleCalendarService from '../../services/googleCalendarService';
 import EventDetailModal, { MapModal } from './EventDetailModal';
 import BottomNavigation from './BottomNavigation';
 import './MobileScheduleView.css';
@@ -68,35 +69,92 @@ const MobileScheduleView = ({ user }) => {
    // 나의 일정 가져오기
    const fetchEvents = useCallback(async () => {
       try {
-         const currentUser = auth.currentUser;
-         if (!currentUser) return;
+         const isGoogleUser = localStorage.getItem('loginMethod') === 'google' && user?.google?.refreshToken;
 
-         const response = await fetch(`${API_BASE_URL}/api/events`, {
-            headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
-         });
-         if (!response.ok) throw new Error('Failed to fetch events');
-
-         const data = await response.json();
-         const formattedEvents = data.events.map(event => ({
-            id: event._id,
-            title: event.title,
-            date: new Date(event.date).toISOString().split('T')[0],
-            time: event.time,
-            endTime: event.endTime,
-            participants: event.participants || 1,
-            priority: event.priority || 3,
-            color: event.color || 'blue',
-            location: event.location || null // 일정의 목적지 주소
-         }));
-         setGlobalEvents(formattedEvents);
+         if (isGoogleUser) {
+            // 구글 로그인 사용자: 구글 캘린더에서 이벤트 가져오기
+            try {
+               const threeMonthsAgo = new Date();
+               threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+               const oneYearLater = new Date();
+               oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+               const gEvents = await googleCalendarService.getEvents(
+                  threeMonthsAgo.toISOString(),
+                  oneYearLater.toISOString()
+               );
+               const formattedEvents = gEvents.map(e => {
+                  // description에서 참석자 수와 이름 파싱
+                  let participants = 0;
+                  let participantNames = [];
+                  if (e.description) {
+                     const countMatch = e.description.match(/참석자:\s*(\d+)명/);
+                     if (countMatch) participants = parseInt(countMatch[1], 10);
+                     const namesMatch = e.description.match(/참석:\s*(.+?)(?:\n|$)/);
+                     if (namesMatch) participantNames = namesMatch[1].split(',').map(n => n.trim());
+                  }
+                  // [약속] 태그가 있으면 조율 일정으로 표시
+                  const isCoordinated = e.title && e.title.includes('[약속]');
+                  return {
+                     id: e.id,
+                     googleEventId: e.googleEventId,
+                     title: e.title,
+                     date: e.start ? e.start.split('T')[0] : '',
+                     time: e.start ? new Date(e.start).toTimeString().substring(0, 5) : '',
+                     endTime: e.end ? new Date(e.end).toTimeString().substring(0, 5) : '',
+                     participants: participants,
+                     participantNames: participantNames,
+                     priority: 3,
+                     color: isCoordinated ? '#3b82f6' : '#22c55e',
+                     isGoogleEvent: true,
+                     isCoordinated: isCoordinated,
+                     location: e.location || null,
+                     description: e.description || '',
+                  };
+               });
+               setGlobalEvents(formattedEvents);
+            } catch (gErr) {
+               console.warn('구글 캘린더 이벤트 로딩 실패:', gErr);
+               setGlobalEvents([]);
+            }
+         } else {
+            // 일반 로그인 사용자: 기존 DB 이벤트
+            const currentUser = auth.currentUser;
+            if (!currentUser) return;
+            const response = await fetch(`${API_BASE_URL}/api/events`, {
+               headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
+            });
+            if (!response.ok) throw new Error('Failed to fetch events');
+            const data = await response.json();
+            const formattedEvents = data.events.map(event => ({
+               id: event._id,
+               title: event.title,
+               date: new Date(event.date).toISOString().split('T')[0],
+               time: event.time,
+               endTime: event.endTime,
+               participants: event.participants || 1,
+               priority: event.priority || 3,
+               color: event.color || 'blue',
+               location: event.location || null
+            }));
+            setGlobalEvents(formattedEvents);
+         }
       } catch (error) {
          console.error('Fetch events error:', error);
       }
-   }, [API_BASE_URL]);
+   }, [API_BASE_URL, user]);
 
    // 개인시간 (확정된 일정) 가져오기
    const fetchPersonalTimes = useCallback(async () => {
       try {
+         const isGoogleUser = localStorage.getItem('loginMethod') === 'google' && user?.google?.refreshToken;
+
+         if (isGoogleUser) {
+            // 구글 로그인 사용자: personalTimes 사용 안 함 (구글 캘린더가 대체)
+            setPersonalTimes([]);
+            return;
+         }
+
+         // 일반 로그인 사용자: 기존 DB에서 가져오기
          const currentUser = auth.currentUser;
          if (!currentUser) return;
 
@@ -107,13 +165,10 @@ const MobileScheduleView = ({ user }) => {
 
          const data = await response.json();
 
-         // 🔍 디버그: 서버에서 받은 원본 데이터 확인
-         // 이동시간과 수업시간 병합 로직
          const personalTimesArray = data.personalTimes || [];
          const mergedPersonalTimes = [];
          const processedIds = new Set();
 
-         // 날짜별로 그룹화
          const byDate = {};
          personalTimesArray.forEach(pt => {
             if (!pt.specificDate) return;
@@ -121,119 +176,77 @@ const MobileScheduleView = ({ user }) => {
             byDate[pt.specificDate].push(pt);
          });
 
-         // 각 날짜별로 병합 처리
          Object.keys(byDate).forEach(date => {
             const dayEvents = byDate[date].sort((a, b) => a.startTime.localeCompare(b.startTime));
 
             dayEvents.forEach((pt, idx) => {
                if (processedIds.has(pt.id)) return;
 
-               // 이동시간이면 다음 일정과 병합 시도
                if (pt.title && pt.title.includes('이동시간')) {
-                  console.log('📱 [클라이언트] 이동시간 감지:', {
-                     title: pt.title,
-                     ptLocation: pt.location,
-                     ptLocationLat: pt.locationLat,
-                     ptLocationLng: pt.locationLng,
-                     startTime: pt.startTime,
-                     endTime: pt.endTime
-                  });
-
                   const nextEvent = dayEvents[idx + 1];
-                  // 다음 일정이 있고, 시간이 연속되고, 같은 방이면 병합
                   if (nextEvent &&
                       nextEvent.startTime === pt.endTime &&
                       pt.title.split('-')[0].trim() === nextEvent.title.split('-')[0].trim()) {
-
-                     console.log('📱 [클라이언트] 병합 시작:', {
-                        ptLocation: pt.location,
-                        nextEventLocation: nextEvent.location,
-                        finalLocation: pt.location || nextEvent.location || null
-                     });
-
-                     // 병합된 일정 생성
-                     // 🔧 이동시간의 목적지(pt.location)를 우선 사용 (조원 주소)
                      mergedPersonalTimes.push({
                         id: `pt-${nextEvent.id}`,
                         title: nextEvent.title,
                         date: nextEvent.specificDate,
-                        time: pt.startTime, // 이동시간의 시작
-                        endTime: nextEvent.endTime, // 수업시간의 종료
-                        participants: pt.participants || nextEvent.participants || 1,  // 🆕 실제 참석자 수
+                        time: pt.startTime,
+                        endTime: nextEvent.endTime,
+                        participants: pt.participants || nextEvent.participants || 1,
                         priority: 3,
                         color: nextEvent.color || '#3B82F6',
                         isCoordinated: true,
                         roomName: nextEvent.title.split('-')[0].trim(),
-                        location: pt.location || nextEvent.location || null, // 이동시간 목적지 우선
+                        location: pt.location || nextEvent.location || null,
                         locationLat: pt.locationLat || nextEvent.locationLat || null,
                         locationLng: pt.locationLng || nextEvent.locationLng || null,
                         transportMode: nextEvent.transportMode || pt.transportMode || null,
-                        hasTravelTime: true, // 이동시간 포함 플래그
+                        hasTravelTime: true,
                         travelStartTime: pt.startTime,
                         travelEndTime: pt.endTime,
-                        suggestionId: pt.suggestionId || nextEvent.suggestionId || null,  // 🆕 원본 일정 ID
+                        suggestionId: pt.suggestionId || nextEvent.suggestionId || null,
                         participantNames: nextEvent.participantNames || pt.participantNames || [],
                         totalMembers: nextEvent.totalMembers || pt.totalMembers || 0
                      });
-
                      processedIds.add(pt.id);
                      processedIds.add(nextEvent.id);
                   } else {
-                     // 병합 실패 - 이동시간만 단독으로 표시
                      mergedPersonalTimes.push({
-                        id: `pt-${pt.id}`,
-                        title: pt.title,
-                        date: pt.specificDate,
-                        time: pt.startTime,
-                        endTime: pt.endTime,
-                        participants: pt.participants || 1,  // 🆕 실제 참석자 수
-                        priority: 3,
-                        color: pt.color || '#FFA500',
+                        id: `pt-${pt.id}`, title: pt.title, date: pt.specificDate,
+                        time: pt.startTime, endTime: pt.endTime, participants: pt.participants || 1,
+                        priority: 3, color: pt.color || '#FFA500',
                         isCoordinated: !!(pt.suggestionId || (pt.title && pt.title.includes('-'))),
                         roomName: pt.title && pt.title.includes('-') ? pt.title.split('-')[0].trim() : undefined,
-                        location: pt.location || null,
-                        locationLat: pt.locationLat || null,
-                        locationLng: pt.locationLng || null,
-                        transportMode: pt.transportMode || null,
-                        suggestionId: pt.suggestionId || null,  // 🆕 원본 일정 ID
-                        participantNames: pt.participantNames || [],
-                        totalMembers: pt.totalMembers || 0
+                        location: pt.location || null, locationLat: pt.locationLat || null,
+                        locationLng: pt.locationLng || null, transportMode: pt.transportMode || null,
+                        suggestionId: pt.suggestionId || null,
+                        participantNames: pt.participantNames || [], totalMembers: pt.totalMembers || 0
                      });
                      processedIds.add(pt.id);
                   }
                } else {
-                  // 일반 일정 (이동시간 아님)
                   mergedPersonalTimes.push({
-                     id: `pt-${pt.id}`,
-                     title: pt.title || '개인 일정',
-                     date: pt.specificDate,
-                     time: pt.startTime,
-                     endTime: pt.endTime,
-                     participants: pt.participants || 1,  // 🆕 DB에서 가져온 실제 참석자 수
-                     priority: 3,
-                     color: pt.color || '#10B981',
+                     id: `pt-${pt.id}`, title: pt.title || '개인 일정', date: pt.specificDate,
+                     time: pt.startTime, endTime: pt.endTime, participants: pt.participants || 1,
+                     priority: 3, color: pt.color || '#10B981',
                      isCoordinated: !!(pt.suggestionId || (pt.title && pt.title.includes('-'))),
                      roomName: pt.title && pt.title.includes('-') ? pt.title.split('-')[0].trim() : undefined,
-                     location: pt.location || null,
-                     locationLat: pt.locationLat || null,
-                     locationLng: pt.locationLng || null,
-                     transportMode: pt.transportMode || null,
-                     hasTravelTime: pt.hasTravelTime || false,
-                     suggestionId: pt.suggestionId || null,  // 🆕 원본 일정 ID
-                     participantNames: pt.participantNames || [],
-                     totalMembers: pt.totalMembers || 0
+                     location: pt.location || null, locationLat: pt.locationLat || null,
+                     locationLng: pt.locationLng || null, transportMode: pt.transportMode || null,
+                     hasTravelTime: pt.hasTravelTime || false, suggestionId: pt.suggestionId || null,
+                     participantNames: pt.participantNames || [], totalMembers: pt.totalMembers || 0
                   });
                   processedIds.add(pt.id);
                }
             });
          });
 
-         // 🔍 디버그: 병합 후 데이터 확인
          setPersonalTimes(mergedPersonalTimes);
       } catch (error) {
          console.error('Fetch personal times error:', error);
       }
-   }, [API_BASE_URL]);
+   }, [API_BASE_URL, user]);
 
    // 2. 데이터 로드 Effect
    useEffect(() => {
@@ -371,6 +384,13 @@ const MobileScheduleView = ({ user }) => {
          if (!currentUser) return;
          const token = await currentUser.getIdToken();
 
+         console.log('[handleDeleteEvent] 삭제 시도:', {
+            id: event.id,
+            googleEventId: event.googleEventId,
+            isGoogleEvent: event.isGoogleEvent,
+            title: event.title
+         });
+
          if (event.id && event.id.startsWith('pt-')) {
             // Personal Time 삭제
             const personalTimeId = event.id.replace('pt-', '');
@@ -379,6 +399,11 @@ const MobileScheduleView = ({ user }) => {
                headers: { 'Authorization': `Bearer ${token}` },
             });
             if (!response.ok) throw new Error('Failed to delete personal time');
+         } else if (event.isGoogleEvent || event.id?.startsWith('google-')) {
+            // 🆕 구글 캘린더 이벤트 삭제
+            const googleEventId = event.googleEventId || event.id.replace('google-', '');
+            console.log('[handleDeleteEvent] 구글 이벤트 삭제 호출, googleEventId:', googleEventId);
+            await googleCalendarService.deleteEvent(googleEventId);
          } else {
             // Global Event 삭제
             const response = await fetch(`${API_BASE_URL}/api/events/${event.id}`, {

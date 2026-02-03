@@ -7,6 +7,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import { Menu, LogOut, User, Calendar, Clipboard, ClipboardX, Phone, Settings, FileText } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 import { userService } from '../../services/userService';
+import * as googleCalendarService from '../../services/googleCalendarService';
 import { useChatEnhanced } from '../../hooks/useChat/enhanced';
 import SimplifiedScheduleDisplay from './SimplifiedScheduleDisplay';
 import BottomNavigation from './BottomNavigation';
@@ -45,6 +46,7 @@ const MobileCalendarView = ({ user }) => {
    const [personalTimes, setPersonalTimes] = useState([]);
 
    const [globalEvents, setGlobalEvents] = useState([]);
+   const [googleCalendarEvents, setGoogleCalendarEvents] = useState([]);
    const [eventAddedKey, setEventAddedKey] = useState(0);
    const [eventActions, setEventActions] = useState({
       addEvent: async () => {},
@@ -208,16 +210,62 @@ const MobileCalendarView = ({ user }) => {
    const fetchSchedule = useCallback(async () => {
       try {
          setIsLoading(true);
-         const data = await userService.getUserSchedule();
-         setDefaultSchedule(data.defaultSchedule || []);
-         setScheduleExceptions(data.scheduleExceptions || []);
-         setPersonalTimes(data.personalTimes || []);
+         const loginMethod = localStorage.getItem('loginMethod') || (user?.google?.refreshToken ? 'google' : '');
+         const isGoogleUser = loginMethod === 'google' && user?.google?.refreshToken;
+
+         if (isGoogleUser) {
+            // 구글 로그인 사용자: 구글 캘린더만 사용 (DB 스케줄 X)
+            setDefaultSchedule([]);
+            setScheduleExceptions([]);
+            setPersonalTimes([]);
+            try {
+               const threeMonthsAgo = new Date();
+               threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+               const oneYearLater = new Date();
+               oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+               const gEvents = await googleCalendarService.getEvents(
+                  threeMonthsAgo.toISOString(),
+                  oneYearLater.toISOString()
+               );
+               // 구글 캘린더 이벤트에서 참석자 정보 파싱
+               const formattedGoogleEvents = gEvents.map(e => {
+                  let participants = 0;
+                  let participantNames = [];
+                  if (e.description) {
+                     const countMatch = e.description.match(/참석자:\s*(\d+)명/);
+                     if (countMatch) participants = parseInt(countMatch[1], 10);
+                     const namesMatch = e.description.match(/참석:\s*(.+?)(?:\n|$)/);
+                     if (namesMatch) participantNames = namesMatch[1].split(',').map(n => n.trim());
+                  }
+                  const isCoordinated = e.title && e.title.includes('[약속]');
+                  return {
+                     ...e,
+                     participants: participants,
+                     participantNames: participantNames,
+                     isCoordinated: isCoordinated,
+                     backgroundColor: isCoordinated ? '#3b82f6' : '#22c55e',
+                     borderColor: isCoordinated ? '#2563eb' : '#16a34a',
+                  };
+               });
+               setGoogleCalendarEvents(formattedGoogleEvents);
+            } catch (gErr) {
+               console.warn('구글 캘린더 이벤트 로딩 실패:', gErr);
+               setGoogleCalendarEvents([]);
+            }
+         } else {
+            // 일반 로그인 사용자: 기존 DB 캘린더 사용
+            const data = await userService.getUserSchedule();
+            setDefaultSchedule(data.defaultSchedule || []);
+            setScheduleExceptions(data.scheduleExceptions || []);
+            setPersonalTimes(data.personalTimes || []);
+            setGoogleCalendarEvents([]);
+         }
       } catch (err) {
          console.error('일정 로딩 실패:', err);
       } finally {
          setIsLoading(false);
       }
-   }, [convertScheduleToEvents]);
+   }, [convertScheduleToEvents, user]);;
 
    useEffect(() => { fetchSchedule(); }, [fetchSchedule]);
    
@@ -240,18 +288,18 @@ const MobileCalendarView = ({ user }) => {
       if (!isLoading && calendarRef.current) {
           const calendarApi = calendarRef.current.getApi();
           const calendarEvents = convertScheduleToEvents(defaultSchedule, scheduleExceptions, personalTimes);
-          
+          const allEvents = [...calendarEvents, ...googleCalendarEvents];
 
           // React 상태 업데이트 (하단 리스트 등 다른 UI 요소에 필요)
-          setEvents(calendarEvents);
+          setEvents(allEvents);
   
           // FullCalendar API 호출을 마이크로태스크로 연기하여 React 렌더링 사이클 완료 후 실행
           Promise.resolve().then(() => {
               calendarApi.removeAllEvents();
-              calendarApi.addEventSource(calendarEvents);
+              calendarApi.addEventSource(allEvents);
           });
       }
-  }, [defaultSchedule, scheduleExceptions, personalTimes, isLoading, convertScheduleToEvents, calendarRef]);
+  }, [defaultSchedule, scheduleExceptions, personalTimes, googleCalendarEvents, isLoading, convertScheduleToEvents, calendarRef]);
 
    const formatEventForClient = (event, color) => {
       if (!event || !event.startTime) return { ...event, date: '', time: '' };
@@ -280,17 +328,66 @@ const MobileCalendarView = ({ user }) => {
       try {
          const currentUser = auth.currentUser;
          if (!currentUser) return;
-         const response = await fetch(`${API_BASE_URL}/api/events`, {
-            headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
-         });
-         if (!response.ok) throw new Error('Failed to fetch events');
-         const data = await response.json();
-         const formattedEvents = data.events.map(event => formatEventForClient(event));
-         setGlobalEvents(formattedEvents);
+
+         const loginMethod = localStorage.getItem('loginMethod') || (user?.google?.refreshToken ? 'google' : '');
+         const isGoogleUser = loginMethod === 'google' && user?.google?.refreshToken;
+
+         if (isGoogleUser) {
+            // 구글 사용자: globalEvents도 구글 캘린더에서 가져옴
+            try {
+               const threeMonthsAgo = new Date();
+               threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+               const oneYearLater = new Date();
+               oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+               const gEvents = await googleCalendarService.getEvents(
+                  threeMonthsAgo.toISOString(),
+                  oneYearLater.toISOString()
+               );
+               const formattedEvents = gEvents.map(e => {
+                  // description에서 참석자 수와 이름 파싱
+                  let participants = 0;
+                  let participantNames = [];
+                  if (e.description) {
+                     const countMatch = e.description.match(/참석자:\s*(\d+)명/);
+                     if (countMatch) participants = parseInt(countMatch[1], 10);
+                     const namesMatch = e.description.match(/참석:\s*(.+?)(?:\n|$)/);
+                     if (namesMatch) participantNames = namesMatch[1].split(',').map(n => n.trim());
+                  }
+                  // [약속] 태그가 있으면 조율 일정으로 표시
+                  const isCoordinated = e.title && e.title.includes('[약속]');
+                  return {
+                     id: e.id,
+                     googleEventId: e.googleEventId,
+                     title: e.title,
+                     date: e.start ? e.start.split('T')[0] : '',
+                     time: e.start ? new Date(e.start).toTimeString().substring(0, 5) : '',
+                     participants: participants,
+                     participantNames: participantNames,
+                     color: isCoordinated ? '#3b82f6' : '#22c55e',
+                     isGoogleEvent: true,
+                     isCoordinated: isCoordinated,
+                     location: e.location || null,
+                     description: e.description || '',
+                  };
+               });
+               setGlobalEvents(formattedEvents);
+            } catch (gErr) {
+               console.warn('구글 캘린더 globalEvents 로딩 실패:', gErr);
+               setGlobalEvents([]);
+            }
+         } else {
+            const response = await fetch(`${API_BASE_URL}/api/events`, {
+               headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
+            });
+            if (!response.ok) throw new Error('Failed to fetch events');
+            const data = await response.json();
+            const formattedEvents = data.events.map(event => formatEventForClient(event));
+            setGlobalEvents(formattedEvents);
+         }
       } catch (error) {
          console.error('이벤트 가져오기 실패:', error);
       }
-   }, [isLoggedIn]);
+   }, [isLoggedIn, user]);
 
    const handleAddGlobalEvent = useCallback(async eventData => {
       try {
@@ -363,11 +460,22 @@ const MobileCalendarView = ({ user }) => {
    const handleChatMessage = async (message, additionalContext = {}) => {
       try {
          if (!chatEnhanced || !chatEnhanced.handleChatMessage) return { success: false, message: '챗봇이 준비 중입니다.' };
-         const result = await chatEnhanced.handleChatMessage(message, { context: 'profile', tabType: 'local', currentEvents: globalEvents, ...additionalContext });
+         // 구글 로그인 사용자는 구글 캘린더에 일정 추가, 일반 사용자는 로컬 DB
+         const loginMethod = localStorage.getItem('loginMethod');
+         const hasRefreshToken = !!user?.google?.refreshToken;
+         const isGoogleUser = loginMethod === 'google' && hasRefreshToken;
+         const tabType = isGoogleUser ? 'google' : 'local';
+         const context = isGoogleUser ? 'googleCalendar' : 'profile';
+         console.log('[handleChatMessage] 구글유저:', isGoogleUser, '| loginMethod:', loginMethod, '| refreshToken:', hasRefreshToken, '| tabType:', tabType, '| context:', context);
+         const result = await chatEnhanced.handleChatMessage(message, { context, tabType, currentEvents: globalEvents, ...additionalContext });
+         console.log('[handleChatMessage] 결과:', result);
          await fetchSchedule();
          await fetchGlobalEvents();
          return result;
-      } catch (error) { return { success: false, message: '메시지 처리 중 오류 발생' }; }
+      } catch (error) {
+         console.error('[handleChatMessage] 에러:', error);
+         return { success: false, message: '메시지 처리 중 오류 발생' };
+      }
    };
 
    const handleStartVoiceRecognition = () => {
@@ -478,7 +586,8 @@ const MobileCalendarView = ({ user }) => {
             time: new Date(originalEvent.start).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }),
             endTime: new Date(originalEvent.end).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }),
             location: originalEvent.location || null,
-            participants: originalEvent.participants || 1,
+            participants: originalEvent.participants ?? 0,
+            participantNames: originalEvent.participantNames || [],
             isCoordinated: originalEvent.isCoordinated || false,
             hasTravelTime: originalEvent.hasTravelTime || false
          });
@@ -499,6 +608,14 @@ const MobileCalendarView = ({ user }) => {
          const currentUser = auth.currentUser;
          if (!currentUser) return;
          const token = await currentUser.getIdToken();
+
+         // 구글 캘린더 이벤트 삭제
+         if (event.isGoogleEvent && event.googleEventId) {
+            await googleCalendarService.deleteEvent(event.googleEventId);
+            setSelectedEvent(null);
+            await fetchSchedule();
+            return;
+         }
 
          if (event.id && event.id.startsWith('pt-')) {
             const personalTimeId = event.id.replace('pt-', '');
@@ -543,12 +660,13 @@ const MobileCalendarView = ({ user }) => {
       if (!prev || prev.start?.getTime() !== newRange.start.getTime() || prev.end?.getTime() !== newRange.end.getTime()) {
          visibleRangeRef.current = newRange;
          const calendarEvents = convertScheduleToEvents(defaultSchedule, scheduleExceptions, personalTimes);
-         setEvents(calendarEvents);
+         const allEvts = [...calendarEvents, ...googleCalendarEvents];
+         setEvents(allEvts);
          if (calendarRef.current) {
             const calendarApi = calendarRef.current.getApi();
             Promise.resolve().then(() => {
                calendarApi.removeAllEvents();
-               calendarApi.addEventSource(calendarEvents);
+               calendarApi.addEventSource(allEvts);
             });
          }
       }
@@ -701,7 +819,12 @@ const MobileCalendarView = ({ user }) => {
                   <div className="schedule-page-title">
                      <span>{currentTitle || '달력'}</span>
                      <div className="top-edit-buttons">
-                        {!isEditing ? (
+                        {(() => {
+                           const isGoogleUser = localStorage.getItem('loginMethod') === 'google' && user?.google?.refreshToken;
+                           if (isGoogleUser) {
+                              return <button className="edit-button" onClick={() => setShowPersonalInfo(true)}>개인정보 수정</button>;
+                           }
+                           return !isEditing ? (
                            <>
                               <button className="edit-button" onClick={handleStartEdit}>편집</button>
                               <button className="edit-button" onClick={() => setShowPersonalInfo(true)}>개인정보 수정</button>
@@ -712,7 +835,8 @@ const MobileCalendarView = ({ user }) => {
                               <button className="edit-button clear-button" onClick={handleClearAll}>초기화</button>
                               <button className="edit-button save-button" onClick={handleSave}>저장</button>
                            </>
-                        )}
+                        );
+                        })()}
                      </div>
                   </div>
                   <div 

@@ -11,6 +11,8 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 // Gemini AI 인스턴스
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+const { syncToGoogleCalendar } = require('../services/confirmScheduleService');
+
 // @desc    Get chat history
 // @route   GET /api/chat/:roomId
 // @access  Private
@@ -393,8 +395,9 @@ exports.acceptSuggestion = async (req, res) => {
     const { roomId, suggestionId } = req.params;
     const userId = req.user.id;
 
-    // 1. 제안 조회
-    const suggestion = await ScheduleSuggestion.findById(suggestionId);
+    // 1. 제안 조회 (참석자 정보 포함)
+    const suggestion = await ScheduleSuggestion.findById(suggestionId)
+      .populate('memberResponses.user', 'firstName lastName email');
     if (!suggestion) {
       return res.status(404).json({ msg: 'Suggestion not found' });
     }
@@ -409,7 +412,27 @@ exports.acceptSuggestion = async (req, res) => {
     // 🆕 먼저 수락 처리 후 참석자 수 계산
     await suggestion.acceptByUser(userId, null); // personalTimeId는 아래에서 업데이트
 
-    const acceptedCount = suggestion.memberResponses.filter(r => r.status === 'accepted').length;
+    // 참석자 이름 목록 직접 조회
+    const acceptedResponses = suggestion.memberResponses.filter(r => r.status === 'accepted');
+    const acceptedCount = acceptedResponses.length;
+    
+    // User 모델에서 직접 이름 가져오기
+    const participantNames = [];
+    console.log('[acceptSuggestion] acceptedResponses:', acceptedResponses.length);
+    for (const r of acceptedResponses) {
+      const memberId = r.user?._id || r.user;
+      console.log('[acceptSuggestion] memberId:', memberId, 'r.user:', r.user);
+      if (memberId) {
+        const member = await User.findById(memberId).select('firstName lastName email');
+        console.log('[acceptSuggestion] member found:', member ? { firstName: member.firstName, lastName: member.lastName, email: member.email } : null);
+        if (member) {
+          const name = member.firstName || member.lastName || member.email?.split('@')[0] || '참석자';
+          console.log('[acceptSuggestion] pushing name:', name);
+          participantNames.push(name);
+        }
+      }
+    }
+    console.log('[acceptSuggestion] 최종 participantNames:', participantNames);
 
     const newPersonalTime = {
       id: user.personalTimes.length > 0
@@ -432,6 +455,16 @@ exports.acceptSuggestion = async (req, res) => {
     user.personalTimes.push(newPersonalTime);
     await user.save();
 
+    // 🔄 구글 캘린더 사용자면 구글 캘린더에도 동기화
+    if (user.google && user.google.refreshToken) {
+      try {
+        await syncToGoogleCalendar(user, newPersonalTime, participantNames);
+        console.log(`[acceptSuggestion] ✅ 구글 캘린더 동기화 완료: ${user.email}`);
+      } catch (syncErr) {
+        console.warn(`[acceptSuggestion] 구글 캘린더 동기화 실패: ${syncErr.message}`);
+      }
+    }
+
     // 4. personalTimeId 업데이트
     const userResponse = suggestion.memberResponses.find(
       r => r.user.toString() === userId.toString() || r.user._id?.toString() === userId.toString()
@@ -452,7 +485,15 @@ exports.acceptSuggestion = async (req, res) => {
             if (pt) {
               pt.participants = acceptedCount;
               await otherUser.save();
+              // 🔄 구글 캘린더 사용자면 참석자 수 업데이트
+              if (otherUser.google && otherUser.google.refreshToken) {
+                try {
+                  await syncToGoogleCalendar(otherUser, pt, participantNames);
+                } catch (gcErr) {
+                  console.warn(`[Accept] 구글 캘린더 업데이트 실패: ${gcErr.message}`);
+                }
               }
+            }
           }
         } catch (syncErr) {
           console.error(`⚠️ [Accept] Failed to sync participants:`, syncErr.message);

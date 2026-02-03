@@ -17,8 +17,9 @@
  * @returns {string} Gemini API용 프롬프트
  */
 function generateSchedulePrompt(conversationText, currentDate = new Date(), existingSuggestions = []) {
-  // 한국 시간대(KST, UTC+9) 기준으로 날짜 계산
-  const kstDate = new Date(currentDate.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+  // 한국 시간대(KST, UTC+9) 기준으로 날짜 계산 - 명시적 UTC 오프셋 사용
+  const utcTime = currentDate.getTime() + (currentDate.getTimezoneOffset() * 60000);
+  const kstDate = new Date(utcTime + (9 * 60 * 60 * 1000)); // UTC+9
   const year = kstDate.getFullYear();
   const month = kstDate.getMonth() + 1;
   const date = kstDate.getDate();
@@ -118,6 +119,12 @@ ${existingSuggestions.map((s, i) => {
 
    ❌ **흔한 실수: "다음주 토요일"인데 이번주 토요일 날짜를 쓰는 것!**
    ❌ **"다음주"라고 했으면 이번주 달력의 날짜가 나올 수 없습니다!**
+   ❌ **절대로 날짜를 직접 계산하지 마세요! 위 달력에서 복사해서 쓰세요!**
+
+   **Step 3: 최종 검증 (반드시 수행!)**
+   - 출력할 date 값이 위 달력표에 실제로 존재하는지 확인
+   - "다음주 월요일"이면 다음주 달력의 "월=" 값과 정확히 일치해야 함
+   - 일치하지 않으면 달력표의 값으로 교정
 
 📅 **이번주 달력 (일요일~토요일):**
    ${thisWeekDates.join(', ')}

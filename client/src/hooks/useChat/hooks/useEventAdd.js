@@ -169,9 +169,12 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
     let requestBody = eventData;
     let httpMethod = 'POST';
 
+    console.log('[useEventAdd] tabType:', context.tabType, '| context:', context.context, '| eventData:', eventData);
+
     switch (context.tabType) {
       case 'google':
         apiEndpoint = `${API_BASE_URL}/api/calendar/events/google`;
+        console.log('[useEventAdd] ✅ 구글 캘린더 API 호출:', apiEndpoint);
         break;
       case 'local':
         if (context.context === 'profile') {

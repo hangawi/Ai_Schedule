@@ -3,7 +3,9 @@ const ChatMessage = require('../models/ChatMessage');
 const Room = require('../models/room');
 const RejectedSuggestion = require('../models/RejectedSuggestion');
 const ScheduleSuggestion = require('../models/ScheduleSuggestion');
+const User = require('../models/user');
 const { generateSchedulePrompt } = require('../prompts/scheduleAnalysis');
+const { syncToGoogleCalendar } = require('./confirmScheduleService');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -231,7 +233,6 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
   // 🆕 제안자(생성자)의 personalTime 생성
   if (suggestedByUserId) {
     try {
-      const User = require('../models/user');
       const suggester = await User.findById(suggestedByUserId);
       if (suggester) {
         let endTime = data.endTime;
@@ -290,12 +291,12 @@ async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
     return;
   }
 
-  const suggestion = await ScheduleSuggestion.findById(targetId);
+  const suggestion = await ScheduleSuggestion.findById(targetId)
+    .populate('memberResponses.user', 'firstName lastName email');
   if (!suggestion) {
     console.error('❌ [AI Schedule] Target suggestion not found:', targetId);
     return;
   }
-
 
   // 변경 전 값 저장
   const oldStartTime = suggestion.startTime;
@@ -332,7 +333,19 @@ async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
 
   // 🆕 수락한 모든 사용자의 personalTimes 동기화 (장소, 시간, 제목 등)
   if (hasDataChange) {
-    const User = require('../models/user');
+    // 참석자 이름 목록 구성 - User 모델에서 직접 조회
+    const acceptedResponses = suggestion.memberResponses.filter(r => r.status === 'accepted');
+    const participantNames = [];
+    for (const r of acceptedResponses) {
+      const memberId = r.user?._id || r.user;
+      if (memberId) {
+        const member = await User.findById(memberId).select('firstName email');
+        if (member) {
+          participantNames.push(member.firstName || member.email?.split('@')[0] || '참석자');
+        }
+      }
+    }
+
     for (const response of suggestion.memberResponses) {
       if (response.status === 'accepted' && response.personalTimeId) {
         try {
@@ -350,6 +363,15 @@ async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
               }
               if (changed) {
                 await syncUser.save();
+                // 🔄 구글 캘린더 사용자면 구글 캘린더 이벤트도 업데이트
+                if (syncUser.google && syncUser.google.refreshToken) {
+                  try {
+                    await syncToGoogleCalendar(syncUser, pt, participantNames);
+                    console.log(`[AI Schedule] ✅ 구글 캘린더 업데이트 완료: ${syncUser.email}`);
+                  } catch (gcErr) {
+                    console.warn(`[AI Schedule] 구글 캘린더 업데이트 실패: ${gcErr.message}`);
+                  }
+                }
               }
             }
           }
@@ -467,7 +489,6 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
   if (sentiment === 'accept') {
 
     // 🆕 사용자 개인 캘린더에 일정 추가 (personalTimes)
-    const User = require('../models/user');
     const user = await User.findById(userId);
     if (!user) {
       console.error('❌ [AI Schedule] User not found:', userId);
@@ -484,8 +505,27 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
     userResponse.status = 'accepted';
     userResponse.respondedAt = new Date();
 
-    // 🆕 참석자 수 계산 (accepted 상태인 멤버 수 - 현재 사용자 포함)
-    const acceptedCount = suggestion.memberResponses.filter(r => r.status === 'accepted').length;
+    // 🆕 참석자 수 및 이름 계산 (accepted 상태인 멤버)
+    const acceptedResponses = suggestion.memberResponses.filter(r => r.status === 'accepted');
+    const acceptedCount = acceptedResponses.length;
+    
+    // User 모델에서 직접 이름 가져오기
+    const participantNames = [];
+    console.log('[handleAutoResponse] acceptedResponses:', acceptedResponses.length);
+    for (const r of acceptedResponses) {
+      const memberId = r.user?._id || r.user;
+      console.log('[handleAutoResponse] memberId:', memberId, 'r.user:', r.user);
+      if (memberId) {
+        const member = await User.findById(memberId).select('firstName lastName email');
+        console.log('[handleAutoResponse] member found:', member ? { firstName: member.firstName, lastName: member.lastName, email: member.email } : null);
+        if (member) {
+          const name = member.firstName || member.lastName || member.email?.split('@')[0] || '참석자';
+          console.log('[handleAutoResponse] pushing name:', name);
+          participantNames.push(name);
+        }
+      }
+    }
+    console.log('[handleAutoResponse] 최종 participantNames:', participantNames);
 
     const newPersonalTime = {
       id: user.personalTimes.length > 0
@@ -507,6 +547,16 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
 
     user.personalTimes.push(newPersonalTime);
     await user.save();
+
+    // 🔄 구글 캘린더 사용자면 구글 캘린더에도 동기화
+    if (user.google && user.google.refreshToken) {
+      try {
+        await syncToGoogleCalendar(user, newPersonalTime, participantNames);
+        console.log(`[AI Schedule] ✅ 구글 캘린더 동기화 완료: ${user.email}`);
+      } catch (syncErr) {
+        console.warn(`[AI Schedule] 구글 캘린더 동기화 실패: ${syncErr.message}`);
+      }
+    }
 
     // personalTimeId 업데이트
     userResponse.personalTimeId = newPersonalTime.id;
@@ -542,7 +592,6 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
 
     // 🆕 이미 수락해서 personalTime이 있었다면 제거
     if (userResponse.personalTimeId) {
-      const User = require('../models/user');
       const rejectUser = await User.findById(userId);
       if (rejectUser) {
         rejectUser.personalTimes = rejectUser.personalTimes.filter(
@@ -612,7 +661,6 @@ async function handleCancelSchedule(roomId, targetId, reason, sortedMessages) {
     // 2명 이상 수락한 경우: 제안자만 불참 처리
 
     // 제안자의 personalTime 제거
-    const User = require('../models/user');
     const suggesterUser = await User.findById(suggesterId);
     if (suggesterUser) {
       suggesterUser.personalTimes = suggesterUser.personalTimes.filter(
@@ -640,7 +688,6 @@ async function handleCancelSchedule(roomId, targetId, reason, sortedMessages) {
     // 2명 미만 수락: 일정 완전 취소
 
     // 모든 수락 멤버의 personalTime 제거
-    const User = require('../models/user');
     for (const response of suggestion.memberResponses) {
       if (response.status === 'accepted' && response.personalTimeId) {
         try {
