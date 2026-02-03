@@ -185,7 +185,10 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
           }
           const currentSchedule = await currentScheduleResponse.json();
           
-          const newPersonalTime = createSingleProfilePersonalTime(eventData);
+          const specificDate = eventData.startDateTime.split('T')[0];
+          const startTime = eventData.startDateTime.split('T')[1]?.substring(0, 5) || '00:00';
+          const endTime = eventData.endDateTime.split('T')[1]?.substring(0, 5) || '23:59';
+          const newPersonalTime = createSingleProfilePersonalTime(eventData, specificDate, startTime, endTime);
 
           const existingPersonalTimes = Array.isArray(currentSchedule.personalTimes)
             ? [...currentSchedule.personalTimes]

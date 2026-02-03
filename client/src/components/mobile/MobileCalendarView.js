@@ -88,12 +88,15 @@ const MobileCalendarView = ({ user }) => {
       return merged;
    };
 
+   const visibleRangeRef = useRef(null);
+
    const convertScheduleToEvents = useCallback((defaultSchedule, scheduleExceptions, personalTimes) => {
 
       const tempEvents = [];
       const today = new Date();
-      const startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const endDate = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+      const vr = visibleRangeRef.current;
+      const startDate = vr ? new Date(vr.start) : new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const endDate = vr ? new Date(vr.end) : new Date(today.getFullYear(), today.getMonth() + 2, 0);
 
       for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
          const dayOfWeek = d.getDay();
@@ -534,7 +537,21 @@ const MobileCalendarView = ({ user }) => {
 
    const handleViewChange = (viewInfo) => {
       setCalendarView(viewInfo.view.type);
-      setCurrentTitle(viewInfo.view.title); 
+      setCurrentTitle(viewInfo.view.title);
+      const newRange = { start: viewInfo.view.activeStart, end: viewInfo.view.activeEnd };
+      const prev = visibleRangeRef.current;
+      if (!prev || prev.start?.getTime() !== newRange.start.getTime() || prev.end?.getTime() !== newRange.end.getTime()) {
+         visibleRangeRef.current = newRange;
+         const calendarEvents = convertScheduleToEvents(defaultSchedule, scheduleExceptions, personalTimes);
+         setEvents(calendarEvents);
+         if (calendarRef.current) {
+            const calendarApi = calendarRef.current.getApi();
+            Promise.resolve().then(() => {
+               calendarApi.removeAllEvents();
+               calendarApi.addEventSource(calendarEvents);
+            });
+         }
+      }
       if (viewInfo.view.type !== 'dayGridMonth') {
          const today = new Date();
          const vs = viewInfo.view.currentStart;
