@@ -43,7 +43,9 @@
       "Bash(node:*)",
       "Bash(npm test)",
       "mcp__serena__check_onboarding_performed",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(find:*)",
+      "mcp__serena__list_memories"
     ]
   }
 }
