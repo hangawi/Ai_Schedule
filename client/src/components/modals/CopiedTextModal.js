@@ -12,44 +12,17 @@
  *    - 사용자가 '일정 추가' 또는 '취소'를 선택할 수 있도록 함.
  *    - AI가 텍스트를 분석하는 동안('isAnalyzing' 상태) 로딩 스피너를 표시하고 버튼을 비활성화.
  *
- * 🔗 연결된 파일:
- *    - ../../App.js - 클립보드 모니터링 로직에서 이 모달을 호출.
- *    - ../../utils/index.js - `translateEnglishDays` 유틸리티 함수 사용.
- *
- * 💡 UI 위치:
- *    - 클립보드 모니터링이 활성화된 상태에서 텍스트를 복사했을 때, 자동으로 화면 하단(모바일) 또는 중앙(데스크탑)에 나타나는 팝업 모달.
- *
- * ✏️ 수정 가이드:
- *    - 텍스트 요약 길이를 변경하려면 `MAX_DISPLAY_LENGTH` 상수를 조절합니다.
- *    - 번역 로직을 변경하려면 `translateEnglishDays` 유틸리티 함수를 수정해야 합니다.
- *    - AI 분석 중일 때의 UI를 변경하려면 `isAnalyzing` prop에 따른 조건부 렌더링 부분을 수정합니다.
- *
- * 📝 참고사항:
- *    - 이 모달은 텍스트를 최종적으로 파싱하지 않습니다. '일정 추가'를 누르면 전처리된 텍스트를 부모 컴포넌트로 넘겨,
- *      부모 컴포넌트가 챗봇 API로 해당 텍스트를 보내 분석 및 파싱을 요청합니다.
- *
  * ===================================================================================================
  */
 import React from 'react';
-import { Check, Loader2 } from 'lucide-react';
+import { Loader2, X, Clipboard, Calendar } from 'lucide-react';
 import { translateEnglishDays } from '../../utils';
 
-/**
- * CopiedTextModal
- * @description 클립보드에서 복사된 텍스트를 보여주고, 이를 기반으로 일정을 추가할지 사용자에게 확인받는 모달.
- * @param {object} props - 컴포넌트 props
- * @param {string} props.text - 클립보드에서 복사된 원본 텍스트.
- * @param {boolean} props.isAnalyzing - AI가 현재 텍스트를 분석 중인지 여부.
- * @param {function} props.onClose - 모달을 닫는 함수.
- * @param {function} props.onConfirm - '일정 추가' 버튼 클릭 시 호출되는 콜백. 번역된 텍스트를 인자로 받음.
- * @returns {JSX.Element}
- */
 const CopiedTextModal = ({ text, isAnalyzing, onClose, onConfirm }) => {
   const translatedText = translateEnglishDays(text);
   const hasTranslation = translatedText !== text;
 
-  // 텍스트가 너무 길면 요약
-  const MAX_DISPLAY_LENGTH = 200;
+  const MAX_DISPLAY_LENGTH = 150;
   const getDisplayText = (fullText) => {
     if (fullText.length <= MAX_DISPLAY_LENGTH) {
       return fullText;
@@ -61,79 +34,134 @@ const CopiedTextModal = ({ text, isAnalyzing, onClose, onConfirm }) => {
   const displayTranslatedText = getDisplayText(translatedText);
 
   return (
-    <div className="fixed inset-0 flex items-end sm:items-center justify-center z-50 bg-black bg-opacity-50 p-4">
-      <div className="bg-white w-full max-w-md rounded-t-lg sm:rounded-lg shadow-xl p-4 sm:p-6 max-h-[80vh] sm:max-h-[90vh] overflow-y-auto transform transition-transform duration-300 ease-out">
-        <div className="flex items-center mb-4">
-          <h2 className="text-lg sm:text-xl font-bold text-gray-800 pr-2">
-            복사된 텍스트로 일정 추가
-          </h2>
-          {isAnalyzing && (
-            <Loader2 size={18} className="animate-spin text-blue-500" />
-          )}
+    <div className="fixed inset-0 flex items-end justify-center z-50">
+      {/* 배경 오버레이 */}
+      <div 
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      
+      {/* 모달 컨텐츠 */}
+      <div className="relative w-full bg-white rounded-t-3xl shadow-2xl animate-slide-up safe-area-bottom">
+        {/* 드래그 핸들 */}
+        <div className="flex justify-center pt-3 pb-2">
+          <div className="w-10 h-1 bg-gray-300 rounded-full" />
         </div>
-        <div className="mb-6">
-          <p className="text-sm text-gray-600 mb-3">
-            {isAnalyzing ? '일정 관련 텍스트인지 분석 중...' : '클립보드에 복사된 내용으로 일정을 추가할까요?'}
-          </p>
 
-          {hasTranslation && (
-            <div className="mb-3">
-              <p className="text-xs text-blue-600 mb-1">원본 텍스트:</p>
-              <blockquote className="bg-blue-50 p-2 rounded-md border-l-2 border-blue-300 text-gray-700 text-sm">
-                {displayText}
-                {text.length > MAX_DISPLAY_LENGTH && (
-                  <span className="text-xs text-gray-500 block mt-1">
-                    ({text.length}자 중 {MAX_DISPLAY_LENGTH}자 표시)
-                  </span>
+        <div className="px-5 pb-6">
+          {/* 헤더 */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                isAnalyzing ? 'bg-blue-100' : 'bg-green-100'
+              }`}>
+                {isAnalyzing ? (
+                  <Loader2 size={20} className="animate-spin text-blue-600" />
+                ) : (
+                  <Clipboard size={20} className="text-green-600" />
                 )}
-              </blockquote>
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  {isAnalyzing ? '분석 중...' : '일정 감지됨'}
+                </h2>
+                <p className="text-xs text-gray-500">
+                  {isAnalyzing ? '텍스트를 분석하고 있습니다' : '클립보드에서 일정을 발견했습니다'}
+                </p>
+              </div>
             </div>
-          )}
+            <button 
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
+            >
+              <X size={18} className="text-gray-500" />
+            </button>
+          </div>
 
-          <div>
-            {hasTranslation && <p className="text-xs text-green-600 mb-1">변환된 텍스트:</p>}
-            <blockquote className={`p-3 rounded-md border-l-4 text-gray-800 text-sm ${
-              hasTranslation ? 'bg-green-50 border-green-500' : 'bg-gray-50 border-blue-500'
-            }`}>
-              {displayTranslatedText}
-              {translatedText.length > MAX_DISPLAY_LENGTH && (
-                <span className="text-xs text-gray-500 block mt-1">
-                  ({translatedText.length}자 중 {MAX_DISPLAY_LENGTH}자 표시)
-                </span>
+          {/* 텍스트 내용 */}
+          <div className="mb-5">
+            {hasTranslation && (
+              <div className="mb-3">
+                <p className="text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wide">원본</p>
+                <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                  <p className="text-sm text-gray-600 leading-relaxed">{displayText}</p>
+                </div>
+              </div>
+            )}
+
+            <div>
+              {hasTranslation && (
+                <p className="text-xs font-medium text-green-600 mb-1.5 uppercase tracking-wide">변환됨</p>
               )}
-            </blockquote>
+              <div className={`rounded-2xl p-4 border-2 ${
+                hasTranslation 
+                  ? 'bg-green-50 border-green-200' 
+                  : 'bg-blue-50 border-blue-200'
+              }`}>
+                <p className="text-sm text-gray-800 leading-relaxed font-medium">
+                  {displayTranslatedText}
+                </p>
+                {translatedText.length > MAX_DISPLAY_LENGTH && (
+                  <p className="text-xs text-gray-400 mt-2">
+                    +{translatedText.length - MAX_DISPLAY_LENGTH}자 더 있음
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 버튼 */}
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 h-12 rounded-2xl bg-gray-100 text-gray-700 font-semibold text-base active:bg-gray-200 transition-colors"
+            >
+              취소
+            </button>
+            <button
+              onClick={() => onConfirm(translatedText)}
+              disabled={isAnalyzing}
+              className={`flex-1 h-12 rounded-2xl font-semibold text-base flex items-center justify-center gap-2 transition-all ${
+                isAnalyzing 
+                  ? 'bg-gray-200 text-gray-400' 
+                  : 'bg-blue-500 text-white active:bg-blue-600 shadow-lg shadow-blue-500/30'
+              }`}
+            >
+              {isAnalyzing ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  분석 중
+                </>
+              ) : (
+                <>
+                  <Calendar size={18} />
+                  일정 추가
+                </>
+              )}
+            </button>
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row sm:justify-end space-y-2 sm:space-y-0 sm:space-x-3">
-          <button
-            onClick={onClose}
-            className="w-full sm:w-auto px-4 py-3 sm:py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center justify-center text-base sm:text-sm"
-          >
-            취소
-          </button>
-          <button
-            onClick={() => onConfirm(translatedText)}
-            disabled={isAnalyzing}
-            className={`w-full sm:w-auto px-4 py-3 sm:py-2 rounded-md flex items-center justify-center text-base sm:text-sm font-medium ${
-              isAnalyzing 
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                : 'bg-blue-500 text-white hover:bg-blue-600'
-            }`}
-          >
-            {isAnalyzing ? (
-              <>
-                <Loader2 size={16} className="mr-2 animate-spin" />
-                분석 중...
-              </>
-            ) : (
-              <>
-                <Check size={16} className="mr-2" />
-                일정 추가
-              </>
-            )}
-          </button>
-        </div>
       </div>
+
+      {/* 애니메이션 스타일 */}
+      <style>{`
+        @keyframes slide-up {
+          from {
+            transform: translateY(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+        .animate-slide-up {
+          animation: slide-up 0.3s ease-out;
+        }
+        .safe-area-bottom {
+          padding-bottom: calc(max(env(safe-area-inset-bottom), 20px) + 70px);
+        }
+      `}</style>
     </div>
   );
 };

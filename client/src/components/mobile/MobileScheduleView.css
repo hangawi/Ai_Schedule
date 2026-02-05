@@ -91,6 +91,32 @@
    color: #3b82f6;
 }
 
+/* 로그인 상태 인디케이터 */
+.mobile-logo-wrapper {
+   position: relative;
+   width: 32px;
+   height: 32px;
+   margin-right: 10px;
+}
+
+.mobile-login-indicator {
+   position: absolute;
+   top: -2px;
+   right: -2px;
+   width: 10px;
+   height: 10px;
+   border-radius: 50%;
+   border: 2px solid white;
+}
+
+.mobile-login-indicator.google {
+   background: #22c55e;
+}
+
+.mobile-login-indicator.local {
+   background: #ef4444;
+}
+
 .mobile-profile-btn {
    min-width: 32px;
    height: 28px;

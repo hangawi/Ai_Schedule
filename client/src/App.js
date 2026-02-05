@@ -273,13 +273,13 @@ function App() {
                   ) : <Navigate to="/auth" />
                } />
                <Route path="/mobile/schedule" element={
-                  isLoggedIn ? <MobileScheduleView user={user} /> : <Navigate to="/auth" />
+                  isLoggedIn ? <MobileScheduleView user={user} isClipboardMonitoring={isClipboardMonitoring} setIsClipboardMonitoring={setIsClipboardMonitoring} isVoiceEnabled={isVoiceRecognitionEnabled} setIsVoiceEnabled={handleToggleVoiceRecognition} /> : <Navigate to="/auth" />
                } />
                <Route path="/mobile/groups" element={
-                  isLoggedIn ? <MobileGroupsView user={user} /> : <Navigate to="/auth" />
+                  isLoggedIn ? <MobileGroupsView user={user} isClipboardMonitoring={isClipboardMonitoring} setIsClipboardMonitoring={setIsClipboardMonitoring} isVoiceEnabled={isVoiceRecognitionEnabled} setIsVoiceEnabled={handleToggleVoiceRecognition} /> : <Navigate to="/auth" />
                } />
                <Route path="/mobile/calendar" element={
-                  isLoggedIn ? <MobileCalendarView user={user} /> : <Navigate to="/auth" />
+                  isLoggedIn ? <MobileCalendarView user={user} isClipboardMonitoring={isClipboardMonitoring} setIsClipboardMonitoring={setIsClipboardMonitoring} isVoiceEnabled={isVoiceRecognitionEnabled} setIsVoiceEnabled={handleToggleVoiceRecognition} /> : <Navigate to="/auth" />
                } />
             </Routes>
             {isLoggedIn && sharedText && (

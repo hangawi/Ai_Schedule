@@ -929,7 +929,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
 
             <main className={`flex-1 overflow-y-auto ${isMobile && !forceDesktopMode ? '' : 'p-4 sm:p-6'}`}>
                {isMobile && !forceDesktopMode ? (
-                  <MobileDashboard user={user} />
+                  <MobileDashboard user={user} isClipboardMonitoring={isClipboardMonitoring} setIsClipboardMonitoring={setIsClipboardMonitoring} isVoiceEnabled={isVoiceRecognitionEnabled} setIsVoiceEnabled={setIsVoiceRecognitionEnabled} />
                ) : (
                   <>
                      {activeTab === 'dashboard' && <DashboardTab pastEvents={pastEvents} todayEvents={todayEvents} upcomingEvents={upcomingEvents} />}

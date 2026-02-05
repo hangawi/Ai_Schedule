@@ -1,19 +1,32 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Menu, LogOut, Calendar, Clipboard, ClipboardX, Phone, User } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 import CoordinationTab from '../tabs/CoordinationTab';
 import BottomNavigation from './BottomNavigation';
+import { useBackgroundMonitoring } from '../../hooks/useBackgroundMonitoring';
+import AutoDetectedScheduleModal from '../modals/AutoDetectedScheduleModal';
 import './MobileGroupsView.css';
 
-const MobileGroupsView = ({ user }) => {
+const MobileGroupsView = ({ user, isClipboardMonitoring, setIsClipboardMonitoring, isVoiceEnabled, setIsVoiceEnabled }) => {
    const navigate = useNavigate();
    const location = useLocation();
    const [exchangeRequestCount, setExchangeRequestCount] = useState(0);
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-   const [isClipboardMonitoring, setIsClipboardMonitoring] = useState(false);
-   const [isBackgroundMonitoring, setIsBackgroundMonitoring] = useState(false);
-   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
+   const [eventAddedKey, setEventAddedKey] = useState(0);
+   const backgroundRecognitionRef = useRef(null);
+   
+   // 백그라운드 대화 감지 훅
+   const dummyEventActions = { addEvent: async () => {} };
+   const {
+      isBackgroundMonitoring,
+      toggleBackgroundMonitoring,
+      processTranscript,
+      detectedSchedules,
+      confirmSchedule,
+      dismissSchedule,
+      isAnalyzing: isBackgroundAnalyzing,
+   } = useBackgroundMonitoring(dummyEventActions, setEventAddedKey);
    const [isInRoom, setIsInRoom] = useState(false);
    const [effectiveIsInRoom, setEffectiveIsInRoom] = useState(false);
    const [refreshKey, setRefreshKey] = useState(0);
@@ -50,6 +63,67 @@ const MobileGroupsView = ({ user }) => {
    useEffect(() => {
       setEffectiveIsInRoom(isInRoom || !!localStorage.getItem('currentRoomId'));
    }, [isInRoom]);
+
+   // 백그라운드 모니터링 활성화 시 음성 인식 시작
+   useEffect(() => {
+      if (!isBackgroundMonitoring) {
+         if (backgroundRecognitionRef.current) {
+            backgroundRecognitionRef.current.stop();
+            backgroundRecognitionRef.current = null;
+         }
+         return;
+      }
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+         alert('이 브라우저에서는 음성 인식을 지원하지 않습니다.');
+         return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'ko-KR';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onresult = (event) => {
+         for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            const isFinal = event.results[i].isFinal;
+            processTranscript(transcript, isFinal);
+         }
+      };
+
+      recognition.onerror = (event) => {
+         console.warn('백그라운드 음성 인식 오류:', event.error);
+         if (event.error === 'not-allowed') {
+            alert('마이크 권한이 필요합니다.');
+         }
+      };
+
+      recognition.onend = () => {
+         if (isBackgroundMonitoring && backgroundRecognitionRef.current) {
+            try {
+               recognition.start();
+            } catch (e) {
+               console.warn('음성 인식 재시작 실패:', e);
+            }
+         }
+      };
+
+      try {
+         recognition.start();
+         backgroundRecognitionRef.current = recognition;
+      } catch (e) {
+         console.error('음성 인식 시작 실패:', e);
+      }
+
+      return () => {
+         if (backgroundRecognitionRef.current) {
+            backgroundRecognitionRef.current.stop();
+            backgroundRecognitionRef.current = null;
+         }
+      };
+   }, [isBackgroundMonitoring, processTranscript]);
 
    const handleLogout = async () => {
       try {
@@ -99,18 +173,16 @@ const MobileGroupsView = ({ user }) => {
                      <Menu size={24} />
                   </button>
                   <div className="mobile-logo-btn" onClick={() => navigate('/')}>
-                     <img src="/image.png" alt="MeetAgent Logo" className="mobile-logo-img" />
+                     <div className="mobile-logo-wrapper">
+                        <img src="/image.png" alt="MeetAgent Logo" className="mobile-logo-img" />
+                        <div className={`mobile-login-indicator ${localStorage.getItem('loginMethod') === 'google' ? 'google' : 'local'}`}></div>
+                     </div>
                      <h1 className="mobile-logo-text">MeetAgent</h1>
                   </div>
                </div>
 
                {/* 오른쪽: 버튼들 */}
                <div className="mobile-header-right">
-                  {/* 캘린더 버튼 */}
-                  <button className="mobile-icon-btn" onClick={() => navigate('/')} title="캘린더">
-                     <Calendar size={20} />
-                  </button>
-
                   {/* 클립보드 모니터링 */}
                   <button
                      className={`mobile-icon-btn ${isClipboardMonitoring ? 'active' : ''}`}
@@ -122,7 +194,7 @@ const MobileGroupsView = ({ user }) => {
                   {/* 백그라운드 모니터링 */}
                   <button
                      className={`mobile-icon-btn ${isBackgroundMonitoring ? 'active' : ''}`}
-                     onClick={() => setIsBackgroundMonitoring(!isBackgroundMonitoring)}
+                     onClick={toggleBackgroundMonitoring}
                      title={isBackgroundMonitoring ? "통화감지 ON" : "통화감지 OFF"}>
                      <Phone size={18} />
                   </button>
@@ -130,14 +202,6 @@ const MobileGroupsView = ({ user }) => {
                   {/* 프로필 버튼 */}
                   <button className="mobile-profile-btn" onClick={() => navigate('/')} title="프로필">
                      {user && user.firstName ? user.firstName : <User size={18} />}
-                  </button>
-
-                  {/* 음성 인식 버튼 */}
-                  <button
-                     className="mobile-voice-btn"
-                     onClick={() => setIsVoiceEnabled(!isVoiceEnabled)}
-                     title={isVoiceEnabled ? "음성 인식 ON" : "음성 인식 OFF"}>
-                     {isVoiceEnabled ? '🎙️' : '🔇'}
                   </button>
 
                   {/* 로그아웃 버튼 */}
@@ -195,6 +259,16 @@ const MobileGroupsView = ({ user }) => {
          {!effectiveIsInRoom && (
             <BottomNavigation
                onRefresh={handleRefresh}
+            />
+         )}
+
+         {/* 자동 감지된 일정 모달 */}
+         {detectedSchedules.length > 0 && (
+            <AutoDetectedScheduleModal
+               schedules={detectedSchedules}
+               onConfirm={confirmSchedule}
+               onDismiss={dismissSchedule}
+               isAnalyzing={isBackgroundAnalyzing}
             />
          )}
       </div>

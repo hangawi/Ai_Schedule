@@ -53,15 +53,9 @@ exports.analyzeConversation = async (roomId) => {
     } else {
     }
 
-    // 3. 대화 텍스트 변환 (사용자 메시지 + AI 시스템 메시지를 컨텍스트로 포함)
+    // 3. 대화 텍스트 변환 (조원 메시지만 포함 — AI/시스템 메시지 제외)
     const userMessages = sortedMessages.filter(m => m.type === 'text' || !m.type);
-    const contextMessages = sortedMessages.filter(m =>
-      m.type === 'text' || !m.type || m.type === 'ai-suggestion' || m.type === 'system'
-    );
-    const conversationText = contextMessages.map(m => {
-      if (m.type === 'ai-suggestion' || m.type === 'system') {
-        return `[AI시스템]: ${m.content}`;
-      }
+    const conversationText = userMessages.map(m => {
       return `${m.sender?.firstName || 'User'}: ${m.content}`;
     }).join('');
 
@@ -460,8 +454,9 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
     return;
   }
 
-  // 마지막 메시지 작성자 확인
-  const lastMessage = sortedMessages[sortedMessages.length - 1];
+  // 마지막 유저 메시지 작성자 확인 (AI/시스템 메시지 제외)
+  const userOnlyMessages = sortedMessages.filter(m => m.type === 'text' || !m.type);
+  const lastMessage = userOnlyMessages[userOnlyMessages.length - 1];
   const userId = lastMessage?.sender?._id?.toString() || lastMessage?.sender?.toString();
 
   if (!userId) {

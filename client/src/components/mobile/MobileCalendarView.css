@@ -58,7 +58,6 @@
    height: 32px;
    border-radius: 6px;
    object-fit: cover;
-   margin-right: 8px;
 }
 
 .mobile-logo-text {
@@ -143,6 +142,65 @@
 
 .mobile-logout-btn:active {
    background: #fca5a5;
+}
+
+/* 헤더 버튼 통일 스타일 */
+.mobile-header-btn {
+   min-width: 32px;
+   height: 32px;
+   background: #f3f4f6;
+   color: #374151;
+   border: none;
+   border-radius: 16px;
+   padding: 0 12px;
+   font-size: 13px;
+   font-weight: 500;
+   cursor: pointer;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   transition: all 0.2s;
+}
+
+.mobile-header-btn:hover {
+   background: #e5e7eb;
+}
+
+.mobile-header-btn.logout {
+   background: #fee2e2;
+   color: #dc2626;
+   padding: 0;
+   width: 32px;
+}
+
+.mobile-header-btn.logout:hover {
+   background: #fecaca;
+}
+
+/* 로그인 상태 인디케이터 */
+.mobile-logo-wrapper {
+   position: relative;
+   width: 32px;
+   height: 32px;
+   margin-right: 10px;
+}
+
+.mobile-login-indicator {
+   position: absolute;
+   top: -2px;
+   right: -2px;
+   width: 10px;
+   height: 10px;
+   border-radius: 50%;
+   border: 2px solid white;
+}
+
+.mobile-login-indicator.google {
+   background: #22c55e; /* 초록색 - 구글 로그인 */
+}
+
+.mobile-login-indicator.local {
+   background: #ef4444; /* 빨간색 - 일반 로그인 */
 }
 
 /* 사이드바 */
