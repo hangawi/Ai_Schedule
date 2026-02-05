@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Menu, LogOut, Calendar, Clipboard, ClipboardX, Phone, User } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
@@ -16,6 +16,11 @@ const MobileGroupsView = ({ user }) => {
    const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
    const [isInRoom, setIsInRoom] = useState(false);
    const [effectiveIsInRoom, setEffectiveIsInRoom] = useState(false);
+   const [refreshKey, setRefreshKey] = useState(0);
+
+   const handleRefresh = useCallback(() => {
+      setRefreshKey(prev => prev + 1);
+   }, []);
 
    // 방 상태 추적 및 초기화
    useEffect(() => {
@@ -175,8 +180,8 @@ const MobileGroupsView = ({ user }) => {
          
          {/* 그룹 컨텐츠 */}
          <div className="groups-content">
-            <CoordinationTab 
-               key={location.key}
+            <CoordinationTab
+               key={`${location.key}-${refreshKey}`}
                user={user} 
                onExchangeRequestCountChange={setExchangeRequestCount}
                hideHeader={true}
@@ -189,8 +194,7 @@ const MobileGroupsView = ({ user }) => {
          {/* 하단 네비게이션 바 (방 목록에 있을 때만 표시) */}
          {!effectiveIsInRoom && (
             <BottomNavigation
-               onRefresh={() => window.location.reload()}
-               onChat={() => alert('챗봇 기능은 달력 페이지에서 사용 가능합니다.')}
+               onRefresh={handleRefresh}
             />
          )}
       </div>

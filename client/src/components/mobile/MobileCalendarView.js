@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -21,14 +21,15 @@ const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:500
 
 const MobileCalendarView = ({ user }) => {
    const navigate = useNavigate();
+   const [searchParams, setSearchParams] = useSearchParams();
    const calendarRef = useRef(null);
    const [events, setEvents] = useState([]);
    const [isLoading, setIsLoading] = useState(true);
-   const [selectedDate, setSelectedDate] = useState(new Date()); 
+   const [selectedDate, setSelectedDate] = useState(new Date());
    const [calendarView, setCalendarView] = useState('dayGridMonth');
    const [showPersonalInfo, setShowPersonalInfo] = useState(false);
    const [showScheduleEdit, setShowScheduleEdit] = useState(false);
-   const [isChatOpen, setIsChatOpen] = useState(false);
+   const [isChatOpen, setIsChatOpen] = useState(searchParams.get('chat') === 'open');
    const [isEditing, setIsEditing] = useState(false);
    const [initialState, setInitialState] = useState(null);
    const [currentTitle, setCurrentTitle] = useState('');
@@ -54,6 +55,14 @@ const MobileCalendarView = ({ user }) => {
       editEvent: async () => {}
    });
    const isLoggedIn = !!user;
+
+   // chat=open 쿼리 파라미터 정리
+   useEffect(() => {
+      if (searchParams.get('chat') === 'open') {
+         searchParams.delete('chat');
+         setSearchParams(searchParams, { replace: true });
+      }
+   }, []);
 
    const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
    const [isClipboardMonitoring, setIsClipboardMonitoring] = useState(false);

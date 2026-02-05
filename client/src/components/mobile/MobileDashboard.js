@@ -7,7 +7,7 @@
  * - 하단: 네비게이션 바 (새로고침, 카메라, 채팅, 마이크)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, LogOut, Calendar, Clipboard, ClipboardX, Phone, User } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
@@ -20,6 +20,11 @@ const MobileDashboard = ({ user }) => {
    const [isClipboardMonitoring, setIsClipboardMonitoring] = useState(false);
    const [isBackgroundMonitoring, setIsBackgroundMonitoring] = useState(false);
    const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
+   const [refreshKey, setRefreshKey] = useState(0);
+
+   const handleRefresh = useCallback(() => {
+      setRefreshKey(prev => prev + 1);
+   }, []);
 
    const handleLogout = async () => {
       try {
@@ -171,8 +176,7 @@ const MobileDashboard = ({ user }) => {
 
          {/* 하단 네비게이션 바 */}
          <BottomNavigation
-            onRefresh={() => window.location.reload()}
-            onChat={() => alert('챗봇 기능은 달력 페이지에서 사용 가능합니다.')}
+            onRefresh={handleRefresh}
          />
       </div>
    );

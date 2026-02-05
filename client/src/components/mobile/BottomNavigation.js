@@ -1,30 +1,39 @@
 /**
  * BottomNavigation.js - 하단 네비게이션 바
- * 
+ *
  * 기능:
- * - 새로고침: 페이지 새로고침
+ * - 새로고침: 데이터 새로고침 + 스크롤 맨 위로
  * - 카메라: 향후 구현
- * - 채팅: 향후 구현
+ * - 채팅: 달력 페이지 채팅 열기
  * - 마이크: 향후 구현
  */
 
-import React from 'react';
+import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { RefreshCw, Camera, MessageCircle, Mic } from 'lucide-react';
 import './BottomNavigation.css';
 
-const BottomNavigation = ({ 
-   onRefresh, 
-   onCamera, 
-   onChat, 
-   onMic 
+const BottomNavigation = ({
+   onRefresh,
+   onCamera,
+   onChat,
+   onMic
 }) => {
+   const [isRefreshing, setIsRefreshing] = useState(false);
+   const navigate = useNavigate();
+   const location = useLocation();
+
    // 새로고침 버튼
-   const handleRefresh = () => {
-      if (onRefresh) {
-         onRefresh();
-      } else {
-         window.location.reload();
+   const handleRefresh = async () => {
+      if (!onRefresh || isRefreshing) return;
+      setIsRefreshing(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      try {
+         await onRefresh();
+      } catch (e) {
+         // ignore
       }
+      setTimeout(() => setIsRefreshing(false), 600);
    };
 
    // 카메라 버튼 (사진으로 시간표 만들기)
@@ -32,18 +41,16 @@ const BottomNavigation = ({
       if (onCamera) {
          onCamera();
       } else {
-         console.log('카메라 버튼 클릭');
          alert('카메라 기능은 곧 추가됩니다!');
       }
    };
 
-   // 채팅 버튼 (챗봇)
+   // 채팅 버튼 - 달력 페이지가 아니면 달력으로 이동
    const handleChat = () => {
       if (onChat) {
          onChat();
       } else {
-         console.log('채팅 버튼 클릭');
-         alert('채팅 기능은 곧 추가됩니다!');
+         navigate('/mobile/calendar?chat=open');
       }
    };
 
@@ -52,7 +59,6 @@ const BottomNavigation = ({
       if (onMic) {
          onMic();
       } else {
-         console.log('마이크 버튼 클릭');
          alert('마이크 기능은 곧 추가됩니다!');
       }
    };
@@ -61,11 +67,12 @@ const BottomNavigation = ({
       <nav className="bottom-navigation">
          {/* 새로고침 버튼 */}
          <button
-            className="nav-button"
+            className={`nav-button ${isRefreshing ? 'refreshing' : ''}`}
             onClick={handleRefresh}
             aria-label="새로고침"
+            disabled={isRefreshing}
          >
-            <RefreshCw size={22} />
+            <RefreshCw size={22} className={isRefreshing ? 'spin' : ''} />
             <span className="nav-label">새로고침</span>
          </button>
 

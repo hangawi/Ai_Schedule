@@ -65,11 +65,16 @@ const MobileScheduleView = ({ user }) => {
 
    const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
+   // user를 ref로 관리하여 useCallback 안정성 확보
+   const userRef = useRef(user);
+   userRef.current = user;
+
    // 1. API 호출 함수 정의
    // 나의 일정 가져오기
    const fetchEvents = useCallback(async () => {
       try {
-         const isGoogleUser = localStorage.getItem('loginMethod') === 'google' && user?.google?.refreshToken;
+         const currentUserData = userRef.current;
+         const isGoogleUser = localStorage.getItem('loginMethod') === 'google' && currentUserData?.google?.refreshToken;
 
          if (isGoogleUser) {
             // 구글 로그인 사용자: 구글 캘린더에서 이벤트 가져오기
@@ -145,12 +150,13 @@ const MobileScheduleView = ({ user }) => {
       } catch (error) {
          console.error('Fetch events error:', error);
       }
-   }, [API_BASE_URL, user]);
+   }, [API_BASE_URL]);
 
    // 개인시간 (확정된 일정) 가져오기
    const fetchPersonalTimes = useCallback(async () => {
       try {
-         const isGoogleUser = localStorage.getItem('loginMethod') === 'google' && user?.google?.refreshToken;
+         const currentUserData = userRef.current;
+         const isGoogleUser = localStorage.getItem('loginMethod') === 'google' && currentUserData?.google?.refreshToken;
 
          if (isGoogleUser) {
             // 구글 로그인 사용자: personalTimes 사용 안 함 (구글 캘린더가 대체)
@@ -250,7 +256,12 @@ const MobileScheduleView = ({ user }) => {
       } catch (error) {
          console.error('Fetch personal times error:', error);
       }
-   }, [API_BASE_URL, user]);
+   }, [API_BASE_URL]);
+
+   // 새로고침 핸들러
+   const handleRefresh = useCallback(async () => {
+      await Promise.all([fetchEvents(), fetchPersonalTimes()]);
+   }, [fetchEvents, fetchPersonalTimes]);
 
    // 2. 데이터 로드 Effect
    useEffect(() => {
@@ -601,8 +612,7 @@ const MobileScheduleView = ({ user }) => {
 
          {/* 하단 네비게이션 바 */}
          <BottomNavigation
-            onRefresh={() => window.location.reload()}
-            onChat={() => alert('챗봇 기능은 달력 페이지에서 사용 가능합니다.')}
+            onRefresh={handleRefresh}
          />
       </div>
    );

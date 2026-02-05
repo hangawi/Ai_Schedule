@@ -49,6 +49,20 @@
    margin-bottom: 2px;
 }
 
+/* 새로고침 회전 애니메이션 */
+.nav-button svg.spin {
+   animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+   from { transform: rotate(0deg); }
+   to { transform: rotate(360deg); }
+}
+
+.nav-button.refreshing {
+   color: #667eea;
+}
+
 .nav-label {
    font-size: 10px;
    font-weight: 500;
