@@ -35,35 +35,48 @@ const ScheduleDetailModal = ({ isOpen, onClose, suggestion, userAddress }) => {
     if (!isOpen || !mapLoaded || !suggestion?.location) return;
 
     const initMap = async () => {
+      const showMap = (location, title) => {
+        const map = new window.google.maps.Map(document.getElementById('detail-map'), {
+          center: location,
+          zoom: 15,
+          language: 'ko',
+          region: 'KR'
+        });
+
+        new window.google.maps.Marker({
+          position: location,
+          map: map,
+          title: title,
+          animation: window.google.maps.Animation.DROP
+        });
+
+        if (userAddress) {
+          fetchDirections(userAddress, title, map);
+        }
+      };
+
       const geocoder = new window.google.maps.Geocoder();
 
       // 장소 주소를 좌표로 변환
       geocoder.geocode({ address: suggestion.location, region: 'KR' }, (results, status) => {
         if (status === 'OK' && results[0]) {
           const location = results[0].geometry.location;
-
-          // 지도 생성
-          const map = new window.google.maps.Map(document.getElementById('detail-map'), {
-            center: location,
-            zoom: 15,
-            language: 'ko',
-            region: 'KR'
-          });
-
-          // 마커 추가
-          new window.google.maps.Marker({
-            position: location,
-            map: map,
-            title: suggestion.location,
-            animation: window.google.maps.Animation.DROP
-          });
-
-          // 대중교통 경로 가져오기
-          if (userAddress) {
-            fetchDirections(userAddress, suggestion.location, map);
-          }
+          showMap(location, suggestion.location);
         } else {
-          console.error('Geocoding failed:', status);
+          // Geocoding 실패 시 Places API로 폴백 (장소명 검색)
+          const service = new window.google.maps.places.PlacesService(document.createElement('div'));
+          service.findPlaceFromQuery({
+            query: suggestion.location,
+            fields: ['geometry', 'name'],
+            locationBias: { lat: 37.5665, lng: 126.978 } // 서울 중심
+          }, (placeResults, placeStatus) => {
+            if (placeStatus === 'OK' && placeResults[0]) {
+              const location = placeResults[0].geometry.location;
+              showMap(location, suggestion.location);
+            } else {
+              console.error('Geocoding and Places search both failed:', status, placeStatus);
+            }
+          });
         }
       });
     };
