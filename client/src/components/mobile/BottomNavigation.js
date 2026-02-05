@@ -36,12 +36,12 @@ const BottomNavigation = ({
       setTimeout(() => setIsRefreshing(false), 600);
    };
 
-   // 카메라 버튼 (사진으로 시간표 만들기)
+   // 카메라 버튼 (사진으로 시간표 만들기) - 달력 페이지가 아니면 달력으로 이동 후 카메라 실행
    const handleCamera = () => {
       if (onCamera) {
          onCamera();
       } else {
-         alert('카메라 기능은 곧 추가됩니다!');
+         navigate('/mobile/calendar?camera=open');
       }
    };
 
@@ -54,12 +54,12 @@ const BottomNavigation = ({
       }
    };
 
-   // 마이크 버튼 (음성)
+   // 마이크 버튼 (음성) - 달력 페이지가 아니면 달력으로 이동 후 음성 시작
    const handleMic = () => {
       if (onMic) {
          onMic();
       } else {
-         alert('마이크 기능은 곧 추가됩니다!');
+         navigate('/mobile/calendar?voice=start');
       }
    };
 

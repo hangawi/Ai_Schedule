@@ -163,6 +163,7 @@ exports.createEvent = async (req, res) => {
          sourceCalendarId,
          externalEventId,
          color,
+         location,
          duration = 60, // 기본 1시간
          forceCreate = false, // 충돌 무시하고 강제 생성
       } = req.body;
@@ -226,6 +227,7 @@ exports.createEvent = async (req, res) => {
          userId,
          title,
          description: description || '',
+         location: location || '',
          startTime,
          endTime,
          priority: priority || 3,

@@ -162,7 +162,8 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
       title: chatResponse.title || '일정',
       description: chatResponse.description || '',
       startDateTime: chatResponse.startDateTime,
-      endDateTime: chatResponse.endDateTime
+      endDateTime: chatResponse.endDateTime,
+      location: chatResponse.location || ''
     };
 
     let apiEndpoint;
@@ -172,10 +173,6 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
     console.log('[useEventAdd] tabType:', context.tabType, '| context:', context.context, '| eventData:', eventData);
 
     switch (context.tabType) {
-      case 'google':
-        apiEndpoint = `${API_BASE_URL}/api/calendar/events/google`;
-        console.log('[useEventAdd] ✅ 구글 캘린더 API 호출:', apiEndpoint);
-        break;
       case 'local':
         if (context.context === 'profile') {
           // '내 프로필' 탭의 개인시간으로 추가
@@ -213,13 +210,23 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
             time: eventData.startDateTime.split('T')[1].substring(0, 5),
             participants: [],
             priority: 3,
-            description: eventData.description
+            description: eventData.description,
+            location: eventData.location
           };
         }
         break;
       default:
-        // 기본값은 Google 캘린더
-        apiEndpoint = `${API_BASE_URL}/api/calendar/events/google`;
+        // 기본값은 로컬 DB
+        apiEndpoint = `${API_BASE_URL}/api/events`;
+        requestBody = {
+          title: eventData.title,
+          date: eventData.startDateTime.split('T')[0],
+          time: eventData.startDateTime.split('T')[1].substring(0, 5),
+          participants: [],
+          priority: 3,
+          description: eventData.description,
+          location: eventData.location
+        };
     }
 
     const response = await fetch(apiEndpoint, {

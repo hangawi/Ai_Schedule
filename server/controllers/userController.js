@@ -275,7 +275,8 @@ exports.updateUserSchedule = async (req, res) => {
             days: pt.days,
             isRecurring: pt.isRecurring !== undefined ? pt.isRecurring : true,
             specificDate: pt.specificDate,
-            color: pt.color
+            color: pt.color,
+            location: pt.location || ''
         }));
     } else {
         user.personalTimes = [];

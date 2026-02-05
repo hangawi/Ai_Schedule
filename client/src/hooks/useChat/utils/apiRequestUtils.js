@@ -30,6 +30,7 @@ export const createLocalEventData = (chatResponse, date) => {
   return {
     title: chatResponse.title || '일정',
     description: chatResponse.description || '',
+    location: chatResponse.location || '',
     date: date,
     time: chatResponse.startTime,
     duration: durationMinutes
@@ -85,6 +86,7 @@ export const createSingleProfilePersonalTime = (eventData, specificDate, startTi
     type: 'event',
     startTime: startTime,
     endTime: endTime,
+    location: eventData.location || '',
     days: [],
     isRecurring: false,
     specificDate: specificDate,

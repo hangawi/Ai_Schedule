@@ -705,7 +705,7 @@
    일정 관리 섹션 (기존 스타일 유지)
 .management-section {
    padding: 16px;
-   background: #f9fafb;
+   background: white;
 }
 
 .section-tabs {
@@ -713,7 +713,7 @@
 }
 
 .section-title {
-   font-size: 18px;
+   font-size: 20px;
    font-weight: 700;
    color: #1f2937;
    margin: 0;

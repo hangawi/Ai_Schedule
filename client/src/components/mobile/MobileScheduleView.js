@@ -73,80 +73,30 @@ const MobileScheduleView = ({ user }) => {
    // 나의 일정 가져오기
    const fetchEvents = useCallback(async () => {
       try {
-         const currentUserData = userRef.current;
-         const isGoogleUser = localStorage.getItem('loginMethod') === 'google' && currentUserData?.google?.refreshToken;
-
-         if (isGoogleUser) {
-            // 구글 로그인 사용자: 구글 캘린더에서 이벤트 가져오기
-            try {
-               const threeMonthsAgo = new Date();
-               threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-               const oneYearLater = new Date();
-               oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
-               const gEvents = await googleCalendarService.getEvents(
-                  threeMonthsAgo.toISOString(),
-                  oneYearLater.toISOString()
-               );
-               const formattedEvents = gEvents.map(e => {
-                  // description에서 참석자 수와 이름 파싱
-                  let participants = 0;
-                  let participantNames = [];
-                  if (e.description) {
-                     const countMatch = e.description.match(/참석자:\s*(\d+)명/);
-                     if (countMatch) participants = parseInt(countMatch[1], 10);
-                     const namesMatch = e.description.match(/참석:\s*(.+?)(?:\n|$)/);
-                     if (namesMatch) participantNames = namesMatch[1].split(',').map(n => n.trim());
-                  }
-                  // [약속] 태그가 있으면 조율 일정으로 표시
-                  const isCoordinated = e.title && e.title.includes('[약속]');
-                  // 생일 이벤트 감지 (Google Calendar 특수 이벤트 - 삭제 불가)
-                  const isBirthdayEvent = e.googleEventId?.includes('_') &&
-                     (e.title?.includes('생일') || e.title?.toLowerCase().includes('birthday'));
-                  return {
-                     id: e.id,
-                     googleEventId: e.googleEventId,
-                     title: e.title,
-                     date: e.start ? e.start.split('T')[0] : '',
-                     time: e.start ? new Date(e.start).toTimeString().substring(0, 5) : '',
-                     endTime: e.end ? new Date(e.end).toTimeString().substring(0, 5) : '',
-                     participants: participants,
-                     participantNames: participantNames,
-                     priority: 3,
-                     color: isCoordinated ? '#3b82f6' : '#22c55e',
-                     isGoogleEvent: true,
-                     isCoordinated: isCoordinated,
-                     isBirthdayEvent: isBirthdayEvent,
-                     location: e.location || null,
-                     description: e.description || '',
-                  };
-               });
-               setGlobalEvents(formattedEvents);
-            } catch (gErr) {
-               console.warn('구글 캘린더 이벤트 로딩 실패:', gErr);
-               setGlobalEvents([]);
-            }
-         } else {
-            // 일반 로그인 사용자: 기존 DB 이벤트
-            const currentUser = auth.currentUser;
-            if (!currentUser) return;
-            const response = await fetch(`${API_BASE_URL}/api/events`, {
-               headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
-            });
-            if (!response.ok) throw new Error('Failed to fetch events');
-            const data = await response.json();
-            const formattedEvents = data.events.map(event => ({
+         // 모든 사용자: DB에서 이벤트 가져오기
+         const currentUser = auth.currentUser;
+         if (!currentUser) return;
+         const response = await fetch(`${API_BASE_URL}/api/events`, {
+            headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
+         });
+         if (!response.ok) throw new Error('Failed to fetch events');
+         const data = await response.json();
+         const formattedEvents = data.events.map(event => {
+            const start = event.startTime ? new Date(event.startTime) : null;
+            const end = event.endTime ? new Date(event.endTime) : null;
+            return {
                id: event._id,
                title: event.title,
-               date: new Date(event.date).toISOString().split('T')[0],
-               time: event.time,
-               endTime: event.endTime,
-               participants: event.participants || 1,
+               date: start ? start.toISOString().split('T')[0] : '',
+               time: start ? start.toTimeString().substring(0, 5) : '',
+               endTime: end ? end.toTimeString().substring(0, 5) : '',
+               participants: Array.isArray(event.participants) ? event.participants.length : (event.participants || 1),
                priority: event.priority || 3,
                color: event.color || 'blue',
                location: event.location || null
-            }));
-            setGlobalEvents(formattedEvents);
-         }
+            };
+         });
+         setGlobalEvents(formattedEvents);
       } catch (error) {
          console.error('Fetch events error:', error);
       }
@@ -155,16 +105,7 @@ const MobileScheduleView = ({ user }) => {
    // 개인시간 (확정된 일정) 가져오기
    const fetchPersonalTimes = useCallback(async () => {
       try {
-         const currentUserData = userRef.current;
-         const isGoogleUser = localStorage.getItem('loginMethod') === 'google' && currentUserData?.google?.refreshToken;
-
-         if (isGoogleUser) {
-            // 구글 로그인 사용자: personalTimes 사용 안 함 (구글 캘린더가 대체)
-            setPersonalTimes([]);
-            return;
-         }
-
-         // 일반 로그인 사용자: 기존 DB에서 가져오기
+         // 모든 사용자: DB에서 personalTimes 가져오기
          const currentUser = auth.currentUser;
          if (!currentUser) return;
 

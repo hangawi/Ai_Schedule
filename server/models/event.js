@@ -38,6 +38,12 @@ const EventSchema = new mongoose.Schema({
     trim: true,
     maxlength: [1000, '설명은 1000자를 초과할 수 없습니다.']
   },
+  location: {
+    type: String,
+    default: '',
+    trim: true,
+    maxlength: [500, '장소는 500자를 초과할 수 없습니다.']
+  },
   color: {
     type: String,
     default: 'blue',

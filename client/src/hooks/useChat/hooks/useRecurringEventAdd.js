@@ -237,13 +237,8 @@ export const useRecurringEventAdd = (eventActions, setEventAddedKey) => {
             let eventData;
             let apiEndpoint;
 
-            if (context.tabType === 'google') {
-              eventData = createGoogleEventData(chatResponse, date);
-              apiEndpoint = `${API_BASE_URL}/api/calendar/events/google`;
-            } else {
-              eventData = createLocalEventData(chatResponse, date);
-              apiEndpoint = `${API_BASE_URL}/api/events`;
-            }
+            eventData = createLocalEventData(chatResponse, date);
+            apiEndpoint = `${API_BASE_URL}/api/events`;
 
             const response = await fetch(apiEndpoint, {
               method: 'POST',

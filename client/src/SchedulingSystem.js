@@ -403,60 +403,27 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
     const fetchEvents = useCallback(async () => {
       if (!isLoggedIn) return;
       try {
-         const isGoogleUser = loginMethod === 'google' && user?.google?.refreshToken;
-
-         if (isGoogleUser) {
-            // 구글 로그인 사용자: 구글 캘린더에서 이벤트 가져오기
-            try {
-               const threeMonthsAgo = new Date();
-               threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-               const oneYearLater = new Date();
-               oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
-               const gEvents = await googleCalendarService.getEvents(
-                  threeMonthsAgo.toISOString(),
-                  oneYearLater.toISOString()
-               );
-               // 구글 캘린더 이벤트를 globalEvents 형식으로 변환
-               const formattedEvents = gEvents.map(e => ({
-                  id: e.id,
-                  googleEventId: e.googleEventId,
-                  title: e.title,
-                  date: e.start ? e.start.split('T')[0] : '',
-                  time: e.start ? new Date(e.start).toTimeString().substring(0, 5) : '',
-                  endTime: e.end ? new Date(e.end).toTimeString().substring(0, 5) : '',
-                  participants: 0,
-                  priority: 3,
-                  color: '#22c55e',
-                  isGoogleEvent: true,
-               }));
-               setGlobalEvents(formattedEvents);
-            } catch (gErr) {
-               console.warn('구글 캘린더 이벤트 로딩 실패:', gErr);
-               setGlobalEvents([]);
-            }
-         } else {
-            // 일반 로그인 사용자: 기존 DB 이벤트
-            const currentUser = auth.currentUser;
-            if (!currentUser) {
-               handleLogout();
-               return;
-            }
-            const response = await fetch(`${API_BASE_URL}/api/events`, {
-               headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
-            });
-            if (!response.ok) {
-               if (response.status === 401) handleLogout();
-               throw new Error('Failed to fetch events');
-            }
-            const data = await response.json();
-            const formattedEvents = data.events.map(event => formatEventForClient(event));
-            setGlobalEvents(formattedEvents);
+         // 모든 사용자: DB에서 이벤트 가져오기
+         const currentUser = auth.currentUser;
+         if (!currentUser) {
+            handleLogout();
+            return;
          }
+         const response = await fetch(`${API_BASE_URL}/api/events`, {
+            headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
+         });
+         if (!response.ok) {
+            if (response.status === 401) handleLogout();
+            throw new Error('Failed to fetch events');
+         }
+         const data = await response.json();
+         const formattedEvents = data.events.map(event => formatEventForClient(event));
+         setGlobalEvents(formattedEvents);
          setEventsLoaded(true);
       } catch (error) {
          setEventsLoaded(true);
       }
-   }, [isLoggedIn, handleLogout, loginMethod, user]);;
+   }, [isLoggedIn, handleLogout]);
 
 
    /**
@@ -467,16 +434,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
    const fetchPersonalTimes = useCallback(async () => {
       if (!isLoggedIn) return;
       try {
-         const isGoogleUser = loginMethod === 'google' && user?.google?.refreshToken;
-
-         if (isGoogleUser) {
-            // 구글 로그인 사용자: personalTimes 사용 안 함 (구글 캘린더가 대체)
-            setPersonalTimes([]);
-            setPersonalTimesLoaded(true);
-            return;
-         }
-
-         // 일반 로그인 사용자: 기존 DB에서 가져오기
+         // 모든 사용자: DB에서 personalTimes 가져오기
          const currentUser = auth.currentUser;
          if (!currentUser) {
             handleLogout();
@@ -520,7 +478,7 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
          console.error('Fetch personal times error:', error);
          setPersonalTimesLoaded(true);
       }
-   }, [isLoggedIn, handleLogout, loginMethod, user]);;
+   }, [isLoggedIn, handleLogout]);
 
    /**
     * handleAddGlobalEvent
@@ -770,10 +728,10 @@ const SchedulingSystem = ({ isLoggedIn, user, handleLogout, speak, isVoiceRecogn
                });
 
             case 'googleCalendar':
-               // Google 캘린더 탭 - Google 캘린더 연동
+               // Google 캘린더 탭 - 로컬 DB 사용
                return await handleChatMessage(message, {
                   context: 'googleCalendar',
-                  tabType: 'google',
+                  tabType: 'local',
                   currentEvents: globalEvents,
                   ...additionalContext
                });

@@ -104,9 +104,7 @@ export const useRangeDeletion = (setEventAddedKey) => {
           }));
         }
       } else {
-        const apiEndpoint = context.tabType === 'google'
-          ? `${API_BASE_URL}/api/calendar/events/google`
-          : `${API_BASE_URL}/api/events`;
+        const apiEndpoint = `${API_BASE_URL}/api/events`;
 
         const eventsResponse = await fetch(`${apiEndpoint}?startDate=${chatResponse.startDate}&endDate=${chatResponse.endDate}`, {
           headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }

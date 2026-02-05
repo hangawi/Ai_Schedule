@@ -48,6 +48,8 @@ const MobileCalendarView = ({ user }) => {
 
    const [globalEvents, setGlobalEvents] = useState([]);
    const [googleCalendarEvents, setGoogleCalendarEvents] = useState([]);
+   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
+   const cameraInputRef = useRef(null);
    const [eventAddedKey, setEventAddedKey] = useState(0);
    const [eventActions, setEventActions] = useState({
       addEvent: async () => {},
@@ -61,6 +63,25 @@ const MobileCalendarView = ({ user }) => {
       if (searchParams.get('chat') === 'open') {
          searchParams.delete('chat');
          setSearchParams(searchParams, { replace: true });
+      }
+   }, []);
+
+   // voice=start 쿼리 감지 → 자동 음성 인식 시작
+   useEffect(() => {
+      if (searchParams.get('voice') === 'start') {
+         searchParams.delete('voice');
+         setSearchParams(searchParams, { replace: true });
+         // 약간의 딜레이 후 음성 인식 시작 (페이지 로딩 완료 대기)
+         setTimeout(() => handleStartVoiceRecognition(), 500);
+      }
+   }, []);
+
+   // camera=open 쿼리 감지 → 카메라 자동 실행
+   useEffect(() => {
+      if (searchParams.get('camera') === 'open') {
+         searchParams.delete('camera');
+         setSearchParams(searchParams, { replace: true });
+         setTimeout(() => handleStartCamera(), 500);
       }
    }, []);
 
@@ -219,14 +240,16 @@ const MobileCalendarView = ({ user }) => {
    const fetchSchedule = useCallback(async () => {
       try {
          setIsLoading(true);
+         // 모든 사용자: DB에서 스케줄 가져오기
+         const data = await userService.getUserSchedule();
+         setDefaultSchedule(data.defaultSchedule || []);
+         setScheduleExceptions(data.scheduleExceptions || []);
+         setPersonalTimes(data.personalTimes || []);
+
+         // 구글 사용자: 구글 캘린더 이벤트를 보조로 추가 표시
          const loginMethod = localStorage.getItem('loginMethod') || (user?.google?.refreshToken ? 'google' : '');
          const isGoogleUser = loginMethod === 'google' && user?.google?.refreshToken;
-
          if (isGoogleUser) {
-            // 구글 로그인 사용자: 구글 캘린더만 사용 (DB 스케줄 X)
-            setDefaultSchedule([]);
-            setScheduleExceptions([]);
-            setPersonalTimes([]);
             try {
                const threeMonthsAgo = new Date();
                threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
@@ -236,7 +259,6 @@ const MobileCalendarView = ({ user }) => {
                   threeMonthsAgo.toISOString(),
                   oneYearLater.toISOString()
                );
-               // 구글 캘린더 이벤트에서 참석자 정보 파싱
                const formattedGoogleEvents = gEvents.map(e => {
                   let participants = 0;
                   let participantNames = [];
@@ -262,11 +284,6 @@ const MobileCalendarView = ({ user }) => {
                setGoogleCalendarEvents([]);
             }
          } else {
-            // 일반 로그인 사용자: 기존 DB 캘린더 사용
-            const data = await userService.getUserSchedule();
-            setDefaultSchedule(data.defaultSchedule || []);
-            setScheduleExceptions(data.scheduleExceptions || []);
-            setPersonalTimes(data.personalTimes || []);
             setGoogleCalendarEvents([]);
          }
       } catch (err) {
@@ -274,7 +291,7 @@ const MobileCalendarView = ({ user }) => {
       } finally {
          setIsLoading(false);
       }
-   }, [convertScheduleToEvents, user]);;
+   }, [convertScheduleToEvents, user]);
 
    useEffect(() => { fetchSchedule(); }, [fetchSchedule]);
    
@@ -338,65 +355,14 @@ const MobileCalendarView = ({ user }) => {
          const currentUser = auth.currentUser;
          if (!currentUser) return;
 
-         const loginMethod = localStorage.getItem('loginMethod') || (user?.google?.refreshToken ? 'google' : '');
-         const isGoogleUser = loginMethod === 'google' && user?.google?.refreshToken;
-
-         if (isGoogleUser) {
-            // 구글 사용자: globalEvents도 구글 캘린더에서 가져옴
-            try {
-               const threeMonthsAgo = new Date();
-               threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-               const oneYearLater = new Date();
-               oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
-               const gEvents = await googleCalendarService.getEvents(
-                  threeMonthsAgo.toISOString(),
-                  oneYearLater.toISOString()
-               );
-               const formattedEvents = gEvents.map(e => {
-                  // description에서 참석자 수와 이름 파싱
-                  let participants = 0;
-                  let participantNames = [];
-                  if (e.description) {
-                     const countMatch = e.description.match(/참석자:\s*(\d+)명/);
-                     if (countMatch) participants = parseInt(countMatch[1], 10);
-                     const namesMatch = e.description.match(/참석:\s*(.+?)(?:\n|$)/);
-                     if (namesMatch) participantNames = namesMatch[1].split(',').map(n => n.trim());
-                  }
-                  // [약속] 태그가 있으면 조율 일정으로 표시
-                  const isCoordinated = e.title && e.title.includes('[약속]');
-                  // 생일 이벤트 감지 (Google Calendar 특수 이벤트 - 삭제 불가)
-                  const isBirthdayEvent = e.googleEventId?.includes('_') &&
-                     (e.title?.includes('생일') || e.title?.toLowerCase().includes('birthday'));
-                  return {
-                     id: e.id,
-                     googleEventId: e.googleEventId,
-                     title: e.title,
-                     date: e.start ? e.start.split('T')[0] : '',
-                     time: e.start ? new Date(e.start).toTimeString().substring(0, 5) : '',
-                     participants: participants,
-                     participantNames: participantNames,
-                     color: isCoordinated ? '#3b82f6' : '#22c55e',
-                     isGoogleEvent: true,
-                     isCoordinated: isCoordinated,
-                     isBirthdayEvent: isBirthdayEvent,
-                     location: e.location || null,
-                     description: e.description || '',
-                  };
-               });
-               setGlobalEvents(formattedEvents);
-            } catch (gErr) {
-               console.warn('구글 캘린더 globalEvents 로딩 실패:', gErr);
-               setGlobalEvents([]);
-            }
-         } else {
-            const response = await fetch(`${API_BASE_URL}/api/events`, {
-               headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
-            });
-            if (!response.ok) throw new Error('Failed to fetch events');
-            const data = await response.json();
-            const formattedEvents = data.events.map(event => formatEventForClient(event));
-            setGlobalEvents(formattedEvents);
-         }
+         // 모든 사용자: DB에서 globalEvents 가져오기
+         const response = await fetch(`${API_BASE_URL}/api/events`, {
+            headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
+         });
+         if (!response.ok) throw new Error('Failed to fetch events');
+         const data = await response.json();
+         const formattedEvents = data.events.map(event => formatEventForClient(event));
+         setGlobalEvents(formattedEvents);
       } catch (error) {
          console.error('이벤트 가져오기 실패:', error);
       }
@@ -473,13 +439,9 @@ const MobileCalendarView = ({ user }) => {
    const handleChatMessage = async (message, additionalContext = {}) => {
       try {
          if (!chatEnhanced || !chatEnhanced.handleChatMessage) return { success: false, message: '챗봇이 준비 중입니다.' };
-         // 구글 로그인 사용자는 구글 캘린더에 일정 추가, 일반 사용자는 로컬 DB
-         const loginMethod = localStorage.getItem('loginMethod');
-         const hasRefreshToken = !!user?.google?.refreshToken;
-         const isGoogleUser = loginMethod === 'google' && hasRefreshToken;
-         const tabType = isGoogleUser ? 'google' : 'local';
-         const context = isGoogleUser ? 'googleCalendar' : 'profile';
-         console.log('[handleChatMessage] 구글유저:', isGoogleUser, '| loginMethod:', loginMethod, '| refreshToken:', hasRefreshToken, '| tabType:', tabType, '| context:', context);
+         // 모든 사용자: 로컬 DB로 통일
+         const tabType = 'local';
+         const context = 'profile';
          const result = await chatEnhanced.handleChatMessage(message, { context, tabType, currentEvents: globalEvents, ...additionalContext });
          console.log('[handleChatMessage] 결과:', result);
          await fetchSchedule();
@@ -505,6 +467,83 @@ const MobileCalendarView = ({ user }) => {
       recognition.onerror = () => setIsVoiceEnabled(false);
       recognition.onend = () => setIsVoiceEnabled(false);
       recognition.start();
+   };
+
+   // 카메라 시작: 숨겨진 file input 클릭
+   const handleStartCamera = () => {
+      if (cameraInputRef.current) {
+         cameraInputRef.current.click();
+      }
+   };
+
+   // 카메라 촬영 후 OCR 처리
+   const handleCameraCapture = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      setIsOcrProcessing(true);
+      try {
+         const currentUser = auth.currentUser;
+         if (!currentUser) { alert('로그인이 필요합니다.'); return; }
+
+         const formData = new FormData();
+         formData.append('image', file);
+
+         const response = await fetch(`${API_BASE_URL}/api/ocr/analyze-schedule`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` },
+            body: formData,
+         });
+
+         if (!response.ok) throw new Error('OCR 처리 실패');
+
+         const result = await response.json();
+         const scheduleItems = result.scheduleItems || result.events || [];
+
+         if (scheduleItems.length === 0) {
+            alert('시간표에서 일정을 찾을 수 없습니다. 다시 촬영해 주세요.');
+            return;
+         }
+
+         // 추출된 일정 자동 등록
+         let addedCount = 0;
+         for (const item of scheduleItems) {
+            try {
+               await fetch(`${API_BASE_URL}/api/events`, {
+                  method: 'POST',
+                  headers: {
+                     'Content-Type': 'application/json',
+                     'Authorization': `Bearer ${await currentUser.getIdToken()}`
+                  },
+                  body: JSON.stringify({
+                     title: item.title || item.subject || '시간표 일정',
+                     date: item.date,
+                     time: item.startTime || item.time || '09:00',
+                     duration: item.duration || 60,
+                     location: item.location || '',
+                  })
+               });
+               addedCount++;
+            } catch (err) {
+               console.warn('일정 등록 실패:', item, err);
+            }
+         }
+
+         if (addedCount > 0) {
+            alert(`시간표에서 ${addedCount}개의 일정을 등록했습니다!`);
+         } else {
+            alert('일정 등록에 실패했습니다. 다시 시도해 주세요.');
+         }
+         await fetchSchedule();
+         await fetchGlobalEvents();
+      } catch (error) {
+         console.error('OCR 처리 오류:', error);
+         alert('시간표 인식에 실패했습니다. 다시 시도해 주세요.');
+      } finally {
+         setIsOcrProcessing(false);
+         // file input 초기화
+         if (cameraInputRef.current) cameraInputRef.current.value = '';
+      }
    };
 
    const handleStartEdit = () => {
@@ -734,7 +773,7 @@ const MobileCalendarView = ({ user }) => {
          if (calendarView === 'dayGridMonth') {
             return (
                <div className="management-section">
-                  <div className="section-tabs"><h3 className="section-title">일정 관리</h3></div>
+                  
                   <div className="sections-container">
                      <div className="preference-section"><h4 className="subsection-title">선호시간</h4><p className="section-description">클릭 또는 챗봇으로 추가한 가능한 시간들 (자동배정 시 사용됨)</p><SimplifiedScheduleDisplay schedule={defaultSchedule} type="preference" /></div>
                      <div className="personal-section"><h4 className="subsection-title">개인시간</h4><p className="section-description">자동 스케줄링 시 이 시간들은 제외됩니다</p><SimplifiedScheduleDisplay schedule={personalTimes} type="personal" /></div>
@@ -837,12 +876,7 @@ const MobileCalendarView = ({ user }) => {
                   <div className="schedule-page-title">
                      <span>{currentTitle || '달력'}</span>
                      <div className="top-edit-buttons">
-                        {(() => {
-                           const isGoogleUser = localStorage.getItem('loginMethod') === 'google' && user?.google?.refreshToken;
-                           if (isGoogleUser) {
-                              return <button className="edit-button" onClick={() => setShowPersonalInfo(true)}>개인정보 수정</button>;
-                           }
-                           return !isEditing ? (
+                        {!isEditing ? (
                            <>
                               <button className="edit-button" onClick={handleStartEdit}>편집</button>
                               <button className="edit-button" onClick={() => setShowPersonalInfo(true)}>개인정보 수정</button>
@@ -853,8 +887,7 @@ const MobileCalendarView = ({ user }) => {
                               <button className="edit-button clear-button" onClick={handleClearAll}>초기화</button>
                               <button className="edit-button save-button" onClick={handleSave}>저장</button>
                            </>
-                        );
-                        })()}
+                        )}
                      </div>
                   </div>
                   <div 
@@ -899,13 +932,42 @@ const MobileCalendarView = ({ user }) => {
                </>
             }
          </div>
-         {/* 하단 네비게이션 바 - 항상 표시 */}
-         <BottomNavigation 
-            onRefresh={fetchSchedule} 
-            onChat={() => setIsChatOpen(!isChatOpen)} 
-            onMic={handleStartVoiceRecognition} 
+         {/* 숨겨진 카메라 입력 */}
+         <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            ref={cameraInputRef}
+            style={{ display: 'none' }}
+            onChange={handleCameraCapture}
          />
-         
+
+         {/* OCR 처리 중 로딩 */}
+         {isOcrProcessing && (
+            <div style={{
+               position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+               backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+               alignItems: 'center', justifyContent: 'center', zIndex: 9999
+            }}>
+               <div style={{
+                  background: 'white', borderRadius: '12px', padding: '24px',
+                  textAlign: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+               }}>
+                  <div style={{ fontSize: '24px', marginBottom: '12px' }}>📸</div>
+                  <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>시간표 분석 중...</div>
+                  <div style={{ color: '#666', fontSize: '14px' }}>AI가 시간표를 인식하고 있습니다</div>
+               </div>
+            </div>
+         )}
+
+         {/* 하단 네비게이션 바 - 항상 표시 */}
+         <BottomNavigation
+            onRefresh={fetchSchedule}
+            onChat={() => setIsChatOpen(!isChatOpen)}
+            onMic={handleStartVoiceRecognition}
+            onCamera={handleStartCamera}
+         />
+
          {/* 챗봇 - isChatOpen이 true일 때만 표시 */}
          {isChatOpen && (
             <ChatBox 

@@ -109,10 +109,7 @@ export const getEventDateForGoogle = (event) => {
  * @returns {string}
  */
 export const getEventTitle = (event, context) => {
-  if (context.tabType === 'google') {
-    return event.summary;
-  }
-  return event.title;
+  return event.title || event.summary;
 };
 
 /**
