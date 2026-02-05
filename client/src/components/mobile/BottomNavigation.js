@@ -9,6 +9,7 @@
  */
 
 import React from 'react';
+import { RefreshCw, Camera, MessageCircle, Mic } from 'lucide-react';
 import './BottomNavigation.css';
 
 const BottomNavigation = ({ 
@@ -59,38 +60,42 @@ const BottomNavigation = ({
    return (
       <nav className="bottom-navigation">
          {/* 새로고침 버튼 */}
-         <button 
+         <button
             className="nav-button"
             onClick={handleRefresh}
             aria-label="새로고침"
          >
+            <RefreshCw size={22} />
             <span className="nav-label">새로고침</span>
          </button>
 
          {/* 카메라 버튼 */}
-         <button 
+         <button
             className="nav-button"
             onClick={handleCamera}
             aria-label="카메라"
          >
+            <Camera size={22} />
             <span className="nav-label">카메라</span>
          </button>
 
          {/* 채팅 버튼 */}
-         <button 
+         <button
             className="nav-button"
             onClick={handleChat}
             aria-label="채팅"
          >
+            <MessageCircle size={22} />
             <span className="nav-label">채팅</span>
          </button>
 
          {/* 마이크 버튼 */}
-         <button 
+         <button
             className="nav-button"
             onClick={handleMic}
             aria-label="마이크"
          >
+            <Mic size={22} />
             <span className="nav-label">마이크</span>
          </button>
       </nav>

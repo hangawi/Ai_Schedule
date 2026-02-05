@@ -45,8 +45,12 @@
 
 
 
+.nav-button svg {
+   margin-bottom: 2px;
+}
+
 .nav-label {
-   font-size: 11px;
+   font-size: 10px;
    font-weight: 500;
    text-align: center;
 }
