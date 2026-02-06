@@ -379,7 +379,9 @@ exports.updateUserSchedule = async (req, res) => {
             isRecurring: pt.isRecurring !== undefined ? pt.isRecurring : true,
             specificDate: pt.specificDate,
             color: pt.color,
-            location: pt.location || ''
+            location: pt.location || '',
+            participants: pt.participants || 1,
+            externalParticipants: pt.externalParticipants || []
         }));
     } else {
         user.personalTimes = [];
