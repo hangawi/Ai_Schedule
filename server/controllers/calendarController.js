@@ -72,7 +72,11 @@ exports.getCalendarEvents = async (req, res) => {
       orderBy: 'startTime',
     });
 
-    const events = response.data.items;
+    // 🆕 extendedProperties 포함하여 반환 (중복 필터링용)
+    const events = response.data.items.map(event => ({
+      ...event,
+      extendedProperties: event.extendedProperties || null
+    }));
     res.json(events);
 
   } catch (error) {

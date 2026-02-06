@@ -11,7 +11,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 // Gemini AI 인스턴스
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-const { syncToGoogleCalendar } = require('../services/confirmScheduleService');
+const { syncToGoogleCalendar, deleteFromGoogleCalendar } = require('../services/confirmScheduleService');
 
 // @desc    Get chat history
 // @route   GET /api/chat/:roomId
@@ -461,23 +461,32 @@ exports.acceptSuggestion = async (req, res) => {
       suggestionId: suggestion._id.toString()
     };
 
-    user.personalTimes.push(newPersonalTime);
-    await user.save();
+    // 🆕 구글 사용자 여부 확인
+    const isGoogleUser = !!(user.google && user.google.refreshToken);
 
-    // 🔄 구글 캘린더 사용자면 구글 캘린더에도 동기화
-    if (user.google && user.google.refreshToken) {
+    if (isGoogleUser) {
+      // 🆕 구글 사용자: Google Calendar에만 저장 (personalTimes에 저장 안 함)
       try {
         await syncToGoogleCalendar(user, newPersonalTime, participantNames);
-        console.log(`[acceptSuggestion] ✅ 구글 캘린더 동기화 완료: ${user.email}`);
+        console.log(`[acceptSuggestion] ✅ 구글 사용자 - Google Calendar에만 저장: ${user.email}`);
       } catch (syncErr) {
         console.warn(`[acceptSuggestion] 구글 캘린더 동기화 실패: ${syncErr.message}`);
       }
-    }
+      // 구글 사용자는 personalTimeId를 저장하지 않음
+      if (userResponse) {
+        userResponse.personalTimeId = null;
+        await suggestion.save();
+      }
+    } else {
+      // 일반 사용자: personalTimes에 저장
+      user.personalTimes.push(newPersonalTime);
+      await user.save();
 
-    // 4. personalTimeId 업데이트 (위에서 찾은 userResponse 재사용)
-    if (userResponse) {
-      userResponse.personalTimeId = newPersonalTime.id;
-      await suggestion.save();
+      // personalTimeId 업데이트
+      if (userResponse) {
+        userResponse.personalTimeId = newPersonalTime.id;
+        await suggestion.save();
+      }
     }
 
     // 🆕 이미 수락한 다른 사용자들의 participants 동기화
@@ -779,9 +788,26 @@ exports.rejectSuggestion = async (req, res) => {
     // 3. 제안의 memberResponses 업데이트
     await suggestion.rejectByUser(userId);
 
-    // 3.5. 불참한 사용자의 personalTime에서 해당 일정 제거
+    // 3.5. 불참한 사용자의 일정 제거
     const userResponse = suggestion.memberResponses.find(r => r.user.toString() === userId);
-    if (userResponse && userResponse.personalTimeId) {
+    const isGoogleUser = !!(user.google && user.google.refreshToken);
+
+    if (isGoogleUser) {
+      // 🆕 구글 사용자: Google Calendar에서만 삭제 (personalTimes 없음)
+      try {
+        const ptData = {
+          title: `[약속] ${suggestion.summary}`,
+          specificDate: suggestion.date,
+          startTime: suggestion.startTime,
+          suggestionId: suggestionId
+        };
+        await deleteFromGoogleCalendar(user, ptData);
+        console.log(`[rejectSuggestion] ✅ 구글 사용자 - Google Calendar에서 삭제: ${ptData.title}`);
+      } catch (gcErr) {
+        console.warn(`[rejectSuggestion] 구글 캘린더 삭제 실패: ${gcErr.message}`);
+      }
+    } else if (userResponse && userResponse.personalTimeId) {
+      // 일반 사용자: personalTimes에서 삭제
       user.personalTimes = user.personalTimes.filter(pt => pt.suggestionId !== suggestionId);
       await user.save();
     }

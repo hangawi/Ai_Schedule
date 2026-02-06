@@ -80,7 +80,8 @@ const syncToGoogleCalendar = async (user, personalTimeEntry, participantNames = 
       extendedProperties: {
         private: {
           isCoordinationConfirmed: 'true',
-          roomId: personalTimeEntry.roomId || ''
+          roomId: personalTimeEntry.roomId || '',
+          suggestionId: personalTimeEntry.suggestionId || ''  // 🆕 중복 제거용
         }
       }
     };
@@ -696,7 +697,115 @@ async function confirmScheduleLogic(room, travelMode, requestUserId, requestUser
   }
 }
 
+/**
+ * 구글 캘린더에서 일정 삭제
+ * suggestionId 또는 googleEventId로 이벤트를 찾아 삭제
+ */
+const deleteFromGoogleCalendar = async (user, personalTimeEntry) => {
+  if (!user.google || !user.google.refreshToken) return;
+
+  try {
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
+    oauth2Client.setCredentials({ refresh_token: user.google.refreshToken });
+
+    // accessToken 갱신
+    const { credentials } = await oauth2Client.refreshAccessToken();
+    oauth2Client.setCredentials(credentials);
+
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    // 방법 1: googleEventId가 있으면 직접 삭제
+    if (personalTimeEntry.googleEventId) {
+      try {
+        await calendar.events.delete({
+          calendarId: 'primary',
+          eventId: personalTimeEntry.googleEventId
+        });
+        console.log(`[Google Calendar] ✅ 이벤트 삭제 (by eventId): ${personalTimeEntry.title}`);
+        return;
+      } catch (deleteErr) {
+        console.warn(`[Google Calendar] eventId로 삭제 실패: ${deleteErr.message}`);
+      }
+    }
+
+    // 방법 2: suggestionId로 이벤트 검색 후 삭제
+    if (personalTimeEntry.suggestionId) {
+      try {
+        // extendedProperties.private에서 suggestionId로 검색
+        const dateStr = personalTimeEntry.specificDate;
+        const timeMin = new Date(`${dateStr}T00:00:00+09:00`).toISOString();
+        const timeMax = new Date(`${dateStr}T23:59:59+09:00`).toISOString();
+
+        const eventsRes = await calendar.events.list({
+          calendarId: 'primary',
+          timeMin,
+          timeMax,
+          singleEvents: true
+        });
+
+        const matchingEvent = eventsRes.data.items?.find(event =>
+          event.extendedProperties?.private?.suggestionId === personalTimeEntry.suggestionId
+        );
+
+        if (matchingEvent) {
+          await calendar.events.delete({
+            calendarId: 'primary',
+            eventId: matchingEvent.id
+          });
+          console.log(`[Google Calendar] ✅ 이벤트 삭제 (by suggestionId): ${personalTimeEntry.title}`);
+          return;
+        }
+      } catch (searchErr) {
+        console.warn(`[Google Calendar] suggestionId로 검색 실패: ${searchErr.message}`);
+      }
+    }
+
+    // 방법 3: 제목, 날짜, 시간으로 매칭하여 삭제
+    try {
+      const dateStr = personalTimeEntry.specificDate;
+      const timeMin = new Date(`${dateStr}T00:00:00+09:00`).toISOString();
+      const timeMax = new Date(`${dateStr}T23:59:59+09:00`).toISOString();
+
+      const eventsRes = await calendar.events.list({
+        calendarId: 'primary',
+        timeMin,
+        timeMax,
+        singleEvents: true
+      });
+
+      const matchingEvent = eventsRes.data.items?.find(event => {
+        // 제목이 일치하고
+        const titleMatch = event.summary === personalTimeEntry.title;
+        // 시작 시간이 일치 (시간만 비교)
+        const eventStartTime = event.start?.dateTime?.substring(11, 16);
+        const timeMatch = eventStartTime === personalTimeEntry.startTime;
+        return titleMatch && timeMatch;
+      });
+
+      if (matchingEvent) {
+        await calendar.events.delete({
+          calendarId: 'primary',
+          eventId: matchingEvent.id
+        });
+        console.log(`[Google Calendar] ✅ 이벤트 삭제 (by title/time): ${personalTimeEntry.title}`);
+      } else {
+        console.log(`[Google Calendar] ⚠️ 삭제할 이벤트를 찾지 못함: ${personalTimeEntry.title}`);
+      }
+    } catch (fallbackErr) {
+      console.warn(`[Google Calendar] 제목/시간으로 삭제 실패: ${fallbackErr.message}`);
+    }
+
+  } catch (error) {
+    console.warn(`[Google Calendar 삭제 실패] userId=${user._id}: ${error.message}`);
+  }
+};
+
 module.exports = {
   confirmScheduleLogic,
-  syncToGoogleCalendar
+  syncToGoogleCalendar,
+  deleteFromGoogleCalendar
 };

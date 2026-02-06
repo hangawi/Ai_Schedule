@@ -397,9 +397,31 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
           const dbGoogleEventIds = new Set(
              personalTimes.filter(pt => pt.googleEventId).map(pt => pt.googleEventId)
           );
-          const filteredGoogleEvents = googleCalendarEvents.filter(
-             ge => !ge.googleEventId || !dbGoogleEventIds.has(ge.googleEventId)
+          // 🆕 suggestionId로도 중복 제거 (조율방 확정 일정)
+          const dbSuggestionIds = new Set(
+             personalTimes.filter(pt => pt.suggestionId).map(pt => pt.suggestionId)
           );
+          // 🆕 제목+날짜+시간으로 중복 체크용 Set (가장 확실한 방법)
+          const dbEventKeys = new Set(
+             personalTimes.filter(pt => pt.specificDate && pt.startTime).map(pt =>
+                `${pt.title}|${pt.specificDate}|${pt.startTime}`
+             )
+          );
+          const filteredGoogleEvents = googleCalendarEvents.filter(ge => {
+             // googleEventId로 중복 체크
+             if (ge.googleEventId && dbGoogleEventIds.has(ge.googleEventId)) return false;
+             // suggestionId로 중복 체크 (extendedProperties.private.suggestionId)
+             const geSuggestionId = ge.extendedProperties?.private?.suggestionId;
+             if (geSuggestionId && dbSuggestionIds.has(geSuggestionId)) return false;
+             // 🆕 제목+날짜+시간으로 중복 체크 (가장 확실)
+             if (ge.start?.dateTime && ge.summary) {
+                const geDate = ge.start.dateTime.substring(0, 10); // YYYY-MM-DD
+                const geTime = ge.start.dateTime.substring(11, 16); // HH:MM
+                const geKey = `${ge.summary}|${geDate}|${geTime}`;
+                if (dbEventKeys.has(geKey)) return false;
+             }
+             return true;
+          });
           const allEvents = [...calendarEvents, ...filteredGoogleEvents];
 
           // React 상태 업데이트 (하단 리스트 등 다른 UI 요소에 필요)
@@ -850,9 +872,29 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          const dbGoogleIds = new Set(
             personalTimes.filter(pt => pt.googleEventId).map(pt => pt.googleEventId)
          );
-         const filteredGEvts = googleCalendarEvents.filter(
-            ge => !ge.googleEventId || !dbGoogleIds.has(ge.googleEventId)
+         // suggestionId로도 중복 제거 (조율방 확정 일정)
+         const dbSuggestionIds = new Set(
+            personalTimes.filter(pt => pt.suggestionId).map(pt => pt.suggestionId)
          );
+         // 🆕 제목+날짜+시간으로 중복 체크용 Set
+         const dbEventKeys = new Set(
+            personalTimes.filter(pt => pt.specificDate && pt.startTime).map(pt =>
+               `${pt.title}|${pt.specificDate}|${pt.startTime}`
+            )
+         );
+         const filteredGEvts = googleCalendarEvents.filter(ge => {
+            if (ge.googleEventId && dbGoogleIds.has(ge.googleEventId)) return false;
+            const geSuggestionId = ge.extendedProperties?.private?.suggestionId;
+            if (geSuggestionId && dbSuggestionIds.has(geSuggestionId)) return false;
+            // 🆕 제목+날짜+시간으로 중복 체크
+            if (ge.start?.dateTime && ge.summary) {
+               const geDate = ge.start.dateTime.substring(0, 10);
+               const geTime = ge.start.dateTime.substring(11, 16);
+               const geKey = `${ge.summary}|${geDate}|${geTime}`;
+               if (dbEventKeys.has(geKey)) return false;
+            }
+            return true;
+         });
          const allEvts = [...calendarEvents, ...filteredGEvts];
          setEvents(allEvts);
          if (calendarRef.current) {
