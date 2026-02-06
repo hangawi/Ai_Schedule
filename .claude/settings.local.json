@@ -46,7 +46,8 @@
       "Bash(timeout:*)",
       "Bash(find:*)",
       "mcp__serena__list_memories",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npx react-scripts build)"
     ]
   }
 }

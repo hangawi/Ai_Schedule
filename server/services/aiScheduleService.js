@@ -6,6 +6,7 @@ const ScheduleSuggestion = require('../models/ScheduleSuggestion');
 const User = require('../models/user');
 const { generateSchedulePrompt } = require('../prompts/scheduleAnalysis');
 const { syncToGoogleCalendar } = require('./confirmScheduleService');
+const preferenceService = require('./preferenceService');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -195,18 +196,71 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
   const lastMessage = sortedMessages[sortedMessages.length - 1];
   const suggestedByUserId = lastMessage?.sender?._id || lastMessage?.sender;
 
-  // 모든 방 멤버를 memberResponses에 추가
+  // 🆕 일정 충돌 체크
+  let conflictInfo = { conflicts: [], availableMembers: [] };
+  try {
+    console.log('[AI Schedule] 충돌 체크 시작:', { date: data.date, startTime: data.startTime, endTime: data.endTime });
+    conflictInfo = await preferenceService.checkTimeConflict(roomId, {
+      date: data.date,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      summary: data.summary
+    });
+    console.log('[AI Schedule] 충돌 체크 결과:', JSON.stringify(conflictInfo, null, 2));
+  } catch (conflictErr) {
+    console.warn('⚠️ [AI Schedule] Failed to check conflicts:', conflictErr.message);
+  }
+
+  // 충돌 있는 멤버 ID Set 생성
+  const conflictUserIds = new Set(conflictInfo.conflicts.map(c => c.userId.toString()));
+
+  // 모든 방 멤버를 memberResponses에 추가 (충돌 시 자동 불참)
   const memberResponses = room.members.map(member => {
     const memberId = member.user.toString();
     const suggesterId = suggestedByUserId?.toString();
     const isSuggester = memberId === suggesterId;
+    const hasConflict = conflictUserIds.has(memberId);
+
+    // 제안자는 충돌이 있어도 참석 (본인이 제안했으니까)
+    if (isSuggester) {
+      return {
+        user: member.user,
+        status: 'accepted',
+        respondedAt: new Date(),
+        personalTimeId: null,
+        isAutoRejected: false,
+        autoRejectReason: null
+      };
+    }
+
+    // 충돌이 있는 멤버는 자동 불참
+    if (hasConflict) {
+      return {
+        user: member.user,
+        status: 'rejected',
+        respondedAt: new Date(),
+        personalTimeId: null,
+        isAutoRejected: true,
+        autoRejectReason: '일정 충돌'
+      };
+    }
+
+    // 충돌 없는 멤버는 pending
     return {
       user: member.user,
-      status: isSuggester ? 'accepted' : 'pending',
-      respondedAt: isSuggester ? new Date() : null,
-      personalTimeId: null
+      status: 'pending',
+      respondedAt: null,
+      personalTimeId: null,
+      isAutoRejected: false,
+      autoRejectReason: null
     };
   });
+
+  // 자동 불참 멤버 목록 생성
+  // 제안자는 충돌이 있어도 참석이므로 자동 불참 목록에서 제외
+  const autoRejectedMembers = conflictInfo.conflicts
+    .filter(c => c.userId.toString() !== suggestedByUserId?.toString())
+    .map(c => c.userName);
 
   // ScheduleSuggestion 생성
   const suggestion = new ScheduleSuggestion({
@@ -271,9 +325,17 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
 
   // 시스템 메시지 생성
   const suggesterName = lastMessage?.sender?.firstName || '사용자';
+
   await sendSystemMessage(roomId, suggestedByUserId,
     `${suggesterName}님이 ${data.date} 일정을 제안하였습니다`,
     'ai-suggestion', suggestion._id);
+
+  // 자동 불참자가 있으면 별도 시스템 메시지
+  if (autoRejectedMembers.length > 0) {
+    await sendSystemMessage(roomId, suggestedByUserId,
+      `🚫 ${autoRejectedMembers.join(', ')}님은 해당 시간에 일정이 있어 자동 불참 처리되었습니다`,
+      'system', suggestion._id);
+  }
 }
 
 /**
@@ -323,6 +385,105 @@ async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
 
   if (hasDataChange) {
     await suggestion.save();
+  }
+
+  // 🆕 시간이 변경되었으면 모든 참여자에 대해 충돌 재체크
+  if (data.startTime || data.endTime) {
+    console.log('[AI분석] 시간 변경됨 - 충돌 재체크 시작');
+    const autoRejectedUsers = [];
+    
+    for (const response of suggestion.memberResponses) {
+      // pending 또는 accepted 상태인 사람만 체크 (이미 수동 불참한 사람은 제외)
+      if (response.status === 'rejected' && !response.isAutoRejected) continue;
+      
+      const memberId = response.user?._id || response.user;
+      const member = await User.findById(memberId);
+      if (!member) continue;
+      
+      let hasConflict = false;
+      const conflictReasons = [];
+      const proposedDate = new Date(suggestion.date);
+      proposedDate.setHours(0, 0, 0, 0);
+      
+      // personalTimes 충돌 체크
+      if (member.personalTimes && member.personalTimes.length > 0) {
+        for (const pt of member.personalTimes) {
+          // 같은 제안의 일정은 제외
+          if (pt.suggestionId === suggestion._id.toString()) continue;
+          
+          if (pt.specificDate) {
+            const ptDate = new Date(pt.specificDate);
+            ptDate.setHours(0, 0, 0, 0);
+            
+            if (ptDate.getTime() === proposedDate.getTime()) {
+              const isOverlap = !(suggestion.endTime <= pt.startTime || suggestion.startTime >= pt.endTime);
+              if (isOverlap) {
+                hasConflict = true;
+                conflictReasons.push({ type: 'personal', title: pt.title, time: `${pt.startTime}-${pt.endTime}` });
+              }
+            }
+          }
+        }
+      }
+      
+      // events 충돌 체크
+      try {
+        const Event = require('../models/event');
+        const userEvents = await Event.find({
+          userId: member._id,
+          startTime: { $gte: new Date(`${suggestion.date}T00:00:00`), $lt: new Date(`${suggestion.date}T23:59:59`) },
+          status: { $ne: 'cancelled' }
+        });
+        
+        for (const event of userEvents) {
+          const eventStartTime = event.startTime.toTimeString().substring(0, 5);
+          const eventEndTime = event.endTime.toTimeString().substring(0, 5);
+          const isOverlap = !(suggestion.endTime <= eventStartTime || suggestion.startTime >= eventEndTime);
+          if (isOverlap) {
+            hasConflict = true;
+            conflictReasons.push({ type: 'event', title: '일정 있음', time: `${eventStartTime}-${eventEndTime}` });
+          }
+        }
+      } catch (eventErr) {
+        console.warn('⚠️ [AI Schedule] Failed to check events:', eventErr.message);
+      }
+      
+      // 충돌 있으면 자동 불참 처리
+      if (hasConflict) {
+        // 기존에 수락했던 사람이면 personalTime 제거
+        if (response.status === 'accepted' && response.personalTimeId) {
+          const pt = member.personalTimes.find(p => p.id === response.personalTimeId);
+          if (pt) {
+            member.personalTimes = member.personalTimes.filter(p => p.id !== response.personalTimeId);
+            await member.save();
+          }
+        }
+        
+        response.status = 'rejected';
+        response.isAutoRejected = true;
+        response.autoRejectReason = conflictReasons.map(r => r.title).join(', ');
+        response.personalTimeId = null;
+        
+        autoRejectedUsers.push(member.firstName || member.email?.split('@')[0] || '사용자');
+        console.log(`[AI분석] 시간 변경으로 자동 불참 - ${member.firstName}: ${conflictReasons.map(r => r.title).join(', ')}`);
+      } else if (response.isAutoRejected) {
+        // 이전에 자동 불참이었는데 이제 충돌이 없으면 pending으로 복구
+        response.status = 'pending';
+        response.isAutoRejected = false;
+        response.autoRejectReason = null;
+        console.log(`[AI분석] 시간 변경으로 충돌 해소 - ${member.firstName} → pending으로 복구`);
+      }
+    }
+    
+    await suggestion.save();
+    
+    // 자동 불참자 알림 메시지
+    if (autoRejectedUsers.length > 0) {
+      const lastMessage = sortedMessages[sortedMessages.length - 1];
+      await sendSystemMessage(roomId, lastMessage?.sender?._id,
+        `⚠️ 시간 변경으로 ${autoRejectedUsers.join(', ')}님이 자동 불참 처리되었습니다 (일정 충돌)`,
+        'system', suggestion._id);
+    }
   }
 
   // 🆕 수락한 모든 사용자의 personalTimes 동기화 (장소, 시간, 제목 등)
@@ -474,10 +635,150 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
     return;
   }
 
-  // 🆕 이미 응답한 사용자는 재처리 안 함
+  // 🆕 이미 응답한 사용자 재처리 규칙
+  // - 자동 불참(isAutoRejected)인 경우: accept 시 참석으로 변경 가능 (충돌 확인 필요)
+  // - 참석(accepted) → 불참(reject): 변경 허용
+  // - 불참(rejected) → 참석(accept): 변경 허용
   if (userResponse.status !== 'pending') {
-    console.log(`[AI분석] 이미 응답 완료 - user: ${userId}, status: ${userResponse.status}, sentiment: ${sentiment}`);
-    return;
+    // 🆕 참석 → 불참 변경 허용
+    if (userResponse.status === 'accepted' && sentiment === 'reject') {
+      console.log(`[AI분석] 참석 → 불참 변경 - user: ${userId}`);
+      
+      // personalTime 제거
+      if (userResponse.personalTimeId) {
+        const rejectUser = await User.findById(userId);
+        if (rejectUser) {
+          rejectUser.personalTimes = rejectUser.personalTimes.filter(
+            pt => pt.suggestionId !== suggestion._id.toString()
+          );
+          await rejectUser.save();
+        }
+      }
+      
+      userResponse.status = 'rejected';
+      userResponse.respondedAt = new Date();
+      userResponse.personalTimeId = null;
+      userResponse.isAutoRejected = false;
+      await suggestion.save();
+      
+      // 시스템 메시지
+      const lastMessage = sortedMessages[sortedMessages.length - 1];
+      const userName = lastMessage?.sender?.firstName || '사용자';
+      await sendSystemMessage(roomId, userId,
+        `${userName}님이 일정 참석을 취소했습니다: ${suggestion.date} ${suggestion.summary}`,
+        'system', suggestion._id);
+      
+      // Socket 이벤트 발송
+      if (global.io) {
+        global.io.to(`room-${roomId}`).emit('suggestion-updated', {
+          suggestionId: suggestion._id,
+          suggestion: suggestion
+        });
+      }
+      return;
+    }
+    
+    // 🆕 수동 불참 → 참석 변경 허용
+    if (userResponse.status === 'rejected' && !userResponse.isAutoRejected && sentiment === 'accept') {
+      console.log(`[AI분석] 불참 → 참석 변경 - user: ${userId}`);
+      // 아래 accept 로직으로 진행 (pending처럼 처리)
+      userResponse.status = 'pending';
+    }
+    
+    // 자동 불참자가 참석 의사를 표현한 경우 → 참석으로 변경 허용 (충돌 확인 필요)
+    else if (userResponse.isAutoRejected && sentiment === 'accept') {
+      console.log(`[AI분석] 자동 불참자 참석 전환 시도 - user: ${userId}`);
+      
+      // 🆕 현재 사용자의 충돌 일정 체크
+      const user = await User.findById(userId);
+      const conflictingSchedules = [];
+      
+      if (user) {
+        const proposedDate = new Date(suggestion.date);
+        proposedDate.setHours(0, 0, 0, 0);
+        
+        // personalTimes 충돌 체크
+        if (user.personalTimes && user.personalTimes.length > 0) {
+          for (const pt of user.personalTimes) {
+            // 같은 제안의 일정은 제외
+            if (pt.suggestionId === suggestion._id.toString()) continue;
+            
+            if (pt.specificDate) {
+              const ptDate = new Date(pt.specificDate);
+              ptDate.setHours(0, 0, 0, 0);
+              
+              if (ptDate.getTime() === proposedDate.getTime()) {
+                // 시간 겹침 체크
+                const isOverlap = !(suggestion.endTime <= pt.startTime || suggestion.startTime >= pt.endTime);
+                if (isOverlap) {
+                  conflictingSchedules.push({
+                    type: 'personal',
+                    title: pt.title,
+                    time: `${pt.startTime}-${pt.endTime}`
+                  });
+                }
+              }
+            }
+          }
+        }
+        
+        // events 충돌 체크
+        try {
+          const Event = require('../models/event');
+          const userEvents = await Event.find({
+            userId: user._id,
+            startTime: {
+              $gte: new Date(`${suggestion.date}T00:00:00`),
+              $lt: new Date(`${suggestion.date}T23:59:59`)
+            },
+            status: { $ne: 'cancelled' }
+          });
+          
+          for (const event of userEvents) {
+            const eventStartTime = event.startTime.toTimeString().substring(0, 5);
+            const eventEndTime = event.endTime.toTimeString().substring(0, 5);
+            const isOverlap = !(suggestion.endTime <= eventStartTime || suggestion.startTime >= eventEndTime);
+            if (isOverlap) {
+              conflictingSchedules.push({
+                type: 'event',
+                title: event.title,
+                time: `${eventStartTime}-${eventEndTime}`
+              });
+            }
+          }
+        } catch (eventErr) {
+          console.warn('⚠️ [AI Schedule] Failed to check events:', eventErr.message);
+        }
+      }
+      
+      // 🆕 충돌이 있으면 socket으로 확인 요청
+      if (conflictingSchedules.length > 0) {
+        console.log(`[AI분석] 충돌 감지 - ${conflictingSchedules.length}개 일정과 충돌, 확인 모달 표시`);
+        if (global.io) {
+          global.io.to(`room-${roomId}`).emit('conflict-confirmation-needed', {
+            suggestionId: suggestion._id,
+            suggestion: {
+              _id: suggestion._id,
+              summary: suggestion.summary,
+              date: suggestion.date,
+              startTime: suggestion.startTime,
+              endTime: suggestion.endTime,
+              location: suggestion.location
+            },
+            conflicts: conflictingSchedules,
+            targetUserId: userId
+          });
+        }
+        return; // 참석 처리하지 않고 종료 - 사용자 확인 필요
+      }
+      
+      // 충돌 없음 - 기존대로 진행
+      userResponse.isAutoRejected = false;
+      userResponse.autoRejectReason = null;
+    } else {
+      console.log(`[AI분석] 이미 응답 완료 - user: ${userId}, status: ${userResponse.status}, sentiment: ${sentiment}`);
+      return;
+    }
   }
 
   // sentiment에 따라 자동 처리

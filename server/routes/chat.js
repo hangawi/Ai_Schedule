@@ -36,6 +36,7 @@ router.post('/:roomId/read', chatController.markAsRead);
 // 일정 제안 관리
 router.get('/:roomId/suggestions', chatController.getSuggestions);
 router.post('/:roomId/suggestions/:suggestionId/accept', chatController.acceptSuggestion);
+router.post('/:roomId/suggestions/:suggestionId/force-accept', chatController.forceAcceptSuggestion); // 🆕 강제 참석 (충돌 무시)
 router.post('/:roomId/suggestions/:suggestionId/reject', chatController.rejectSuggestion);
 router.delete('/:roomId/suggestions/:suggestionId', chatController.deleteSuggestion);
 

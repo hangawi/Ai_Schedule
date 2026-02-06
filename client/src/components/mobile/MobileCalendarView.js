@@ -390,7 +390,14 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
       if (!isLoading && calendarRef.current) {
           const calendarApi = calendarRef.current.getApi();
           const calendarEvents = convertScheduleToEvents(defaultSchedule, scheduleExceptions, personalTimes);
-          const allEvents = [...calendarEvents, ...googleCalendarEvents];
+          // 중복 제거: DB에서 이미 동기화된 구글 캘린더 이벤트 제외
+          const dbGoogleEventIds = new Set(
+             personalTimes.filter(pt => pt.googleEventId).map(pt => pt.googleEventId)
+          );
+          const filteredGoogleEvents = googleCalendarEvents.filter(
+             ge => !ge.googleEventId || !dbGoogleEventIds.has(ge.googleEventId)
+          );
+          const allEvents = [...calendarEvents, ...filteredGoogleEvents];
 
           // React 상태 업데이트 (하단 리스트 등 다른 UI 요소에 필요)
           setEvents(allEvents);
@@ -793,7 +800,13 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
       if (!prev || prev.start?.getTime() !== newRange.start.getTime() || prev.end?.getTime() !== newRange.end.getTime()) {
          visibleRangeRef.current = newRange;
          const calendarEvents = convertScheduleToEvents(defaultSchedule, scheduleExceptions, personalTimes);
-         const allEvts = [...calendarEvents, ...googleCalendarEvents];
+         const dbGoogleIds = new Set(
+            personalTimes.filter(pt => pt.googleEventId).map(pt => pt.googleEventId)
+         );
+         const filteredGEvts = googleCalendarEvents.filter(
+            ge => !ge.googleEventId || !dbGoogleIds.has(ge.googleEventId)
+         );
+         const allEvts = [...calendarEvents, ...filteredGEvts];
          setEvents(allEvts);
          if (calendarRef.current) {
             const calendarApi = calendarRef.current.getApi();

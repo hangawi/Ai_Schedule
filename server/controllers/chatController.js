@@ -409,8 +409,17 @@ exports.acceptSuggestion = async (req, res) => {
     }
 
     // 3. 개인 캘린더에 일정 추가 (personalTimes에 추가)
-    // 🆕 먼저 수락 처리 후 참석자 수 계산
-    await suggestion.acceptByUser(userId, null); // personalTimeId는 아래에서 업데이트
+    // 🆕 직접 상태 변경 (populate된 객체에서 acceptByUser가 작동 안 함)
+    const userResponse = suggestion.memberResponses.find(
+      r => (r.user._id?.toString() || r.user.toString()) === userId.toString()
+    );
+    if (userResponse) {
+      userResponse.status = 'accepted';
+      userResponse.respondedAt = new Date();
+      userResponse.isAutoRejected = false;
+      userResponse.autoRejectReason = null;
+      await suggestion.save();
+    }
 
     // 참석자 이름 목록 직접 조회
     const acceptedResponses = suggestion.memberResponses.filter(r => r.status === 'accepted');
@@ -465,10 +474,7 @@ exports.acceptSuggestion = async (req, res) => {
       }
     }
 
-    // 4. personalTimeId 업데이트
-    const userResponse = suggestion.memberResponses.find(
-      r => r.user.toString() === userId.toString() || r.user._id?.toString() === userId.toString()
-    );
+    // 4. personalTimeId 업데이트 (위에서 찾은 userResponse 재사용)
     if (userResponse) {
       userResponse.personalTimeId = newPersonalTime.id;
       await suggestion.save();
@@ -530,6 +536,154 @@ exports.acceptSuggestion = async (req, res) => {
 
   } catch (error) {
     console.error('Accept suggestion error:', error);
+    res.status(500).json({ msg: 'Server error', error: error.message });
+  }
+};
+
+
+// 🆕 강제 참석 (충돌 무시) - 채팅에서 충돌 확인 후 참석
+// @route   POST /api/chat/:roomId/suggestions/:suggestionId/force-accept
+// @access  Private
+exports.forceAcceptSuggestion = async (req, res) => {
+  try {
+    const { roomId, suggestionId } = req.params;
+    const userId = req.user.id;
+
+    // 1. 제안 조회
+    const suggestion = await ScheduleSuggestion.findById(suggestionId)
+      .populate('memberResponses.user', 'firstName lastName email');
+    if (!suggestion) {
+      return res.status(404).json({ msg: 'Suggestion not found' });
+    }
+
+    // 2. 사용자 정보 조회
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ msg: 'User not found' });
+    }
+
+    // 3. 사용자 응답 찾기
+    const userResponse = suggestion.memberResponses.find(
+      r => r.user._id?.toString() === userId.toString() || r.user.toString() === userId.toString()
+    );
+    if (!userResponse) {
+      return res.status(400).json({ msg: 'User not found in memberResponses' });
+    }
+
+    // 4. 강제 참석 처리 (isAutoRejected 초기화)
+    userResponse.status = 'accepted';
+    userResponse.respondedAt = new Date();
+    userResponse.isAutoRejected = false;
+    userResponse.autoRejectReason = null;
+    await suggestion.save();
+
+    // 5. 참석자 이름 목록 구성
+    const acceptedResponses = suggestion.memberResponses.filter(r => r.status === 'accepted');
+    const acceptedCount = acceptedResponses.length;
+    
+    const participantNames = [];
+    for (const r of acceptedResponses) {
+      const memberId = r.user?._id || r.user;
+      if (memberId) {
+        const member = await User.findById(memberId).select('firstName lastName email');
+        if (member) {
+          const name = member.firstName || member.lastName || member.email?.split('@')[0] || '참석자';
+          participantNames.push(name);
+        }
+      }
+    }
+
+    // 6. personalTimes에 일정 추가
+    const newPersonalTime = {
+      id: user.personalTimes.length > 0
+        ? Math.max(...user.personalTimes.map(pt => pt.id)) + 1
+        : 1,
+      title: `[약속] ${suggestion.summary}`,
+      type: 'event',
+      startTime: suggestion.startTime,
+      endTime: suggestion.endTime === '24:00' ? '23:59' : suggestion.endTime,
+      days: [],
+      isRecurring: false,
+      specificDate: suggestion.date,
+      color: '#3b82f6',
+      location: suggestion.location || '',
+      roomId: roomId,
+      participants: acceptedCount,
+      suggestionId: suggestion._id.toString()
+    };
+
+    user.personalTimes.push(newPersonalTime);
+    await user.save();
+
+    // 7. 구글 캘린더 동기화
+    if (user.google && user.google.refreshToken) {
+      try {
+        await syncToGoogleCalendar(user, newPersonalTime, participantNames);
+        console.log(`[forceAcceptSuggestion] ✅ 구글 캘린더 동기화 완료: ${user.email}`);
+      } catch (syncErr) {
+        console.warn(`[forceAcceptSuggestion] 구글 캘린더 동기화 실패: ${syncErr.message}`);
+      }
+    }
+
+    // 8. personalTimeId 업데이트
+    userResponse.personalTimeId = newPersonalTime.id;
+    await suggestion.save();
+
+    // 9. 다른 참석자들의 participants 동기화
+    for (const response of suggestion.memberResponses) {
+      const respUserId = response.user._id?.toString() || response.user.toString();
+      if (response.status === 'accepted' && response.personalTimeId && respUserId !== userId.toString()) {
+        try {
+          const otherUser = await User.findById(response.user._id || response.user);
+          if (otherUser) {
+            const pt = otherUser.personalTimes.find(p => p.id === response.personalTimeId);
+            if (pt) {
+              pt.participants = acceptedCount;
+              await otherUser.save();
+              if (otherUser.google && otherUser.google.refreshToken) {
+                try {
+                  await syncToGoogleCalendar(otherUser, pt, participantNames);
+                } catch (gcErr) {
+                  console.warn(`[ForceAccept] 구글 캘린더 업데이트 실패: ${gcErr.message}`);
+                }
+              }
+            }
+          }
+        } catch (syncErr) {
+          console.error(`⚠️ [ForceAccept] Failed to sync participants:`, syncErr.message);
+        }
+      }
+    }
+
+    // 10. 시스템 메시지 전송
+    const systemMsg = new ChatMessage({
+      room: roomId,
+      sender: userId,
+      content: `${user.firstName}님이 일정에 참석했습니다 (충돌 무시): ${suggestion.date} ${suggestion.startTime} ${suggestion.summary}`,
+      type: 'system'
+    });
+    await systemMsg.save();
+    await systemMsg.populate('sender', 'firstName lastName');
+
+    // 11. Socket 이벤트 발송
+    const updatedSuggestion = await ScheduleSuggestion.findById(suggestionId).populate('memberResponses.user', 'firstName lastName email');
+    if (global.io) {
+      global.io.to(`room-${roomId}`).emit('chat-message', systemMsg);
+      global.io.to(`room-${roomId}`).emit('suggestion-updated', {
+        suggestionId,
+        userId,
+        status: 'accepted',
+        memberResponses: updatedSuggestion.memberResponses
+      });
+    }
+
+    res.json({
+      success: true,
+      suggestion: updatedSuggestion
+    });
+
+  } catch (error) {
+    console.error('Force accept suggestion error:', error);
     res.status(500).json({ msg: 'Server error', error: error.message });
   }
 };

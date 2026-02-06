@@ -31,6 +31,16 @@ const MemberResponseSchema = new mongoose.Schema({
     enum: ['pending', 'accepted', 'rejected'],
     default: 'pending'
   },
+  // 자동 불참 여부 (일정 충돌로 인한 자동 불참)
+  isAutoRejected: {
+    type: Boolean,
+    default: false
+  },
+  // 자동 불참 사유 (있으면 일정 충돌)
+  autoRejectReason: {
+    type: String,
+    default: null
+  },
   respondedAt: {
     type: Date,
     default: null
@@ -142,6 +152,8 @@ ScheduleSuggestionSchema.methods.acceptByUser = function(userId, personalTimeId)
     response.status = 'accepted';
     response.respondedAt = new Date();
     response.personalTimeId = personalTimeId;
+    response.isAutoRejected = false;
+    response.autoRejectReason = null;
   }
   return this.save();
 };

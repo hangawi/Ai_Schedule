@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { io } from 'socket.io-client';
-import { Send, Paperclip, Download, FileText } from 'lucide-react';
+import { Send, Paperclip, Download, FileText, Calendar, Clock } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 import SuggestionModal from './SuggestionModal';
 
@@ -15,6 +16,12 @@ const GroupChat = ({ roomId, user, isMobile, typoCorrection = false }) => {
   const [showSuggestionModal, setShowSuggestionModal] = useState(false); // 일정관리 모달 표시
   const [isCorrecting, setIsCorrecting] = useState(false); // AI 오타 교정 중
   const [deleteTarget, setDeleteTarget] = useState(null); // 삭제 대상 메시지
+  const [conflictModal, setConflictModal] = useState(null); // 🆕 충돌 확인 모달
+  
+  // 🆕 디버그: conflictModal 상태 변경 추적
+  useEffect(() => {
+    console.log('🔴 [GroupChat] conflictModal 상태 변경:', conflictModal);
+  }, [conflictModal]);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const socketRef = useRef(null);
@@ -47,10 +54,49 @@ const GroupChat = ({ roomId, user, isMobile, typoCorrection = false }) => {
       setMessages((prev) => prev.filter(msg => msg._id !== messageId));
     });
 
+    // 🆕 충돌 확인 필요 이벤트
+    socketRef.current.on('conflict-confirmation-needed', (data) => {
+      console.log('⚠️ [GroupChat] Conflict confirmation needed:', data);
+      console.log('⚠️ [GroupChat] user:', user);
+      console.log('⚠️ [GroupChat] user._id:', user?._id, 'user.id:', user?.id);
+      console.log('⚠️ [GroupChat] targetUserId:', data.targetUserId);
+      // 현재 사용자에게만 모달 표시 (user._id 또는 user.id 둘 다 체크)
+      const currentUserId = user?._id || user?.id;
+      if (currentUserId && data.targetUserId === currentUserId) {
+        console.log('⚠️ [GroupChat] 모달 표시!');
+        setConflictModal(data);
+      } else {
+        console.log('⚠️ [GroupChat] ID 불일치 - 모달 표시 안함');
+      }
+    });
+
     return () => {
       if (socketRef.current) socketRef.current.disconnect();
     };
   }, [roomId]);
+
+  // 🆕 강제 참석 (충돌 무시)
+  const handleForceAccept = async (suggestionId) => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_BASE_URL}/api/chat/${roomId}/suggestions/${suggestionId}/force-accept`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        console.log('✅ Force accepted suggestion');
+        setConflictModal(null);
+        setToast({ message: '일정에 참석했습니다', type: 'success' });
+      } else {
+        const error = await res.json();
+        setToast({ message: error.message || '참석 처리에 실패했습니다.', type: 'error' });
+      }
+    } catch (error) {
+      console.error('Failed to force accept suggestion:', error);
+      setToast({ message: '참석 처리 중 오류가 발생했습니다.', type: 'error' });
+    }
+  };
 
   const fetchMessages = async () => {
     try {
@@ -518,6 +564,83 @@ return (
         socket={socketRef.current}
         isMobile={isMobile}
       />
+
+      {/* 🆕 충돌 확인 모달 - Portal로 body에 렌더링 */}
+      {conflictModal && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 999999,
+            padding: '16px',
+            isolation: 'isolate'
+          }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6" style={{ position: 'relative', zIndex: 1000000 }}>
+            <div className="text-center mb-4">
+              <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <span className="text-2xl">⚠️</span>
+              </div>
+              <h3 className="text-lg font-bold text-gray-800">기존 일정이 있습니다</h3>
+            </div>
+
+            {/* 충돌하는 일정 목록 */}
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-red-700 font-medium mb-2">충돌하는 일정:</p>
+              {conflictModal.conflicts?.map((conflict, idx) => (
+                <div key={idx} className="text-sm text-red-600 flex items-center gap-2 py-1">
+                  <Clock size={14} />
+                  <span>{conflict.title} ({conflict.time})</span>
+                </div>
+              ))}
+            </div>
+
+            {/* 새 일정 정보 */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-blue-700 font-medium mb-2">참석하려는 일정:</p>
+              <div className="text-sm text-blue-600">
+                <div className="flex items-center gap-2 py-1">
+                  <Calendar size={14} />
+                  <span>{conflictModal.suggestion?.date}</span>
+                </div>
+                <div className="flex items-center gap-2 py-1">
+                  <Clock size={14} />
+                  <span>{conflictModal.suggestion?.startTime} ~ {conflictModal.suggestion?.endTime}</span>
+                </div>
+                <div className="font-medium mt-1">{conflictModal.suggestion?.summary}</div>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-600 text-center mb-4">
+              기존 일정과 시간이 겹칩니다.<br />
+              그래도 참석하시겠습니까?
+            </p>
+
+            {/* 버튼 */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConflictModal(null)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => handleForceAccept(conflictModal.suggestionId)}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+              >
+                참석하기
+              </button>
+            </div>
+          </div>
+        </div>
+      , document.body)}
 
       {/* 메시지 삭제 확인 모달 */}
       {deleteTarget && (

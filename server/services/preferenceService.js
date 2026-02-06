@@ -20,6 +20,7 @@
 
 const User = require('../models/user');
 const Room = require('../models/room');
+const Event = require('../models/event');
 
 /**
  * 시간 문자열(HH:MM)을 분으로 변환
@@ -91,8 +92,10 @@ exports.checkTimeConflict = async (roomId, suggestion) => {
     const conflicts = [];
     const availableMembers = [];
 
+    console.log('[충돌체크] 방 멤버 수:', room.members.length);
     for (const member of room.members) {
       const user = member.user;
+      console.log('[충돌체크] 멤버:', user?.firstName, '- personalTimes 있음?', !!user?.personalTimes, '개수:', user?.personalTimes?.length);
       if (!user) continue;
 
       let hasConflict = false;
@@ -124,8 +127,10 @@ exports.checkTimeConflict = async (roomId, suggestion) => {
       }
 
       // 체크 2: personalTimes 중 specificDate가 있는 것만 (특정 날짜 약속)
+      console.log(`[충돌체크] ${user.firstName}의 personalTimes:`, user.personalTimes?.length || 0, '개');
       if (user.personalTimes && user.personalTimes.length > 0) {
         for (const pt of user.personalTimes) {
+          console.log(`[충돌체크] - ${pt.title}: ${pt.specificDate} ${pt.startTime}-${pt.endTime}`);
           // specificDate가 있고, 날짜가 일치하는지 확인
           if (pt.specificDate) {
             const ptDate = new Date(pt.specificDate);
@@ -145,6 +150,34 @@ exports.checkTimeConflict = async (roomId, suggestion) => {
             }
           }
         }
+      }
+
+      // 체크 3: events (개인 일정) 체크
+      try {
+        const userEvents = await Event.find({
+          userId: user._id,
+          startTime: {
+            $gte: new Date(`${date}T00:00:00`),
+            $lt: new Date(`${date}T23:59:59`)
+          },
+          status: { $ne: 'cancelled' }
+        });
+
+        for (const event of userEvents) {
+          const eventStartTime = event.startTime.toTimeString().substring(0, 5);
+          const eventEndTime = event.endTime.toTimeString().substring(0, 5);
+
+          if (isTimeOverlap(startTime, endTime, eventStartTime, eventEndTime)) {
+            hasConflict = true;
+            conflictReasons.push({
+              type: 'event',
+              title: '일정 있음', // 제목 비공개
+              time: `${eventStartTime}-${eventEndTime}`
+            });
+          }
+        }
+      } catch (eventErr) {
+        console.warn('⚠️ [Preference Service] Failed to check events for user:', user._id, eventErr.message);
       }
 
       // 결과 저장
