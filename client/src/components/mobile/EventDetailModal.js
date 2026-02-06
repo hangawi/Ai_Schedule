@@ -49,7 +49,7 @@ export const MapModal = ({ address, lat, lng, onClose }) => {
 /**
  * EventDetailModal - 일정 상세 모달
  */
-const EventDetailModal = ({ event, user, onClose, onOpenMap, onDelete, previousLocation }) => {
+const EventDetailModal = ({ event, user, onClose, onOpenMap, onDelete, previousLocation, isEditing }) => {
    const [isDeleting, setIsDeleting] = useState(false);
    if (!event) return null;
 
@@ -269,7 +269,7 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap, onDelete, previousL
                      <Users size={16} />
                      인원수
                   </div>
-                  <div className="modal-value">👥 {event.participants || 1}명{event.totalMembers > 0 && ` / ${event.totalMembers}명`}</div>
+                  <div className="modal-value">👥 {event.participants || 1}명 / {event.totalMembers > 0 ? event.totalMembers : (event.participants || 1)}명</div>
                   {event.participantNames && event.participantNames.length > 0 && (
                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
                         {event.participantNames.map((name, idx) => (
@@ -285,6 +285,34 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap, onDelete, previousL
                         ))}
                      </div>
                   )}
+                  {/* 외부 참여자 (채팅으로 추가된 이름들) - 본인 포함하여 표시 */}
+                  {event.externalParticipants && event.externalParticipants.length > 0 && (
+                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                        {/* 본인 이름 먼저 표시 */}
+                        {user && (user.firstName || user.name) && (
+                           <span style={{
+                              padding: '2px 8px',
+                              backgroundColor: '#DBEAFE',
+                              color: '#1D4ED8',
+                              fontSize: '12px',
+                              borderRadius: '9999px'
+                           }}>
+                              {user.firstName || user.name}
+                           </span>
+                        )}
+                        {event.externalParticipants.map((p, idx) => (
+                           <span key={idx} style={{
+                              padding: '2px 8px',
+                              backgroundColor: '#DBEAFE',
+                              color: '#1D4ED8',
+                              fontSize: '12px',
+                              borderRadius: '9999px'
+                           }}>
+                              {p.name}
+                           </span>
+                        ))}
+                     </div>
+                  )}
                </div>
 
                {/* 조율방 정보 (확정된 일정일 경우) */}
@@ -294,11 +322,8 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap, onDelete, previousL
                      <div className="modal-value">📅 {event.roomName}</div>
                   </div>
                )}
-                           {/* 삭제 버튼 (지난 일정만) */}
-               {onDelete && (() => {
-                  const todayStr = new Date().toISOString().split('T')[0];
-                  return event.date < todayStr;
-               })() && (
+                           {/* 삭제 버튼 (onDelete가 있으면 항상 표시) */}
+               {onDelete && (
                   <div className="modal-delete-section">
                      <button
                         className="event-delete-btn"

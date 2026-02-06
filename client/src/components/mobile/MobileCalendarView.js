@@ -263,6 +263,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                      locationLng: pt.locationLng,
                      participants: pt.participants || 1,
                      participantNames: pt.participantNames || [],
+                     externalParticipants: pt.externalParticipants || [],
                      totalMembers: pt.totalMembers || 0,
                      isCoordinated: pt.isCoordinationConfirmed || !!(pt.suggestionId || (pt.title && pt.title.includes('-'))),
                      // 🆕 구글 이벤트 관련 속성 추가
@@ -345,14 +346,17 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                   oneYearLater.toISOString()
                );
                const formattedGoogleEvents = gEvents.map(e => {
-                  let participants = 0;
+                  // 🆕 googleCalendarService에서 이미 파싱된 데이터 사용
+                  const participants = e.participants || 1;
+                  const externalParticipants = e.externalParticipants || [];
                   let participantNames = [];
+
+                  // description에서 추가 파싱 (fallback)
                   if (e.description) {
-                     const countMatch = e.description.match(/참석자:\s*(\d+)명/);
-                     if (countMatch) participants = parseInt(countMatch[1], 10);
                      const namesMatch = e.description.match(/참석:\s*(.+?)(?:\n|$)/);
                      if (namesMatch) participantNames = namesMatch[1].split(',').map(n => n.trim());
                   }
+
                   // 🆕 조율방 확정 일정 여부 체크 (extendedProperties 또는 제목으로)
                   const isCoordinated =
                      e.extendedProperties?.private?.isCoordinationConfirmed === 'true' ||
@@ -362,8 +366,9 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                   const roomId = e.extendedProperties?.private?.roomId || null;
                   return {
                      ...e,
-                     participants: participants,
+                     participants: participants || 1,
                      participantNames: participantNames,
+                     externalParticipants: externalParticipants,
                      isCoordinated: isCoordinated,
                      suggestionId: suggestionId,
                      roomId: roomId,
@@ -672,7 +677,12 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
    };
 
    const handleStartEdit = () => {
-      setInitialState({ defaultSchedule: [...defaultSchedule], scheduleExceptions: [...scheduleExceptions], personalTimes: [...personalTimes] });
+      setInitialState({
+         defaultSchedule: [...defaultSchedule],
+         scheduleExceptions: [...scheduleExceptions],
+         personalTimes: [...personalTimes],
+         googleCalendarEvents: [...googleCalendarEvents]
+      });
       setIsEditing(true);
    };
 
@@ -681,22 +691,70 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          setDefaultSchedule([...initialState.defaultSchedule]);
          setScheduleExceptions([...initialState.scheduleExceptions]);
          setPersonalTimes([...initialState.personalTimes]);
+         setGoogleCalendarEvents([...initialState.googleCalendarEvents]);
       }
       setIsEditing(false);
+      setInitialState(null);
       fetchSchedule();
    };
 
    const handleSave = async () => {
       try {
+         const token = await auth.currentUser?.getIdToken();
+
+         // 🆕 편집 중 삭제된 구글 캘린더 이벤트 실제 삭제
+         if (initialState && token) {
+            const currentGoogleIds = new Set(googleCalendarEvents.map(e => e.googleEventId));
+            const deletedGoogleEvents = initialState.googleCalendarEvents.filter(
+               e => e.googleEventId && !currentGoogleIds.has(e.googleEventId)
+            );
+
+            for (const event of deletedGoogleEvents) {
+               // 생일 이벤트 스킵 (Google 연락처에서 관리되어 삭제 불가)
+               if (event.isBirthdayEvent || event.title?.includes('생일')) {
+                  console.log('생일 이벤트 스킵:', event.title);
+                  continue;
+               }
+
+               try {
+                  const suggestionId = event.suggestionId || event.extendedProperties?.private?.suggestionId;
+                  if (suggestionId) {
+                     await fetch(`${API_BASE_URL}/api/users/profile/schedule/google/${suggestionId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                     });
+                  } else {
+                     await googleCalendarService.deleteEvent(event.googleEventId);
+                  }
+               } catch (err) {
+                  console.warn('구글 일정 삭제 실패:', event.googleEventId, err);
+               }
+            }
+         }
+
+         // 로컬 DB 저장
          await userService.updateUserSchedule({ defaultSchedule, scheduleExceptions, personalTimes });
          alert('저장되었습니다.');
          setIsEditing(false);
+         setInitialState(null);
          await fetchSchedule();
       } catch (error) { alert('저장 실패'); }
    };
 
    const handleClearAll = async () => {
       if (window.confirm('모두 삭제하시겠습니까?')) {
+         // 편집 모드에서는 로컬 상태만 변경 (저장 버튼 눌러야 서버 반영)
+         if (isEditing) {
+            setDefaultSchedule([]);
+            setScheduleExceptions([]);
+            setPersonalTimes([]);
+            // 생일 이벤트는 유지 (삭제 불가)
+            setGoogleCalendarEvents(prev => prev.filter(e => e.isBirthdayEvent || e.title?.includes('생일')));
+            setEvents([]);
+            return;
+         }
+
+         // 편집 모드 아닐 때는 즉시 서버에 반영
          try {
             const loginMethod = localStorage.getItem('loginMethod') || '';
             const token = await auth.currentUser?.getIdToken();
@@ -804,6 +862,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
             location: originalEvent.location || null,
             participants: originalEvent.participants ?? 0,
             participantNames: originalEvent.participantNames || [],
+            externalParticipants: originalEvent.externalParticipants || [],
             isCoordinated: originalEvent.isCoordinated || false,
             hasTravelTime: originalEvent.hasTravelTime || false
          });
@@ -823,6 +882,49 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
       try {
          const currentUser = auth.currentUser;
          if (!currentUser) return;
+
+         // 🆕 편집 모드에서는 로컬 상태만 변경 (저장 버튼 눌러야 서버 반영)
+         if (isEditing) {
+            // originalData에서 실제 id 가져오기
+            const originalId = event.originalData?.id || event.originalData?._id;
+            const eventTitle = event.title;
+            const eventDate = event.date;
+            const eventTime = event.time;
+            const eventId = event.id;
+
+            // personalTimes에서 제거
+            const newPersonalTimes = personalTimes.filter(pt => {
+               const ptId = pt.id || pt._id;
+               // id로 매칭
+               if (originalId && ptId === originalId) return false;
+               // fallback: title + date + time 매칭
+               if (pt.title === eventTitle && pt.specificDate === eventDate && pt.startTime === eventTime) return false;
+               return true;
+            });
+            setPersonalTimes(newPersonalTimes);
+
+            // 구글 캘린더 이벤트 제거
+            let newGoogleEvents = googleCalendarEvents;
+            if (event.isGoogleEvent && event.googleEventId) {
+               newGoogleEvents = googleCalendarEvents.filter(ge => ge.googleEventId !== event.googleEventId);
+               setGoogleCalendarEvents(newGoogleEvents);
+            }
+
+            // events에서 직접 제거 (useEffect 의존 대신 즉시 반영)
+            const newEvents = events.filter(e => e.id !== eventId);
+            setEvents(newEvents);
+
+            // FullCalendar도 즉시 업데이트
+            if (calendarRef.current) {
+               const calendarApi = calendarRef.current.getApi();
+               calendarApi.removeAllEvents();
+               calendarApi.addEventSource(newEvents);
+            }
+
+            setSelectedEvent(null);
+            return;
+         }
+
          const token = await currentUser.getIdToken();
 
          // 🆕 조율방 roomId 확인 (originalData 또는 extendedProperties에서)
@@ -1205,7 +1307,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                forceOpen={true} 
             />
          )}
-         {selectedEvent && <EventDetailModal event={selectedEvent} user={user} onClose={() => setSelectedEvent(null)} onOpenMap={handleOpenMap} onDelete={handleDeleteScheduleEvent} previousLocation={null} />}
+         {selectedEvent && <EventDetailModal event={selectedEvent} user={user} onClose={() => setSelectedEvent(null)} onOpenMap={handleOpenMap} onDelete={handleDeleteScheduleEvent} previousLocation={null} isEditing={isEditing} />}
          {showMapModal && selectedLocation && <MapModal address={selectedLocation.address} lat={selectedLocation.lat} lng={selectedLocation.lng} onClose={handleCloseMapModal} />}
          {detectedSchedules.length > 0 && (
             <AutoDetectedScheduleModal

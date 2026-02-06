@@ -409,6 +409,15 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
             {suggestion.location && (
               <p className="text-xs text-blue-500 ml-5">📍 지도 및 대중교통 경로 보기</p>
             )}
+            {/* 외부 참여자 표시 */}
+            {suggestion.externalParticipants?.length > 0 && (
+              <div className="flex items-center gap-2 mt-1">
+                <Users size={14} className="text-purple-500" />
+                <span className="text-purple-600 font-medium">
+                  {suggestion.externalParticipants.map(p => p.name).join(', ')} ({suggestion.externalParticipants.length}명)
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

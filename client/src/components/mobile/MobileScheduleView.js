@@ -225,7 +225,8 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                      roomId: pt.roomId || null,
                      location: pt.location || null,
                      participantNames: pt.participantNames || [],
-                     totalMembers: pt.totalMembers || 0
+                     totalMembers: pt.totalMembers || 0,
+                     externalParticipants: pt.externalParticipants || []
                   });
                   processedIds.add(pt.id);
                   return;
@@ -256,7 +257,8 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                         travelEndTime: pt.endTime,
                         suggestionId: pt.suggestionId || nextEvent.suggestionId || null,
                         participantNames: nextEvent.participantNames || pt.participantNames || [],
-                        totalMembers: nextEvent.totalMembers || pt.totalMembers || 0
+                        totalMembers: nextEvent.totalMembers || pt.totalMembers || 0,
+                        externalParticipants: nextEvent.externalParticipants || pt.externalParticipants || []
                      });
                      processedIds.add(pt.id);
                      processedIds.add(nextEvent.id);
@@ -270,7 +272,8 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                         location: pt.location || null, locationLat: pt.locationLat || null,
                         locationLng: pt.locationLng || null, transportMode: pt.transportMode || null,
                         suggestionId: pt.suggestionId || null,
-                        participantNames: pt.participantNames || [], totalMembers: pt.totalMembers || 0
+                        participantNames: pt.participantNames || [], totalMembers: pt.totalMembers || 0,
+                        externalParticipants: pt.externalParticipants || []
                      });
                      processedIds.add(pt.id);
                   }
@@ -284,7 +287,8 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                      location: pt.location || null, locationLat: pt.locationLat || null,
                      locationLng: pt.locationLng || null, transportMode: pt.transportMode || null,
                      hasTravelTime: pt.hasTravelTime || false, suggestionId: pt.suggestionId || null,
-                     participantNames: pt.participantNames || [], totalMembers: pt.totalMembers || 0
+                     participantNames: pt.participantNames || [], totalMembers: pt.totalMembers || 0,
+                     externalParticipants: pt.externalParticipants || []
                   });
                   processedIds.add(pt.id);
                }

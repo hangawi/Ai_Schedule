@@ -274,6 +274,18 @@ exports.getUserSchedule = async (req, res) => {
             }
           }
 
+          // 🆕 extendedProperties에서 참여자 정보 읽기
+          const storedParticipantsCount = event.extendedProperties?.private?.participantsCount;
+          let externalParticipants = [];
+          try {
+            const storedExternal = event.extendedProperties?.private?.externalParticipants;
+            if (storedExternal) {
+              externalParticipants = JSON.parse(storedExternal);
+            }
+          } catch (e) {
+            // JSON 파싱 실패 시 무시
+          }
+
           googleConfirmedEvents.push({
             id: event.id,
             googleEventId: event.id,
@@ -288,9 +300,10 @@ exports.getUserSchedule = async (req, res) => {
             isCoordinationConfirmed: isConfirmed,  // 🆕 확정 여부 표시
             suggestionId: suggestionId,
             roomId: event.extendedProperties?.private?.roomId || null,
-            participants: participantNames.length || 1,
+            participants: storedParticipantsCount ? parseInt(storedParticipantsCount) : (participantNames.length || 1),
             participantNames: participantNames,
-            totalMembers: totalMembers
+            totalMembers: totalMembers,
+            externalParticipants: externalParticipants
           });
         }
         console.log(`[getUserSchedule] 구글 사용자 일정 ${googleConfirmedEvents.length}개 조회 (확정: ${googleConfirmedEvents.filter(e => e.isCoordinationConfirmed).length}개)`);

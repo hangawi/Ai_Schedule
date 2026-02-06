@@ -80,6 +80,9 @@ export const createProfileScheduleUpdateBody = (currentSchedule, newPersonalTime
  * @returns {Object}
  */
 export const createSingleProfilePersonalTime = (eventData, specificDate, startTime, endTime) => {
+  // 외부 참여자 이름 배열을 객체 배열로 변환
+  const externalParticipants = (eventData.participants || []).map(name => ({ name }));
+
   return {
     id: Date.now(),
     title: eventData.title,
@@ -90,7 +93,9 @@ export const createSingleProfilePersonalTime = (eventData, specificDate, startTi
     days: [],
     isRecurring: false,
     specificDate: specificDate,
-    color: 'bg-gray-500'
+    color: 'bg-gray-500',
+    participants: 1 + externalParticipants.length,  // 본인 + 외부 참여자
+    externalParticipants: externalParticipants
   };
 };
 

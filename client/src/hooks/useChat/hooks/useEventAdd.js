@@ -165,7 +165,8 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
       description: chatResponse.description || '',
       startDateTime: chatResponse.startDateTime,
       endDateTime: chatResponse.endDateTime,
-      location: chatResponse.location || ''
+      location: chatResponse.location || '',
+      participants: chatResponse.participants || []
     };
 
     let apiEndpoint;
@@ -178,12 +179,21 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
     if (context.loginMethod === 'google') {
       console.log('📅 [구글 사용자] Google Calendar에 일정 추가');
       apiEndpoint = `${API_BASE_URL}/api/calendar/events/google`;
+      // 외부 참여자 이름을 description에 포함
+      const participantNames = eventData.participants || [];
+      const externalParticipants = participantNames.map(name => ({ name }));
+      const participantsCount = 1 + participantNames.length;  // 본인 + 외부 참여자
+      const descWithParticipants = participantNames.length > 0
+        ? `${eventData.description || ''}\n\n참여자: ${participantNames.join(', ')} (${participantNames.length}명)`.trim()
+        : eventData.description;
       requestBody = {
         title: eventData.title,
-        description: eventData.description,
+        description: descWithParticipants,
         location: eventData.location,
         startDateTime: eventData.startDateTime,
-        endDateTime: eventData.endDateTime
+        endDateTime: eventData.endDateTime,
+        participantsCount: participantsCount,
+        externalParticipants: externalParticipants
       };
     } else {
       // 일반 사용자는 로컬 DB 사용

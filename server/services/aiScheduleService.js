@@ -271,6 +271,9 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
     .filter(c => c.userId.toString() !== suggestedByUserId?.toString())
     .map(c => c.userName);
 
+  // 외부 참여자 변환 (문자열 배열 → 객체 배열)
+  const externalParticipants = (data.participants || []).map(name => ({ name }));
+
   // ScheduleSuggestion 생성
   const suggestion = new ScheduleSuggestion({
     room: roomId,
@@ -279,6 +282,7 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
     startTime: data.startTime,
     endTime: data.endTime,
     location: data.location || '',
+    externalParticipants,
     memberResponses,
     status: 'future',
     aiResponse: data,
@@ -310,7 +314,8 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
           color: '#3b82f6',
           location: data.location || '',
           roomId: roomId,
-          participants: 1,
+          participants: 1 + (data.participants?.length || 0),
+          externalParticipants: externalParticipants,
           suggestionId: suggestion._id.toString()
         };
 
@@ -846,7 +851,8 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
       color: '#3b82f6',
       location: suggestion.location || '',
       roomId: roomId,
-      participants: acceptedCount,
+      participants: acceptedCount + (suggestion.externalParticipants?.length || 0),
+      externalParticipants: suggestion.externalParticipants || [],
       suggestionId: suggestion._id.toString()
     };
 

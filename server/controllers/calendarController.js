@@ -114,7 +114,7 @@ exports.createGoogleCalendarEvent = async (req, res) => {
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-    const { title, description, startDateTime, endDateTime, location } = req.body;
+    const { title, description, startDateTime, endDateTime, location, participantsCount, externalParticipants } = req.body;
 
     const event = {
       summary: title,
@@ -128,6 +128,12 @@ exports.createGoogleCalendarEvent = async (req, res) => {
         dateTime: endDateTime,
         timeZone: 'Asia/Seoul',
       },
+      extendedProperties: {
+        private: {
+          participantsCount: String(participantsCount || 1),
+          externalParticipants: JSON.stringify(externalParticipants || [])
+        }
+      }
     };
 
     const response = await calendar.events.insert({

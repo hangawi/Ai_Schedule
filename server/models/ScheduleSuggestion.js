@@ -80,6 +80,13 @@ const ScheduleSuggestionSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  // 외부 참여자 (채팅에서 언급된 이름들)
+  externalParticipants: [{
+    name: {
+      type: String,
+      trim: true
+    }
+  }],
   // 멤버별 응답 상태
   memberResponses: [MemberResponseSchema],
   // 제안 상태

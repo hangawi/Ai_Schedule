@@ -29,26 +29,43 @@ export const getEvents = async (timeMin, timeMax) => {
   if (!res.ok) throw new Error('구글 캘린더 이벤트 조회 실패');
 
   const events = await res.json();
-  return events.map(event => ({
-    id: `google-${event.id}`,
-    googleEventId: event.id,
-    title: event.summary || '(제목 없음)',
-    start: event.start?.dateTime || event.start?.date,
-    end: event.end?.dateTime || event.end?.date,
-    description: event.description || '',
-    location: event.location || null,
-    backgroundColor: '#3b82f6',  // 모든 구글 일정 파란색
-    borderColor: '#2563eb',
-    textColor: '#ffffff',
-    display: 'block',
-    isGoogleEvent: true,
-    etag: event.etag,
-    // 🆕 확정 일정 관련 속성 추가
-    extendedProperties: event.extendedProperties || null,
-    suggestionId: event.extendedProperties?.private?.suggestionId || null,
-    roomId: event.extendedProperties?.private?.roomId || null,
-    isCoordinationConfirmed: event.extendedProperties?.private?.isCoordinationConfirmed === 'true',
-  }));
+  return events.map(event => {
+    // 🆕 extendedProperties에서 참여자 정보 읽기
+    const storedParticipantsCount = event.extendedProperties?.private?.participantsCount;
+    let externalParticipants = [];
+    try {
+      const storedExternal = event.extendedProperties?.private?.externalParticipants;
+      if (storedExternal) {
+        externalParticipants = JSON.parse(storedExternal);
+      }
+    } catch (e) {
+      // JSON 파싱 실패 시 무시
+    }
+
+    return {
+      id: `google-${event.id}`,
+      googleEventId: event.id,
+      title: event.summary || '(제목 없음)',
+      start: event.start?.dateTime || event.start?.date,
+      end: event.end?.dateTime || event.end?.date,
+      description: event.description || '',
+      location: event.location || null,
+      backgroundColor: '#3b82f6',  // 모든 구글 일정 파란색
+      borderColor: '#2563eb',
+      textColor: '#ffffff',
+      display: 'block',
+      isGoogleEvent: true,
+      etag: event.etag,
+      // 🆕 확정 일정 관련 속성 추가
+      extendedProperties: event.extendedProperties || null,
+      suggestionId: event.extendedProperties?.private?.suggestionId || null,
+      roomId: event.extendedProperties?.private?.roomId || null,
+      isCoordinationConfirmed: event.extendedProperties?.private?.isCoordinationConfirmed === 'true',
+      // 🆕 참여자 정보
+      participants: storedParticipantsCount ? parseInt(storedParticipantsCount, 10) : 1,
+      externalParticipants: externalParticipants,
+    };
+  });
 };
 
 /**
