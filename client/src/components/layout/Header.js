@@ -85,7 +85,7 @@ const Header = ({
           </button>
           <button onClick={() => setActiveTab('dashboard')} className="flex items-center cursor-pointer">
             <div className="relative w-10 h-10 rounded-lg mr-3">
-              <img src="/image.png" alt="MeetAgent Logo" className="w-full h-full object-cover rounded-lg" />
+              <img src="/heyheylogo.png" alt="MeetAgent Logo" className="w-full h-full object-cover rounded-lg" />
               {loginMethod && (
                 <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${loginMethod === 'google' ? 'bg-green-500' : 'bg-red-500'} border-2 border-white z-10`}></div>
               )}

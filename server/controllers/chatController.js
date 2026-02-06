@@ -916,3 +916,67 @@ ${text}
     res.json({ corrected: req.body.text || '' });
   }
 };
+
+// 🆕 일정 삭제로 인한 불참 알림
+// @route   POST /api/chat/:roomId/member-decline
+// @access  Private
+exports.notifyMemberDecline = async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { eventTitle } = req.body;
+    const userId = req.user.id;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ msg: '사용자를 찾을 수 없습니다.' });
+    }
+
+    const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || '사용자';
+
+    // ScheduleSuggestion에서 해당 사용자를 불참 처리
+    const suggestion = await ScheduleSuggestion.findOne({
+      room: roomId,
+      status: { $in: ['future', 'today'] }
+    });
+
+    if (suggestion) {
+      const memberResponse = suggestion.memberResponses.find(
+        r => r.user.toString() === userId.toString()
+      );
+      if (memberResponse && memberResponse.status !== 'rejected') {
+        memberResponse.status = 'rejected';
+        memberResponse.respondedAt = new Date();
+        memberResponse.autoRejectReason = '일정 삭제로 인한 불참';
+        await suggestion.save();
+        console.log(`[notifyMemberDecline] ${userName} 불참 처리 완료`);
+      }
+    }
+
+    // 시스템 메시지 전송
+    const ChatMessage = require('../models/ChatMessage');
+    const systemMessage = new ChatMessage({
+      room: roomId,
+      sender: null,
+      content: `⚠️ ${userName}님이 "${eventTitle || '일정'}"을 삭제하여 불참 처리되었습니다.`,
+      isSystem: true
+    });
+    await systemMessage.save();
+
+    // 소켓으로 실시간 알림
+    if (global.io) {
+      global.io.to(roomId).emit('chat-message', systemMessage);
+      global.io.to(roomId).emit('member-declined', {
+        roomId,
+        userId,
+        userName,
+        reason: '일정 삭제'
+      });
+    }
+
+    res.json({ success: true, message: '불참 알림이 전송되었습니다.' });
+
+  } catch (error) {
+    console.error('notifyMemberDecline error:', error);
+    res.status(500).json({ msg: '불참 알림 전송에 실패했습니다.' });
+  }
+};

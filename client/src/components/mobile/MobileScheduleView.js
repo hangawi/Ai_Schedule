@@ -504,7 +504,7 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                   </button>
                   <div className="mobile-logo-btn" onClick={() => navigate('/')}>
                      <div className="mobile-logo-wrapper">
-                        <img src="/image.png" alt="MeetAgent Logo" className="mobile-logo-img" />
+                        <img src="/heyheylogo.png" alt="MeetAgent Logo" className="mobile-logo-img" />
                         <div className={`mobile-login-indicator ${localStorage.getItem('loginMethod') === 'google' ? 'google' : 'local'}`}></div>
                      </div>
                      <h1 className="mobile-logo-text">MeetAgent</h1>

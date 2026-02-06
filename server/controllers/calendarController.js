@@ -1,6 +1,8 @@
 const { google } = require('googleapis');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const User = require('../models/user');
+const ScheduleSuggestion = require('../models/ScheduleSuggestion');
+const Message = require('../models/ChatMessage');
 const multer = require('multer');
 
 // Gemini AI 초기화
@@ -108,11 +110,12 @@ exports.createGoogleCalendarEvent = async (req, res) => {
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-    const { title, description, startDateTime, endDateTime } = req.body;
+    const { title, description, startDateTime, endDateTime, location } = req.body;
 
     const event = {
       summary: title,
       description: description,
+      location: location || '',
       start: {
         dateTime: startDateTime,
         timeZone: 'Asia/Seoul',
@@ -140,7 +143,7 @@ exports.createGoogleCalendarEvent = async (req, res) => {
 exports.deleteGoogleCalendarEvent = async (req, res) => {
   try {
     const { eventId } = req.params;
-    
+
     const user = await User.findById(req.user.id);
     if (!user || !user.google || !user.google.refreshToken) {
       return res.status(401).json({ msg: 'Google 계정이 연결되지 않았거나 토큰이 없습니다.' });
@@ -186,11 +189,74 @@ exports.deleteGoogleCalendarEvent = async (req, res) => {
     if (eventId.startsWith('google-')) {
       cleanEventId = eventId.replace('google-', '');
     }
-    
+
+    // 🆕 삭제 전에 이벤트 정보 조회 (조율방 확정 일정인지 확인)
+    let roomId = null;
+    let eventTitle = null;
+    try {
+      const eventInfo = await calendar.events.get({
+        calendarId: 'primary',
+        eventId: cleanEventId,
+      });
+      roomId = eventInfo.data.extendedProperties?.private?.roomId;
+      eventTitle = eventInfo.data.summary;
+      console.log('[deleteGoogleCalendarEvent] roomId:', roomId, 'title:', eventTitle);
+    } catch (getErr) {
+      console.warn('[deleteGoogleCalendarEvent] 이벤트 정보 조회 실패:', getErr.message);
+    }
+
     await calendar.events.delete({
       calendarId: 'primary',
       eventId: cleanEventId,
     });
+
+    // 🆕 조율방 확정 일정이면 불참 처리 및 알림
+    if (roomId) {
+      try {
+        const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || '사용자';
+
+        // ScheduleSuggestion에서 해당 사용자를 불참 처리
+        const suggestion = await ScheduleSuggestion.findOne({
+          room: roomId,
+          status: { $in: ['future', 'today'] }
+        });
+
+        if (suggestion) {
+          const memberResponse = suggestion.memberResponses.find(
+            r => r.user.toString() === user._id.toString()
+          );
+          if (memberResponse && memberResponse.status !== 'rejected') {
+            memberResponse.status = 'rejected';
+            memberResponse.respondedAt = new Date();
+            memberResponse.autoRejectReason = '일정 삭제로 인한 불참';
+            await suggestion.save();
+            console.log(`[deleteGoogleCalendarEvent] ${userName} 불참 처리 완료`);
+          }
+        }
+
+        // 시스템 메시지 전송
+        const systemMessage = new Message({
+          room: roomId,
+          sender: null,
+          content: `⚠️ ${userName}님이 "${eventTitle || '일정'}"을 삭제하여 불참 처리되었습니다.`,
+          isSystem: true
+        });
+        await systemMessage.save();
+
+        // 소켓으로 실시간 알림
+        if (global.io) {
+          global.io.to(roomId).emit('chat-message', systemMessage);
+          global.io.to(roomId).emit('member-declined', {
+            roomId,
+            userId: user._id,
+            userName,
+            reason: '일정 삭제'
+          });
+        }
+      } catch (notifyErr) {
+        console.warn('[deleteGoogleCalendarEvent] 조율방 알림 실패:', notifyErr.message);
+      }
+    }
 
     res.status(204).send();
 

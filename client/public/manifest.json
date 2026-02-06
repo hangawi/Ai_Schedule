@@ -4,25 +4,25 @@
   "description": "음성 인식과 AI로 간편하게 일정을 관리하세요",
   "icons": [
     {
-      "src": "image.png",
+      "src": "heyheylogo.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "image.png",
+      "src": "heyheylogo.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "image.png",
+      "src": "heyheylogo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "image.png",
+      "src": "heyheylogo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

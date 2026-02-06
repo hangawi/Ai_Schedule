@@ -40,4 +40,7 @@ router.post('/:roomId/suggestions/:suggestionId/force-accept', chatController.fo
 router.post('/:roomId/suggestions/:suggestionId/reject', chatController.rejectSuggestion);
 router.delete('/:roomId/suggestions/:suggestionId', chatController.deleteSuggestion);
 
+// 🆕 일정 삭제로 인한 불참 알림
+router.post('/:roomId/member-decline', chatController.notifyMemberDecline);
+
 module.exports = router;

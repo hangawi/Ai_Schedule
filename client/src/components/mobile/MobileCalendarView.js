@@ -344,7 +344,10 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                      const namesMatch = e.description.match(/참석:\s*(.+?)(?:\n|$)/);
                      if (namesMatch) participantNames = namesMatch[1].split(',').map(n => n.trim());
                   }
-                  const isCoordinated = e.title && e.title.includes('[약속]');
+                  // 🆕 조율방 확정 일정 여부 체크 (extendedProperties 또는 제목으로)
+                  const isCoordinated =
+                     e.extendedProperties?.private?.isCoordinationConfirmed === 'true' ||
+                     (e.summary && e.summary.includes('[약속]'));
                   return {
                      ...e,
                      participants: participants,
@@ -522,10 +525,11 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
    const handleChatMessage = async (message, additionalContext = {}) => {
       try {
          if (!chatEnhanced || !chatEnhanced.handleChatMessage) return { success: false, message: '챗봇이 준비 중입니다.' };
-         // 모든 사용자: 로컬 DB로 통일
+         // 구글 사용자: 구글 캘린더, 일반 사용자: 로컬 DB
+         const loginMethod = localStorage.getItem('loginMethod') || '';
          const tabType = 'local';
          const context = 'profile';
-         const result = await chatEnhanced.handleChatMessage(message, { context, tabType, currentEvents: globalEvents, ...additionalContext });
+         const result = await chatEnhanced.handleChatMessage(message, { context, tabType, loginMethod, currentEvents: globalEvents, ...additionalContext });
          console.log('[handleChatMessage] 결과:', result);
          await fetchSchedule();
          await fetchGlobalEvents();
@@ -656,6 +660,28 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
    const handleClearAll = async () => {
       if (window.confirm('모두 삭제하시겠습니까?')) {
          try {
+            const loginMethod = localStorage.getItem('loginMethod') || '';
+
+            // 🆕 구글 사용자: 구글 캘린더 일정도 삭제
+            if (loginMethod === 'google' && googleCalendarEvents.length > 0) {
+               const token = await auth.currentUser?.getIdToken();
+               let deletedCount = 0;
+               for (const event of googleCalendarEvents) {
+                  try {
+                     const res = await fetch(`${API_BASE_URL}/api/calendar/events/${event.id}`, {
+                        method: 'DELETE',
+                        headers: { Authorization: `Bearer ${token}` }
+                     });
+                     if (res.ok) deletedCount++;
+                  } catch (err) {
+                     console.warn('구글 일정 삭제 실패:', event.id, err);
+                  }
+               }
+               console.log(`✅ 구글 캘린더 ${deletedCount}개 일정 삭제 완료`);
+               setGoogleCalendarEvents([]);
+            }
+
+            // 로컬 DB 초기화 (모든 사용자)
             await userService.updateUserSchedule({ defaultSchedule: [], scheduleExceptions: [], personalTimes: [] });
             setDefaultSchedule([]); setScheduleExceptions([]); setPersonalTimes([]); setEvents([]);
             await fetchSchedule();
@@ -744,7 +770,11 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          if (!currentUser) return;
          const token = await currentUser.getIdToken();
 
-         // 구글 캘린더 이벤트 삭제
+         // 🆕 조율방 roomId 확인 (originalData 또는 extendedProperties에서)
+         const roomId = event.originalData?.roomId || event.extendedProperties?.private?.roomId;
+         const eventTitle = event.title || event.summary || '일정';
+
+         // 구글 캘린더 이벤트 삭제 (서버에서 roomId 처리함)
          if (event.isGoogleEvent && event.googleEventId) {
             // 생일 이벤트는 삭제 불가
             if (event.isBirthdayEvent) {
@@ -770,6 +800,23 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                headers: { 'Authorization': `Bearer ${token}` },
             });
             if (!response.ok) throw new Error('Failed to delete event');
+         }
+
+         // 🆕 조율방 확정 일정이면 불참 알림
+         if (roomId) {
+            try {
+               await fetch(`${API_BASE_URL}/api/chat/${roomId}/member-decline`, {
+                  method: 'POST',
+                  headers: {
+                     'Content-Type': 'application/json',
+                     'Authorization': `Bearer ${token}`
+                  },
+                  body: JSON.stringify({ eventTitle })
+               });
+               console.log(`✅ 조율방(${roomId})에 불참 알림 전송 완료`);
+            } catch (notifyErr) {
+               console.warn('조율방 불참 알림 실패:', notifyErr);
+            }
          }
 
          setSelectedEvent(null);
@@ -947,7 +994,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
             <div className="mobile-header-content">
                <div className="mobile-header-left">
                   <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(true)}><Menu size={24} /></button>
-                  <div className="mobile-logo-btn" onClick={() => navigate('/')}><div className="mobile-logo-wrapper"><img src="/image.png" alt="MeetAgent Logo" className="mobile-logo-img" /><div className={`mobile-login-indicator ${localStorage.getItem('loginMethod') === 'google' ? 'google' : 'local'}`}></div></div><h1 className="mobile-logo-text">MeetAgent</h1></div>
+                  <div className="mobile-logo-btn" onClick={() => navigate('/')}><div className="mobile-logo-wrapper"><img src="/heyheylogo.png" alt="MeetAgent Logo" className="mobile-logo-img" /><div className={`mobile-login-indicator ${localStorage.getItem('loginMethod') === 'google' ? 'google' : 'local'}`}></div></div><h1 className="mobile-logo-text">MeetAgent</h1></div>
                </div>
                <div className="mobile-header-right">
                   <button className={`mobile-icon-btn ${isClipboardMonitoring ? 'active' : ''}`} onClick={() => setIsClipboardMonitoring(!isClipboardMonitoring)} title="클립보드">{isClipboardMonitoring ? <Clipboard size={18} /> : <ClipboardX size={18} />}</button>
@@ -958,7 +1005,12 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
             </div>
          </header>
          <div className="schedule-content">
-            {isLoading ? <div className="loading-state">로딩 중...</div> :
+            {isLoading ? (
+               <div className="loading-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+                  <img src="/waiting.webp" alt="로딩 중" style={{ width: '150px', height: '150px', borderRadius: '50%', objectFit: 'cover', marginBottom: '16px' }} />
+                  <p style={{ color: '#666', fontSize: '14px' }}>로딩 중...</p>
+               </div>
+            ) :
                <>
                   <div className="schedule-page-title">
                      <span>{currentTitle || '달력'}</span>

@@ -93,16 +93,13 @@ export const useEventDelete = (setEventAddedKey) => {
       console.log('⏰ startDateTime 설정:', chatResponse.startDateTime);
     }
 
+    // 🆕 구글 사용자 여부 확인
+    const isGoogleUser = context.loginMethod === 'google';
+    console.log('🗑️ [DELETE] loginMethod:', context.loginMethod, '| isGoogleUser:', isGoogleUser);
+
     let eventsResponse;
-    if (context.context === 'profile' && context.tabType === 'local') {
-      eventsResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-        headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
-      });
-    } else if (context.tabType === 'local') {
-      eventsResponse = await fetch(`${API_BASE_URL}/api/events`, {
-        headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
-      });
-    } else {
+    if (isGoogleUser) {
+      // 구글 사용자: Google Calendar에서 일정 조회
       const threeMonthsAgo = new Date();
       threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
       const oneYearLater = new Date();
@@ -110,19 +107,28 @@ export const useEventDelete = (setEventAddedKey) => {
       eventsResponse = await fetch(`${API_BASE_URL}/api/calendar/events?timeMin=${threeMonthsAgo.toISOString()}&timeMax=${oneYearLater.toISOString()}`, {
         headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
       });
+    } else if (context.context === 'profile' && context.tabType === 'local') {
+      eventsResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+        headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
+      });
+    } else {
+      eventsResponse = await fetch(`${API_BASE_URL}/api/events`, {
+        headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
+      });
     }
 
     if (!eventsResponse.ok) throw new Error('일정 목록을 가져올 수 없습니다.');
 
     const eventsData = await eventsResponse.json();
-    
+
     let events;
-    if (context.context === 'profile' && context.tabType === 'local') {
-      events = convertProfileEvents(eventsData);
-    } else if (context.tabType === 'local') {
-      events = eventsData.events || eventsData;
-    } else {
+    if (isGoogleUser) {
+      // 구글 캘린더 이벤트
       events = eventsData;
+    } else if (context.context === 'profile' && context.tabType === 'local') {
+      events = convertProfileEvents(eventsData);
+    } else {
+      events = eventsData.events || eventsData;
     }
 
     if (!events || !Array.isArray(events)) throw new Error('일정 목록 형식이 올바르지 않습니다.');
@@ -150,7 +156,16 @@ export const useEventDelete = (setEventAddedKey) => {
     // 다중 삭제 처리
     if (matchingEvents.length > 1 && shouldDeleteAll) {
       let deletedCount = 0;
-      if (context.context === 'profile' && context.tabType === 'local') {
+      if (isGoogleUser) {
+        // 🆕 구글 사용자: Google Calendar에서 다중 삭제
+        for (const event of matchingEvents) {
+          const deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${event.id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
+          });
+          if (deleteResponse.ok) deletedCount++;
+        }
+      } else if (context.context === 'profile' && context.tabType === 'local') {
         const remainingExceptions = eventsData.scheduleExceptions.filter(ex => !matchingEvents.some(match => !match.isPersonalTime && !match.isDefaultSchedule && match._id === ex._id));
         const remainingPersonalTimes = eventsData.personalTimes.filter(pt => !matchingEvents.some(match => match.isPersonalTime && match._id === pt.id));
         const remainingDefaultSchedule = eventsData.defaultSchedule.filter((ds, index) => !matchingEvents.some(match => match.isDefaultSchedule && match._id === `default-${ds.dayOfWeek}-${index}`));
@@ -170,10 +185,9 @@ export const useEventDelete = (setEventAddedKey) => {
           window.dispatchEvent(new CustomEvent('calendarUpdate', { detail: { type: 'delete', context: 'profile' } }));
         }
       } else {
-        // '나의 일정' 탭 또는 Google Calendar 에서의 다중 삭제
+        // 일반 사용자: 로컬 DB에서 다중 삭제
         for (const event of matchingEvents) {
-          const endpoint = context.tabType === 'local' ? `/api/events/${event._id || event.id}` : `/api/calendar/events/${event.id}`;
-          const deleteResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+          const deleteResponse = await fetch(`${API_BASE_URL}/api/events/${event._id || event.id}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
           });
@@ -188,7 +202,13 @@ export const useEventDelete = (setEventAddedKey) => {
     const eventToDelete = matchingEvents[0];
     let deleteResponse;
 
-    if (context.context === 'profile' && context.tabType === 'local') {
+    if (isGoogleUser) {
+      // 🆕 구글 사용자: Google Calendar에서 단일 삭제
+      deleteResponse = await fetch(`${API_BASE_URL}/api/calendar/events/${eventToDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
+      });
+    } else if (context.context === 'profile' && context.tabType === 'local') {
       let { scheduleExceptions, personalTimes, defaultSchedule } = eventsData;
       if (eventToDelete.isPersonalTime) {
         personalTimes = personalTimes.filter(pt => String(pt.id) !== String(eventToDelete._id));
@@ -204,8 +224,8 @@ export const useEventDelete = (setEventAddedKey) => {
       });
       if(deleteResponse.ok) window.dispatchEvent(new CustomEvent('calendarUpdate', { detail: { type: 'delete', context: 'profile' } }));
     } else {
-      const endpoint = context.tabType === 'local' ? `/api/events/${eventToDelete._id || eventToDelete.id}` : `/api/calendar/events/${eventToDelete.id}`;
-      deleteResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+      // 일반 사용자: 로컬 DB에서 단일 삭제
+      deleteResponse = await fetch(`${API_BASE_URL}/api/events/${eventToDelete._id || eventToDelete.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
       });
@@ -213,9 +233,26 @@ export const useEventDelete = (setEventAddedKey) => {
 
     if (!deleteResponse.ok) throw new Error('일정 삭제에 실패했습니다.');
 
+    // 🆕 조율방 확정 일정이면 불참 알림 (일반 사용자만 - 구글은 서버에서 처리)
+    if (!isGoogleUser && eventToDelete.roomId) {
+      try {
+        await fetch(`${API_BASE_URL}/api/chat/${eventToDelete.roomId}/member-decline`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${await currentUser.getIdToken()}`
+          },
+          body: JSON.stringify({ eventTitle: eventToDelete.title || '일정' })
+        });
+        console.log(`✅ 조율방(${eventToDelete.roomId})에 불참 알림 전송 완료`);
+      } catch (notifyErr) {
+        console.warn('조율방 불참 알림 실패:', notifyErr);
+      }
+    }
+
     setEventAddedKey(prevKey => prevKey + 1);
-    const deletedTitle = (context.context === 'profile' && context.tabType === 'local') || context.tabType === 'local' ? eventToDelete.title : eventToDelete.summary;
-    
+    const deletedTitle = isGoogleUser ? eventToDelete.summary : eventToDelete.title;
+
     return { success: true, message: `${deletedTitle || '일정'}을 삭제했어요!`, data: chatResponse };
   }, [setEventAddedKey]);
 

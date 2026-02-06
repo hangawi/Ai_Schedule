@@ -121,21 +121,25 @@ export const getEventTitle = (event, context) => {
  * @returns {Array}
  */
 export const filterEventsByDate = (events, targetDate, searchTitle, context) => {
+  // 🆕 구글 사용자 여부 확인
+  const isGoogleUser = context.loginMethod === 'google';
+
   return events.filter(event => {
     if (!event) return false;
 
     let eventDate;
     let eventTitle;
 
-    if (context.context === 'profile' && context.tabType === 'local') {
-      eventDate = getEventDateForProfile(event, targetDate);
-      eventTitle = event.title;
-    } else if (context.tabType === 'local') {
-      eventDate = getEventDateForLocal(event);
-      eventTitle = event.title;
-    } else {
+    if (isGoogleUser) {
+      // 구글 사용자: Google Calendar 이벤트 형식
       eventDate = getEventDateForGoogle(event);
       eventTitle = event.summary;
+    } else if (context.context === 'profile' && context.tabType === 'local') {
+      eventDate = getEventDateForProfile(event, targetDate);
+      eventTitle = event.title;
+    } else {
+      eventDate = getEventDateForLocal(event);
+      eventTitle = event.title;
     }
 
     if (!eventDate) {
@@ -159,13 +163,21 @@ export const filterEventsByDate = (events, targetDate, searchTitle, context) => 
  * @returns {Array}
  */
 export const filterEventsByRange = (events, startDate, endDate, searchTitle, context) => {
+  // 🆕 구글 사용자 여부 확인
+  const isGoogleUser = context.loginMethod === 'google';
+
   return events.filter(event => {
     if (!event) return false;
 
     let eventDate;
     let eventTitle;
 
-    if (context.context === 'profile' && context.tabType === 'local') {
+    if (isGoogleUser) {
+      // 구글 사용자: Google Calendar 이벤트 형식
+      if (!event.start) return false;
+      eventDate = new Date(event.start.dateTime || event.start.date);
+      eventTitle = event.summary;
+    } else if (context.context === 'profile' && context.tabType === 'local') {
       if (event.isDefaultSchedule) {
         eventTitle = event.title;
 
@@ -195,14 +207,11 @@ export const filterEventsByRange = (events, startDate, endDate, searchTitle, con
         eventDate = new Date(event.startTime);
         eventTitle = event.title;
       }
-    } else if (context.tabType === 'local') {
+    } else {
+      // 일반 사용자: 로컬 DB 이벤트 형식
       if (!event.startTime) return false;
       eventDate = new Date(event.startTime);
       eventTitle = event.title;
-    } else {
-      if (!event.start) return false;
-      eventDate = new Date(event.start.dateTime || event.start.date);
-      eventTitle = event.summary;
     }
 
     const inRange = eventDate >= startDate && eventDate <= endDate;

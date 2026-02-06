@@ -68,11 +68,16 @@ rejectedSuggestionSchema.index({
  * @returns {boolean} 거절된 제안이면 true
  */
 rejectedSuggestionSchema.statics.isRejected = async function(roomId, suggestion) {
+  // 24시간 이내 거절만 체크 (삭제된 일정이 재제안 가능하도록)
+  const twentyFourHoursAgo = new Date();
+  twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
   const rejected = await this.findOne({
     room: roomId,
     'suggestion.date': suggestion.date,
     'suggestion.startTime': suggestion.startTime,
-    'suggestion.summary': suggestion.summary
+    'suggestion.summary': suggestion.summary,
+    rejectedAt: { $gte: twentyFourHoursAgo }
   });
 
   return !!rejected;

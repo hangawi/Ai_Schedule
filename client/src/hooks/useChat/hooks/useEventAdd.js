@@ -85,23 +85,25 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
     }
 
     // 충돌 확인 로직
+    const isGoogleUser = context.loginMethod === 'google';
     try {
       const targetDate = chatResponse.startDateTime.split('T')[0];
       let eventsResponse;
-      if (context.context === 'profile' && context.tabType === 'local') {
-        eventsResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-          headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
-        });
-      } else if (context.tabType === 'local') {
-        eventsResponse = await fetch(`${API_BASE_URL}/api/events`, {
-          headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
-        });
-      } else {
+      if (isGoogleUser) {
+        // 🆕 구글 사용자: Google Calendar에서 일정 조회
         const threeMonthsAgo = new Date();
         threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
         const oneYearLater = new Date();
         oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
         eventsResponse = await fetch(`${API_BASE_URL}/api/calendar/events?timeMin=${threeMonthsAgo.toISOString()}&timeMax=${oneYearLater.toISOString()}`, {
+          headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
+        });
+      } else if (context.context === 'profile' && context.tabType === 'local') {
+        eventsResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+          headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
+        });
+      } else {
+        eventsResponse = await fetch(`${API_BASE_URL}/api/events`, {
           headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
         });
       }
@@ -110,7 +112,10 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
         const eventsData = await eventsResponse.json();
         let events = [];
 
-        if (context.context === 'profile' && context.tabType === 'local') {
+        if (isGoogleUser) {
+          // 구글 캘린더 이벤트
+          events = eventsData;
+        } else if (context.context === 'profile' && context.tabType === 'local') {
           const exceptions = (eventsData.scheduleExceptions || [])
             .filter(exc => exc.specificDate === targetDate);
 
@@ -123,11 +128,8 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
             }));
 
           events = [...exceptions, ...personalTimes];
-
-        } else if (context.tabType === 'local') {
-          events = eventsData.events || eventsData;
         } else {
-          events = eventsData;
+          events = eventsData.events || eventsData;
         }
 
         const conflictCheck = checkScheduleConflict(chatResponse.startDateTime, chatResponse.endDateTime, events);
@@ -170,39 +172,66 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
     let requestBody = eventData;
     let httpMethod = 'POST';
 
-    console.log('[useEventAdd] tabType:', context.tabType, '| context:', context.context, '| eventData:', eventData);
+    console.log('[useEventAdd] tabType:', context.tabType, '| context:', context.context, '| loginMethod:', context.loginMethod, '| eventData:', eventData);
 
-    switch (context.tabType) {
-      case 'local':
-        if (context.context === 'profile') {
-          // '내 프로필' 탭의 개인시간으로 추가
-          console.log('📥 [프로필 탭] 최신 스케줄 가져오기 중...');
-          const currentScheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
-            headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
-          });
-          if (!currentScheduleResponse.ok) {
-            throw new Error('현재 스케줄을 가져올 수 없습니다.');
+    // 🆕 구글 사용자는 Google Calendar API 사용
+    if (context.loginMethod === 'google') {
+      console.log('📅 [구글 사용자] Google Calendar에 일정 추가');
+      apiEndpoint = `${API_BASE_URL}/api/calendar/events/google`;
+      requestBody = {
+        title: eventData.title,
+        description: eventData.description,
+        location: eventData.location,
+        startDateTime: eventData.startDateTime,
+        endDateTime: eventData.endDateTime
+      };
+    } else {
+      // 일반 사용자는 로컬 DB 사용
+      switch (context.tabType) {
+        case 'local':
+          if (context.context === 'profile') {
+            // '내 프로필' 탭의 개인시간으로 추가
+            console.log('📥 [프로필 탭] 최신 스케줄 가져오기 중...');
+            const currentScheduleResponse = await fetch(`${API_BASE_URL}/api/users/profile/schedule`, {
+              headers: { 'Authorization': `Bearer ${await currentUser.getIdToken()}` }
+            });
+            if (!currentScheduleResponse.ok) {
+              throw new Error('현재 스케줄을 가져올 수 없습니다.');
+            }
+            const currentSchedule = await currentScheduleResponse.json();
+
+            const specificDate = eventData.startDateTime.split('T')[0];
+            const startTime = eventData.startDateTime.split('T')[1]?.substring(0, 5) || '00:00';
+            const endTime = eventData.endDateTime.split('T')[1]?.substring(0, 5) || '23:59';
+            const newPersonalTime = createSingleProfilePersonalTime(eventData, specificDate, startTime, endTime);
+
+            const existingPersonalTimes = Array.isArray(currentSchedule.personalTimes)
+              ? [...currentSchedule.personalTimes]
+              : [];
+
+            apiEndpoint = `${API_BASE_URL}/api/users/profile/schedule`;
+            requestBody = {
+              defaultSchedule: currentSchedule.defaultSchedule,
+              scheduleExceptions: currentSchedule.scheduleExceptions || [],
+              personalTimes: [...existingPersonalTimes, newPersonalTime]
+            };
+            httpMethod = 'PUT';
+          } else {
+            // '나의 일정' 탭의 고정일정으로 추가
+            apiEndpoint = `${API_BASE_URL}/api/events`;
+            requestBody = {
+              title: eventData.title,
+              date: eventData.startDateTime.split('T')[0],
+              time: eventData.startDateTime.split('T')[1].substring(0, 5),
+              participants: [],
+              priority: 3,
+              description: eventData.description,
+              location: eventData.location
+            };
           }
-          const currentSchedule = await currentScheduleResponse.json();
-          
-          const specificDate = eventData.startDateTime.split('T')[0];
-          const startTime = eventData.startDateTime.split('T')[1]?.substring(0, 5) || '00:00';
-          const endTime = eventData.endDateTime.split('T')[1]?.substring(0, 5) || '23:59';
-          const newPersonalTime = createSingleProfilePersonalTime(eventData, specificDate, startTime, endTime);
-
-          const existingPersonalTimes = Array.isArray(currentSchedule.personalTimes)
-            ? [...currentSchedule.personalTimes]
-            : [];
-          
-          apiEndpoint = `${API_BASE_URL}/api/users/profile/schedule`;
-          requestBody = {
-            defaultSchedule: currentSchedule.defaultSchedule,
-            scheduleExceptions: currentSchedule.scheduleExceptions || [],
-            personalTimes: [...existingPersonalTimes, newPersonalTime]
-          };
-          httpMethod = 'PUT';
-        } else {
-          // '나의 일정' 탭의 고정일정으로 추가
+          break;
+        default:
+          // 기본값은 로컬 DB
           apiEndpoint = `${API_BASE_URL}/api/events`;
           requestBody = {
             title: eventData.title,
@@ -213,20 +242,7 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
             description: eventData.description,
             location: eventData.location
           };
-        }
-        break;
-      default:
-        // 기본값은 로컬 DB
-        apiEndpoint = `${API_BASE_URL}/api/events`;
-        requestBody = {
-          title: eventData.title,
-          date: eventData.startDateTime.split('T')[0],
-          time: eventData.startDateTime.split('T')[1].substring(0, 5),
-          participants: [],
-          priority: 3,
-          description: eventData.description,
-          location: eventData.location
-        };
+      }
     }
 
     const response = await fetch(apiEndpoint, {

@@ -143,10 +143,13 @@ exports.analyzeConversation = async (roomId) => {
  * 새 일정 생성 처리
  */
 async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestions = []) {
+  console.log('🆕 [handleNewSchedule] 시작 - data:', JSON.stringify(data));
+
   if (!data || !data.date || !data.startTime || !data.summary) {
     console.error('❌ [AI Schedule] Missing required fields for new schedule:', data);
     return;
   }
+  console.log('✅ [handleNewSchedule] 필수 필드 확인 완료');
 
   // endTime 자동 생성
   if (!data.endTime) {
@@ -175,22 +178,28 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
   });
 
   if (isDuplicate) {
+    console.log('⚠️ [handleNewSchedule] 중복 일정으로 스킵');
     return;
   }
+  console.log('✅ [handleNewSchedule] 중복 체크 통과');
 
   // 거절 내역 체크
   const isRejected = await RejectedSuggestion.isRejected(roomId, data);
   if (isRejected) {
+    console.log('⚠️ [handleNewSchedule] 거절된 일정으로 스킵');
     return;
   }
+  console.log('✅ [handleNewSchedule] 거절 체크 통과');
 
 
   // 방 정보 가져오기
+  console.log('🔍 [handleNewSchedule] 방 정보 조회 중... roomId:', roomId);
   const room = await Room.findById(roomId);
   if (!room) {
     console.error('❌ [AI Schedule] Room not found:', roomId);
     return;
   }
+  console.log('✅ [handleNewSchedule] 방 찾음 - 멤버 수:', room.members?.length);
 
   // 마지막 메시지 작성자를 제안자로 설정 (sortedMessages는 이미 userMessages로 필터링됨)
   const lastMessage = sortedMessages[sortedMessages.length - 1];
@@ -277,6 +286,7 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
   });
 
   await suggestion.save();
+  console.log('✅ [handleNewSchedule] ScheduleSuggestion 저장 완료 - id:', suggestion._id);
 
   // 🆕 제안자(생성자)의 personalTime 생성
   if (suggestedByUserId) {
@@ -329,6 +339,7 @@ async function handleNewSchedule(roomId, data, sortedMessages, existingSuggestio
   await sendSystemMessage(roomId, suggestedByUserId,
     `${suggesterName}님이 ${data.date} 일정을 제안하였습니다`,
     'ai-suggestion', suggestion._id);
+  console.log('✅ [handleNewSchedule] 시스템 메시지 전송 완료');
 
   // 자동 불참자가 있으면 별도 시스템 메시지
   if (autoRejectedMembers.length > 0) {
