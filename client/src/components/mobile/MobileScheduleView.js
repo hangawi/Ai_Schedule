@@ -207,6 +207,30 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
             dayEvents.forEach((pt, idx) => {
                if (processedIds.has(pt.id)) return;
 
+               // 🆕 구글 이벤트인 경우 별도 처리 (pt- 접두사 붙이지 않음)
+               if (pt.isGoogleEvent) {
+                  mergedPersonalTimes.push({
+                     id: pt.googleEventId || pt.id,
+                     googleEventId: pt.googleEventId || pt.id,
+                     title: pt.title || '일정',
+                     date: pt.specificDate,
+                     time: pt.startTime,
+                     endTime: pt.endTime,
+                     participants: pt.participants || 1,
+                     priority: 3,
+                     color: '#3b82f6',  // 모든 구글 일정 파란색
+                     isCoordinated: pt.isCoordinationConfirmed || false,  // 🆕 확정 여부
+                     isGoogleEvent: true,
+                     suggestionId: pt.suggestionId || null,
+                     roomId: pt.roomId || null,
+                     location: pt.location || null,
+                     participantNames: pt.participantNames || [],
+                     totalMembers: pt.totalMembers || 0
+                  });
+                  processedIds.add(pt.id);
+                  return;
+               }
+
                if (pt.title && pt.title.includes('이동시간')) {
                   const nextEvent = dayEvents[idx + 1];
                   if (nextEvent &&
@@ -414,23 +438,34 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          if (!currentUser) return;
          const token = await currentUser.getIdToken();
 
-         if (event.id && event.id.startsWith('pt-')) {
-            // Personal Time 삭제
+         // 🆕 구글 이벤트 체크를 먼저! (isGoogleEvent 플래그 우선)
+         if (event.isGoogleEvent) {
+            // 생일 이벤트는 삭제 불가
+            if (event.isBirthdayEvent) {
+               alert('생일 이벤트는 Google 연락처에서 관리되어 삭제할 수 없습니다.');
+               return;
+            }
+
+            // 확정된 구글 일정인 경우 (suggestionId가 있음) - 서버 API로 삭제 + 불참 처리
+            if (event.suggestionId) {
+               const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule/google/${event.suggestionId}`, {
+                  method: 'DELETE',
+                  headers: { 'Authorization': `Bearer ${token}` },
+               });
+               if (!response.ok) throw new Error('Failed to delete Google event');
+            } else {
+               // 일반 구글 캘린더 이벤트 삭제
+               const googleEventId = event.googleEventId || event.id;
+               await googleCalendarService.deleteEvent(googleEventId);
+            }
+         } else if (event.id && event.id.startsWith('pt-')) {
+            // Personal Time 삭제 (서버에서 자동 불참 처리)
             const personalTimeId = event.id.replace('pt-', '');
             const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule/${personalTimeId}`, {
                method: 'DELETE',
                headers: { 'Authorization': `Bearer ${token}` },
             });
             if (!response.ok) throw new Error('Failed to delete personal time');
-         } else if (event.isGoogleEvent || event.id?.startsWith('google-')) {
-            // 생일 이벤트는 삭제 불가
-            if (event.isBirthdayEvent) {
-               alert('생일 이벤트는 Google 연락처에서 관리되어 삭제할 수 없습니다.');
-               return;
-            }
-            // 구글 캘린더 이벤트 삭제
-            const googleEventId = event.googleEventId || event.id.replace('google-', '');
-            await googleCalendarService.deleteEvent(googleEventId);
          } else {
             // Global Event 삭제
             const response = await fetch(`${API_BASE_URL}/api/events/${event.id}`, {

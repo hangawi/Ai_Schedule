@@ -245,13 +245,16 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                   const [eh, em] = pt.endTime.split(':').map(Number);
                   const start = new Date(d); start.setHours(sh, sm, 0, 0);
                   const end = new Date(d); end.setHours(eh, em, 0, 0);
+                  // 구글 이벤트=파란색, 일반=빨간색
+                  let bgColor = pt.isGoogleEvent ? '#3b82f6' : '#ef4444';
+                  let borderClr = pt.isGoogleEvent ? '#2563eb' : '#dc2626';
                   tempEvents.push({
                      id: pt.id || `pt-${ptIdx}-${dateStr}`,
                      title: pt.name || pt.title || '개인',
                      start: formatLocalDateTime(start),
                      end: formatLocalDateTime(end),
-                     backgroundColor: '#ef4444',
-                     borderColor: '#dc2626',
+                     backgroundColor: bgColor,
+                     borderColor: borderClr,
                      textColor: '#ffffff',
                      display: 'block',
                      dateKey: dateStr,
@@ -261,7 +264,13 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                      participants: pt.participants || 1,
                      participantNames: pt.participantNames || [],
                      totalMembers: pt.totalMembers || 0,
-                     isCoordinated: !!(pt.suggestionId || (pt.title && pt.title.includes('-'))),
+                     isCoordinated: pt.isCoordinationConfirmed || !!(pt.suggestionId || (pt.title && pt.title.includes('-'))),
+                     // 🆕 구글 이벤트 관련 속성 추가
+                     isGoogleEvent: pt.isGoogleEvent || false,
+                     isCoordinationConfirmed: pt.isCoordinationConfirmed || false,
+                     googleEventId: pt.googleEventId || null,
+                     suggestionId: pt.suggestionId || null,
+                     roomId: pt.roomId || null,
                      originalData: pt
                   });
                }
@@ -348,13 +357,20 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                   const isCoordinated =
                      e.extendedProperties?.private?.isCoordinationConfirmed === 'true' ||
                      (e.summary && e.summary.includes('[약속]'));
+                  // 🆕 suggestionId, roomId 추출
+                  const suggestionId = e.extendedProperties?.private?.suggestionId || null;
+                  const roomId = e.extendedProperties?.private?.roomId || null;
                   return {
                      ...e,
                      participants: participants,
                      participantNames: participantNames,
                      isCoordinated: isCoordinated,
-                     backgroundColor: isCoordinated ? '#3b82f6' : '#22c55e',
-                     borderColor: isCoordinated ? '#2563eb' : '#16a34a',
+                     suggestionId: suggestionId,
+                     roomId: roomId,
+                     isGoogleEvent: true,
+                     googleEventId: e.googleEventId || e.id,
+                     backgroundColor: '#3b82f6',  // 모든 구글 일정 파란색
+                     borderColor: '#2563eb',
                   };
                });
                setGoogleCalendarEvents(formattedGoogleEvents);
@@ -683,18 +699,35 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
       if (window.confirm('모두 삭제하시겠습니까?')) {
          try {
             const loginMethod = localStorage.getItem('loginMethod') || '';
+            const token = await auth.currentUser?.getIdToken();
 
             // 🆕 구글 사용자: 구글 캘린더 일정도 삭제
             if (loginMethod === 'google' && googleCalendarEvents.length > 0) {
-               const token = await auth.currentUser?.getIdToken();
                let deletedCount = 0;
                for (const event of googleCalendarEvents) {
                   try {
-                     const res = await fetch(`${API_BASE_URL}/api/calendar/events/${event.id}`, {
-                        method: 'DELETE',
-                        headers: { Authorization: `Bearer ${token}` }
-                     });
-                     if (res.ok) deletedCount++;
+                     // 생일 이벤트 스킵
+                     if (event.isBirthdayEvent || event.title?.includes('생일')) {
+                        console.log('생일 이벤트 스킵:', event.title);
+                        continue;
+                     }
+
+                     // 🆕 suggestionId가 있으면 profile/schedule/google API 사용 (불참 처리됨)
+                     const suggestionId = event.suggestionId || event.extendedProperties?.private?.suggestionId;
+                     if (suggestionId) {
+                        const res = await fetch(`${API_BASE_URL}/api/users/profile/schedule/google/${suggestionId}`, {
+                           method: 'DELETE',
+                           headers: { Authorization: `Bearer ${token}` }
+                        });
+                        if (res.ok) deletedCount++;
+                     } else {
+                        // 일반 구글 일정은 calendar API 사용
+                        const res = await fetch(`${API_BASE_URL}/api/calendar/events/${event.id}`, {
+                           method: 'DELETE',
+                           headers: { Authorization: `Bearer ${token}` }
+                        });
+                        if (res.ok || res.status === 204) deletedCount++;
+                     }
                   } catch (err) {
                      console.warn('구글 일정 삭제 실패:', event.id, err);
                   }
@@ -795,6 +828,8 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          // 🆕 조율방 roomId 확인 (originalData 또는 extendedProperties에서)
          const roomId = event.originalData?.roomId || event.extendedProperties?.private?.roomId;
          const eventTitle = event.title || event.summary || '일정';
+         // 🆕 suggestionId 확인
+         const suggestionId = event.suggestionId || event.originalData?.suggestionId || event.extendedProperties?.private?.suggestionId;
 
          // 구글 캘린더 이벤트 삭제 (서버에서 roomId 처리함)
          if (event.isGoogleEvent && event.googleEventId) {
@@ -803,13 +838,25 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                alert('생일 이벤트는 Google 연락처에서 관리되어 삭제할 수 없습니다.');
                return;
             }
-            await googleCalendarService.deleteEvent(event.googleEventId);
+
+            // 🆕 확정된 구글 일정인 경우 - 서버 API로 삭제 + 불참 처리
+            if (suggestionId) {
+               const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule/google/${suggestionId}`, {
+                  method: 'DELETE',
+                  headers: { 'Authorization': `Bearer ${token}` },
+               });
+               if (!response.ok) throw new Error('Failed to delete Google confirmed event');
+            } else {
+               // 일반 구글 캘린더 이벤트 삭제
+               await googleCalendarService.deleteEvent(event.googleEventId);
+            }
             setSelectedEvent(null);
             await fetchSchedule();
             return;
          }
 
          if (event.id && event.id.startsWith('pt-')) {
+            // 🆕 Personal Time 삭제 (서버에서 자동 불참 처리)
             const personalTimeId = event.id.replace('pt-', '');
             const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule/${personalTimeId}`, {
                method: 'DELETE',

@@ -196,6 +196,7 @@ exports.deleteGoogleCalendarEvent = async (req, res) => {
 
     // 🆕 삭제 전에 이벤트 정보 조회 (조율방 확정 일정인지 확인)
     let roomId = null;
+    let suggestionId = null;
     let eventTitle = null;
     try {
       const eventInfo = await calendar.events.get({
@@ -203,8 +204,9 @@ exports.deleteGoogleCalendarEvent = async (req, res) => {
         eventId: cleanEventId,
       });
       roomId = eventInfo.data.extendedProperties?.private?.roomId;
+      suggestionId = eventInfo.data.extendedProperties?.private?.suggestionId;
       eventTitle = eventInfo.data.summary;
-      console.log('[deleteGoogleCalendarEvent] roomId:', roomId, 'title:', eventTitle);
+      console.log('[deleteGoogleCalendarEvent] roomId:', roomId, 'suggestionId:', suggestionId, 'title:', eventTitle);
     } catch (getErr) {
       console.warn('[deleteGoogleCalendarEvent] 이벤트 정보 조회 실패:', getErr.message);
     }
@@ -215,47 +217,57 @@ exports.deleteGoogleCalendarEvent = async (req, res) => {
     });
 
     // 🆕 조율방 확정 일정이면 불참 처리 및 알림
-    if (roomId) {
+    if (suggestionId || roomId) {
       try {
         const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || '사용자';
 
-        // ScheduleSuggestion에서 해당 사용자를 불참 처리
-        const suggestion = await ScheduleSuggestion.findOne({
-          room: roomId,
-          status: { $in: ['future', 'today'] }
-        });
+        // ScheduleSuggestion에서 해당 사용자를 불참 처리 (suggestionId 우선)
+        let suggestion = null;
+        if (suggestionId) {
+          suggestion = await ScheduleSuggestion.findById(suggestionId);
+        }
+        if (!suggestion && roomId) {
+          suggestion = await ScheduleSuggestion.findOne({
+            room: roomId,
+            status: { $in: ['future', 'today', 'pending'] }
+          });
+        }
 
         if (suggestion) {
           const memberResponse = suggestion.memberResponses.find(
-            r => r.user.toString() === user._id.toString()
+            r => (r.user._id?.toString() || r.user.toString()) === user._id.toString()
           );
-          if (memberResponse && memberResponse.status !== 'rejected') {
+          if (memberResponse && memberResponse.status === 'accepted') {
             memberResponse.status = 'rejected';
             memberResponse.respondedAt = new Date();
-            memberResponse.autoRejectReason = '일정 삭제로 인한 불참';
+            memberResponse.personalTimeId = null;
             await suggestion.save();
-            console.log(`[deleteGoogleCalendarEvent] ${userName} 불참 처리 완료`);
+            console.log(`[deleteGoogleCalendarEvent] ✅ ${userName} 불참 처리 완료 - suggestionId: ${suggestion._id}`);
+
+            // 소켓으로 suggestion 업데이트 알림
+            if (global.io && suggestion.room) {
+              global.io.to(`room-${suggestion.room}`).emit('suggestion-updated', {
+                suggestionId: suggestion._id,
+                suggestion: suggestion
+              });
+            }
           }
         }
 
-        // 시스템 메시지 전송
-        const systemMessage = new Message({
-          room: roomId,
-          sender: null,
-          content: `⚠️ ${userName}님이 "${eventTitle || '일정'}"을 삭제하여 불참 처리되었습니다.`,
-          isSystem: true
-        });
-        await systemMessage.save();
-
-        // 소켓으로 실시간 알림
-        if (global.io) {
-          global.io.to(roomId).emit('chat-message', systemMessage);
-          global.io.to(roomId).emit('member-declined', {
-            roomId,
-            userId: user._id,
-            userName,
-            reason: '일정 삭제'
+        // 시스템 메시지 전송 (sender 필수이므로 user._id 사용)
+        if (roomId) {
+          const systemMessage = new Message({
+            room: roomId,
+            sender: user._id,
+            content: `⚠️ ${userName}님이 "${eventTitle || '일정'}"을 삭제하여 불참 처리되었습니다.`,
+            type: 'system'
           });
+          await systemMessage.save();
+
+          // 소켓으로 실시간 알림
+          if (global.io) {
+            global.io.to(`room-${roomId}`).emit('chat-message', systemMessage);
+          }
         }
       } catch (notifyErr) {
         console.warn('[deleteGoogleCalendarEvent] 조율방 알림 실패:', notifyErr.message);

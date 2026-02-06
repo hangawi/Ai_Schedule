@@ -37,12 +37,17 @@ export const getEvents = async (timeMin, timeMax) => {
     end: event.end?.dateTime || event.end?.date,
     description: event.description || '',
     location: event.location || null,
-    backgroundColor: '#22c55e',
-    borderColor: '#16a34a',
+    backgroundColor: '#3b82f6',  // 모든 구글 일정 파란색
+    borderColor: '#2563eb',
     textColor: '#ffffff',
     display: 'block',
     isGoogleEvent: true,
     etag: event.etag,
+    // 🆕 확정 일정 관련 속성 추가
+    extendedProperties: event.extendedProperties || null,
+    suggestionId: event.extendedProperties?.private?.suggestionId || null,
+    roomId: event.extendedProperties?.private?.roomId || null,
+    isCoordinationConfirmed: event.extendedProperties?.private?.isCoordinationConfirmed === 'true',
   }));
 };
 

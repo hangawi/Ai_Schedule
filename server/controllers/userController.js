@@ -1,4 +1,5 @@
 const User = require('../models/user');
+const { google } = require('googleapis');
 
 exports.getMe = async (req, res) => {
   try {
@@ -32,7 +33,7 @@ exports.connectCalendar = async (req, res) => {
 // @access  Private
 exports.getUserSchedule = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('defaultSchedule scheduleExceptions personalTimes firstName lastName');
+    const user = await User.findById(req.user.id).select('defaultSchedule scheduleExceptions personalTimes firstName lastName google');
     if (!user) {
       return res.status(404).json({ msg: 'User not found' });
     }
@@ -213,10 +214,99 @@ exports.getUserSchedule = async (req, res) => {
     }
 
 
+    // 🆕 구글 사용자: Google Calendar에서 확정된 일정 가져오기
+    let googleConfirmedEvents = [];
+    const isGoogleUser = !!(user.google && user.google.refreshToken);
+
+    if (isGoogleUser) {
+      try {
+        const oauth2Client = new google.auth.OAuth2(
+          process.env.GOOGLE_CLIENT_ID,
+          process.env.GOOGLE_CLIENT_SECRET,
+          process.env.GOOGLE_REDIRECT_URI
+        );
+        oauth2Client.setCredentials({
+          refresh_token: user.google.refreshToken
+        });
+
+        const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+        // 오늘부터 3개월 뒤까지 이벤트 조회
+        const now = new Date();
+        const threeMonthsLater = new Date();
+        threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
+
+        const eventsRes = await calendar.events.list({
+          calendarId: 'primary',
+          timeMin: now.toISOString(),
+          timeMax: threeMonthsLater.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
+          maxResults: 100
+        });
+
+        const gcalEvents = eventsRes.data.items || [];
+
+        // 🆕 모든 구글 캘린더 이벤트 반환 (확정 여부 구분)
+        for (const event of gcalEvents) {
+          const isConfirmed = event.extendedProperties?.private?.isCoordinationConfirmed === 'true';
+          const suggestionId = event.extendedProperties?.private?.suggestionId || null;
+          const startDateTime = event.start?.dateTime || event.start?.date;
+          const endDateTime = event.end?.dateTime || event.end?.date;
+
+          // 참석자 정보 조회 (확정 일정인 경우)
+          let participantNames = [];
+          let totalMembers = 0;
+          if (suggestionId) {
+            try {
+              const ScheduleSuggestion = require('../models/scheduleSuggestion');
+              const suggestion = await ScheduleSuggestion.findById(suggestionId)
+                .populate('memberResponses.user', 'firstName lastName')
+                .lean();
+              if (suggestion) {
+                participantNames = suggestion.memberResponses
+                  .filter(r => r.status === 'accepted' && r.user)
+                  .map(r => r.user.firstName || '');
+                totalMembers = suggestion.memberResponses.length;
+              }
+            } catch (e) {
+              // suggestion not found
+            }
+          }
+
+          googleConfirmedEvents.push({
+            id: event.id,
+            googleEventId: event.id,
+            title: event.summary || '일정',
+            specificDate: startDateTime ? startDateTime.substring(0, 10) : null,
+            startTime: startDateTime && startDateTime.length > 10 ? startDateTime.substring(11, 16) : '00:00',
+            endTime: endDateTime && endDateTime.length > 10 ? endDateTime.substring(11, 16) : '23:59',
+            location: event.location || '',
+            color: '#3b82f6',  // 모든 구글 일정 파란색
+            isGoogleEvent: true,
+            isRecurring: false,
+            isCoordinationConfirmed: isConfirmed,  // 🆕 확정 여부 표시
+            suggestionId: suggestionId,
+            roomId: event.extendedProperties?.private?.roomId || null,
+            participants: participantNames.length || 1,
+            participantNames: participantNames,
+            totalMembers: totalMembers
+          });
+        }
+        console.log(`[getUserSchedule] 구글 사용자 일정 ${googleConfirmedEvents.length}개 조회 (확정: ${googleConfirmedEvents.filter(e => e.isCoordinationConfirmed).length}개)`);
+      } catch (gcErr) {
+        console.warn('[getUserSchedule] Google Calendar 조회 실패:', gcErr.message);
+      }
+    }
+
+    // 구글 확정 일정과 DB personalTimes 합치기
+    const allPersonalTimes = [...personalTimesWithLocation, ...googleConfirmedEvents];
+
     res.json({
       defaultSchedule: user.defaultSchedule,
       scheduleExceptions: user.scheduleExceptions,
-      personalTimes: personalTimesWithLocation
+      personalTimes: allPersonalTimes,
+      isGoogleUser: isGoogleUser
     });
   } catch (err) {
     console.error('getUserSchedule error:', err);

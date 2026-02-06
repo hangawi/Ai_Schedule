@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const User = require('../models/user');
+const ScheduleSuggestion = require('../models/ScheduleSuggestion');
+const ChatMessage = require('../models/ChatMessage');
+const { deleteFromGoogleCalendar } = require('../services/confirmScheduleService');
 
 // @route   GET api/users/profile
 // @desc    Get user profile
@@ -190,8 +193,90 @@ router.post('/schedule', auth, async (req, res) => {
   }
 });
 
+// @route   DELETE api/users/profile/schedule/google/:suggestionId
+// @desc    Delete a Google Calendar event (+ auto reject if from suggestion)
+// @access  Private
+// 🆕 이 라우트가 :personalTimeId보다 먼저 와야 함!
+router.delete('/schedule/google/:suggestionId', auth, async (req, res) => {
+  try {
+    const { suggestionId } = req.params;
+    console.log('[profile.js DELETE /schedule/google] Request for user:', req.user.id, 'suggestionId:', suggestionId);
+
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ msg: '사용자를 찾을 수 없습니다.' });
+    }
+
+    // 구글 사용자 확인
+    const isGoogleUser = !!(user.google && user.google.refreshToken);
+    if (!isGoogleUser) {
+      return res.status(400).json({ msg: '구글 사용자가 아닙니다.' });
+    }
+
+    // suggestion 찾기
+    const suggestion = await ScheduleSuggestion.findById(suggestionId);
+    if (!suggestion) {
+      return res.status(404).json({ msg: '해당 일정을 찾을 수 없습니다.' });
+    }
+
+    // Google Calendar에서 삭제
+    try {
+      const ptData = {
+        title: `[약속] ${suggestion.summary}`,
+        specificDate: suggestion.date,
+        startTime: suggestion.startTime,
+        suggestionId: suggestionId
+      };
+      await deleteFromGoogleCalendar(user, ptData);
+      console.log(`[profile.js DELETE /schedule/google] ✅ Google Calendar 삭제 완료`);
+    } catch (gcErr) {
+      console.warn('[profile.js DELETE /schedule/google] Google Calendar 삭제 실패:', gcErr.message);
+    }
+
+    // suggestion에서 불참 처리
+    const userResponse = suggestion.memberResponses.find(
+      r => (r.user._id?.toString() || r.user.toString()) === req.user.id.toString()
+    );
+    if (userResponse && userResponse.status === 'accepted') {
+      userResponse.status = 'rejected';
+      userResponse.respondedAt = new Date();
+      userResponse.personalTimeId = null;
+      await suggestion.save();
+      console.log(`[profile.js DELETE /schedule/google] 🔄 자동 불참 처리 완료`);
+
+      // 🆕 시스템 메시지 전송
+      const userName = user.firstName || user.email?.split('@')[0] || '사용자';
+      const systemMsg = new ChatMessage({
+        room: suggestion.room,
+        sender: user._id,
+        content: `${userName}님이 ${suggestion.date} ${suggestion.summary} 일정에 불참했습니다.`,
+        type: 'system'
+      });
+      await systemMsg.save();
+
+      // Socket 이벤트 발송
+      if (global.io && suggestion.room) {
+        global.io.to(`room-${suggestion.room}`).emit('chat-message', systemMsg);
+        global.io.to(`room-${suggestion.room}`).emit('suggestion-updated', {
+          suggestionId: suggestion._id,
+          suggestion: suggestion
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      msg: '일정이 삭제되고 불참 처리되었습니다.'
+    });
+  } catch (err) {
+    console.error('[profile.js DELETE /schedule/google] Error:', err);
+    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+  }
+});
+
 // @route   DELETE api/users/profile/schedule/:personalTimeId
-// @desc    Delete a personal time entry
+// @desc    Delete a personal time entry (+ auto reject if from suggestion)
 // @access  Private
 router.delete('/schedule/:personalTimeId', auth, async (req, res) => {
   try {
@@ -204,13 +289,59 @@ router.delete('/schedule/:personalTimeId', auth, async (req, res) => {
       return res.status(404).json({ msg: '사용자를 찾을 수 없습니다.' });
     }
 
-    const initialLength = user.personalTimes.length;
-    user.personalTimes = user.personalTimes.filter(pt => pt._id.toString() !== personalTimeId);
+    // 🆕 삭제할 personalTime 찾기 (suggestionId 확인용)
+    const targetPt = user.personalTimes.find(pt =>
+      pt._id.toString() === personalTimeId || pt.id?.toString() === personalTimeId
+    );
 
-    if (user.personalTimes.length === initialLength) {
+    if (!targetPt) {
       return res.status(404).json({ msg: '해당 개인 일정을 찾을 수 없습니다.' });
     }
 
+    // 🆕 suggestionId가 있으면 해당 suggestion에서 불참 처리
+    if (targetPt.suggestionId) {
+      try {
+        const suggestion = await ScheduleSuggestion.findById(targetPt.suggestionId);
+        if (suggestion) {
+          const userResponse = suggestion.memberResponses.find(
+            r => (r.user._id?.toString() || r.user.toString()) === req.user.id.toString()
+          );
+          if (userResponse && userResponse.status === 'accepted') {
+            userResponse.status = 'rejected';
+            userResponse.respondedAt = new Date();
+            userResponse.personalTimeId = null;
+            await suggestion.save();
+            console.log(`[profile.js DELETE] 🔄 자동 불참 처리: suggestionId=${targetPt.suggestionId}, userId=${req.user.id}`);
+
+            // 🆕 시스템 메시지 전송
+            const userName = user.firstName || user.email?.split('@')[0] || '사용자';
+            const systemMsg = new ChatMessage({
+              room: suggestion.room,
+              sender: user._id,
+              content: `${userName}님이 ${suggestion.date} ${suggestion.summary} 일정에 불참했습니다.`,
+              type: 'system'
+            });
+            await systemMsg.save();
+
+            // Socket 이벤트 발송
+            if (global.io && suggestion.room) {
+              global.io.to(`room-${suggestion.room}`).emit('chat-message', systemMsg);
+              global.io.to(`room-${suggestion.room}`).emit('suggestion-updated', {
+                suggestionId: suggestion._id,
+                suggestion: suggestion
+              });
+            }
+          }
+        }
+      } catch (suggErr) {
+        console.warn('[profile.js DELETE] Suggestion 불참 처리 실패:', suggErr.message);
+      }
+    }
+
+    // personalTimes에서 삭제
+    user.personalTimes = user.personalTimes.filter(pt =>
+      pt._id.toString() !== personalTimeId && pt.id?.toString() !== personalTimeId
+    );
     await user.save();
     console.log('[profile.js DELETE /schedule] Personal time deleted successfully');
 
