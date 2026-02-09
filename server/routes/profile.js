@@ -220,33 +220,58 @@ router.delete('/schedule/google/:suggestionId', auth, async (req, res) => {
       return res.status(404).json({ msg: '해당 일정을 찾을 수 없습니다.' });
     }
 
-    // Google Calendar에서 삭제
-    try {
-      const ptData = {
-        title: `[약속] ${suggestion.summary}`,
-        specificDate: suggestion.date,
-        startTime: suggestion.startTime,
-        suggestionId: suggestionId
-      };
-      await deleteFromGoogleCalendar(user, ptData);
-      console.log(`[profile.js DELETE /schedule/google] ✅ Google Calendar 삭제 완료`);
-    } catch (gcErr) {
-      console.warn('[profile.js DELETE /schedule/google] Google Calendar 삭제 실패:', gcErr.message);
-    }
+    // 🆕 accepted 멤버 수 확인 (참여 인원별 분기)
+    const acceptedCount = suggestion.memberResponses.filter(
+      r => r.status === 'accepted'
+    ).length;
+    const userName = user.firstName || user.email?.split('@')[0] || '사용자';
 
-    // suggestion에서 불참 처리
-    const userResponse = suggestion.memberResponses.find(
-      r => (r.user._id?.toString() || r.user.toString()) === req.user.id.toString()
-    );
-    if (userResponse && userResponse.status === 'accepted') {
-      userResponse.status = 'rejected';
-      userResponse.respondedAt = new Date();
-      userResponse.personalTimeId = null;
-      await suggestion.save();
-      console.log(`[profile.js DELETE /schedule/google] 🔄 자동 불참 처리 완료`);
+    if (acceptedCount >= 2) {
+      // ✅ 2명 이상 참여 → 본인만 불참 처리
+      // 본인 Google Calendar에서 삭제
+      try {
+        const ptData = {
+          title: `[약속] ${suggestion.summary}`,
+          specificDate: suggestion.date,
+          startTime: suggestion.startTime,
+          suggestionId: suggestionId
+        };
+        await deleteFromGoogleCalendar(user, ptData);
+      } catch (gcErr) {
+        console.warn('[profile.js DELETE /schedule/google] Google Calendar 삭제 실패:', gcErr.message);
+      }
 
-      // 🆕 시스템 메시지 전송
-      const userName = user.firstName || user.email?.split('@')[0] || '사용자';
+      const userResponse = suggestion.memberResponses.find(
+        r => (r.user._id?.toString() || r.user.toString()) === req.user.id.toString()
+      );
+      if (userResponse && userResponse.status === 'accepted') {
+        userResponse.status = 'rejected';
+        userResponse.respondedAt = new Date();
+        userResponse.personalTimeId = null;
+        await suggestion.save();
+
+        // 다른 참여자들의 participants 수 업데이트
+        const newAcceptedCount = acceptedCount - 1;
+        for (const mr of suggestion.memberResponses) {
+          if (mr.status === 'accepted' && mr.personalTimeId) {
+            const otherUserId = mr.user._id?.toString() || mr.user.toString();
+            if (otherUserId !== req.user.id.toString()) {
+              const otherUser = await User.findById(otherUserId);
+              if (otherUser) {
+                const otherPt = otherUser.personalTimes.find(
+                  pt => pt.suggestionId === suggestionId
+                );
+                if (otherPt) {
+                  otherPt.participants = newAcceptedCount;
+                  await otherUser.save();
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 시스템 메시지: 불참
       const systemMsg = new ChatMessage({
         room: suggestion.room,
         sender: user._id,
@@ -255,7 +280,6 @@ router.delete('/schedule/google/:suggestionId', auth, async (req, res) => {
       });
       await systemMsg.save();
 
-      // Socket 이벤트 발송
       if (global.io && suggestion.room) {
         global.io.to(`room-${suggestion.room}`).emit('chat-message', systemMsg);
         global.io.to(`room-${suggestion.room}`).emit('suggestion-updated', {
@@ -263,12 +287,78 @@ router.delete('/schedule/google/:suggestionId', auth, async (req, res) => {
           suggestion: suggestion
         });
       }
-    }
 
-    res.json({
-      success: true,
-      msg: '일정이 삭제되고 불참 처리되었습니다.'
-    });
+      return res.json({ success: true, action: 'rejected', msg: '불참 처리되었습니다.' });
+
+    } else {
+      // ✅ 1명 이하 참여 → 일정 완전 삭제
+      suggestion.status = 'cancelled';
+
+      // 모든 accepted 멤버 처리
+      for (const mr of suggestion.memberResponses) {
+        const memberId = mr.user._id?.toString() || mr.user.toString();
+        if (mr.status === 'accepted' && memberId !== req.user.id.toString()) {
+          const memberUser = await User.findById(memberId);
+          if (memberUser) {
+            const isGoogleMember = !!(memberUser.google && memberUser.google.refreshToken);
+            if (isGoogleMember) {
+              try {
+                const ptData = {
+                  title: `[약속] ${suggestion.summary}`,
+                  specificDate: suggestion.date,
+                  startTime: suggestion.startTime,
+                  suggestionId: suggestionId
+                };
+                await deleteFromGoogleCalendar(memberUser, ptData);
+              } catch (gcErr) {
+                console.warn('[profile.js DELETE /schedule/google] 다른 멤버 Google Calendar 삭제 실패:', gcErr.message);
+              }
+            } else {
+              memberUser.personalTimes = memberUser.personalTimes.filter(
+                pt => pt.suggestionId !== suggestionId
+              );
+              await memberUser.save();
+            }
+          }
+        }
+        mr.status = 'rejected';
+        mr.respondedAt = new Date();
+        mr.personalTimeId = null;
+      }
+      await suggestion.save();
+
+      // 본인 Google Calendar에서 삭제
+      try {
+        const ptData = {
+          title: `[약속] ${suggestion.summary}`,
+          specificDate: suggestion.date,
+          startTime: suggestion.startTime,
+          suggestionId: suggestionId
+        };
+        await deleteFromGoogleCalendar(user, ptData);
+      } catch (gcErr) {
+        console.warn('[profile.js DELETE /schedule/google] 본인 Google Calendar 삭제 실패:', gcErr.message);
+      }
+
+      // 시스템 메시지: 삭제
+      const systemMsg = new ChatMessage({
+        room: suggestion.room,
+        sender: user._id,
+        content: `${userName}님이 ${suggestion.date} ${suggestion.summary} 일정을 삭제했습니다.`,
+        type: 'system'
+      });
+      await systemMsg.save();
+
+      if (global.io && suggestion.room) {
+        global.io.to(`room-${suggestion.room}`).emit('chat-message', systemMsg);
+        global.io.to(`room-${suggestion.room}`).emit('suggestion-updated', {
+          suggestionId: suggestion._id,
+          suggestion: suggestion
+        });
+      }
+
+      return res.json({ success: true, action: 'deleted', msg: '일정이 삭제되었습니다.' });
+    }
   } catch (err) {
     console.error('[profile.js DELETE /schedule/google] Error:', err);
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });

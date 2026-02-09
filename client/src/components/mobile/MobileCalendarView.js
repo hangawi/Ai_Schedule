@@ -719,10 +719,18 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                try {
                   const suggestionId = event.suggestionId || event.extendedProperties?.private?.suggestionId;
                   if (suggestionId) {
-                     await fetch(`${API_BASE_URL}/api/users/profile/schedule/google/${suggestionId}`, {
+                     const resp = await fetch(`${API_BASE_URL}/api/users/profile/schedule/google/${suggestionId}`, {
                         method: 'DELETE',
                         headers: { 'Authorization': `Bearer ${token}` }
                      });
+                     if (resp.ok) {
+                        const result = await resp.json();
+                        if (result.action === 'rejected') {
+                           alert('불참 처리되었습니다.');
+                        } else if (result.action === 'deleted') {
+                           alert('일정이 삭제되었습니다.');
+                        }
+                     }
                   } else {
                      await googleCalendarService.deleteEvent(event.googleEventId);
                   }
@@ -732,11 +740,11 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
             }
          }
 
-         // 🆕 편집 중 삭제된 suggestion 일정 → 서버에서 불참/삭제 처리
+         // 🆕 편집 중 삭제된 suggestion 일정 → 서버에서 불참/삭제 처리 (일반 사용자만)
          if (initialState && token) {
             const currentPtIds = new Set(personalTimes.map(pt => (pt._id || pt.id)?.toString()));
             const deletedSuggestionPts = initialState.personalTimes.filter(
-               pt => pt.suggestionId && !(currentPtIds.has((pt._id || pt.id)?.toString()))
+               pt => pt.suggestionId && !pt.isGoogleEvent && !(currentPtIds.has((pt._id || pt.id)?.toString()))
             );
 
             for (const pt of deletedSuggestionPts) {
@@ -760,8 +768,9 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
             }
          }
 
-         // 로컬 DB 저장
-         await userService.updateUserSchedule({ defaultSchedule, scheduleExceptions, personalTimes });
+         // 로컬 DB 저장 (구글 캘린더 이벤트는 제외 - DB personalTimes만 전송)
+         const dbPersonalTimes = personalTimes.filter(pt => !pt.isGoogleEvent);
+         await userService.updateUserSchedule({ defaultSchedule, scheduleExceptions, personalTimes: dbPersonalTimes });
          alert('저장되었습니다.');
          setIsEditing(false);
          setInitialState(null);
@@ -969,13 +978,19 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                return;
             }
 
-            // 🆕 확정된 구글 일정인 경우 - 서버 API로 삭제 + 불참 처리
+            // 🆕 확정된 구글 일정인 경우 - 서버 API로 삭제 + 불참/삭제 분기 처리
             if (suggestionId) {
                const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule/google/${suggestionId}`, {
                   method: 'DELETE',
                   headers: { 'Authorization': `Bearer ${token}` },
                });
                if (!response.ok) throw new Error('Failed to delete Google confirmed event');
+               const result = await response.json();
+               if (result.action === 'rejected') {
+                  alert('불참 처리되었습니다.');
+               } else if (result.action === 'deleted') {
+                  alert('일정이 삭제되었습니다.');
+               }
             } else {
                // 일반 구글 캘린더 이벤트 삭제
                await googleCalendarService.deleteEvent(event.googleEventId);
