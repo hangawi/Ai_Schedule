@@ -249,7 +249,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                   let bgColor = pt.isGoogleEvent ? '#3b82f6' : '#ef4444';
                   let borderClr = pt.isGoogleEvent ? '#2563eb' : '#dc2626';
                   tempEvents.push({
-                     id: pt.id || `pt-${ptIdx}-${dateStr}`,
+                     id: `pt-${pt._id || pt.id || ptIdx + '-' + dateStr}`,
                      title: pt.name || pt.title || '개인',
                      start: formatLocalDateTime(start),
                      end: formatLocalDateTime(end),
@@ -728,6 +728,34 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                   }
                } catch (err) {
                   console.warn('구글 일정 삭제 실패:', event.googleEventId, err);
+               }
+            }
+         }
+
+         // 🆕 편집 중 삭제된 suggestion 일정 → 서버에서 불참/삭제 처리
+         if (initialState && token) {
+            const currentPtIds = new Set(personalTimes.map(pt => (pt._id || pt.id)?.toString()));
+            const deletedSuggestionPts = initialState.personalTimes.filter(
+               pt => pt.suggestionId && !(currentPtIds.has((pt._id || pt.id)?.toString()))
+            );
+
+            for (const pt of deletedSuggestionPts) {
+               try {
+                  const ptId = pt._id || pt.id;
+                  const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule/${ptId}`, {
+                     method: 'DELETE',
+                     headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  if (response.ok) {
+                     const result = await response.json();
+                     if (result.action === 'rejected') {
+                        alert('불참 처리되었습니다.');
+                     } else if (result.action === 'deleted') {
+                        alert('일정이 삭제되었습니다.');
+                     }
+                  }
+               } catch (err) {
+                  console.warn('제안 일정 삭제 처리 실패:', pt.suggestionId, err);
                }
             }
          }
