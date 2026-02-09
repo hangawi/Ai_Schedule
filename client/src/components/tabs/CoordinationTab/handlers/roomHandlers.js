@@ -91,36 +91,33 @@ export const createHandleRoomClick = (fetchRoomDetails, setCurrentRoom, showAler
  * @description '방 나가기' 핸들러를 생성하는 팩토리 함수.
  * @returns {function} 사용자에게 확인을 받은 후, 방 나가기 API를 호출하고 관련 상태를 업데이트하는 핸들러.
  */
-export const createHandleLeaveRoom = (currentRoom, setCurrentRoom, fetchMyRooms) => {
+export const createHandleLeaveRoom = (currentRoom, setCurrentRoom, fetchMyRooms, showAlert) => {
   return async () => {
-    if (window.confirm("정말로 이 방을 나가시겠습니까? 배정된 모든 시간이 삭제됩니다.")) {
-      try {
-        const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-        const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${currentRoom._id}/leave`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
-          }
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.msg || 'Failed to leave room');
+    try {
+      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+      const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${currentRoom._id}/leave`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
         }
+      });
 
-        console.warn("방에서 나갔습니다.");
-        setCurrentRoom(null);
-        fetchMyRooms();
-
-        window.history.pushState({
-          tab: 'coordination',
-          roomState: null
-        }, '', '#coordination');
-
-      } catch (error) {
-        console.warn(`방 나가기 실패: ${error.message}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.msg || 'Failed to leave room');
       }
+
+      setCurrentRoom(null);
+      fetchMyRooms();
+
+      window.history.pushState({
+        tab: 'coordination',
+        roomState: null
+      }, '', '#coordination');
+
+    } catch (error) {
+      if (showAlert) showAlert(`방 나가기 실패: ${error.message}`, 'error');
     }
   };
 };

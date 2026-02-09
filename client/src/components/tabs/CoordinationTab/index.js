@@ -90,6 +90,8 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
   
   const [showChainExchangeModal, setShowChainExchangeModal] = useState(false);
   const [selectedChainRequest, setSelectedChainRequest] = useState(null);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
 
   const {
     myRooms, currentRoom, isLoading, error,
@@ -335,23 +337,37 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
   };
 
   const handleBackToRoomList = () => { setCurrentRoom(null); window.history.pushState({ tab: 'coordination', roomState: null }, '', '#coordination'); };
-  const handleLeaveRoom = async () => {
-    if (window.confirm("방을 나가시겠습니까?")) {
+  const handleLeaveRoom = () => setShowLeaveConfirm(true);
+  const executeLeaveRoom = async () => {
+    try {
       const token = await auth.currentUser?.getIdToken();
-      await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/coordination/rooms/${currentRoom._id}/leave`, {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/api/coordination/rooms/${currentRoom._id}/leave`, {
         method: 'DELETE', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
       });
-      setCurrentRoom(null); fetchMyRooms();
+      setShowLeaveConfirm(false);
+      if (response.ok) {
+        setCurrentRoom(null); fetchMyRooms();
+      } else {
+        const errorData = await response.json();
+        showAlert(errorData.msg || '방 나가기 실패', 'error');
+      }
+    } catch (error) {
+      setShowLeaveConfirm(false);
+      showAlert('방 나가기 중 오류가 발생했습니다.', 'error');
     }
   };
 
   const handleResetCarryOverTimesCallback = useCallback(async () => { await handleResetCarryOverTimes(currentRoom, fetchRoomDetails, setCurrentRoom, showAlert); }, [currentRoom, fetchRoomDetails, setCurrentRoom, showAlert]);
   const handleResetCompletedTimesCallback = useCallback(async () => { await handleResetCompletedTimes(currentRoom, fetchRoomDetails, setCurrentRoom, showAlert); }, [currentRoom, fetchRoomDetails, setCurrentRoom, showAlert]);
-  const handleClearAllCarryOverHistoriesCallback = useCallback(async () => {
-    if (window.confirm('초기화하시겠습니까?')) {
+  const handleClearAllCarryOverHistoriesCallback = useCallback(() => setShowClearHistoryConfirm(true), []);
+  const executeClearAllCarryOverHistories = useCallback(async () => {
+    try {
       const res = await coordinationService.clearAllCarryOverHistories(currentRoom._id);
       showAlert(res.msg, 'success'); setCurrentRoom(res.room);
+    } catch (error) {
+      showAlert('초기화 실패', 'error');
     }
+    setShowClearHistoryConfirm(false);
   }, [currentRoom, setCurrentRoom, showAlert]);
 
   const handleRunAutoScheduleCallback = async () => { await handleRunAutoSchedule(currentRoom, currentWeekStartDate, user, scheduleOptions, setIsScheduling, setScheduleError, setUnassignedMembersInfo, setConflictSuggestions, setWarnings, setCurrentRoom, showAlert, viewMode, travelMode); };
@@ -412,6 +428,8 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
       <ChainExchangeRequestModal isOpen={showChainExchangeModal} onClose={() => setShowChainExchangeModal(false)} request={selectedChainRequest} roomId={selectedChainRequest?.roomId} onRequestHandled={handleChainExchangeRequestHandled} />
       <CustomAlertModal isOpen={showWalkingErrorModal} onClose={handleCloseWalkingErrorModal} title="도보 모드 사용 불가" message={walkingErrorMessage} type="warning" showCancel={false} />
       <OptimalTimeModal isOpen={showOptimalTimeModal} onClose={() => setShowOptimalTimeModal(false)} roomId={currentRoom?._id} />
+      <CustomAlertModal isOpen={showLeaveConfirm} onClose={() => setShowLeaveConfirm(false)} onConfirm={executeLeaveRoom} title="방 나가기" message="정말로 이 방을 나가시겠습니까? 배정된 모든 시간이 삭제됩니다." type="warning" showCancel={true} confirmText="나가기" />
+      <CustomAlertModal isOpen={showClearHistoryConfirm} onClose={() => setShowClearHistoryConfirm(false)} onConfirm={executeClearAllCarryOverHistories} title="초기화" message="초기화하시겠습니까?" type="danger" showCancel={true} />
     </>
   );
 

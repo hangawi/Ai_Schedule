@@ -816,10 +816,46 @@ exports.rejectSuggestion = async (req, res) => {
       await user.save();
     }
 
-    // 3.6. 전원 불참 체크
+    // 3.6. 참석자 수 기반 삭제/불참 분기
+    const acceptedCount = suggestion.memberResponses.filter(r => r.status === 'accepted').length;
     const allRejected = suggestion.memberResponses.every(r => r.status === 'rejected');
-    if (allRejected) {
+    const shouldDelete = allRejected || acceptedCount === 0;
+
+    if (shouldDelete) {
       suggestion.status = 'cancelled';
+      // 남아있는 accepted 멤버들의 personalTime도 정리
+      for (const mr of suggestion.memberResponses) {
+        if (mr.status === 'accepted') {
+          const memberId = mr.user._id?.toString() || mr.user.toString();
+          if (memberId !== userId) {
+            const memberUser = await User.findById(memberId);
+            if (memberUser) {
+              const isMemberGoogle = !!(memberUser.google && memberUser.google.refreshToken);
+              if (isMemberGoogle) {
+                try {
+                  const ptData = {
+                    title: `[약속] ${suggestion.summary}`,
+                    specificDate: suggestion.date,
+                    startTime: suggestion.startTime,
+                    suggestionId: suggestionId
+                  };
+                  await deleteFromGoogleCalendar(memberUser, ptData);
+                } catch (gcErr) {
+                  console.warn('[rejectSuggestion] 다른 멤버 Google Calendar 삭제 실패:', gcErr.message);
+                }
+              } else {
+                memberUser.personalTimes = memberUser.personalTimes.filter(
+                  pt => pt.suggestionId !== suggestionId
+                );
+                await memberUser.save();
+              }
+            }
+          }
+          mr.status = 'rejected';
+          mr.respondedAt = new Date();
+          mr.personalTimeId = null;
+        }
+      }
       await suggestion.save();
     }
 
@@ -839,8 +875,8 @@ exports.rejectSuggestion = async (req, res) => {
     await rejectedSuggestion.save();
 
     // 5. 시스템 메시지 전송
-    const messageContent = allRejected
-      ? `모든 멤버가 불참하여 일정이 취소되었습니다: ${suggestion.date} ${suggestion.startTime} ${suggestion.summary}`
+    const messageContent = shouldDelete
+      ? `${user.firstName}님이 일정을 삭제했습니다: ${suggestion.date} ${suggestion.startTime} ${suggestion.summary}`
       : `${user.firstName}님이 일정에 불참했습니다: ${suggestion.date} ${suggestion.startTime} ${suggestion.summary}`;
 
     const systemMsg = new ChatMessage({
@@ -866,6 +902,7 @@ exports.rejectSuggestion = async (req, res) => {
 
     res.json({
       success: true,
+      action: shouldDelete ? 'deleted' : 'rejected',
       suggestion: updatedSuggestion
     });
 

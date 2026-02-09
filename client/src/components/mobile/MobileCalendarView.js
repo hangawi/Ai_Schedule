@@ -1012,6 +1012,8 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
             return;
          }
 
+         let deleteAction = null; // 삭제/불참 결과 추적
+
          if (event.id && event.id.startsWith('pt-')) {
             // 🆕 Personal Time 삭제 (참여 인원에 따라 삭제/불참 분기)
             const personalTimeId = event.id.replace('pt-', '');
@@ -1021,6 +1023,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
             });
             if (!response.ok) throw new Error('Failed to delete personal time');
             const result = await response.json();
+            deleteAction = result.action;
             if (result.action === 'rejected') {
                showToast('불참 처리되었습니다.');
             } else if (result.action === 'deleted') {
@@ -1034,8 +1037,8 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
             if (!response.ok) throw new Error('Failed to delete event');
          }
 
-         // 🆕 조율방 확정 일정이면 불참 알림
-         if (roomId) {
+         // 🆕 조율방 확정 일정이면 불참 알림 (suggestion 처리가 안 된 경우만)
+         if (roomId && !deleteAction && !suggestionId) {
             try {
                await fetch(`${API_BASE_URL}/api/chat/${roomId}/member-decline`, {
                   method: 'POST',

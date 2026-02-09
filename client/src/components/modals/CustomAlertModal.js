@@ -29,6 +29,7 @@
  * ===================================================================================================
  */
 import React from 'react';
+import ReactDOM from 'react-dom';
 import { CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 
 /**
@@ -117,7 +118,7 @@ const CustomAlertModal = ({
     }
   };
 
-  return (
+  return ReactDOM.createPortal(
     <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
       onClick={handleOverlayClick}
@@ -132,7 +133,7 @@ const CustomAlertModal = ({
             </div>
           </div>
         </div>
-        
+
         <div className="flex justify-end space-x-3 px-6 pb-6">
           {showCancel && (
             <button
@@ -150,7 +151,8 @@ const CustomAlertModal = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

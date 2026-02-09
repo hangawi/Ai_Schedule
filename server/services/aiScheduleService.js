@@ -659,7 +659,7 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
     // 🆕 참석 → 불참 변경 허용
     if (userResponse.status === 'accepted' && sentiment === 'reject') {
       console.log(`[AI분석] 참석 → 불참 변경 - user: ${userId}`);
-      
+
       // personalTime 제거
       if (userResponse.personalTimeId) {
         const rejectUser = await User.findById(userId);
@@ -670,20 +670,48 @@ async function handleAutoResponse(roomId, analysisResult, sortedMessages) {
           await rejectUser.save();
         }
       }
-      
+
       userResponse.status = 'rejected';
       userResponse.respondedAt = new Date();
       userResponse.personalTimeId = null;
       userResponse.isAutoRejected = false;
+
+      // 참석자 수 체크: 남은 참석자가 없으면 일정 전체 삭제
+      const acceptedCount = suggestion.memberResponses.filter(r => r.status === 'accepted').length;
+      const shouldDelete = acceptedCount === 0;
+
+      if (shouldDelete) {
+        suggestion.status = 'cancelled';
+        // 남아있는 다른 accepted 멤버 정리 (이론상 없지만 안전장치)
+        for (const mr of suggestion.memberResponses) {
+          if (mr.status === 'accepted') {
+            const memberId = mr.user?._id?.toString() || mr.user?.toString();
+            if (memberId && memberId !== userId) {
+              const memberUser = await User.findById(memberId);
+              if (memberUser) {
+                memberUser.personalTimes = memberUser.personalTimes.filter(
+                  pt => pt.suggestionId !== suggestion._id.toString()
+                );
+                await memberUser.save();
+              }
+            }
+            mr.status = 'rejected';
+            mr.respondedAt = new Date();
+            mr.personalTimeId = null;
+          }
+        }
+      }
+
       await suggestion.save();
-      
+
       // 시스템 메시지
       const lastMessage = sortedMessages[sortedMessages.length - 1];
       const userName = lastMessage?.sender?.firstName || '사용자';
-      await sendSystemMessage(roomId, userId,
-        `${userName}님이 일정 참석을 취소했습니다: ${suggestion.date} ${suggestion.summary}`,
-        'system', suggestion._id);
-      
+      const messageContent = shouldDelete
+        ? `${userName}님이 일정을 삭제했습니다: ${suggestion.date} ${suggestion.summary}`
+        : `${userName}님이 일정 참석을 취소했습니다: ${suggestion.date} ${suggestion.summary}`;
+      await sendSystemMessage(roomId, userId, messageContent, 'system', suggestion._id);
+
       // Socket 이벤트 발송
       if (global.io) {
         global.io.to(`room-${roomId}`).emit('suggestion-updated', {

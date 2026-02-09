@@ -224,7 +224,13 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
 
       if (res.ok) {
         const data = await res.json();
+        if (data.action === 'deleted') {
+          showToast('일정이 삭제되었습니다.');
+        } else {
+          showToast('불참 처리되었습니다.');
+        }
         fetchSuggestions();
+        window.dispatchEvent(new CustomEvent('calendarUpdate', { detail: { type: 'suggestion_rejected' } }));
         window.dispatchEvent(new CustomEvent('suggestionUpdate', { detail: { roomId } }));
       } else {
         const error = await res.json();

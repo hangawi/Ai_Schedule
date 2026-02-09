@@ -96,6 +96,16 @@ exports.leaveRoom = async (req, res) => {
 
     // 2. Check if user is the owner
     if (room.owner.toString() === userId) {
+      // 방장이 유일한 멤버면 방 삭제
+      const otherMembers = room.members.filter(m => m.user.toString() !== userId);
+      if (otherMembers.length === 0) {
+        await Room.findByIdAndDelete(roomId);
+        return res.json({
+          msg: '방에 혼자 남아 있어 방이 삭제되었습니다.',
+          success: true,
+          deleted: true
+        });
+      }
       return res.status(400).json({
         msg: '방장은 방을 나갈 수 없습니다. 방을 삭제하거나 다른 조원에게 방장을 위임하세요.'
       });
