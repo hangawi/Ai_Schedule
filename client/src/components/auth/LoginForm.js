@@ -223,10 +223,11 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
 
          localStorage.setItem('googleConnected', 'true');
 
-         // 구글 캘린더 refreshToken이 없으면 동의 화면으로 이동
-         if (!data.user.google || !data.user.google.refreshToken) {
+         // 구글 캘린더 refreshToken이 없고, 처음 구글로 로그인하는 사용자만 동의 화면으로 이동
+         // (설정에서 연동한 사용자는 google.id가 있으므로 건너뜀 - 캘린더는 설정에서 별도 연동)
+         if (!data.user.google || (!data.user.google.refreshToken && !data.user.google.id)) {
             try {
-               const consentRes = await fetch(`${API_BASE_URL}/api/auth/google/calendar-consent`, {
+               const consentRes = await fetch(`${API_BASE_URL}/api/auth/google/calendar-consent?returnUrl=/auth`, {
                   headers: { 'Authorization': `Bearer ${idToken}` }
                });
                const consentData = await consentRes.json();

@@ -54,6 +54,7 @@ import MobileDashboard from './components/mobile/MobileDashboard';
 import MobileCalendarView from './components/mobile/MobileCalendarView';
 import MobileScheduleView from './components/mobile/MobileScheduleView';
 import MobileGroupsView from './components/mobile/MobileGroupsView';
+import MobileSettings from './components/mobile/MobileSettings';
 import { AdminProvider } from './contexts/AdminContext';
 import { ToastProvider } from './contexts/ToastContext';
 import SharedTextModal from './components/modals/SharedTextModal';
@@ -282,6 +283,9 @@ function App() {
                } />
                <Route path="/mobile/calendar" element={
                   isLoggedIn ? <MobileCalendarView user={user} isClipboardMonitoring={isClipboardMonitoring} setIsClipboardMonitoring={setIsClipboardMonitoring} isVoiceEnabled={isVoiceRecognitionEnabled} setIsVoiceEnabled={handleToggleVoiceRecognition} /> : <Navigate to="/auth" />
+               } />
+               <Route path="/mobile/settings" element={
+                  isLoggedIn ? <MobileSettings user={user} /> : <Navigate to="/auth" />
                } />
             </Routes>
             {isLoggedIn && sharedText && (

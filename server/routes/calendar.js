@@ -40,6 +40,11 @@ router.delete('/events/:eventId', auth, calendarController.deleteGoogleCalendarE
 // @access  Private
 router.put('/events/:eventId', auth, calendarController.updateGoogleCalendarEvent);
 
+// @route   POST api/calendar/sync-to-google
+// @desc    Sync existing DB events to Google Calendar
+// @access  Private
+router.post('/sync-to-google', auth, calendarController.syncEventsToGoogle);
+
 // @route   POST api/calendar/analyze-image
 // @desc    Analyze image for schedule information using Gemini Vision API
 // @access  Private

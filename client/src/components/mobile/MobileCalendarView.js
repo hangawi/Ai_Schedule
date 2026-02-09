@@ -335,10 +335,9 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          setScheduleExceptions(data.scheduleExceptions || []);
          setPersonalTimes(data.personalTimes || []);
 
-         // 구글 사용자: 구글 캘린더 이벤트를 보조로 추가 표시
-         const loginMethod = localStorage.getItem('loginMethod') || (user?.google?.refreshToken ? 'google' : '');
-         const isGoogleUser = loginMethod === 'google' && user?.google?.refreshToken;
-         if (isGoogleUser) {
+         // 구글 캘린더 연동된 사용자: 구글 캘린더 이벤트를 보조로 추가 표시
+         const hasGoogleCalendar = !!user?.google?.refreshToken;
+         if (hasGoogleCalendar) {
             try {
                const threeMonthsAgo = new Date();
                threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
@@ -432,15 +431,17 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
              )
           );
           const filteredGoogleEvents = googleCalendarEvents.filter(ge => {
+             // 우리 앱에서 동기화한 이벤트는 DB에서 이미 표시하므로 스킵
+             if (ge.extendedProperties?.private?.source === 'meetagent') return false;
              // googleEventId로 중복 체크
              if (ge.googleEventId && dbGoogleEventIds.has(ge.googleEventId)) return false;
              // suggestionId로 중복 체크 (extendedProperties.private.suggestionId)
              const geSuggestionId = ge.extendedProperties?.private?.suggestionId;
              if (geSuggestionId && dbSuggestionIds.has(geSuggestionId)) return false;
-             // 🆕 제목+날짜+시간으로 중복 체크 (가장 확실)
+             // 제목+날짜+시간으로 중복 체크
              if (ge.start?.dateTime && ge.summary) {
-                const geDate = ge.start.dateTime.substring(0, 10); // YYYY-MM-DD
-                const geTime = ge.start.dateTime.substring(11, 16); // HH:MM
+                const geDate = ge.start.dateTime.substring(0, 10);
+                const geTime = ge.start.dateTime.substring(11, 16);
                 const geKey = `${ge.summary}|${geDate}|${geTime}`;
                 if (dbEventKeys.has(geKey)) return false;
              }
@@ -571,11 +572,11 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
    const handleChatMessage = async (message, additionalContext = {}) => {
       try {
          if (!chatEnhanced || !chatEnhanced.handleChatMessage) return { success: false, message: '챗봇이 준비 중입니다.' };
-         // 구글 사용자: 구글 캘린더, 일반 사용자: 로컬 DB
          const loginMethod = localStorage.getItem('loginMethod') || '';
+         const hasGoogleCalendar = !!user?.google?.refreshToken;
          const tabType = 'local';
          const context = 'profile';
-         const result = await chatEnhanced.handleChatMessage(message, { context, tabType, loginMethod, currentEvents: globalEvents, ...additionalContext });
+         const result = await chatEnhanced.handleChatMessage(message, { context, tabType, loginMethod, hasGoogleCalendar, currentEvents: globalEvents, ...additionalContext });
          console.log('[handleChatMessage] 결과:', result);
          await fetchSchedule();
          await fetchGlobalEvents();
@@ -1096,10 +1097,10 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
             )
          );
          const filteredGEvts = googleCalendarEvents.filter(ge => {
+            if (ge.extendedProperties?.private?.source === 'meetagent') return false;
             if (ge.googleEventId && dbGoogleIds.has(ge.googleEventId)) return false;
             const geSuggestionId = ge.extendedProperties?.private?.suggestionId;
             if (geSuggestionId && dbSuggestionIds.has(geSuggestionId)) return false;
-            // 🆕 제목+날짜+시간으로 중복 체크
             if (ge.start?.dateTime && ge.summary) {
                const geDate = ge.start.dateTime.substring(0, 10);
                const geTime = ge.start.dateTime.substring(11, 16);
@@ -1242,13 +1243,14 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                <button className="sidebar-item" onClick={() => navigate('/mobile/schedule')}>📅 내 일정</button>
                <button className="sidebar-item" onClick={() => navigate('/mobile/groups')}>👥 그룹</button>
                <button className="sidebar-item" onClick={() => navigate('/mobile/calendar')}>📆 달력</button>
+               <button className="sidebar-item" onClick={() => navigate('/mobile/settings')}>⚙️ 설정</button>
             </div>
          </nav>
          <header className="mobile-header">
             <div className="mobile-header-content">
                <div className="mobile-header-left">
                   <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(true)}><Menu size={24} /></button>
-                  <div className="mobile-logo-btn" onClick={() => navigate('/')}><div className="mobile-logo-wrapper"><img src="/heyheylogo.png" alt="MeetAgent Logo" className="mobile-logo-img" /><div className={`mobile-login-indicator ${localStorage.getItem('loginMethod') === 'google' ? 'google' : 'local'}`}></div></div><h1 className="mobile-logo-text">MeetAgent</h1></div>
+                  <div className="mobile-logo-btn" onClick={() => navigate('/')}><div className="mobile-logo-wrapper"><img src="/heyheylogo.png" alt="MeetAgent Logo" className="mobile-logo-img" /><div className={`mobile-login-indicator ${user?.google?.refreshToken ? 'google' : 'local'}`}></div></div><h1 className="mobile-logo-text">MeetAgent</h1></div>
                </div>
                <div className="mobile-header-right">
                   <button className={`mobile-icon-btn ${isClipboardMonitoring ? 'active' : ''}`} onClick={() => setIsClipboardMonitoring(!isClipboardMonitoring)} title="클립보드">{isClipboardMonitoring ? <Clipboard size={18} /> : <ClipboardX size={18} />}</button>

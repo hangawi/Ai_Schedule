@@ -117,6 +117,10 @@ exports.googleAuth = async (req, res) => {
 // @access  Private
 const getCalendarConsentUrl = async (req, res) => {
   try {
+    // returnUrl을 state에 포함 (설정 페이지 vs 로그인 페이지 구분)
+    const returnUrl = req.query.returnUrl || '/auth';
+    const stateData = `${req.user.id}|${returnUrl}`;
+
     const authUrl = client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
@@ -124,8 +128,8 @@ const getCalendarConsentUrl = async (req, res) => {
         'https://www.googleapis.com/auth/calendar',
         'https://www.googleapis.com/auth/calendar.events',
       ],
-      state: req.user.id,
-      redirect_uri: process.env.GOOGLE_CALENDAR_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI,
+      state: stateData,
+      redirect_uri: process.env.GOOGLE_CALENDAR_REDIRECT_URI,
     });
 
     res.json({ url: authUrl });
@@ -138,14 +142,24 @@ const getCalendarConsentUrl = async (req, res) => {
 // @route   GET /api/auth/google/calendar-callback
 // @access  Public
 const calendarCallback = async (req, res) => {
-  try {
-    const { code, state: userId } = req.query;
+  const frontendUrl = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000';
 
-    if (!code || !userId) {
-      return res.redirect(`${process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000'}/auth?calendarError=missing_params`);
+  try {
+    const { code, state } = req.query;
+
+    if (!code || !state) {
+      return res.redirect(`${frontendUrl}/auth?calendarError=missing_params`);
     }
 
-    const callbackUri = process.env.GOOGLE_CALENDAR_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI;
+    // state에서 userId와 returnUrl 파싱 (형식: "userId|returnUrl" 또는 레거시 "userId")
+    let userId, returnUrl = '/auth';
+    if (state.includes('|')) {
+      [userId, returnUrl] = state.split('|');
+    } else {
+      userId = state;
+    }
+
+    const callbackUri = process.env.GOOGLE_CALENDAR_REDIRECT_URI;
     const callbackClient = new OAuth2Client(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
@@ -156,7 +170,7 @@ const calendarCallback = async (req, res) => {
 
     const user = await User.findById(userId);
     if (!user) {
-      return res.redirect(`${process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000'}/auth?calendarError=user_not_found`);
+      return res.redirect(`${frontendUrl}${returnUrl}?calendarError=user_not_found`);
     }
 
     if (!user.google) user.google = {};
@@ -166,10 +180,10 @@ const calendarCallback = async (req, res) => {
     }
     await user.save();
 
-    res.redirect(`${process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000'}/auth?calendarConnected=true`);
+    res.redirect(`${frontendUrl}${returnUrl}?calendarConnected=true`);
   } catch (err) {
     console.error('Calendar callback error:', err);
-    res.redirect(`${process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000'}/auth?calendarError=token_exchange_failed`);
+    res.redirect(`${frontendUrl}/auth?calendarError=token_exchange_failed`);
   }
 };
 
@@ -237,6 +251,46 @@ exports.deleteAccount = async (req, res) => {
 
 
     res.json({ msg: '회원탈퇴가 완료되었습니다.' });
+  } catch (err) {
+    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+  }
+};
+
+// @desc    Link Google account to existing user
+// @route   POST /api/auth/link-google
+// @access  Private
+exports.linkGoogle = async (req, res) => {
+  try {
+    const { googleId } = req.body;
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ msg: '사용자를 찾을 수 없습니다.' });
+    }
+
+    if (!user.google) user.google = {};
+    user.google.id = googleId;
+    await user.save();
+
+    res.json({ success: true, msg: '구글 계정 연동 완료' });
+  } catch (err) {
+    res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+  }
+};
+
+// @desc    Unlink Google account from existing user
+// @route   POST /api/auth/unlink-google
+// @access  Private
+exports.unlinkGoogle = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ msg: '사용자를 찾을 수 없습니다.' });
+    }
+
+    user.google = {};
+    await user.save();
+
+    res.json({ success: true, msg: '구글 계정 연동 해제 완료' });
   } catch (err) {
     res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
   }

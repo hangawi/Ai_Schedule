@@ -154,6 +154,9 @@ const MobileDashboard = ({ user, isClipboardMonitoring, setIsClipboardMonitoring
                <button className="sidebar-item" onClick={() => navigate('/mobile/calendar')}>
                   📆 달력
                </button>
+               <button className="sidebar-item" onClick={() => navigate('/mobile/settings')}>
+                  ⚙️ 설정
+               </button>
             </div>
          </nav>
 
@@ -168,7 +171,7 @@ const MobileDashboard = ({ user, isClipboardMonitoring, setIsClipboardMonitoring
                   <div className="mobile-logo-btn" onClick={() => navigate('/')}>
                      <div className="mobile-logo-wrapper">
                         <img src="/heyheylogo.png" alt="MeetAgent Logo" className="mobile-logo-img" />
-                        <div className={`mobile-login-indicator ${localStorage.getItem('loginMethod') === 'google' ? 'google' : 'local'}`}></div>
+                        <div className={`mobile-login-indicator ${user?.google?.refreshToken ? 'google' : 'local'}`}></div>
                      </div>
                      <h1 className="mobile-logo-text">MeetAgent</h1>
                   </div>

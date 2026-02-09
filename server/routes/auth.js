@@ -93,6 +93,8 @@ router.get('/', auth, authController.getLoggedInUser);
 router.post('/google', auth, authController.googleAuth);
 router.get('/google/calendar-consent', auth, authController.getCalendarConsentUrl);
 router.get('/google/calendar-callback', authController.calendarCallback);
+router.post('/link-google', auth, authController.linkGoogle);
+router.post('/unlink-google', auth, authController.unlinkGoogle);
 // router.delete('/delete-account', auth, authController.deleteAccount); // Temporarily disabled
 
 // Health check
