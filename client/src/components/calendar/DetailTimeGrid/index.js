@@ -51,6 +51,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+import { useToast } from '../../../contexts/ToastContext';
 
 // Import utilities
 import { generateTimeSlots, getNextTimeSlot, getTimeDifferenceInMinutes, timeToMinutes, calculateEndTime } from './utils/timeCalculations';
@@ -72,6 +73,7 @@ const DetailTimeGrid = ({
   onSave,
   showFullDay = false
 }) => {
+  const { showToast } = useToast();
   const [timeRange, setTimeRange] = useState({ start: 9, end: 18 });
   const [selectionStart, setSelectionStart] = useState(null);
   const [isSelecting, setIsSelecting] = useState(false);
@@ -1183,7 +1185,7 @@ const DetailTimeGrid = ({
     const endMinutes = endHour * 60 + endMin;
 
     if (endMinutes <= startMinutes) {
-      alert('종료 시간은 시작 시간보다 늦어야 합니다.');
+      showToast('종료 시간은 시작 시간보다 늦어야 합니다.');
       return;
     }
 

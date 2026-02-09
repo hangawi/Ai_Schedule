@@ -34,6 +34,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, FileText, User, Trash2 } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
+import { useToast } from '../../contexts/ToastContext';
 
 /**
  * MemberLogsModal
@@ -47,6 +48,7 @@ import { auth } from '../../config/firebaseConfig';
  * @returns {JSX.Element}
  */
 const MemberLogsModal = ({ roomId, memberId, memberName, onClose, isAdmin = false }) => {
+  const { showToast } = useToast();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeLogTab, setActiveLogTab] = useState('all');
@@ -164,10 +166,10 @@ const MemberLogsModal = ({ roomId, memberId, memberName, onClose, isAdmin = fals
         throw new Error(data.msg || '로그 삭제 실패');
       }
 
-      alert(data.msg);
+      showToast(data.msg);
       await fetchMemberLogs(); // Refresh logs
     } catch (err) {
-      alert(err.message || '로그 삭제 중 오류가 발생했습니다.');
+      showToast(err.message || '로그 삭제 중 오류가 발생했습니다.');
     }
   };
 

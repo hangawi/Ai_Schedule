@@ -45,6 +45,7 @@ import React, { useState, useEffect } from 'react';
 import { Building2, Search, Trash2, RefreshCw, Users, Clock, ChevronDown, ChevronUp, X, FileText } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 import MemberLogsModal from '../modals/MemberLogsModal';
+import { useToast } from '../../contexts/ToastContext';
 
 /**
  * AdminRoomManagement - 관리자 방 관리 메인 컴포넌트
@@ -52,6 +53,7 @@ import MemberLogsModal from '../modals/MemberLogsModal';
  * @returns {JSX.Element} 관리자 방 관리 UI
  */
 const AdminRoomManagement = () => {
+  const { showToast } = useToast();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -147,7 +149,7 @@ const AdminRoomManagement = () => {
 
       fetchRooms(pagination.current);
     } catch (err) {
-      alert(err.message);
+      showToast(err.message);
     }
   };
 
@@ -193,7 +195,7 @@ const AdminRoomManagement = () => {
         }
       }
     } catch (err) {
-      alert(err.message);
+      showToast(err.message);
     } finally {
       setLogsLoading(false);
     }
@@ -267,9 +269,9 @@ const AdminRoomManagement = () => {
       }
 
       setLogs([]);
-      alert('로그가 성공적으로 삭제되었습니다.');
+      showToast('로그가 성공적으로 삭제되었습니다.');
     } catch (err) {
-      alert(err.message);
+      showToast(err.message);
     }
   };
 

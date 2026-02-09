@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Calendar, Clock, MapPin, Users, X, Trash2 } from 'lucide-react';
+import { useToast } from '../../contexts/ToastContext';
 import './MobileScheduleView.css'; // 스타일 재사용
 
 /**
@@ -51,6 +52,7 @@ export const MapModal = ({ address, lat, lng, onClose }) => {
  */
 const EventDetailModal = ({ event, user, onClose, onOpenMap, onDelete, previousLocation, isEditing }) => {
    const [isDeleting, setIsDeleting] = useState(false);
+   const { showToast } = useToast();
    if (!event) return null;
 
    // 날짜 포맷팅
@@ -255,7 +257,7 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap, onDelete, previousL
                                        // (길찾기 파라미터가 복잡함)
                                        const kakaoMapUrl = `https://map.kakao.com/link/search/${encodeURIComponent(endAddr)}`;
                                        window.open(kakaoMapUrl, '_blank');
-                                       alert('정확한 경로를 보려면 주소 등록이 필요합니다.');
+                                       showToast('정확한 경로를 보려면 주소 등록이 필요합니다.');
                                     }
                                  }}
                               >

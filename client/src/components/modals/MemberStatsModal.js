@@ -32,6 +32,7 @@
 import React from 'react';
 import { X, Clock, Calendar, TrendingUp, TrendingDown } from 'lucide-react';
 import { coordinationService } from '../../services/coordinationService';
+import { useToast } from '../../contexts/ToastContext';
 
 /**
  * MemberStatsModal
@@ -46,6 +47,7 @@ import { coordinationService } from '../../services/coordinationService';
  * @returns {JSX.Element|null} isOpen이 false이거나 member 객체가 없으면 null을 반환.
  */
 const MemberStatsModal = ({ isOpen, onClose, member, isOwner, currentRoom, onRefresh }) => {
+  const { showToast } = useToast();
   if (!isOpen || !member) return null;
 
   const handleClearCarryOverHistory = async () => {
@@ -53,13 +55,13 @@ const MemberStatsModal = ({ isOpen, onClose, member, isOwner, currentRoom, onRef
       try {
         const memberId = latestMember.user?._id || latestMember.user;
         await coordinationService.clearCarryOverHistory(currentRoom._id, memberId);
-        alert('이월시간 내역이 성공적으로 삭제되었습니다.');
+        showToast('이월시간 내역이 성공적으로 삭제되었습니다.');
         if (onRefresh) {
           onRefresh();
         }
         onClose(); // Close modal on success
       } catch (error) {
-        alert(`오류가 발생했습니다: ${error.message}`);
+        showToast(`오류가 발생했습니다: ${error.message}`);
       }
     }
   };

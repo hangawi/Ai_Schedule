@@ -37,6 +37,7 @@ import {
   generateAutoSchedule,
   optimizeScheduleWithGPT
 } from '../../utils/scheduleOptimizer';
+import { useToast } from '../../contexts/ToastContext';
 
 /**
  * ScheduleOptimizerModal
@@ -48,6 +49,7 @@ import {
  * @returns {JSX.Element}
  */
 const ScheduleOptimizerModal = ({ schedules, onClose, onOptimized }) => {
+  const { showToast } = useToast();
   const [step, setStep] = useState('intro'); // intro, questions, processing, result
   const [conflicts, setConflicts] = useState([]);
   const [questions, setQuestions] = useState([]);
@@ -84,7 +86,7 @@ const ScheduleOptimizerModal = ({ schedules, onClose, onOptimized }) => {
 
     // 필수 질문 체크
     if (currentQuestion.required && !answers[currentQuestion.id]) {
-      alert('필수 항목입니다. 답변을 입력해주세요.');
+      showToast('필수 항목입니다. 답변을 입력해주세요.');
       return;
     }
 
@@ -119,7 +121,7 @@ const ScheduleOptimizerModal = ({ schedules, onClose, onOptimized }) => {
       setOptimizedResult(result);
       setStep('result');
     } catch (error) {
-      alert('스케줄 최적화에 실패했습니다. 다시 시도해주세요.');
+      showToast('스케줄 최적화에 실패했습니다. 다시 시도해주세요.');
       setStep('questions');
     } finally {
       setIsProcessing(false);

@@ -184,7 +184,7 @@ const GroupChat = ({ roomId, user, isMobile, typoCorrection = false }) => {
 
     // 파일 크기 체크 (10MB 제한)
     if (file.size > 10 * 1024 * 1024) {
-      alert('파일 크기는 10MB 이하여야 합니다.');
+      setToast({ message: '파일 크기는 10MB 이하여야 합니다.', type: 'error' });
       return;
     }
 
@@ -210,7 +210,7 @@ const GroupChat = ({ roomId, user, isMobile, typoCorrection = false }) => {
       // 업로드 성공 시 소켓으로 메시지가 전달됨
     } catch (error) {
       console.error('File upload error:', error);
-      alert('파일 업로드에 실패했습니다.');
+      setToast({ message: '파일 업로드에 실패했습니다.', type: 'error' });
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -240,7 +240,7 @@ const GroupChat = ({ roomId, user, isMobile, typoCorrection = false }) => {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Download error:', error);
-      alert('다운로드에 실패했습니다.');
+      setToast({ message: '다운로드에 실패했습니다.', type: 'error' });
     }
   };
 

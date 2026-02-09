@@ -43,6 +43,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Search, Trash2, Shield, ShieldOff, RefreshCw } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
+import { useToast } from '../../contexts/ToastContext';
 
 /**
  * AdminUserManagement - 관리자 회원 관리 메인 컴포넌트
@@ -50,6 +51,7 @@ import { auth } from '../../config/firebaseConfig';
  * @returns {JSX.Element} 관리자 회원 관리 UI
  */
 const AdminUserManagement = () => {
+  const { showToast } = useToast();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -137,7 +139,7 @@ const AdminUserManagement = () => {
 
       fetchUsers(pagination.current);
     } catch (err) {
-      alert(err.message);
+      showToast(err.message);
     }
   };
 
@@ -169,7 +171,7 @@ const AdminUserManagement = () => {
 
       fetchUsers(pagination.current);
     } catch (err) {
-      alert(err.message);
+      showToast(err.message);
     }
   };
 
@@ -201,7 +203,7 @@ const AdminUserManagement = () => {
 
       fetchUsers(pagination.current);
     } catch (err) {
-      alert(err.message);
+      showToast(err.message);
     }
   };
 

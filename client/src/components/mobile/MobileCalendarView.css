@@ -663,6 +663,11 @@
    to { transform: translateY(0); }
 }
 
+@keyframes fadeInUp {
+   from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+   to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 .detail-header {
    padding: 16px 20px;
    border-bottom: 1px solid #e5e7eb;

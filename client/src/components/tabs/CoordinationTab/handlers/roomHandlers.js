@@ -109,7 +109,7 @@ export const createHandleLeaveRoom = (currentRoom, setCurrentRoom, fetchMyRooms)
           throw new Error(errorData.msg || 'Failed to leave room');
         }
 
-        alert("방에서 나갔습니다.");
+        console.warn("방에서 나갔습니다.");
         setCurrentRoom(null);
         fetchMyRooms();
 
@@ -119,7 +119,7 @@ export const createHandleLeaveRoom = (currentRoom, setCurrentRoom, fetchMyRooms)
         }, '', '#coordination');
 
       } catch (error) {
-        alert(`방 나가기 실패: ${error.message}`);
+        console.warn(`방 나가기 실패: ${error.message}`);
       }
     }
   };

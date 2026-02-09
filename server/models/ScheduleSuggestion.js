@@ -106,6 +106,12 @@ const ScheduleSuggestionSchema = new mongoose.Schema({
     ref: 'User',
     default: null
   },
+  // 최적시간표에서 생성된 경우 원본 슬롯 정보 (삭제 시 복원용)
+  optimalSource: {
+    dayOfWeek: { type: Number, default: null },
+    startTime: { type: String, default: null },
+    endTime: { type: String, default: null }
+  },
   // 원본 AI 응답 (디버깅용)
   aiResponse: {
     type: mongoose.Schema.Types.Mixed,

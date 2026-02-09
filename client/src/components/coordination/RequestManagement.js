@@ -36,6 +36,7 @@ import React from 'react';
 import { Calendar, Users, AlertTriangle } from 'lucide-react';
 import { dayMap, getMemberDisplayName } from '../../utils/coordinationUtils';
 import { auth } from '../../config/firebaseConfig';
+import { useToast } from '../../contexts/ToastContext';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -259,6 +260,7 @@ const RequestSection = ({ title, requests, type, showAllKey, expandedKey, showAl
  * @description '받은 요청'과 '보낸 요청' 탭을 관리하고, 각 뷰에 맞는 요청 목록을 표시하는 메인 컴포넌트입니다.
  */
 const RequestManagement = ({ currentRoom, receivedRequests, sentRequests, requestViewMode, setRequestViewMode, showAllRequests, setShowAllRequests, expandedSections, setExpandedSections, onRequestWithUpdate, onCancelRequest, onRefreshRoom }) => {
+  const { showToast } = useToast();
   const handleShowAll = (key) => setShowAllRequests(prev => ({ ...prev, [key]: true }));
   const handleToggleExpanded = (key) => setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -266,7 +268,7 @@ const RequestManagement = ({ currentRoom, receivedRequests, sentRequests, reques
     try {
       const currentUser = auth.currentUser;
       if (!currentUser) {
-        alert('로그인이 필요합니다.');
+        showToast('로그인이 필요합니다.');
         return;
       }
       const token = await currentUser.getIdToken();
@@ -277,13 +279,13 @@ const RequestManagement = ({ currentRoom, receivedRequests, sentRequests, reques
       });
       const data = await response.json();
       if (data.success) {
-        alert(data.msg);
+        showToast(data.msg);
         if (onRefreshRoom) onRefreshRoom();
       } else {
-        alert(data.msg || '처리 중 오류가 발생했습니다.');
+        showToast(data.msg || '처리 중 오류가 발생했습니다.');
       }
     } catch (error) {
-      alert('연쇄 조정 처리 중 오류가 발생했습니다.');
+      showToast('연쇄 조정 처리 중 오류가 발생했습니다.');
     }
   };
 

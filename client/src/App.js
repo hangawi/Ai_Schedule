@@ -55,6 +55,7 @@ import MobileCalendarView from './components/mobile/MobileCalendarView';
 import MobileScheduleView from './components/mobile/MobileScheduleView';
 import MobileGroupsView from './components/mobile/MobileGroupsView';
 import { AdminProvider } from './contexts/AdminContext';
+import { ToastProvider } from './contexts/ToastContext';
 import SharedTextModal from './components/modals/SharedTextModal';
 import CopiedTextModal from './components/modals/CopiedTextModal';
 import BackgroundGuide from './components/guides/BackgroundGuide';
@@ -255,6 +256,7 @@ function App() {
          libraries={libraries}
          language="ko"
       >
+         <ToastProvider>
          <Router>
             <Routes>
                <Route path="/auth" element={
@@ -290,6 +292,7 @@ function App() {
             )}
             {isLoggedIn && showBackgroundGuide && <BackgroundGuide onClose={handleCloseBackgroundGuide} />}
          </Router>
+         </ToastProvider>
       </LoadScript>
    );
 }

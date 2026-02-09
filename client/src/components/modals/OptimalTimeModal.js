@@ -11,6 +11,8 @@ const OptimalTimeModal = ({ isOpen, onClose, roomId }) => {
    const [totalMembers, setTotalMembers] = useState(0);
    const [error, setError] = useState(null);
    const [creating, setCreating] = useState(null); // 생성 중인 candidate index
+   const [titleInput, setTitleInput] = useState({ show: false, idx: null, candidate: null, value: '' });
+   const [toast, setToast] = useState(null);
 
    useEffect(() => {
       if (isOpen && roomId) {
@@ -38,6 +40,15 @@ const OptimalTimeModal = ({ isOpen, onClose, roomId }) => {
          });
          if (!response.ok) throw new Error('API 호출 실패');
          const data = await response.json();
+
+         // 선호시간 없음 또는 겹치는 시간 없음 체크
+         if (data.success === false) {
+            setError(data.message || '시간표를 만들 수 없습니다.');
+            setCandidates([]);
+            setTotalMembers(data.totalMembers || 0);
+            return;
+         }
+
          setCandidates(data.candidates || []);
          setTotalMembers(data.totalMembers || 0);
       } catch (err) {
@@ -48,11 +59,16 @@ const OptimalTimeModal = ({ isOpen, onClose, roomId }) => {
       }
    };
 
-   const handleCreateSuggestion = async (candidate, idx) => {
-      if (creating !== null) return;
-      const title = window.prompt('일정 제목을 입력하세요', '');
-      if (title === null) return; // 취소
+   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
+   const handleCandidateClick = (candidate, idx) => {
+      if (creating !== null) return;
+      setTitleInput({ show: true, idx, candidate, value: '' });
+   };
+
+   const handleCreateSuggestion = async () => {
+      const { candidate, idx, value } = titleInput;
+      setTitleInput({ show: false, idx: null, candidate: null, value: '' });
       setCreating(idx);
       try {
          const token = await auth.currentUser?.getIdToken();
@@ -67,18 +83,18 @@ const OptimalTimeModal = ({ isOpen, onClose, roomId }) => {
                dayOfWeek: candidate.dayOfWeek,
                startTime: candidate.startTime,
                endTime: candidate.endTime,
-               summary: title || '최적 시간 일정'
+               summary: value || '최적 시간 일정'
             })
          });
          if (!response.ok) throw new Error('일정 생성 실패');
-         // 캘린더 & 채팅 갱신 이벤트
+         // 확정된 candidate를 목록에서 즉시 제거
+         setCandidates(prev => prev.filter((_, i) => i !== idx));
          window.dispatchEvent(new CustomEvent('calendarUpdate', { detail: { type: 'suggestion_created' } }));
          window.dispatchEvent(new CustomEvent('suggestionUpdate', { detail: { roomId } }));
-         alert('일정이 제안되었습니다!');
-         onClose();
+         showToast('일정이 제안되었습니다!');
       } catch (err) {
          console.error('일정 생성 실패:', err);
-         alert('일정 생성에 실패했습니다.');
+         showToast('일정 생성에 실패했습니다.');
       } finally {
          setCreating(null);
       }
@@ -134,7 +150,7 @@ const OptimalTimeModal = ({ isOpen, onClose, roomId }) => {
                      {candidates.map((c, idx) => (
                         <div
                            key={idx}
-                           onClick={() => handleCreateSuggestion(c, idx)}
+                           onClick={() => handleCandidateClick(c, idx)}
                            className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
                               c.isAllMembers
                                  ? 'border-green-400 bg-green-50 hover:border-green-500'
@@ -187,6 +203,47 @@ const OptimalTimeModal = ({ isOpen, onClose, roomId }) => {
                </button>
             </div>
          </div>
+
+         {/* 제목 입력 모달 */}
+         {titleInput.show && (
+            <div style={{ position: 'fixed', inset: 0, zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+               <div className="bg-white rounded-xl shadow-2xl w-80 mx-4 p-5">
+                  <h4 className="text-base font-bold text-gray-800 mb-3">일정 제목</h4>
+                  <input
+                     type="text"
+                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-4"
+                     value={titleInput.value}
+                     onChange={(e) => setTitleInput(prev => ({ ...prev, value: e.target.value }))}
+                     placeholder="일정 제목을 입력하세요"
+                     autoFocus
+                     onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSuggestion(); }}
+                  />
+                  <div className="flex gap-2">
+                     <button
+                        onClick={() => setTitleInput({ show: false, idx: null, candidate: null, value: '' })}
+                        className="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"
+                     >
+                        취소
+                     </button>
+                     <button
+                        onClick={handleCreateSuggestion}
+                        className="flex-1 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium"
+                     >
+                        생성
+                     </button>
+                  </div>
+               </div>
+            </div>
+         )}
+
+         {/* 토스트 */}
+         {toast && (
+            <div style={{ position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)', zIndex: 100001 }}>
+               <div className="bg-gray-800 text-white px-5 py-3 rounded-xl shadow-lg text-sm font-medium whitespace-nowrap">
+                  {toast}
+               </div>
+            </div>
+         )}
       </div>
    );
 

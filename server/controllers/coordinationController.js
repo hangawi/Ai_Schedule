@@ -283,6 +283,8 @@ exports.getMyConfirmedSchedules = async (req, res) => {
 // 🆕 최적 만남 시간 찾기 (멤버 선호시간 겹침 기반)
 exports.findOptimalMeetingTime = async (req, res) => {
    try {
+      const ScheduleSuggestion = require('../models/ScheduleSuggestion');
+
       const room = await Room.findById(req.params.roomId)
          .populate('members.user', '_id firstName lastName')
          .populate('owner', '_id firstName lastName');
@@ -301,6 +303,18 @@ exports.findOptimalMeetingTime = async (req, res) => {
       // 모든 멤버의 defaultSchedule 가져오기
       const users = await User.find({ _id: { $in: allMemberIds } })
          .select('_id firstName lastName defaultSchedule');
+
+      // 요청자 본인의 선호시간 체크
+      const requestingUser = users.find(u => u._id.toString() === req.user.id);
+      if (!requestingUser || !requestingUser.defaultSchedule || requestingUser.defaultSchedule.length === 0) {
+         return res.json({
+            success: false,
+            reason: 'no_preferred_times',
+            message: '선호시간이 등록되어 있지 않아 최적 시간표를 만들 수 없습니다. 먼저 선호시간을 설정해주세요.',
+            totalMembers,
+            candidates: []
+         });
+      }
 
       const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
       const results = [];
@@ -388,16 +402,42 @@ exports.findOptimalMeetingTime = async (req, res) => {
          userMap[user._id.toString()] = user.firstName || '사용자';
       }
 
-      const candidates = results.map(r => ({
-         dayOfWeek: r.dayOfWeek,
-         dayName: r.dayName,
-         startTime: r.startTime,
-         endTime: r.endTime,
-         count: r.count,
-         totalMembers: r.totalMembers,
-         memberNames: r.members.map(id => userMap[id] || '사용자'),
-         isAllMembers: r.count === totalMembers
-      }));
+      // 이미 최적시간표에서 생성된 활성 suggestion 조회 (확정 시 목록에서 제외)
+      const activeSuggestions = await ScheduleSuggestion.find({
+         room: req.params.roomId,
+         status: { $in: ['future', 'today'] },
+         'optimalSource.dayOfWeek': { $ne: null }
+      });
+
+      const usedSlotKeys = new Set(
+         activeSuggestions.map(s =>
+            `${s.optimalSource.dayOfWeek}-${s.optimalSource.startTime}-${s.optimalSource.endTime}`
+         )
+      );
+
+      const candidates = results
+         .map(r => ({
+            dayOfWeek: r.dayOfWeek,
+            dayName: r.dayName,
+            startTime: r.startTime,
+            endTime: r.endTime,
+            count: r.count,
+            totalMembers: r.totalMembers,
+            memberNames: r.members.map(id => userMap[id] || '사용자'),
+            isAllMembers: r.count === totalMembers
+         }))
+         .filter(c => !usedSlotKeys.has(`${c.dayOfWeek}-${c.startTime}-${c.endTime}`));
+
+      // 겹치는 시간이 전혀 없는 경우 (선호시간은 있지만 다른 사람과 안 겹침)
+      if (candidates.length === 0 && results.length === 0) {
+         return res.json({
+            success: false,
+            reason: 'no_overlap',
+            message: '다른 멤버들과 겹치는 선호시간이 없어 시간표를 만들 수 없습니다.',
+            totalMembers,
+            candidates: []
+         });
+      }
 
       res.json({
          success: true,
@@ -464,7 +504,8 @@ exports.createSuggestionFromOptimal = async (req, res) => {
          location: '',
          memberResponses,
          status: 'future',
-         suggestedBy: userId
+         suggestedBy: userId,
+         optimalSource: { dayOfWeek, startTime, endTime }
       });
       await suggestion.save();
 

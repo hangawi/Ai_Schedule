@@ -34,6 +34,7 @@
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { Zap, WandSparkles, MessageSquare, Clock, Calendar, X, RefreshCw, History, CheckCircle } from 'lucide-react';
+import { useToast } from '../../contexts/ToastContext';
 
 /**
  * [AutoSchedulerPanel]
@@ -66,6 +67,7 @@ const AutoSchedulerPanel = ({
   currentWeekStartDate,
   setAutoConfirmDuration
 }) => {
+  const { showToast } = useToast();
   const [shouldRun, setShouldRun] = useState(false);
   const [showModeDropdown, setShowModeDropdown] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(null);
@@ -148,7 +150,7 @@ const AutoSchedulerPanel = ({
 
     // 유효성 검사
     if (timerDuration < 1 || timerDuration > 1440) {
-      alert('타이머는 1분에서 1440분(24시간) 사이여야 합니다.');
+      showToast('타이머는 1분에서 1440분(24시간) 사이여야 합니다.');
       return;
     }
 
@@ -157,7 +159,7 @@ const AutoSchedulerPanel = ({
       await setAutoConfirmDuration(currentRoom._id, timerDuration);
       // 성공 메시지는 서버에서 socket.io로 전달됨
     } catch (error) {
-      alert(error.message || '타이머 설정에 실패했습니다.');
+      showToast(error.message || '타이머 설정에 실패했습니다.');
     } finally {
       setIsSavingTimer(false);
     }

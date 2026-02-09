@@ -14,10 +14,12 @@ import { auth } from '../../config/firebaseConfig';
 import BottomNavigation from './BottomNavigation';
 import { useBackgroundMonitoring } from '../../hooks/useBackgroundMonitoring';
 import AutoDetectedScheduleModal from '../modals/AutoDetectedScheduleModal';
+import { useToast } from '../../contexts/ToastContext';
 import './MobileDashboard.css';
 
 const MobileDashboard = ({ user, isClipboardMonitoring, setIsClipboardMonitoring, isVoiceEnabled, setIsVoiceEnabled }) => {
    const navigate = useNavigate();
+   const { showToast } = useToast();
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
    const [refreshKey, setRefreshKey] = useState(0);
    const [eventAddedKey, setEventAddedKey] = useState(0);
@@ -47,7 +49,7 @@ const MobileDashboard = ({ user, isClipboardMonitoring, setIsClipboardMonitoring
 
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
-         alert('이 브라우저에서는 음성 인식을 지원하지 않습니다.');
+         showToast('이 브라우저에서는 음성 인식을 지원하지 않습니다.');
          return;
       }
 
@@ -67,7 +69,7 @@ const MobileDashboard = ({ user, isClipboardMonitoring, setIsClipboardMonitoring
       recognition.onerror = (event) => {
          console.warn('백그라운드 음성 인식 오류:', event.error);
          if (event.error === 'not-allowed') {
-            alert('마이크 권한이 필요합니다.');
+            showToast('마이크 권한이 필요합니다.');
          }
       };
 

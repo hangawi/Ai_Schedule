@@ -281,89 +281,89 @@ useEffect(() => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg shadow-xl w-11/12 max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-gray-800">새 조율방 생성</h2>
+    <div className="fixed inset-0 bg-black bg-opacity-30 z-50 flex items-end sm:items-center justify-center" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white px-4 pt-3 pb-2 rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg max-h-[85vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="text-base font-bold text-gray-800">새 조율방 생성</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
         
-        <div className="space-y-4">
+        <div className="space-y-2">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-gray-700 mb-0.5">
               방 이름 <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="예: 큐브 스터디 그룹"
               maxLength={100}
             />
           </div>
-          
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">방 설명</label>
+            <label className="block text-xs font-medium text-gray-700 mb-0.5">방 설명</label>
             <textarea
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="이 방에 대한 간단한 설명을 입력해주세요 (선택사항)"
-              rows={3}
+              rows={2}
               maxLength={500}
             />
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">조율 모드</label>
-            <div className="grid grid-cols-2 gap-3">
-              <div 
-                className={`border rounded-lg p-3 cursor-pointer transition-all ${mode === 'standard' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}
+            <label className="block text-xs font-medium text-gray-700 mb-1">조율 모드</label>
+            <div className="grid grid-cols-2 gap-2">
+              <div
+                className={`border rounded-lg p-2 cursor-pointer transition-all ${mode === 'standard' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}
                 onClick={() => setMode('standard')}
               >
-                <div className="flex items-center mb-1">
-                  <input type="radio" checked={mode === 'standard'} readOnly className="mr-2" />
-                  <span className="text-sm font-bold text-gray-800">표준 모드</span>
+                <div className="flex items-center mb-0.5">
+                  <input type="radio" checked={mode === 'standard'} readOnly className="mr-1.5" />
+                  <span className="text-xs font-bold text-gray-800">표준 모드</span>
                 </div>
-                <p className="text-xs text-gray-500 leading-relaxed">기존의 수동 배정 및 자동 알고리즘 방식</p>
+                <p className="text-[11px] text-gray-500 leading-snug">수동 배정 및 자동 알고리즘 방식</p>
               </div>
-              <div 
-                className={`border rounded-lg p-3 cursor-pointer transition-all ${mode === 'conversational' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}
+              <div
+                className={`border rounded-lg p-2 cursor-pointer transition-all ${mode === 'conversational' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}
                 onClick={() => setMode('conversational')}
               >
-                <div className="flex items-center mb-1">
-                  <input type="radio" checked={mode === 'conversational'} readOnly className="mr-2" />
-                  <span className="text-sm font-bold text-gray-800">대화형 모드</span>
+                <div className="flex items-center mb-0.5">
+                  <input type="radio" checked={mode === 'conversational'} readOnly className="mr-1.5" />
+                  <span className="text-xs font-bold text-gray-800">대화형 모드</span>
                 </div>
-                <p className="text-xs text-gray-500 leading-relaxed">AI가 채팅 대화를 분석해 자동으로 일정 생성</p>
+                <p className="text-[11px] text-gray-500 leading-snug">AI가 채팅 대화를 분석해 자동으로 일정 생성</p>
               </div>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">최대 멤버 수</label>
+            <label className="block text-xs font-medium text-gray-700 mb-0.5">최대 멤버 수</label>
             <input
               type="number"
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               value={maxMembers}
               onChange={(e) => setMaxMembers(Math.max(2, Math.min(300, Number(e.target.value))))}
               min="2"
               max="300"
             />
-            <p className="text-xs text-gray-500 mt-1">2명~300명까지 설정할 수 있습니다</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">2명~300명까지 설정할 수 있습니다</p>
           </div>
 
-          <div className="border-t pt-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-3">시간표 설정</h3>
-            
-            <div className="grid grid-cols-2 gap-4">
+          <div className="border-t pt-2">
+            <h3 className="text-xs font-medium text-gray-700 mb-2">시간표 설정</h3>
+
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-gray-600 mb-1">시작 시간</label>
+                <label className="block text-[11px] text-gray-600 mb-0.5">시작 시간</label>
                 <select
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={settings.startHour}
                   onChange={(e) => setSettings({...settings, startHour: Number(e.target.value)})}
                 >
@@ -374,9 +374,9 @@ useEffect(() => {
               </div>
               
               <div>
-                <label className="block text-xs text-gray-600 mb-1">종료 시간</label>
+                <label className="block text-[11px] text-gray-600 mb-0.5">종료 시간</label>
                 <select
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={settings.endHour}
                   onChange={(e) => setSettings({...settings, endHour: Number(e.target.value)})}
                 >
@@ -387,8 +387,8 @@ useEffect(() => {
               </div>
             </div>
 
-            <div className="mt-4">
-              <div className="flex justify-between items-center mb-2">
+            <div className="mt-2">
+              <div className="flex justify-between items-center mb-1">
                 <h4 className="text-xs font-medium text-gray-700">금지 시간대 설정</h4>
                 <span className="text-xs text-gray-500">({settings.blockedTimes.length}개)</span>
               </div>
@@ -418,31 +418,31 @@ useEffect(() => {
               )}
               
               {/* 새 금지 시간대 추가 */}
-              <div className="border border-gray-200 rounded p-3">
-                <div className="mb-2">
+              <div className="border border-gray-200 rounded p-2">
+                <div className="mb-1.5">
                   <input
                     type="text"
-                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     value={newBlockedTime.name}
                     onChange={(e) => setNewBlockedTime({...newBlockedTime, name: e.target.value})}
                     placeholder="금지 시간 이름 (예: 점심시간, 회의시간)"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2 mb-2">
+                <div className="grid grid-cols-2 gap-2 mb-1.5">
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1">시작 시간</label>
+                    <label className="block text-[11px] text-gray-600 mb-0.5">시작 시간</label>
                     <input
                       type="time"
-                      className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       value={newBlockedTime.startTime}
                       onChange={(e) => setNewBlockedTime({...newBlockedTime, startTime: e.target.value})}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1">종료 시간</label>
+                    <label className="block text-[11px] text-gray-600 mb-0.5">종료 시간</label>
                     <input
                       type="time"
-                      className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       value={newBlockedTime.endTime}
                       onChange={(e) => setNewBlockedTime({...newBlockedTime, endTime: e.target.value})}
                     />
@@ -465,7 +465,7 @@ useEffect(() => {
                       showAlert('모든 필드를 입력해주세요.');
                     }
                   }}
-                  className="w-full px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                  className="w-full px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
                   disabled={!newBlockedTime.name.trim() || !newBlockedTime.startTime || !newBlockedTime.endTime}
                 >
                   금지 시간 추가
@@ -477,16 +477,16 @@ useEffect(() => {
           </div>
         </div>
         
-        <div className="mt-6 flex justify-end space-x-3">
-          <button 
-            onClick={onClose} 
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+        <div className="mt-3 flex justify-end space-x-2 sticky bottom-0 bg-white pt-2 pb-1 border-t border-gray-100">
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
           >
             취소
           </button>
-          <button 
-            onClick={handleSubmit} 
-            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
+          <button
+            onClick={handleSubmit}
+            className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
             disabled={!name.trim()}
           >
             생성

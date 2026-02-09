@@ -7,6 +7,7 @@ import EventDetailModal, { MapModal } from './EventDetailModal';
 import BottomNavigation from './BottomNavigation';
 import { useBackgroundMonitoring } from '../../hooks/useBackgroundMonitoring';
 import AutoDetectedScheduleModal from '../modals/AutoDetectedScheduleModal';
+import { useToast } from '../../contexts/ToastContext';
 import './MobileScheduleView.css';
 
 /**
@@ -48,6 +49,7 @@ const EventCard = ({ event, onClick, isToday, isHighlighted, cardRef }) => {
 
 const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitoring, isVoiceEnabled, setIsVoiceEnabled }) => {
    const navigate = useNavigate();
+   const { showToast } = useToast();
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
    const [selectedEvent, setSelectedEvent] = useState(null);
    const [eventAddedKey, setEventAddedKey] = useState(0);
@@ -94,7 +96,7 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
 
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
-         alert('이 브라우저에서는 음성 인식을 지원하지 않습니다.');
+         showToast('이 브라우저에서는 음성 인식을 지원하지 않습니다.');
          return;
       }
 
@@ -114,7 +116,7 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
       recognition.onerror = (event) => {
          console.warn('백그라운드 음성 인식 오류:', event.error);
          if (event.error === 'not-allowed') {
-            alert('마이크 권한이 필요합니다.');
+            showToast('마이크 권한이 필요합니다.');
          }
       };
 
@@ -446,7 +448,7 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          if (event.isGoogleEvent) {
             // 생일 이벤트는 삭제 불가
             if (event.isBirthdayEvent) {
-               alert('생일 이벤트는 Google 연락처에서 관리되어 삭제할 수 없습니다.');
+               showToast('생일 이벤트는 Google 연락처에서 관리되어 삭제할 수 없습니다.');
                return;
             }
 
@@ -484,7 +486,7 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          await Promise.all([fetchEvents(), fetchPersonalTimes()]);
       } catch (error) {
          console.error('Delete event error:', error);
-         alert('일정 삭제에 실패했습니다.');
+         showToast('일정 삭제에 실패했습니다.');
       }
    };
 

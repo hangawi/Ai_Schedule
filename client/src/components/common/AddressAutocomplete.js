@@ -36,6 +36,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { MapPin } from 'lucide-react';
+import { useToast } from '../../contexts/ToastContext';
 
 /**
  * AddressAutocomplete
@@ -56,6 +57,7 @@ import { MapPin } from 'lucide-react';
  * />
  */
 const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력하세요" }) => {
+  const { showToast } = useToast();
   const inputRef = useRef(null);
   const autocompleteRef = useRef(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -188,7 +190,7 @@ const AddressAutocomplete = ({ value, onChange, placeholder = "주소를 입력�
                   placeId: result.place_id
                 });
               } else {
-                alert('주소를 찾을 수 없습니다. 자동완성 목록에서 선택해주세요.');
+                showToast('주소를 찾을 수 없습니다. 자동완성 목록에서 선택해주세요.');
               }
             }
           );

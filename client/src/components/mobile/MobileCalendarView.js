@@ -48,6 +48,9 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
    const [scheduleExceptions, setScheduleExceptions] = useState([]);
    const [personalTimes, setPersonalTimes] = useState([]);
 
+   const [toastMessage, setToastMessage] = useState(null);
+   const showToast = useCallback((msg) => { setToastMessage(msg); }, []);
+
    const [globalEvents, setGlobalEvents] = useState([]);
    const [googleCalendarEvents, setGoogleCalendarEvents] = useState([]);
    const [isOcrProcessing, setIsOcrProcessing] = useState(false);
@@ -116,7 +119,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
 
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
-         alert('이 브라우저에서는 음성 인식을 지원하지 않습니다.');
+         showToast('이 브라우저에서는 음성 인식을 지원하지 않습니다.');
          return;
       }
 
@@ -136,7 +139,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
       recognition.onerror = (event) => {
          console.warn('백그라운드 음성 인식 오류:', event.error);
          if (event.error === 'not-allowed') {
-            alert('마이크 권한이 필요합니다.');
+            showToast('마이크 권한이 필요합니다.');
          }
       };
 
@@ -585,7 +588,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
 
    const handleStartVoiceRecognition = () => {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) { alert('음성 인식을 지원하지 않습니다.'); return; }
+      if (!SpeechRecognition) { showToast('음성 인식을 지원하지 않습니다.'); return; }
       const recognition = new SpeechRecognition();
       recognition.lang = 'ko-KR';
       recognition.onstart = () => setIsVoiceEnabled(true);
@@ -614,7 +617,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
       setIsOcrProcessing(true);
       try {
          const currentUser = auth.currentUser;
-         if (!currentUser) { alert('로그인이 필요합니다.'); return; }
+         if (!currentUser) { showToast('로그인이 필요합니다.'); return; }
 
          const formData = new FormData();
          formData.append('image', file);
@@ -631,7 +634,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          const scheduleItems = result.scheduleItems || result.events || [];
 
          if (scheduleItems.length === 0) {
-            alert('시간표에서 일정을 찾을 수 없습니다. 다시 촬영해 주세요.');
+            showToast('시간표에서 일정을 찾을 수 없습니다. 다시 촬영해 주세요.');
             return;
          }
 
@@ -660,15 +663,15 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          }
 
          if (addedCount > 0) {
-            alert(`시간표에서 ${addedCount}개의 일정을 등록했습니다!`);
+            showToast(`시간표에서 ${addedCount}개의 일정을 등록했습니다!`);
          } else {
-            alert('일정 등록에 실패했습니다. 다시 시도해 주세요.');
+            showToast('일정 등록에 실패했습니다. 다시 시도해 주세요.');
          }
          await fetchSchedule();
          await fetchGlobalEvents();
       } catch (error) {
          console.error('OCR 처리 오류:', error);
-         alert('시간표 인식에 실패했습니다. 다시 시도해 주세요.');
+         showToast('시간표 인식에 실패했습니다. 다시 시도해 주세요.');
       } finally {
          setIsOcrProcessing(false);
          // file input 초기화
@@ -709,13 +712,11 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                e => e.googleEventId && !currentGoogleIds.has(e.googleEventId)
             );
 
-            for (const event of deletedGoogleEvents) {
-               // 생일 이벤트 스킵 (Google 연락처에서 관리되어 삭제 불가)
-               if (event.isBirthdayEvent || event.title?.includes('생일')) {
-                  console.log('생일 이벤트 스킵:', event.title);
-                  continue;
-               }
+            let rejectedCount = 0;
+            let deletedCount = 0;
 
+            for (const event of deletedGoogleEvents) {
+               if (event.isBirthdayEvent || event.title?.includes('생일')) continue;
                try {
                   const suggestionId = event.suggestionId || event.extendedProperties?.private?.suggestionId;
                   if (suggestionId) {
@@ -725,18 +726,23 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                      });
                      if (resp.ok) {
                         const result = await resp.json();
-                        if (result.action === 'rejected') {
-                           alert('불참 처리되었습니다.');
-                        } else if (result.action === 'deleted') {
-                           alert('일정이 삭제되었습니다.');
-                        }
+                        if (result.action === 'rejected') rejectedCount++;
+                        else if (result.action === 'deleted') deletedCount++;
                      }
                   } else {
                      await googleCalendarService.deleteEvent(event.googleEventId);
+                     deletedCount++;
                   }
                } catch (err) {
                   console.warn('구글 일정 삭제 실패:', event.googleEventId, err);
                }
+            }
+
+            if (rejectedCount > 0 || deletedCount > 0) {
+               const msgs = [];
+               if (rejectedCount > 0) msgs.push(`${rejectedCount}건 불참 처리`);
+               if (deletedCount > 0) msgs.push(`${deletedCount}건 삭제`);
+               showToast(`${msgs.join(', ')}되었습니다.`);
             }
          }
 
@@ -747,6 +753,8 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                pt => pt.suggestionId && !pt.isGoogleEvent && !(currentPtIds.has((pt._id || pt.id)?.toString()))
             );
 
+            let sugRejected = 0;
+            let sugDeleted = 0;
             for (const pt of deletedSuggestionPts) {
                try {
                   const ptId = pt._id || pt.id;
@@ -756,26 +764,30 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                   });
                   if (response.ok) {
                      const result = await response.json();
-                     if (result.action === 'rejected') {
-                        alert('불참 처리되었습니다.');
-                     } else if (result.action === 'deleted') {
-                        alert('일정이 삭제되었습니다.');
-                     }
+                     if (result.action === 'rejected') sugRejected++;
+                     else if (result.action === 'deleted') sugDeleted++;
                   }
                } catch (err) {
                   console.warn('제안 일정 삭제 처리 실패:', pt.suggestionId, err);
                }
+            }
+
+            if (sugRejected > 0 || sugDeleted > 0) {
+               const msgs = [];
+               if (sugRejected > 0) msgs.push(`${sugRejected}건 불참 처리`);
+               if (sugDeleted > 0) msgs.push(`${sugDeleted}건 삭제`);
+               showToast(`${msgs.join(', ')}되었습니다.`);
             }
          }
 
          // 로컬 DB 저장 (구글 캘린더 이벤트는 제외 - DB personalTimes만 전송)
          const dbPersonalTimes = personalTimes.filter(pt => !pt.isGoogleEvent);
          await userService.updateUserSchedule({ defaultSchedule, scheduleExceptions, personalTimes: dbPersonalTimes });
-         alert('저장되었습니다.');
+         showToast('저장되었습니다.');
          setIsEditing(false);
          setInitialState(null);
          await fetchSchedule();
-      } catch (error) { alert('저장 실패'); }
+      } catch (error) { showToast('저장 실패'); }
    };
 
    const handleClearAll = async () => {
@@ -835,7 +847,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
             await userService.updateUserSchedule({ defaultSchedule: [], scheduleExceptions: [], personalTimes: [] });
             setDefaultSchedule([]); setScheduleExceptions([]); setPersonalTimes([]); setEvents([]);
             await fetchSchedule();
-         } catch (error) { alert('초기화 실패'); }
+         } catch (error) { showToast('초기화 실패'); }
       }
    };
 
@@ -974,7 +986,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          if (event.isGoogleEvent && event.googleEventId) {
             // 생일 이벤트는 삭제 불가
             if (event.isBirthdayEvent) {
-               alert('생일 이벤트는 Google 연락처에서 관리되어 삭제할 수 없습니다.');
+               showToast('생일 이벤트는 Google 연락처에서 관리되어 삭제할 수 없습니다.');
                return;
             }
 
@@ -987,9 +999,9 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                if (!response.ok) throw new Error('Failed to delete Google confirmed event');
                const result = await response.json();
                if (result.action === 'rejected') {
-                  alert('불참 처리되었습니다.');
+                  showToast('불참 처리되었습니다.');
                } else if (result.action === 'deleted') {
-                  alert('일정이 삭제되었습니다.');
+                  showToast('일정이 삭제되었습니다.');
                }
             } else {
                // 일반 구글 캘린더 이벤트 삭제
@@ -1010,9 +1022,9 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
             if (!response.ok) throw new Error('Failed to delete personal time');
             const result = await response.json();
             if (result.action === 'rejected') {
-               alert('불참 처리되었습니다.');
+               showToast('불참 처리되었습니다.');
             } else if (result.action === 'deleted') {
-               alert('일정이 삭제되었습니다.');
+               showToast('일정이 삭제되었습니다.');
             }
          } else {
             const response = await fetch(`${API_BASE_URL}/api/events/${event.id}`, {
@@ -1043,7 +1055,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          await fetchSchedule();
       } catch (error) {
          console.error('Delete event error:', error);
-         alert('일정 삭제에 실패했습니다.');
+         showToast('일정 삭제에 실패했습니다.');
       }
    };
 
@@ -1364,6 +1376,21 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                onDismiss={dismissSchedule}
                isAnalyzing={isBackgroundAnalyzing}
             />
+         )}
+         {toastMessage && (
+            <div
+               style={{
+                  position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+                  zIndex: 100000, backgroundColor: 'rgba(0,0,0,0.8)', color: '#fff',
+                  padding: '12px 24px', borderRadius: 12, fontSize: 14, fontWeight: 500,
+                  maxWidth: '85%', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                  animation: 'fadeInUp 0.3s ease-out'
+               }}
+               onClick={() => setToastMessage(null)}
+               onAnimationEnd={() => setTimeout(() => setToastMessage(null), 2500)}
+            >
+               {toastMessage}
+            </div>
          )}
       </div>
    );

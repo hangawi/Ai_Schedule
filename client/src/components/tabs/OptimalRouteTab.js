@@ -39,6 +39,7 @@ import React, { useState, useEffect } from 'react';
 import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import { Users, MapPin, Plus, Trash2, Navigation, Clock, Train, Car, Footprints } from 'lucide-react';
 import { userService } from '../../services/userService';
+import { useToast } from '../../contexts/ToastContext';
 
 /**
  * [OptimalRouteTab]
@@ -47,6 +48,7 @@ import { userService } from '../../services/userService';
  * @returns {JSX.Element} 최적 경로 찾기 탭 컴포넌트
  */
 const OptimalRouteTab = () => {
+  const { showToast } = useToast();
   const [participants, setParticipants] = useState([]);
   const [newParticipant, setNewParticipant] = useState({ name: '', address: '', email: '' });
   const [routes, setRoutes] = useState([]);
@@ -88,7 +90,7 @@ const OptimalRouteTab = () => {
    */
   const handleAddParticipant = () => {
     if (!newParticipant.name || !newParticipant.address) {
-      alert('이름과 주소를 입력해주세요.');
+      showToast('이름과 주소를 입력해주세요.');
       return;
     }
 
@@ -109,7 +111,7 @@ const OptimalRouteTab = () => {
         setParticipants([...participants, participant]);
         setNewParticipant({ name: '', address: '', email: '' });
       } else {
-        alert('주소를 찾을 수 없습니다. 다시 입력해주세요.');
+        showToast('주소를 찾을 수 없습니다. 다시 입력해주세요.');
       }
     });
   };
@@ -117,7 +119,7 @@ const OptimalRouteTab = () => {
   // 참가자 삭제
   const handleRemoveParticipant = (id) => {
     if (id === 'me') {
-      alert('본인은 삭제할 수 없습니다.');
+      showToast('본인은 삭제할 수 없습니다.');
       return;
     }
     setParticipants(participants.filter(p => p.id !== id));
@@ -134,7 +136,7 @@ const OptimalRouteTab = () => {
    */
   const calculateOptimalRoutes = async () => {
     if (participants.length < 2) {
-      alert('최소 2명 이상의 참가자가 필요합니다.');
+      showToast('최소 2명 이상의 참가자가 필요합니다.');
       return;
     }
 
@@ -223,12 +225,12 @@ const OptimalRouteTab = () => {
           routePromises.sort((a, b) => a.avgDuration - b.avgDuration);
           setRoutes(routePromises);
         } else {
-          alert('근처에 만남 장소를 찾을 수 없습니다.');
+          showToast('근처에 만남 장소를 찾을 수 없습니다.');
         }
         setLoading(false);
       });
     } catch (error) {
-      alert('경로 계산에 실패했습니다.');
+      showToast('경로 계산에 실패했습니다.');
       setLoading(false);
     }
   };

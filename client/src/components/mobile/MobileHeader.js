@@ -15,6 +15,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, Calendar, Clipboard, ClipboardX, Phone, User, LogOut } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
+import { useToast } from '../../contexts/ToastContext';
 
 const MobileHeader = ({
    user,
@@ -25,6 +26,7 @@ const MobileHeader = ({
    setIsVoiceEnabled
 }) => {
    const navigate = useNavigate();
+   const { showToast } = useToast();
    const loginMethod = localStorage.getItem('loginMethod') || '';
    
    // 통화 감지 상태 (로컬)
@@ -78,7 +80,7 @@ const MobileHeader = ({
             setIsBackgroundMonitoring(true);
          } catch (err) {
             console.error('마이크 접근 실패:', err);
-            alert('마이크 권한이 필요합니다.');
+            showToast('마이크 권한이 필요합니다.');
          }
       }
    }, [isBackgroundMonitoring]);

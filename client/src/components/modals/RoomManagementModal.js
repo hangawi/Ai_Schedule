@@ -38,6 +38,7 @@ import CustomAlertModal from './CustomAlertModal';
 import RoomInfoTab from './room/RoomInfoTab';
 import RoomMembersList from './room/RoomMembersList';
 import { auth } from '../../config/firebaseConfig';
+import { useToast } from '../../contexts/ToastContext';
 
 /**
  * RoomManagementModal
@@ -59,6 +60,7 @@ const RoomManagementModal = ({
   deleteRoom,
   defaultTab = "info",
 }) => {
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -166,9 +168,9 @@ const RoomManagementModal = ({
 
       // 초기화 후 로그 목록 비우기
       setLogs([]);
-      alert('로그가 초기화되었습니다.');
+      showToast('로그가 초기화되었습니다.');
     } catch (err) {
-      alert(err.message || '로그 초기화 중 오류가 발생했습니다.');
+      showToast(err.message || '로그 초기화 중 오류가 발생했습니다.');
     }
   };
 

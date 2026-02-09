@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useToast } from '../../contexts/ToastContext';
 import { X, Calendar, Clock, MapPin, Users, Check, XCircle, Trash2 } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 import { io } from 'socket.io-client';
@@ -22,6 +23,7 @@ import ScheduleDetailModal from './ScheduleDetailModal';
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
 const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMobile }) => {
+  const { showToast } = useToast();
   const [ownSocket, setOwnSocket] = useState(null);
   const socketRef = useRef(null);
 
@@ -204,11 +206,11 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
         window.dispatchEvent(new CustomEvent('suggestionUpdate', { detail: { roomId } }));
       } else {
         const error = await res.json();
-        alert(error.message || '일정 추가에 실패했습니다.');
+        showToast(error.message || '일정 추가에 실패했습니다.');
       }
     } catch (error) {
       console.error('Failed to accept suggestion:', error);
-      alert('일정 추가 중 오류가 발생했습니다.');
+      showToast('일정 추가 중 오류가 발생했습니다.');
     }
   };
 
@@ -226,11 +228,11 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
         window.dispatchEvent(new CustomEvent('suggestionUpdate', { detail: { roomId } }));
       } else {
         const error = await res.json();
-        alert(error.message || '일정 거절에 실패했습니다.');
+        showToast(error.message || '일정 거절에 실패했습니다.');
       }
     } catch (error) {
       console.error('Failed to reject suggestion:', error);
-      alert('일정 거절 중 오류가 발생했습니다.');
+      showToast('일정 거절 중 오류가 발생했습니다.');
     }
   };
 
@@ -251,11 +253,11 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
         window.dispatchEvent(new CustomEvent('suggestionUpdate', { detail: { roomId } }));
       } else {
         const error = await res.json();
-        alert(error.message || '참석 처리에 실패했습니다.');
+        showToast(error.message || '참석 처리에 실패했습니다.');
       }
     } catch (error) {
       console.error('Failed to force accept suggestion:', error);
-      alert('참석 처리 중 오류가 발생했습니다.');
+      showToast('참석 처리 중 오류가 발생했습니다.');
     }
   };
 
@@ -277,11 +279,11 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
         window.dispatchEvent(new CustomEvent('suggestionUpdate', { detail: { roomId } }));
       } else {
         const error = await res.json();
-        alert(error.message || '일정 삭제에 실패했습니다.');
+        showToast(error.message || '일정 삭제에 실패했습니다.');
       }
     } catch (error) {
       console.error('Failed to delete suggestion:', error);
-      alert('일정 삭제 중 오류가 발생했습니다.');
+      showToast('일정 삭제 중 오류가 발생했습니다.');
     }
   };
 

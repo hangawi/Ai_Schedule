@@ -6,10 +6,12 @@ import CoordinationTab from '../tabs/CoordinationTab';
 import BottomNavigation from './BottomNavigation';
 import { useBackgroundMonitoring } from '../../hooks/useBackgroundMonitoring';
 import AutoDetectedScheduleModal from '../modals/AutoDetectedScheduleModal';
+import { useToast } from '../../contexts/ToastContext';
 import './MobileGroupsView.css';
 
 const MobileGroupsView = ({ user, isClipboardMonitoring, setIsClipboardMonitoring, isVoiceEnabled, setIsVoiceEnabled }) => {
    const navigate = useNavigate();
+   const { showToast } = useToast();
    const location = useLocation();
    const [exchangeRequestCount, setExchangeRequestCount] = useState(0);
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -76,7 +78,7 @@ const MobileGroupsView = ({ user, isClipboardMonitoring, setIsClipboardMonitorin
 
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
-         alert('이 브라우저에서는 음성 인식을 지원하지 않습니다.');
+         showToast('이 브라우저에서는 음성 인식을 지원하지 않습니다.');
          return;
       }
 
@@ -96,7 +98,7 @@ const MobileGroupsView = ({ user, isClipboardMonitoring, setIsClipboardMonitorin
       recognition.onerror = (event) => {
          console.warn('백그라운드 음성 인식 오류:', event.error);
          if (event.error === 'not-allowed') {
-            alert('마이크 권한이 필요합니다.');
+            showToast('마이크 권한이 필요합니다.');
          }
       };
 
