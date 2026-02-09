@@ -21,7 +21,8 @@ const ConversationalRoomView = ({
   onLeaveRoom,
   onMemberClick,
   onMemberScheduleClick,
-  onOpenLogs
+  onOpenLogs,
+  onFindOptimalTime
 }) => {
   const [showSuggestions, setShowSuggestions] = useState(false); // 일정 관리 모달 토글
   const [showDrawer, setShowDrawer] = useState(false); // 🆕 오른쪽 Drawer 토글
@@ -113,7 +114,7 @@ const ConversationalRoomView = ({
 
             {/* Drawer Footer: 아이콘 버튼들 */}
             <div className="p-3 border-t border-gray-200 bg-gray-50">
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-5 gap-2">
                 {/* 방 나가기 */}
                 <button
                   onClick={() => {
@@ -169,6 +170,19 @@ const ConversationalRoomView = ({
                 >
                   <Sparkles size={18} />
                   <span className="text-[10px] font-medium whitespace-nowrap">AI</span>
+                </button>
+
+                {/* 최적 시간 찾기 */}
+                <button
+                  onClick={() => {
+                    setShowDrawer(false);
+                    onFindOptimalTime?.();
+                  }}
+                  className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors flex flex-col items-center gap-1"
+                  title="최적 시간 찾기"
+                >
+                  <Calendar size={18} />
+                  <span className="text-[10px] font-medium whitespace-nowrap">최적</span>
                 </button>
               </div>
             </div>

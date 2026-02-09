@@ -57,6 +57,9 @@ router.delete('/rooms/:roomId/time-slots', auth, coordinationController.deleteAl
 
 // AI-based scheduling
 router.post('/rooms/:roomId/find-common-slots', auth, coordinationController.findCommonSlots);
+// 🆕 최적 만남 시간 찾기 (멤버 선호시간 기반)
+router.post('/rooms/:roomId/find-optimal-time', auth, coordinationController.findOptimalMeetingTime);
+router.post('/rooms/:roomId/create-from-optimal', auth, coordinationController.createSuggestionFromOptimal);
 router.post('/rooms/:roomId/run-schedule', auth, coordinationSchedulingController.runAutoSchedule);
 router.post('/rooms/:roomId/confirm-schedule', auth, coordinationSchedulingController.confirmSchedule);
 

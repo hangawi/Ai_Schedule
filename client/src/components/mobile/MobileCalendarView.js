@@ -1163,9 +1163,8 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
       // 2. 기본 상태 (모든 뷰): 하단에 선택된 날짜(또는 오늘)의 일정 리스트 표시
       const targetDate = selectedDate || new Date();
       
-      // 필터링: 선호시간('가능') 제외하고 실제 일정(개인시간, 확정일정)만 표시
+      // 해당 날짜의 모든 일정 표시 (선호시간 포함)
       const dayEvents = getEventsForDate(targetDate)
-         .filter(e => e.title !== '가능' && e.title !== '선호시간')
          .sort((a, b) => new Date(a.start) - new Date(b.start));
 
       // 컨테이너 스타일 결정 (월간 뷰는 하단 시트, 나머지는 고정 영역)
@@ -1201,11 +1200,11 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                            {new Date(event.start).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
                            <br />~ {new Date(event.end).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
                         </div>
-                        <div 
+                        <div
                            className="split-item-content"
                            style={{ backgroundColor: event.backgroundColor || '#3b82f6' }}
                         >
-                           {event.title}
+                           {event.title === '가능' ? '선호시간' : event.title}
                         </div>
                      </div>
                   ))}

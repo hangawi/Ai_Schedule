@@ -75,6 +75,19 @@ const GroupChat = ({ roomId, user, isMobile, typoCorrection = false }) => {
     };
   }, [roomId]);
 
+  // 외부 이벤트(일정 생성/삭제 등)로 채팅 메시지 갱신
+  useEffect(() => {
+    const handleSuggestionUpdate = () => {
+      fetchMessages();
+    };
+    window.addEventListener('suggestionUpdate', handleSuggestionUpdate);
+    window.addEventListener('calendarUpdate', handleSuggestionUpdate);
+    return () => {
+      window.removeEventListener('suggestionUpdate', handleSuggestionUpdate);
+      window.removeEventListener('calendarUpdate', handleSuggestionUpdate);
+    };
+  }, []);
+
   // 🆕 강제 참석 (충돌 무시)
   const handleForceAccept = async (suggestionId) => {
     try {

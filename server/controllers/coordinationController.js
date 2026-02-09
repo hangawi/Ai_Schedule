@@ -279,3 +279,235 @@ exports.getMyConfirmedSchedules = async (req, res) => {
       res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
    }
 };
+
+// 🆕 최적 만남 시간 찾기 (멤버 선호시간 겹침 기반)
+exports.findOptimalMeetingTime = async (req, res) => {
+   try {
+      const room = await Room.findById(req.params.roomId)
+         .populate('members.user', '_id firstName lastName')
+         .populate('owner', '_id firstName lastName');
+
+      if (!room) {
+         return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+      }
+
+      // 모든 멤버 ID 수집 (방장 + 멤버, 중복 제거)
+      const allMemberIds = [...new Set([
+         room.owner._id.toString(),
+         ...room.members.map(m => m.user._id.toString())
+      ])];
+      const totalMembers = allMemberIds.length;
+
+      // 모든 멤버의 defaultSchedule 가져오기
+      const users = await User.find({ _id: { $in: allMemberIds } })
+         .select('_id firstName lastName defaultSchedule');
+
+      const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+      const results = [];
+
+      // 각 요일별로 겹치는 시간 계산
+      for (let day = 0; day <= 6; day++) {
+         // 이 요일에 선호시간이 있는 멤버 수집
+         const membersOnDay = [];
+         for (const user of users) {
+            const daySlots = (user.defaultSchedule || []).filter(s => s.dayOfWeek === day);
+            if (daySlots.length > 0) {
+               membersOnDay.push({
+                  userId: user._id.toString(),
+                  name: user.firstName || '사용자',
+                  slots: daySlots.map(s => ({ startTime: s.startTime, endTime: s.endTime }))
+               });
+            }
+         }
+
+         if (membersOnDay.length < 2) continue;
+
+         // 30분 단위로 슬롯 분할하여 멤버별 가용 여부 체크
+         const slotMembers = {}; // "HH:MM" -> Set of userIds
+
+         for (const member of membersOnDay) {
+            for (const slot of member.slots) {
+               const [sh, sm] = slot.startTime.split(':').map(Number);
+               const [eh, em] = slot.endTime.split(':').map(Number);
+               const startMin = sh * 60 + sm;
+               const endMin = eh * 60 + em;
+
+               for (let m = startMin; m < endMin; m += 30) {
+                  const key = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+                  if (!slotMembers[key]) slotMembers[key] = new Set();
+                  slotMembers[key].add(member.userId);
+               }
+            }
+         }
+
+         // 연속된 슬롯을 그룹으로 묶기 (같은 멤버 set인 경우만)
+         const sortedTimes = Object.keys(slotMembers).sort();
+         let currentGroup = null;
+
+         for (const time of sortedTimes) {
+            const memberSet = slotMembers[time];
+            const count = memberSet.size;
+
+            if (count >= 2) {
+               const memberKey = [...memberSet].sort().join(',');
+               const [h, m] = time.split(':').map(Number);
+               const nextMin = h * 60 + m + 30;
+               const endTime = `${String(Math.floor(nextMin / 60)).padStart(2, '0')}:${String(nextMin % 60).padStart(2, '0')}`;
+
+               if (currentGroup && currentGroup.memberKey === memberKey) {
+                  currentGroup.endTime = endTime;
+               } else {
+                  if (currentGroup) results.push(currentGroup);
+                  currentGroup = {
+                     dayOfWeek: day,
+                     dayName: dayNames[day],
+                     startTime: time,
+                     endTime: endTime,
+                     count: count,
+                     memberKey: memberKey,
+                     members: [...memberSet],
+                     totalMembers: totalMembers
+                  };
+               }
+            } else {
+               if (currentGroup) {
+                  results.push(currentGroup);
+                  currentGroup = null;
+               }
+            }
+         }
+         if (currentGroup) results.push(currentGroup);
+      }
+
+      // 정렬: 가용 멤버 수 내림차순, 요일 오름차순
+      results.sort((a, b) => b.count - a.count || a.dayOfWeek - b.dayOfWeek);
+
+      // 멤버 이름 매핑
+      const userMap = {};
+      for (const user of users) {
+         userMap[user._id.toString()] = user.firstName || '사용자';
+      }
+
+      const candidates = results.map(r => ({
+         dayOfWeek: r.dayOfWeek,
+         dayName: r.dayName,
+         startTime: r.startTime,
+         endTime: r.endTime,
+         count: r.count,
+         totalMembers: r.totalMembers,
+         memberNames: r.members.map(id => userMap[id] || '사용자'),
+         isAllMembers: r.count === totalMembers
+      }));
+
+      res.json({
+         success: true,
+         totalMembers,
+         candidates
+      });
+   } catch (error) {
+      console.error('findOptimalMeetingTime error:', error);
+      res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+   }
+};
+
+/**
+ * 최적 시간 선택 → 일정 제안(ScheduleSuggestion) 생성
+ */
+exports.createSuggestionFromOptimal = async (req, res) => {
+   try {
+      const ScheduleSuggestion = require('../models/ScheduleSuggestion');
+      const ChatMessage = require('../models/ChatMessage');
+
+      const { dayOfWeek, startTime, endTime, summary } = req.body;
+      const roomId = req.params.roomId;
+      const userId = req.user.id;
+
+      const room = await Room.findById(roomId)
+         .populate('members.user', '_id firstName lastName')
+         .populate('owner', '_id firstName lastName');
+      if (!room) return res.status(404).json({ msg: '방을 찾을 수 없습니다.' });
+
+      // 다음 해당 요일 날짜 계산
+      const today = new Date();
+      const todayDow = today.getDay();
+      let diff = dayOfWeek - todayDow;
+      if (diff < 0) diff += 7;
+      if (diff === 0) diff = 0; // 오늘이 해당 요일이면 오늘
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() + diff);
+      const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+
+      // 모든 멤버를 memberResponses에 추가
+      const memberResponses = room.members.map(member => {
+         const memberId = member.user._id.toString();
+         if (memberId === userId) {
+            return { user: member.user._id, status: 'accepted', respondedAt: new Date() };
+         }
+         return { user: member.user._id, status: 'pending', respondedAt: null };
+      });
+      // 방장이 members에 없는 경우 추가
+      const ownerInMembers = room.members.some(m => m.user._id.toString() === room.owner._id.toString());
+      if (!ownerInMembers) {
+         if (room.owner._id.toString() === userId) {
+            memberResponses.push({ user: room.owner._id, status: 'accepted', respondedAt: new Date() });
+         } else {
+            memberResponses.push({ user: room.owner._id, status: 'pending', respondedAt: null });
+         }
+      }
+
+      const suggestion = new ScheduleSuggestion({
+         room: roomId,
+         summary: summary || '최적 시간 일정',
+         date: dateStr,
+         startTime,
+         endTime,
+         location: '',
+         memberResponses,
+         status: 'future',
+         suggestedBy: userId
+      });
+      await suggestion.save();
+
+      // 제안자의 personalTime에 추가
+      const suggester = await User.findById(userId);
+      if (suggester) {
+         let adjEndTime = endTime === '24:00' ? '23:59' : endTime;
+         const newPtId = suggester.personalTimes.length > 0
+            ? Math.max(...suggester.personalTimes.map(pt => pt.id || 0)) + 1 : 1;
+         suggester.personalTimes.push({
+            id: newPtId,
+            title: `[약속] ${summary || '최적 시간 일정'}`,
+            type: 'event',
+            startTime,
+            endTime: adjEndTime,
+            specificDate: dateStr,
+            suggestionId: suggestion._id.toString(),
+            participants: 1
+         });
+         await suggester.save();
+      }
+
+      // 시스템 메시지 전송
+      const userName = suggester ? `${suggester.firstName || ''}`.trim() || '사용자' : '사용자';
+      const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+      const systemMsg = new ChatMessage({
+         room: roomId,
+         sender: userId,
+         type: 'system',
+         content: `${userName}님이 최적 시간으로 일정을 제안했습니다: ${dateStr} (${dayNames[dayOfWeek]}요일) ${startTime}~${endTime}`,
+         suggestionId: suggestion._id
+      });
+      await systemMsg.save();
+
+      // 소켓 이벤트 (global.io 사용 - 다른 컨트롤러와 동일)
+      if (global.io) {
+         global.io.to(`room-${roomId}`).emit('chat-message', systemMsg);
+         global.io.to(`room-${roomId}`).emit('suggestion-updated', { roomId, suggestion });
+      }
+
+      res.json({ success: true, suggestion });
+   } catch (error) {
+      console.error('createSuggestionFromOptimal error:', error);
+      res.status(500).json({ msg: '서버 오류가 발생했습니다.' });
+   }
+};

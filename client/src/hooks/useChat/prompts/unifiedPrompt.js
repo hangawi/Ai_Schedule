@@ -37,6 +37,49 @@ export const generateEnhancedPrompt = (command, context = {}) => {
     return `${dateStr}T${hours}:${minutes}:00+09:00`;
   };
 
+  // 이번주/다음주 날짜 테이블 계산 (월요일 시작 기준)
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+  const todayDow = now.getDay(); // 0=일, 1=월, ..., 6=토
+  const mondayOffset = todayDow === 0 ? -6 : 1 - todayDow; // 이번주 월요일까지의 차이
+  const thisMonday = new Date(now);
+  thisMonday.setDate(now.getDate() + mondayOffset);
+  thisMonday.setHours(0, 0, 0, 0);
+
+  const buildWeekTable = (startMonday) => {
+    const lines = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(startMonday);
+      d.setDate(startMonday.getDate() + i);
+      const dow = dayNames[d.getDay()];
+      lines.push(`  ${dow}요일: ${formatDate(d)}`);
+    }
+    return lines.join('\n');
+  };
+
+  const nextMonday = new Date(thisMonday);
+  nextMonday.setDate(thisMonday.getDate() + 7);
+
+  const thisWeekTable = buildWeekTable(thisMonday);
+  const nextWeekTable = buildWeekTable(nextMonday);
+
+  // 이번달 남은 날짜 중 각 요일 목록
+  const thisMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const buildMonthDaysMap = () => {
+    const map = {};
+    for (let i = 0; i < 7; i++) map[dayNames[i]] = [];
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    while (d <= thisMonthEnd) {
+      map[dayNames[d.getDay()]].push(formatDate(d));
+      d.setDate(d.getDate() + 1);
+    }
+    return Object.entries(map)
+      .filter(([, dates]) => dates.length > 0)
+      .map(([name, dates]) => `  ${name}요일: ${dates.join(', ')}`)
+      .join('\n');
+  };
+  const monthDaysTable = buildMonthDaysMap();
+
   // 컨텍스트 정보
   let contextInfo = '';
   if (context.context === 'profile') {
@@ -53,9 +96,18 @@ export const generateEnhancedPrompt = (command, context = {}) => {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 📅 **현재 시간 정보:**
-- 오늘: ${formatDate(now)} (${['일', '월', '화', '수', '목', '금', '토'][now.getDay()]}요일)
+- 오늘: ${formatDate(now)} (${dayNames[now.getDay()]}요일)
 - 현재 시각: ${now.getHours()}시 ${now.getMinutes()}분
 ${contextInfo ? `- ${contextInfo}` : ''}
+
+📆 **이번주 날짜 (반드시 이 표를 참고하세요!):**
+${thisWeekTable}
+
+📆 **다음주 날짜:**
+${nextWeekTable}
+
+📆 **이번달 남은 요일별 날짜 (오늘 이후):**
+${monthDaysTable}
 
 👤 **사용자 요청:**
 "${command}"
@@ -125,18 +177,31 @@ ${contextInfo ? `- ${contextInfo}` : ''}
 🎯 **중요한 규칙:**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. **상대적 시간 표현 해석**
+1. **상대적 시간 표현 해석** ⭐⭐⭐ 가장 중요!
    - "오늘", "내일", "모레", "어제" → 현재 날짜(${formatDate(now)}) 기준으로 계산
    - "이번 주", "다음 주", "다다음주" → 월요일~일요일 기준
    - "이번 달", "다음 달" → 해당 월의 1일~말일
 
-   ⚠️ 요일 계산 주의:
-   - 월요일 = 1, 화요일 = 2, 수요일 = 3, 목요일 = 4, 금요일 = 5, 토요일 = 6, 일요일 = 7
-   - 오늘이 ${formatDate(now)} (${['일', '월', '화', '수', '목', '금', '토'][now.getDay()]}요일)이면:
-     * "이번주 월요일" → 이번주의 월요일 날짜 계산
-     * "이번주 토요일" → 이번주의 토요일 날짜 계산 (일요일이 아님!)
-     * "다음주 월요일" → 다음주의 월요일 날짜 계산
-     * "다다음주 월요일" → 다음주에서 +7일 한 월요일 날짜 계산 (2주 후)
+   ⚠️ 요일→날짜 변환 시 반드시 위의 📆 날짜 테이블을 참조하세요!
+   절대로 직접 계산하지 말고 테이블에서 찾으세요!
+
+   - "이번주 월요일" → 위 "이번주 날짜" 테이블에서 월요일 날짜 사용
+   - "이번주 목요일" → 위 "이번주 날짜" 테이블에서 목요일 날짜 사용
+   - "다음주 월요일" → 위 "다음주 날짜" 테이블에서 월요일 날짜 사용
+
+   ⚠️ "이번주"는 오늘을 포함합니다!
+   - 오늘이 ${dayNames[now.getDay()]}요일(${formatDate(now)})이면, "이번주 ${dayNames[now.getDay()]}요일" = 오늘(${formatDate(now)})
+   - 이미 지나간 요일도 이번주에 포함됩니다
+
+   ⚠️ 요일만 말하고 "이번주"를 안 붙여도 이번주로 해석:
+   - "월 목 금 추가" → 이번주 월요일, 이번주 목요일, 이번주 금요일 (각 1회)
+   - "화요일 추가" → 이번주 화요일 (1회)
+   - 단, 이미 지나간 요일이면 다음주로: 오늘이 수요일이고 "월요일 추가"면 → 다음주 월요일
+
+   ⚠️ "이번달", "매주", "전부" 키워드가 있을 때만 반복!
+   - "이번달 월 목 추가" → 이번달의 모든 월요일과 목요일 (add_recurring_preferred_time)
+   - "매주 월 목 추가" → 이번달의 모든 월요일과 목요일 (add_recurring_preferred_time)
+   - "월 목 추가" → 이번주 월요일 1회 + 이번주 목요일 1회 (add_preferred_time 2개)
 
 2. **우선순위 자동 판단** ⭐ 매우 중요!
    - "선호시간으로" 또는 "선호시간" 키워드 포함 → 무조건 priority: 3
@@ -147,11 +212,16 @@ ${contextInfo ? `- ${contextInfo}` : ''}
    ⚠️ 주의: "선호시간으로 추가", "선호시간으로 해줘" 등 "선호시간" 키워드가 있으면
    어떤 표현이든 무조건 priority: 3으로 설정하세요!
 
-3. **반복 패턴 인식**
-   - "이번달 전부" → 이번 달 1일~말일 매일
-   - "이번달 월요일 전부" → 이번 달의 모든 월요일
+3. **반복 패턴 인식** ⭐ 주의!
+   - "이번달 전부" → 이번 달 오늘~말일 매일
+   - "이번달 월요일 전부" → 이번 달의 모든 월요일 (위 📆 이번달 테이블 참조!)
+   - "이번달 월 목" → 이번 달의 모든 월요일과 목요일 (위 📆 이번달 테이블 참조!)
    - "매주 월요일" → 매주 반복
    - "X일부터 Y일까지" → 범위 내 매일
+
+   ⚠️ "이번달", "매주", "전부", "매일" 등 반복 키워드가 없으면 add_recurring 사용 금지!
+   - "월 목 추가" → add_preferred_time 2개 (이번주 월, 이번주 목 각 1회)
+   - "이번달 월 목 추가" → add_recurring_preferred_time 1개 (이번달 모든 월, 목)
 
 3-1. **여러 시간 범위 처리** ⭐ 중요!
    - "9-12시 1-4시" → timeRanges 배열 사용

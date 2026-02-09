@@ -41,6 +41,7 @@ import CustomAlertModal from '../../modals/CustomAlertModal';
 import NotificationModal from '../../modals/NotificationModal';
 import MemberStatsModal from '../../modals/MemberStatsModal';
 import MemberScheduleModal from '../../modals/MemberScheduleModal';
+import OptimalTimeModal from '../../modals/OptimalTimeModal';
 
 import ChainExchangeRequestModal from '../../coordination/ChainExchangeRequestModal';
 
@@ -206,6 +207,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
   const [showDetailGrid, setShowDetailGrid] = useState(false);
   const [showWalkingErrorModal, setShowWalkingErrorModal] = useState(false);
   const [walkingErrorMessage, setWalkingErrorMessage] = useState('');
+  const [showOptimalTimeModal, setShowOptimalTimeModal] = useState(false);
 
   const scheduleStartHour = getHourFromSettings(currentRoom?.settings?.scheduleStart || currentRoom?.settings?.startHour, '9');
   const scheduleEndHour = getHourFromSettings(currentRoom?.settings?.scheduleEnd || currentRoom?.settings?.endHour, '18');
@@ -409,6 +411,7 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
       {showMemberScheduleModal && selectedMemberId && ( <MemberScheduleModal memberId={selectedMemberId} onClose={() => setShowMemberScheduleModal(false)} /> )}
       <ChainExchangeRequestModal isOpen={showChainExchangeModal} onClose={() => setShowChainExchangeModal(false)} request={selectedChainRequest} roomId={selectedChainRequest?.roomId} onRequestHandled={handleChainExchangeRequestHandled} />
       <CustomAlertModal isOpen={showWalkingErrorModal} onClose={handleCloseWalkingErrorModal} title="도보 모드 사용 불가" message={walkingErrorMessage} type="warning" showCancel={false} />
+      <OptimalTimeModal isOpen={showOptimalTimeModal} onClose={() => setShowOptimalTimeModal(false)} roomId={currentRoom?._id} />
     </>
   );
 
@@ -419,16 +422,17 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
     if (currentRoom.mode === 'conversational') {
       return (
         <>
-          <ConversationalRoomView 
-            currentRoom={currentRoom} 
-            user={user} 
-            isOwner={isOwner} 
+          <ConversationalRoomView
+            currentRoom={currentRoom}
+            user={user}
+            isOwner={isOwner}
             isMobile={isMobile}
             onManageRoom={openManageRoomModal}
             onBackToRoomList={handleBackToRoomList}
             onLeaveRoom={handleLeaveRoom}
             onMemberClick={handleMemberClick}
             onMemberScheduleClick={handleMemberScheduleClick}
+            onFindOptimalTime={() => setShowOptimalTimeModal(true)}
           />
           {renderCommonModals()}
         </>

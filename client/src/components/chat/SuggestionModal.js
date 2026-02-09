@@ -200,8 +200,8 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
 
       if (res.ok) {
         const data = await res.json();
-        // 로컬 상태도 즉시 업데이트
         fetchSuggestions();
+        window.dispatchEvent(new CustomEvent('suggestionUpdate', { detail: { roomId } }));
       } else {
         const error = await res.json();
         alert(error.message || '일정 추가에 실패했습니다.');
@@ -222,9 +222,8 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
 
       if (res.ok) {
         const data = await res.json();
-        console.log('❌ Rejected suggestion:', data);
-        // 로컬 상태도 즉시 업데이트
         fetchSuggestions();
+        window.dispatchEvent(new CustomEvent('suggestionUpdate', { detail: { roomId } }));
       } else {
         const error = await res.json();
         alert(error.message || '일정 거절에 실패했습니다.');
@@ -249,6 +248,7 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
         console.log('✅ Force accepted suggestion:', data);
         setConflictModal(null);
         fetchSuggestions();
+        window.dispatchEvent(new CustomEvent('suggestionUpdate', { detail: { roomId } }));
       } else {
         const error = await res.json();
         alert(error.message || '참석 처리에 실패했습니다.');
@@ -273,8 +273,8 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
 
       if (res.ok) {
         console.log('🗑️ Deleted suggestion:', suggestionId);
-        // 로컬 상태도 즉시 업데이트
         fetchSuggestions();
+        window.dispatchEvent(new CustomEvent('suggestionUpdate', { detail: { roomId } }));
       } else {
         const error = await res.json();
         alert(error.message || '일정 삭제에 실패했습니다.');
