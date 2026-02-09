@@ -48,7 +48,9 @@
       "mcp__serena__list_memories",
       "Bash(curl:*)",
       "Bash(npx react-scripts build)",
-      "Bash(ren:*)"
+      "Bash(ren:*)",
+      "mcp__serena__onboarding",
+      "mcp__serena__write_memory"
     ]
   }
 }

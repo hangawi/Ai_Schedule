@@ -380,6 +380,14 @@ exports.updateUserSchedule = async (req, res) => {
             specificDate: pt.specificDate,
             color: pt.color,
             location: pt.location || '',
+            locationLat: pt.locationLat || null,
+            locationLng: pt.locationLng || null,
+            transportMode: pt.transportMode || null,
+            roomId: pt.roomId || null,
+            isTravelTime: pt.isTravelTime || false,
+            hasTravelTime: pt.hasTravelTime || false,
+            suggestionId: pt.suggestionId || null,
+            googleEventId: pt.googleEventId || null,
             participants: pt.participants || 1,
             externalParticipants: pt.externalParticipants || []
         }));

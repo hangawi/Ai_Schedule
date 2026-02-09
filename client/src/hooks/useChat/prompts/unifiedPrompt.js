@@ -236,9 +236,12 @@ ${contextInfo ? `- ${contextInfo}` : ''}
   "response": "일정을 추가했어요!"
 }
 ⚠️ location 규칙:
-- 사용자가 장소를 언급하면 → location에 장소명 추가
-- "신라호텔 오후2시" → location: "신라호텔"
-- "강남역 카페에서 3시 회의" → location: "강남역 카페"
+- 사용자가 장소를 언급하면 → location에 장소명 추출하고, title에도 장소 포함
+- "신라호텔 오후2시 미팅" → location: "신라호텔", title: "신라호텔 미팅"
+- "강남역 카페에서 3시 회의" → location: "강남역 카페", title: "강남역 카페 회의"
+- "롯데월드에서 놀기" → location: "롯데월드", title: "롯데월드 놀기"
+- "홍대에서 밥약속" → location: "홍대", title: "홍대 밥약속"
+- "~에서", "~에", "~로" 앞의 장소명을 반드시 location 필드에도 넣을 것
 - 장소 언급이 없으면 → location 필드 생략 또는 빈 문자열
 
 ⚠️ participants 규칙:
@@ -294,7 +297,7 @@ ${contextInfo ? `- ${contextInfo}` : ''}
 사용자: "신라호텔 오후2시 미팅"
 → {
   "intent": "add_event",
-  "title": "미팅",
+  "title": "신라호텔 미팅",
   "location": "신라호텔",
   "startDateTime": "2025-12-01T14:00:00+09:00",
   "endDateTime": "2025-12-01T15:00:00+09:00",
@@ -304,7 +307,7 @@ ${contextInfo ? `- ${contextInfo}` : ''}
 사용자: "다음주 금요일 오후 4시에 조선호텔에서 창정 지윤 형우랑 밥약속"
 → {
   "intent": "add_event",
-  "title": "밥약속",
+  "title": "조선호텔 밥약속",
   "location": "조선호텔",
   "participants": ["창정", "지윤", "형우"],
   "startDateTime": "2025-12-12T16:00:00+09:00",

@@ -958,13 +958,19 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          }
 
          if (event.id && event.id.startsWith('pt-')) {
-            // 🆕 Personal Time 삭제 (서버에서 자동 불참 처리)
+            // 🆕 Personal Time 삭제 (참여 인원에 따라 삭제/불참 분기)
             const personalTimeId = event.id.replace('pt-', '');
             const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule/${personalTimeId}`, {
                method: 'DELETE',
                headers: { 'Authorization': `Bearer ${token}` },
             });
             if (!response.ok) throw new Error('Failed to delete personal time');
+            const result = await response.json();
+            if (result.action === 'rejected') {
+               alert('불참 처리되었습니다.');
+            } else if (result.action === 'deleted') {
+               alert('일정이 삭제되었습니다.');
+            }
          } else {
             const response = await fetch(`${API_BASE_URL}/api/events/${event.id}`, {
                method: 'DELETE',

@@ -298,32 +298,130 @@ router.delete('/schedule/:personalTimeId', auth, async (req, res) => {
       return res.status(404).json({ msg: '해당 개인 일정을 찾을 수 없습니다.' });
     }
 
-    // 🆕 suggestionId가 있으면 해당 suggestion에서 불참 처리
+    // 🆕 suggestionId가 있으면 참여 인원 수에 따라 삭제/불참 분기 처리
     if (targetPt.suggestionId) {
       try {
         const suggestion = await ScheduleSuggestion.findById(targetPt.suggestionId);
         if (suggestion) {
-          const userResponse = suggestion.memberResponses.find(
-            r => (r.user._id?.toString() || r.user.toString()) === req.user.id.toString()
-          );
-          if (userResponse && userResponse.status === 'accepted') {
-            userResponse.status = 'rejected';
-            userResponse.respondedAt = new Date();
-            userResponse.personalTimeId = null;
-            await suggestion.save();
-            console.log(`[profile.js DELETE] 🔄 자동 불참 처리: suggestionId=${targetPt.suggestionId}, userId=${req.user.id}`);
+          // accepted 멤버 수 확인
+          const acceptedCount = suggestion.memberResponses.filter(
+            r => r.status === 'accepted'
+          ).length;
+          const userName = user.firstName || user.email?.split('@')[0] || '사용자';
 
-            // 🆕 시스템 메시지 전송
-            const userName = user.firstName || user.email?.split('@')[0] || '사용자';
+          if (acceptedCount >= 2) {
+            // ✅ 2명 이상 참여 → 본인만 불참 처리 (일정 유지)
+            const userResponse = suggestion.memberResponses.find(
+              r => (r.user._id?.toString() || r.user.toString()) === req.user.id.toString()
+            );
+            if (userResponse && userResponse.status === 'accepted') {
+              userResponse.status = 'rejected';
+              userResponse.respondedAt = new Date();
+              userResponse.personalTimeId = null;
+              await suggestion.save();
+              console.log(`[profile.js DELETE] 🔄 불참 처리 (${acceptedCount}명 중 1명 불참): suggestionId=${targetPt.suggestionId}`);
+
+              // 다른 참여자들의 participants 수 업데이트
+              const newAcceptedCount = acceptedCount - 1;
+              for (const mr of suggestion.memberResponses) {
+                if (mr.status === 'accepted' && mr.personalTimeId) {
+                  const otherUserId = mr.user._id?.toString() || mr.user.toString();
+                  if (otherUserId !== req.user.id.toString()) {
+                    const otherUser = await User.findById(otherUserId);
+                    if (otherUser) {
+                      const otherPt = otherUser.personalTimes.find(
+                        pt => pt.suggestionId === targetPt.suggestionId
+                      );
+                      if (otherPt) {
+                        otherPt.participants = newAcceptedCount;
+                        await otherUser.save();
+                      }
+                    }
+                  }
+                }
+              }
+
+              // 시스템 메시지: 불참
+              const systemMsg = new ChatMessage({
+                room: suggestion.room,
+                sender: user._id,
+                content: `${userName}님이 ${suggestion.date} ${suggestion.summary} 일정에 불참했습니다.`,
+                type: 'system'
+              });
+              await systemMsg.save();
+
+              if (global.io && suggestion.room) {
+                global.io.to(`room-${suggestion.room}`).emit('chat-message', systemMsg);
+                global.io.to(`room-${suggestion.room}`).emit('suggestion-updated', {
+                  suggestionId: suggestion._id,
+                  suggestion: suggestion
+                });
+              }
+            }
+
+            // 본인 personalTime만 삭제
+            user.personalTimes = user.personalTimes.filter(pt =>
+              pt._id.toString() !== personalTimeId && pt.id?.toString() !== personalTimeId
+            );
+            await user.save();
+
+            return res.json({
+              success: true,
+              action: 'rejected',
+              msg: '불참 처리되었습니다.',
+              personalTimes: user.personalTimes
+            });
+
+          } else {
+            // ✅ 1명 이하 참여 → 일정 완전 삭제
+            suggestion.status = 'cancelled';
+
+            // 모든 accepted 멤버의 personalTimes에서 해당 일정 삭제
+            for (const mr of suggestion.memberResponses) {
+              const memberId = mr.user._id?.toString() || mr.user.toString();
+              if (mr.status === 'accepted' && memberId !== req.user.id.toString()) {
+                const memberUser = await User.findById(memberId);
+                if (memberUser) {
+                  const isGoogleMember = !!(memberUser.google && memberUser.google.refreshToken);
+                  if (isGoogleMember) {
+                    // 구글 사용자: Google Calendar에서 삭제
+                    try {
+                      const ptData = {
+                        title: `[약속] ${suggestion.summary}`,
+                        specificDate: suggestion.date,
+                        startTime: suggestion.startTime,
+                        suggestionId: targetPt.suggestionId
+                      };
+                      await deleteFromGoogleCalendar(memberUser, ptData);
+                    } catch (gcErr) {
+                      console.warn('[profile.js DELETE] 다른 멤버 Google Calendar 삭제 실패:', gcErr.message);
+                    }
+                  } else {
+                    // 일반 사용자: personalTimes에서 삭제
+                    memberUser.personalTimes = memberUser.personalTimes.filter(
+                      pt => pt.suggestionId !== targetPt.suggestionId
+                    );
+                    await memberUser.save();
+                  }
+                }
+              }
+              // 모든 멤버 응답 상태 업데이트
+              mr.status = 'rejected';
+              mr.respondedAt = new Date();
+              mr.personalTimeId = null;
+            }
+            await suggestion.save();
+            console.log(`[profile.js DELETE] ❌ 일정 완전 삭제: suggestionId=${targetPt.suggestionId}`);
+
+            // 시스템 메시지: 삭제
             const systemMsg = new ChatMessage({
               room: suggestion.room,
               sender: user._id,
-              content: `${userName}님이 ${suggestion.date} ${suggestion.summary} 일정에 불참했습니다.`,
+              content: `${userName}님이 ${suggestion.date} ${suggestion.summary} 일정을 삭제했습니다.`,
               type: 'system'
             });
             await systemMsg.save();
 
-            // Socket 이벤트 발송
             if (global.io && suggestion.room) {
               global.io.to(`room-${suggestion.room}`).emit('chat-message', systemMsg);
               global.io.to(`room-${suggestion.room}`).emit('suggestion-updated', {
@@ -331,14 +429,27 @@ router.delete('/schedule/:personalTimeId', auth, async (req, res) => {
                 suggestion: suggestion
               });
             }
+
+            // 본인 personalTime도 삭제
+            user.personalTimes = user.personalTimes.filter(pt =>
+              pt._id.toString() !== personalTimeId && pt.id?.toString() !== personalTimeId
+            );
+            await user.save();
+
+            return res.json({
+              success: true,
+              action: 'deleted',
+              msg: '일정이 삭제되었습니다.',
+              personalTimes: user.personalTimes
+            });
           }
         }
       } catch (suggErr) {
-        console.warn('[profile.js DELETE] Suggestion 불참 처리 실패:', suggErr.message);
+        console.warn('[profile.js DELETE] Suggestion 처리 실패:', suggErr.message);
       }
     }
 
-    // personalTimes에서 삭제
+    // suggestionId가 없는 일반 personalTime 삭제
     user.personalTimes = user.personalTimes.filter(pt =>
       pt._id.toString() !== personalTimeId && pt.id?.toString() !== personalTimeId
     );
@@ -347,6 +458,7 @@ router.delete('/schedule/:personalTimeId', auth, async (req, res) => {
 
     res.json({
       success: true,
+      action: 'deleted',
       msg: '개인 일정이 삭제되었습니다.',
       personalTimes: user.personalTimes
     });

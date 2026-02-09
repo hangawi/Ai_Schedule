@@ -171,7 +171,11 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap, onDelete, previousL
 
                         if (displayLocation) {
                            // 일정 목적지 주소를 사용하는 경우 좌표는 null
-                           onOpenMap(displayLocation, event.locationLat || user?.addressLat, event.locationLng || user?.addressLng);
+                           onOpenMap(
+                              displayLocation,
+                              eventLocation ? (event.locationLat || null) : user?.addressLat,
+                              eventLocation ? (event.locationLng || null) : user?.addressLng
+                           );
                         }
                      }}
                      style={{ cursor: (event.location || (user && user.address)) ? 'pointer' : 'default' }}
