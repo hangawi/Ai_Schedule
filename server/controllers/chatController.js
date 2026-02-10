@@ -724,7 +724,7 @@ exports.deleteSuggestion = async (req, res) => {
     } else {
       // 제안자가 나간 경우 (suggestedBy === null): rejected가 아닌 멤버면 삭제 가능
       const isActiveMember = suggestion.memberResponses.some(
-        r => r.user.toString() === userId && r.status !== 'rejected'
+        r => r.user.toString() === userId && r.status === 'accepted'
       );
       if (!isActiveMember) {
         return res.status(403).json({ msg: '제안을 삭제할 권한이 없습니다. 참여 중인 멤버만 삭제할 수 있습니다.' });

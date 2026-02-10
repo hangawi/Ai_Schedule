@@ -304,7 +304,7 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
     }
     // 제안자가 나간 경우 (suggestedBy === null): rejected가 아닌 멤버면 삭제 가능
     const isActiveMember = suggestion.memberResponses?.some(
-      r => r.user?.email === currentUser.email && r.status !== 'rejected'
+      r => r.user?.email === currentUser.email && r.status === 'accepted'
     );
     return !!isActiveMember;
   };
