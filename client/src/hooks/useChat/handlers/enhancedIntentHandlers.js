@@ -167,6 +167,14 @@ export const createEnhancedIntentRouter = (handlers) => {
 async function routeSingleAction(action, context, message, handlers) {
     const { intent } = action;
 
+    // LLM 응답 정규화: date + startTime/endTime → startDateTime/endDateTime
+    if (action.date && action.startTime && !action.startDateTime) {
+      action.startDateTime = `${action.date}T${action.startTime}:00`;
+    }
+    if (action.date && action.endTime && !action.endDateTime) {
+      action.endDateTime = `${action.date}T${action.endTime}:00`;
+    }
+
     // 🆕 선호시간 추가
     if (intent === 'add_preferred_time' && action.startDateTime) {
       return await handlers.handlePreferredTimeAdd(action, context);

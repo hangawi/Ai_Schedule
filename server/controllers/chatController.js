@@ -720,16 +720,33 @@ exports.deleteSuggestion = async (req, res) => {
       return res.status(403).json({ msg: '제안을 삭제할 권한이 없습니다. 제안자만 삭제할 수 있습니다.' });
     }
 
-    // 3. 수락한 멤버들의 personalTimes에서 해당 일정 제거
+    // 3. 수락한 멤버들의 personalTimes에서 해당 일정 제거 + 구글 캘린더 삭제
     for (const response of suggestion.memberResponses) {
-      if (response.status === 'accepted' && response.personalTimeId) {
+      if (response.status === 'accepted') {
         try {
           const member = await User.findById(response.user);
           if (member) {
+            // personalTime 삭제
+            const beforeCount = member.personalTimes.length;
             member.personalTimes = member.personalTimes.filter(
               pt => pt.suggestionId !== suggestionId
             );
-            await member.save();
+            if (member.personalTimes.length < beforeCount) {
+              await member.save();
+            }
+            // 구글 캘린더에서도 삭제
+            if (member.google && member.google.refreshToken) {
+              try {
+                await deleteFromGoogleCalendar(member, {
+                  title: `[약속] ${suggestion.summary}`,
+                  specificDate: suggestion.date,
+                  startTime: suggestion.startTime,
+                  suggestionId: suggestionId
+                });
+              } catch (gcErr) {
+                console.warn(`구글 캘린더 삭제 실패 (${response.user}):`, gcErr.message);
+              }
+            }
           }
         } catch (err) {
           console.error(`⚠️ Failed to remove personalTime for user ${response.user}:`, err.message);
@@ -796,24 +813,24 @@ exports.rejectSuggestion = async (req, res) => {
     const userResponse = suggestion.memberResponses.find(r => r.user.toString() === userId);
     const isGoogleUser = !!(user.google && user.google.refreshToken);
 
+    // personalTime 삭제 (구글/일반 사용자 공통)
+    const beforeCount = user.personalTimes.length;
+    user.personalTimes = user.personalTimes.filter(pt => pt.suggestionId !== suggestionId);
+    if (user.personalTimes.length < beforeCount) {
+      await user.save();
+    }
+    // 구글 사용자: 구글 캘린더에서도 삭제
     if (isGoogleUser) {
-      // 🆕 구글 사용자: Google Calendar에서만 삭제 (personalTimes 없음)
       try {
-        const ptData = {
+        await deleteFromGoogleCalendar(user, {
           title: `[약속] ${suggestion.summary}`,
           specificDate: suggestion.date,
           startTime: suggestion.startTime,
           suggestionId: suggestionId
-        };
-        await deleteFromGoogleCalendar(user, ptData);
-        console.log(`[rejectSuggestion] ✅ 구글 사용자 - Google Calendar에서 삭제: ${ptData.title}`);
+        });
       } catch (gcErr) {
         console.warn(`[rejectSuggestion] 구글 캘린더 삭제 실패: ${gcErr.message}`);
       }
-    } else if (userResponse && userResponse.personalTimeId) {
-      // 일반 사용자: personalTimes에서 삭제
-      user.personalTimes = user.personalTimes.filter(pt => pt.suggestionId !== suggestionId);
-      await user.save();
     }
 
     // 3.6. 참석자 수 기반 삭제/불참 분기

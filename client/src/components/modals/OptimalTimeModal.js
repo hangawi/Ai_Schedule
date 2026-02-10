@@ -104,7 +104,7 @@ const OptimalTimeModal = ({ isOpen, onClose, roomId }) => {
 
    const modalContent = (
       <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-         <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col">
+         <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 flex flex-col" style={{ maxHeight: '80vh' }}>
             {/* 헤더 */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
                <div className="flex items-center">
@@ -117,7 +117,7 @@ const OptimalTimeModal = ({ isOpen, onClose, roomId }) => {
             </div>
 
             {/* 내용 */}
-            <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div className="flex-1 px-5 py-4" style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch', minHeight: 0 }}>
                {loading && (
                   <div className="flex items-center justify-center py-12">
                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>

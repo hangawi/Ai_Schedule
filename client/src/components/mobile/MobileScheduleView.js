@@ -315,6 +315,19 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          setDataLoaded(true);
       };
       loadData();
+
+      // 다른 페이지에서 일정 변경 후 돌아올 때 자동 갱신
+      const handleCalendarUpdate = () => loadData();
+      window.addEventListener('calendarUpdate', handleCalendarUpdate);
+      const handleVisibility = () => {
+         if (document.visibilityState === 'visible') loadData();
+      };
+      document.addEventListener('visibilitychange', handleVisibility);
+
+      return () => {
+         window.removeEventListener('calendarUpdate', handleCalendarUpdate);
+         document.removeEventListener('visibilitychange', handleVisibility);
+      };
    }, [fetchEvents, fetchPersonalTimes]);
 
    // 3. useMemo (전체 일정 시간순 정렬 + 가장 가까운 일정 인덱스)
@@ -444,15 +457,16 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          if (!currentUser) return;
          const token = await currentUser.getIdToken();
 
-         // 🆕 구글 이벤트 체크를 먼저! (isGoogleEvent 플래그 우선)
-         if (event.isGoogleEvent) {
-            // 생일 이벤트는 삭제 불가
-            if (event.isBirthdayEvent) {
-               showToast('생일 이벤트는 Google 연락처에서 관리되어 삭제할 수 없습니다.');
-               return;
-            }
-
-            // 확정된 구글 일정인 경우 (suggestionId가 있음) - 서버 API로 삭제 + 불참 처리
+         // pt- 접두사가 있으면 personalTime 삭제를 우선 (서버에서 구글캘린더도 같이 처리)
+         if (event.id && event.id.startsWith('pt-')) {
+            const personalTimeId = event.id.replace('pt-', '');
+            const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule/${personalTimeId}`, {
+               method: 'DELETE',
+               headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!response.ok) throw new Error('Failed to delete personal time');
+         } else if (event.isGoogleEvent) {
+            // 순수 구글 캘린더 이벤트 (pt- 없음)
             if (event.suggestionId) {
                const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule/google/${event.suggestionId}`, {
                   method: 'DELETE',
@@ -460,18 +474,9 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                });
                if (!response.ok) throw new Error('Failed to delete Google event');
             } else {
-               // 일반 구글 캘린더 이벤트 삭제
                const googleEventId = event.googleEventId || event.id;
                await googleCalendarService.deleteEvent(googleEventId);
             }
-         } else if (event.id && event.id.startsWith('pt-')) {
-            // Personal Time 삭제 (서버에서 자동 불참 처리)
-            const personalTimeId = event.id.replace('pt-', '');
-            const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule/${personalTimeId}`, {
-               method: 'DELETE',
-               headers: { 'Authorization': `Bearer ${token}` },
-            });
-            if (!response.ok) throw new Error('Failed to delete personal time');
          } else {
             // Global Event 삭제
             const response = await fetch(`${API_BASE_URL}/api/events/${event.id}`, {

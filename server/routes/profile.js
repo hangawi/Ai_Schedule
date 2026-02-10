@@ -200,23 +200,32 @@ router.post('/schedule', auth, async (req, res) => {
 router.delete('/schedule/google/:suggestionId', auth, async (req, res) => {
   try {
     const { suggestionId } = req.params;
-    console.log('[profile.js DELETE /schedule/google] Request for user:', req.user.id, 'suggestionId:', suggestionId);
-
     const user = await User.findById(req.user.id);
-
     if (!user) {
       return res.status(404).json({ msg: '사용자를 찾을 수 없습니다.' });
     }
 
-    // 구글 사용자 확인
     const isGoogleUser = !!(user.google && user.google.refreshToken);
     if (!isGoogleUser) {
       return res.status(400).json({ msg: '구글 사용자가 아닙니다.' });
     }
 
     // suggestion 찾기
-    const suggestion = await ScheduleSuggestion.findById(suggestionId);
+    const suggestion = await ScheduleSuggestion.findById(suggestionId).catch(() => null);
     if (!suggestion) {
+      // suggestion이 없으면 personalTime에서 해당 suggestionId를 가진 항목 직접 삭제
+      const ptIndex = user.personalTimes.findIndex(pt =>
+        pt.suggestionId && pt.suggestionId.toString() === suggestionId
+      );
+      if (ptIndex !== -1) {
+        const targetPt = user.personalTimes[ptIndex];
+        if (user.google && user.google.refreshToken) {
+          try { await deleteFromGoogleCalendar(user, targetPt); } catch (e) { console.warn('구글 삭제 실패:', e.message); }
+        }
+        user.personalTimes.splice(ptIndex, 1);
+        await user.save();
+        return res.json({ success: true, action: 'deleted', msg: '일정이 삭제되었습니다.' });
+      }
       return res.status(404).json({ msg: '해당 일정을 찾을 수 없습니다.' });
     }
 

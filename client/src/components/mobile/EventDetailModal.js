@@ -328,8 +328,8 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap, onDelete, previousL
                      <div className="modal-value">📅 {event.roomName}</div>
                   </div>
                )}
-                           {/* 삭제 버튼 (편집 모드에서만 표시) */}
-               {onDelete && isEditing && (
+                           {/* 삭제 버튼 */}
+               {onDelete && (
                   <div className="modal-delete-section">
                      <button
                         className="event-delete-btn"

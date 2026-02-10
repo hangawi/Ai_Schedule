@@ -519,6 +519,7 @@ exports.createSuggestionFromOptimal = async (req, res) => {
             id: newPtId,
             title: `[약속] ${summary || '최적 시간 일정'}`,
             type: 'event',
+            isRecurring: false,
             startTime,
             endTime: adjEndTime,
             specificDate: dateStr,
@@ -526,6 +527,17 @@ exports.createSuggestionFromOptimal = async (req, res) => {
             participants: 1
          });
          await suggester.save();
+
+         // 구글 사용자면 구글 캘린더에도 동기화
+         if (suggester.google && suggester.google.refreshToken) {
+            try {
+               const { syncEventsToGoogleInternal } = require('./calendarController');
+               const syncResult = await syncEventsToGoogleInternal(userId);
+               console.log('[createSuggestionFromOptimal] 구글 캘린더 동기화:', syncResult);
+            } catch (syncErr) {
+               console.warn('[createSuggestionFromOptimal] 구글 동기화 실패:', syncErr.message);
+            }
+         }
       }
 
       // 시스템 메시지 전송

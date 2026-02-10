@@ -243,7 +243,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                    (pt.daysOfWeek && pt.daysOfWeek.includes(dayOfWeek)));
 
 
-               if (hasRecurringTime || (pt.isRecurring === false && pt.specificDate === dateStr)) {
+               if (hasRecurringTime || (pt.specificDate === dateStr)) {
                   const [sh, sm] = pt.startTime.split(':').map(Number);
                   const [eh, em] = pt.endTime.split(':').map(Number);
                   const start = new Date(d); start.setHours(sh, sm, 0, 0);
@@ -448,8 +448,6 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
              return true;
           });
           const allEvents = [...calendarEvents, ...filteredGoogleEvents];
-
-          // React 상태 업데이트 (하단 리스트 등 다른 UI 요소에 필요)
           setEvents(allEvents);
   
           // FullCalendar API 호출을 마이크로태스크로 연기하여 React 렌더링 사이클 완료 후 실행
@@ -719,9 +717,12 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
             for (const event of deletedGoogleEvents) {
                if (event.isBirthdayEvent || event.title?.includes('생일')) continue;
                try {
+                  let deleted = false;
                   const suggestionId = event.suggestionId || event.extendedProperties?.private?.suggestionId;
-                  if (suggestionId) {
-                     const resp = await fetch(`${API_BASE_URL}/api/users/profile/schedule/google/${suggestionId}`, {
+                  // DB에 personalTime이 있는 경우만 서버 호출
+                  const ptId = event.originalData?._id || event.originalData?.id;
+                  if (ptId && suggestionId) {
+                     const resp = await fetch(`${API_BASE_URL}/api/users/profile/schedule/${ptId}`, {
                         method: 'DELETE',
                         headers: { 'Authorization': `Bearer ${token}` }
                      });
@@ -729,8 +730,11 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                         const result = await resp.json();
                         if (result.action === 'rejected') rejectedCount++;
                         else if (result.action === 'deleted') deletedCount++;
+                        deleted = true;
                      }
-                  } else {
+                  }
+                  // DB에 없거나 서버 실패 → 구글 캘린더에서 직접 삭제
+                  if (!deleted && event.googleEventId) {
                      await googleCalendarService.deleteEvent(event.googleEventId);
                      deletedCount++;
                   }
@@ -983,38 +987,9 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          // 🆕 suggestionId 확인
          const suggestionId = event.suggestionId || event.originalData?.suggestionId || event.extendedProperties?.private?.suggestionId;
 
-         // 구글 캘린더 이벤트 삭제 (서버에서 roomId 처리함)
-         if (event.isGoogleEvent && event.googleEventId) {
-            // 생일 이벤트는 삭제 불가
-            if (event.isBirthdayEvent) {
-               showToast('생일 이벤트는 Google 연락처에서 관리되어 삭제할 수 없습니다.');
-               return;
-            }
+         let deleteAction = null;
 
-            // 🆕 확정된 구글 일정인 경우 - 서버 API로 삭제 + 불참/삭제 분기 처리
-            if (suggestionId) {
-               const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule/google/${suggestionId}`, {
-                  method: 'DELETE',
-                  headers: { 'Authorization': `Bearer ${token}` },
-               });
-               if (!response.ok) throw new Error('Failed to delete Google confirmed event');
-               const result = await response.json();
-               if (result.action === 'rejected') {
-                  showToast('불참 처리되었습니다.');
-               } else if (result.action === 'deleted') {
-                  showToast('일정이 삭제되었습니다.');
-               }
-            } else {
-               // 일반 구글 캘린더 이벤트 삭제
-               await googleCalendarService.deleteEvent(event.googleEventId);
-            }
-            setSelectedEvent(null);
-            await fetchSchedule();
-            return;
-         }
-
-         let deleteAction = null; // 삭제/불참 결과 추적
-
+         // pt- 접두사 → personalTime 삭제 우선 (서버에서 구글캘린더+suggestion도 같이 처리)
          if (event.id && event.id.startsWith('pt-')) {
             // 🆕 Personal Time 삭제 (참여 인원에 따라 삭제/불참 분기)
             const personalTimeId = event.id.replace('pt-', '');
@@ -1029,6 +1004,28 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                showToast('불참 처리되었습니다.');
             } else if (result.action === 'deleted') {
                showToast('일정이 삭제되었습니다.');
+            }
+         } else if (event.isGoogleEvent && event.googleEventId) {
+            // 순수 구글 캘린더 이벤트 (pt- 접두사 없음)
+            if (event.isBirthdayEvent) {
+               showToast('생일 이벤트는 Google 연락처에서 관리되어 삭제할 수 없습니다.');
+               setSelectedEvent(null);
+               return;
+            }
+            if (suggestionId) {
+               const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule/google/${suggestionId}`, {
+                  method: 'DELETE',
+                  headers: { 'Authorization': `Bearer ${token}` },
+               });
+               if (response.ok) {
+                  const result = await response.json();
+                  deleteAction = result.action;
+               } else {
+                  // 서버에 없으면 구글 캘린더에서 직접 삭제
+                  await googleCalendarService.deleteEvent(event.googleEventId);
+               }
+            } else {
+               await googleCalendarService.deleteEvent(event.googleEventId);
             }
          } else {
             const response = await fetch(`${API_BASE_URL}/api/events/${event.id}`, {
