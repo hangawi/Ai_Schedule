@@ -247,8 +247,12 @@ exports.getUserSchedule = async (req, res) => {
 
         const gcalEvents = eventsRes.data.items || [];
 
-        // 🆕 모든 구글 캘린더 이벤트 반환 (확정 여부 구분)
-        for (const event of gcalEvents) {
+        // 앱에서 생성한 이벤트(source=meetagent) 제외 → DB에 이미 있으므로 중복 방지
+        const filteredGcalEvents = gcalEvents.filter(event =>
+          event.extendedProperties?.private?.source !== 'meetagent'
+        );
+
+        for (const event of filteredGcalEvents) {
           const isConfirmed = event.extendedProperties?.private?.isCoordinationConfirmed === 'true';
           const suggestionId = event.extendedProperties?.private?.suggestionId || null;
           const startDateTime = event.start?.dateTime || event.start?.date;

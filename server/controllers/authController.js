@@ -4,6 +4,7 @@ const ActivityLog = require('../models/ActivityLog');
 const bcrypt = require('bcryptjs');
 const { auth: firebaseAuth } = require('../config/firebaseAdmin');
 const { OAuth2Client } = require('google-auth-library');
+const { syncEventsToGoogleInternal } = require('./calendarController');
 
 const client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
@@ -143,6 +144,8 @@ const getCalendarConsentUrl = async (req, res) => {
 // @access  Public
 const calendarCallback = async (req, res) => {
   const frontendUrl = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000';
+  console.log('[calendarCallback] 호출됨');
+  console.log('[calendarCallback] GOOGLE_REDIRECT_URI:', process.env.GOOGLE_REDIRECT_URI);
 
   try {
     const { code, state } = req.query;
@@ -180,7 +183,17 @@ const calendarCallback = async (req, res) => {
     }
     await user.save();
 
-    res.redirect(`${frontendUrl}${returnUrl}?calendarConnected=true`);
+    // 토큰 저장 직후 서버에서 바로 동기화 (클라이언트 타이밍 이슈 없음)
+    try {
+      const syncResult = await syncEventsToGoogleInternal(userId);
+      console.log('[calendarCallback] 서버 동기화 완료:', syncResult);
+    } catch (syncErr) {
+      console.warn('[calendarCallback] 서버 동기화 실패:', syncErr.message);
+    }
+
+    const redirectUrl = `${frontendUrl}${returnUrl}?calendarConnected=true`;
+    console.log('[calendarCallback] 리다이렉트:', redirectUrl);
+    res.redirect(redirectUrl);
   } catch (err) {
     console.error('Calendar callback error:', err);
     res.redirect(`${frontendUrl}/auth?calendarError=token_exchange_failed`);

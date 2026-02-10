@@ -59,7 +59,24 @@ const MobileSettings = ({ user }) => {
       localStorage.setItem('loginMethod', 'google');
       // user prop 갱신을 위해 이벤트 발송
       window.dispatchEvent(new Event('userProfileUpdated'));
-      showAlert('연동 완료', '구글 계정이 연동되었습니다. 이제 구글로도 로그인할 수 있습니다.', 'success');
+      // 구글 계정 연동 성공 → 바로 구글 캘린더 동의 화면으로 이동
+      console.log('[handleLinkGoogle] 구글 계정 연동 성공, 캘린더 동의 URL 요청 중...');
+      try {
+        const calendarRes = await fetch(`${API_BASE_URL}/api/auth/google/calendar-consent?returnUrl=/mobile/settings`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const calendarData = await calendarRes.json();
+        console.log('[handleLinkGoogle] 캘린더 동의 응답:', calendarData);
+        if (calendarData.url) {
+          console.log('[handleLinkGoogle] 캘린더 동의 URL로 리다이렉트:', calendarData.url);
+          localStorage.setItem('pendingCalendarSync', 'true');
+          window.location.href = calendarData.url;
+          return;
+        }
+      } catch (calErr) {
+        console.warn('캘린더 자동 연동 실패:', calErr);
+      }
+      showAlert('연동 완료', '구글 계정이 연동되었습니다. 캘린더 연동은 아래 버튼을 눌러주세요.', 'success');
     } catch (error) {
       if (error.code === 'auth/credential-already-in-use') {
         showAlert('연동 실패', '이 구글 계정은 이미 다른 계정에 연결되어 있습니다.', 'error');
@@ -149,42 +166,18 @@ const MobileSettings = ({ user }) => {
     }
   };
 
-  // 구글 캘린더 연동 콜백 처리 (OAuth 리다이렉트 후 복귀)
+  // 구글 캘린더 연동 콜백 처리 (서버에서 이미 동기화 완료, 여기선 UI 알림만)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const calendarConnected = params.get('calendarConnected');
     const calendarError = params.get('calendarError');
+    const pendingSync = localStorage.getItem('pendingCalendarSync');
 
-    if (calendarConnected === 'true') {
+    if (calendarConnected === 'true' || pendingSync === 'true') {
+      localStorage.removeItem('pendingCalendarSync');
       setIsCalendarLinked(true);
-      // URL 파라미터 정리
       window.history.replaceState({}, document.title, window.location.pathname);
-      // user 데이터 갱신
       window.dispatchEvent(new Event('userProfileUpdated'));
-
-      // 기존 일정을 구글 캘린더로 동기화
-      const syncExistingEvents = async () => {
-        try {
-          const currentUser = auth.currentUser;
-          if (!currentUser) return;
-          const token = await currentUser.getIdToken();
-          const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-          const syncRes = await fetch(`${API_BASE_URL}/api/calendar/sync-to-google`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          const syncData = await syncRes.json();
-          if (syncRes.ok && syncData.synced > 0) {
-            showAlert('연동 완료', `구글 캘린더가 연동되었습니다. 기존 일정 ${syncData.synced}개가 구글 캘린더에 동기화되었습니다.`, 'success');
-          } else {
-            showAlert('연동 완료', '구글 캘린더가 연동되었습니다. 구글 캘린더 일정이 초록색으로 표시됩니다.', 'success');
-          }
-        } catch (syncError) {
-          console.warn('기존 일정 구글 캘린더 동기화 실패:', syncError);
-          showAlert('연동 완료', '구글 캘린더가 연동되었습니다. (기존 일정 동기화는 실패했습니다)', 'success');
-        }
-      };
-      syncExistingEvents();
     } else if (calendarError) {
       window.history.replaceState({}, document.title, window.location.pathname);
       showAlert('연동 실패', `구글 캘린더 연동에 실패했습니다: ${calendarError}`, 'error');
@@ -305,48 +298,24 @@ const MobileSettings = ({ user }) => {
               )}
             </div>
 
-            {/* 구글 캘린더 연동 */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#f9fafb', borderRadius: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                {isCalendarLinked ? <CheckCircle size={20} color="#22c55e" /> : <Calendar size={20} color="#6b7280" />}
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#1f2937' }}>구글 캘린더</div>
-                  <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                    {isCalendarLinked ? '연동됨 - 구글 캘린더 일정 표시 중' : '미연동 - 구글 캘린더 일정 미표시'}
+            {/* 구글 캘린더 (구글은 연동됐지만 캘린더만 안 된 경우에만 표시) */}
+            {isGoogleLinked && !isCalendarLinked && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#fffbeb', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Calendar size={20} color="#f59e0b" />
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#1f2937' }}>구글 캘린더 미연동</div>
+                    <div style={{ fontSize: '12px', color: '#6b7280' }}>캘린더 권한이 필요합니다</div>
                   </div>
                 </div>
-              </div>
-              {isGoogleLinked && !isCalendarLinked && (
                 <button
                   onClick={handleLinkCalendar}
                   style={{ padding: '6px 12px', fontSize: '13px', fontWeight: 600, color: 'white', background: '#22c55e', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                 >
                   <Calendar size={14} /> 연동하기
                 </button>
-              )}
-              {isCalendarLinked && (
-                <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: 600 }}>활성</span>
-              )}
-              {!isGoogleLinked && (
-                <span style={{ fontSize: '12px', color: '#9ca3af' }}>구글 로그인 연동 필요</span>
-              )}
-            {/* 수동 동기화 */}
-            {isCalendarLinked && (
-              <div style={{ marginTop: '12px', padding: '12px', background: '#f0fdf4', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#1f2937' }}>기존 일정 동기화</div>
-                  <div style={{ fontSize: '12px', color: '#6b7280' }}>앱의 기존 일정을 구글 캘린더로 내보내기</div>
-                </div>
-                <button
-                  onClick={handleSyncToGoogle}
-                  disabled={isSyncing}
-                  style={{ padding: '6px 12px', fontSize: '13px', fontWeight: 600, color: 'white', background: isSyncing ? '#9ca3af' : '#3b82f6', border: 'none', borderRadius: '6px', cursor: isSyncing ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                >
-                  <Calendar size={14} /> {isSyncing ? '동기화 중...' : '동기화'}
-                </button>
               </div>
             )}
-            </div>
           </div>
         </div>
 

@@ -365,126 +365,139 @@ exports.updateGoogleCalendarEvent = async (req, res) => {
 // @desc    기존 DB 일정을 구글 캘린더로 일괄 동기화
 // @route   POST /api/calendar/sync-to-google
 // @access  Private
-exports.syncEventsToGoogle = async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user || !user.google || !user.google.refreshToken) {
-      return res.status(401).json({ msg: 'Google 캘린더가 연결되지 않았습니다.' });
-    }
+// 핵심 동기화 로직 (서버 내부에서도 직접 호출 가능)
+const syncEventsToGoogleInternal = async (userId) => {
+  const user = await User.findById(userId);
+  console.log('[syncEventsToGoogle] 시작 - userId:', userId);
+  if (!user || !user.google || !user.google.refreshToken) {
+    return { success: false, synced: 0, msg: 'Google 캘린더가 연결되지 않았습니다.' };
+  }
 
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
-    );
-    oauth2Client.setCredentials({
-      access_token: user.google.accessToken,
-      refresh_token: user.google.refreshToken,
-    });
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
+  oauth2Client.setCredentials({
+    access_token: user.google.accessToken,
+    refresh_token: user.google.refreshToken,
+  });
 
-    oauth2Client.on('tokens', async (tokens) => {
-      user.google.accessToken = tokens.access_token;
-      if (tokens.refresh_token) user.google.refreshToken = tokens.refresh_token;
-      await user.save();
-    });
+  oauth2Client.on('tokens', async (tokens) => {
+    user.google.accessToken = tokens.access_token;
+    if (tokens.refresh_token) user.google.refreshToken = tokens.refresh_token;
+    await user.save();
+  });
 
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-    // 1) personalTimes에서 특정 날짜가 있는 일정 (type 기반 필터)
-    const personalTimeEvents = (user.personalTimes || [])
-      .filter(pt => pt.specificDate)
-      .map(pt => ({
-        title: pt.title || '개인 일정',
-        description: pt.description || '',
-        location: pt.location || '',
-        startDateTime: `${pt.specificDate}T${pt.startTime}:00+09:00`,
-        endDateTime: `${pt.specificDate}T${pt.endTime}:00+09:00`,
-      }));
-
-    // 2) Event 컬렉션에서 이 사용자의 일정
-    const dbEvents = await Event.find({ userId: req.user.id });
-    const dbEventsMapped = dbEvents.map(ev => ({
-      title: ev.title || '일정',
-      description: ev.description || '',
-      location: ev.location || '',
-      startDateTime: ev.startTime.toISOString(),
-      endDateTime: ev.endTime.toISOString(),
+  const personalTimeEvents = (user.personalTimes || [])
+    .filter(pt => pt.specificDate)
+    .map(pt => ({
+      title: pt.title || '개인 일정',
+      description: pt.description || '',
+      location: pt.location || '',
+      startDateTime: `${pt.specificDate}T${pt.startTime}:00+09:00`,
+      endDateTime: `${pt.specificDate}T${pt.endTime}:00+09:00`,
     }));
 
-    const allEventsToSync = [...personalTimeEvents, ...dbEventsMapped];
+  const dbEvents = await Event.find({ userId });
+  const dbEventsMapped = dbEvents.map(ev => ({
+    title: ev.title || '일정',
+    description: ev.description || '',
+    location: ev.location || '',
+    startDateTime: ev.startTime.toISOString(),
+    endDateTime: ev.endTime.toISOString(),
+  }));
 
-    if (allEventsToSync.length === 0) {
-      return res.json({ success: true, synced: 0, msg: '동기화할 일정이 없습니다.' });
-    }
+  const allEventsToSync = [...personalTimeEvents, ...dbEventsMapped];
+  console.log('[syncEventsToGoogle] 동기화 대상:', allEventsToSync.length, '개');
 
-    // 기존 구글 캘린더 이벤트 조회 (중복 방지)
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-    const oneYearLater = new Date();
-    oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+  if (allEventsToSync.length === 0) {
+    return { success: true, synced: 0, skipped: 0, total: 0, msg: '동기화할 일정이 없습니다.' };
+  }
 
-    let existingGoogleEvents = [];
-    try {
-      const existing = await calendar.events.list({
-        calendarId: 'primary',
-        timeMin: threeMonthsAgo.toISOString(),
-        timeMax: oneYearLater.toISOString(),
-        maxResults: 2500,
-        singleEvents: true,
-      });
-      existingGoogleEvents = existing.data.items || [];
-    } catch (listErr) {
-      console.warn('기존 구글 캘린더 이벤트 조회 실패:', listErr.message);
-    }
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  const oneYearLater = new Date();
+  oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
 
-    let syncedCount = 0;
-    let skippedCount = 0;
-
-    for (const ev of allEventsToSync) {
-      try {
-        // 중복 체크: 같은 제목 + 시작시간 앞부분 일치
-        const evStartPrefix = ev.startDateTime.substring(0, 16); // YYYY-MM-DDTHH:MM
-        const isDuplicate = existingGoogleEvents.some(ge => {
-          const geStart = ge.start?.dateTime || ge.start?.date || '';
-          return ge.summary === ev.title && geStart.substring(0, 16) === evStartPrefix;
-        });
-
-        if (isDuplicate) {
-          skippedCount++;
-          continue;
-        }
-
-        await calendar.events.insert({
-          calendarId: 'primary',
-          resource: {
-            summary: ev.title,
-            description: ev.description,
-            location: ev.location,
-            start: { dateTime: ev.startDateTime, timeZone: 'Asia/Seoul' },
-            end: { dateTime: ev.endDateTime, timeZone: 'Asia/Seoul' },
-            extendedProperties: {
-              private: { source: 'meetagent' }
-            },
-          },
-        });
-        syncedCount++;
-      } catch (insertErr) {
-        console.warn(`이벤트 동기화 실패 (${ev.title}):`, insertErr.message);
-      }
-    }
-
-    res.json({
-      success: true,
-      synced: syncedCount,
-      skipped: skippedCount,
-      total: allEventsToSync.length,
-      msg: `${syncedCount}개 일정이 구글 캘린더에 동기화되었습니다.${skippedCount > 0 ? ` (${skippedCount}개 중복 스킵)` : ''}`
+  let existingGoogleEvents = [];
+  try {
+    const existing = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin: threeMonthsAgo.toISOString(),
+      timeMax: oneYearLater.toISOString(),
+      maxResults: 2500,
+      singleEvents: true,
     });
+    existingGoogleEvents = existing.data.items || [];
+  } catch (listErr) {
+    console.warn('기존 구글 캘린더 이벤트 조회 실패:', listErr.message);
+  }
+
+  let syncedCount = 0;
+  let skippedCount = 0;
+
+  for (const ev of allEventsToSync) {
+    try {
+      const evStartPrefix = ev.startDateTime.substring(0, 16);
+      const isDuplicate = existingGoogleEvents.some(ge => {
+        const geStart = ge.start?.dateTime || ge.start?.date || '';
+        return ge.summary === ev.title && geStart.substring(0, 16) === evStartPrefix;
+      });
+
+      if (isDuplicate) {
+        console.log(`[syncEventsToGoogle] 중복 스킵: ${ev.title} (${evStartPrefix})`);
+        skippedCount++;
+        continue;
+      }
+
+      await calendar.events.insert({
+        calendarId: 'primary',
+        resource: {
+          summary: ev.title,
+          description: ev.description,
+          location: ev.location,
+          start: { dateTime: ev.startDateTime, timeZone: 'Asia/Seoul' },
+          end: { dateTime: ev.endDateTime, timeZone: 'Asia/Seoul' },
+          extendedProperties: {
+            private: { source: 'meetagent' }
+          },
+        },
+      });
+      console.log(`[syncEventsToGoogle] 동기화 성공: ${ev.title}`);
+      syncedCount++;
+    } catch (insertErr) {
+      console.error(`[syncEventsToGoogle] 이벤트 동기화 실패 (${ev.title}):`, insertErr.message);
+    }
+  }
+
+  return {
+    success: true,
+    synced: syncedCount,
+    skipped: skippedCount,
+    total: allEventsToSync.length,
+    msg: `${syncedCount}개 일정이 구글 캘린더에 동기화되었습니다.${skippedCount > 0 ? ` (${skippedCount}개 중복 스킵)` : ''}`
+  };
+};
+
+// API 라우트 핸들러 (기존 클라이언트 호출용)
+exports.syncEventsToGoogle = async (req, res) => {
+  try {
+    const result = await syncEventsToGoogleInternal(req.user.id);
+    if (!result.success) {
+      return res.status(401).json(result);
+    }
+    res.json(result);
   } catch (error) {
     console.error('syncEventsToGoogle error:', error.message);
     res.status(500).json({ msg: '구글 캘린더 동기화에 실패했습니다.', error: error.message });
   }
 };
+
+// 내부 호출용 export
+exports.syncEventsToGoogleInternal = syncEventsToGoogleInternal;
 
 // 이미지에서 스케줄 정보 추출
 exports.analyzeImage = async (req, res) => {

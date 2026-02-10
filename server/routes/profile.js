@@ -450,6 +450,15 @@ router.delete('/schedule/:personalTimeId', auth, async (req, res) => {
             }
 
             // 본인 personalTime만 삭제
+            // 본인 구글 캘린더에서도 삭제
+            if (user.google && user.google.refreshToken && targetPt) {
+              try {
+                await deleteFromGoogleCalendar(user, targetPt);
+              } catch (gcErr) {
+                console.warn('[profile.js DELETE] 본인 구글 캘린더 삭제 실패:', gcErr.message);
+              }
+            }
+
             user.personalTimes = user.personalTimes.filter(pt =>
               pt._id.toString() !== personalTimeId && pt.id?.toString() !== personalTimeId
             );
@@ -521,6 +530,15 @@ router.delete('/schedule/:personalTimeId', auth, async (req, res) => {
             }
 
             // 본인 personalTime도 삭제
+            // 본인 구글 캘린더에서도 삭제
+            if (user.google && user.google.refreshToken && targetPt) {
+              try {
+                await deleteFromGoogleCalendar(user, targetPt);
+              } catch (gcErr) {
+                console.warn('[profile.js DELETE] 본인 구글 캘린더 삭제 실패 (완전삭제):', gcErr.message);
+              }
+            }
+
             user.personalTimes = user.personalTimes.filter(pt =>
               pt._id.toString() !== personalTimeId && pt.id?.toString() !== personalTimeId
             );
@@ -540,6 +558,16 @@ router.delete('/schedule/:personalTimeId', auth, async (req, res) => {
     }
 
     // suggestionId가 없는 일반 personalTime 삭제
+    // 구글 캘린더에서도 삭제 (연동된 경우)
+    if (user.google && user.google.refreshToken && targetPt) {
+      try {
+        await deleteFromGoogleCalendar(user, targetPt);
+        console.log('[profile.js DELETE /schedule] 구글 캘린더에서도 삭제 완료');
+      } catch (gcErr) {
+        console.warn('[profile.js DELETE /schedule] 구글 캘린더 삭제 실패:', gcErr.message);
+      }
+    }
+
     user.personalTimes = user.personalTimes.filter(pt =>
       pt._id.toString() !== personalTimeId && pt.id?.toString() !== personalTimeId
     );
