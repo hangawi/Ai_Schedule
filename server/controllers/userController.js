@@ -343,37 +343,49 @@ exports.updateUserSchedule = async (req, res) => {
       return res.status(404).json({ msg: 'User not found' });
     }
 
-    if (defaultSchedule) {
-      user.defaultSchedule = defaultSchedule.map(slot => ({
-        dayOfWeek: slot.dayOfWeek,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        priority: slot.priority || 2,
-        specificDate: slot.specificDate
-      }));
-    } else {
-      user.defaultSchedule = [];
-    }
-    user.markModified('defaultSchedule');
-
-    if (scheduleExceptions) {
-        user.scheduleExceptions = scheduleExceptions.map(ex => ({
-            _id: ex._id,
-            title: ex.title,
-            startTime: ex.startTime,
-            endTime: ex.endTime,
-            isHoliday: ex.isHoliday,
-            isAllDay: ex.isAllDay,
-            specificDate: ex.specificDate,
-            priority: ex.priority
+    if (defaultSchedule !== undefined) {
+      if (defaultSchedule) {
+        user.defaultSchedule = defaultSchedule.map(slot => ({
+          dayOfWeek: slot.dayOfWeek,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          priority: slot.priority || 2,
+          specificDate: slot.specificDate
         }));
-    } else {
-        user.scheduleExceptions = [];
+      } else {
+        user.defaultSchedule = [];
+      }
+      user.markModified('defaultSchedule');
     }
-    user.markModified('scheduleExceptions');
+
+    if (scheduleExceptions !== undefined) {
+      if (scheduleExceptions) {
+          user.scheduleExceptions = scheduleExceptions.map(ex => ({
+              _id: ex._id,
+              title: ex.title,
+              startTime: ex.startTime,
+              endTime: ex.endTime,
+              isHoliday: ex.isHoliday,
+              isAllDay: ex.isAllDay,
+              specificDate: ex.specificDate,
+              priority: ex.priority
+          }));
+      } else {
+          user.scheduleExceptions = [];
+      }
+      user.markModified('scheduleExceptions');
+    }
 
     if (personalTimes) {
-        user.personalTimes = personalTimes.map(pt => ({
+        // 🔒 서버에서 생성된 suggestion 일정 보존 (프론트엔드에서 모를 수 있음)
+        const incomingSuggestionIds = new Set(
+          personalTimes.filter(pt => pt.suggestionId).map(pt => pt.suggestionId)
+        );
+        const serverOnlySuggestionEntries = (user.personalTimes || []).filter(pt => 
+          pt.suggestionId && !incomingSuggestionIds.has(pt.suggestionId)
+        );
+
+        const mappedTimes = personalTimes.map(pt => ({
             id: pt.id,
             title: pt.title,
             type: pt.type,
@@ -395,8 +407,23 @@ exports.updateUserSchedule = async (req, res) => {
             participants: pt.participants || 1,
             externalParticipants: pt.externalParticipants || []
         }));
+
+        // 프론트엔드 데이터 + 서버 전용 suggestion 항목 합치기
+        user.personalTimes = [...mappedTimes, ...serverOnlySuggestionEntries];
+
+        if (serverOnlySuggestionEntries.length > 0) {
+          console.log(`🔒 [updateUserSchedule] 서버 suggestion 항목 ${serverOnlySuggestionEntries.length}개 보존됨:`, 
+            serverOnlySuggestionEntries.map(pt => pt.suggestionId));
+        }
     } else {
-        user.personalTimes = [];
+        // personalTimes가 없어도 suggestion 항목은 보존
+        const serverOnlySuggestionEntries = (user.personalTimes || []).filter(pt => pt.suggestionId);
+        if (serverOnlySuggestionEntries.length > 0) {
+          user.personalTimes = serverOnlySuggestionEntries;
+          console.log(`🔒 [updateUserSchedule] personalTimes 없음, suggestion 항목 ${serverOnlySuggestionEntries.length}개 보존됨`);
+        } else {
+          user.personalTimes = [];
+        }
     }
     user.markModified('personalTimes');
 
@@ -428,7 +455,6 @@ exports.updateUserSchedule = async (req, res) => {
     });
   }
 };
-
 // @desc    Get any user's schedule by ID
 // @route   GET /api/users/:userId/schedule
 // @access  Private (auth middleware ensures user is logged in)

@@ -991,19 +991,25 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
 
          // pt- 접두사 → personalTime 삭제 우선 (서버에서 구글캘린더+suggestion도 같이 처리)
          if (event.id && event.id.startsWith('pt-')) {
-            // 🆕 Personal Time 삭제 (참여 인원에 따라 삭제/불참 분기)
             const personalTimeId = event.id.replace('pt-', '');
             const response = await fetch(`${API_BASE_URL}/api/users/profile/schedule/${personalTimeId}`, {
                method: 'DELETE',
                headers: { 'Authorization': `Bearer ${token}` },
             });
-            if (!response.ok) throw new Error('Failed to delete personal time');
-            const result = await response.json();
-            deleteAction = result.action;
-            if (result.action === 'rejected') {
-               showToast('불참 처리되었습니다.');
-            } else if (result.action === 'deleted') {
-               showToast('일정이 삭제되었습니다.');
+            if (response.ok) {
+               const result = await response.json();
+               deleteAction = result.action;
+               if (result.action === 'rejected') {
+                  showToast('불참 처리되었습니다.');
+               } else if (result.action === 'deleted') {
+                  showToast('일정이 삭제되었습니다.');
+               }
+            } else if (event.isGoogleEvent && event.googleEventId) {
+               // DB에 없는 구글 캘린더 이벤트 → 구글에서 직접 삭제
+               await googleCalendarService.deleteEvent(event.googleEventId);
+               showToast('구글 캘린더에서 삭제되었습니다.');
+            } else {
+               throw new Error('Failed to delete personal time');
             }
          } else if (event.isGoogleEvent && event.googleEventId) {
             // 순수 구글 캘린더 이벤트 (pt- 접두사 없음)
@@ -1282,7 +1288,19 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                         )}
                      </div>
                   </div>
-                  <div 
+                  {googleCalendarEvents.length > 0 && (
+                     <div className="calendar-legend">
+                        <span className="legend-item">
+                           <span className="legend-dot" style={{ backgroundColor: '#ef4444' }}></span>
+                           앱 일정
+                        </span>
+                        <span className="legend-item">
+                           <span className="legend-dot" style={{ backgroundColor: '#3b82f6' }}></span>
+                           구글 캘린더
+                        </span>
+                     </div>
+                  )}
+                  <div
                      className="calendar-container"
                      onTouchStart={handleTouchStart}
                      onTouchMove={handleTouchMove}

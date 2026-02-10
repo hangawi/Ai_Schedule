@@ -464,7 +464,14 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                method: 'DELETE',
                headers: { 'Authorization': `Bearer ${token}` },
             });
-            if (!response.ok) throw new Error('Failed to delete personal time');
+            if (!response.ok) {
+               // DB에 없는 구글 캘린더 이벤트 → 구글에서 직접 삭제
+               if (event.isGoogleEvent && event.googleEventId) {
+                  await googleCalendarService.deleteEvent(event.googleEventId);
+               } else {
+                  throw new Error('Failed to delete personal time');
+               }
+            }
          } else if (event.isGoogleEvent) {
             // 순수 구글 캘린더 이벤트 (pt- 없음)
             if (event.suggestionId) {
@@ -472,7 +479,11 @@ const MobileScheduleView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                   method: 'DELETE',
                   headers: { 'Authorization': `Bearer ${token}` },
                });
-               if (!response.ok) throw new Error('Failed to delete Google event');
+               if (!response.ok) {
+                  // 서버에 없으면 구글 캘린더에서 직접 삭제
+                  const googleEventId = event.googleEventId || event.id;
+                  await googleCalendarService.deleteEvent(googleEventId);
+               }
             } else {
                const googleEventId = event.googleEventId || event.id;
                await googleCalendarService.deleteEvent(googleEventId);

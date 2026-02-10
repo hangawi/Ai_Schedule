@@ -388,12 +388,45 @@ router.delete('/schedule/:personalTimeId', auth, async (req, res) => {
       return res.status(404).json({ msg: '사용자를 찾을 수 없습니다.' });
     }
 
-    // 🆕 삭제할 personalTime 찾기 (suggestionId 확인용)
-    const targetPt = user.personalTimes.find(pt =>
+    // 🆕 삭제할 personalTime 찾기 (_id, id, googleEventId로 매칭)
+    let targetPt = user.personalTimes.find(pt =>
       pt._id.toString() === personalTimeId || pt.id?.toString() === personalTimeId
     );
+    // 구글 사용자: googleEventId로도 매칭 시도
+    if (!targetPt) {
+      targetPt = user.personalTimes.find(pt =>
+        pt.googleEventId === personalTimeId
+      );
+    }
 
     if (!targetPt) {
+      // DB에 없는 순수 구글 캘린더 이벤트 → 구글에서 직접 삭제
+      if (user.google && user.google.refreshToken) {
+        try {
+          const { google } = require('googleapis');
+          const oauth2Client = new google.auth.OAuth2(
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET
+          );
+          oauth2Client.setCredentials({
+            refresh_token: user.google.refreshToken,
+            access_token: user.google.accessToken
+          });
+          const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+          await calendar.events.delete({
+            calendarId: 'primary',
+            eventId: personalTimeId
+          });
+          return res.json({
+            success: true,
+            action: 'deleted',
+            msg: '구글 캘린더에서 삭제되었습니다.',
+            personalTimes: user.personalTimes
+          });
+        } catch (gcErr) {
+          console.warn('[profile.js DELETE] 구글 캘린더 직접 삭제 실패:', gcErr.message);
+        }
+      }
       return res.status(404).json({ msg: '해당 개인 일정을 찾을 수 없습니다.' });
     }
 
@@ -469,7 +502,7 @@ router.delete('/schedule/:personalTimeId', auth, async (req, res) => {
             }
 
             user.personalTimes = user.personalTimes.filter(pt =>
-              pt._id.toString() !== personalTimeId && pt.id?.toString() !== personalTimeId
+              pt._id.toString() !== personalTimeId && pt.id?.toString() !== personalTimeId && pt.googleEventId !== personalTimeId
             );
             await user.save();
 
@@ -549,7 +582,7 @@ router.delete('/schedule/:personalTimeId', auth, async (req, res) => {
             }
 
             user.personalTimes = user.personalTimes.filter(pt =>
-              pt._id.toString() !== personalTimeId && pt.id?.toString() !== personalTimeId
+              pt._id.toString() !== personalTimeId && pt.id?.toString() !== personalTimeId && pt.googleEventId !== personalTimeId
             );
             await user.save();
 
@@ -578,7 +611,7 @@ router.delete('/schedule/:personalTimeId', auth, async (req, res) => {
     }
 
     user.personalTimes = user.personalTimes.filter(pt =>
-      pt._id.toString() !== personalTimeId && pt.id?.toString() !== personalTimeId
+      pt._id.toString() !== personalTimeId && pt.id?.toString() !== personalTimeId && pt.googleEventId !== personalTimeId
     );
     await user.save();
     console.log('[profile.js DELETE /schedule] Personal time deleted successfully');

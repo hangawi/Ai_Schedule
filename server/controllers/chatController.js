@@ -715,9 +715,20 @@ exports.deleteSuggestion = async (req, res) => {
       return res.status(404).json({ msg: 'Suggestion not found' });
     }
 
-    // 2. 권한 체크: suggestedBy가 현재 사용자인지 확인
-    if (!suggestion.suggestedBy || suggestion.suggestedBy.toString() !== userId) {
-      return res.status(403).json({ msg: '제안을 삭제할 권한이 없습니다. 제안자만 삭제할 수 있습니다.' });
+    // 2. 권한 체크: suggestedBy가 현재 사용자이거나, suggestedBy가 null이면 accepted 멤버 누구나 삭제 가능
+    if (suggestion.suggestedBy) {
+      // 제안자가 있으면 제안자만 삭제 가능
+      if (suggestion.suggestedBy.toString() !== userId) {
+        return res.status(403).json({ msg: '제안을 삭제할 권한이 없습니다. 제안자만 삭제할 수 있습니다.' });
+      }
+    } else {
+      // 제안자가 나간 경우 (suggestedBy === null): rejected가 아닌 멤버면 삭제 가능
+      const isActiveMember = suggestion.memberResponses.some(
+        r => r.user.toString() === userId && r.status !== 'rejected'
+      );
+      if (!isActiveMember) {
+        return res.status(403).json({ msg: '제안을 삭제할 권한이 없습니다. 참여 중인 멤버만 삭제할 수 있습니다.' });
+      }
     }
 
     // 3. 수락한 멤버들의 personalTimes에서 해당 일정 제거 + 구글 캘린더 삭제
@@ -726,6 +737,10 @@ exports.deleteSuggestion = async (req, res) => {
         try {
           const member = await User.findById(response.user);
           if (member) {
+            // 삭제 전에 googleEventId 먼저 가져오기
+            const targetPt = member.personalTimes.find(pt => pt.suggestionId === suggestionId);
+            const googleEventId = targetPt?.googleEventId || null;
+
             // personalTime 삭제
             const beforeCount = member.personalTimes.length;
             member.personalTimes = member.personalTimes.filter(
@@ -741,7 +756,8 @@ exports.deleteSuggestion = async (req, res) => {
                   title: `[약속] ${suggestion.summary}`,
                   specificDate: suggestion.date,
                   startTime: suggestion.startTime,
-                  suggestionId: suggestionId
+                  suggestionId: suggestionId,
+                  googleEventId: googleEventId
                 });
               } catch (gcErr) {
                 console.warn(`구글 캘린더 삭제 실패 (${response.user}):`, gcErr.message);
@@ -806,37 +822,89 @@ exports.rejectSuggestion = async (req, res) => {
       return res.status(404).json({ msg: 'User not found' });
     }
 
-    // 3. 제안의 memberResponses 업데이트
+    // 3. 제안자 여부를 rejectByUser 호출 전에 확인 (save 후 상태가 바뀔 수 있으므로)
+    const originalSuggestedBy = suggestion.suggestedBy ? suggestion.suggestedBy.toString() : null;
+    const isCreatorDeclining = originalSuggestedBy === userId;
+    console.log(`[rejectSuggestion] 소유권 체크: suggestedBy=${originalSuggestedBy}, userId=${userId}, isCreator=${isCreatorDeclining}`);
+
+    // memberResponses 업데이트
     await suggestion.rejectByUser(userId);
+
+    // 3.1. 제안자가 불참하면 소유권 이전 (suggestedBy를 null로 → 남은 참여자 누구나 삭제 가능)
+    if (isCreatorDeclining) {
+      await ScheduleSuggestion.findByIdAndUpdate(suggestionId, { suggestedBy: null });
+      suggestion.suggestedBy = null;
+      console.log(`[rejectSuggestion] ✅ 소유권 이전 완료: suggestedBy → null`);
+    }
 
     // 3.5. 불참한 사용자의 일정 제거
     const userResponse = suggestion.memberResponses.find(r => r.user.toString() === userId);
     const isGoogleUser = !!(user.google && user.google.refreshToken);
+    console.log(`[rejectSuggestion] 구글 사용자 여부: ${isGoogleUser}, refreshToken: ${!!user.google?.refreshToken}`);
+
+    // 삭제 전에 googleEventId 먼저 가져오기
+    const myTargetPt = user.personalTimes.find(pt => pt.suggestionId === suggestionId);
+    const myGoogleEventId = myTargetPt?.googleEventId || null;
+    console.log(`[rejectSuggestion] personalTime 찾기: found=${!!myTargetPt}, googleEventId=${myGoogleEventId}, suggestionId=${suggestionId}`);
+    console.log(`[rejectSuggestion] personalTimes 중 suggestionId 목록:`, user.personalTimes.map(pt => ({ title: pt.title, suggestionId: pt.suggestionId })));
 
     // personalTime 삭제 (구글/일반 사용자 공통)
     const beforeCount = user.personalTimes.length;
     user.personalTimes = user.personalTimes.filter(pt => pt.suggestionId !== suggestionId);
+    console.log(`[rejectSuggestion] personalTime 삭제: ${beforeCount} → ${user.personalTimes.length}`);
     if (user.personalTimes.length < beforeCount) {
       await user.save();
     }
     // 구글 사용자: 구글 캘린더에서도 삭제
     if (isGoogleUser) {
+      const gcData = {
+        title: `[약속] ${suggestion.summary}`,
+        specificDate: suggestion.date,
+        startTime: suggestion.startTime,
+        suggestionId: suggestionId,
+        googleEventId: myGoogleEventId
+      };
+      console.log(`[rejectSuggestion] 구글 캘린더 삭제 시도:`, JSON.stringify(gcData));
       try {
-        await deleteFromGoogleCalendar(user, {
-          title: `[약속] ${suggestion.summary}`,
-          specificDate: suggestion.date,
-          startTime: suggestion.startTime,
-          suggestionId: suggestionId
-        });
+        await deleteFromGoogleCalendar(user, gcData);
+        console.log(`[rejectSuggestion] ✅ 구글 캘린더 삭제 완료`);
       } catch (gcErr) {
-        console.warn(`[rejectSuggestion] 구글 캘린더 삭제 실패: ${gcErr.message}`);
+        console.error(`[rejectSuggestion] ❌ 구글 캘린더 삭제 실패: ${gcErr.message}`);
       }
+    } else {
+      console.log(`[rejectSuggestion] 구글 사용자 아님 - 구글 캘린더 삭제 스킵`);
     }
 
     // 3.6. 참석자 수 기반 삭제/불참 분기
     const acceptedCount = suggestion.memberResponses.filter(r => r.status === 'accepted').length;
+    const pendingCount = suggestion.memberResponses.filter(r => r.status === 'pending').length;
     const allRejected = suggestion.memberResponses.every(r => r.status === 'rejected');
-    const shouldDelete = allRejected || acceptedCount === 0;
+    // 제안자 본인이 불참하는 경우 → 삭제 안 함 (소유권 이전, pending 멤버 응답 대기)
+    // 그 외: acceptedCount === 0 이면 삭제 (이미 제안자도 나갔고 남은 accepted 없음)
+    const shouldDelete = allRejected || (acceptedCount === 0 && !isCreatorDeclining);
+    console.log(`[rejectSuggestion] 상태: accepted=${acceptedCount}, pending=${pendingCount}, allRejected=${allRejected}, isCreatorDeclining=${isCreatorDeclining}, shouldDelete=${shouldDelete}`);
+
+    // 3.7. 남은 accepted 멤버들의 participants 수 업데이트
+    if (!shouldDelete && acceptedCount > 0) {
+      for (const mr of suggestion.memberResponses) {
+        if (mr.status === 'accepted') {
+          const memberId = mr.user._id?.toString() || mr.user.toString();
+          try {
+            const memberUser = await User.findById(memberId);
+            if (memberUser) {
+              const memberPt = memberUser.personalTimes.find(pt => pt.suggestionId === suggestionId);
+              if (memberPt) {
+                memberPt.participants = acceptedCount;
+                await memberUser.save();
+                console.log(`[rejectSuggestion] 참여자 수 업데이트: ${memberId} → ${acceptedCount}명`);
+              }
+            }
+          } catch (updateErr) {
+            console.warn(`[rejectSuggestion] participants 업데이트 실패:`, updateErr.message);
+          }
+        }
+      }
+    }
 
     if (shouldDelete) {
       suggestion.status = 'cancelled';
@@ -847,24 +915,30 @@ exports.rejectSuggestion = async (req, res) => {
           if (memberId !== userId) {
             const memberUser = await User.findById(memberId);
             if (memberUser) {
+              // 삭제 전에 googleEventId 먼저 가져오기
+              const memberPt = memberUser.personalTimes.find(pt => pt.suggestionId === suggestionId);
+              const memberGoogleEventId = memberPt?.googleEventId || null;
+
+              // personalTime 삭제 (구글/일반 공통)
+              memberUser.personalTimes = memberUser.personalTimes.filter(
+                pt => pt.suggestionId !== suggestionId
+              );
+              await memberUser.save();
+
+              // 구글 사용자: 구글 캘린더에서도 삭제
               const isMemberGoogle = !!(memberUser.google && memberUser.google.refreshToken);
               if (isMemberGoogle) {
                 try {
-                  const ptData = {
+                  await deleteFromGoogleCalendar(memberUser, {
                     title: `[약속] ${suggestion.summary}`,
                     specificDate: suggestion.date,
                     startTime: suggestion.startTime,
-                    suggestionId: suggestionId
-                  };
-                  await deleteFromGoogleCalendar(memberUser, ptData);
+                    suggestionId: suggestionId,
+                    googleEventId: memberGoogleEventId
+                  });
                 } catch (gcErr) {
                   console.warn('[rejectSuggestion] 다른 멤버 Google Calendar 삭제 실패:', gcErr.message);
                 }
-              } else {
-                memberUser.personalTimes = memberUser.personalTimes.filter(
-                  pt => pt.suggestionId !== suggestionId
-                );
-                await memberUser.save();
               }
             }
           }
@@ -906,14 +980,17 @@ exports.rejectSuggestion = async (req, res) => {
     await systemMsg.populate('sender', 'firstName lastName');
 
     // 6. Socket 이벤트 발송
-    const updatedSuggestion = await ScheduleSuggestion.findById(suggestionId).populate('memberResponses.user', 'firstName lastName email');
+    const updatedSuggestion = await ScheduleSuggestion.findById(suggestionId)
+      .populate('memberResponses.user', 'firstName lastName email')
+      .populate('suggestedBy', 'firstName lastName email');
     if (global.io) {
       global.io.to(`room-${roomId}`).emit('chat-message', systemMsg);
       global.io.to(`room-${roomId}`).emit('suggestion-updated', {
         suggestionId,
         userId,
         status: 'rejected',
-        memberResponses: updatedSuggestion.memberResponses
+        memberResponses: updatedSuggestion.memberResponses,
+        suggestedBy: updatedSuggestion.suggestedBy
       });
     }
 

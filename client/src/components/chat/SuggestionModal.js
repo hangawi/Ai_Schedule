@@ -115,10 +115,11 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
           );
 
           if (index !== -1) {
-            // 기존 제안 업데이트
+            // 기존 제안 업데이트 (memberResponses + suggestedBy 소유권 이전 반영)
             updatedSuggestions[category][index] = {
               ...updatedSuggestions[category][index],
-              memberResponses: data.memberResponses
+              memberResponses: data.memberResponses,
+              ...(data.suggestedBy !== undefined && { suggestedBy: data.suggestedBy })
             };
             break;
           }
@@ -295,9 +296,17 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
 
   // 현재 사용자가 제안자인지 확인 (email로 비교)
   const isOwner = (suggestion) => {
-    if (!currentUser?.email || !suggestion.suggestedBy) return false;
-    const suggestedByEmail = suggestion.suggestedBy.email;
-    return suggestedByEmail === currentUser.email;
+    if (!currentUser?.email) return false;
+    // 제안자가 있으면 제안자만 삭제 가능
+    if (suggestion.suggestedBy) {
+      const suggestedByEmail = suggestion.suggestedBy.email;
+      return suggestedByEmail === currentUser.email;
+    }
+    // 제안자가 나간 경우 (suggestedBy === null): rejected가 아닌 멤버면 삭제 가능
+    const isActiveMember = suggestion.memberResponses?.some(
+      r => r.user?.email === currentUser.email && r.status !== 'rejected'
+    );
+    return !!isActiveMember;
   };
 
   // 현재 사용자의 응답 상태 확인 (email로 비교)

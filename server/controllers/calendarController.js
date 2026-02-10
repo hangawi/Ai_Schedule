@@ -393,12 +393,15 @@ const syncEventsToGoogleInternal = async (userId) => {
 
   const personalTimeEvents = (user.personalTimes || [])
     .filter(pt => pt.specificDate)
+    .filter(pt => !pt.googleEventId) // 이미 구글에 있는 이벤트는 스킵
     .map(pt => ({
       title: pt.title || '개인 일정',
       description: pt.description || '',
       location: pt.location || '',
       startDateTime: `${pt.specificDate}T${pt.startTime}:00+09:00`,
       endDateTime: `${pt.specificDate}T${pt.endTime}:00+09:00`,
+      suggestionId: pt.suggestionId || null,
+      roomId: pt.roomId || null,
     }));
 
   const dbEvents = await Event.find({ userId });
@@ -453,7 +456,7 @@ const syncEventsToGoogleInternal = async (userId) => {
         continue;
       }
 
-      await calendar.events.insert({
+      const insertResult = await calendar.events.insert({
         calendarId: 'primary',
         resource: {
           summary: ev.title,
@@ -462,11 +465,30 @@ const syncEventsToGoogleInternal = async (userId) => {
           start: { dateTime: ev.startDateTime, timeZone: 'Asia/Seoul' },
           end: { dateTime: ev.endDateTime, timeZone: 'Asia/Seoul' },
           extendedProperties: {
-            private: { source: 'meetagent' }
+            private: {
+              source: 'meetagent',
+              ...(ev.suggestionId && { suggestionId: ev.suggestionId }),
+              ...(ev.roomId && { roomId: ev.roomId })
+            }
           },
         },
       });
-      console.log(`[syncEventsToGoogle] 동기화 성공: ${ev.title}`);
+      // 구글 이벤트 ID를 personalTime에 저장 (삭제 시 사용)
+      if (insertResult.data?.id && ev.suggestionId) {
+        try {
+          const ptUser = await User.findById(userId);
+          if (ptUser) {
+            const pt = ptUser.personalTimes.find(p => p.suggestionId === ev.suggestionId);
+            if (pt && !pt.googleEventId) {
+              pt.googleEventId = insertResult.data.id;
+              await ptUser.save();
+            }
+          }
+        } catch (saveErr) {
+          console.warn(`[syncEventsToGoogle] googleEventId 저장 실패:`, saveErr.message);
+        }
+      }
+      console.log(`[syncEventsToGoogle] 동기화 성공: ${ev.title} (googleEventId: ${insertResult.data?.id})`);
       syncedCount++;
     } catch (insertErr) {
       console.error(`[syncEventsToGoogle] 이벤트 동기화 실패 (${ev.title}):`, insertErr.message);
