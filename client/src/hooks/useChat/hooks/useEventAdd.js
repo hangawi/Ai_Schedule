@@ -182,7 +182,7 @@ export const useEventAdd = (eventActions, setEventAddedKey) => {
           const newPersonalTime = createSingleProfilePersonalTime(eventData, specificDate, startTime, endTime);
 
           const existingPersonalTimes = Array.isArray(currentSchedule.personalTimes)
-            ? [...currentSchedule.personalTimes]
+            ? currentSchedule.personalTimes.filter(pt => !pt.isGoogleEvent)
             : [];
 
           apiEndpoint = `${API_BASE_URL}/api/users/profile/schedule`;
