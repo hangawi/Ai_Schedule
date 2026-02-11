@@ -528,6 +528,15 @@ exports.createSuggestionFromOptimal = async (req, res) => {
          });
          await suggester.save();
 
+         // suggestion의 memberResponses에 personalTimeId 저장 (extend 시 동기화에 필요)
+         const creatorResponse = suggestion.memberResponses.find(
+            r => r.user.toString() === userId
+         );
+         if (creatorResponse) {
+            creatorResponse.personalTimeId = newPtId;
+            await suggestion.save();
+         }
+
          // 구글 사용자면 구글 캘린더에도 동기화
          if (suggester.google && suggester.google.refreshToken) {
             try {

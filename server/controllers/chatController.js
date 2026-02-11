@@ -464,28 +464,22 @@ exports.acceptSuggestion = async (req, res) => {
     // 🆕 구글 사용자 여부 확인
     const isGoogleUser = !!(user.google && user.google.refreshToken);
 
+    // 구글/일반 사용자 모두 DB에 personalTime 저장
+    user.personalTimes.push(newPersonalTime);
+    await user.save();
+    if (userResponse) {
+      userResponse.personalTimeId = newPersonalTime.id;
+      await suggestion.save();
+    }
+
+    // 구글 사용자: Google Calendar에도 동기화
     if (isGoogleUser) {
-      // 🆕 구글 사용자: Google Calendar에만 저장 (personalTimes에 저장 안 함)
       try {
-        await syncToGoogleCalendar(user, newPersonalTime, participantNames);
-        console.log(`[acceptSuggestion] ✅ 구글 사용자 - Google Calendar에만 저장: ${user.email}`);
+        const { syncEventsToGoogleInternal } = require('./calendarController');
+        await syncEventsToGoogleInternal(userId);
+        console.log(`[acceptSuggestion] ✅ 구글 사용자 - DB + Google Calendar 동기화: ${user.email}`);
       } catch (syncErr) {
         console.warn(`[acceptSuggestion] 구글 캘린더 동기화 실패: ${syncErr.message}`);
-      }
-      // 구글 사용자는 personalTimeId를 저장하지 않음
-      if (userResponse) {
-        userResponse.personalTimeId = null;
-        await suggestion.save();
-      }
-    } else {
-      // 일반 사용자: personalTimes에 저장
-      user.personalTimes.push(newPersonalTime);
-      await user.save();
-
-      // personalTimeId 업데이트
-      if (userResponse) {
-        userResponse.personalTimeId = newPersonalTime.id;
-        await suggestion.save();
       }
     }
 
@@ -624,22 +618,21 @@ exports.forceAcceptSuggestion = async (req, res) => {
     // 🆕 구글 사용자 여부 확인
     const isGoogleUser = !!(user.google && user.google.refreshToken);
 
+    // 구글/일반 사용자 모두 DB에 personalTime 저장
+    user.personalTimes.push(newPersonalTime);
+    await user.save();
+    userResponse.personalTimeId = newPersonalTime.id;
+    await suggestion.save();
+
+    // 구글 사용자: Google Calendar에도 동기화
     if (isGoogleUser) {
-      // 🆕 구글 사용자: Google Calendar에만 저장 (personalTimes에 저장 안 함)
       try {
-        await syncToGoogleCalendar(user, newPersonalTime, participantNames);
-        console.log(`[forceAcceptSuggestion] ✅ 구글 사용자 - Google Calendar에만 저장: ${user.email}`);
+        const { syncEventsToGoogleInternal } = require('./calendarController');
+        await syncEventsToGoogleInternal(userId);
+        console.log(`[forceAcceptSuggestion] ✅ 구글 사용자 - DB + Google Calendar 동기화: ${user.email}`);
       } catch (syncErr) {
         console.warn(`[forceAcceptSuggestion] 구글 캘린더 동기화 실패: ${syncErr.message}`);
       }
-      userResponse.personalTimeId = null;
-      await suggestion.save();
-    } else {
-      // 일반 사용자: personalTimes에 저장
-      user.personalTimes.push(newPersonalTime);
-      await user.save();
-      userResponse.personalTimeId = newPersonalTime.id;
-      await suggestion.save();
     }
 
     // 9. 다른 참석자들의 participants 동기화

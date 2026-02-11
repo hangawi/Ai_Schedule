@@ -57,6 +57,7 @@ const MobileSettings = ({ user }) => {
 
       setIsGoogleLinked(true);
       localStorage.setItem('loginMethod', 'google');
+      localStorage.setItem('googleConnected', 'true');
       // user prop 갱신을 위해 이벤트 발송
       window.dispatchEvent(new Event('userProfileUpdated'));
       // 구글 계정 연동 성공 → 바로 구글 캘린더 동의 화면으로 이동
@@ -114,6 +115,7 @@ const MobileSettings = ({ user }) => {
           setIsGoogleLinked(false);
           setIsCalendarLinked(false);
           localStorage.setItem('loginMethod', 'local');
+          localStorage.setItem('googleConnected', 'false');
           window.dispatchEvent(new Event('userProfileUpdated'));
           showAlert('해제 완료', '구글 계정 연동이 해제되었습니다.', 'success');
         } catch (error) {
@@ -175,6 +177,7 @@ const MobileSettings = ({ user }) => {
 
     if (calendarConnected === 'true' || pendingSync === 'true') {
       localStorage.removeItem('pendingCalendarSync');
+      localStorage.setItem('googleConnected', 'true');
       setIsCalendarLinked(true);
       window.history.replaceState({}, document.title, window.location.pathname);
       window.dispatchEvent(new Event('userProfileUpdated'));

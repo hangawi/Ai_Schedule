@@ -79,6 +79,7 @@ const syncToGoogleCalendar = async (user, personalTimeEntry, participantNames = 
       // 🆕 조율방 확정 일정임을 표시 (프론트엔드에서 파란색으로 렌더링)
       extendedProperties: {
         private: {
+          source: 'meetagent',
           isCoordinationConfirmed: 'true',
           roomId: personalTimeEntry.roomId || '',
           suggestionId: personalTimeEntry.suggestionId || ''  // 🆕 중복 제거용

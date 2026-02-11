@@ -212,15 +212,18 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
 
             if (response.ok) {
                const data = await response.json();
-               googleEvents = data.map(event => ({
-                  id: event.id,
-                  title: event.summary,
-                  start: new Date(event.start.dateTime || event.start.date),
-                  end: new Date(event.end.dateTime || event.end.date),
-                  allDay: !event.start.dateTime,
-                  description: event.description,
-                  etag: event.etag,
-               }));
+               googleEvents = data
+                  .filter(event => event.extendedProperties?.private?.source !== 'meetagent')
+                  .map(event => ({
+                     id: event.id,
+                     title: event.summary,
+                     start: new Date(event.start.dateTime || event.start.date),
+                     end: new Date(event.end.dateTime || event.end.date),
+                     allDay: !event.start.dateTime,
+                     description: event.description,
+                     etag: event.etag,
+                     suggestionId: event.extendedProperties?.private?.suggestionId || null,
+                  }));
             } else if (response.status === 401) {
                localStorage.setItem('googleConnected', 'false');
             } else {
@@ -243,7 +246,15 @@ const MyCalendar = ({ isListening, onEventAdded, isVoiceRecognitionEnabled, onTo
             }
          }
 
-         setEvents([...googleEvents, ...personalEvents]);
+         // 구글 캘린더에 이미 동기화된 personalTimes 이벤트 중복 제거
+         const googleSuggestionIds = new Set(
+            googleEvents.filter(e => e.suggestionId).map(e => e.suggestionId)
+         );
+         const deduplicatedPersonalEvents = googleSuggestionIds.size > 0
+            ? personalEvents.filter(e => !e.suggestionId || !googleSuggestionIds.has(e.suggestionId))
+            : personalEvents;
+
+         setEvents([...googleEvents, ...deduplicatedPersonalEvents]);
       } catch (error) {
         // Error fetching calendar events - silently handle error
         showAlert('캘린더 이벤트를 가져오는 중 오류가 발생했습니다.', 'error', '오류');
