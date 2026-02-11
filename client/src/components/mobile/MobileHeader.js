@@ -154,7 +154,7 @@ const MobileHeader = ({
                </button>
 
                {/* 프로필 버튼 */}
-               <button className="mobile-profile-btn" onClick={() => navigate('/mobile/profile')} title="프로필">
+               <button className="mobile-profile-btn" onClick={() => navigate('/mobile/settings')} title="설정">
                   {user && user.firstName ? user.firstName : <User size={18} />}
                </button>
 

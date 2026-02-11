@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, googleProvider } from '../../config/firebaseConfig';
 import { linkWithPopup, unlink, onAuthStateChanged } from 'firebase/auth';
-import { Menu, ChevronLeft, Link2, Unlink, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
+import { Menu, ChevronLeft, Link2, Unlink, Calendar, CheckCircle, AlertCircle, UserCog, Trash2 } from 'lucide-react';
 import CustomAlertModal from '../modals/CustomAlertModal';
+import MobilePersonalInfoEdit from './MobilePersonalInfoEdit';
 import './MobileCalendarView.css';
 
 const MobileSettings = ({ user }) => {
@@ -14,7 +15,9 @@ const MobileSettings = ({ user }) => {
   const [isLinking, setIsLinking] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [alertModal, setAlertModal] = useState({ isOpen: false, title: '', message: '', type: 'info' });
-  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', type: 'warning', onConfirm: null });
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', type: 'warning', onConfirm: null, confirmText: '확인' });
+  const [showPersonalInfo, setShowPersonalInfo] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Firebase Auth 상태 리스너 - providerData 정확하게 감지
   useEffect(() => {
@@ -101,6 +104,7 @@ const MobileSettings = ({ user }) => {
       title: '구글 연동 해제',
       message: '구글 계정 연동을 해제하시겠습니까? 구글 로그인과 구글 캘린더 연동이 모두 해제됩니다.',
       type: 'warning',
+      confirmText: '해제',
       onConfirm: async () => {
         try {
           await unlink(auth.currentUser, 'google.com');
@@ -168,6 +172,40 @@ const MobileSettings = ({ user }) => {
     }
   };
 
+  // 계정 탈퇴
+  const handleDeleteAccount = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: '계정 탈퇴',
+      message: '정말로 탈퇴하시겠습니까? 모든 데이터(일정, 선호시간, 조율방 등)가 삭제되며 복구할 수 없습니다.',
+      type: 'error',
+      confirmText: '탈퇴',
+      onConfirm: async () => {
+        setIsDeleting(true);
+        try {
+          const token = await auth.currentUser.getIdToken();
+          const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+          const res = await fetch(`${API_BASE_URL}/api/auth/delete-account`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            await auth.signOut();
+            navigate('/auth');
+          } else {
+            const data = await res.json();
+            showAlert('탈퇴 실패', data.message || '계정 삭제에 실패했습니다.', 'error');
+          }
+        } catch (error) {
+          showAlert('탈퇴 실패', `오류: ${error.message}`, 'error');
+        } finally {
+          setIsDeleting(false);
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        }
+      }
+    });
+  };
+
   // 구글 캘린더 연동 콜백 처리 (서버에서 이미 동기화 완료, 여기선 UI 알림만)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -186,6 +224,10 @@ const MobileSettings = ({ user }) => {
       showAlert('연동 실패', `구글 캘린더 연동에 실패했습니다: ${calendarError}`, 'error');
     }
   }, []);
+
+  if (showPersonalInfo) {
+    return <MobilePersonalInfoEdit onBack={() => setShowPersonalInfo(false)} />;
+  }
 
   return (
     <div className="mobile-calendar-view">
@@ -263,6 +305,16 @@ const MobileSettings = ({ user }) => {
                 {isGoogleLinked ? '구글 + 이메일' : '이메일'}
               </span>
             </div>
+            <button
+              onClick={() => setShowPersonalInfo(true)}
+              style={{
+                width: '100%', marginTop: '12px', padding: '10px', fontSize: '14px', fontWeight: 600,
+                color: '#3b82f6', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+              }}
+            >
+              <UserCog size={16} /> 개인정보 수정
+            </button>
           </div>
         </div>
 
@@ -323,7 +375,7 @@ const MobileSettings = ({ user }) => {
         </div>
 
         {/* 안내 */}
-        <div style={{ background: '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe', padding: '16px' }}>
+        <div style={{ background: '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe', padding: '16px', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
             <AlertCircle size={18} color="#3b82f6" style={{ flexShrink: 0, marginTop: '2px' }} />
             <div style={{ fontSize: '13px', color: '#1e40af', lineHeight: '1.5' }}>
@@ -332,6 +384,28 @@ const MobileSettings = ({ user }) => {
               - 기존 일정, 선호시간, 조율방 데이터 모두 유지<br />
               - 구글 캘린더 연동 시 기존 구글 일정이 초록색으로 표시
             </div>
+          </div>
+        </div>
+
+
+        {/* 계정 탈퇴 */}
+        <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #fecaca', marginBottom: '16px', overflow: 'hidden' }}>
+          <div style={{ padding: '16px' }}>
+            <button
+              onClick={handleDeleteAccount}
+              disabled={isDeleting}
+              style={{
+                width: '100%', padding: '10px', fontSize: '14px', fontWeight: 600,
+                color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca',
+                borderRadius: '8px', cursor: isDeleting ? 'default' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+              }}
+            >
+              <Trash2 size={16} /> {isDeleting ? '처리 중...' : '계정 탈퇴'}
+            </button>
+            <p style={{ fontSize: '12px', color: '#9ca3af', textAlign: 'center', marginTop: '8px', margin: '8px 0 0 0' }}>
+              탈퇴 시 모든 데이터가 삭제되며 복구할 수 없습니다.
+            </p>
           </div>
         </div>
       </div>
@@ -352,7 +426,7 @@ const MobileSettings = ({ user }) => {
         message={confirmModal.message}
         type={confirmModal.type}
         showCancel={true}
-        confirmText="해제"
+        confirmText={confirmModal.confirmText || '확인'}
       />
     </div>
   );

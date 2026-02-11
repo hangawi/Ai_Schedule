@@ -95,7 +95,7 @@ router.get('/google/calendar-consent', auth, authController.getCalendarConsentUr
 router.get('/google/calendar-callback', authController.calendarCallback);
 router.post('/link-google', auth, authController.linkGoogle);
 router.post('/unlink-google', auth, authController.unlinkGoogle);
-// router.delete('/delete-account', auth, authController.deleteAccount); // Temporarily disabled
+router.delete('/delete-account', auth, authController.deleteAccount);
 
 // Health check
 router.get('/health', (req, res) => {

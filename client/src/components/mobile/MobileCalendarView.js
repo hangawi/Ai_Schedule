@@ -12,7 +12,7 @@ import { useChatEnhanced } from '../../hooks/useChat/enhanced';
 import { useBackgroundMonitoring } from '../../hooks/useBackgroundMonitoring';
 import SimplifiedScheduleDisplay from './SimplifiedScheduleDisplay';
 import BottomNavigation from './BottomNavigation';
-import MobilePersonalInfoEdit from './MobilePersonalInfoEdit';
+
 import MobileScheduleEdit from './MobileScheduleEdit';
 import ChatBox from '../chat/ChatBox';
 import EventDetailModal, { MapModal } from './EventDetailModal';
@@ -29,7 +29,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
    const [isLoading, setIsLoading] = useState(true);
    const [selectedDate, setSelectedDate] = useState(new Date());
    const [calendarView, setCalendarView] = useState('dayGridMonth');
-   const [showPersonalInfo, setShowPersonalInfo] = useState(false);
+
    const [showScheduleEdit, setShowScheduleEdit] = useState(false);
    const [isChatOpen, setIsChatOpen] = useState(searchParams.get('chat') === 'open');
    const [isEditing, setIsEditing] = useState(false);
@@ -1233,7 +1233,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
       );
    };
 
-   if (showPersonalInfo) return <MobilePersonalInfoEdit onBack={() => setShowPersonalInfo(false)} />;
+
    if (showScheduleEdit) return <MobileScheduleEdit onBack={() => setShowScheduleEdit(false)} />;
 
    return (
@@ -1258,7 +1258,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                <div className="mobile-header-right">
                   <button className={`mobile-icon-btn ${isClipboardMonitoring ? 'active' : ''}`} onClick={() => setIsClipboardMonitoring(!isClipboardMonitoring)} title="클립보드">{isClipboardMonitoring ? <Clipboard size={18} /> : <ClipboardX size={18} />}</button>
                   <button className={`mobile-icon-btn ${isBackgroundMonitoring ? 'active' : ''}`} onClick={toggleBackgroundMonitoring} title={isBackgroundMonitoring ? `대화감지 ON ${voiceStatus}` : "대화감지 OFF"}><Phone size={18} /></button>
-                  <button className="mobile-profile-btn" onClick={() => navigate('/')} title="프로필">{user && user.firstName ? user.firstName : <User size={18} />}</button>
+                  <button className="mobile-profile-btn" onClick={() => navigate('/mobile/settings')} title="설정">{user && user.firstName ? user.firstName : <User size={18} />}</button>
                   <button className="mobile-logout-btn" onClick={handleLogout} title="로그아웃"><LogOut size={16} /></button>
                </div>
             </div>
@@ -1277,7 +1277,6 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                         {!isEditing ? (
                            <>
                               <button className="edit-button" onClick={handleStartEdit}>편집</button>
-                              <button className="edit-button" onClick={() => setShowPersonalInfo(true)}>개인정보 수정</button>
                            </>
                         ) : (
                            <>

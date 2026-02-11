@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleMap, Marker } from '@react-google-maps/api';
-import { ArrowLeft, User, Mail, Phone, MapPin, Briefcase, Calendar, Save } from 'lucide-react';
+import { ArrowLeft, User, Mail, Phone, MapPin, Briefcase, Calendar, Save, Lock, ChevronDown, ChevronUp } from 'lucide-react';
+import { auth } from '../../config/firebaseConfig';
+import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { userService } from '../../services/userService';
 import AddressAutocomplete from '../common/AddressAutocomplete';
 import './MobilePersonalInfoEdit.css';
@@ -22,6 +24,38 @@ const MobilePersonalInfoEdit = ({ onBack }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const isEmailUser = auth.currentUser?.providerData?.some(p => p.providerId === 'password');
+
+  const handleChangePassword = async () => {
+    if (passwordForm.new !== passwordForm.confirm) {
+      setMessage({ type: 'error', text: '새 비밀번호가 일치하지 않습니다.' });
+      return;
+    }
+    if (passwordForm.new.length < 6) {
+      setMessage({ type: 'error', text: '비밀번호는 6자 이상이어야 합니다.' });
+      return;
+    }
+    setIsChangingPassword(true);
+    try {
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, passwordForm.current);
+      await reauthenticateWithCredential(auth.currentUser, credential);
+      await updatePassword(auth.currentUser, passwordForm.new);
+      setPasswordForm({ current: '', new: '', confirm: '' });
+      setShowPasswordChange(false);
+      setMessage({ type: 'success', text: '비밀번호가 변경되었습니다.' });
+    } catch (error) {
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        setMessage({ type: 'error', text: '현재 비밀번호가 올바르지 않습니다.' });
+      } else {
+        setMessage({ type: 'error', text: `비밀번호 변경 실패: ${error.message}` });
+      }
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
 
   useEffect(() => {
     const fetchUserInfo = async () => {
@@ -148,6 +182,51 @@ const MobilePersonalInfoEdit = ({ onBack }) => {
               />
               <p className="help-text">이메일은 변경할 수 없습니다.</p>
             </div>
+
+            {/* 비밀번호 변경 (이메일 로그인 사용자만) */}
+            {isEmailUser && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordChange(!showPasswordChange)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '10px 12px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px',
+                    cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: showPasswordChange ? '0' : '0'
+                  }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Lock size={16} /> 비밀번호 변경
+                  </span>
+                  {showPasswordChange ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+                {showPasswordChange && (
+                  <div style={{ padding: '12px', background: '#f9fafb', border: '1px solid #e5e7eb', borderTop: 'none', borderRadius: '0 0 8px 8px', marginTop: '-1px' }}>
+                    <div className="form-group">
+                      <label className="form-label"><Lock size={16} /> 현재 비밀번호</label>
+                      <input type="password" value={passwordForm.current} onChange={(e) => setPasswordForm(prev => ({ ...prev, current: e.target.value }))} className="form-input" placeholder="현재 비밀번호" />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label"><Lock size={16} /> 새 비밀번호</label>
+                      <input type="password" value={passwordForm.new} onChange={(e) => setPasswordForm(prev => ({ ...prev, new: e.target.value }))} className="form-input" placeholder="새 비밀번호 (6자 이상)" />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label"><Lock size={16} /> 새 비밀번호 확인</label>
+                      <input type="password" value={passwordForm.confirm} onChange={(e) => setPasswordForm(prev => ({ ...prev, confirm: e.target.value }))} className="form-input" placeholder="새 비밀번호 확인" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleChangePassword}
+                      disabled={isChangingPassword || !passwordForm.current || !passwordForm.new || !passwordForm.confirm}
+                      className="submit-button"
+                      style={{ background: isChangingPassword ? '#9ca3af' : '#3b82f6' }}
+                    >
+                      {isChangingPassword ? '변경 중...' : '비밀번호 변경'}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
 
             <div className="form-group">
               <label className="form-label">
