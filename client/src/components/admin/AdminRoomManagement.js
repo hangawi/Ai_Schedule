@@ -45,6 +45,7 @@ import React, { useState, useEffect } from 'react';
 import { Building2, Search, Trash2, RefreshCw, Users, Clock, ChevronDown, ChevronUp, X, FileText } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 import MemberLogsModal from '../modals/MemberLogsModal';
+import CustomAlertModal from '../modals/CustomAlertModal';
 import { useToast } from '../../contexts/ToastContext';
 
 /**
@@ -67,6 +68,7 @@ const AdminRoomManagement = () => {
   const [roomMembers, setRoomMembers] = useState([]);
   const [roomMembersWithUserInfo, setRoomMembersWithUserInfo] = useState([]);
   const [modalTab, setModalTab] = useState('logs'); // 'logs' 또는 'members'
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -129,28 +131,31 @@ const AdminRoomManagement = () => {
    * @param {string} roomName - 삭제할 방의 이름 (확인 메시지용)
    */
   const handleDelete = async (roomId, roomName) => {
-    if (!window.confirm(`정말로 "${roomName}" 방을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) {
-      return;
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: '방 삭제',
+      message: `정말로 "${roomName}" 방을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`,
+      onConfirm: async () => {
+        try {
+          const currentUser = auth.currentUser;
+          const response = await fetch(`${API_BASE_URL}/api/admin/rooms/${roomId}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${await currentUser.getIdToken()}`
+            }
+          });
 
-    try {
-      const currentUser = auth.currentUser;
-      const response = await fetch(`${API_BASE_URL}/api/admin/rooms/${roomId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${await currentUser.getIdToken()}`
+          if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.msg || '방 삭제 실패');
+          }
+
+          fetchRooms(pagination.current);
+        } catch (err) {
+          showToast(err.message);
         }
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.msg || '방 삭제 실패');
       }
-
-      fetchRooms(pagination.current);
-    } catch (err) {
-      showToast(err.message);
-    }
+    });
   };
 
   /**
@@ -248,31 +253,34 @@ const AdminRoomManagement = () => {
    * @param {string} roomId - 로그를 삭제할 방의 ID
    */
   const clearLogs = async (roomId) => {
-    if (!window.confirm('정말로 이 방의 모든 로그를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
-      return;
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: '로그 삭제',
+      message: '정말로 이 방의 모든 로그를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.',
+      onConfirm: async () => {
+        try {
+          const currentUser = auth.currentUser;
 
-    try {
-      const currentUser = auth.currentUser;
+          const response = await fetch(`${API_BASE_URL}/api/admin/rooms/${roomId}/logs`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${await currentUser.getIdToken()}`
+            }
+          });
 
-      const response = await fetch(`${API_BASE_URL}/api/admin/rooms/${roomId}/logs`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${await currentUser.getIdToken()}`
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.msg || '로그 삭제 실패');
+          }
+
+          setLogs([]);
+          showToast('로그가 성공적으로 삭제되었습니다.');
+        } catch (err) {
+          showToast(err.message);
         }
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.msg || '로그 삭제 실패');
       }
-
-      setLogs([]);
-      showToast('로그가 성공적으로 삭제되었습니다.');
-    } catch (err) {
-      showToast(err.message);
-    }
+    });
   };
 
   /**
@@ -709,6 +717,18 @@ const AdminRoomManagement = () => {
           isAdmin={true}
         />
       )}
+
+      <CustomAlertModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type="warning"
+        showCancel={true}
+        confirmText="확인"
+        cancelText="취소"
+      />
     </div>
   );
 };

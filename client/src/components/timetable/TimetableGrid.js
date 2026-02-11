@@ -242,6 +242,9 @@ const TimetableGrid = ({
   const showAlert = (message) => setCustomAlert({ show: true, message });
   const closeAlert = () => setCustomAlert({ show: false, message: '' });
 
+  // Confirm Modal 상태
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+
   /**
    * recentRequests - 최근 요청 추적 Set
    *
@@ -785,19 +788,26 @@ const TimetableGrid = ({
 
     if (ownerInfo) {
       if (isOwnedByCurrentUser) {
-        if (onRemoveSlot && window.confirm('이 시간을 삭제하시겠습니까?')) {
-          const [hour, minute] = time.split(':').map(Number);
-          const endHour = minute >= 50 ? hour + 1 : hour;
-          const endMinute = minute >= 50 ? 0 : minute + 10;
+        if (onRemoveSlot) {
+          setConfirmModal({
+            isOpen: true,
+            title: '시간 삭제',
+            message: '이 시간을 삭제하시겠습니까?',
+            onConfirm: () => {
+              const [hour, minute] = time.split(':').map(Number);
+              const endHour = minute >= 50 ? hour + 1 : hour;
+              const endMinute = minute >= 50 ? 0 : minute + 10;
 
-          const dayIndex = getDayIndex(date);
-          if (dayIndex === -1) return; // Weekend, skip
+              const dayIndex = getDayIndex(date);
+              if (dayIndex === -1) return; // Weekend, skip
 
-          onRemoveSlot({
-            date: date, // Pass date object
-            day: DAY_NAMES[dayIndex],
-            startTime: time,
-            endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`
+              onRemoveSlot({
+                date: date, // Pass date object
+                day: DAY_NAMES[dayIndex],
+                startTime: time,
+                endTime: `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`
+              });
+            }
           });
         }
       } else {
@@ -1280,6 +1290,19 @@ const TimetableGrid = ({
         message={customAlert.message}
         type="warning"
         showCancel={false}
+      />
+
+      {/* Confirm Modal */}
+      <CustomAlertModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type="warning"
+        showCancel={true}
+        confirmText="확인"
+        cancelText="취소"
       />
     </div>
   );

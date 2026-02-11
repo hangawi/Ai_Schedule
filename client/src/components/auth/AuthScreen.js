@@ -101,9 +101,9 @@ const AuthScreen = ({ onLoginSuccess }) => {
       ) : (
         <RegisterForm
           onClose={() => {
-            if (window.confirm('회원가입을 하지 않으시겠습니까?')) {
+            showAlert('회원가입을 하지 않으시겠습니까?', 'warning', '회원가입 취소', true, () => {
               setShowLogin(true);
-            }
+            });
           }}
           onRegisterSuccess={() => {
             showAlert('회원가입 성공! 로그인 해주세요.', 'success', '회원가입 성공', false, () => setShowLogin(true));

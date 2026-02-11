@@ -17,6 +17,7 @@ import MobileScheduleEdit from './MobileScheduleEdit';
 import ChatBox from '../chat/ChatBox';
 import EventDetailModal, { MapModal } from './EventDetailModal';
 import AutoDetectedScheduleModal from '../modals/AutoDetectedScheduleModal';
+import CustomAlertModal from '../modals/CustomAlertModal';
 import './MobileCalendarView.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
@@ -49,6 +50,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
    const [personalTimes, setPersonalTimes] = useState([]);
 
    const [toastMessage, setToastMessage] = useState(null);
+   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
    const showToast = useCallback((msg) => { setToastMessage(msg); }, []);
 
    const [globalEvents, setGlobalEvents] = useState([]);
@@ -883,65 +885,70 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
       } catch (error) { showToast('저장 실패'); }
    };
 
-   const handleClearAll = async () => {
-      if (window.confirm('모두 삭제하시겠습니까?')) {
-         // 편집 모드에서는 로컬 상태만 변경 (저장 버튼 눌러야 서버 반영)
-         if (isEditing) {
-            setDefaultSchedule([]);
-            setScheduleExceptions([]);
-            setPersonalTimes([]);
-            // 생일 이벤트는 유지 (삭제 불가)
-            setGoogleCalendarEvents(prev => prev.filter(e => e.isBirthdayEvent || e.title?.includes('생일')));
-            setEvents([]);
-            return;
-         }
-
-         // 편집 모드 아닐 때는 즉시 서버에 반영
-         try {
-            const loginMethod = localStorage.getItem('loginMethod') || '';
-            const token = await auth.currentUser?.getIdToken();
-
-            // 🆕 구글 사용자: 구글 캘린더 일정도 삭제
-            if (loginMethod === 'google' && googleCalendarEvents.length > 0) {
-               let deletedCount = 0;
-               for (const event of googleCalendarEvents) {
-                  try {
-                     // 생일 이벤트 스킵
-                     if (event.isBirthdayEvent || event.title?.includes('생일')) {
-                        console.log('생일 이벤트 스킵:', event.title);
-                        continue;
-                     }
-
-                     // 🆕 suggestionId가 있으면 profile/schedule/google API 사용 (불참 처리됨)
-                     const suggestionId = event.suggestionId || event.extendedProperties?.private?.suggestionId;
-                     if (suggestionId) {
-                        const res = await fetch(`${API_BASE_URL}/api/users/profile/schedule/google/${suggestionId}`, {
-                           method: 'DELETE',
-                           headers: { Authorization: `Bearer ${token}` }
-                        });
-                        if (res.ok) deletedCount++;
-                     } else {
-                        // 일반 구글 일정은 calendar API 사용
-                        const res = await fetch(`${API_BASE_URL}/api/calendar/events/${event.id}`, {
-                           method: 'DELETE',
-                           headers: { Authorization: `Bearer ${token}` }
-                        });
-                        if (res.ok || res.status === 204) deletedCount++;
-                     }
-                  } catch (err) {
-                     console.warn('구글 일정 삭제 실패:', event.id, err);
-                  }
-               }
-               console.log(`✅ 구글 캘린더 ${deletedCount}개 일정 삭제 완료`);
-               setGoogleCalendarEvents([]);
+   const handleClearAll = () => {
+      setConfirmModal({
+         isOpen: true,
+         title: '전체 삭제',
+         message: '모두 삭제하시겠습니까?',
+         onConfirm: async () => {
+            // 편집 모드에서는 로컬 상태만 변경 (저장 버튼 눌러야 서버 반영)
+            if (isEditing) {
+               setDefaultSchedule([]);
+               setScheduleExceptions([]);
+               setPersonalTimes([]);
+               // 생일 이벤트는 유지 (삭제 불가)
+               setGoogleCalendarEvents(prev => prev.filter(e => e.isBirthdayEvent || e.title?.includes('생일')));
+               setEvents([]);
+               return;
             }
 
-            // 로컬 DB 초기화 (모든 사용자)
-            await userService.updateUserSchedule({ defaultSchedule: [], scheduleExceptions: [], personalTimes: [] });
-            setDefaultSchedule([]); setScheduleExceptions([]); setPersonalTimes([]); setEvents([]);
-            await fetchSchedule();
-         } catch (error) { showToast('초기화 실패'); }
-      }
+            // 편집 모드 아닐 때는 즉시 서버에 반영
+            try {
+               const loginMethod = localStorage.getItem('loginMethod') || '';
+               const token = await auth.currentUser?.getIdToken();
+
+               // 🆕 구글 사용자: 구글 캘린더 일정도 삭제
+               if (loginMethod === 'google' && googleCalendarEvents.length > 0) {
+                  let deletedCount = 0;
+                  for (const event of googleCalendarEvents) {
+                     try {
+                        // 생일 이벤트 스킵
+                        if (event.isBirthdayEvent || event.title?.includes('생일')) {
+                           console.log('생일 이벤트 스킵:', event.title);
+                           continue;
+                        }
+
+                        // 🆕 suggestionId가 있으면 profile/schedule/google API 사용 (불참 처리됨)
+                        const suggestionId = event.suggestionId || event.extendedProperties?.private?.suggestionId;
+                        if (suggestionId) {
+                           const res = await fetch(`${API_BASE_URL}/api/users/profile/schedule/google/${suggestionId}`, {
+                              method: 'DELETE',
+                              headers: { Authorization: `Bearer ${token}` }
+                           });
+                           if (res.ok) deletedCount++;
+                        } else {
+                           // 일반 구글 일정은 calendar API 사용
+                           const res = await fetch(`${API_BASE_URL}/api/calendar/events/${event.id}`, {
+                              method: 'DELETE',
+                              headers: { Authorization: `Bearer ${token}` }
+                           });
+                           if (res.ok || res.status === 204) deletedCount++;
+                        }
+                     } catch (err) {
+                        console.warn('구글 일정 삭제 실패:', event.id, err);
+                     }
+                  }
+                  console.log(`✅ 구글 캘린더 ${deletedCount}개 일정 삭제 완료`);
+                  setGoogleCalendarEvents([]);
+               }
+
+               // 로컬 DB 초기화 (모든 사용자)
+               await userService.updateUserSchedule({ defaultSchedule: [], scheduleExceptions: [], personalTimes: [] });
+               setDefaultSchedule([]); setScheduleExceptions([]); setPersonalTimes([]); setEvents([]);
+               await fetchSchedule();
+            } catch (error) { showToast('초기화 실패'); }
+         }
+      });
    };
 
    const renderEventContent = (eventInfo) => {
@@ -1499,6 +1506,17 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                {toastMessage}
             </div>
          )}
+         <CustomAlertModal
+            isOpen={confirmModal.isOpen}
+            onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+            onConfirm={confirmModal.onConfirm}
+            title={confirmModal.title}
+            message={confirmModal.message}
+            type="warning"
+            showCancel={true}
+            confirmText="확인"
+            cancelText="취소"
+         />
       </div>
    );
 };

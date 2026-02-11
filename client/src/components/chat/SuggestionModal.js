@@ -19,6 +19,7 @@ import { X, Calendar, Clock, MapPin, Users, Check, XCircle, Trash2 } from 'lucid
 import { auth } from '../../config/firebaseConfig';
 import { io } from 'socket.io-client';
 import ScheduleDetailModal from './ScheduleDetailModal';
+import CustomAlertModal from '../modals/CustomAlertModal';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -58,6 +59,7 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
   const [userProfile, setUserProfile] = useState(null); // 🆕 사용자 전체 프로필 (주소 포함)
   const [selectedSuggestion, setSelectedSuggestion] = useState(null); // 🆕 상세 모달용
   const [conflictModal, setConflictModal] = useState(null); // 🆕 충돌 확인 모달
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
   // 현재 사용자 정보 가져오기 (email로 비교)
   useEffect(() => {
@@ -268,30 +270,33 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
     }
   };
 
-  const handleDelete = async (suggestionId) => {
-    if (!window.confirm('정말로 이 일정 제안을 삭제하시겠습니까?')) {
-      return;
-    }
+  const handleDelete = (suggestionId) => {
+    setConfirmModal({
+      isOpen: true,
+      title: '일정 제안 삭제',
+      message: '정말로 이 일정 제안을 삭제하시겠습니까?',
+      onConfirm: async () => {
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          const res = await fetch(`${API_BASE_URL}/api/chat/${roomId}/suggestions/${suggestionId}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+          });
 
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      const res = await fetch(`${API_BASE_URL}/api/chat/${roomId}/suggestions/${suggestionId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (res.ok) {
-        console.log('🗑️ Deleted suggestion:', suggestionId);
-        fetchSuggestions();
-        window.dispatchEvent(new CustomEvent('suggestionUpdate', { detail: { roomId } }));
-      } else {
-        const error = await res.json();
-        showToast(error.message || '일정 삭제에 실패했습니다.');
+          if (res.ok) {
+            console.log('🗑️ Deleted suggestion:', suggestionId);
+            fetchSuggestions();
+            window.dispatchEvent(new CustomEvent('suggestionUpdate', { detail: { roomId } }));
+          } else {
+            const error = await res.json();
+            showToast(error.message || '일정 삭제에 실패했습니다.');
+          }
+        } catch (error) {
+          console.error('Failed to delete suggestion:', error);
+          showToast('일정 삭제 중 오류가 발생했습니다.');
+        }
       }
-    } catch (error) {
-      console.error('Failed to delete suggestion:', error);
-      showToast('일정 삭제 중 오류가 발생했습니다.');
-    }
+    });
   };
 
   // 현재 사용자가 제안자인지 확인 (email로 비교)
@@ -691,6 +696,17 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
           </div>
         </div>
       , document.body)}
+      <CustomAlertModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type="warning"
+        showCancel={true}
+        confirmText="확인"
+        cancelText="취소"
+      />
     </div>
   );
 };

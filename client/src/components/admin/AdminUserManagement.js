@@ -44,6 +44,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, Search, Trash2, Shield, ShieldOff, RefreshCw } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 import { useToast } from '../../contexts/ToastContext';
+import CustomAlertModal from '../modals/CustomAlertModal';
 
 /**
  * AdminUserManagement - 관리자 회원 관리 메인 컴포넌트
@@ -57,6 +58,7 @@ const AdminUserManagement = () => {
   const [search, setSearch] = useState('');
   const [pagination, setPagination] = useState({ current: 1, pages: 1, total: 0 });
   const [error, setError] = useState('');
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -119,28 +121,31 @@ const AdminUserManagement = () => {
    * @param {string} userName - 삭제할 회원의 이름 (확인 메시지용)
    */
   const handleDelete = async (userId, userName) => {
-    if (!window.confirm(`정말로 "${userName}" 회원을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) {
-      return;
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: '회원 삭제',
+      message: `정말로 "${userName}" 회원을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`,
+      onConfirm: async () => {
+        try {
+          const currentUser = auth.currentUser;
+          const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${await currentUser.getIdToken()}`
+            }
+          });
 
-    try {
-      const currentUser = auth.currentUser;
-      const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${await currentUser.getIdToken()}`
+          if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.msg || '회원 삭제 실패');
+          }
+
+          fetchUsers(pagination.current);
+        } catch (err) {
+          showToast(err.message);
         }
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.msg || '회원 삭제 실패');
       }
-
-      fetchUsers(pagination.current);
-    } catch (err) {
-      showToast(err.message);
-    }
+    });
   };
 
   /**
@@ -151,28 +156,31 @@ const AdminUserManagement = () => {
    * @param {string} userName - 승급할 회원의 이름 (확인 메시지용)
    */
   const handlePromote = async (userId, userName) => {
-    if (!window.confirm(`"${userName}" 회원을 관리자로 승급하시겠습니까?`)) {
-      return;
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: '관리자 승급',
+      message: `"${userName}" 회원을 관리자로 승급하시겠습니까?`,
+      onConfirm: async () => {
+        try {
+          const currentUser = auth.currentUser;
+          const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/promote`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${await currentUser.getIdToken()}`
+            }
+          });
 
-    try {
-      const currentUser = auth.currentUser;
-      const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/promote`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${await currentUser.getIdToken()}`
+          if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.msg || '승급 실패');
+          }
+
+          fetchUsers(pagination.current);
+        } catch (err) {
+          showToast(err.message);
         }
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.msg || '승급 실패');
       }
-
-      fetchUsers(pagination.current);
-    } catch (err) {
-      showToast(err.message);
-    }
+    });
   };
 
   /**
@@ -183,28 +191,31 @@ const AdminUserManagement = () => {
    * @param {string} userName - 강등할 관리자의 이름 (확인 메시지용)
    */
   const handleDemote = async (userId, userName) => {
-    if (!window.confirm(`"${userName}" 관리자를 일반 사용자로 강등하시겠습니까?`)) {
-      return;
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: '관리자 강등',
+      message: `"${userName}" 관리자를 일반 사용자로 강등하시겠습니까?`,
+      onConfirm: async () => {
+        try {
+          const currentUser = auth.currentUser;
+          const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/demote`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${await currentUser.getIdToken()}`
+            }
+          });
 
-    try {
-      const currentUser = auth.currentUser;
-      const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/demote`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${await currentUser.getIdToken()}`
+          if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.msg || '강등 실패');
+          }
+
+          fetchUsers(pagination.current);
+        } catch (err) {
+          showToast(err.message);
         }
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.msg || '강등 실패');
       }
-
-      fetchUsers(pagination.current);
-    } catch (err) {
-      showToast(err.message);
-    }
+    });
   };
 
   /**
@@ -369,6 +380,18 @@ const AdminUserManagement = () => {
           )}
         </>
       )}
+
+      <CustomAlertModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type="warning"
+        showCancel={true}
+        confirmText="확인"
+        cancelText="취소"
+      />
     </div>
   );
 };

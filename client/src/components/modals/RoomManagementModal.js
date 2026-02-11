@@ -97,6 +97,9 @@ const RoomManagementModal = ({
   const showAlert = (message) => setCustomAlert({ show: true, message });
   const closeAlert = () => setCustomAlert({ show: false, message: '' });
 
+  // Confirm 모달 상태
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+
   // 로그 관련 상태
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
@@ -145,33 +148,36 @@ const RoomManagementModal = ({
 
   // 로그 초기화
   const clearLogs = async () => {
-    if (!window.confirm('로그를 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
-      return;
-    }
-    
-    try {
-      const currentUser = auth.currentUser;
-      if (!currentUser) return;
+    setConfirmModal({
+      isOpen: true,
+      title: '로그 초기화',
+      message: '로그를 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.',
+      onConfirm: async () => {
+        try {
+          const currentUser = auth.currentUser;
+          if (!currentUser) return;
 
-      const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${room._id}/clear-logs`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${await currentUser.getIdToken()}`
+          const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${room._id}/clear-logs`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${await currentUser.getIdToken()}`
+            }
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.msg || '로그를 초기화할 수 없습니다.');
+          }
+
+          // 초기화 후 로그 목록 비우기
+          setLogs([]);
+          showToast('로그가 초기화되었습니다.');
+        } catch (err) {
+          showToast(err.message || '로그 초기화 중 오류가 발생했습니다.');
         }
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.msg || '로그를 초기화할 수 없습니다.');
       }
-
-      // 초기화 후 로그 목록 비우기
-      setLogs([]);
-      showToast('로그가 초기화되었습니다.');
-    } catch (err) {
-      showToast(err.message || '로그 초기화 중 오류가 발생했습니다.');
-    }
+    });
   };
 
   const getActionLabel = (action) => {
@@ -234,18 +240,19 @@ const RoomManagementModal = ({
   };
 
   const handleDelete = async () => {
-    if (
-      window.confirm(
-        "정말로 이 방을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
-      )
-    ) {
-      try {
-        await deleteRoom(room._id);
-        onClose();
-      } catch (error) {
-        // Failed to delete room - silently handle error
+    setConfirmModal({
+      isOpen: true,
+      title: '방 삭제',
+      message: '정말로 이 방을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.',
+      onConfirm: async () => {
+        try {
+          await deleteRoom(room._id);
+          onClose();
+        } catch (error) {
+          // Failed to delete room - silently handle error
+        }
       }
-    }
+    });
   };
 
   const copyInviteCode = () => {
@@ -254,68 +261,78 @@ const RoomManagementModal = ({
   };
 
   const removeMember = async (memberId) => {
-    if (window.confirm("이 멤버를 방에서 제거하시겠습니까?")) {
-      try {
-        const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-        const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${room._id}/members/${memberId}`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
+    setConfirmModal({
+      isOpen: true,
+      title: '멤버 제거',
+      message: '이 멤버를 방에서 제거하시겠습니까?',
+      onConfirm: async () => {
+        try {
+          const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+          const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${room._id}/members/${memberId}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
+            }
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.msg || 'Failed to remove member');
           }
-        });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.msg || 'Failed to remove member');
+          const result = await response.json();
+          onRoomUpdated(result.room);
+
+          if (result.removedMember) {
+            showAlert(`${result.removedMember.name}님이 방에서 강퇴되었습니다. 해당 멤버에게 알림이 전송되었습니다.`);
+          } else {
+            showAlert("조원이 성공적으로 제거되었습니다.");
+          }
+        } catch (error) {
+          // Failed to remove member - silently handle error
+          showAlert(`조원 제거 실패: ${error.message}`);
         }
-
-        const result = await response.json();
-        onRoomUpdated(result.room);
-
-        if (result.removedMember) {
-          showAlert(`${result.removedMember.name}님이 방에서 강퇴되었습니다. 해당 멤버에게 알림이 전송되었습니다.`);
-        } else {
-          showAlert("조원이 성공적으로 제거되었습니다.");
-        }
-      } catch (error) {
-        // Failed to remove member - silently handle error
-        showAlert(`조원 제거 실패: ${error.message}`);
       }
-    }
+    });
   };
 
   const leaveRoom = async () => {
-    if (window.confirm("정말로 이 방을 나가시겠습니까? 배정된 모든 시간이 삭제됩니다.")) {
-      try {
-        const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-        const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${room._id}/leave`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
+    setConfirmModal({
+      isOpen: true,
+      title: '방 나가기',
+      message: '정말로 이 방을 나가시겠습니까? 배정된 모든 시간이 삭제됩니다.',
+      onConfirm: async () => {
+        try {
+          const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+          const response = await fetch(`${API_BASE_URL}/api/coordination/rooms/${room._id}/leave`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
+            }
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.msg || 'Failed to leave room');
           }
-        });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.msg || 'Failed to leave room');
+          const result = await response.json();
+          showAlert("방에서 나갔습니다.");
+
+          // Close modal and trigger room list refresh
+          setTimeout(() => {
+            onClose();
+            // Dispatch custom event to refresh room list
+            window.dispatchEvent(new CustomEvent('roomListChanged'));
+          }, 1500);
+
+        } catch (error) {
+          showAlert(`방 나가기 실패: ${error.message}`);
         }
-
-        const result = await response.json();
-        showAlert("방에서 나갔습니다.");
-
-        // Close modal and trigger room list refresh
-        setTimeout(() => {
-          onClose();
-          // Dispatch custom event to refresh room list
-          window.dispatchEvent(new CustomEvent('roomListChanged'));
-        }, 1500);
-
-      } catch (error) {
-        showAlert(`방 나가기 실패: ${error.message}`);
       }
-    }
+    });
   };
 
   const renderInfoTab = () => (
@@ -625,6 +642,19 @@ const RoomManagementModal = ({
           show={customAlert.show}
           onClose={closeAlert}
           message={customAlert.message}
+        />
+
+        {/* Confirm Modal */}
+        <CustomAlertModal
+          isOpen={confirmModal.isOpen}
+          onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+          onConfirm={confirmModal.onConfirm}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          type="warning"
+          showCancel={true}
+          confirmText="확인"
+          cancelText="취소"
         />
       </div>
     </div>

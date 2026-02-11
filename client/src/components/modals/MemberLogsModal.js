@@ -35,6 +35,7 @@ import React, { useState, useEffect } from 'react';
 import { X, FileText, User, Trash2 } from 'lucide-react';
 import { auth } from '../../config/firebaseConfig';
 import { useToast } from '../../contexts/ToastContext';
+import CustomAlertModal from './CustomAlertModal';
 
 /**
  * MemberLogsModal
@@ -52,6 +53,7 @@ const MemberLogsModal = ({ roomId, memberId, memberName, onClose, isAdmin = fals
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeLogTab, setActiveLogTab] = useState('all');
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
   const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -141,36 +143,39 @@ const MemberLogsModal = ({ roomId, memberId, memberName, onClose, isAdmin = fals
   };
 
   const clearMemberLogs = async () => {
-    if (!window.confirm(`정말로 ${memberName}님의 모든 활동 로그를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) {
-      return;
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: '활동 로그 삭제',
+      message: `정말로 ${memberName}님의 모든 활동 로그를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`,
+      onConfirm: async () => {
+        try {
+          const currentUser = auth.currentUser;
+          if (!currentUser) return;
 
-    try {
-      const currentUser = auth.currentUser;
-      if (!currentUser) return;
+          const apiPath = isAdmin
+            ? `${API_BASE_URL}/api/admin/rooms/${roomId}/logs/user/${memberId}`
+            : `${API_BASE_URL}/api/coordination/rooms/${roomId}/logs/user/${memberId}`;
 
-      const apiPath = isAdmin
-        ? `${API_BASE_URL}/api/admin/rooms/${roomId}/logs/user/${memberId}`
-        : `${API_BASE_URL}/api/coordination/rooms/${roomId}/logs/user/${memberId}`;
+          const response = await fetch(apiPath, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${await currentUser.getIdToken()}`
+            }
+          });
 
-      const response = await fetch(apiPath, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${await currentUser.getIdToken()}`
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.msg || '로그 삭제 실패');
+          }
+
+          showToast(data.msg);
+          await fetchMemberLogs(); // Refresh logs
+        } catch (err) {
+          showToast(err.message || '로그 삭제 중 오류가 발생했습니다.');
         }
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.msg || '로그 삭제 실패');
       }
-
-      showToast(data.msg);
-      await fetchMemberLogs(); // Refresh logs
-    } catch (err) {
-      showToast(err.message || '로그 삭제 중 오류가 발생했습니다.');
-    }
+    });
   };
 
   // 선택된 탭에 따라 로그 필터링
@@ -325,6 +330,18 @@ const MemberLogsModal = ({ roomId, memberId, memberName, onClose, isAdmin = fals
           </button>
         </div>
       </div>
+
+      <CustomAlertModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type="warning"
+        showCancel={true}
+        confirmText="확인"
+        cancelText="취소"
+      />
     </div>
   );
 };

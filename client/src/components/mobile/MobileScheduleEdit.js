@@ -15,6 +15,7 @@ const MobileScheduleEdit = ({ onBack }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [customAlert, setCustomAlert] = useState({ show: false, message: '', title: '' });
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
   const [viewingMonth, setViewingMonth] = useState(new Date());
   const [activeTab, setActiveTab] = useState('schedule'); // 'schedule' or 'personal'
 
@@ -92,12 +93,17 @@ const MobileScheduleEdit = ({ onBack }) => {
   };
 
   const handleClearAll = () => {
-    if (window.confirm('모든 일정을 삭제하시겠습니까?')) {
-      setDefaultSchedule([]);
-      setScheduleExceptions([]);
-      setPersonalTimes([]);
-      showAlert('모든 일정이 삭제되었습니다. 저장 버튼을 눌러 확정하세요.', '알림');
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: '전체 삭제',
+      message: '모든 일정을 삭제하시겠습니까?',
+      onConfirm: () => {
+        setDefaultSchedule([]);
+        setScheduleExceptions([]);
+        setPersonalTimes([]);
+        showAlert('모든 일정이 삭제되었습니다. 저장 버튼을 눌러 확정하세요.', '알림');
+      }
+    });
   };
 
   const handleRemoveException = (exceptionId) => {
@@ -212,6 +218,18 @@ const MobileScheduleEdit = ({ onBack }) => {
         onClose={closeAlert}
         title={customAlert.title}
         message={customAlert.message}
+      />
+      {/* 확인 모달 */}
+      <CustomAlertModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type="warning"
+        showCancel={true}
+        confirmText="확인"
+        cancelText="취소"
       />
     </div>
   );

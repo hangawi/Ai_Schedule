@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Calendar, Clock, MapPin, Users, X, Trash2 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
+import CustomAlertModal from '../modals/CustomAlertModal';
 import './MobileScheduleView.css'; // 스타일 재사용
 
 /**
@@ -52,6 +53,7 @@ export const MapModal = ({ address, lat, lng, onClose }) => {
  */
 const EventDetailModal = ({ event, user, onClose, onOpenMap, onDelete, previousLocation, isEditing }) => {
    const [isDeleting, setIsDeleting] = useState(false);
+   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
    const { showToast } = useToast();
    if (!event) return null;
 
@@ -335,10 +337,15 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap, onDelete, previousL
                         className="event-delete-btn"
                         onClick={() => {
                            if (isDeleting) return;
-                           if (window.confirm('이 일정을 삭제하시겠습니까?')) {
-                              setIsDeleting(true);
-                              onDelete(event).finally(() => setIsDeleting(false));
-                           }
+                           setConfirmModal({
+                              isOpen: true,
+                              title: '일정 삭제',
+                              message: '이 일정을 삭제하시겠습니까?',
+                              onConfirm: () => {
+                                 setIsDeleting(true);
+                                 onDelete(event).finally(() => setIsDeleting(false));
+                              }
+                           });
                         }}
                         disabled={isDeleting}
                      >
@@ -349,6 +356,17 @@ const EventDetailModal = ({ event, user, onClose, onOpenMap, onDelete, previousL
                )}
             </div>
          </div>
+         <CustomAlertModal
+            isOpen={confirmModal.isOpen}
+            onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+            onConfirm={confirmModal.onConfirm}
+            title={confirmModal.title}
+            message={confirmModal.message}
+            type="warning"
+            showCancel={true}
+            confirmText="확인"
+            cancelText="취소"
+         />
       </>
    );
 };

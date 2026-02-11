@@ -29,10 +29,11 @@
  *
  * ===================================================================================================
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { X, Clock, Calendar, TrendingUp, TrendingDown } from 'lucide-react';
 import { coordinationService } from '../../services/coordinationService';
 import { useToast } from '../../contexts/ToastContext';
+import CustomAlertModal from './CustomAlertModal';
 
 /**
  * MemberStatsModal
@@ -48,22 +49,28 @@ import { useToast } from '../../contexts/ToastContext';
  */
 const MemberStatsModal = ({ isOpen, onClose, member, isOwner, currentRoom, onRefresh }) => {
   const { showToast } = useToast();
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
   if (!isOpen || !member) return null;
 
   const handleClearCarryOverHistory = async () => {
-    if (window.confirm('정말로 이 멤버의 이월시간 내역을 모두 삭제하고, 이월시간을 0으로 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
-      try {
-        const memberId = latestMember.user?._id || latestMember.user;
-        await coordinationService.clearCarryOverHistory(currentRoom._id, memberId);
-        showToast('이월시간 내역이 성공적으로 삭제되었습니다.');
-        if (onRefresh) {
-          onRefresh();
+    setConfirmModal({
+      isOpen: true,
+      title: '이월시간 초기화',
+      message: '정말로 이 멤버의 이월시간 내역을 모두 삭제하고, 이월시간을 0으로 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.',
+      onConfirm: async () => {
+        try {
+          const memberId = latestMember.user?._id || latestMember.user;
+          await coordinationService.clearCarryOverHistory(currentRoom._id, memberId);
+          showToast('이월시간 내역이 성공적으로 삭제되었습니다.');
+          if (onRefresh) {
+            onRefresh();
+          }
+          onClose(); // Close modal on success
+        } catch (error) {
+          showToast(`오류가 발생했습니다: ${error.message}`);
         }
-        onClose(); // Close modal on success
-      } catch (error) {
-        showToast(`오류가 발생했습니다: ${error.message}`);
       }
-    }
+    });
   };
 
   // 💡 currentRoom이 있으면 최신 멤버 데이터를 가져옴 (이월시간 업데이트 반영)
@@ -200,6 +207,18 @@ const MemberStatsModal = ({ isOpen, onClose, member, isOwner, currentRoom, onRef
           </button>
         </div>
       </div>
+
+      <CustomAlertModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type="warning"
+        showCancel={true}
+        confirmText="확인"
+        cancelText="취소"
+      />
     </div>
   );
 };

@@ -31,28 +31,34 @@ function generateSchedulePrompt(conversationText, currentDate = new Date(), exis
   const formatDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
 
-  // 이번주 날짜들 (일요일부터 토요일까지)
+  // 한국식 주 계산 (월요일 시작)
+  const mondayDayIndex = dayIndex === 0 ? 6 : dayIndex - 1; // 월=0, 화=1, ..., 일=6
+
+  // 이번주 날짜들 (월요일부터 일요일까지)
   const thisWeekDates = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(kstDate);
-    d.setDate(kstDate.getDate() - dayIndex + i);
-    thisWeekDates.push(`${dayNames[i]}=${formatDate(d)}`);
+    d.setDate(kstDate.getDate() - mondayDayIndex + i);
+    const actualDayIndex = d.getDay();
+    thisWeekDates.push(`${dayNames[actualDayIndex]}=${formatDate(d)}`);
   }
 
   // 다음주 날짜들
   const nextWeekDates = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(kstDate);
-    d.setDate(kstDate.getDate() - dayIndex + 7 + i);
-    nextWeekDates.push(`${dayNames[i]}=${formatDate(d)}`);
+    d.setDate(kstDate.getDate() - mondayDayIndex + 7 + i);
+    const actualDayIndex = d.getDay();
+    nextWeekDates.push(`${dayNames[actualDayIndex]}=${formatDate(d)}`);
   }
 
   // 다다음주 날짜들
   const weekAfterNextDates = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(kstDate);
-    d.setDate(kstDate.getDate() - dayIndex + 14 + i);
-    weekAfterNextDates.push(`${dayNames[i]}=${formatDate(d)}`);
+    d.setDate(kstDate.getDate() - mondayDayIndex + 14 + i);
+    const actualDayIndex = d.getDay();
+    weekAfterNextDates.push(`${dayNames[actualDayIndex]}=${formatDate(d)}`);
   }
 
 
@@ -126,13 +132,13 @@ ${existingSuggestions.map((s, i) => {
    - "다음주 월요일"이면 다음주 달력의 "월=" 값과 정확히 일치해야 함
    - 일치하지 않으면 달력표의 값으로 교정
 
-📅 **이번주 달력 (일요일~토요일):**
+📅 **이번주 달력 (월요일~일요일):**
    ${thisWeekDates.join(', ')}
 
-📅 **다음주 달력 (일요일~토요일):**
+📅 **다음주 달력 (월요일~일요일):**
    ${nextWeekDates.join(', ')}
 
-📅 **다다음주 달력 (일요일~토요일):**
+📅 **다다음주 달력 (월요일~일요일):**
    ${weekAfterNextDates.join(', ')}
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -142,14 +148,14 @@ ${existingSuggestions.map((s, i) => {
 [예시 1]
 대화: "다음주 월요일 오후 4시에 밥먹자"
 분석:
-- 요일: "다음주 월요일" → 다음주 달력에서 "월=" 찾기 → 월=${nextWeekDates[1].split('=')[1]}
+- 요일: "다음주 월요일" → 다음주 달력에서 "월=" 찾기 → 월=${nextWeekDates[0].split('=')[1]}
 - 시간: "오후 4시" → 16:00
 정답:
 {
   "action": "new",
   "data": {
     "summary": "밥약속",
-    "date": "${nextWeekDates[1].split('=')[1]}",
+    "date": "${nextWeekDates[0].split('=')[1]}",
     "startTime": "16:00",
     "endTime": "18:00",
     "location": ""
@@ -159,14 +165,14 @@ ${existingSuggestions.map((s, i) => {
 [예시 2]
 대화: "이번주 토요일 저녁 7시 치킨 먹자"
 분석:
-- 요일: "이번주 토요일" → 이번주 달력에서 "토=" 찾기 → 토=${thisWeekDates[6].split('=')[1]}
+- 요일: "이번주 토요일" → 이번주 달력에서 "토=" 찾기 → 토=${thisWeekDates[5].split('=')[1]}
 - 시간: "저녁 7시" → 19:00
 정답:
 {
   "action": "new",
   "data": {
     "summary": "치킨",
-    "date": "${thisWeekDates[6].split('=')[1]}",
+    "date": "${thisWeekDates[5].split('=')[1]}",
     "startTime": "19:00",
     "endTime": "21:00",
     "location": ""
@@ -176,8 +182,8 @@ ${existingSuggestions.map((s, i) => {
 [예시 2-2 - "다음주 토요일" 날짜 계산 🆕]
 대화: "다음주 토요일에 강변역에서 밥이나 먹자 한 2시쯤에"
 분석:
-- 요일: ⚠️ "다음주 토요일" → **다음주** 달력에서 "토=" 찾기 → 토=${nextWeekDates[6].split('=')[1]}
-- ❌ 이번주 토요일(${thisWeekDates[6].split('=')[1]})이 아님! "다음주"라고 했으므로!
+- 요일: ⚠️ "다음주 토요일" → **다음주** 달력에서 "토=" 찾기 → 토=${nextWeekDates[5].split('=')[1]}
+- ❌ 이번주 토요일(${thisWeekDates[5].split('=')[1]})이 아님! "다음주"라고 했으므로!
 - 시간: "2시쯤" → 14:00
 - 장소: "강변역"
 정답:
@@ -185,7 +191,7 @@ ${existingSuggestions.map((s, i) => {
   "action": "new",
   "data": {
     "summary": "밥",
-    "date": "${nextWeekDates[6].split('=')[1]}",
+    "date": "${nextWeekDates[5].split('=')[1]}",
     "startTime": "14:00",
     "endTime": "16:00",
     "location": "강변역"
@@ -1218,15 +1224,15 @@ FOR EACH 기존 일정:
 | **내일** | 오늘 + 1일 | 직접 계산 | ${formatDate(new Date(kstDate.getTime() + 86400000))} |
 | **모레** | 오늘 + 2일 | 직접 계산 | ${formatDate(new Date(kstDate.getTime() + 172800000))} |
 | **글피** | 오늘 + 3일 | 직접 계산 | ${formatDate(new Date(kstDate.getTime() + 259200000))} |
-| **이번주 월요일** | 이번주 | 이번주 달력에서 "월=" 찾기 | ${thisWeekDates[1].split('=')[1]} |
-| **이번주 금요일** | 이번주 | 이번주 달력에서 "금=" 찾기 | ${thisWeekDates[5].split('=')[1]} |
-| **이번주 토요일** | 이번주 | 이번주 달력에서 "토=" 찾기 | ${thisWeekDates[6].split('=')[1]} |
-| **이번 주말** | 이번주 토요일 | 이번주 달력에서 "토=" 찾기 | ${thisWeekDates[6].split('=')[1]} |
-| **다음주 월요일** | 다음주 | 다음주 달력에서 "월=" 찾기 | ${nextWeekDates[1].split('=')[1]} |
-| **다음주 목요일** | 다음주 | 다음주 달력에서 "목=" 찾기 | ${nextWeekDates[4].split('=')[1]} |
-| **다음 주말** | 다음주 토요일 | 다음주 달력에서 "토=" 찾기 | ${nextWeekDates[6].split('=')[1]} |
-| **다다음주 월요일** | 다다음주 | 다다음주 달력에서 "월=" 찾기 | ${weekAfterNextDates[1].split('=')[1]} |
-| **다다음주 금요일** | 다다음주 | 다다음주 달력에서 "금=" 찾기 | ${weekAfterNextDates[5].split('=')[1]} |
+| **이번주 월요일** | 이번주 | 이번주 달력에서 "월=" 찾기 | ${thisWeekDates[0].split('=')[1]} |
+| **이번주 금요일** | 이번주 | 이번주 달력에서 "금=" 찾기 | ${thisWeekDates[4].split('=')[1]} |
+| **이번주 토요일** | 이번주 | 이번주 달력에서 "토=" 찾기 | ${thisWeekDates[5].split('=')[1]} |
+| **이번 주말** | 이번주 토요일 | 이번주 달력에서 "토=" 찾기 | ${thisWeekDates[5].split('=')[1]} |
+| **다음주 월요일** | 다음주 | 다음주 달력에서 "월=" 찾기 | ${nextWeekDates[0].split('=')[1]} |
+| **다음주 목요일** | 다음주 | 다음주 달력에서 "목=" 찾기 | ${nextWeekDates[3].split('=')[1]} |
+| **다음 주말** | 다음주 토요일 | 다음주 달력에서 "토=" 찾기 | ${nextWeekDates[5].split('=')[1]} |
+| **다다음주 월요일** | 다다음주 | 다다음주 달력에서 "월=" 찾기 | ${weekAfterNextDates[0].split('=')[1]} |
+| **다다음주 금요일** | 다다음주 | 다다음주 달력에서 "금=" 찾기 | ${weekAfterNextDates[4].split('=')[1]} |
 
 ---
 
@@ -1269,6 +1275,35 @@ FOR EACH 기존 일정:
 | **저녁 8시** | 20:00 | |
 | **밤 9시** | 21:00 | |
 
+**🔴🔴🔴 "X시" 오전/오후 판단 규칙 (매우 중요!) 🔴🔴🔴**
+
+"오전/오후" 없이 숫자만 있을 때 (예: "10시", "2시", "6시"):
+
+**1. extend (endTime 변경) 시 → 기존 일정 startTime 기준:**
+- 기존 startTime이 18:00 이후(저녁) → 언급된 시간은 **밤~새벽** (PM/다음날)
+  - "10시까지" → **22:00** (밤 10시), ❌ 오전 10시 아님!
+  - "12시까지" → **24:00** (자정), ❌ 정오 아님!
+  - "2시까지" → **02:00** (새벽), ❌ 오후 2시 아님!
+- 기존 startTime이 12:00~17:00(오후) → 언급된 시간은 **오후~저녁**
+  - "6시까지" → **18:00** (저녁 6시)
+  - "10시까지" → **22:00** (밤 10시)
+- 기존 startTime이 09:00~11:00(오전) → 언급된 시간은 **오전~오후**
+  - "12시까지" → **12:00** (정오)
+
+**2. new (새 일정) 시 → 활동 맥락 기준:**
+- "놀자", "술 마시자", "게임하자" → 저녁/밤 활동 → **PM 해석**
+  - "10시에 만나자" → **22:00** (밤 10시)
+  - "6시에 보자" → **18:00** (저녁 6시)
+- "밥 먹자", "점심 먹자" → 식사 시간 → **낮 해석**
+  - "2시에 먹자" → **14:00** (오후 2시)
+- "아침", "출근", "학교" → 오전 활동 → **AM 해석**
+  - "8시에 만나자" → **08:00** (오전 8시)
+
+**3. 핵심 원칙: 1~6시는 맥락 의존도 높음!**
+- 저녁 시작 일정에서 "1시~5시" → **새벽** (01:00~05:00)
+- 낮 시작 일정에서 "1시~5시" → **오후** (13:00~17:00)
+- 7시~11시는 대부분 **PM** (19:00~23:00) 해석 (일상 약속 기준)
+
 **🔴 맥락 기반 추론 (시간 미명시 시):**
 - "밥", "저녁", "술" → 기본 18:00 (오후 6시)
 - "점심" → 기본 12:00 (낮 12시)
@@ -1281,14 +1316,14 @@ FOR EACH 기존 일정:
 대화: "다음주 월요일 오후 4시에 밥먹을까?"
 분석 단계:
 1. "다음주 월요일" 발견 → 다음주 달력 사용
-2. 다음주 달력에서 "월=" 찾기 → 월=${nextWeekDates[1].split('=')[1]}
+2. 다음주 달력에서 "월=" 찾기 → 월=${nextWeekDates[0].split('=')[1]}
 3. "오후 4시" → 16:00 변환
 정답:
 {
   "action": "new",
   "data": {
     "summary": "밥약속",
-    "date": "${nextWeekDates[1].split('=')[1]}",
+    "date": "${nextWeekDates[0].split('=')[1]}",
     "startTime": "16:00",
     "endTime": "18:00",
     "location": ""
@@ -1331,14 +1366,14 @@ FOR EACH 기존 일정:
 대화: "다다음주 금요일에 볼링 가자"
 분석 단계:
 1. "다다음주 금요일" 발견 → 다다음주 달력 사용
-2. 다다음주 달력에서 "금=" 찾기 → 금=${weekAfterNextDates[5].split('=')[1]}
+2. 다다음주 달력에서 "금=" 찾기 → 금=${weekAfterNextDates[4].split('=')[1]}
 3. 시간 미명시 → 저녁시간 기본 19:00
 정답:
 {
   "action": "new",
   "data": {
     "summary": "볼링",
-    "date": "${weekAfterNextDates[5].split('=')[1]}",
+    "date": "${weekAfterNextDates[4].split('=')[1]}",
     "startTime": "19:00",
     "endTime": "21:00",
     "location": ""
@@ -1683,6 +1718,15 @@ FOR EACH 기존 일정:
 - 이 일정의 ID를 targetId로 사용 → **절대 금지!**
 
 **extend action으로 출력하기 전에 반드시 확인:**
+
+🔴🔴🔴 **extend 타겟 선택 시 "같은 값" 주의!** 🔴🔴🔴
+- 기존 일정이 여러 개일 때, **시간이 같다고 아무거나 선택하지 마세요!**
+- **반드시 날짜를 기준으로 타겟을 선택하세요!**
+- 예: 2월 9일 일정(21:00)과 2월 10일 일정(22:00)이 있을 때
+  - "10시까지 놀자" → 대화 맥락상 **2월 9일** 일정을 extend해야 함
+  - ❌ 잘못: 2월 10일 일정(이미 22:00)을 선택 → "같은 값"으로 스킵됨!
+  - ✅ 올바름: 2월 9일 일정(21:00→22:00)을 선택 → 정상 변경!
+- **endTime이 일치하는 일정이 있더라도 날짜가 맞는 일정을 선택!**
 
 **[대화에 날짜 명시된 경우]**
 1. ✅ 대화에서 언급된 날짜를 추출했는가? (YYYY-MM-DD)

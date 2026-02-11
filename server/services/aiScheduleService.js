@@ -405,7 +405,13 @@ async function handleExtendSchedule(roomId, targetId, data, sortedMessages) {
   // 모든 필드가 제거되었으면 (실제 변경 없음) sentiment만 처리
   const hasDataChange = data.summary || data.endTime || data.startTime || data.location;
   if (!hasDataChange && !sentiment) {
-    console.log('[AI분석] 이미 같은 값 - extend 스킵:', { targetId, data, old: { oldSummary, oldStartTime, oldEndTime, oldLocation } });
+    console.log('[AI분석] 같은 값 감지 - extend 스킵:', {
+      targetId,
+      suggestionDate: suggestion.date,
+      data,
+      old: { oldSummary, oldStartTime, oldEndTime, oldLocation }
+    });
+    console.warn('[AI분석] ⚠️ AI가 잘못된 일정을 타겟팅했을 수 있음 (날짜 확인 필요)');
     return;
   }
 
