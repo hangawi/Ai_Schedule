@@ -151,16 +151,40 @@ const MobileSettings = ({ user }) => {
     try {
       const token = await auth.currentUser.getIdToken();
       const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+
+      // 1) 앱 → 구글 동기화
       const res = await fetch(`${API_BASE_URL}/api/calendar/sync-to-google`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
-      if (res.ok) {
-        if (data.synced > 0) {
-          showAlert('동기화 완료', `${data.synced}개 일정이 구글 캘린더에 동기화되었습니다.${data.skipped > 0 ? ` (${data.skipped}개 중복 스킵)` : ''}`, 'success');
+
+      // 2) 구글 → 앱 역동기화 (구글에서 삭제된 일정 제거)
+      let removedCount = 0;
+      try {
+        const syncRes = await fetch(`${API_BASE_URL}/api/calendar/sync-from-google`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (syncRes.ok) {
+          const syncData = await syncRes.json();
+          removedCount = syncData.removed || 0;
         } else {
-          showAlert('동기화 완료', '새로 동기화할 일정이 없습니다. (이미 동기화됨)', 'info');
+          console.warn('역동기화 응답 에러:', syncRes.status);
+        }
+      } catch (syncErr) {
+        console.warn('역동기화 실패:', syncErr);
+      }
+
+      if (res.ok) {
+        const parts = [];
+        if (data.synced > 0) parts.push(`${data.synced}개 일정 → 구글 동기화`);
+        if (data.skipped > 0) parts.push(`${data.skipped}개 중복 스킵`);
+        if (removedCount > 0) parts.push(`${removedCount}개 구글에서 삭제된 일정 제거`);
+        if (parts.length > 0) {
+          showAlert('동기화 완료', parts.join(', '), 'success');
+        } else {
+          showAlert('동기화 완료', '모든 일정이 최신 상태입니다.', 'info');
         }
       } else {
         showAlert('동기화 실패', data.msg || '동기화에 실패했습니다.', 'error');

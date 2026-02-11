@@ -45,6 +45,11 @@ router.put('/events/:eventId', auth, calendarController.updateGoogleCalendarEven
 // @access  Private
 router.post('/sync-to-google', auth, calendarController.syncEventsToGoogle);
 
+// @route   POST api/calendar/sync-from-google
+// @desc    Sync deletions from Google Calendar back to app DB
+// @access  Private
+router.post('/sync-from-google', auth, calendarController.syncFromGoogle);
+
 // @route   POST api/calendar/analyze-image
 // @desc    Analyze image for schedule information using Gemini Vision API
 // @access  Private

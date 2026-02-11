@@ -381,6 +381,27 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                   };
                });
                setGoogleCalendarEvents(formattedGoogleEvents);
+
+               // 역동기화: 구글에서 삭제된 일정을 앱 DB에서도 제거
+               try {
+                  const syncToken = await auth.currentUser?.getIdToken();
+                  const syncRes = await fetch(`${API_BASE_URL}/api/calendar/sync-from-google`, {
+                     method: 'POST',
+                     headers: { Authorization: `Bearer ${syncToken}` }
+                  });
+                  if (syncRes.ok) {
+                     const syncData = await syncRes.json();
+                     if (syncData.removed > 0) {
+                        console.log(`[syncFromGoogle] ${syncData.removed}개 일정 DB에서 제거됨, 재로딩`);
+                        const refreshed = await userService.getUserSchedule();
+                        setPersonalTimes(refreshed.personalTimes || []);
+                     }
+                  } else {
+                     console.warn('역동기화 응답 에러:', syncRes.status);
+                  }
+               } catch (syncErr) {
+                  console.warn('역동기화 실패:', syncErr);
+               }
             } catch (gErr) {
                console.warn('구글 캘린더 이벤트 로딩 실패:', gErr);
                setGoogleCalendarEvents([]);
@@ -396,19 +417,76 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
    }, [convertScheduleToEvents, user]);
 
    useEffect(() => { fetchSchedule(); }, [fetchSchedule]);
-   
+
    // 챗봇 등 외부에서 calendarUpdate 이벤트를 발생시킬 때 스케줄을 다시 불러옴
    useEffect(() => {
        const handleCalendarUpdate = (event) => {
            fetchSchedule(); // Re-fetch data when a calendar update event is received
        };
-   
+
        window.addEventListener('calendarUpdate', handleCalendarUpdate);
-   
+
        return () => {
            window.removeEventListener('calendarUpdate', handleCalendarUpdate);
        };
    }, [fetchSchedule]);
+
+   // 구글 캘린더 역동기화 폴링 (30초 간격 + 탭 포커스 시)
+   const syncFromGoogleLight = useCallback(async () => {
+      const hasGoogleCalendar = !!user?.google?.refreshToken;
+      if (!hasGoogleCalendar) return;
+      try {
+         const token = await auth.currentUser?.getIdToken();
+         if (!token) return;
+         const res = await fetch(`${API_BASE_URL}/api/calendar/sync-from-google`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` }
+         });
+         if (res.ok) {
+            const data = await res.json();
+            if (data.removed > 0) {
+               console.log(`[syncFromGoogle polling] ${data.removed}개 삭제 감지, 새로고침`);
+               const refreshed = await userService.getUserSchedule();
+               setPersonalTimes(refreshed.personalTimes || []);
+               // 구글 캘린더 이벤트도 다시 로드
+               const threeMonthsAgo = new Date();
+               threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+               const oneYearLater = new Date();
+               oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+               const gEvents = await googleCalendarService.getEvents(
+                  threeMonthsAgo.toISOString(), oneYearLater.toISOString()
+               );
+               setGoogleCalendarEvents(gEvents.map(e => ({
+                  ...e, isGoogleEvent: true, googleEventId: e.googleEventId || e.id,
+                  backgroundColor: '#3b82f6', borderColor: '#2563eb',
+               })));
+            }
+         }
+      } catch (err) {
+         // 폴링 실패는 무시
+      }
+   }, [user]);
+
+   useEffect(() => {
+      const hasGoogleCalendar = !!user?.google?.refreshToken;
+      if (!hasGoogleCalendar) return;
+
+      // 30초 간격 폴링
+      const interval = setInterval(syncFromGoogleLight, 30000);
+
+      // 탭 포커스 시 동기화
+      const handleVisibility = () => {
+         if (document.visibilityState === 'visible') {
+            syncFromGoogleLight();
+         }
+      };
+      document.addEventListener('visibilitychange', handleVisibility);
+
+      return () => {
+         clearInterval(interval);
+         document.removeEventListener('visibilitychange', handleVisibility);
+      };
+   }, [syncFromGoogleLight]);
 
    // personalTimes/defaultSchedule/scheduleExceptions 변경 시 events 재계산
    useEffect(() => {
