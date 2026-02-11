@@ -55,6 +55,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
    const [googleCalendarEvents, setGoogleCalendarEvents] = useState([]);
    const [isOcrProcessing, setIsOcrProcessing] = useState(false);
    const cameraInputRef = useRef(null);
+   const syncLockRef = useRef(false);
    const [eventAddedKey, setEventAddedKey] = useState(0);
    const [eventActions, setEventActions] = useState({
       addEvent: async () => {},
@@ -383,24 +384,29 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                setGoogleCalendarEvents(formattedGoogleEvents);
 
                // 역동기화: 구글에서 삭제된 일정을 앱 DB에서도 제거
-               try {
-                  const syncToken = await auth.currentUser?.getIdToken();
-                  const syncRes = await fetch(`${API_BASE_URL}/api/calendar/sync-from-google`, {
-                     method: 'POST',
-                     headers: { Authorization: `Bearer ${syncToken}` }
-                  });
-                  if (syncRes.ok) {
-                     const syncData = await syncRes.json();
-                     if (syncData.removed > 0) {
-                        console.log(`[syncFromGoogle] ${syncData.removed}개 일정 DB에서 제거됨, 재로딩`);
-                        const refreshed = await userService.getUserSchedule();
-                        setPersonalTimes(refreshed.personalTimes || []);
+               if (!syncLockRef.current) {
+                  syncLockRef.current = true;
+                  try {
+                     const syncToken = await auth.currentUser?.getIdToken();
+                     const syncRes = await fetch(`${API_BASE_URL}/api/calendar/sync-from-google`, {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${syncToken}` }
+                     });
+                     if (syncRes.ok) {
+                        const syncData = await syncRes.json();
+                        if (syncData.removed > 0) {
+                           console.log(`[syncFromGoogle] ${syncData.removed}개 일정 DB에서 제거됨, 재로딩`);
+                           const refreshed = await userService.getUserSchedule();
+                           setPersonalTimes(refreshed.personalTimes || []);
+                        }
+                     } else {
+                        console.warn('역동기화 응답 에러:', syncRes.status);
                      }
-                  } else {
-                     console.warn('역동기화 응답 에러:', syncRes.status);
+                  } catch (syncErr) {
+                     console.warn('역동기화 실패:', syncErr);
+                  } finally {
+                     syncLockRef.current = false;
                   }
-               } catch (syncErr) {
-                  console.warn('역동기화 실패:', syncErr);
                }
             } catch (gErr) {
                console.warn('구글 캘린더 이벤트 로딩 실패:', gErr);
@@ -435,6 +441,8 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
    const syncFromGoogleLight = useCallback(async () => {
       const hasGoogleCalendar = !!user?.google?.refreshToken;
       if (!hasGoogleCalendar) return;
+      if (syncLockRef.current) return;
+      syncLockRef.current = true;
       try {
          const token = await auth.currentUser?.getIdToken();
          if (!token) return;
@@ -464,6 +472,8 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          }
       } catch (err) {
          // 폴링 실패는 무시
+      } finally {
+         syncLockRef.current = false;
       }
    }, [user]);
 

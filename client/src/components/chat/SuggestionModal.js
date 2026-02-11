@@ -454,7 +454,7 @@ const SuggestionModal = ({ isOpen, onClose, roomId, socket: externalSocket, isMo
           <div className="flex flex-wrap gap-2">
             {suggestion.memberResponses?.map((response, idx) => (
               <div
-                key={String(response.user?._id || response.user || idx)}
+                key={`member-${idx}`}
                 className={`px-2 py-1 text-xs rounded border ${
                   response.status === 'accepted'
                     ? 'bg-green-50 border-green-200 text-green-700'
