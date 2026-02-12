@@ -336,7 +336,21 @@ const CoordinationTab = ({ user, onExchangeRequestCountChange, hideHeader = fals
     else { setCurrentRoom(r); }
   };
 
-  const handleBackToRoomList = () => { setCurrentRoom(null); window.history.pushState({ tab: 'coordination', roomState: null }, '', '#coordination'); };
+  const handleBackToRoomList = async () => {
+    // 🆕 방 나가기 전에 읽음 처리 완료 후 목록 새로고침
+    if (currentRoom?._id) {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        await fetch(`${process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000'}/api/chat/${currentRoom._id}/read`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (e) { /* 실패해도 진행 */ }
+    }
+    setCurrentRoom(null);
+    fetchMyRooms();
+    window.history.pushState({ tab: 'coordination', roomState: null }, '', '#coordination');
+  };
   const handleLeaveRoom = () => setShowLeaveConfirm(true);
   const executeLeaveRoom = async () => {
     try {

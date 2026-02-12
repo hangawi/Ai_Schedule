@@ -60,6 +60,10 @@ const RoomList = ({
 }) => {
   const hasRooms = myRooms?.owned?.length > 0 || myRooms?.joined?.length > 0;
 
+  // 각 탭별 안 읽은 채팅 총합 계산
+  const ownedUnreadTotal = (myRooms?.owned || []).reduce((sum, room) => sum + (room.unreadCount || 0), 0);
+  const joinedUnreadTotal = (myRooms?.joined || []).reduce((sum, room) => sum + (room.unreadCount || 0), 0);
+
   return (
     <div className="bg-slate-50 p-4 sm:p-6 rounded-lg min-h-full">
       {/* 상단 제목 및 버튼 */}
@@ -90,15 +94,25 @@ const RoomList = ({
           <div className="flex space-x-2 border-b border-gray-200 mb-4">
             <button
               onClick={() => setSelectedTab('owned')}
-              className={`px-4 py-2 font-semibold transition-colors ${selectedTab === 'owned' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`px-4 py-2 font-semibold transition-colors flex items-center gap-1.5 ${selectedTab === 'owned' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
             >
               내가 만든 방 ({myRooms?.owned?.length || 0})
+              {ownedUnreadTotal > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center">
+                  {ownedUnreadTotal}
+                </span>
+              )}
             </button>
             <button
               onClick={() => setSelectedTab('joined')}
-              className={`px-4 py-2 font-semibold transition-colors ${selectedTab === 'joined' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`px-4 py-2 font-semibold transition-colors flex items-center gap-1.5 ${selectedTab === 'joined' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
             >
               참여 중인 방 ({myRooms?.joined?.length || 0})
+              {joinedUnreadTotal > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center">
+                  {joinedUnreadTotal}
+                </span>
+              )}
             </button>
           </div>
 
@@ -150,7 +164,7 @@ const RoomCard = ({ room, selectedTab, exchangeCount, onClick }) => (
         {/* 🆕 안 읽은 채팅 배지 */}
         {room.unreadCount > 0 && (
           <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1" title="읽지 않은 메시지">
-            채팅 {room.unreadCount}
+            {room.unreadCount}
           </span>
         )}
       </div>

@@ -26,6 +26,7 @@ const GroupChat = ({ roomId, user, isMobile, typoCorrection = false }) => {
   const messagesContainerRef = useRef(null);
   const socketRef = useRef(null);
   const fileInputRef = useRef(null);
+  const readTimerRef = useRef(null); // 🆕 읽음 처리 디바운스 타이머
 
   // 1. 초기 로드 및 소켓 연결
   useEffect(() => {
@@ -47,6 +48,9 @@ const GroupChat = ({ roomId, user, isMobile, typoCorrection = false }) => {
     socketRef.current.on('chat-message', (newMessage) => {
       setMessages((prev) => [...prev, newMessage]);
       scrollToBottom();
+      // 🆕 메시지 수신 시 디바운스 읽음 처리 (3초 후, 연속 메시지는 한 번만)
+      if (readTimerRef.current) clearTimeout(readTimerRef.current);
+      readTimerRef.current = setTimeout(() => markMessagesAsRead(), 3000);
     });
 
     // 메시지 삭제 수신
@@ -71,6 +75,9 @@ const GroupChat = ({ roomId, user, isMobile, typoCorrection = false }) => {
     });
 
     return () => {
+      // 🆕 방 나갈 때 읽음 처리 (실시간 수신 메시지도 읽음 반영)
+      if (readTimerRef.current) clearTimeout(readTimerRef.current);
+      markMessagesAsRead();
       if (socketRef.current) socketRef.current.disconnect();
     };
   }, [roomId]);

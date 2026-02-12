@@ -10,16 +10,53 @@ const preferenceService = require('./preferenceService');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// 분석 중복 방지를 위한 Map (roomId -> 마지막 분석 시간)
-const analysisTimestamps = new Map();
+// 🆕 방별 분석 잠금 (Race Condition 방지)
+// roomId -> { running: boolean, pending: boolean }
+const analysisLocks = new Map();
 
 /**
  * 대화 내용 분석 및 일정 추출 서비스
  */
 exports.analyzeConversation = async (roomId) => {
+  const roomIdStr = roomId.toString();
+
+  // 🆕 이미 이 방의 분석이 진행 중이면, pending 표시 후 리턴
+  // 현재 분석이 끝나면 pending된 재분석이 자동 실행됨
+  if (analysisLocks.has(roomIdStr) && analysisLocks.get(roomIdStr).running) {
+    analysisLocks.get(roomIdStr).pending = true;
+    console.log(`🔒 [AI Schedule] 방 ${roomIdStr} 분석 중 - 대기열에 추가`);
+    return;
+  }
+
+  // 잠금 설정
+  analysisLocks.set(roomIdStr, { running: true, pending: false });
+
   try {
-    // 🆕 30초 버퍼 제거 - 모든 메시지를 즉시 분석하여 실시간 응답 가능
-    // (이전: 30초 이내 재분석 방지로 실시간 참석/불참 처리가 불가능했음)
+    await _doAnalysis(roomId);
+  } finally {
+    // 분석 완료 후 pending 요청이 있으면 재실행
+    const lock = analysisLocks.get(roomIdStr);
+    if (lock && lock.pending) {
+      lock.running = false;
+      lock.pending = false;
+      console.log(`🔄 [AI Schedule] 방 ${roomIdStr} 대기 중인 재분석 실행`);
+      // 비동기로 재실행 (현재 호출 스택에서 분리)
+      setImmediate(() => {
+        exports.analyzeConversation(roomId).catch(err => {
+          console.error('❌ [AI Schedule] Pending re-analysis failed:', err);
+        });
+      });
+    } else {
+      analysisLocks.delete(roomIdStr);
+    }
+  }
+};
+
+/**
+ * 실제 분석 로직 (내부 함수)
+ */
+async function _doAnalysis(roomId) {
+  try {
 
     // 1. 최근 대화 내용 가져오기 (최근 5개만 - 가장 최근 맥락 우선)
     const messages = await ChatMessage.find({ room: roomId })
@@ -137,7 +174,7 @@ exports.analyzeConversation = async (roomId) => {
       console.error('  → API quota exceeded. Check Gemini API usage.');
     }
   }
-};
+}
 
 /**
  * 새 일정 생성 처리
