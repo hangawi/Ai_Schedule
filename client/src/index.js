@@ -42,3 +42,12 @@ root.render(
     <App />
   </React.StrictMode>
 );
+
+// Service Worker 등록 (PWA 설치 지원)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then((reg) => console.log('[SW] 등록 성공:', reg.scope))
+      .catch((err) => console.log('[SW] 등록 실패:', err));
+  });
+}

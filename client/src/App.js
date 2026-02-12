@@ -81,6 +81,86 @@ function App() {
    const { handleChatMessage } = useChat(isLoggedIn, setEventAddedKey, eventActions);
 
    
+   // 파비콘에 빨간 뱃지 그리기
+   const updateFavicon = useCallback((count) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+         ctx.drawImage(img, 0, 0, 64, 64);
+         if (count > 0) {
+            // 빨간 원
+            const text = count > 99 ? '99+' : String(count);
+            const fontSize = text.length > 2 ? 20 : 26;
+            ctx.font = `bold ${fontSize}px sans-serif`;
+            const textWidth = ctx.measureText(text).width;
+            const badgeSize = Math.max(28, textWidth + 12);
+            const x = 64 - badgeSize / 2;
+            const y = badgeSize / 2;
+            ctx.beginPath();
+            ctx.arc(x, y, badgeSize / 2, 0, Math.PI * 2);
+            ctx.fillStyle = '#ef4444';
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            // 흰색 숫자
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, x, y + 1);
+         }
+         // 파비콘 업데이트
+         let link = document.querySelector("link[rel~='icon']");
+         if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+         link.href = canvas.toDataURL('image/png');
+      };
+      img.src = '/heyheylogo.png';
+   }, []);
+
+   // PWA 앱 아이콘 뱃지 - 읽지 않은 메시지 수 표시
+   useEffect(() => {
+      if (!isLoggedIn) return;
+
+      const updateBadge = async () => {
+         try {
+            const currentUser = auth.currentUser;
+            if (!currentUser) return;
+            const token = await currentUser.getIdToken();
+            const res = await fetch(
+               `${process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000'}/api/coordination/my-rooms`,
+               { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (!res.ok) return;
+            const data = await res.json();
+            const rooms = [...(data.owned || []), ...(data.joined || [])];
+            const total = rooms.reduce((sum, r) => sum + (r.unreadCount || 0), 0);
+
+            // 타이틀 + 파비콘 뱃지 업데이트
+            document.title = total > 0 ? `(${total}) AI Schedule` : 'AI Schedule';
+            updateFavicon(total);
+
+            // PWA 앱 아이콘 뱃지 (지원되면)
+            if ('setAppBadge' in navigator) {
+               if (total > 0) {
+                  navigator.setAppBadge(total);
+               } else {
+                  navigator.clearAppBadge();
+               }
+            }
+         } catch (e) {
+            // 뱃지 업데이트 실패 무시
+         }
+      };
+
+      updateBadge();
+      const interval = setInterval(updateBadge, 30000);
+      return () => clearInterval(interval);
+   }, [isLoggedIn]);
+
    const [sharedText, setSharedText] = useState(null);
    const [copiedText, setCopiedText] = useState(null);
    const [isAnalyzing, setIsAnalyzing] = useState(false);
