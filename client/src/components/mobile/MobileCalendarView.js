@@ -675,9 +675,21 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
       }
    };
 
-   const handleStartVoiceRecognition = () => {
+   const handleStartVoiceRecognition = async () => {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) { showToast('음성 인식을 지원하지 않습니다.'); return; }
+
+      // 🆕 마이크 권한 상태 확인 (반복 팝업 방지)
+      try {
+         const permResult = await navigator.permissions.query({ name: 'microphone' });
+         if (permResult.state === 'denied') {
+            showToast('마이크 권한이 차단되어 있습니다. 브라우저 설정에서 허용해주세요.');
+            return;
+         }
+      } catch (e) {
+         // permissions API 미지원 브라우저 → 그냥 진행
+      }
+
       const recognition = new SpeechRecognition();
       recognition.lang = 'ko-KR';
       recognition.onstart = () => setIsVoiceEnabled(true);
@@ -686,7 +698,12 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
          if (!isChatOpen) setIsChatOpen(true);
          await handleChatMessage(transcript);
       };
-      recognition.onerror = () => setIsVoiceEnabled(false);
+      recognition.onerror = (e) => {
+         setIsVoiceEnabled(false);
+         if (e.error === 'not-allowed') {
+            showToast('마이크 권한이 차단되어 있습니다. 브라우저 설정에서 허용해주세요.');
+         }
+      };
       recognition.onend = () => setIsVoiceEnabled(false);
       recognition.start();
    };

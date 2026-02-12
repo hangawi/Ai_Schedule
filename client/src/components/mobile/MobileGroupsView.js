@@ -248,7 +248,7 @@ const MobileGroupsView = ({ user, isClipboardMonitoring, setIsClipboardMonitorin
          )}
          
          {/* 그룹 컨텐츠 */}
-         <div className="groups-content">
+         <div className={`groups-content ${!effectiveIsInRoom ? 'with-bottom-nav' : ''}`}>
             <CoordinationTab
                key={`${location.key}-${refreshKey}`}
                user={user} 

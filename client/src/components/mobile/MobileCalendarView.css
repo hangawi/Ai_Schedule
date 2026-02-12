@@ -6,6 +6,12 @@
    overflow: hidden;
 }
 
+.mobile-calendar-view > .schedule-content {
+   flex: 1;
+   overflow-y: auto;
+   padding-bottom: 73px;
+}
+
 /* 모바일 헤더 */
 .mobile-header {
    background: white;

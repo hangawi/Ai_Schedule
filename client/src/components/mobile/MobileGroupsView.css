@@ -344,6 +344,10 @@
    overflow-y: auto;
 }
 
+.groups-content.with-bottom-nav {
+   padding-bottom: 73px;
+}
+
 /* CoordinationTab 모바일 최적화 */
 .groups-content .coordination-tab-container {
    padding: 16px;
