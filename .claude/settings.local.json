@@ -54,7 +54,15 @@
       "mcp__serena__read_memory",
       "Bash(robocopy:*)",
       "Bash(powershell:*)",
-      "Bash(npm run install:all:*)"
+      "Bash(npm run install:all:*)",
+      "Bash(git init:*)",
+      "Bash(git branch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(BASE=\"C:/Users/예상/OneDrive/Desktop/프로젝트/Ai_Mobile/client/src/components\")",
+      "Bash(cmd /c:*)"
     ]
   }
 }
