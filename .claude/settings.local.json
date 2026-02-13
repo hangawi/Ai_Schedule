@@ -51,7 +51,10 @@
       "Bash(ren:*)",
       "mcp__serena__onboarding",
       "mcp__serena__write_memory",
-      "mcp__serena__read_memory"
+      "mcp__serena__read_memory",
+      "Bash(robocopy:*)",
+      "Bash(powershell:*)",
+      "Bash(npm run install:all:*)"
     ]
   }
 }
