@@ -139,6 +139,7 @@ const GroupChat = ({ roomId, user, isMobile, typoCorrection = false }) => {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
+      window.dispatchEvent(new Event('badgeUpdate'));
     } catch (error) {
       console.error('Failed to mark messages as read:', error);
     }

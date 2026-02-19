@@ -158,7 +158,11 @@ function App() {
 
       updateBadge();
       const interval = setInterval(updateBadge, 30000);
-      return () => clearInterval(interval);
+      window.addEventListener('badgeUpdate', updateBadge);
+      return () => {
+         clearInterval(interval);
+         window.removeEventListener('badgeUpdate', updateBadge);
+      };
    }, [isLoggedIn]);
 
    const [sharedText, setSharedText] = useState(null);
