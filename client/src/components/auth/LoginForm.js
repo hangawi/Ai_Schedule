@@ -38,7 +38,7 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { signInWithPopup, signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithPopup, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth, googleProvider } from '../../config/firebaseConfig';
 import CustomAlertModal from '../modals/CustomAlertModal';
 import SocialLoginButtons from './SocialLoginButtons';
@@ -60,6 +60,8 @@ const API_BASE_URL = process.env.REACT_APP_API_BASE_URL
 const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
    const [email, setEmail] = useState('');
    const [password, setPassword] = useState('');
+   const [showForgotPassword, setShowForgotPassword] = useState(false);
+   const [forgotEmail, setForgotEmail] = useState('');
 
    // CustomAlert 상태
    const [alertModal, setAlertModal] = useState({
@@ -255,6 +257,25 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
     * @description Enter 키 입력 시 로그인 실행
     * @param {KeyboardEvent} event - 키보드 이벤트
     */
+   const handleForgotPassword = async () => {
+      if (!forgotEmail) {
+         showAlert('이메일을 입력해주세요.', 'warning', '입력 오류');
+         return;
+      }
+      try {
+         await sendPasswordResetEmail(auth, forgotEmail);
+         showAlert(`${forgotEmail}로 비밀번호 재설정 링크를 전송했습니다. 메일함을 확인해주세요.`, 'success', '전송 완료');
+         setShowForgotPassword(false);
+         setForgotEmail('');
+      } catch (error) {
+         if (error.code === 'auth/user-not-found') {
+            showAlert('등록되지 않은 이메일입니다.', 'error', '오류');
+         } else {
+            showAlert('전송에 실패했습니다. 다시 시도해주세요.', 'error', '오류');
+         }
+      }
+   };
+
    const handleKeyPress = event => {
       if (event.key === 'Enter') {
          handleLogin();
@@ -264,45 +285,83 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
    return (
       <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
          <div className="bg-white w-11/12 max-w-md rounded-lg shadow-xl p-6">
-            <div className="relative mb-4">
-               <h2 className="text-xl font-bold text-gray-800 text-center">로그인</h2>
-            </div>
 
-            <div className="space-y-4">
-               <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
-                  <input
-                     type="email"
-                     className="w-full border border-gray-300 rounded-md px-3 py-2"
-                     value={email}
-                     onChange={e => setEmail(e.target.value)}
-                     onKeyPress={handleKeyPress}
-                  />
-               </div>
-               <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
-                  <input
-                     type="password"
-                     className="w-full border border-gray-300 rounded-md px-3 py-2"
-                     value={password}
-                     onChange={e => setPassword(e.target.value)}
-                     onKeyPress={handleKeyPress}
-                  />
-               </div>
-            </div>
+            {showForgotPassword ? (
+               <>
+                  <div className="relative mb-4">
+                     <h2 className="text-xl font-bold text-gray-800 text-center">비밀번호 찾기</h2>
+                  </div>
+                  <p className="text-sm text-gray-500 mb-4 text-center">가입한 이메일 주소를 입력하면 재설정 링크를 보내드립니다.</p>
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
+                     <input
+                        type="email"
+                        className="w-full border border-gray-300 rounded-md px-3 py-2"
+                        value={forgotEmail}
+                        onChange={e => setForgotEmail(e.target.value)}
+                        onKeyPress={e => e.key === 'Enter' && handleForgotPassword()}
+                        placeholder="이메일 입력"
+                        autoFocus
+                     />
+                  </div>
+                  <div className="mt-6 flex flex-col space-y-3">
+                     <button onClick={handleForgotPassword} className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                        재설정 링크 전송
+                     </button>
+                     <button onClick={() => { setShowForgotPassword(false); setForgotEmail(''); }} className="px-4 py-2 border border-gray-300 text-gray-600 rounded-md hover:bg-gray-50">
+                        로그인으로 돌아가기
+                     </button>
+                  </div>
+               </>
+            ) : (
+               <>
+                  <div className="relative mb-4">
+                     <h2 className="text-xl font-bold text-gray-800 text-center">로그인</h2>
+                  </div>
 
-            <div className="mt-6 flex flex-col space-y-3">
-               <button onClick={handleLogin} className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
-                  로그인
-               </button>
-               <button
-                  onClick={onRegisterClick}
-                  className="px-4 py-2 border border-blue-500 text-blue-500 rounded-md hover:bg-blue-50">
-                  회원가입
-               </button>
+                  <div className="space-y-4">
+                     <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
+                        <input
+                           type="email"
+                           className="w-full border border-gray-300 rounded-md px-3 py-2"
+                           value={email}
+                           onChange={e => setEmail(e.target.value)}
+                           onKeyPress={handleKeyPress}
+                        />
+                     </div>
+                     <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+                        <input
+                           type="password"
+                           className="w-full border border-gray-300 rounded-md px-3 py-2"
+                           value={password}
+                           onChange={e => setPassword(e.target.value)}
+                           onKeyPress={handleKeyPress}
+                        />
+                        <button
+                           type="button"
+                           onClick={() => { setShowForgotPassword(true); setForgotEmail(email); }}
+                           className="mt-1 text-xs text-blue-500 hover:text-blue-700 float-right">
+                           비밀번호를 잊으셨나요?
+                        </button>
+                     </div>
+                  </div>
 
-               <SocialLoginButtons googleLogin={handleGoogleLogin} showAlert={showAlert} />
-            </div>
+                  <div className="mt-6 flex flex-col space-y-3">
+                     <button onClick={handleLogin} className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                        로그인
+                     </button>
+                     <button
+                        onClick={onRegisterClick}
+                        className="px-4 py-2 border border-blue-500 text-blue-500 rounded-md hover:bg-blue-50">
+                        회원가입
+                     </button>
+
+                     <SocialLoginButtons googleLogin={handleGoogleLogin} showAlert={showAlert} />
+                  </div>
+               </>
+            )}
 
             <CustomAlertModal
                isOpen={alertModal.isOpen}
@@ -315,6 +374,7 @@ const LoginForm = ({ onClose, onRegisterClick, onLoginSuccess }) => {
             />
          </div>
       </div>
+
    );
 };
 

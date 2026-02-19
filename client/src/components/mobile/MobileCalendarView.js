@@ -211,10 +211,10 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
             <div className="sidebar-header"><h2 className="sidebar-title">메뉴</h2><button className="sidebar-close-btn" onClick={() => setIsSidebarOpen(false)}>✕</button></div>
             <div className="sidebar-menu">
                <button className="sidebar-item" onClick={() => navigate('/')}>🏠 홈으로</button>
-               <button className="sidebar-item" onClick={() => navigate('/schedule')}>📅 내 일정</button>
-               <button className="sidebar-item" onClick={() => navigate('/groups')}>👥 그룹</button>
-               <button className="sidebar-item" onClick={() => navigate('/calendar')}>📆 달력</button>
-               <button className="sidebar-item" onClick={() => navigate('/settings')}>⚙️ 설정</button>
+               <button className="sidebar-item" onClick={() => navigate('/mobile/schedule')}>📅 내 일정</button>
+               <button className="sidebar-item" onClick={() => navigate('/mobile/groups')}>👥 그룹</button>
+               <button className="sidebar-item" onClick={() => navigate('/mobile/calendar')}>📆 달력</button>
+               <button className="sidebar-item" onClick={() => navigate('/mobile/settings')}>⚙️ 설정</button>
             </div>
          </nav>
          <header className="mobile-header">
@@ -226,7 +226,7 @@ const MobileCalendarView = ({ user, isClipboardMonitoring, setIsClipboardMonitor
                <div className="mobile-header-right">
                   <button className={`mobile-icon-btn ${isClipboardMonitoring ? 'active' : ''}`} onClick={() => setIsClipboardMonitoring(!isClipboardMonitoring)} title="클립보드">{isClipboardMonitoring ? <Clipboard size={18} /> : <ClipboardX size={18} />}</button>
                   <button className={`mobile-icon-btn ${isBackgroundMonitoring ? 'active' : ''}`} onClick={toggleBackgroundMonitoring} title={isBackgroundMonitoring ? `대화감지 ON ${voiceStatus}` : "대화감지 OFF"}><Phone size={18} /></button>
-                  <button className="mobile-profile-btn" onClick={() => navigate('/settings')} title="설정">{user && user.firstName ? user.firstName : <User size={18} />}</button>
+                  <button className="mobile-profile-btn" onClick={() => navigate('/mobile/settings')} title="설정">{user && user.firstName ? user.firstName : <User size={18} />}</button>
                   <button className="mobile-logout-btn" onClick={handleLogout} title="로그아웃"><LogOut size={16} /></button>
                </div>
             </div>
